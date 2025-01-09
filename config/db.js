@@ -1,17 +1,31 @@
-// config/db.js
-
 const mysql = require('mysql2/promise');
 
-// Create a MySQL pool
+// Use environment variables directly (no need for || 'defaults' anymore)
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'your_db_username',
-  password: process.env.DB_PASSWORD || 'your_db_password',
-  database: process.env.DB_NAME || 'v12',
-  port: process.env.DB_PORT || 3306, // Ensure DB_PORT is used
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT, 10), // Important: Parse port to integer
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    // Add debug option for troubleshooting (optional)
+    debug: false // Set to true for more verbose output
 });
+
+// Test the connection immediately after creating the pool
+async function testConnection() {
+    try {
+        const connection = await pool.getConnection();
+        console.log('Database connected successfully!');
+        connection.release(); // Important: Release the connection back to the pool
+    } catch (error) {
+        console.error('Database connection error:', error);
+        process.exit(1); // Exit if the connection fails on startup
+    }
+}
+
+testConnection(); // Call the test function
 
 module.exports = { pool };
