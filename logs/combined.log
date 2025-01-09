@@ -1,0 +1,10 @@
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.quantity' in 'field list'","timestamp":"2025-01-01T09:53:35.914Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.quantity' in 'field list'","timestamp":"2025-01-01T09:55:55.406Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.quantity' in 'field list'","timestamp":"2025-01-01T09:56:01.976Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.quantity' in 'field list'","timestamp":"2025-01-01T09:56:09.195Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.status' in 'field list'","timestamp":"2025-01-01T09:57:56.510Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.created_at' in 'field list'","timestamp":"2025-01-01T10:00:36.137Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.created_at' in 'order clause'","timestamp":"2025-01-01T10:02:56.710Z"}
+{"level":"error","message":"Error loading Fabric Manager Dashboard: Unknown column 'fi.created_at' in 'order clause'","timestamp":"2025-01-01T10:03:02.881Z"}
+{"level":"info","message":"Fabric Manager aftab accessed the dashboard.","timestamp":"2025-01-01T10:05:59.114Z"}
+{"level":"info","message":"Fabric Manager aftab accessed the dashboard.","timestamp":"2025-01-01T10:05:59.784Z"}

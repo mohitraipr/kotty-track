@@ -1,0 +1,627 @@
+<!-- views/cuttingManagerDashboard.ejs -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cutting Manager Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- Bootstrap Icons -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+    rel="stylesheet"
+  />
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .card {
+      margin-bottom: 1rem;
+    }
+    .roll-section, .size-section {
+      border: 1px solid #dee2e6;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      background-color: #fff;
+      position: relative;
+    }
+    .roll-section .remove-roll-btn, .size-row .removeSizeBtn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+    .size-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .hidden {
+      display: none;
+    }
+    .progress {
+      height: 20px;
+    }
+    .progress-bar {
+      transition: width 0.3s ease-in-out;
+    }
+    /* Icon Button Styling */
+    .btn-icon {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-icon i {
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+    <div class="container-fluid">
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <i class="bi bi-speedometer2 me-2"></i> Cutting Manager Dashboard
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" 
+        aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <div class="ms-auto d-flex align-items-center">
+          <i class="bi bi-person-circle text-white me-2"></i>
+          <span class="navbar-text me-3">
+            Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
+          </span>
+          <a href="/logout" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-box-arrow-right me-1"></i> Logout
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Alert Messages -->
+    <% if (error && error.length > 0) { %>
+      <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" role="img" aria-label="Error"></i>
+        <div>
+          <%= error %>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+
+    <% if (success && success.length > 0) { %>
+      <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
+        <i class="bi bi-check-circle-fill flex-shrink-0 me-2" role="img" aria-label="Success"></i>
+        <div>
+          <%= success %>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+
+    <!-- Existing Cutting Lots -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="mb-0"><i class="bi bi-folder-fill me-2"></i> Existing Cutting Lots</h2>
+      </div>
+      <div class="card-body p-2">
+        <div class="table-responsive">
+          <table class="table table-bordered mb-4 bg-white">
+            <thead class="table-dark">
+              <tr>
+                <th>ID</th>
+                <th>Lot No</th>
+                <th>SKU</th>
+                <th>Fabric Type</th>
+                <th>Remark</th>
+                <th>Image</th>
+                <th>Created By</th>
+                <th>Created At</th>
+                <th>Total Pieces</th>
+                <th>Sizes</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (cuttingLots.length === 0) { %>
+                <tr>
+                  <td colspan="11" class="text-center">No cutting lots available.</td>
+                </tr>
+              <% } else { %>
+                <% cuttingLots.forEach(lot => { %>
+                  <tr>
+                    <td><%= lot.id %></td>
+                    <td><%= lot.lot_no %></td>
+                    <td><%= lot.sku %></td>
+                    <td><%= lot.fabric_type %></td>
+                    <td><%= lot.remark || 'N/A' %></td>
+                    <td>
+                      <% if (lot.image_url) { %>
+                        <img src="/<%= lot.image_url %>" alt="lot image" class="img-fluid rounded" style="max-width:100px;"/>
+                      <% } else { %>
+                        <i class="bi bi-image text-muted"></i> N/A
+                      <% } %>
+                    </td>
+                    <td><%= lot.created_by || 'N/A' %></td>
+                    <td><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %></td>
+                    <td><%= lot.total_pieces || 0 %></td>
+                    <td>
+                      <% if (lot.sizes && lot.sizes.length > 0) { %>
+                        <div class="table-responsive">
+                          <table class="table table-sm mb-0">
+                            <thead>
+                              <tr>
+                                <th>Size</th>
+                                <th>Pattern Count</th>
+                                <th>Total Pieces</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% lot.sizes.forEach(size => { %>
+                                <tr>
+                                  <td><%= size.size_label %></td>
+                                  <td><%= size.pattern_count %></td>
+                                  <td><%= size.total_pieces %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } else { %>
+                        <i class="bi bi-list-stars text-muted"></i> N/A
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="d-flex flex-column flex-sm-row gap-2">
+                        <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="btn btn-sm btn-primary">
+                          <i class="bi bi-file-earmark-arrow-down me-1"></i> Generate Challan
+                        </a>
+                        <a href="/cutting-manager/lot-details/<%= lot.id %>" class="btn btn-sm btn-info">
+                          <i class="bi bi-eye me-1"></i> View Details
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create New Cutting Lot -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i> Create New Cutting Lot</h3>
+      </div>
+      <div class="card-body">
+        <form
+          id="lotForm"
+          method="POST"
+          action="/cutting-manager/create-lot"
+          enctype="multipart/form-data"
+        >
+          <!-- Lot Details Section -->
+          <div class="row g-3">
+            <!-- Lot No (Read-Only) -->
+            <div class="col-md-4">
+              <label for="lot_no" class="form-label"><i class="bi bi-hash me-1"></i> Lot No. (System Generated)</label>
+              <input
+                type="text"
+                class="form-control"
+                id="lot_no"
+                name="lot_no"
+                value="<%= generatedLotNumber %>"
+                readonly
+              />
+            </div>
+
+            <!-- SKU Input -->
+            <div class="col-md-4">
+              <label for="sku" class="form-label"><i class="bi bi-barcode me-1"></i> SKU</label>
+              <input
+                type="text"
+                class="form-control"
+                id="sku"
+                name="sku"
+                placeholder="Enter SKU (e.g., KTTDRESS50)"
+                required
+              />
+            </div>
+
+            <!-- Fabric Type -->
+            <div class="col-md-4">
+              <label for="fabric_type" class="form-label"><i class="bi bi-hexagon-fill me-1"></i> Fabric Type</label>
+              <select class="form-select" name="fabric_type" id="fabric_type" required>
+                <option value="">--Select Fabric Type--</option>
+                <% Object.keys(rollsByFabricType).forEach(ft => { %>
+                  <option value="<%= ft %>"><%= ft %></option>
+                <% }) %>
+              </select>
+            </div>
+
+            <!-- Remark -->
+            <div class="col-md-6">
+              <label for="remark" class="form-label"><i class="bi bi-chat-left-text me-1"></i> Remark</label>
+              <textarea
+                class="form-control"
+                name="remark"
+                id="remark"
+                rows="2"
+                placeholder="Any additional remarks..."
+              ></textarea>
+            </div>
+
+            <!-- Image Upload -->
+            <div class="col-md-6">
+              <label for="image" class="form-label"><i class="bi bi-image me-1"></i> Image Upload</label>
+              <input
+                type="file"
+                class="form-control"
+                name="image"
+                id="image"
+                accept="image/*"
+              />
+            </div>
+          </div>
+
+          <hr/>
+
+          <!-- Sizes and Patterns Section -->
+          <div class="mb-3">
+            <h4><i class="bi bi-list me-1"></i> Sizes and Patterns</h4>
+            <div id="sizesContainer"></div>
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              id="addSizeBtn"
+            >
+              <i class="bi bi-plus-circle me-1"></i> Add Size
+            </button>
+          </div>
+
+          <hr/>
+
+          <!-- Rolls Used Section -->
+          <div class="mb-3">
+            <h4><i class="bi bi-box-seam me-1"></i> Rolls Used</h4>
+            <div id="rollsContainer"></div>
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              id="addRollBtn"
+              disabled
+            >
+              <i class="bi bi-plus-circle me-1"></i> Add Another Roll
+            </button>
+          </div>
+
+          <hr/>
+
+          <!-- Total Pieces Display -->
+          <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap">
+            <strong>Total Pieces (calculated):</strong>
+            <span id="totalPiecesDisplay" class="fs-5 fw-bold">0</span>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-check-circle me-1"></i> Create Lot
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Size Template -->
+  <div id="sizeTemplate" class="d-none">
+    <div class="roll-section size-section">
+      <button type="button" class="btn btn-sm btn-danger removeSizeBtn">
+        <i class="bi bi-dash-circle me-1"></i> Remove
+      </button>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label visually-hidden">Size</label>
+          <select class="form-select sizeLabelSel" name="size_label[]" required>
+            <option value="">--Select Size--</option>
+            <option value="26">26</option>
+            <option value="28">28</option>
+            <option value="30">30</option>
+            <option value="32">32</option>
+            <option value="34">34</option>
+            <option value="36">36</option>
+            <option value="XL">XL</option>
+            <option value="XXL">XXL</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label visually-hidden">Pattern Count</label>
+          <input
+            type="number"
+            class="form-control patternCountInput"
+            min="1"
+            value="1"
+            name="pattern_count[]"
+            required
+            placeholder="Pattern Count"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roll Template -->
+  <div id="rollTemplate" class="d-none">
+    <div class="roll-section">
+      <button type="button" class="btn btn-sm btn-danger remove-roll-btn">
+        <i class="bi bi-x-circle"></i>
+      </button>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label"><i class="bi bi-box-arrow-in-down me-1"></i> Roll No</label>
+          <select class="form-select rollNoSel" name="roll_no[]" required>
+            <option value="">--Select Roll No.--</option>
+            <!-- Options will be populated based on selected fabric_type -->
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label"><i class="bi bi-layer-fill me-1"></i> Layers</label>
+          <input
+            type="number"
+            class="form-control layersInput"
+            name="layers[]"
+            min="1"
+            required
+            placeholder="Enter Layers"
+          />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label"><i class="bi bi-weight-fill me-1"></i> Weight Used</label>
+          <input
+            type="number"
+            step="0.01"
+            class="form-control weightUsedInput"
+            name="weight_used[]"
+            min="0"
+            required
+            placeholder="Enter Weight Used"
+          />
+        </div>
+      </div>
+      <!-- Progress bar for used vs available -->
+      <div class="mb-3">
+        <label class="form-label"><i class="bi bi-graph-up me-1"></i> Weight Usage Progress</label>
+        <div class="progress">
+          <div
+            class="progress-bar bg-info"
+            role="progressbar"
+            style="width: 0%;"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            0%
+          </div>
+        </div>
+        <small class="text-muted">
+          Available: <span class="availableWeightTxt">0</span>
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS and Dependencies -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  ></script>
+
+  <!-- Custom Script -->
+  <script>
+    // Pass rollsByFabricType from server to client
+    const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>; 
+    // e.g., {"Cotton": [{roll_no:"2087", per_roll_weight:120}, ...], "Polyester": [...]}
+
+    console.log("rollsByFabricType:", rollsByFabricType); // Debugging
+
+    const sizeTemplate = document.getElementById('sizeTemplate');
+    const rollTemplate = document.getElementById('rollTemplate');
+    const sizesContainer = document.getElementById('sizesContainer');
+    const addSizeBtn = document.getElementById('addSizeBtn');
+    const rollsContainer = document.getElementById('rollsContainer');
+    const addRollBtn = document.getElementById('addRollBtn');
+    const totalPiecesDisplay = document.getElementById('totalPiecesDisplay');
+    const lotForm = document.getElementById('lotForm');
+    const fabricTypeSel = document.getElementById('fabric_type');
+
+    // Function to add a new size
+    function addNewSize() {
+      const newSize = sizeTemplate.cloneNode(true);
+      newSize.classList.remove('d-none');
+      newSize.removeAttribute('id');
+      sizesContainer.appendChild(newSize);
+
+      // Remove size functionality
+      const removeSizeBtn = newSize.querySelector('.removeSizeBtn');
+      removeSizeBtn.addEventListener('click', () => {
+        newSize.remove();
+        updateTotalPieces();
+      });
+
+      // Pattern count input event
+      const patternCountInput = newSize.querySelector('.patternCountInput');
+      patternCountInput.addEventListener('input', () => {
+        updateTotalPieces();
+      });
+
+      // Size label selection event
+      const sizeLabelSel = newSize.querySelector('.sizeLabelSel');
+      sizeLabelSel.addEventListener('change', () => {
+        updateTotalPieces();
+      });
+    }
+
+    // Function to add a new roll
+    function addNewRoll() {
+      const newRoll = rollTemplate.cloneNode(true);
+      newRoll.classList.remove('d-none');
+      newRoll.removeAttribute('id');
+      rollsContainer.appendChild(newRoll);
+
+      // Remove roll functionality
+      const removeRollBtn = newRoll.querySelector('.remove-roll-btn');
+      removeRollBtn.addEventListener('click', () => {
+        newRoll.remove();
+        updateTotalPieces();
+      });
+
+      // Roll No change event
+      const rollNoSel = newRoll.querySelector('.rollNoSel');
+      const availableWeightTxt = newRoll.querySelector('.availableWeightTxt');
+      const progressBar = newRoll.querySelector('.progress-bar');
+      const layersInput = newRoll.querySelector('.layersInput');
+      const weightUsedInput = newRoll.querySelector('.weightUsedInput');
+
+      rollNoSel.addEventListener('change', () => {
+        const selectedOption = rollNoSel.selectedOptions[0];
+        if (selectedOption && selectedOption.dataset.weight) {
+          const available = parseFloat(selectedOption.dataset.weight);
+          availableWeightTxt.textContent = available.toFixed(2);
+          weightUsedInput.max = available;
+          updateWeightProgress(newRoll);
+        } else {
+          availableWeightTxt.textContent = '0';
+          weightUsedInput.removeAttribute('max');
+          progressBar.style.width = '0%';
+          progressBar.textContent = '0%';
+          progressBar.classList.remove('bg-danger');
+          progressBar.classList.add('bg-info');
+        }
+      });
+
+      // Layers and Weight Used input events
+      layersInput.addEventListener('input', () => {
+        updateTotalPieces();
+      });
+
+      weightUsedInput.addEventListener('input', () => {
+        updateWeightProgress(newRoll);
+        updateTotalPieces();
+      });
+
+      // Populate Roll Nos based on current fabric_type
+      const currentFabricType = fabricTypeSel.value;
+      if (currentFabricType) {
+        populateRollNos(rollNoSel, currentFabricType);
+      }
+    }
+
+    // Function to update weight usage progress
+    function updateWeightProgress(rollSection) {
+      const rollNoSel = rollSection.querySelector('.rollNoSel');
+      const selectedOption = rollNoSel.selectedOptions[0];
+      if (!selectedOption) return;
+
+      const available = parseFloat(selectedOption.dataset.weight || '0');
+      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value || '0');
+      const bar = rollSection.querySelector('.progress-bar');
+      const ratio = (weightUsed / available) * 100;
+      const percent = Math.min(Math.max(ratio, 0), 100).toFixed(1); // Clamp between 0 and 100
+
+      bar.style.width = `${percent}%`;
+      bar.textContent = `${percent}%`;
+
+      // Highlight progress bar in red if exceeded
+      if (weightUsed > available) {
+        bar.classList.remove('bg-info');
+        bar.classList.add('bg-danger');
+      } else {
+        bar.classList.remove('bg-danger');
+        bar.classList.add('bg-info');
+      }
+    }
+
+    // Function to calculate total pieces
+    function updateTotalPieces() {
+      // Calculate total patterns across all sizes
+      let totalPatterns = 0;
+      sizesContainer.querySelectorAll('.size-section:not(.d-none)').forEach(sr => {
+        const patternCount = parseInt(sr.querySelector('.patternCountInput').value || '0', 10);
+        totalPatterns += patternCount;
+      });
+
+      // Calculate total layers across all rolls
+      let totalLayers = 0;
+      rollsContainer.querySelectorAll('.roll-section:not(.d-none)').forEach(rs => {
+        const layers = parseInt(rs.querySelector('.layersInput').value || '0', 10);
+        totalLayers += layers;
+      });
+
+      // Calculate total pieces
+      let totalPieces = totalPatterns * totalLayers;
+
+      totalPiecesDisplay.textContent = totalPieces;
+    }
+
+    // Function to populate Roll Nos based on fabric type
+    function populateRollNos(rollNoSelect, selectedFabricType) {
+      // Clear existing options
+      rollNoSelect.innerHTML = '<option value="">--Select Roll No.--</option>';
+
+      if (rollsByFabricType[selectedFabricType]) {
+        rollsByFabricType[selectedFabricType].forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.roll_no;
+          opt.dataset.weight = r.per_roll_weight;
+          opt.textContent = `${r.roll_no} (Available: ${r.per_roll_weight})`;
+          rollNoSelect.appendChild(opt);
+        });
+      }
+
+      // Debugging: Log the options added
+      console.log(`Populated Roll Nos for fabric type "${selectedFabricType}":`, rollsByFabricType[selectedFabricType]);
+    }
+
+    // Event listener for Fabric Type change to populate Roll Nos
+    fabricTypeSel.addEventListener('change', () => {
+      const selectedFabricType = fabricTypeSel.value;
+      const rollNoSels = rollsContainer.querySelectorAll('.rollNoSel');
+
+      rollNoSels.forEach(rollNoSel => {
+        populateRollNos(rollNoSel, selectedFabricType);
+      });
+
+      if (fabricTypeSel.value) {
+        addRollBtn.disabled = false;
+        // Reset existing rolls if fabric_type changes
+        rollsContainer.innerHTML = '';
+        updateTotalPieces();
+      } else {
+        addRollBtn.disabled = true;
+        rollsContainer.innerHTML = '';
+        updateTotalPieces();
+      }
+    });
+
+    // Add a new size when "Add Size" button is clicked
+    addSizeBtn.addEventListener('click', addNewSize);
+
+    // Add a new roll when "Add Another Roll" button is clicked
+    addRollBtn.addEventListener('click', addNewRoll);
+
+    // Initialize with one size
+    addNewSize();
+  </script>
+</body>
+</html>

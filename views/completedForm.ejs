@@ -1,0 +1,106 @@
+<!-- views/completedForm.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Assign Completed - <%= assignment.lot_no %></title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  />
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+    <div class="container-fluid">
+      <span class="navbar-brand">Operator - Completed Pieces</span>
+      <div class="ms-auto">
+        <span class="navbar-text me-3">
+          Welcome, <strong><%= user.username %></strong>
+        </span>
+        <a href="/logout" class="btn btn-outline-light">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <% if (error && error.length > 0) { %>
+      <div class="alert alert-danger"><%= error[0] %></div>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <div class="alert alert-success"><%= success[0] %></div>
+    <% } %>
+
+    <h3>Lot: <%= assignment.lot_no %></h3>
+    <p>
+      SKU: <%= assignment.sku %> | Fabric: <%= assignment.fabric_type %>
+      <br/>
+      Assigned Pieces: <%= assignment.assigned_pieces %>
+      <br/>
+      Current Status: <%= assignment.status %>
+    </p>
+    <hr/>
+
+    <!-- We see how many completed_pieces exist in size_assignments.
+         Then the operator chooses how many of those completed to pass on. -->
+    <form method="POST" action="/operator/reassign-completed">
+      <input type="hidden" name="assignment_id" value="<%= assignment.assignment_id %>" />
+
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Size Label</th>
+            <th>Assigned Pieces</th>
+            <th>Completed Pieces</th>
+            <th>Pass Forward</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% sizes.forEach((sz, idx) => { %>
+            <tr>
+              <td>
+                <%= sz.size_label %>
+                <input type="hidden" name="completed_sizes[<%= idx %>][size_label]" value="<%= sz.size_label %>" />
+              </td>
+              <td><%= sz.assigned_pieces %></td>
+              <td><%= sz.completed_pieces %></td>
+              <td>
+                <!-- Operator can pass some or all of the completed_pieces to next dept -->
+                <input
+                  type="number"
+                  class="form-control form-control-sm"
+                  name="completed_sizes[<%= idx %>][completed_to_pass]"
+                  min="0"
+                  max="<%= sz.completed_pieces %>"
+                  value="<%= sz.completed_pieces %>"
+                />
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <div class="mb-3">
+        <label class="form-label">Next Dept User ID</label>
+        <input
+          type="number"
+          class="form-control"
+          name="next_dept_user_id"
+          placeholder="User ID of next department user"
+          required
+        />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Target Day</label>
+        <input type="date" class="form-control" name="target_day" />
+      </div>
+
+      <button type="submit" class="btn btn-primary">Pass Completed Pieces</button>
+      <a href="/operator/dashboard" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+  </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!-- views/assignLotForm.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Assign Lot <%= lot.lot_no %></title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  />
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+    <div class="container-fluid">
+      <span class="navbar-brand">Operator - Assign Lot</span>
+      <div class="ms-auto">
+        <span class="navbar-text me-3">
+          Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
+        </span>
+        <a href="/logout" class="btn btn-outline-light">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <% if (error && error.length > 0) { %>
+      <div class="alert alert-danger"><%= error[0] %></div>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <div class="alert alert-success"><%= success[0] %></div>
+    <% } %>
+
+    <h3>Assign Lot: <%= lot.lot_no %></h3>
+    <p>SKU: <%= lot.sku %> | Fabric: <%= lot.fabric_type %> | Confirmed? <%= lot.is_confirmed %></p>
+    <hr />
+
+    <!-- We pass the numeric lot_id for the final DB reference,
+         but the user sees lot_no in the page. -->
+    <form method="POST" action="/operator/assign-lot">
+      <input type="hidden" name="lot_id" value="<%= lot.lot_id %>" />
+
+      <div class="mb-3">
+        <label for="roleSelect" class="form-label">Next Department Role</label>
+        <select class="form-select" id="roleSelect" name="role_id" required>
+          <option value="">-- Select Role --</option>
+          <% nextRoles.forEach(r => { %>
+            <option value="<%= r.id %>"><%= r.name %></option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="userSelect" class="form-label">Select User in that Department</label>
+        <select class="form-select" id="userSelect" name="assigned_user_id" required>
+          <option value="">-- Select a Department User --</option>
+        </select>
+      </div>
+
+      <hr />
+      <h5>Size Assignments</h5>
+      <% sizes.forEach((sz, idx) => { %>
+        <div class="row mb-2">
+          <div class="col-4">
+            <strong>Size: <%= sz.size_label %></strong>
+            <input type="hidden" name="size_assignments[<%= idx %>][size_label]" value="<%= sz.size_label %>" />
+          </div>
+          <div class="col-4">
+            Max: <%= sz.total_pieces %>
+          </div>
+          <div class="col-4">
+            <input
+              type="number"
+              class="form-control form-control-sm"
+              name="size_assignments[<%= idx %>][assign_pieces]"
+              min="0"
+              max="<%= sz.total_pieces %>"
+              placeholder="Pieces"
+            />
+          </div>
+        </div>
+      <% }) %>
+
+      <div class="mb-3 mt-3">
+        <label for="target_day" class="form-label">Target Day</label>
+        <input type="date" class="form-control" name="target_day" />
+      </div>
+
+      <button type="submit" class="btn btn-primary">Assign Lot</button>
+      <a href="/operator/dashboard" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+  </script>
+  <script>
+    // Ajax load next dept users
+    const roleSelect = document.getElementById('roleSelect');
+    const userSelect = document.getElementById('userSelect');
+    roleSelect.addEventListener('change', () => {
+      const val = roleSelect.value;
+      userSelect.innerHTML = '<option value="">Loading...</option>';
+      if (!val) {
+        userSelect.innerHTML = '<option value="">-- Select a Department User --</option>';
+        return;
+      }
+      fetch('/operator/get-dept-users?roleId=' + val)
+        .then(res => res.json())
+        .then(data => {
+          userSelect.innerHTML = '<option value="">-- Select a Department User --</option>';
+          if (data.users) {
+            data.users.forEach(u => {
+              const opt = document.createElement('option');
+              opt.value = u.id;
+              opt.textContent = u.username;
+              userSelect.appendChild(opt);
+            });
+          }
+        })
+        .catch(err => {
+          userSelect.innerHTML = '<option value="">Error loading users</option>';
+        });
+    });
+  </script>
+</body>
+</html>

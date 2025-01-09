@@ -1,0 +1,113 @@
+<!-- views/fabricInvoiceRolls.ejs -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fabric Invoice Rolls</title>
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    />
+    <style>
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
+        <div class="container-fluid">
+            <span class="navbar-brand">Fabric Invoice Rolls</span>
+            <div class="ms-auto">
+                <span class="navbar-text me-3">
+                    Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
+                </span>
+                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">Dashboard</a>
+                <a href="/logout" class="btn btn-outline-light">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Display Flash Messages -->
+        <% if (error && error.length > 0) { %>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <%= error %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <% } %>
+
+        <% if (success && success.length > 0) { %>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <%= success %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <% } %>
+
+        <h2 class="mb-4">Rolls for Invoice: <%= invoice.invoice_no %></h2>
+        <p><strong>Vendor Name:</strong> <%= invoice.vendor_name %></p>
+        <p><strong>Date Invoice:</strong> <%= invoice.date_invoice.toISOString().split('T')[0] %></p>
+        <p><strong>Date Received:</strong> <%= invoice.date_received.toISOString().split('T')[0] %></p>
+        <p><strong>Total Roll Quantity:</strong> <%= invoice.total_roll_quantity %></p>
+        <p><strong>Fabric Type:</strong> <%= invoice.fabric_type || 'N/A' %></p>
+        <p><strong>Invoice Weight:</strong> <%= invoice.invoice_weight || 'N/A' %></p>
+        <p><strong>Short Weight:</strong> <%= invoice.short_weight || 'N/A' %></p>
+
+        <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+            <div>
+                <a href="/fabric-manager/invoice/<%= invoice.id %>/download-rolls" class="btn btn-secondary btn-sm">Download Rolls as Excel</a>
+            </div>
+            <div>
+                <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                    Print
+                </button>
+            </div>
+        </div>
+
+        <table class="table table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Roll No</th>
+                    <th>Per Roll Weight</th>
+                    <th>Color</th>
+                    <th>GR No by Vendor</th>
+                    <th>Unit</th>
+                    <th>Created By</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (rolls.length === 0) { %>
+                    <tr>
+                        <td colspan="7" class="text-center">No Rolls Found for this Invoice.</td>
+                    </tr>
+                <% } else { %>
+                    <% rolls.forEach(roll => { %>
+                        <tr>
+                            <td><%= roll.id %></td>
+                            <td><%= roll.roll_no %></td>
+                            <td><%= roll.per_roll_weight %></td>
+                            <td><%= roll.color || 'N/A' %></td>
+                            <td><%= roll.gr_no_by_vendor || 'N/A' %></td>
+                            <td><%= roll.unit %></td>
+                            <td><%= roll.created_by %></td>
+                        </tr>
+                    <% }) %>
+                <% } %>
+            </tbody>
+        </table>
+
+        <!-- Bulk Upload for Rolls -->
+        <div class="mb-4 no-print">
+            <a href="/fabric-manager/bulk-upload/rolls" class="btn btn-outline-primary">Bulk Upload Fabric Invoice Rolls</a>
+            <a href="/fabric-manager/dashboard" class="btn btn-outline-success">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    ></script>
+</body>
+</html>

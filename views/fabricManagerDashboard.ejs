@@ -1,0 +1,141 @@
+<!-- views/fabricManagerDashboard.ejs -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fabric Manager Dashboard</title>
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    />
+    <style>
+        .table-scroll {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
+        <div class="container-fluid">
+            <span class="navbar-brand">Fabric Manager Dashboard</span>
+            <div class="ms-auto">
+                <span class="navbar-text me-3">
+                    Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
+                </span>
+                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">Dashboard</a>
+                <a href="/logout" class="btn btn-outline-light">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Display Flash Messages -->
+        <% if (error && error.length > 0) { %>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <%= error %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <% } %>
+
+        <% if (success && success.length > 0) { %>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <%= success %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <% } %>
+
+        <h2 class="mb-4">Fabric Invoices</h2>
+
+        <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+            <div class="d-flex align-items-center">
+                <h4 class="mb-0 me-4">Data Table</h4>
+                <form class="d-flex" method="GET" action="/fabric-manager/view">
+                    <input type="hidden" name="table" value="fabric_invoices" />
+                    <input
+                        type="text"
+                        name="search"
+                        class="form-control form-control-sm me-2"
+                        placeholder="Search..."
+                        value="<%= searchTerm %>"
+                    />
+                    <button type="submit" class="btn btn-sm btn-primary">Search</button>
+                </form>
+            </div>
+            <div>
+                <a
+                    href="/fabric-manager/download-excel?search=<%= encodeURIComponent(searchTerm) %>"
+                    class="btn btn-success btn-sm me-2"
+                >
+                    Download Excel
+                </a>
+                <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                    Print
+                </button>
+            </div>
+        </div>
+
+        <div class="table-scroll mb-4">
+            <table class="table table-bordered" id="dataTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Invoice No</th>
+                        <th>Vendor Name</th>
+                        <th>Date Invoice</th>
+                        <th>Date Received</th>
+                        <th>Total Roll Quantity</th>
+                        <th>Fabric Type</th>
+                        <th>Invoice Weight</th>
+                        <th>Short Weight</th>
+                        <th>Created By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (fabricInvoices.length === 0) { %>
+                        <tr>
+                            <td colspan="11" class="text-center">No Fabric Invoices Found.</td>
+                        </tr>
+                    <% } else { %>
+                        <% fabricInvoices.forEach(invoice => { %>
+                            <tr>
+                                <td><%= invoice.id %></td>
+                                <td><%= invoice.invoice_no %></td>
+                                <td><%= invoice.vendor_name %></td>
+                                <td><%= invoice.date_invoice.toISOString().split('T')[0] %></td>
+                                <td><%= invoice.date_received.toISOString().split('T')[0] %></td>
+                                <td><%= invoice.total_roll_quantity %></td>
+                                <td><%= invoice.fabric_type || 'N/A' %></td>
+                                <td><%= invoice.invoice_weight || 'N/A' %></td>
+                                <td><%= invoice.short_weight || 'N/A' %></td>
+                                <td><%= invoice.created_by %></td>
+                                <td>
+                                    <a href="/fabric-manager/invoice/<%= invoice.id %>/rolls" class="btn btn-sm btn-info">View Rolls</a>
+                                    <a href="/fabric-manager/invoice/<%= invoice.id %>/download-rolls" class="btn btn-sm btn-secondary">Download Rolls</a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Bulk Upload and Insert Forms -->
+        <div class="mb-4 no-print">
+            <a href="/fabric-manager/bulk-upload" class="btn btn-outline-primary">Bulk Upload Fabric Invoices</a>
+            <a href="/fabric-manager/bulk-upload/rolls" class="btn btn-outline-secondary">Bulk Upload Fabric Invoice Rolls</a>
+            <a href="/fabric-manager/view" class="btn btn-outline-success">Advanced View</a>
+        </div>
+    </div>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    ></script>
+</body>
+</html>

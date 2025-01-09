@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Admin Dashboard</title>
+    <!-- Bootstrap 5 -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    />
+    <!-- Bootstrap Icons (optional) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+    />
+    <style>
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      /* Sidebar styling */
+      .sidebar {
+        height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 220px;
+        background-color: #343a40;
+        color: #fff;
+        overflow-y: auto;
+      }
+      .sidebar .nav-link {
+        color: #fff;
+      }
+      .sidebar .nav-link:hover {
+        background-color: #495057;
+        color: #fff;
+      }
+      /* Main content offset by sidebar width */
+      .main-content {
+        margin-left: 220px;
+        padding: 20px;
+        flex: 1;
+      }
+      .brand {
+        font-weight: bold;
+        letter-spacing: 0.5px;
+      }
+      .sidebar .user-info {
+        border-bottom: 1px solid #495057;
+        padding: 1rem;
+      }
+      .sidebar .user-info p {
+        margin: 0;
+        font-size: 0.9rem;
+      }
+      /* On smaller screens, you might want to hide the sidebar or make it collapsible (not included here). */
+      @media (max-width: 768px) {
+        .sidebar {
+          position: relative;
+          height: auto;
+          width: 100%;
+        }
+        .main-content {
+          margin-left: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar d-flex flex-column">
+      <div class="p-3 user-info">
+        <span class="brand h4">Admin Dashboard</span>
+        <p class="mt-2">Welcome, <strong><%= user.username %></strong></p>
+        <p>Role: <strong><%= user.roleName %></strong></p>
+      </div>
+      <nav class="nav flex-column p-2">
+        <a
+          class="nav-link"
+          href="#"
+          data-bs-toggle="collapse"
+          data-bs-target="#rolesSection"
+          aria-expanded="false"
+        >
+          <i class="bi bi-shield-lock me-2"></i> Roles
+        </a>
+        <a
+          class="nav-link"
+          href="#"
+          data-bs-toggle="collapse"
+          data-bs-target="#usersSection"
+          aria-expanded="false"
+        >
+          <i class="bi bi-people me-2"></i> Users
+        </a>
+        <a
+          class="nav-link"
+          href="#"
+          data-bs-toggle="collapse"
+          data-bs-target="#dashboardsSection"
+          aria-expanded="false"
+        >
+          <i class="bi bi-table me-2"></i> Dashboards
+        </a>
+        <hr class="bg-secondary" />
+        <a class="nav-link" href="/logout">
+          <i class="bi bi-box-arrow-right me-2"></i> Logout
+        </a>
+      </nav>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="container-fluid">
+        <h2 class="mb-4">Admin Panel</h2>
+
+        <!-- ROLES SECTION -->
+        <div class="collapse show" id="rolesSection">
+          <div class="card mb-3">
+            <div
+              class="card-header d-flex justify-content-between align-items-center"
+            >
+              <h4 class="mb-0">Roles</h4>
+              <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#createRoleModal"
+              >
+                <i class="bi bi-plus-circle me-1"></i> Create Role
+              </button>
+            </div>
+            <div class="card-body">
+              <h5>Existing Roles</h5>
+              <ul class="list-group">
+                <% roles.forEach((r) => { %>
+                  <li class="list-group-item">
+                    <%= r.name %>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- USERS SECTION -->
+        <div class="collapse" id="usersSection">
+          <div class="card mb-3">
+            <div
+              class="card-header d-flex justify-content-between align-items-center"
+            >
+              <h4 class="mb-0">Users</h4>
+              <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#createUserModal"
+              >
+                <i class="bi bi-plus-circle me-1"></i> Create User
+              </button>
+            </div>
+            <div class="card-body">
+              <h5>Existing Users</h5>
+              <ul class="list-group">
+                <% users.forEach((u) => { %>
+                  <li
+                    class="list-group-item d-flex justify-content-between align-items-center"
+                  >
+                    <div>
+                      <strong><%= u.username %></strong> (Role: <%= u.role_name %>)
+                      <%= u.is_active ? '' : ' [INACTIVE]' %>
+                    </div>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- DASHBOARDS SECTION -->
+        <div class="collapse" id="dashboardsSection">
+          <div class="card mb-3">
+            <div
+              class="card-header d-flex justify-content-between align-items-center"
+            >
+              <h4 class="mb-0">Dashboards</h4>
+              <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#createDashboardModal"
+              >
+                <i class="bi bi-plus-circle me-1"></i> Create Dashboard
+              </button>
+            </div>
+            <div class="card-body">
+              <h5>Manage Existing Dashboards</h5>
+              <div class="table-responsive">
+                <table class="table table-bordered">
+                  <thead class="table-dark">
+                    <tr>
+                      <th>#ID</th>
+                      <th>Dashboard Name</th>
+                      <th>Table Name</th>
+                      <th>Assigned Role</th>
+                      <th>Can Update?</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% dashboards.forEach((d) => { %>
+                      <tr>
+                        <td><%= d.id %></td>
+                        <td><%= d.name %></td>
+                        <td><%= d.table_name %></td>
+                        <td>
+                          <form
+                            method="POST"
+                            action="/admin/update-dashboard-role"
+                            class="d-flex"
+                          >
+                            <input
+                              type="hidden"
+                              name="dashboardId"
+                              value="<%= d.id %>"
+                            />
+                            <select
+                              name="roleId"
+                              class="form-select form-select-sm w-auto me-2"
+                            >
+                              <% roles.forEach((r) => { %>
+                                <option
+                                  value="<%= r.id %>"
+                                  <%= (r.id === d.role_id) ? 'selected' : '' %>
+                                >
+                                  <%= r.name %>
+                                </option>
+                              <% }) %>
+                            </select>
+                            <button
+                              type="submit"
+                              class="btn btn-sm btn-success"
+                            >
+                              Update
+                            </button>
+                          </form>
+                        </td>
+                        <td><%= d.can_update ? 'Yes' : 'No' %></td>
+                        <td>
+                          <!-- Potential delete or other actions, if you want -->
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- /container-fluid -->
+    </div> <!-- /main-content -->
+
+    <!-- MODALS -->
+
+    <!-- CREATE ROLE MODAL -->
+    <div
+      class="modal fade"
+      id="createRoleModal"
+      tabindex="-1"
+      aria-labelledby="createRoleModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="createRoleModalLabel">Create Role</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <form method="POST" action="/admin/create-role">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="roleName" class="form-label">Role Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="roleName"
+                  name="roleName"
+                  required
+                />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn btn-primary">Create Role</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE USER MODAL -->
+    <div
+      class="modal fade"
+      id="createUserModal"
+      tabindex="-1"
+      aria-labelledby="createUserModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="createUserModalLabel">Create User</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <form method="POST" action="/admin/create-user">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="username"
+                  name="username"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input
+                  type="password"
+                  class="form-control"
+                  id="password"
+                  name="password"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="role_id" class="form-label">Assign Role</label>
+                <select
+                  class="form-select"
+                  id="role_id"
+                  name="role_id"
+                  required
+                >
+                  <% roles.forEach((r) => { %>
+                    <option value="<%= r.id %>"><%= r.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn btn-primary">Create User</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE DASHBOARD MODAL (New Table) -->
+    <div
+      class="modal fade"
+      id="createDashboardModal"
+      tabindex="-1"
+      aria-labelledby="createDashboardModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="createDashboardModalLabel">
+              Create Dashboard/Table
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <!-- NOTE: This action is /admin/create-dashboard -->
+          <form method="POST" action="/admin/create-dashboard">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="dashboardName" class="form-label">
+                  Dashboard Friendly Name
+                </label>
+                <input
+                  type="text"
+                  name="dashboardName"
+                  id="dashboardName"
+                  class="form-control"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="tableName" class="form-label">
+                  Database Table Name
+                </label>
+                <input
+                  type="text"
+                  name="tableName"
+                  id="tableName"
+                  class="form-control"
+                  required
+                />
+              </div>
+              <div class="mb-3">
+                <label for="roleId" class="form-label">Assign to Role</label>
+                <select name="roleId" id="roleId" class="form-select" required>
+                  <% roles.forEach((r) => { %>
+                    <option value="<%= r.id %>"><%= r.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="form-check mb-3">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  name="canUpdate"
+                  id="canUpdate"
+                />
+                <label class="form-check-label" for="canUpdate">
+                  Allow updates/insert data?
+                </label>
+              </div>
+              <div class="mb-3">
+                <label for="columns" class="form-label">Columns (JSON array)</label>
+                <textarea
+                  name="columns"
+                  id="columns"
+                  rows="6"
+                  class="form-control"
+                  required
+                >
+[{"name":"fabric_type","type":"VARCHAR(100)","isNotNull":true},{"name":"roll_no","type":"VARCHAR(50)","isNotNull":true}]
+                </textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn btn-primary">
+                Create Dashboard
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    ></script>
+  </body>
+</html>

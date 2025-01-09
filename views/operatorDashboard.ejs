@@ -1,0 +1,186 @@
+<!-- views/operatorDashboard.ejs -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Operator Dashboard</title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+  />
+  <style>
+    .bordered-block {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #fff;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand">Operator Dashboard</span>
+      <div class="ms-auto">
+        <span class="navbar-text me-3">
+          Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
+        </span>
+        <a href="/logout" class="btn btn-outline-light">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <% if (error && error.length > 0) { %>
+      <div class="alert alert-danger"><%= error[0] %></div>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <div class="alert alert-success"><%= success[0] %></div>
+    <% } %>
+
+    <div class="row">
+      <!-- (A) LEFT COLUMN: Unconfirmed + Unassigned -->
+      <div class="col-md-6">
+        <h4>Unconfirmed + Unassigned Lots</h4>
+        <% if (unassignedLots.length === 0) { %>
+          <p>No unconfirmed/unassigned lots found.</p>
+        <% } else { %>
+          <% unassignedLots.forEach(lot => { %>
+            <div class="bordered-block">
+              <h5>Lot No: <%= lot.lot_no %></h5>
+              <p>
+                <strong>SKU:</strong> <%= lot.sku %> |
+                <strong>Fabric:</strong> <%= lot.fabric_type %> |
+                <strong>Confirmed?</strong> <%= lot.is_confirmed %>
+              </p>
+              <p><strong>Total (expected):</strong> <%= lot.total_pieces %></p>
+              <p><strong>Sizes:</strong>
+                <% lot.sizes.forEach(sz => { %>
+                  <%= sz.size_label %> (<%= sz.size_total_pieces %>) |
+                <% }) %>
+              </p>
+
+              <!-- Operator can confirm cutting pieces -->
+              <form method="POST" action="/operator/confirm-cutting">
+                <input type="hidden" name="lot_no" value="<%= lot.lot_no %>" />
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Size</th>
+                      <th>Actual Received</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% lot.sizes.forEach((sz, idx) => { %>
+                      <tr>
+                        <td>
+                          <%= sz.size_label %>
+                          <input type="hidden" name="sizes[<%= idx %>][size_label]" value="<%= sz.size_label %>" />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            class="form-control form-control-sm"
+                            name="sizes[<%= idx %>][actual_received]"
+                            min="0"
+                            value="<%= sz.size_total_pieces %>"
+                          />
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+                <button type="submit" class="btn btn-sm btn-primary">Confirm Cutting</button>
+              </form>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+
+      <!-- (B) RIGHT COLUMN: Assigned by Operator -->
+      <div class="col-md-6">
+        <h4>Assigned Lots</h4>
+        <% if (assignedAssignments.length === 0) { %>
+          <p>No assigned lots found.</p>
+        <% } else { %>
+          <table class="table table-bordered">
+            <thead class="table-dark">
+              <tr>
+                <th>Lot No</th>
+                <th>Assigned Pieces</th>
+                <th>Dept Confirmed</th>
+                <th>Remaining (not completed)</th>
+                <th>Status</th>
+                <th>Assigned At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% assignedAssignments.forEach(a => {
+                   const leftover = a.assigned_pieces - a.total_confirmed_by_dept;
+              %>
+                <tr>
+                  <td><%= a.lot_no %></td>
+                  <td><%= a.assigned_pieces %></td>
+                  <td><%= a.total_confirmed_by_dept %></td>
+                  <td><%= leftover %></td>
+                  <td><%= a.status %></td>
+                  <td><%= new Date(a.assigned_at).toLocaleString() %></td>
+                  <td>
+                    <!-- Optional: link to a "pendency" route -->
+                    <a href="/operator/pendency/<%= a.lot_no %>" class="btn btn-sm btn-info mb-2">View Pendency</a>
+                    <br/>
+                    <!-- We do "Pass Completed" logic here, not leftover. So we show a link to /operator/completed/:assignmentId -->
+                    <a
+                      href="/operator/completed/<%= a.assignment_id %>"
+                      class="btn btn-sm btn-success"
+                    >
+                      Pass Completed
+                    </a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+
+    <hr/>
+
+    <!-- (C) Confirmed but Unassigned -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <h4>Confirmed but Not Assigned</h4>
+        <% if (!confirmedButUnassigned || confirmedButUnassigned.length === 0) { %>
+          <p>No confirmed-but-unassigned lots found.</p>
+        <% } else { %>
+          <% confirmedButUnassigned.forEach(lot => { %>
+            <div class="bordered-block">
+              <h5>Lot No: <%= lot.lot_no %></h5>
+              <p>
+                <strong>SKU:</strong> <%= lot.sku %> |
+                <strong>Fabric:</strong> <%= lot.fabric_type %> |
+                <strong>Confirmed?:</strong> <%= lot.is_confirmed %>
+              </p>
+              <p><strong>Total Pieces:</strong> <%= lot.total_pieces %></p>
+              <!-- Link to /operator/assign-lot-form/<lot.lot_no> -->
+              <a 
+                href="/operator/assign-lot-form/<%= lot.lot_no %>"
+                class="btn btn-sm btn-primary"
+              >
+                Assign to Next Dept
+              </a>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+  </div> <!-- /container -->
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+  </script>
+</body>
+</html>
