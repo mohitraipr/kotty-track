@@ -55,6 +55,9 @@ router.post('/login', async (req, res) => {
       case 'cutting_manager':
         res.redirect('/cutting-manager/dashboard');
         break;
+      case 'fabric_manager':
+        res.redirect('/fabric-manager/dashboard');
+        break;
       case 'operator':
         res.redirect('/operator/dashboard');
         break;
