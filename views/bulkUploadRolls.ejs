@@ -1,9 +1,9 @@
-<!-- views/bulkUpload.ejs -->
+<!-- views/bulkUploadRolls.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bulk Upload Fabric Invoices</title>
+    <title>Bulk Upload Fabric Invoice Rolls</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome Icons -->
@@ -13,7 +13,7 @@
             background-color: #f8f9fa;
         }
         .upload-card {
-            max-width: 600px;
+            max-width: 800px;
             margin: 50px auto;
         }
     </style>
@@ -23,7 +23,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
         <div class="container-fluid">
             <a class="navbar-brand" href="/fabric-manager/dashboard">
-                <i class="fas fa-industry"></i> Bulk Upload Fabric Invoices
+                <i class="fas fa-industry"></i> Bulk Upload Fabric Invoice Rolls
             </a>
             <div class="ms-auto">
                 <span class="navbar-text me-3">
@@ -41,26 +41,14 @@
 
     <!-- Main Container -->
     <div class="container upload-card">
-        <!-- Flash Messages -->
-        <% if (error && error.length > 0) { %>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fas fa-exclamation-triangle"></i> <%= error.join(' ') %>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        <% } %>
-
-        <% if (success && success.length > 0) { %>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fas fa-check-circle"></i> <%= success.join(' ') %>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        <% } %>
+        <!-- Include Flash Messages Partial -->
+        <%- include('partials/flashMessages') %>
 
         <!-- Upload Form -->
         <div class="card shadow-sm">
             <div class="card-body">
                 <h4 class="card-title mb-4"><i class="fas fa-upload"></i> Bulk Upload for <%= tableName %></h4>
-                <form action="/fabric-manager/bulk-upload/invoices" method="POST" enctype="multipart/form-data">
+                <form action="/fabric-manager/bulk-upload/rolls" method="POST" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="excelFile" class="form-label">
                             <i class="fas fa-file-excel"></i> Upload Excel File (.xlsx)
@@ -75,6 +63,21 @@
                         <i class="fas fa-times-circle"></i> Cancel
                     </a>
                 </form>
+
+                <hr>
+
+                <!-- Roll Number Uniqueness Information -->
+                <h5>Roll Number Uniqueness</h5>
+                <p>The system enforces that each <strong>roll_no</strong> is unique per vendor. If a <strong>roll_no</strong> already exists for a vendor, the upload will fail for that row.</p>
+
+                <hr>
+
+                <!-- Excel Template Information -->
+                <h5>Excel Template</h5>
+                <p>Please download the Excel template to ensure correct formatting:</p>
+                <a href="/path-to-template/fabric_invoice_rolls_template.xlsx" download class="btn btn-outline-success">
+                    <i class="fas fa-download"></i> Download Template
+                </a>
             </div>
         </div>
     </div>
