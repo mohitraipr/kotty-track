@@ -13,7 +13,7 @@
             background-color: #f8f9fa;
         }
         .upload-card {
-            max-width: 600px;
+            max-width: 800px;
             margin: 50px auto;
         }
     </style>
@@ -41,20 +41,8 @@
 
     <!-- Main Container -->
     <div class="container upload-card">
-        <!-- Flash Messages -->
-        <% if (error && error.length > 0) { %>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fas fa-exclamation-triangle"></i> <%= error.join(' ') %>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        <% } %>
-
-        <% if (success && success.length > 0) { %>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fas fa-check-circle"></i> <%= success.join(' ') %>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        <% } %>
+        <!-- Include Flash Messages Partial -->
+        <%- include('partials/flashMessages') %>
 
         <!-- Upload Form -->
         <div class="card shadow-sm">
@@ -75,6 +63,22 @@
                         <i class="fas fa-times-circle"></i> Cancel
                     </a>
                 </form>
+
+                <hr>
+
+                <!-- Vendor Mapping Information -->
+                <h5>Vendor Mapping</h5>
+                <p>The system will automatically match the <strong>vendor_name</strong> in your Excel file to existing vendors. If a vendor does not exist, a new vendor will be created.</p>
+                <p><strong>Note:</strong> Ensure that the <strong>vendor_name</strong> in your Excel matches the intended vendor names.</p>
+
+                <hr>
+
+                <!-- Excel Template Information -->
+                <h5>Excel Template</h5>
+                <p>Please download the Excel template to ensure correct formatting:</p>
+                <a href="/path-to-template/fabric_invoices_template.xlsx" download class="btn btn-outline-success">
+                    <i class="fas fa-download"></i> Download Template
+                </a>
             </div>
         </div>
     </div>
