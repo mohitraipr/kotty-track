@@ -1,57 +1,85 @@
 <!-- views/bulkUpload.ejs -->
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Bulk Upload Fabric Invoices</title>
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    />
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .upload-card {
+            max-width: 600px;
+            margin: 50px auto;
+        }
+    </style>
 </head>
-<body class="bg-light">
+<body>
+    <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
         <div class="container-fluid">
-            <span class="navbar-brand">Bulk Upload Fabric Invoices</span>
+            <a class="navbar-brand" href="/fabric-manager/dashboard">
+                <i class="fas fa-industry"></i> Bulk Upload Fabric Invoices
+            </a>
             <div class="ms-auto">
                 <span class="navbar-text me-3">
                     Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
                 </span>
-                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">Dashboard</a>
-                <a href="/logout" class="btn btn-outline-light">Logout</a>
+                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a href="/logout" class="btn btn-outline-light">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
             </div>
         </div>
     </nav>
 
-    <div class="container mt-4">
-        <!-- Display Flash Messages -->
-        <% if (errorMessage && errorMessage.length > 0) { %>
+    <!-- Main Container -->
+    <div class="container upload-card">
+        <!-- Flash Messages -->
+        <% if (error && error.length > 0) { %>
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <%= errorMessage %>
+                <i class="fas fa-exclamation-triangle"></i> <%= error.join(' ') %>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <% } %>
 
         <% if (success && success.length > 0) { %>
             <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <%= success %>
+                <i class="fas fa-check-circle"></i> <%= success.join(' ') %>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <% } %>
 
-        <h2>Bulk Upload for <%= tableName %></h2>
-        <form action="/fabric-manager/bulk-upload/invoices" method="POST" enctype="multipart/form-data" class="card p-4">
-            <div class="mb-3">
-                <label for="excelFile" class="form-label">Upload Excel File (.xlsx)</label>
-                <input type="file" class="form-control" id="excelFile" name="excelFile" accept=".xlsx" required />
+        <!-- Upload Form -->
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h4 class="card-title mb-4"><i class="fas fa-upload"></i> Bulk Upload for <%= tableName %></h4>
+                <form action="/fabric-manager/bulk-upload/invoices" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="excelFile" class="form-label">
+                            <i class="fas fa-file-excel"></i> Upload Excel File (.xlsx)
+                        </label>
+                        <input type="file" class="form-control" id="excelFile" name="excelFile" accept=".xlsx" required>
+                        <div class="form-text">Ensure the Excel file follows the required format.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload
+                    </button>
+                    <a href="/fabric-manager/dashboard" class="btn btn-secondary">
+                        <i class="fas fa-times-circle"></i> Cancel
+                    </a>
+                </form>
             </div>
-            <button type="submit" class="btn btn-primary">Upload</button>
-            <a href="/fabric-manager/dashboard" class="btn btn-secondary">Cancel</a>
-        </form>
+        </div>
     </div>
 
-    <script
-        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-    ></script>
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
