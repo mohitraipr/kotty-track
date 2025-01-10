@@ -58,10 +58,14 @@ router.get('/dashboard', isAuthenticated, isFabricManager, async (req, res) => {
 
     try {
         // Fetch total count for pagination
-        let countQuery = 'SELECT COUNT(*) AS total FROM fabric_invoices';
+        let countQuery = `
+            SELECT COUNT(*) AS total 
+            FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
+        `;
         let countParams = [];
         if (searchTerm) {
-            countQuery += ' WHERE invoice_no LIKE ? OR vendor_name LIKE ?';
+            countQuery += ' WHERE fi.invoice_no LIKE ? OR v.name LIKE ?';
             countParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
         }
 
@@ -74,7 +78,7 @@ router.get('/dashboard', isAuthenticated, isFabricManager, async (req, res) => {
             SELECT 
                 fi.id,
                 fi.invoice_no,
-                fi.vendor_name,
+                v.name AS vendor_name,
                 fi.date_invoice,
                 fi.date_received,
                 fi.total_roll_quantity,
@@ -85,17 +89,21 @@ router.get('/dashboard', isAuthenticated, isFabricManager, async (req, res) => {
                 fi.user_id,
                 u.username AS created_by
             FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
             JOIN users u ON fi.user_id = u.id
         `;
         let dataParams = [];
         if (searchTerm) {
-            dataQuery += ' WHERE invoice_no LIKE ? OR vendor_name LIKE ?';
+            dataQuery += ' WHERE fi.invoice_no LIKE ? OR v.name LIKE ?';
             dataParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
         }
         dataQuery += ' ORDER BY fi.total_roll_quantity DESC LIMIT ? OFFSET ?';
         dataParams.push(pageSize, offset);
 
         const [fabricInvoices] = await pool.query(dataQuery, dataParams);
+
+        // Fetch all vendors for display purposes
+        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
 
         // Pass variables to the EJS view
         res.render('fabricManagerDashboard', {
@@ -104,8 +112,8 @@ router.get('/dashboard', isAuthenticated, isFabricManager, async (req, res) => {
             searchTerm,
             currentPage: pageNum,
             totalPages,
-            success: req.flash('success'),
-            error: req.flash('error')
+            vendors, // Pass vendors to the view
+            // Removed 'success' and 'error' to rely on res.locals
         });
     } catch (err) {
         console.error('Error loading Fabric Manager Dashboard:', err);
@@ -127,10 +135,14 @@ router.get('/view', isAuthenticated, isFabricManager, async (req, res) => {
 
     try {
         // Fetch total count for pagination
-        let countQuery = 'SELECT COUNT(*) AS total FROM fabric_invoices';
+        let countQuery = `
+            SELECT COUNT(*) AS total 
+            FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
+        `;
         let countParams = [];
         if (searchTerm) {
-            countQuery += ' WHERE invoice_no LIKE ? OR vendor_name LIKE ?';
+            countQuery += ' WHERE fi.invoice_no LIKE ? OR v.name LIKE ?';
             countParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
         }
 
@@ -143,22 +155,23 @@ router.get('/view', isAuthenticated, isFabricManager, async (req, res) => {
             SELECT 
                 fi.id,
                 fi.invoice_no,
-                fi.vendor_name,
+                v.name AS vendor_name,
                 fi.date_invoice,
                 fi.date_received,
                 fi.total_roll_quantity,
                 fi.fabric_type,
                 fi.invoice_weight,
-                fi.short_weight,                
+                fi.short_weight,
                 fi.received_weight,
                 fi.user_id,
                 u.username AS created_by
             FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
             JOIN users u ON fi.user_id = u.id
         `;
         let dataParams = [];
         if (searchTerm) {
-            dataQuery += ' WHERE invoice_no LIKE ? OR vendor_name LIKE ?';
+            dataQuery += ' WHERE fi.invoice_no LIKE ? OR v.name LIKE ?';
             dataParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
         }
         dataQuery += ' ORDER BY fi.total_roll_quantity DESC LIMIT ? OFFSET ?';
@@ -174,6 +187,7 @@ router.get('/view', isAuthenticated, isFabricManager, async (req, res) => {
             searchTerm,
             currentPage: pageNum,
             totalPages
+            // Removed 'success' and 'error' to rely on res.locals
         });
     } catch (err) {
         console.error('Error in /fabric-manager/view:', err);
@@ -195,7 +209,7 @@ router.get('/download-excel', isAuthenticated, isFabricManager, async (req, res)
             SELECT 
                 fi.id,
                 fi.invoice_no,
-                fi.vendor_name,
+                v.name AS vendor_name,
                 fi.date_invoice,
                 fi.date_received,
                 fi.total_roll_quantity,
@@ -206,11 +220,12 @@ router.get('/download-excel', isAuthenticated, isFabricManager, async (req, res)
                 fi.user_id,
                 u.username AS created_by
             FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
             JOIN users u ON fi.user_id = u.id
         `;
         let dataParams = [];
         if (searchTerm) {
-            dataQuery += ' WHERE invoice_no LIKE ? OR vendor_name LIKE ?';
+            dataQuery += ' WHERE fi.invoice_no LIKE ? OR v.name LIKE ?';
             dataParams.push(`%${searchTerm}%`, `%${searchTerm}%`);
         }
         dataQuery += ' ORDER BY fi.total_roll_quantity DESC';
@@ -218,7 +233,8 @@ router.get('/download-excel', isAuthenticated, isFabricManager, async (req, res)
         const [fabricInvoices] = await pool.query(dataQuery, dataParams);
 
         if (!fabricInvoices.length) {
-            return res.status(404).send('No data available to export.');
+            req.flash('error', 'No data available to export.');
+            return res.redirect('/fabric-manager/dashboard');
         }
 
         // Convert data to worksheet
@@ -253,7 +269,7 @@ router.post('/insert/invoice',
     isFabricManager,
     [
         body('invoice_no').notEmpty().withMessage('Invoice number is required.'),
-        body('vendor_name').notEmpty().withMessage('Vendor name is required.'),
+        body('vendor_id').isInt().withMessage('Valid Vendor is required.'),
         body('date_invoice').isDate().withMessage('Invalid invoice date.'),
         body('date_received').isDate().withMessage('Invalid received date.'),
         body('total_roll_quantity').isInt({ min: 1 }).withMessage('Total roll quantity must be a positive integer.'),
@@ -266,11 +282,12 @@ router.post('/insert/invoice',
         const user = req.session.user;
 
         if (!errors.isEmpty()) {
-            req.flash('error', errors.array().map(err => err.msg).join(' '));
+            // Set each error message individually
+            errors.array().forEach(err => req.flash('error', err.msg));
             return res.redirect('/fabric-manager/dashboard');
         }
 
-        const { invoice_no, vendor_name, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, received_weight } = req.body;
+        const { invoice_no, vendor_id, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, received_weight } = req.body;
 
         // Calculate short_weight
         const short_weight = (invoice_weight && received_weight) ? (parseFloat(invoice_weight) - parseFloat(received_weight)).toFixed(2) : null;
@@ -279,12 +296,12 @@ router.post('/insert/invoice',
             // Insert into fabric_invoices
             const insertQuery = `
                 INSERT INTO fabric_invoices 
-                (invoice_no, vendor_name, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, short_weight, received_weight, user_id)
+                (invoice_no, vendor_id, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, short_weight, received_weight, user_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
             await pool.query(insertQuery, [
                 invoice_no,
-                vendor_name,
+                vendor_id,
                 date_invoice,
                 date_received,
                 total_roll_quantity,
@@ -301,6 +318,8 @@ router.post('/insert/invoice',
             console.error('Error inserting fabric invoice:', err);
             if (err.code === 'ER_DUP_ENTRY') {
                 req.flash('error', 'Invoice number must be unique.');
+            } else if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+                req.flash('error', 'Selected vendor does not exist.');
             } else {
                 req.flash('error', 'Error inserting fabric invoice.');
             }
@@ -327,7 +346,7 @@ router.get('/invoice/:id/rolls', isAuthenticated, isFabricManager, async (req, r
             SELECT 
                 fi.id,
                 fi.invoice_no,
-                fi.vendor_name,
+                v.name AS vendor_name,
                 fi.date_invoice,
                 fi.date_received,
                 fi.total_roll_quantity,
@@ -338,6 +357,7 @@ router.get('/invoice/:id/rolls', isAuthenticated, isFabricManager, async (req, r
                 fi.user_id,
                 u.username AS created_by
             FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
             JOIN users u ON fi.user_id = u.id
             WHERE fi.id = ?
         `, [invoiceId]);
@@ -369,9 +389,8 @@ router.get('/invoice/:id/rolls', isAuthenticated, isFabricManager, async (req, r
         res.render('fabricInvoiceRolls', {
             user: req.session.user,
             invoice,
-            rolls,
-            success: req.flash('success'),
-            error: req.flash('error')
+            rolls
+            // Removed 'success' and 'error' to rely on res.locals
         });
     } catch (err) {
         console.error('Error fetching fabric invoice rolls:', err);
@@ -400,21 +419,47 @@ router.post('/insert/roll',
         const user = req.session.user;
 
         if (!errors.isEmpty()) {
-            req.flash('error', errors.array().map(err => err.msg).join(' '));
+            // Set each error message individually
+            errors.array().forEach(err => req.flash('error', err.msg));
             return res.redirect(`/fabric-manager/invoice/${req.body.invoice_id}/rolls`);
         }
 
         const { invoice_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit } = req.body;
 
         try {
+            // Fetch vendor_id from the invoice
+            const [invoiceRows] = await pool.query(
+                'SELECT vendor_id FROM fabric_invoices WHERE id = ?',
+                [invoice_id]
+            );
+
+            if (invoiceRows.length === 0) {
+                req.flash('error', 'Associated Fabric Invoice not found.');
+                return res.redirect('/fabric-manager/dashboard');
+            }
+
+            const vendor_id = invoiceRows[0].vendor_id;
+
+            // Check if the roll_no already exists for the given vendor_id
+            const [existingRoll] = await pool.query(
+                'SELECT id FROM fabric_invoice_rolls WHERE vendor_id = ? AND roll_no = ?',
+                [vendor_id, roll_no]
+            );
+
+            if (existingRoll.length > 0) {
+                req.flash('error', 'Roll number must be unique for this vendor.');
+                return res.redirect(`/fabric-manager/invoice/${invoice_id}/rolls`);
+            }
+
             // Insert into fabric_invoice_rolls
             const insertQuery = `
                 INSERT INTO fabric_invoice_rolls 
-                (invoice_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (invoice_id, vendor_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `;
             await pool.query(insertQuery, [
                 invoice_id,
+                vendor_id,
                 roll_no,
                 per_roll_weight,
                 color || null,
@@ -428,7 +473,7 @@ router.post('/insert/roll',
         } catch (err) {
             console.error('Error inserting fabric invoice roll:', err);
             if (err.code === 'ER_DUP_ENTRY') {
-                req.flash('error', 'Roll number must be unique.');
+                req.flash('error', 'Roll number must be unique for this vendor.');
             } else {
                 req.flash('error', 'Error inserting fabric invoice roll.');
             }
@@ -455,7 +500,7 @@ router.get('/invoice/:id/download-rolls', isAuthenticated, isFabricManager, asyn
             SELECT 
                 fi.id,
                 fi.invoice_no,
-                fi.vendor_name,
+                v.name AS vendor_name,
                 fi.date_invoice,
                 fi.date_received,
                 fi.total_roll_quantity,
@@ -466,6 +511,7 @@ router.get('/invoice/:id/download-rolls', isAuthenticated, isFabricManager, asyn
                 fi.user_id,
                 u.username AS created_by
             FROM fabric_invoices fi
+            JOIN vendors v ON fi.vendor_id = v.id
             JOIN users u ON fi.user_id = u.id
             WHERE fi.id = ?
         `, [invoiceId]);
@@ -526,13 +572,21 @@ router.get('/invoice/:id/download-rolls', isAuthenticated, isFabricManager, asyn
  * GET /fabric-manager/bulk-upload
  * Render the bulk upload page for fabric invoices.
  */
-router.get('/bulk-upload', isAuthenticated, isFabricManager, (req, res) => {
-    res.render('bulkUpload', {
-        user: req.session.user,
-        tableName: 'fabric_invoices',
-        success: req.flash('success'),
-        error: req.flash('error')
-    });
+router.get('/bulk-upload', isAuthenticated, isFabricManager, async (req, res) => {
+    try {
+        // Fetch all vendors for the upload form
+        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+        res.render('bulkUpload', {
+            user: req.session.user,
+            tableName: 'fabric_invoices',
+            vendors, // Pass vendors to the view for selection
+            // Removed 'success' and 'error' to rely on res.locals
+        });
+    } catch (err) {
+        console.error('Error loading bulk upload page:', err);
+        req.flash('error', 'Error loading bulk upload page.');
+        res.redirect('/fabric-manager/dashboard');
+    }
 });
 
 /**
@@ -557,18 +611,42 @@ router.post('/bulk-upload/invoices',
             const workbook = xlsx.readFile(req.file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = xlsx.utils.sheet_to_json(worksheet);
+            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null }); // Use defval to handle empty cells
 
             // Validate and prepare data
             const preparedData = [];
+            let rowNumber = 2; // Assuming the first row is headers
 
             for (const row of jsonData) {
                 // Ensure mandatory fields are present
                 const requiredFields = ['invoice_no', 'vendor_name', 'date_invoice', 'date_received', 'total_roll_quantity', 'invoice_weight', 'received_weight'];
                 for (const field of requiredFields) {
-                    if (row[field] === undefined || row[field] === null || row[field] === '') {
-                        throw new Error(`Missing required field: ${field}`);
+                    if (row[field] === undefined || row[field] === null || row[field].toString().trim() === '') {
+                        throw new Error(`Missing required field: ${field} in row ${rowNumber}`);
                     }
+                }
+
+                // Resolve vendor_id from vendor_name
+                const vendorName = row.vendor_name.toString().trim();
+                const [vendorRows] = await pool.query(
+                    'SELECT id FROM vendors WHERE name = ?',
+                    [vendorName]
+                );
+
+                let vendor_id;
+                if (vendorRows.length > 0) {
+                    vendor_id = vendorRows[0].id;
+                } else {
+                    // Option 1: Throw an error
+                    // throw new Error(`Vendor "${vendorName}" does not exist in row ${rowNumber}`);
+
+                    // Option 2: Create a new vendor
+                    const insertVendorQuery = `
+                        INSERT INTO vendors (name)
+                        VALUES (?)
+                    `;
+                    const [newVendor] = await pool.query(insertVendorQuery, [vendorName]);
+                    vendor_id = newVendor.insertId;
                 }
 
                 // Convert dates if necessary
@@ -590,17 +668,19 @@ router.post('/bulk-upload/invoices',
 
                 // Prepare the data array
                 preparedData.push([
-                    row.invoice_no,
-                    row.vendor_name,
+                    row.invoice_no.toString().trim(),
+                    vendor_id,
                     formattedDateInvoice,
                     formattedDateReceived,
                     row.total_roll_quantity,
-                    row.fabric_type || null,
+                    row.fabric_type ? row.fabric_type.toString().trim() : null,
                     invoice_weight,
                     short_weight,
                     received_weight,
                     user.id
                 ]);
+
+                rowNumber++;
             }
 
             // Insert data into the database using a transaction
@@ -610,7 +690,7 @@ router.post('/bulk-upload/invoices',
 
                 const insertQuery = `
                     INSERT INTO fabric_invoices 
-                    (invoice_no, vendor_name, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, short_weight, received_weight, user_id)
+                    (invoice_no, vendor_id, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, short_weight, received_weight, user_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
@@ -634,7 +714,11 @@ router.post('/bulk-upload/invoices',
                 fs.unlinkSync(req.file.path);
 
                 console.error('Transaction Error during bulk upload:', transactionError);
-                req.flash('error', `Bulk upload failed: ${transactionError.message}`);
+                if (transactionError.code === 'ER_DUP_ENTRY') {
+                    req.flash('error', 'One or more invoice numbers already exist.');
+                } else {
+                    req.flash('error', `Bulk upload failed: ${transactionError.message}`);
+                }
                 res.redirect('/fabric-manager/bulk-upload');
             }
         } catch (err) {
@@ -653,13 +737,21 @@ router.post('/bulk-upload/invoices',
  * GET /fabric-manager/bulk-upload/rolls
  * Render the bulk upload page for fabric invoice rolls.
  */
-router.get('/bulk-upload/rolls', isAuthenticated, isFabricManager, (req, res) => {
-    res.render('bulkUploadRolls', {
-        user: req.session.user,
-        tableName: 'fabric_invoice_rolls',
-        success: req.flash('success'),
-        error: req.flash('error')
-    });
+router.get('/bulk-upload/rolls', isAuthenticated, isFabricManager, async (req, res) => {
+    try {
+        // Fetch all vendors for the upload form
+        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+        res.render('bulkUploadRolls', {
+            user: req.session.user,
+            tableName: 'fabric_invoice_rolls',
+            vendors, // Pass vendors to the view for selection
+            // Removed 'success' and 'error' to rely on res.locals
+        });
+    } catch (err) {
+        console.error('Error loading bulk upload rolls page:', err);
+        req.flash('error', 'Error loading bulk upload rolls page.');
+        res.redirect('/fabric-manager/dashboard');
+    }
 });
 
 /**
@@ -684,30 +776,68 @@ router.post('/bulk-upload/rolls',
             const workbook = xlsx.readFile(req.file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = xlsx.utils.sheet_to_json(worksheet);
+            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null }); // Use defval to handle empty cells
 
             // Validate and prepare data
             const preparedData = [];
+            let rowNumber = 2; // Assuming the first row is headers
 
             for (const row of jsonData) {
                 // Ensure mandatory fields are present
-                const requiredFields = ['invoice_id', 'roll_no', 'per_roll_weight', 'unit'];
+                const requiredFields = ['invoice_no', 'roll_no', 'per_roll_weight', 'unit'];
                 for (const field of requiredFields) {
-                    if (row[field] === undefined || row[field] === null || row[field] === '') {
-                        throw new Error(`Missing required field: ${field}`);
+                    if (row[field] === undefined || row[field] === null || row[field].toString().trim() === '') {
+                        throw new Error(`Missing required field: ${field} in row ${rowNumber}`);
                     }
+                }
+
+                // Validate unit
+                const validUnits = ['METER', 'KG'];
+                if (!validUnits.includes(row.unit)) {
+                    throw new Error(`Invalid unit '${row.unit}' in row ${rowNumber}. Must be 'METER' or 'KG'.`);
+                }
+
+                // Resolve invoice_id from invoice_no
+                const invoiceNo = row.invoice_no.toString().trim();
+                const [invoiceRows] = await pool.query(
+                    'SELECT id, vendor_id FROM fabric_invoices WHERE invoice_no = ?',
+                    [invoiceNo]
+                );
+
+                if (invoiceRows.length === 0) {
+                    throw new Error(`Fabric Invoice "${invoiceNo}" does not exist in row ${rowNumber}`);
+                }
+
+                const invoice_id = invoiceRows[0].id;
+                const vendor_id = invoiceRows[0].vendor_id;
+
+                // Check for duplicate roll_no within the same vendor in the uploaded data
+                const duplicateInPreparedData = preparedData.find(
+                    data => data[1] === row.roll_no && data[2] === vendor_id
+                );
+                if (duplicateInPreparedData) {
+                    throw new Error(`Duplicate roll_no ${row.roll_no} for vendor_id ${vendor_id} in row ${rowNumber}`);
+                }
+
+                // Optional: Validate per_roll_weight is a positive number
+                const per_roll_weight = parseFloat(row.per_roll_weight);
+                if (isNaN(per_roll_weight) || per_roll_weight <= 0) {
+                    throw new Error(`Invalid per_roll_weight '${row.per_roll_weight}' in row ${rowNumber}. Must be a positive number.`);
                 }
 
                 // Prepare the data array
                 preparedData.push([
-                    row.invoice_id,
+                    invoice_id,
                     row.roll_no,
-                    row.per_roll_weight,
-                    row.color || null,
-                    row.gr_no_by_vendor || null,
+                    vendor_id,
+                    per_roll_weight,
+                    row.color ? row.color.toString().trim() : null,
+                    row.gr_no_by_vendor ? row.gr_no_by_vendor.toString().trim() : null,
                     row.unit,
                     user.id
                 ]);
+
+                rowNumber++;
             }
 
             // Insert data into the database using a transaction
@@ -717,8 +847,8 @@ router.post('/bulk-upload/rolls',
 
                 const insertQuery = `
                     INSERT INTO fabric_invoice_rolls 
-                    (invoice_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (invoice_id, roll_no, vendor_id, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `;
 
                 for (const data of preparedData) {
@@ -740,8 +870,13 @@ router.post('/bulk-upload/rolls',
                 // Delete the uploaded file after processing
                 fs.unlinkSync(req.file.path);
 
+                // Handle duplicate entry error for (vendor_id, roll_no)
+                if (transactionError.code === 'ER_DUP_ENTRY') {
+                    req.flash('error', 'One or more roll numbers already exist for the specified vendors.');
+                } else {
+                    req.flash('error', `Bulk upload failed: ${transactionError.message}`);
+                }
                 console.error('Transaction Error during bulk upload of rolls:', transactionError);
-                req.flash('error', `Bulk upload failed: ${transactionError.message}`);
                 res.redirect('/fabric-manager/bulk-upload/rolls');
             }
         } catch (err) {
