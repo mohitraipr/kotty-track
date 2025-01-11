@@ -897,6 +897,8 @@
       const selectedFabricType = fabricTypeSel.value;
       if (selectedFabricType) {
         addRollBtn.disabled = false;
+        // **Clear existing rolls to prevent data entry conflicts**
+        rollsContainer.innerHTML = ''; // **Added line to clear previous roll entries**
         populateRollNos(selectedFabricType);
         updateTotalPieces();
       } else {
