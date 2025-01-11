@@ -1,21 +1,24 @@
 <!-- views/cuttingManagerDashboard.ejs -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Cutting Manager Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <!-- Bootstrap CSS -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
     rel="stylesheet"
   />
+
   <!-- Bootstrap Icons -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
     rel="stylesheet"
   />
+
+  <!-- Custom CSS -->
   <style>
     body {
       background-color: #f8f9fa;
@@ -31,20 +34,10 @@
       background-color: #fff;
       position: relative;
     }
-    .roll-section .remove-roll-btn, .size-row .removeSizeBtn {
+    .roll-section .remove-roll-btn, .size-section .removeSizeBtn {
       position: absolute;
       top: 10px;
       right: 10px;
-    }
-    .size-row {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 0.5rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .hidden {
-      display: none;
     }
     .progress {
       height: 20px;
@@ -52,14 +45,73 @@
     .progress-bar {
       transition: width 0.3s ease-in-out;
     }
-    /* Icon Button Styling */
-    .btn-icon {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+    /* Autocomplete Styles */
+    .autocomplete {
+      position: relative;
+      width: 100%;
     }
-    .btn-icon i {
-      font-size: 1rem;
+    .autocomplete input {
+      width: 100%;
+      padding: 0.375rem 0.75rem;
+      border: 1px solid #ced4da;
+      border-radius: 0.25rem;
+      box-sizing: border-box;
+    }
+    .autocomplete-items {
+      position: absolute;
+      border: 1px solid #ced4da;
+      border-top: none;
+      z-index: 1000;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 200px;
+      overflow-y: auto;
+      background-color: #fff;
+      animation: fadeIn 0.2s ease-in-out;
+      display: none; /* Hidden by default */
+    }
+    .autocomplete-items li {
+      padding: 0.375rem 0.75rem;
+      cursor: pointer;
+    }
+    .autocomplete-items li:hover, .autocomplete-active {
+      background-color: #e9ecef;
+    }
+    /* Highlight matching text */
+    .highlight {
+      font-weight: bold;
+      background-color: yellow;
+    }
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    /* Mobile Enhancements */
+    @media (max-width: 576px) {
+      .navbar-brand {
+        font-size: 1rem;
+      }
+      .navbar-text {
+        display: none;
+      }
+      .btn {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.75rem;
+      }
+      .table-responsive {
+        font-size: 0.875rem;
+      }
+      .autocomplete-items {
+        max-height: 150px;
+      }
+      .progress {
+        height: 16px;
+      }
+      .progress-bar {
+        font-size: 0.75rem;
+      }
     }
   </style>
 </head>
@@ -77,7 +129,7 @@
       <div class="collapse navbar-collapse" id="navbarContent">
         <div class="ms-auto d-flex align-items-center">
           <i class="bi bi-person-circle text-white me-2"></i>
-          <span class="navbar-text me-3">
+          <span class="navbar-text me-3 d-none d-sm-inline">
             Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
           </span>
           <a href="/logout" class="btn btn-outline-light btn-sm">
@@ -88,7 +140,7 @@
     </div>
   </nav>
 
-  <!-- Main Container -->
+  <!-- Main Container with Tabs -->
   <div class="container">
     <!-- Alert Messages -->
     <% if (error && error.length > 0) { %>
@@ -111,225 +163,238 @@
       </div>
     <% } %>
 
-    <!-- Existing Cutting Lots -->
-    <div class="card">
-      <div class="card-header">
-        <h2 class="mb-0"><i class="bi bi-folder-fill me-2"></i> Existing Cutting Lots</h2>
-      </div>
-      <div class="card-body p-2">
-        <div class="table-responsive">
-          <table class="table table-bordered mb-4 bg-white">
-            <thead class="table-dark">
-              <tr>
-                <th>ID</th>
-                <th>Lot No</th>
-                <th>SKU</th>
-                <th>Fabric Type</th>
-                <th>Remark</th>
-                <th>Image</th>
-                <th>Created By</th>
-                <th>Created At</th>
-                <th>Total Pieces</th>
-                <th>Sizes</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (cuttingLots.length === 0) { %>
-                <tr>
-                  <td colspan="11" class="text-center">No cutting lots available.</td>
-                </tr>
-              <% } else { %>
-                <% cuttingLots.forEach(lot => { %>
+    <!-- Tabs for Navigation -->
+    <ul class="nav nav-tabs mb-3" id="dashboardTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="existing-lots-tab" data-bs-toggle="tab" data-bs-target="#existing-lots" type="button" role="tab" aria-controls="existing-lots" aria-selected="true">
+          <i class="bi bi-folder-fill me-1"></i> Existing Cutting Lots
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
+          <i class="bi bi-plus-circle-fill me-1"></i> Create New Cutting Lot
+        </button>
+      </li>
+    </ul>
+    <div class="tab-content" id="dashboardTabsContent">
+      <!-- Existing Cutting Lots Tab -->
+      <div class="tab-pane fade show active" id="existing-lots" role="tabpanel" aria-labelledby="existing-lots-tab">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="mb-0"><i class="bi bi-folder-fill me-2"></i> Existing Cutting Lots</h2>
+          </div>
+          <div class="card-body p-2">
+            <div class="table-responsive">
+              <table class="table table-bordered mb-4 bg-white">
+                <thead class="table-dark">
                   <tr>
-                    <td><%= lot.id %></td>
-                    <td><%= lot.lot_no %></td>
-                    <td><%= lot.sku %></td>
-                    <td><%= lot.fabric_type %></td>
-                    <td><%= lot.remark || 'N/A' %></td>
-                    <td>
-                      <% if (lot.image_url) { %>
-                        <img src="/<%= lot.image_url %>" alt="lot image" class="img-fluid rounded" style="max-width:100px;"/>
-                      <% } else { %>
-                        <i class="bi bi-image text-muted"></i> N/A
-                      <% } %>
-                    </td>
-                    <td><%= lot.created_by || 'N/A' %></td>
-                    <td><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %></td>
-                    <td><%= lot.total_pieces || 0 %></td>
-                    <td>
-                      <% if (lot.sizes && lot.sizes.length > 0) { %>
-                        <div class="table-responsive">
-                          <table class="table table-sm mb-0">
-                            <thead>
-                              <tr>
-                                <th>Size</th>
-                                <th>Pattern Count</th>
-                                <th>Total Pieces</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% lot.sizes.forEach(size => { %>
-                                <tr>
-                                  <td><%= size.size_label %></td>
-                                  <td><%= size.pattern_count %></td>
-                                  <td><%= size.total_pieces %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } else { %>
-                        <i class="bi bi-list-stars text-muted"></i> N/A
-                      <% } %>
-                    </td>
-                    <td>
-                      <div class="d-flex flex-column flex-sm-row gap-2">
-                        <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="btn btn-sm btn-primary">
-                          <i class="bi bi-file-earmark-arrow-down me-1"></i> Generate Challan
-                        </a>
-                        <a href="/cutting-manager/lot-details/<%= lot.id %>" class="btn btn-sm btn-info">
-                          <i class="bi bi-eye me-1"></i> View Details
-                        </a>
-                      </div>
-                    </td>
+                    <th>ID</th>
+                    <th>Lot No</th>
+                    <th>SKU</th>
+                    <th>Fabric Type</th>
+                    <th>Remark</th>
+                    <th>Image</th>
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Total Pieces</th>
+                    <th>Sizes</th>
+                    <th>Action</th>
                   </tr>
-                <% }) %>
-              <% } %>
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  <% if (cuttingLots.length === 0) { %>
+                    <tr>
+                      <td colspan="11" class="text-center">No cutting lots available.</td>
+                    </tr>
+                  <% } else { %>
+                    <% cuttingLots.forEach(lot => { %>
+                      <tr>
+                        <td><%= lot.id %></td>
+                        <td><%= lot.lot_no %></td>
+                        <td><%= lot.sku %></td>
+                        <td><%= lot.fabric_type %></td>
+                        <td><%= lot.remark || 'N/A' %></td>
+                        <td>
+                          <% if (lot.image_url) { %>
+                            <img src="/<%= lot.image_url %>" alt="lot image" class="img-fluid rounded" style="max-width:100px;"/>
+                          <% } else { %>
+                            <i class="bi bi-image text-muted"></i> N/A
+                          <% } %>
+                        </td>
+                        <td><%= lot.created_by || 'N/A' %></td>
+                        <td><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %></td>
+                        <td><%= lot.total_pieces || 0 %></td>
+                        <td>
+                          <% if (lot.sizes && lot.sizes.length > 0) { %>
+                            <div class="table-responsive">
+                              <table class="table table-sm mb-0">
+                                <thead>
+                                  <tr>
+                                    <th>Size</th>
+                                    <th>Pattern Count</th>
+                                    <th>Total Pieces</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <% lot.sizes.forEach(size => { %>
+                                    <tr>
+                                      <td><%= size.size_label %></td>
+                                      <td><%= size.pattern_count %></td>
+                                      <td><%= size.total_pieces %></td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
+                          <% } else { %>
+                            <i class="bi bi-list-stars text-muted"></i> N/A
+                          <% } %>
+                        </td>
+                        <td>
+                          <div class="d-flex flex-column flex-sm-row gap-2">
+                            <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="btn btn-sm btn-primary">
+                              <i class="bi bi-file-earmark-arrow-down me-1"></i> Generate Challan
+                            </a>
+                            <a href="/cutting-manager/lot-details/<%= lot.id %>" class="btn btn-sm btn-info">
+                              <i class="bi bi-eye me-1"></i> View Details
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Create New Cutting Lot -->
-    <div class="card">
-      <div class="card-header">
-        <h3 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i> Create New Cutting Lot</h3>
-      </div>
-      <div class="card-body">
-        <form
-          id="lotForm"
-          method="POST"
-          action="/cutting-manager/create-lot"
-          enctype="multipart/form-data"
-        >
-          <!-- Lot Details Section -->
-          <div class="row g-3">
-            <!-- Lot No (Read-Only) -->
-            <div class="col-md-4">
-              <label for="lot_no" class="form-label"><i class="bi bi-hash me-1"></i> Lot No. (System Generated)</label>
-              <input
-                type="text"
-                class="form-control"
-                id="lot_no"
-                name="lot_no"
-                value="<%= generatedLotNumber %>"
-                readonly
-              />
-            </div>
-
-            <!-- SKU Input -->
-            <div class="col-md-4">
-              <label for="sku" class="form-label"><i class="bi bi-barcode me-1"></i> SKU</label>
-              <input
-                type="text"
-                class="form-control"
-                id="sku"
-                name="sku"
-                placeholder="Enter SKU (e.g., KTTDRESS50)"
-                required
-              />
-            </div>
-
-            <!-- Fabric Type -->
-            <div class="col-md-4">
-              <label for="fabric_type" class="form-label"><i class="bi bi-hexagon-fill me-1"></i> Fabric Type</label>
-              <select class="form-select" name="fabric_type" id="fabric_type" required>
-                <option value="">--Select Fabric Type--</option>
-                <% Object.keys(rollsByFabricType).forEach(ft => { %>
-                  <option value="<%= ft %>"><%= ft %></option>
-                <% }) %>
-              </select>
-            </div>
-
-            <!-- Remark -->
-            <div class="col-md-6">
-              <label for="remark" class="form-label"><i class="bi bi-chat-left-text me-1"></i> Remark</label>
-              <textarea
-                class="form-control"
-                name="remark"
-                id="remark"
-                rows="2"
-                placeholder="Any additional remarks..."
-              ></textarea>
-            </div>
-
-            <!-- Image Upload -->
-            <div class="col-md-6">
-              <label for="image" class="form-label"><i class="bi bi-image me-1"></i> Image Upload</label>
-              <input
-                type="file"
-                class="form-control"
-                name="image"
-                id="image"
-                accept="image/*"
-              />
-            </div>
+      <!-- Create New Cutting Lot Tab -->
+      <div class="tab-pane fade" id="create-lot" role="tabpanel" aria-labelledby="create-lot-tab">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i> Create New Cutting Lot</h3>
           </div>
-
-          <hr/>
-
-          <!-- Sizes and Patterns Section -->
-          <div class="mb-3">
-            <h4><i class="bi bi-list me-1"></i> Sizes and Patterns</h4>
-            <div id="sizesContainer"></div>
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              id="addSizeBtn"
+          <div class="card-body">
+            <form
+              id="lotForm"
+              method="POST"
+              action="/cutting-manager/create-lot"
+              enctype="multipart/form-data"
             >
-              <i class="bi bi-plus-circle me-1"></i> Add Size
-            </button>
+              <!-- Lot Details Section -->
+              <div class="row g-3">
+                <!-- Lot No (Read-Only) -->
+                <div class="col-md-4">
+                  <label for="lot_no" class="form-label"><i class="bi bi-hash me-1"></i> Lot No. (System Generated)</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="lot_no"
+                    name="lot_no"
+                    value="<%= generatedLotNumber %>"
+                    readonly
+                  />
+                </div>
+
+                <!-- SKU Input -->
+                <div class="col-md-4">
+                  <label for="sku" class="form-label"><i class="bi bi-barcode me-1"></i> SKU</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="sku"
+                    name="sku"
+                    placeholder="Enter SKU (e.g., KTTDRESS50)"
+                    required
+                  />
+                </div>
+
+                <!-- Fabric Type (Autocomplete) -->
+                <div class="col-md-4">
+                  <label for="fabric_type_search" class="form-label"><i class="bi bi-hexagon-fill me-1"></i> Fabric Type</label>
+                  <div class="autocomplete">
+                    <input type="text" id="fabric_type_search" class="form-control" placeholder="Search Fabric Type..." aria-autocomplete="list" aria-controls="fabric_type_options" aria-expanded="false" aria-haspopup="listbox">
+                    <input type="hidden" id="fabric_type" name="fabric_type" required>
+                    <ul class="autocomplete-items list-group d-none" id="fabric_type_options" role="listbox"></ul>
+                  </div>
+                </div>
+
+                <!-- Remark -->
+                <div class="col-md-6">
+                  <label for="remark" class="form-label"><i class="bi bi-chat-left-text me-1"></i> Remark</label>
+                  <textarea
+                    class="form-control"
+                    name="remark"
+                    id="remark"
+                    rows="2"
+                    placeholder="Any additional remarks..."
+                  ></textarea>
+                </div>
+
+                <!-- Image Upload -->
+                <div class="col-md-6">
+                  <label for="image" class="form-label"><i class="bi bi-image me-1"></i> Image Upload</label>
+                  <input
+                    type="file"
+                    class="form-control"
+                    name="image"
+                    id="image"
+                    accept="image/*"
+                  />
+                </div>
+              </div>
+
+              <hr/>
+
+              <!-- Sizes and Patterns Section -->
+              <div class="mb-3">
+                <h4><i class="bi bi-list me-1"></i> Sizes and Patterns</h4>
+                <div id="sizesContainer"></div>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-secondary mt-2"
+                  id="addSizeBtn"
+                >
+                  <i class="bi bi-plus-circle me-1"></i> Add Size
+                </button>
+              </div>
+
+              <hr/>
+
+              <!-- Rolls Used Section -->
+              <div class="mb-3">
+                <h4><i class="bi bi-box-seam me-1"></i> Rolls Used</h4>
+                <div id="rollsContainer"></div>
+                <button type="button" class="btn btn-sm btn-primary mt-2" id="addRollBtn" disabled>
+                  <i class="bi bi-plus-circle me-1"></i> Add Another Roll
+                </button>
+              </div>
+
+              <hr/>
+
+              <!-- Total Pieces Display -->
+              <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap">
+                <strong>Total Pieces (calculated):</strong>
+                <span id="totalPiecesDisplay" class="fs-5 fw-bold">0</span>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-check-circle me-1"></i> Create Lot
+              </button>
+            </form>
           </div>
-
-          <hr/>
-
-          <!-- Rolls Used Section -->
-          <div class="mb-3">
-            <h4><i class="bi bi-box-seam me-1"></i> Rolls Used</h4>
-            <div id="rollsContainer"></div>
-            <button
-              type="button"
-              class="btn btn-sm btn-primary"
-              id="addRollBtn"
-              disabled
-            >
-              <i class="bi bi-plus-circle me-1"></i> Add Another Roll
-            </button>
-          </div>
-
-          <hr/>
-
-          <!-- Total Pieces Display -->
-          <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap">
-            <strong>Total Pieces (calculated):</strong>
-            <span id="totalPiecesDisplay" class="fs-5 fw-bold">0</span>
-          </div>
-
-          <!-- Submit Button -->
-          <button type="submit" class="btn btn-success w-100">
-            <i class="bi bi-check-circle me-1"></i> Create Lot
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Size Template -->
+  <!-- Size Template (Hidden) -->
   <div id="sizeTemplate" class="d-none">
     <div class="roll-section size-section">
-      <button type="button" class="btn btn-sm btn-danger removeSizeBtn">
+      <button type="button" class="btn btn-sm btn-danger removeSizeBtn" aria-label="Remove Size">
         <i class="bi bi-dash-circle me-1"></i> Remove
       </button>
       <div class="row g-3">
@@ -363,22 +428,23 @@
     </div>
   </div>
 
-  <!-- Roll Template -->
+  <!-- Roll Template (Hidden) -->
   <div id="rollTemplate" class="d-none">
     <div class="roll-section">
-      <button type="button" class="btn btn-sm btn-danger remove-roll-btn">
+      <button type="button" class="btn btn-sm btn-danger remove-roll-btn" aria-label="Remove Roll">
         <i class="bi bi-x-circle"></i>
       </button>
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label"><i class="bi bi-box-arrow-in-down me-1"></i> Roll No</label>
-          <select class="form-select rollNoSel" name="roll_no[]" required>
-            <option value="">--Select Roll No.--</option>
-            <!-- Options will be populated based on selected fabric_type -->
-          </select>
+          <label class="form-label">Roll No</label>
+          <div class="autocomplete">
+            <input type="text" class="form-control rollNo_search" placeholder="Search Roll No..." aria-autocomplete="list" aria-controls="rollNo_options" aria-expanded="false" aria-haspopup="listbox">
+            <input type="hidden" class="rollNoSel" name="roll_no[]" required>
+            <ul class="autocomplete-items list-group d-none" role="listbox"></ul>
+          </div>
         </div>
         <div class="col-md-4">
-          <label class="form-label"><i class="bi bi-layer-fill me-1"></i> Layers</label>
+          <label class="form-label">Layers</label>
           <input
             type="number"
             class="form-control layersInput"
@@ -389,7 +455,7 @@
           />
         </div>
         <div class="col-md-4">
-          <label class="form-label"><i class="bi bi-weight-fill me-1"></i> Weight Used</label>
+          <label class="form-label">Weight Used</label>
           <input
             type="number"
             step="0.01"
@@ -397,7 +463,7 @@
             name="weight_used[]"
             min="0"
             required
-            placeholder="Enter Weight Used"
+            placeholder="Enter Weight Used In Meter's Or KG"
           />
         </div>
       </div>
@@ -409,6 +475,7 @@
             class="progress-bar bg-info"
             role="progressbar"
             style="width: 0%;"
+            aria-valuenow="0"
             aria-valuemin="0"
             aria-valuemax="100"
           >
@@ -427,14 +494,24 @@
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
   ></script>
 
-  <!-- Custom Script -->
+  <!-- Custom Script for Dynamic Functionality -->
   <script>
     // Pass rollsByFabricType from server to client
     const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>; 
-    // e.g., {"Cotton": [{roll_no:"2087", per_roll_weight:120}, ...], "Polyester": [...]}
+    // Example structure:
+    // {
+    //   "Cotton": [
+    //     { "roll_no": "2087", "per_roll_weight": 120, "vendor_name": "Vendor A" },
+    //     { "roll_no": "2088", "per_roll_weight": 150, "vendor_name": "Vendor B" }
+    //   ],
+    //   "Polyester": [
+    //     { "roll_no": "3097", "per_roll_weight": 100, "vendor_name": "Vendor C" }
+    //   ]
+    // }
 
     console.log("rollsByFabricType:", rollsByFabricType); // Debugging
 
+    // Get Templates and Containers
     const sizeTemplate = document.getElementById('sizeTemplate');
     const rollTemplate = document.getElementById('rollTemplate');
     const sizesContainer = document.getElementById('sizesContainer');
@@ -444,6 +521,221 @@
     const totalPiecesDisplay = document.getElementById('totalPiecesDisplay');
     const lotForm = document.getElementById('lotForm');
     const fabricTypeSel = document.getElementById('fabric_type');
+    const fabricTypeSearch = document.getElementById('fabric_type_search');
+    const fabricTypeOptions = document.getElementById('fabric_type_options');
+
+    // Debounce function to limit the rate of function calls
+    function debounce(func, delay) {
+      let debounceTimer;
+      return function(...args) {
+        const context = this;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => func.apply(context, args), delay);
+      };
+    }
+
+    // Function to initialize a searchable autocomplete
+    function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = []) {
+      // Store original data to reset later
+      const originalData = [...data];
+
+      // Populate options container with data and store related info using data attributes
+      populateOptions();
+
+      // Show dropdown on input focus
+      inputField.addEventListener('focus', () => {
+        if (inputField.value.trim() !== '') {
+          optionsContainer.classList.remove('d-none');
+          optionsContainer.classList.add('d-block');
+          inputField.setAttribute('aria-expanded', 'true');
+        }
+      });
+
+      // Hide dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!inputField.contains(e.target) && !optionsContainer.contains(e.target)) {
+          optionsContainer.classList.remove('d-block');
+          optionsContainer.classList.add('d-none');
+          inputField.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      // Filter options based on input and highlight matching text
+      inputField.addEventListener('input', debounce(() => {
+        const filter = inputField.value.toLowerCase();
+        const options = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
+        let visibleCount = 0;
+        options.forEach(option => {
+          const text = option.textContent.toLowerCase();
+          if (text.includes(filter)) {
+            option.style.display = 'block';
+            // Highlight matching text
+            const regex = new RegExp(`(${filter})`, 'gi');
+            option.innerHTML = option.textContent.replace(regex, '<span class="highlight">$1</span>');
+            visibleCount++;
+          } else {
+            option.style.display = 'none';
+            // Remove previous highlights
+            option.innerHTML = option.textContent;
+          }
+        });
+        // If no matches found, show a 'No results' message
+        const noResult = optionsContainer.querySelector('.no-results');
+        if (visibleCount === 0) {
+          if (!noResult) {
+            const li = document.createElement('li');
+            li.classList.add('list-group-item', 'no-results');
+            li.textContent = 'No results found.';
+            optionsContainer.appendChild(li);
+          }
+        } else {
+          if (noResult) {
+            noResult.remove();
+          }
+        }
+        // Show or hide the dropdown based on matches
+        if (inputField.value.trim() !== '') {
+          optionsContainer.classList.remove('d-none');
+          optionsContainer.classList.add('d-block');
+          inputField.setAttribute('aria-expanded', 'true');
+        } else {
+          optionsContainer.classList.remove('d-block');
+          optionsContainer.classList.add('d-none');
+          inputField.setAttribute('aria-expanded', 'false');
+        }
+      }, 300));
+
+      // Handle option click
+      optionsContainer.addEventListener('click', (e) => {
+        if (e.target && e.target.matches('li.list-group-item') && !e.target.classList.contains('no-results')) {
+          const selectedValue = e.target.dataset.value;
+          const selectedText = e.target.textContent;
+          hiddenField.value = selectedValue;
+          inputField.value = selectedText;
+          optionsContainer.classList.remove('d-block');
+          optionsContainer.classList.add('d-none');
+          inputField.setAttribute('aria-expanded', 'false');
+          // Trigger change event if necessary
+          hiddenField.dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Keyboard navigation
+      let currentFocus = -1;
+
+      inputField.addEventListener('keydown', function(e) {
+        const items = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
+        if (e.key === 'ArrowDown') { // Down key
+          currentFocus++;
+          addActive(items);
+          e.preventDefault();
+        } else if (e.key === 'ArrowUp') { // Up key
+          currentFocus--;
+          addActive(items);
+          e.preventDefault();
+        } else if (e.key === 'Enter') { // Enter key
+          e.preventDefault();
+          if (currentFocus > -1 && items[currentFocus]) {
+            items[currentFocus].click();
+          }
+        }
+      });
+
+      function addActive(items) {
+        if (!items) return false;
+        removeActive(items);
+        if (currentFocus >= items.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = items.length - 1;
+        items[currentFocus].classList.add('active');
+        items[currentFocus].setAttribute('aria-selected', 'true');
+      }
+
+      function removeActive(items) {
+        items.forEach(item => {
+          item.classList.remove('active');
+          item.setAttribute('aria-selected', 'false');
+        });
+      }
+
+      function populateOptions() {
+        optionsContainer.innerHTML = '';
+        data.forEach(item => {
+          let displayText = item;
+          let value = item;
+          let availableWeight = '';
+
+          // If data is an object with more details
+          if (typeof item === 'object' && item !== null) {
+            displayText = item.displayText;
+            value = item.value;
+            availableWeight = item.availableWeight || '';
+          }
+
+          const li = document.createElement('li');
+          li.classList.add('list-group-item', 'list-group-item-action');
+          li.setAttribute('role', 'option');
+          li.setAttribute('aria-selected', 'false');
+          li.textContent = displayText;
+          li.dataset.value = value;
+          if (availableWeight) {
+            li.dataset.availableWeight = availableWeight;
+          }
+          optionsContainer.appendChild(li);
+        });
+      }
+    }
+
+    // Initialize Fabric Type Autocomplete
+    const fabricTypes = Object.keys(rollsByFabricType);
+    const fabricTypeData = fabricTypes.map(ft => ({
+      displayText: ft,
+      value: ft
+    }));
+    initializeAutocomplete(fabricTypeSearch, fabricTypeSel, fabricTypeOptions, fabricTypeData);
+
+    // Function to initialize a searchable Roll No autocomplete within a roll section
+    function initializeRollNoAutocomplete(rollSection, fabricType) {
+      const rollNoSel = rollSection.querySelector('.rollNoSel');
+      const rollNoSearch = rollSection.querySelector('.rollNo_search');
+      const rollNoOptions = rollSection.querySelector('.autocomplete-items');
+
+      const availableRolls = rollsByFabricType[fabricType] || [];
+
+      // Prepare data with display text and value
+      const rollData = availableRolls.map(roll => ({
+        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight}kg) (Vendor: ${roll.vendor_name})`,
+        value: roll.roll_no,
+        availableWeight: roll.per_roll_weight
+      }));
+
+      // Initialize autocomplete for Roll No
+      initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
+
+      // Roll No change event
+      rollNoSel.addEventListener('change', () => {
+        const selectedRollNo = rollNoSel.value;
+        const selectedRoll = availableRolls.find(r => r.roll_no === selectedRollNo);
+        if (selectedRoll) {
+          const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
+          const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+          const progressBar = rollSection.querySelector('.progress-bar');
+          availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
+          weightUsedInput.max = selectedRoll.per_roll_weight;
+          updateWeightProgress(rollSection);
+        } else {
+          const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
+          const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+          const progressBar = rollSection.querySelector('.progress-bar');
+          availableWeightTxt.textContent = '0';
+          weightUsedInput.value = '';
+          weightUsedInput.removeAttribute('max');
+          progressBar.style.width = '0%';
+          progressBar.textContent = '0%';
+          progressBar.classList.remove('bg-danger');
+          progressBar.classList.add('bg-info');
+        }
+      });
+    }
 
     // Function to add a new size
     function addNewSize() {
@@ -451,6 +743,8 @@
       newSize.classList.remove('d-none');
       newSize.removeAttribute('id');
       sizesContainer.appendChild(newSize);
+
+      const sizeLabelSel = newSize.querySelector('.sizeLabelSel');
 
       // Remove size functionality
       const removeSizeBtn = newSize.querySelector('.removeSizeBtn');
@@ -466,7 +760,6 @@
       });
 
       // Size label selection event
-      const sizeLabelSel = newSize.querySelector('.sizeLabelSel');
       sizeLabelSel.addEventListener('change', () => {
         updateTotalPieces();
       });
@@ -479,6 +772,10 @@
       newRoll.removeAttribute('id');
       rollsContainer.appendChild(newRoll);
 
+      const rollNoSel = newRoll.querySelector('.rollNoSel');
+      const rollNoSearch = newRoll.querySelector('.rollNo_search');
+      const rollNoOptions = newRoll.querySelector('.autocomplete-items');
+
       // Remove roll functionality
       const removeRollBtn = newRoll.querySelector('.remove-roll-btn');
       removeRollBtn.addEventListener('click', () => {
@@ -486,31 +783,10 @@
         updateTotalPieces();
       });
 
-      // Roll No change event
-      const rollNoSel = newRoll.querySelector('.rollNoSel');
-      const availableWeightTxt = newRoll.querySelector('.availableWeightTxt');
-      const progressBar = newRoll.querySelector('.progress-bar');
+      // Layers and Weight Used input events
       const layersInput = newRoll.querySelector('.layersInput');
       const weightUsedInput = newRoll.querySelector('.weightUsedInput');
 
-      rollNoSel.addEventListener('change', () => {
-        const selectedOption = rollNoSel.selectedOptions[0];
-        if (selectedOption && selectedOption.dataset.weight) {
-          const available = parseFloat(selectedOption.dataset.weight);
-          availableWeightTxt.textContent = available.toFixed(2);
-          weightUsedInput.max = available;
-          updateWeightProgress(newRoll);
-        } else {
-          availableWeightTxt.textContent = '0';
-          weightUsedInput.removeAttribute('max');
-          progressBar.style.width = '0%';
-          progressBar.textContent = '0%';
-          progressBar.classList.remove('bg-danger');
-          progressBar.classList.add('bg-info');
-        }
-      });
-
-      // Layers and Weight Used input events
       layersInput.addEventListener('input', () => {
         updateTotalPieces();
       });
@@ -520,27 +796,30 @@
         updateTotalPieces();
       });
 
-      // Populate Roll Nos based on current fabric_type
+      // Initialize Roll No Autocomplete
       const currentFabricType = fabricTypeSel.value;
       if (currentFabricType) {
-        populateRollNos(rollNoSel, currentFabricType);
+        initializeRollNoAutocomplete(newRoll, currentFabricType);
       }
     }
 
     // Function to update weight usage progress
     function updateWeightProgress(rollSection) {
       const rollNoSel = rollSection.querySelector('.rollNoSel');
-      const selectedOption = rollNoSel.selectedOptions[0];
-      if (!selectedOption) return;
+      const selectedRollNo = rollNoSel.value;
+      const rollData = Object.values(rollsByFabricType).flat().find(r => r.roll_no === selectedRollNo);
 
-      const available = parseFloat(selectedOption.dataset.weight || '0');
-      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value || '0');
+      if (!rollData) return;
+
+      const available = parseFloat(rollData.per_roll_weight) || 0;
+      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
       const bar = rollSection.querySelector('.progress-bar');
-      const ratio = (weightUsed / available) * 100;
-      const percent = Math.min(Math.max(ratio, 0), 100).toFixed(1); // Clamp between 0 and 100
+      const ratio = available === 0 ? 0 : (weightUsed / available) * 100;
+      const percent = isNaN(ratio) ? 0 : Math.min(Math.max(ratio, 0), 100).toFixed(1); // Clamp between 0 and 100
 
       bar.style.width = `${percent}%`;
       bar.textContent = `${percent}%`;
+      bar.setAttribute('aria-valuenow', percent);
 
       // Highlight progress bar in red if exceeded
       if (weightUsed > available) {
@@ -571,41 +850,54 @@
       // Calculate total pieces
       let totalPieces = totalPatterns * totalLayers;
 
+      // Handle NaN scenarios
+      totalPieces = isNaN(totalPieces) ? 0 : totalPieces;
+
       totalPiecesDisplay.textContent = totalPieces;
     }
 
     // Function to populate Roll Nos based on fabric type
-    function populateRollNos(rollNoSelect, selectedFabricType) {
-      // Clear existing options
-      rollNoSelect.innerHTML = '<option value="">--Select Roll No.--</option>';
+    function populateRollNos(selectedFabricType) {
+      const rollNoSels = rollsContainer.querySelectorAll('.rollNoSel');
+      rollNoSels.forEach(rollNoSel => {
+        const rollSection = rollNoSel.closest('.roll-section');
+        const rollNoSearch = rollSection.querySelector('.rollNo_search');
+        const rollNoOptions = rollSection.querySelector('.autocomplete-items');
 
-      if (rollsByFabricType[selectedFabricType]) {
-        rollsByFabricType[selectedFabricType].forEach(r => {
-          const opt = document.createElement('option');
-          opt.value = r.roll_no;
-          opt.dataset.weight = r.per_roll_weight;
-          opt.textContent = `${r.roll_no} (Available: ${r.per_roll_weight})`;
-          rollNoSelect.appendChild(opt);
-        });
-      }
+        const availableRolls = rollsByFabricType[selectedFabricType] || [];
 
-      // Debugging: Log the options added
-      console.log(`Populated Roll Nos for fabric type "${selectedFabricType}":`, rollsByFabricType[selectedFabricType]);
+        // Prepare data with display text and value
+        const rollData = availableRolls.map(roll => ({
+          displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight}kg) (Vendor: ${roll.vendor_name})`,
+          value: roll.roll_no,
+          availableWeight: roll.per_roll_weight
+        }));
+
+        // Reinitialize autocomplete with new data
+        initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
+
+        // Reset weight and progress
+        const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
+        const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+        const progressBar = rollSection.querySelector('.progress-bar');
+
+        availableWeightTxt.textContent = '0';
+        weightUsedInput.value = '';
+        weightUsedInput.removeAttribute('max');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+        progressBar.classList.remove('bg-danger');
+        progressBar.classList.add('bg-info');
+      });
     }
 
     // Event listener for Fabric Type change to populate Roll Nos
     fabricTypeSel.addEventListener('change', () => {
       const selectedFabricType = fabricTypeSel.value;
-      const rollNoSels = rollsContainer.querySelectorAll('.rollNoSel');
-
-      rollNoSels.forEach(rollNoSel => {
-        populateRollNos(rollNoSel, selectedFabricType);
-      });
-
-      if (fabricTypeSel.value) {
+      if (selectedFabricType) {
         addRollBtn.disabled = false;
-        // Reset existing rolls if fabric_type changes
-        rollsContainer.innerHTML = '';
+        populateRollNos(selectedFabricType);
         updateTotalPieces();
       } else {
         addRollBtn.disabled = true;
@@ -622,6 +914,17 @@
 
     // Initialize with one size
     addNewSize();
+
+    // Function to initialize all existing roll sections (if any)
+    document.addEventListener('DOMContentLoaded', () => {
+      const existingRollSections = rollsContainer.querySelectorAll('.roll-section');
+      existingRollSections.forEach(rollSection => {
+        const fabricType = fabricTypeSel.value;
+        if (fabricType) {
+          initializeRollNoAutocomplete(rollSection, fabricType);
+        }
+      });
+    });
   </script>
 </body>
 </html>
