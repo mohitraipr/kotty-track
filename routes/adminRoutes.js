@@ -230,7 +230,6 @@ router.post(
       .trim()
       .notEmpty()
       .withMessage('Username is required.')
-      .isAlphanumeric()
       .withMessage('Username must be alphanumeric.')
       .custom(async (value) => {
         const [user] = await pool.query('SELECT id FROM users WHERE username = ?', [value]);
