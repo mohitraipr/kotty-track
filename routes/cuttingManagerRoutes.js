@@ -7,6 +7,7 @@ const { isAuthenticated, isCuttingManager } = require('../middlewares/auth');
 const multer = require('multer');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const generateLotNumber = require('../utils/generateLotNumber'); // Import the utility function
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
@@ -23,9 +24,10 @@ const upload = multer({ storage: storage });
 async function getRollsByFabricType() {
   try {
     const [rows] = await pool.query(`
-      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight
+      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight, v.name AS vendor_name
       FROM fabric_invoice_rolls fir
       JOIN fabric_invoices fi ON fir.invoice_id = fi.id
+      JOIN vendors v ON fir.vendor_id = v.id
       WHERE fir.per_roll_weight > 0 AND fi.fabric_type IS NOT NULL
     `);
 
@@ -37,7 +39,8 @@ async function getRollsByFabricType() {
       }
       rollsByFabricType[row.fabric_type].push({
         roll_no: row.roll_no,
-        per_roll_weight: row.per_roll_weight
+        per_roll_weight: row.per_roll_weight,
+        vendor_name: row.vendor_name // Include vendor_name
       });
     });
 
@@ -48,19 +51,31 @@ async function getRollsByFabricType() {
   }
 }
 
-// Helper function to generate lot number
-function generateLotNumber(username) {
-  const now = new Date();
-  const date = now.toISOString().slice(0,10).replace(/-/g, ''); // YYYYMMDD
-  const time = now.toTimeString().slice(0,8).replace(/:/g, ''); // HHMMSS
-  const sanitizedUsername = username.replace(/\s+/g, '').toLowerCase(); // Remove spaces and lowercase
-  return `LOT-${date}-${time}-${sanitizedUsername}`;
-}
-
 // GET /cutting-manager/dashboard
 router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => {
+  let conn;
   try {
+    console.log('Session User:', req.session.user); // Debugging line
+
     const userId = req.session.user.id;
+
+    // Ensure userId is available
+    if (!userId) {
+      req.flash('error', 'User ID is missing in session.');
+      return res.redirect('/logout'); // Redirect to logout or login
+    }
+
+    // Start a transaction to generate lot_no safely
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // Generate a new lot number
+    const username = req.session.user.username;
+    const generatedLotNumber = await generateLotNumber(username, userId, conn);
+
+    // Commit the transaction
+    await conn.commit();
+    conn.release();
 
     // Fetch all cutting lots created by this cutting manager
     const [cuttingLots] = await pool.query(`
@@ -132,18 +147,20 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
     // Fetch rolls by fabric type
     const rollsByFabricType = await getRollsByFabricType();
 
-    // Generate a new lot number for the form
-    const generatedLotNumber = generateLotNumber(req.session.user.username);
-
+    // Render the dashboard with all necessary data
     res.render('cuttingManagerDashboard', { // Ensure this matches your EJS file name
       user: req.session.user,
       cuttingLots,
       departmentUsers,
       pendingAssignments,
-      rollsByFabricType, // Pass the variable here
-      generatedLotNumber // Pass the generated lot number
+      rollsByFabricType, // Now includes vendor_name
+      generatedLotNumber, // Pass the generated lot number
     });
   } catch (err) {
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
     console.error('Error loading Cutting Manager Dashboard:', err);
     req.flash('error', 'Failed to load Cutting Manager Dashboard.');
     res.redirect('/'); // Adjust as needed
@@ -158,17 +175,20 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
 
   // Input validation
   if (!lot_no || !sku || !fabric_type) {
-    req.flash('error', 'Lot No., SKU, and Fabric Type are required.');
+    req.flash('error', 'Lot No., SKU and Fabric Type are required.');
     return res.redirect('/cutting-manager/dashboard');
   }
 
   try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+
     // Start a transaction
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
-      // Insert the new cutting lot with initial total_pieces = 0
+      // Insert the new cutting lot with total_pieces = 0
       const [result] = await conn.query(`
         INSERT INTO cutting_lots 
           (lot_no, sku, fabric_type, remark, image_url, user_id, total_pieces)
@@ -180,7 +200,7 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
         fabric_type,
         remark || null,
         image ? image.path : null,
-        req.session.user.id
+        userId
       ]);
 
       const cuttingLotId = result.insertId;
@@ -243,7 +263,10 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
       for (let roll of rolls) {
         // Check if the selected roll has enough weight
         const [rollRows] = await conn.query(`
-          SELECT per_roll_weight FROM fabric_invoice_rolls WHERE roll_no = ? FOR UPDATE
+          SELECT fir.per_roll_weight 
+          FROM fabric_invoice_rolls fir 
+          JOIN vendors v ON fir.vendor_id = v.id 
+          WHERE fir.roll_no = ? AND v.name IS NOT NULL FOR UPDATE
         `, [roll.roll_no]);
 
         if (rollRows.length === 0) {
