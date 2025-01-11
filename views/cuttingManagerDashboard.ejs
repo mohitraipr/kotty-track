@@ -703,7 +703,7 @@
 
       // Prepare data with display text and value
       const rollData = availableRolls.map(roll => ({
-        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight}kg) (Vendor: ${roll.vendor_name})`,
+        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit})(Vendor: ${roll.vendor_name})`,
         value: roll.roll_no,
         availableWeight: roll.per_roll_weight
       }));
