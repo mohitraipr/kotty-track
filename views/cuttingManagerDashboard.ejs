@@ -501,11 +501,11 @@
     // Example structure:
     // {
     //   "Cotton": [
-    //     { "roll_no": "2087", "per_roll_weight": 120, "vendor_name": "Vendor A" },
-    //     { "roll_no": "2088", "per_roll_weight": 150, "vendor_name": "Vendor B" }
+    //     { "roll_no": "2087", "per_roll_weight": 120, "vendor_name": "Vendor A", "unit": "kg" },
+    //     { "roll_no": "2088", "per_roll_weight": 150, "vendor_name": "Vendor B", "unit": "meters" }
     //   ],
     //   "Polyester": [
-    //     { "roll_no": "3097", "per_roll_weight": 100, "vendor_name": "Vendor C" }
+    //     { "roll_no": "3097", "per_roll_weight": 100, "vendor_name": "Vendor C", "unit": "kg" }
     //   ]
     // }
 
@@ -523,6 +523,7 @@
     const fabricTypeSel = document.getElementById('fabric_type');
     const fabricTypeSearch = document.getElementById('fabric_type_search');
     const fabricTypeOptions = document.getElementById('fabric_type_options');
+    const skuInput = document.getElementById('sku'); // SKU input for dynamic placeholder (optional)
 
     // Debounce function to limit the rate of function calls
     function debounce(func, delay) {
@@ -698,18 +699,26 @@
       const rollNoSel = rollSection.querySelector('.rollNoSel');
       const rollNoSearch = rollSection.querySelector('.rollNo_search');
       const rollNoOptions = rollSection.querySelector('.autocomplete-items');
+      const weightUsedInput = rollSection.querySelector('.weightUsedInput');
 
       const availableRolls = rollsByFabricType[fabricType] || [];
 
       // Prepare data with display text and value
       const rollData = availableRolls.map(roll => ({
-        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit})(Vendor: ${roll.vendor_name})`,
+        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
         value: roll.roll_no,
-        availableWeight: roll.per_roll_weight
+        availableWeight: roll.per_roll_weight,
+        unit: roll.unit
       }));
 
       // Initialize autocomplete for Roll No
       initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
+
+      // Set dynamic placeholder for Roll No search based on fabric type
+      rollNoSearch.placeholder = `Search Roll No for ${fabricType}...`;
+
+      // Initially set the placeholder for Weight Used input (can be updated upon selection)
+      weightUsedInput.placeholder = `Enter Weight Used in ${fabricType}...`;
 
       // Roll No change event
       rollNoSel.addEventListener('change', () => {
@@ -717,18 +726,23 @@
         const selectedRoll = availableRolls.find(r => r.roll_no === selectedRollNo);
         if (selectedRoll) {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-          const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-          const progressBar = rollSection.querySelector('.progress-bar');
           availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
           weightUsedInput.max = selectedRoll.per_roll_weight;
+
+          // Update the placeholder to include the unit of the selected roll
+          weightUsedInput.placeholder = `Enter Weight Used for Roll No. ${selectedRoll.roll_no} in ${selectedRoll.unit}`;
+
           updateWeightProgress(rollSection);
         } else {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-          const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-          const progressBar = rollSection.querySelector('.progress-bar');
           availableWeightTxt.textContent = '0';
           weightUsedInput.value = '';
           weightUsedInput.removeAttribute('max');
+
+          // Reset the placeholder to the general fabric type
+          weightUsedInput.placeholder = `Enter Weight Used in ${fabricType}...`;
+
+          const progressBar = rollSection.querySelector('.progress-bar');
           progressBar.style.width = '0%';
           progressBar.textContent = '0%';
           progressBar.classList.remove('bg-danger');
@@ -775,6 +789,7 @@
       const rollNoSel = newRoll.querySelector('.rollNoSel');
       const rollNoSearch = newRoll.querySelector('.rollNo_search');
       const rollNoOptions = newRoll.querySelector('.autocomplete-items');
+      const weightUsedInput = newRoll.querySelector('.weightUsedInput');
 
       // Remove roll functionality
       const removeRollBtn = newRoll.querySelector('.remove-roll-btn');
@@ -785,7 +800,6 @@
 
       // Layers and Weight Used input events
       const layersInput = newRoll.querySelector('.layersInput');
-      const weightUsedInput = newRoll.querySelector('.weightUsedInput');
 
       layersInput.addEventListener('input', () => {
         updateTotalPieces();
@@ -800,6 +814,10 @@
       const currentFabricType = fabricTypeSel.value;
       if (currentFabricType) {
         initializeRollNoAutocomplete(newRoll, currentFabricType);
+      } else {
+        // Set default placeholders if no fabric type is selected
+        rollNoSearch.placeholder = 'Search Roll No...';
+        weightUsedInput.placeholder = 'Enter Weight Used In Meter\'s Or KG';
       }
     }
 
@@ -863,27 +881,31 @@
         const rollSection = rollNoSel.closest('.roll-section');
         const rollNoSearch = rollSection.querySelector('.rollNo_search');
         const rollNoOptions = rollSection.querySelector('.autocomplete-items');
+        const weightUsedInput = rollSection.querySelector('.weightUsedInput');
 
         const availableRolls = rollsByFabricType[selectedFabricType] || [];
 
         // Prepare data with display text and value
         const rollData = availableRolls.map(roll => ({
-          displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight}kg) (Vendor: ${roll.vendor_name})`,
+          displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
           value: roll.roll_no,
-          availableWeight: roll.per_roll_weight
+          availableWeight: roll.per_roll_weight,
+          unit: roll.unit
         }));
 
         // Reinitialize autocomplete with new data
         initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
 
+        // Set dynamic placeholders based on fabric type
+        rollNoSearch.placeholder = `Search Roll No for ${selectedFabricType}...`;
+        weightUsedInput.placeholder = `Enter Weight Used in ${selectedFabricType}...`;
+
         // Reset weight and progress
         const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-        const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-        const progressBar = rollSection.querySelector('.progress-bar');
-
         availableWeightTxt.textContent = '0';
         weightUsedInput.value = '';
         weightUsedInput.removeAttribute('max');
+        const progressBar = rollSection.querySelector('.progress-bar');
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
         progressBar.setAttribute('aria-valuenow', '0');
@@ -892,18 +914,30 @@
       });
     }
 
-    // Event listener for Fabric Type change to populate Roll Nos
+    // Event listener for Fabric Type change to populate Roll Nos and set dynamic placeholders
     fabricTypeSel.addEventListener('change', () => {
       const selectedFabricType = fabricTypeSel.value;
       if (selectedFabricType) {
         addRollBtn.disabled = false;
         // **Clear existing rolls to prevent data entry conflicts**
-        rollsContainer.innerHTML = ''; // **Added line to clear previous roll entries**
+        rollsContainer.innerHTML = ''; // Clears all existing roll entries
+
+        // **Optional: Set dynamic placeholder for SKU input based on selected fabric type**
+        // Uncomment the following lines if you still want to set dynamic placeholders for SKU
+        // skuInput.placeholder = `Enter SKU for ${selectedFabricType} (e.g., KTTDRESS50)`;
+
+        // **Populate Roll Nos based on selected fabric type**
         populateRollNos(selectedFabricType);
+
         updateTotalPieces();
       } else {
         addRollBtn.disabled = true;
         rollsContainer.innerHTML = '';
+
+        // **Optional: Reset SKU placeholder if no fabric type is selected**
+        // Uncomment the following line if you still want to reset SKU placeholder
+        // skuInput.placeholder = 'Enter SKU (e.g., KTTDRESS50)';
+
         updateTotalPieces();
       }
     });
@@ -926,6 +960,15 @@
           initializeRollNoAutocomplete(rollSection, fabricType);
         }
       });
+
+      // **Optional: Set initial SKU placeholder based on pre-selected fabric type (if any)**
+      // Uncomment the following lines if you still want to set initial SKU placeholder
+      /*
+      const initialFabricType = fabricTypeSel.value;
+      if (initialFabricType) {
+        skuInput.placeholder = `Enter SKU for ${initialFabricType} (e.g., KTTDRESS50)`;
+      }
+      */
     });
   </script>
 </body>
