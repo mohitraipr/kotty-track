@@ -24,7 +24,7 @@ const upload = multer({ storage: storage });
 async function getRollsByFabricType() {
   try {
     const [rows] = await pool.query(`
-      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight, v.name AS vendor_name
+      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight,fir.unit, v.name AS vendor_name
       FROM fabric_invoice_rolls fir
       JOIN fabric_invoices fi ON fir.invoice_id = fi.id
       JOIN vendors v ON fir.vendor_id = v.id
@@ -39,6 +39,7 @@ async function getRollsByFabricType() {
       }
       rollsByFabricType[row.fabric_type].push({
         roll_no: row.roll_no,
+        unit: row.unit,
         per_roll_weight: row.per_roll_weight,
         vendor_name: row.vendor_name // Include vendor_name
       });
