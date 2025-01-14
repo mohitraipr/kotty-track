@@ -1,186 +1,740 @@
-<!-- views/operatorDashboard.ejs -->
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>Operator Dashboard</title>
+
+  <!-- Bootstrap 5 CSS -->
   <link
-    rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    rel="stylesheet"
   />
+  <!-- Bootstrap Icons -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+    rel="stylesheet"
+  />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    .bordered-block {
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #fff;
-      padding: 1rem;
-      margin-bottom: 1rem;
+    /* Global Styles */
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #f4f6f9;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.25rem;
+    }
+    .card-header {
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-tabs .nav-link {
+      border: none;
+      border-bottom: 2px solid transparent;
+      transition: border-bottom 0.3s, background-color 0.3s;
+      white-space: nowrap;
+    }
+    .nav-tabs .nav-link.active {
+      border-bottom: 2px solid #0d6efd;
+      background-color: transparent;
+      color: #0d6efd;
+    }
+    .nav-tabs .nav-link:hover {
+      background-color: rgba(13, 110, 253, 0.1);
+    }
+    .table thead th {
+      vertical-align: middle;
+      text-align: center;
+    }
+    .table tbody td {
+      vertical-align: middle;
+    }
+    /* Dark Mode Styles */
+    body.dark-mode {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    body.dark-mode .navbar {
+      background-color: #1f1f1f;
+    }
+    body.dark-mode .card-header {
+      background-color: #2c2c2c !important;
+      color: #e0e0e0 !important;
+    }
+    body.dark-mode .card {
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+    }
+    body.dark-mode .nav-tabs .nav-link.active {
+      color: #0d6efd;
+      border-bottom: 2px solid #0d6efd;
+    }
+    body.dark-mode .alert {
+      background-color: #333333;
+      color: #e0e0e0;
+    }
+    /* Sidebar Styles */
+    @media (min-width: 992px) {
+      #sidebar {
+        min-width: 250px;
+        max-width: 250px;
+        min-height: 100vh;
+        background-color: #343a40;
+        color: #fff;
+        position: fixed;
+        top: 0;
+        left: 0;
+        padding-top: 1rem;
+        transition: all 0.3s;
+      }
+      #sidebar .nav-link {
+        color: #adb5bd;
+      }
+      #sidebar .nav-link.active {
+        color: #fff;
+        background-color: #495057;
+      }
+      #content {
+        margin-left: 250px;
+      }
+    }
+    /* Responsive Adjustments */
+    @media (max-width: 991.98px) {
+      #sidebar {
+        display: none;
+      }
+      #content {
+        margin: 0;
+      }
+      /* Make navbar brand smaller on mobile */
+      .navbar-brand.d-lg-none {
+        font-size: 1rem;
+      }
+    }
+    /* Theme Toggle Button */
+    #themeToggle {
+      transition: transform 0.3s;
+    }
+    #themeToggle:hover {
+      transform: scale(1.1);
+    }
+    /* Card Hover Effect */
+    .card:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      transition: box-shadow 0.3s;
+    }
+    /* Button Styles */
+    .btn-custom {
+      border-radius: 20px;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+    }
+    /* Modal Enhancements */
+    .modal-header {
+      background-color: #0d6efd;
+      color: #fff;
+    }
+    .modal-footer .btn {
+      min-width: 100px;
+    }
+    /* Scrollable Tabs on Small Screens */
+    @media (max-width: 576px) {
+      #operatorTabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+      }
+      #operatorTabs .nav-item {
+        flex: 0 0 auto;
+      }
+    }
+    /* Fullscreen Modals on Mobile */
+    @media (max-width: 576px) {
+      .modal-dialog {
+        max-width: 100%;
+        margin: 0;
+        height: 100%;
+      }
+      .modal-content {
+        height: 100%;
+        border-radius: 0;
+      }
+      .modal-body {
+        overflow-y: auto;
+      }
     }
   </style>
 </head>
 <body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <span class="navbar-brand">Operator Dashboard</span>
-      <div class="ms-auto">
-        <span class="navbar-text me-3">
-          Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
-        </span>
-        <a href="/logout" class="btn btn-outline-light">Logout</a>
-      </div>
+  <!-- Sidebar (for larger screens) -->
+  <nav id="sidebar" aria-label="Sidebar Navigation">
+    <div class="d-flex flex-column align-items-start px-3">
+      <a href="#" class="navbar-brand mb-4">
+        <i class="bi bi-speedometer2 me-2"></i> Operator Dashboard
+      </a>
+      <ul class="nav nav-pills flex-column w-100">
+        <li class="nav-item w-100">
+          <a href="#" class="nav-link active w-100 d-flex align-items-center">
+            <i class="bi bi-house-door-fill me-2"></i> Home
+          </a>
+        </li>
+        <!-- Add more sidebar links here if needed -->
+      </ul>
     </div>
   </nav>
 
-  <div class="container mt-4">
-    <% if (error && error.length > 0) { %>
-      <div class="alert alert-danger"><%= error[0] %></div>
-    <% } %>
-    <% if (success && success.length > 0) { %>
-      <div class="alert alert-success"><%= success[0] %></div>
-    <% } %>
+  <!-- Main Content -->
+  <div id="content">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4" aria-label="Main Navigation">
+      <div class="container-fluid">
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#offcanvasSidebar"
+          aria-controls="offcanvasSidebar"
+          aria-label="Toggle Navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand d-lg-none" href="#">
+          <i class="bi bi-speedometer2 me-2"></i> Dashboard
+        </a>
+        <div class="collapse navbar-collapse" id="navbarMenu">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <!-- Placeholder for additional navbar items -->
+          </ul>
+          <div class="d-flex align-items-center">
+            <span class="navbar-text me-3">
+              Welcome, <strong><%= user.username %></strong>
+            </span>
+            <button id="themeToggle" class="btn btn-outline-light btn-sm me-2" aria-label="Toggle Dark Mode">
+              <i class="bi bi-moon me-1"></i> Dark Mode
+            </button>
+            <a href="/logout" class="btn btn-outline-light btn-sm">
+              <i class="bi bi-box-arrow-right me-1"></i> Logout
+            </a>
+          </div>
+        </div>
+      </div>
+    </nav>
 
-    <div class="row">
-      <!-- (A) LEFT COLUMN: Unconfirmed + Unassigned -->
-      <div class="col-md-6">
-        <h4>Unconfirmed + Unassigned Lots</h4>
-        <% if (unassignedLots.length === 0) { %>
-          <p>No unconfirmed/unassigned lots found.</p>
-        <% } else { %>
-          <% unassignedLots.forEach(lot => { %>
-            <div class="bordered-block">
-              <h5>Lot No: <%= lot.lot_no %></h5>
-              <p>
-                <strong>SKU:</strong> <%= lot.sku %> |
-                <strong>Fabric:</strong> <%= lot.fabric_type %> |
-                <strong>Confirmed?</strong> <%= lot.is_confirmed %>
-              </p>
-              <p><strong>Total (expected):</strong> <%= lot.total_pieces %></p>
-              <p><strong>Sizes:</strong>
-                <% lot.sizes.forEach(sz => { %>
-                  <%= sz.size_label %> (<%= sz.size_total_pieces %>) |
-                <% }) %>
-              </p>
+    <!-- Offcanvas Sidebar for Mobile -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
+          <i class="bi bi-speedometer2 me-2"></i> Dashboard
+        </h5>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <ul class="nav nav-pills flex-column">
+          <li class="nav-item">
+            <a href="#" class="nav-link active d-flex align-items-center">
+              <i class="bi bi-house-door-fill me-2"></i> Home
+            </a>
+          </li>
+          <!-- Add more offcanvas sidebar links here if needed -->
+        </ul>
+      </div>
+    </div>
+    <!-- End of Offcanvas Sidebar -->
 
-              <!-- Operator can confirm cutting pieces -->
-              <form method="POST" action="/operator/confirm-cutting">
-                <input type="hidden" name="lot_no" value="<%= lot.lot_no %>" />
-                <table class="table table-sm">
-                  <thead>
+    <div class="container-fluid">
+      <% if (error && error.length > 0) { %>
+        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" aria-hidden="true"></i>
+          <div><%= error[0] %></div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+      <% if (success && success.length > 0) { %>
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
+          <i class="bi bi-check-circle-fill flex-shrink-0 me-2" aria-hidden="true"></i>
+          <div><%= success[0] %></div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% } %>
+
+      <!-- Navigation Tabs -->
+      <ul class="nav nav-tabs mb-4" id="operatorTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link active"
+            id="unconfirmed-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#unconfirmed"
+            type="button"
+            role="tab"
+            aria-controls="unconfirmed"
+            aria-selected="true"
+          >
+            <i class="bi bi-journal-text"></i> Unconfirmed
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="pending-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#pending"
+            type="button"
+            role="tab"
+            aria-controls="pending"
+            aria-selected="false"
+          >
+            <i class="bi bi-exclamation-circle"></i> Pending
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="assigned-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#assigned"
+            type="button"
+            role="tab"
+            aria-controls="assigned"
+            aria-selected="false"
+          >
+            <i class="bi bi-briefcase-fill"></i> Assigned
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="confirmed-tab"
+            data-bs-toggle="tab"
+            data-bs-target="#confirmed"
+            type="button"
+            role="tab"
+            aria-controls="confirmed"
+            aria-selected="false"
+          >
+            <i class="bi bi-patch-check-fill"></i> Confirmed
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="operatorTabsContent">
+        <!-- (A) Unconfirmed + Unassigned -->
+        <div
+          class="tab-pane fade show active"
+          id="unconfirmed"
+          role="tabpanel"
+          aria-labelledby="unconfirmed-tab"
+        >
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-secondary">
+              <i class="bi bi-journal-text me-2"></i> Unconfirmed + Unassigned
+            </h5>
+            <% if (unassignedLots && unassignedLots.length > 0) { %>
+              <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkConfirmModal">
+                <i class="bi bi-check-circle me-1"></i> Bulk Confirm
+              </button>
+            <% } %>
+          </div>
+          <% if (!unassignedLots || unassignedLots.length === 0) { %>
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-box-seam-fill display-4"></i>
+              <p class="mt-3">No unconfirmed/unassigned lots found.</p>
+            </div>
+          <% } else { %>
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+              <% unassignedLots.forEach(lot => { %>
+                <div class="col">
+                  <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <i class="bi bi-tag-fill me-2"></i>
+                          Lot No: <%= lot.lot_no %>
+                        </div>
+                        <button
+                          class="btn btn-sm btn-light"
+                          data-bs-toggle="modal"
+                          data-bs-target="#confirmCuttingModal<%= lot.lot_no %>"
+                          aria-label="Confirm Cutting for Lot <%= lot.lot_no %>"
+                        >
+                          <i class="bi bi-check2-square me-1"></i> Confirm
+                        </button>
+                      </div>
+                    </div>
+                    <div class="card-body">
+                      <p>
+                        <strong>SKU:</strong> <%= lot.sku %> |
+                        <strong>Fabric:</strong> <%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)<br/>
+                        <strong>Total Expected:</strong> <%= lot.total_pieces %><br/>
+                        <strong>Created By:</strong> <%= lot.created_by %>
+                      </p>
+                      <p>
+                        <strong>Sizes:</strong>
+                        <% lot.sizes.forEach(sz => { %>
+                          <span class="badge bg-secondary me-1 mb-1">
+                            <%= sz.size_label %> (<%= sz.size_total_pieces %>)
+                          </span>
+                        <% }) %>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Confirm Cutting Modal -->
+                <div
+                  class="modal fade"
+                  id="confirmCuttingModal<%= lot.lot_no %>"
+                  tabindex="-1"
+                  aria-labelledby="confirmCuttingModalLabel<%= lot.lot_no %>"
+                  aria-hidden="true"
+                >
+                  <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                      <form method="POST" action="/operator/confirm-cutting">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="confirmCuttingModalLabel<%= lot.lot_no %>">
+                            Confirm Cutting for Lot <%= lot.lot_no %>
+                          </h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          <input type="hidden" name="lot_no" value="<%= lot.lot_no %>"/>
+                          <div class="mb-3">
+                            <label class="form-label">SKU</label>
+                            <input type="text" class="form-control" value="<%= lot.sku %>" disabled>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Fabric</label>
+                            <input type="text" class="form-control" value="<%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)" disabled>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Total Expected Pieces</label>
+                            <input type="number" class="form-control" value="<%= lot.total_pieces %>" disabled>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Actual Received Pieces</label>
+                            <table class="table table-sm table-bordered">
+                              <thead>
+                                <tr>
+                                  <th>Size</th>
+                                  <th>Actual Received</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <% lot.sizes.forEach((sz, idx) => { %>
+                                  <tr>
+                                    <td>
+                                      <%= sz.size_label %>
+                                      <input type="hidden" name="sizes[<%= idx %>][size_label]" value="<%= sz.size_label %>"/>
+                                    </td>
+                                    <td>
+                                      <input
+                                        type="number"
+                                        class="form-control form-control-sm"
+                                        name="sizes[<%= idx %>][actual_received]"
+                                        min="0"
+                                        value="<%= sz.size_total_pieces %>"
+                                        required
+                                      />
+                                    </td>
+                                  </tr>
+                                <% }) %>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-check2-square me-1"></i> Confirm
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+                <!-- End of Confirm Cutting Modal -->
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- (B) Pending Operator Verification -->
+        <div
+          class="tab-pane fade"
+          id="pending"
+          role="tabpanel"
+          aria-labelledby="pending-tab"
+        >
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-secondary">
+              <i class="bi bi-exclamation-circle me-2"></i> Pending Operator Verification
+            </h5>
+          </div>
+          <% if (!pendingVerifications || pendingVerifications.length === 0) { %>
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-hourglass-split display-4"></i>
+              <p class="mt-3">No assignments waiting for verification.</p>
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Lot No</th>
+                    <th>SKU</th>
+                    <th>Fabric</th>
+                    <th>Status</th>
+                    <th>Dept User</th>
+                    <th>Assigned At</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% pendingVerifications.forEach(pv => { %>
                     <tr>
-                      <th>Size</th>
+                      <td><%= pv.lot_no %></td>
+                      <td><%= pv.sku %></td>
+                      <td><%= pv.fabric_type %> (Flow: <%= pv.flow_type %>)</td>
+                      <td><span class="badge bg-warning text-dark"><%= pv.status %></span></td>
+                      <td><%= pv.dept_user %> (<%= pv.dept_role %>)</td>
+                      <td><%= new Date(pv.assigned_at).toLocaleString() %></td>
+                      <td>
+                        <a
+                          href="/operator/verify/<%= pv.assignment_id %>"
+                          class="btn btn-sm btn-info"
+                          aria-label="Verify Lot <%= pv.lot_no %>"
+                        >
+                          <i class="bi bi-eye me-1"></i> Verify
+                        </a>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- (C) Assigned (In Progress) -->
+        <div
+          class="tab-pane fade"
+          id="assigned"
+          role="tabpanel"
+          aria-labelledby="assigned-tab"
+        >
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-secondary">
+              <i class="bi bi-briefcase-fill me-2"></i> Assigned In Progress
+            </h5>
+          </div>
+          <% if (!assignedAssignments || assignedAssignments.length === 0) { %>
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-hourglass-split display-4"></i>
+              <p class="mt-3">No assigned lots in progress.</p>
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Lot No</th>
+                    <th>Assigned</th>
+                    <th>Dept Confirmed</th>
+                    <th>Status</th>
+                    <th>Assigned At</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% assignedAssignments.forEach(a => {
+                       const leftover = a.assigned_pieces - a.total_confirmed_by_dept;
+                  %>
+                    <tr>
+                      <td><%= a.lot_no %></td>
+                      <td><%= a.assigned_pieces %></td>
+                      <td><%= a.total_confirmed_by_dept %></td>
+                      <td><span class="badge bg-primary"><%= a.status %></span></td>
+                      <td><%= new Date(a.assigned_at).toLocaleString() %></td>
+                      <td>
+                        <div class="d-flex gap-2">
+                          <a
+                            href="/operator/pendency/<%= a.lot_no %>"
+                            class="btn btn-sm btn-secondary"
+                            aria-label="View Pendency for Lot <%= a.lot_no %>"
+                          >
+                            <i class="bi bi-search me-1"></i> Pendency
+                          </a>
+                          <a
+                            href="/operator/pass-lot/<%= a.assignment_id %>"
+                            class="btn btn-sm btn-success"
+                            aria-label="Pass Partial for Lot <%= a.lot_no %>"
+                          >
+                            <i class="bi bi-arrow-right-square me-1"></i> Pass Partial
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- (D) Confirmed but Unassigned -->
+        <div
+          class="tab-pane fade"
+          id="confirmed"
+          role="tabpanel"
+          aria-labelledby="confirmed-tab"
+        >
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-secondary">
+              <i class="bi bi-patch-check-fill me-2"></i> Confirmed but Not Assigned
+            </h5>
+          </div>
+          <% if (!confirmedButUnassigned || confirmedButUnassigned.length === 0) { %>
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-box-seam-fill display-4"></i>
+              <p class="mt-3">No confirmed-but-unassigned lots found.</p>
+            </div>
+          <% } else { %>
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+              <% confirmedButUnassigned.forEach(lot => { %>
+                <div class="col">
+                  <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <i class="bi bi-tag-fill me-2"></i>
+                          Lot No: <%= lot.lot_no %>
+                        </div>
+                        <a
+                          href="/operator/assign-lot-form/<%= lot.lot_no %>"
+                          class="btn btn-sm btn-light"
+                          aria-label="Assign Next Dept for Lot <%= lot.lot_no %>"
+                        >
+                          <i class="bi bi-arrow-right-circle me-1"></i> Assign
+                        </a>
+                      </div>
+                    </div>
+                    <div class="card-body">
+                      <p>
+                        <strong>SKU:</strong> <%= lot.sku %> |
+                        <strong>Fabric:</strong> <%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)<br/>
+                        <strong>Total Pieces:</strong> <%= lot.total_pieces %>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Confirm Cutting Modal -->
+  <% if (unassignedLots && unassignedLots.length > 0) { %>
+    <div
+      class="modal fade"
+      id="bulkConfirmModal"
+      tabindex="-1"
+      aria-labelledby="bulkConfirmModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+          <form method="POST" action="/operator/bulk-confirm-cutting">
+            <div class="modal-header">
+              <h5 class="modal-title" id="bulkConfirmModalLabel">Bulk Confirm Cutting</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Lot No</th>
+                      <th>SKU</th>
+                      <th>Fabric</th>
+                      <th>Total Expected</th>
                       <th>Actual Received</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <% lot.sizes.forEach((sz, idx) => { %>
+                    <% unassignedLots.forEach((lot, lotIdx) => { %>
                       <tr>
                         <td>
-                          <%= sz.size_label %>
-                          <input type="hidden" name="sizes[<%= idx %>][size_label]" value="<%= sz.size_label %>" />
+                          <%= lot.lot_no %>
+                          <input type="hidden" name="lots[<%= lotIdx %>][lot_no]" value="<%= lot.lot_no %>"/>
                         </td>
+                        <td><%= lot.sku %></td>
+                        <td><%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)</td>
+                        <td><%= lot.total_pieces %></td>
                         <td>
                           <input
                             type="number"
                             class="form-control form-control-sm"
-                            name="sizes[<%= idx %>][actual_received]"
+                            name="lots[<%= lotIdx %>][actual_received]"
                             min="0"
-                            value="<%= sz.size_total_pieces %>"
+                            value="<%= lot.total_pieces %>"
+                            required
                           />
                         </td>
                       </tr>
                     <% }) %>
                   </tbody>
                 </table>
-                <button type="submit" class="btn btn-sm btn-primary">Confirm Cutting</button>
-              </form>
+              </div>
             </div>
-          <% }) %>
-        <% } %>
-      </div>
-
-      <!-- (B) RIGHT COLUMN: Assigned by Operator -->
-      <div class="col-md-6">
-        <h4>Assigned Lots</h4>
-        <% if (assignedAssignments.length === 0) { %>
-          <p>No assigned lots found.</p>
-        <% } else { %>
-          <table class="table table-bordered">
-            <thead class="table-dark">
-              <tr>
-                <th>Lot No</th>
-                <th>Assigned Pieces</th>
-                <th>Dept Confirmed</th>
-                <th>Remaining (not completed)</th>
-                <th>Status</th>
-                <th>Assigned At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% assignedAssignments.forEach(a => {
-                   const leftover = a.assigned_pieces - a.total_confirmed_by_dept;
-              %>
-                <tr>
-                  <td><%= a.lot_no %></td>
-                  <td><%= a.assigned_pieces %></td>
-                  <td><%= a.total_confirmed_by_dept %></td>
-                  <td><%= leftover %></td>
-                  <td><%= a.status %></td>
-                  <td><%= new Date(a.assigned_at).toLocaleString() %></td>
-                  <td>
-                    <!-- Optional: link to a "pendency" route -->
-                    <a href="/operator/pendency/<%= a.lot_no %>" class="btn btn-sm btn-info mb-2">View Pendency</a>
-                    <br/>
-                    <!-- We do "Pass Completed" logic here, not leftover. So we show a link to /operator/completed/:assignmentId -->
-                    <a
-                      href="/operator/completed/<%= a.assignment_id %>"
-                      class="btn btn-sm btn-success"
-                    >
-                      Pass Completed
-                    </a>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        <% } %>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-warning">
+                <i class="bi bi-check2-square me-1"></i> Confirm All
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
+  <% } %>
+  <!-- End of Bulk Confirm Cutting Modal -->
 
-    <hr/>
-
-    <!-- (C) Confirmed but Unassigned -->
-    <div class="row mt-4">
-      <div class="col-12">
-        <h4>Confirmed but Not Assigned</h4>
-        <% if (!confirmedButUnassigned || confirmedButUnassigned.length === 0) { %>
-          <p>No confirmed-but-unassigned lots found.</p>
-        <% } else { %>
-          <% confirmedButUnassigned.forEach(lot => { %>
-            <div class="bordered-block">
-              <h5>Lot No: <%= lot.lot_no %></h5>
-              <p>
-                <strong>SKU:</strong> <%= lot.sku %> |
-                <strong>Fabric:</strong> <%= lot.fabric_type %> |
-                <strong>Confirmed?:</strong> <%= lot.is_confirmed %>
-              </p>
-              <p><strong>Total Pieces:</strong> <%= lot.total_pieces %></p>
-              <!-- Link to /operator/assign-lot-form/<lot.lot_no> -->
-              <a 
-                href="/operator/assign-lot-form/<%= lot.lot_no %>"
-                class="btn btn-sm btn-primary"
-              >
-                Assign to Next Dept
-              </a>
-            </div>
-          <% }) %>
-        <% } %>
-      </div>
-    </div>
-  </div> <!-- /container -->
-
+  <!-- Bootstrap JS with defer for non-blocking -->
   <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    defer
+  ></script>
+  <!-- Optional: Add a script for Dark Mode Toggle -->
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const themeToggle = document.getElementById('themeToggle');
+      const body = document.body;
+
+      // Check for saved user preference, if any, on load of the website
+      if (localStorage.getItem('theme') === 'dark') {
+        body.classList.add('dark-mode');
+        themeToggle.innerHTML = '<i class="bi bi-sun me-1"></i> Light Mode';
+      }
+
+      themeToggle.addEventListener('click', () => {
+        body.classList.toggle('dark-mode');
+        if (body.classList.contains('dark-mode')) {
+          themeToggle.innerHTML = '<i class="bi bi-sun me-1"></i> Light Mode';
+          localStorage.setItem('theme', 'dark');
+        } else {
+          themeToggle.innerHTML = '<i class="bi bi-moon me-1"></i> Dark Mode';
+          localStorage.setItem('theme', 'light');
+        }
+      });
+    });
   </script>
 </body>
 </html>
