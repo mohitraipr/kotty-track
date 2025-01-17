@@ -1,10 +1,8 @@
-// utils/generateLotNumber.js
-
 const { pool } = require('../config/db'); // Adjust the path as needed
 
 /**
  * Generates a new lot number in the format:
- * <FirstFourLettersOfUsername>_<LastLotNo + 1>_<UserID>
+ * <FirstTwoLettersOfUsername><IncrementingLotNo>
  *
  * @param {string} username - The username of the user.
  * @param {number|string} userId - The unique identifier for the user.
@@ -22,38 +20,41 @@ async function generateLotNumber(username, userId, conn) {
     throw new Error('Invalid user ID provided.');
   }
 
-  // Sanitize username: remove spaces, convert to lowercase, and extract first four characters
-  const sanitizedUsername = username.replace(/\s+/g, '').toLowerCase().substring(0, 4);
+  // Sanitize username: remove spaces, convert to lowercase, and extract first two characters
+  const sanitizedUsername = username.replace(/\s+/g, '').toLowerCase().substring(0, 2);
 
   try {
     // Fetch the last lot number for this user from the database with row lock
-    const [rows] = await conn.query(`
+    const [rows] = await conn.query(
+      `
       SELECT lot_no 
       FROM cutting_lots 
       WHERE user_id = ?
       ORDER BY id DESC 
       LIMIT 1
       FOR UPDATE
-    `, [userId]);
+    `,
+      [userId]
+    );
 
     let lastNumber = 0; // Default if no previous lot exists
 
     if (rows.length > 0) {
       const lastLotNumber = rows[0].lot_no;
-      const lotNumberParts = lastLotNumber.split('_');
 
-      if (lotNumberParts.length >= 3) {
-        const lastNum = parseInt(lotNumberParts[1], 10);
-        if (!isNaN(lastNum)) {
-          lastNumber = lastNum;
-        }
+      // Extract the numeric part of the lot number
+      const numericPart = lastLotNumber.substring(2); // Skip the first two characters
+      const parsedNumber = parseInt(numericPart, 10);
+
+      if (!isNaN(parsedNumber)) {
+        lastNumber = parsedNumber;
       }
     }
 
     const newNumber = lastNumber + 1;
 
     // Generate the new lot number
-    const newLotNumber = `${userId}${sanitizedUsername}${newNumber}`;
+    const newLotNumber = `${sanitizedUsername}${newNumber}`;
 
     return newLotNumber;
   } catch (err) {
