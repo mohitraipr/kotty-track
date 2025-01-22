@@ -315,7 +315,7 @@
                 <div class="col-md-4">
                   <label for="fabric_type_search" class="form-label"><i class="bi bi-hexagon-fill me-1"></i> Fabric Type</label>
                   <div class="autocomplete">
-                    <input type="text" id="fabric_type_search" class="form-control" placeholder="Search Fabric Type..." aria-autocomplete="list" aria-controls="fabric_type_options" aria-expanded="false" aria-haspopup="listbox">
+                    <input type="text" id="fabric_type_search" class="form-control" placeholder="Search Fabric Type..." aria-autocomplete="list" aria-controls="fabric_type_options" aria-expanded="false" aria-haspopup="listbox" required>
                     <input type="hidden" id="fabric_type" name="fabric_type" required>
                     <ul class="autocomplete-items list-group d-none" id="fabric_type_options" role="listbox"></ul>
                   </div>
@@ -381,7 +381,8 @@
               </div>
 
               <!-- Submit Button -->
-              <button type="submit" class="btn btn-success w-100">
+              <!-- Added id="createLotBtn" and disabled attribute -->
+              <button type="submit" class="btn btn-success w-100" id="createLotBtn" disabled>
                 <i class="bi bi-check-circle me-1"></i> Create Lot
               </button>
             </form>
@@ -461,7 +462,7 @@
         <div class="col-md-4">
           <label class="form-label">Roll No</label>
           <div class="autocomplete">
-            <input type="text" class="form-control rollNo_search" placeholder="Search Roll No..." aria-autocomplete="list" aria-controls="rollNo_options" aria-expanded="false" aria-haspopup="listbox">
+            <input type="text" class="form-control rollNo_search" placeholder="Search Roll No..." aria-autocomplete="list" aria-controls="rollNo_options" aria-expanded="false" aria-haspopup="listbox" required>
             <input type="hidden" class="rollNoSel" name="roll_no[]" required>
             <ul class="autocomplete-items list-group d-none" role="listbox"></ul>
           </div>
@@ -548,6 +549,9 @@
     const fabricTypeOptions = document.getElementById('fabric_type_options');
     const skuInput = document.getElementById('sku'); // SKU input for dynamic placeholder (optional)
 
+    // **Added: Create Lot Button Reference**
+    const createLotBtn = document.getElementById('createLotBtn'); // Create Lot button
+
     // Debounce function to limit the rate of function calls
     function debounce(func, delay) {
       let debounceTimer;
@@ -627,6 +631,9 @@
           optionsContainer.classList.add('d-none');
           inputField.setAttribute('aria-expanded', 'false');
         }
+
+        // **After filtering, update the Create Lot button state**
+        checkRollsCompletion();
       }, 300));
 
       // Handle option click
@@ -641,6 +648,9 @@
           inputField.setAttribute('aria-expanded', 'false');
           // Trigger change event if necessary
           hiddenField.dispatchEvent(new Event('change'));
+
+          // **After selecting an option, update the Create Lot button state**
+          checkRollsCompletion();
         }
       });
 
@@ -771,6 +781,21 @@
           progressBar.classList.remove('bg-danger');
           progressBar.classList.add('bg-info');
         }
+
+        // **After changing a roll, update the Create Lot button state**
+        checkRollsCompletion();
+      });
+
+      // Weight Used input event
+      weightUsedInput.addEventListener('input', () => {
+        updateWeightProgress(rollSection);
+        checkRollsCompletion();
+      });
+
+      // Layers input event
+      const layersInput = rollSection.querySelector('.layersInput');
+      layersInput.addEventListener('input', () => {
+        checkRollsCompletion();
       });
     }
 
@@ -787,18 +812,20 @@
       const removeSizeBtn = newSize.querySelector('.removeSizeBtn');
       removeSizeBtn.addEventListener('click', () => {
         newSize.remove();
-        updateTotalPieces();
+        checkRollsCompletion(); // Update button state when a size is removed
       });
 
       // Pattern count input event
       const patternCountInput = newSize.querySelector('.patternCountInput');
       patternCountInput.addEventListener('input', () => {
         updateTotalPieces();
+        // Note: Sizes do not affect the Create Lot button directly
       });
 
       // Size label selection event
       sizeLabelSel.addEventListener('change', () => {
         updateTotalPieces();
+        // Note: Sizes do not affect the Create Lot button directly
       });
     }
 
@@ -819,6 +846,7 @@
       removeRollBtn.addEventListener('click', () => {
         newRoll.remove();
         updateTotalPieces();
+        checkRollsCompletion(); // Update button state when a roll is removed
       });
 
       // Layers and Weight Used input events
@@ -826,11 +854,12 @@
 
       layersInput.addEventListener('input', () => {
         updateTotalPieces();
+        checkRollsCompletion();
       });
 
       weightUsedInput.addEventListener('input', () => {
         updateWeightProgress(newRoll);
-        updateTotalPieces();
+        checkRollsCompletion();
       });
 
       // Initialize Roll No Autocomplete
@@ -945,10 +974,6 @@
         // **Clear existing rolls to prevent data entry conflicts**
         rollsContainer.innerHTML = ''; // Clears all existing roll entries
 
-        // **Optional: Set dynamic placeholder for SKU input based on selected fabric type**
-        // Uncomment the following lines if you still want to set dynamic placeholders for SKU
-        // skuInput.placeholder = `Enter SKU for ${selectedFabricType} (e.g., KTTDRESS50)`;
-
         // **Populate Roll Nos based on selected fabric type**
         populateRollNos(selectedFabricType);
 
@@ -957,12 +982,11 @@
         addRollBtn.disabled = true;
         rollsContainer.innerHTML = '';
 
-        // **Optional: Reset SKU placeholder if no fabric type is selected**
-        // Uncomment the following line if you still want to reset SKU placeholder
-        // skuInput.placeholder = 'Enter SKU (e.g., KTTDRESS50)';
-
         updateTotalPieces();
       }
+
+      // **After fabric type changes, check the Create Lot button state**
+      checkRollsCompletion();
     });
 
     // Add a new size when "Add Size" button is clicked
@@ -984,15 +1008,40 @@
         }
       });
 
-      // **Optional: Set initial SKU placeholder based on pre-selected fabric type (if any)**
-      // Uncomment the following lines if you still want to set initial SKU placeholder
-      /*
-      const initialFabricType = fabricTypeSel.value;
-      if (initialFabricType) {
-        skuInput.placeholder = `Enter SKU for ${initialFabricType} (e.g., KTTDRESS50)`;
-      }
-      */
+      // **After page load, check the Create Lot button state**
+      checkRollsCompletion();
     });
+
+    // **New Function: Check if all Roll Sections are Fully Filled**
+    function checkRollsCompletion() {
+      // Select all roll sections
+      const allRollSections = rollsContainer.querySelectorAll('.roll-section');
+
+      // If there are no rolls, disable the button
+      if (allRollSections.length === 0) {
+        createLotBtn.disabled = true;
+        return;
+      }
+
+      // Iterate through each roll section and check required fields
+      let allFilled = true;
+      allRollSections.forEach(roll => {
+        const rollNo = roll.querySelector('.rollNoSel').value.trim();
+        const layers = roll.querySelector('.layersInput').value.trim();
+        const weightUsed = roll.querySelector('.weightUsedInput').value.trim();
+
+        if (rollNo === '' || layers === '' || weightUsed === '') {
+          allFilled = false;
+        }
+      });
+
+      // Enable or disable the Create Lot button based on the check
+      createLotBtn.disabled = !allFilled;
+    }
+
+    // **Ensure Create Lot Button State is Updated When Rolls Are Added or Removed**
+    // This is handled within the addNewRoll and removeRollBtn event listeners above
+
   </script>
 </body>
 </html>
