@@ -3,110 +3,239 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login</title>
+  <title>Kotty - Login</title>
+  
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  
   <!-- Bootstrap CSS -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
     rel="stylesheet"
     crossorigin="anonymous"
   />
+  
   <!-- Bootstrap Icons -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
     rel="stylesheet"
   />
+  
   <style>
+    /* Reset & Global Styles */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
     body {
-      background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
       height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      margin: 0;
+      color: #333;
     }
 
-    .card {
-      border: none;
-      border-radius: 1rem;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Login Container */
+    .login-container {
       background-color: #ffffff;
+      border-radius: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      padding: 3rem 2.5rem;
+      max-width: 420px;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
 
+    .login-container:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Branding */
+    .brand-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .brand-header img {
+      max-width: 70px;
+      margin-bottom: 0.5rem;
+      transition: transform 0.3s ease;
+    }
+
+    .brand-header img:hover {
+      transform: rotate(10deg);
+    }
+
+    .brand-header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #007bff;
+      margin: 0;
+      letter-spacing: 1px;
+    }
+
+    /* Page Title */
+    .page-title {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+      color: #555;
+    }
+
+    /* Form Styles */
+    .form-label {
+      font-weight: 500;
+      color: #333333;
+    }
+
+    .form-control {
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .form-control:focus {
+      border-color: #007bff;
+      box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    /* Toggle Password Icon */
     .toggle-btn {
       cursor: pointer;
       user-select: none;
+      color: #6c757d;
+      transition: color 0.3s ease;
     }
 
-    /* Smooth transition for input focus */
-    .form-control:focus {
-      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    .toggle-btn:hover {
+      color: #495057;
     }
 
-    /* Adjust the toggle button size on mobile */
-    @media (max-width: 576px) {
-      .toggle-btn {
-        font-size: 1.2rem;
+    /* Submit Button */
+    .btn-primary {
+      background-color: #007bff;
+      border-color: #007bff;
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      background-color: #0056b3;
+      border-color: #0056b3;
+    }
+
+    /* Error Alert */
+    .alert-custom {
+      border-radius: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      animation: fadeInDown 0.5s ease forwards;
+    }
+
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
 
-    /* Additional spacing for mobile */
+    /* Responsive Adjustments */
     @media (max-width: 576px) {
-      .card {
-        padding: 1.5rem;
+      .login-container {
+        padding: 2rem 1.5rem;
+      }
+
+      .brand-header h1 {
+        font-size: 1.5rem;
+      }
+
+      .page-title {
+        font-size: 1.25rem;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-12 col-sm-8 col-md-6 col-lg-5">
-        <h2 class="text-center mb-4 fw-bold">Welcome Back</h2>
-
-        <% if (typeof error !== 'undefined' && error) { %>
-          <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <%= error %>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        <% } %>
-
-        <form method="POST" action="/login" class="card p-4">
-          <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <input
-              type="text"
-              name="username"
-              id="username"
-              class="form-control"
-              placeholder="Enter your username"
-              required
-              autofocus
-            />
-          </div>
-
-          <div class="mb-4 position-relative">
-            <label for="password" class="form-label">Password</label>
-            <div class="input-group">
-              <input
-                type="password"
-                name="password"
-                id="password"
-                class="form-control"
-                placeholder="Enter your password"
-                required
-                aria-describedby="togglePassword"
-              />
-              <span class="input-group-text bg-white toggle-btn" id="togglePassword">
-                <i class="bi bi-eye-slash" id="toggleIcon"></i>
-              </span>
-            </div>
-          </div>
-
-          <div class="d-grid mb-3">
-            <button type="submit" class="btn btn-primary btn-lg">Login</button>
-          </div>
-        </form>
-      </div>
+  <div class="login-container">
+    <!-- Company Branding -->
+    <div class="brand-header">
+      <!-- Replace with your Kotty logo 
+      <img src="https://via.placeholder.com/70" alt="Kotty Logo">-->
+      <h1>Kotty</h1>
     </div>
+
+    <!-- Page Title -->
+    <h2 class="page-title">Welcome Back</h2>
+
+    <!-- Error Alert (Rendered by EJS) -->
+    <% if (error && error.length > 0) { %>
+      <div class="alert alert-danger alert-dismissible fade show alert-custom" role="alert">
+        <span><i class="bi bi-exclamation-triangle-fill me-2"></i><%= error %></span>
+      </div>
+    <% } %>
+
+    <!-- Login Form -->
+    <form method="POST" action="/login" novalidate>
+      <!-- Username Field -->
+      <div class="mb-4">
+        <label for="username" class="form-label">Username</label>
+        <input
+          type="text"
+          name="username"
+          id="username"
+          class="form-control"
+          placeholder="Enter your username"
+          required
+          autofocus
+          aria-describedby="usernameHelp"
+        />
+        <div id="usernameHelp" class="form-text text-muted">We'll never share your username with anyone else.</div>
+      </div>
+
+      <!-- Password Field -->
+      <div class="mb-4 position-relative">
+        <label for="password" class="form-label">Password</label>
+        <div class="input-group">
+          <input
+            type="password"
+            name="password"
+            id="password"
+            class="form-control"
+            placeholder="Enter your password"
+            required
+            aria-describedby="passwordHelp togglePassword"
+          />
+          <span class="input-group-text bg-white toggle-btn" id="togglePassword" aria-label="Toggle password visibility">
+            <i class="bi bi-eye-slash" id="toggleIcon"></i>
+          </span>
+        </div>
+        <div id="passwordHelp" class="form-text text-muted">Ensure your password is strong and unique.</div>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="d-grid mb-3">
+        <button type="submit" class="btn btn-primary btn-lg" id="loginButton">
+          <span id="loginButtonText">Login</span>
+          <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="loginSpinner"></span>
+        </button>
+      </div>
+    </form>
   </div>
 
   <!-- Bootstrap JS Bundle -->
@@ -114,17 +243,31 @@
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
     crossorigin="anonymous"
   ></script>
+  
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const togglePassword = document.getElementById('togglePassword');
       const passwordField = document.getElementById('password');
       const toggleIcon = document.getElementById('toggleIcon');
+      const loginButton = document.getElementById('loginButton');
+      const loginButtonText = document.getElementById('loginButtonText');
+      const loginSpinner = document.getElementById('loginSpinner');
 
+      // Toggle Password Visibility
       togglePassword.addEventListener('click', () => {
         const isPassword = passwordField.getAttribute('type') === 'password';
         passwordField.setAttribute('type', isPassword ? 'text' : 'password');
         toggleIcon.classList.toggle('bi-eye');
         toggleIcon.classList.toggle('bi-eye-slash');
+      });
+
+      // Show Loading Spinner on Submit
+      loginButton.addEventListener('click', (e) => {
+        // Prevent multiple submissions
+        if (loginSpinner.classList.contains('d-none')) {
+          loginButtonText.classList.add('d-none');
+          loginSpinner.classList.remove('d-none');
+        }
       });
     });
   </script>
