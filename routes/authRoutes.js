@@ -58,10 +58,12 @@ router.post('/login', async (req, res) => {
       case 'fabric_manager':
         res.redirect('/fabric-manager/dashboard');
         break;
+      case 'stitching_master':
+        res.redirect('/stitchingdashboard');
+        break;
       case 'operator':
         res.redirect('/operator/dashboard');
         break;
-      case 'stitching_master':
       case 'checking':
       case 'washing':
       case 'finishing':
