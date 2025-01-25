@@ -42,7 +42,7 @@ function isOperator(req, res, next) {
 }
 
 function isDepartmentUser(req, res, next) {
-    const departmentRoles = ['stitching_master', 'checking', 'washing', 'finishing', 'quality_assurance'];
+    const departmentRoles = ['checking', 'washing', 'finishing', 'quality_assurance'];
     if (req.session && req.session.user && departmentRoles.includes(req.session.user.roleName)) {
         return next();
     }
