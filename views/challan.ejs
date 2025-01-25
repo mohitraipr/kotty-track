@@ -1,0 +1,113 @@
+<!-- views/challan.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Challan - <%= entry.id %></title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+  >
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+  >
+  <style>
+    body {
+      background-color: #f8f9fa;
+      min-height: 100vh;
+      color: #212529;
+    }
+    .challan-container {
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 2rem;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      margin: 2rem auto;
+      max-width: 800px;
+    }
+    .kotty-heading {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fd7e14;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    hr {
+      margin: 1rem 0;
+    }
+    .updates-table th, .updates-table td {
+      padding: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="challan-container">
+    <div class="kotty-heading">KOTTY LIFESTYLE PRIVATE LTD.</div>
+
+    <h5>Challan for Stitching Data #<%= entry.id %></h5>
+    <hr>
+
+    <p><strong>Lot No:</strong> <%= entry.lot_no %></p>
+    <p><strong>SKU:</strong> <%= entry.sku %></p>
+    <p><strong>Total Pieces:</strong> <%= entry.total_pieces %></p>
+    <% if (entry.remark) { %>
+      <p><strong>Remark:</strong> <%= entry.remark %></p>
+    <% } %>
+    <p><strong>Created At:</strong> <%= new Date(entry.created_at).toLocaleString() %></p>
+    <hr>
+
+    <h6>Current Sizes &amp; Pieces</h6>
+    <% if (sizes && sizes.length > 0) { %>
+      <ul>
+        <% sizes.forEach(s => { %>
+          <li><%= s.size_label %>: <%= s.pieces %> pcs</li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p><em>No sizes found.</em></p>
+    <% } %>
+
+    <hr>
+    <h6>Updates History</h6>
+    <% if (updates && updates.length > 0) { %>
+      <div class="table-responsive">
+        <table class="table table-bordered updates-table align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Updated At</th>
+              <th>Size Label</th>
+              <th>Pieces Added</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% updates.forEach(u => { %>
+              <tr>
+                <td><%= new Date(u.updated_at).toLocaleString() %></td>
+                <td><%= u.size_label %></td>
+                <td>+<%= u.pieces %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p><em>No updates done so far.</em></p>
+    <% } %>
+
+    <hr>
+    <div class="d-flex flex-wrap gap-2 justify-content-end mt-3">
+      <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print
+      </button>
+      <a href="/stitchingdashboard" class="btn btn-secondary btn-sm">
+        Back to Dashboard
+      </a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
