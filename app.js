@@ -49,6 +49,8 @@ const operatorRoutes = require('./routes/operatorRoutes');
 const fabricManagerRoutes = require('./routes/fabricManagerRoutes'); // Import Fabric Manager Routes
 const cuttingManagerRoutes = require('./routes/cuttingManagerRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
+const stitchingRoutes = require('./routes/stitchingRoutes');
+
 
 // Use Routes
 app.use('/', authRoutes);
@@ -58,6 +60,8 @@ app.use('/operator', operatorRoutes);
 app.use('/fabric-manager', fabricManagerRoutes); // Use Fabric Manager Routes
 app.use('/cutting-manager', cuttingManagerRoutes);
 app.use('/department', departmentRoutes);
+app.use('/stitchingdashboard', stitchingRoutes);
+
 
 
 
@@ -72,7 +76,7 @@ app.use((req, res) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
