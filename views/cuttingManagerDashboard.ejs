@@ -1,9 +1,8 @@
-<!-- views/cuttingManagerDashboard.ejs -->
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>काटिंग मैनेजर डैशबोर्ड</title>
+  <title data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Bootstrap CSS -->
@@ -45,6 +44,7 @@
     .progress-bar {
       transition: width 0.3s ease-in-out;
     }
+
     /* Autocomplete Styles */
     .autocomplete {
       position: relative;
@@ -113,6 +113,15 @@
         font-size: 0.75rem;
       }
     }
+    /* Language Toggle styling */
+    .language-toggle {
+      margin-right: 1rem;
+      color: #fff;
+    }
+    .language-toggle input {
+      margin-left: 5px;
+      margin-right: 2px;
+    }
   </style>
 </head>
 <body>
@@ -120,21 +129,40 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
     <div class="container-fluid">
       <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="bi bi-speedometer2 me-2"></i> काटिंग मैनेजर डैशबोर्ड
+        <i class="bi bi-speedometer2 me-2"></i> 
+        <span data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</span>
       </a>
+
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" 
-        aria-controls="navbarContent" aria-expanded="false" aria-label="टॉगल नेविगेशन">
+        aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
+
       <div class="collapse navbar-collapse" id="navbarContent">
+        <!-- Language Toggle (Radio Buttons) -->
         <div class="ms-auto d-flex align-items-center">
-          <i class="bi bi-person-circle text-white me-2"></i>
-          <span class="navbar-text me-3 d-none d-sm-inline">
-            आपका स्वागत है, <strong><%= user.username %></strong> (भूमिका: <%= user.roleName %>)
-          </span>
-          <a href="/logout" class="btn btn-outline-light btn-sm">
-            <i class="bi bi-box-arrow-right me-1"></i> लॉगआउट
-          </a>
+          <div class="language-toggle">
+            <span data-i18n="selectLanguage">Select Language:</span>
+            <label>
+              <input type="radio" name="language" value="en" checked />
+              EN
+            </label>
+            <label>
+              <input type="radio" name="language" value="hi" />
+              HI
+            </label>
+          </div>
+          <div class="d-flex align-items-center">
+            <i class="bi bi-person-circle text-white me-2"></i>
+            <!-- For example, you can partially localize text or keep dynamic user info as is -->
+            <span class="navbar-text me-3 d-none d-sm-inline">
+              <span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> 
+              (<%= user.roleName %>)
+            </span>
+            <a href="/logout" class="btn btn-outline-light btn-sm">
+              <i class="bi bi-box-arrow-right me-1"></i> <span data-i18n="logout">Logout</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -145,21 +173,21 @@
     <!-- Alert Messages -->
     <% if (error && error.length > 0) { %>
       <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" role="img" aria-label="त्रुटि"></i>
+        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2"></i>
         <div>
           <%= error %>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="बंद करें"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
     <% if (success && success.length > 0) { %>
       <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-check-circle-fill flex-shrink-0 me-2" role="img" aria-label="सफलता"></i>
+        <i class="bi bi-check-circle-fill flex-shrink-0 me-2"></i>
         <div>
           <%= success %>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="बंद करें"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
@@ -167,44 +195,52 @@
     <ul class="nav nav-tabs mb-3" id="dashboardTabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="existing-lots-tab" data-bs-toggle="tab" data-bs-target="#existing-lots" type="button" role="tab" aria-controls="existing-lots" aria-selected="true">
-          <i class="bi bi-folder-fill me-1"></i> मौजूदा काटिंग लॉट्स
+          <i class="bi bi-folder-fill me-1"></i> 
+          <span data-i18n="existingCuttingLots">Existing Cutting Lots</span>
         </button>
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
-          <i class="bi bi-plus-circle-fill me-1"></i> नया काटिंग लॉट बनाएं
+          <i class="bi bi-plus-circle-fill me-1"></i> 
+          <span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
         </button>
       </li>
     </ul>
+
     <div class="tab-content" id="dashboardTabsContent">
       <!-- Existing Cutting Lots Tab -->
       <div class="tab-pane fade show active" id="existing-lots" role="tabpanel" aria-labelledby="existing-lots-tab">
         <div class="card">
           <div class="card-header">
-            <h2 class="mb-0"><i class="bi bi-folder-fill me-2"></i> मौजूदा काटिंग लॉट्स</h2>
+            <h2 class="mb-0">
+              <i class="bi bi-folder-fill me-2"></i> 
+              <span data-i18n="existingCuttingLots">Existing Cutting Lots</span>
+            </h2>
           </div>
           <div class="card-body p-2">
             <div class="table-responsive">
               <table class="table table-bordered mb-4 bg-white">
                 <thead class="table-dark">
                   <tr>
-                    <th>आईडी</th>
-                    <th>लॉट नंबर</th>
-                    <th>एसकेयू</th>
-                    <th>फैब्रिक प्रकार</th>
-                    <th>टिप्पणी</th>
-                    <th>छवि</th>
-                    <th>बनाने वाले</th>
-                    <th>बनाने का समय</th>
-                    <th>कुल पीस</th>
-                    <th>साइज़</th>
-                    <th>कार्रवाई</th>
+                    <th data-i18n="idLabel">ID</th>
+                    <th data-i18n="lotNumberLabel">Lot Number</th>
+                    <th data-i18n="skuLabel">SKU</th>
+                    <th data-i18n="fabricTypeLabel">Fabric Type</th>
+                    <th data-i18n="remarkLabel">Remark</th>
+                    <th data-i18n="imageLabel">Image</th>
+                    <th data-i18n="createdByLabel">Created By</th>
+                    <th data-i18n="creationTimeLabel">Creation Time</th>
+                    <th data-i18n="totalPiecesLabel">Total Pieces</th>
+                    <th data-i18n="sizesLabel">Sizes</th>
+                    <th data-i18n="actionsLabel">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   <% if (cuttingLots.length === 0) { %>
                     <tr>
-                      <td colspan="11" class="text-center">कोई काटिंग लॉट उपलब्ध नहीं है।</td>
+                      <td colspan="11" class="text-center" data-i18n="noCuttingLotsAvailable">
+                        No cutting lots available.
+                      </td>
                     </tr>
                   <% } else { %>
                     <% cuttingLots.forEach(lot => { %>
@@ -213,16 +249,24 @@
                         <td><%= lot.lot_no %></td>
                         <td><%= lot.sku %></td>
                         <td><%= lot.fabric_type %></td>
-                        <td><%= lot.remark || 'उपलब्ध नहीं' %></td>
+                        <td><%= lot.remark || 'N/A' %></td>
                         <td>
                           <% if (lot.image_url) { %>
-                            <img src="/<%= lot.image_url %>" alt="lot image" class="img-fluid rounded" style="max-width:100px;"/>
+                            <img 
+                              src="/<%= lot.image_url %>" 
+                              alt="lot image" 
+                              class="img-fluid rounded" 
+                              style="max-width:100px;"
+                            />
                           <% } else { %>
-                            <i class="bi bi-image text-muted"></i> उपलब्ध नहीं
+                            <i class="bi bi-image text-muted"></i> 
+                            <span data-i18n="notAvailable">Not available</span>
                           <% } %>
                         </td>
-                        <td><%= lot.created_by || 'उपलब्ध नहीं' %></td>
-                        <td><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'उपलब्ध नहीं' %></td>
+                        <td><%= lot.created_by || 'N/A' %></td>
+                        <td>
+                          <%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %>
+                        </td>
                         <td><%= lot.total_pieces || 0 %></td>
                         <td>
                           <% if (lot.sizes && lot.sizes.length > 0) { %>
@@ -230,9 +274,9 @@
                               <table class="table table-sm mb-0">
                                 <thead>
                                   <tr>
-                                    <th>साइज़</th>
-                                    <th>पैटर्न की संख्या</th>
-                                    <th>कुल पीस</th>
+                                    <th data-i18n="sizeLabel">Size</th>
+                                    <th data-i18n="patternCountLabel">Pattern Count</th>
+                                    <th data-i18n="totalPiecesLabel">Total Pieces</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -247,16 +291,19 @@
                               </table>
                             </div>
                           <% } else { %>
-                            <i class="bi bi-list-stars text-muted"></i> उपलब्ध नहीं
+                            <i class="bi bi-list-stars text-muted"></i> 
+                            <span data-i18n="notAvailable">Not available</span>
                           <% } %>
                         </td>
                         <td>
                           <div class="d-flex flex-column flex-sm-row gap-2">
                             <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="btn btn-sm btn-primary">
-                              <i class="bi bi-file-earmark-arrow-down me-1"></i> चालान बनाएं
+                              <i class="bi bi-file-earmark-arrow-down me-1"></i> 
+                              <span data-i18n="generateChallan">Generate Challan</span>
                             </a>
                             <a href="/cutting-manager/lot-details/<%= lot.id %>" class="btn btn-sm btn-info">
-                              <i class="bi bi-eye me-1"></i> विवरण देखें
+                              <i class="bi bi-eye me-1"></i> 
+                              <span data-i18n="viewDetails">View Details</span>
                             </a>
                           </div>
                         </td>
@@ -274,7 +321,10 @@
       <div class="tab-pane fade" id="create-lot" role="tabpanel" aria-labelledby="create-lot-tab">
         <div class="card">
           <div class="card-header">
-            <h3 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i> नया काटिंग लॉट बनाएं</h3>
+            <h3 class="mb-0">
+              <i class="bi bi-plus-circle-fill me-2"></i> 
+              <span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
+            </h3>
           </div>
           <div class="card-body">
             <form
@@ -287,7 +337,10 @@
               <div class="row g-3">
                 <!-- Lot No (Read-Only) -->
                 <div class="col-md-4">
-                  <label for="lot_no" class="form-label"><i class="bi bi-hash me-1"></i> लॉट नंबर (सिस्टम द्वारा तैयार)</label>
+                  <label for="lot_no" class="form-label">
+                    <i class="bi bi-hash me-1"></i> 
+                    <span data-i18n="lotNumberGenerated">Lot Number (Generated)</span>
+                  </label>
                   <input
                     type="text"
                     class="form-control"
@@ -300,26 +353,32 @@
 
                 <!-- SKU Input -->
                 <div class="col-md-4">
-                  <label for="sku" class="form-label"><i class="bi bi-barcode me-1"></i> एसकेयू</label>
+                  <label for="sku" class="form-label">
+                    <i class="bi bi-barcode me-1"></i> 
+                    <span data-i18n="skuLabel">SKU</span>
+                  </label>
                   <input
                     type="text"
                     class="form-control"
                     id="sku"
                     name="sku"
-                    placeholder="एसकेयू दर्ज करें (उदाहरण: KTTDRESS50)"
+                    placeholder="Enter SKU"
                     required
                   />
                 </div>
 
                 <!-- Fabric Type (Autocomplete) -->
                 <div class="col-md-4">
-                  <label for="fabric_type_search" class="form-label"><i class="bi bi-hexagon-fill me-1"></i> फैब्रिक प्रकार</label>
+                  <label for="fabric_type_search" class="form-label">
+                    <i class="bi bi-hexagon-fill me-1"></i> 
+                    <span data-i18n="fabricTypeLabel">Fabric Type</span>
+                  </label>
                   <div class="autocomplete">
                     <input
                       type="text"
                       id="fabric_type_search"
                       class="form-control"
-                      placeholder="फैब्रिक प्रकार खोजें..."
+                      placeholder="Search Fabric Type..."
                       aria-autocomplete="list"
                       aria-controls="fabric_type_options"
                       aria-expanded="false"
@@ -333,19 +392,25 @@
 
                 <!-- Remark -->
                 <div class="col-md-6">
-                  <label for="remark" class="form-label"><i class="bi bi-chat-left-text me-1"></i> टिप्पणी</label>
+                  <label for="remark" class="form-label">
+                    <i class="bi bi-chat-left-text me-1"></i> 
+                    <span data-i18n="remarkLabel">Remark</span>
+                  </label>
                   <textarea
                     class="form-control"
                     name="remark"
                     id="remark"
                     rows="2"
-                    placeholder="कोई अतिरिक्त टिप्पणी..."
+                    placeholder="Any note..."
                   ></textarea>
                 </div>
 
                 <!-- Image Upload -->
                 <div class="col-md-6">
-                  <label for="image" class="form-label"><i class="bi bi-image me-1"></i> छवि अपलोड करें</label>
+                  <label for="image" class="form-label">
+                    <i class="bi bi-image me-1"></i> 
+                    <span data-i18n="imageLabel">Image</span>
+                  </label>
                   <input
                     type="file"
                     class="form-control"
@@ -357,42 +422,58 @@
               </div>
 
               <hr/>
-
               <!-- Sizes and Patterns Section -->
               <div class="mb-3">
-                <h4><i class="bi bi-list me-1"></i> साइज़ और पैटर्न</h4>
+                <h4>
+                  <i class="bi bi-list me-1"></i> 
+                  <span data-i18n="sizesAndPatterns">Sizes and Patterns</span>
+                </h4>
                 <div id="sizesContainer"></div>
                 <button
                   type="button"
                   class="btn btn-sm btn-secondary mt-2"
                   id="addSizeBtn"
                 >
-                  <i class="bi bi-plus-circle me-1"></i> नया साइज़ जोड़ें
+                  <i class="bi bi-plus-circle me-1"></i> 
+                  <span data-i18n="addNewSize">Add New Size</span>
                 </button>
               </div>
 
               <hr/>
-
               <!-- Rolls Used Section -->
               <div class="mb-3">
-                <h4><i class="bi bi-box-seam me-1"></i> उपयोग किए गए रोल्स</h4>
+                <h4>
+                  <i class="bi bi-box-seam me-1"></i> 
+                  <span data-i18n="rollsUsed">Rolls Used</span>
+                </h4>
                 <div id="rollsContainer"></div>
-                <button type="button" class="btn btn-sm btn-primary mt-2" id="addRollBtn" disabled>
-                  <i class="bi bi-plus-circle me-1"></i> एक और रोल जोड़ें
+                <button 
+                  type="button" 
+                  class="btn btn-sm btn-primary mt-2" 
+                  id="addRollBtn" 
+                  disabled
+                >
+                  <i class="bi bi-plus-circle me-1"></i> 
+                  <span data-i18n="addAnotherRoll">Add Another Roll</span>
                 </button>
               </div>
 
               <hr/>
-
               <!-- Total Pieces Display -->
               <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap">
-                <strong>कुल पीस (हिसाब से):</strong>
+                <strong data-i18n="totalPiecesCalc">Total Pieces (Calculated):</strong>
                 <span id="totalPiecesDisplay" class="fs-5 fw-bold">0</span>
               </div>
 
               <!-- Submit Button -->
-              <button type="submit" class="btn btn-success w-100" id="createLotBtn" disabled>
-                <i class="bi bi-check-circle me-1"></i> लॉट तैयार करें
+              <button 
+                type="submit" 
+                class="btn btn-success w-100" 
+                id="createLotBtn" 
+                disabled
+              >
+                <i class="bi bi-check-circle me-1"></i> 
+                <span data-i18n="createLotBtn">Create Lot</span>
               </button>
             </form>
           </div>
@@ -404,14 +485,15 @@
   <!-- Size Template (Hidden) -->
   <div id="sizeTemplate" class="d-none">
     <div class="roll-section size-section">
-      <button type="button" class="btn btn-sm btn-danger removeSizeBtn" aria-label="साइज़ हटाएं">
-        <i class="bi bi-dash-circle me-1"></i> हटाएं
+      <button type="button" class="btn btn-sm btn-danger removeSizeBtn" aria-label="Remove size">
+        <i class="bi bi-dash-circle me-1"></i> 
+        <span data-i18n="remove">Remove</span>
       </button>
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label visually-hidden">साइज़</label>
+          <label class="form-label visually-hidden" data-i18n="sizeLabel">Size</label>
           <select class="form-select sizeLabelSel" name="size_label[]" required>
-            <option value="">--साइज़ चुनें--</option>
+            <option value="">--Select Size--</option>
             <option value="XS">XS</option>
             <option value="S">S</option>
             <option value="M">M</option>
@@ -445,7 +527,7 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label class="form-label visually-hidden">पैटर्न की संख्या</label>
+          <label class="form-label visually-hidden" data-i18n="patternCountLabel">Pattern Count</label>
           <input
             type="number"
             class="form-control patternCountInput"
@@ -453,7 +535,7 @@
             value="1"
             name="pattern_count[]"
             required
-            placeholder="पैटर्न की संख्या"
+            placeholder="Pattern Count"
           />
         </div>
       </div>
@@ -463,17 +545,18 @@
   <!-- Roll Template (Hidden) -->
   <div id="rollTemplate" class="d-none">
     <div class="roll-section">
-      <button type="button" class="btn btn-sm btn-danger remove-roll-btn" aria-label="रोल हटाएं">
+      <button type="button" class="btn btn-sm btn-danger remove-roll-btn" aria-label="Remove roll">
         <i class="bi bi-x-circle"></i>
+        <span data-i18n="remove">Remove</span>
       </button>
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label">रोल नंबर</label>
+          <label class="form-label" data-i18n="rollNumber">Roll Number</label>
           <div class="autocomplete">
             <input
               type="text"
               class="form-control rollNo_search"
-              placeholder="रोल नंबर खोजें..."
+              placeholder="Search Roll..."
               aria-autocomplete="list"
               aria-controls="rollNo_options"
               aria-expanded="false"
@@ -485,18 +568,18 @@
           </div>
         </div>
         <div class="col-md-4">
-          <label class="form-label">लेयर्स</label>
+          <label class="form-label" data-i18n="layersLabel">Layers</label>
           <input
             type="number"
             class="form-control layersInput"
             name="layers[]"
             min="1"
             required
-            placeholder="लेयर्स दर्ज करें"
+            placeholder="Layers"
           />
         </div>
         <div class="col-md-4">
-          <label class="form-label">उपयोग किया गया वज़न</label>
+          <label class="form-label" data-i18n="weightUsedLabel">Weight Used</label>
           <input
             type="number"
             step="0.01"
@@ -504,13 +587,16 @@
             name="weight_used[]"
             min="0"
             required
-            placeholder="वज़न (मीटर या किलो) में दर्ज करें"
+            placeholder="Weight used"
           />
         </div>
       </div>
       <!-- Progress bar for used vs available -->
       <div class="mb-3">
-        <label class="form-label"><i class="bi bi-graph-up me-1"></i> वज़न उपयोग की प्रगति</label>
+        <label class="form-label">
+          <i class="bi bi-graph-up me-1"></i> 
+          <span data-i18n="weightUsageProgress">Weight Usage Progress</span>
+        </label>
         <div class="progress">
           <div
             class="progress-bar bg-info"
@@ -524,7 +610,8 @@
           </div>
         </div>
         <small class="text-muted">
-          उपलब्ध: <span class="availableWeightTxt">0</span>
+          <span data-i18n="availableLabel">Available:</span> 
+          <span class="availableWeightTxt">0</span>
         </small>
       </div>
     </div>
@@ -535,15 +622,119 @@
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
   ></script>
 
-  <!-- Custom Script for Dynamic Functionality -->
+  <!-- Custom Script for Dynamic Functionality (Autocomplete + i18n Toggling) -->
   <script>
-    // सर्वर से rollsByFabricType क्लाइंट को पास की जा रही है
-    const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>;
+    // ====== Language Dictionaries ======
+    const langData = {
+      en: {
+        cuttingManagerDashboardTitle: "Cutting Manager Dashboard",
+        selectLanguage: "Select Language:",
+        welcomeUser: "Welcome",
+        logout: "Logout",
+        existingCuttingLots: "Existing Cutting Lots",
+        createNewCuttingLot: "Create New Cutting Lot",
+        idLabel: "ID",
+        lotNumberLabel: "Lot Number",
+        skuLabel: "SKU",
+        fabricTypeLabel: "Fabric Type",
+        remarkLabel: "Remark",
+        imageLabel: "Image",
+        createdByLabel: "Created By",
+        creationTimeLabel: "Creation Time",
+        totalPiecesLabel: "Total Pieces",
+        sizesLabel: "Sizes",
+        actionsLabel: "Actions",
+        noCuttingLotsAvailable: "No cutting lots available.",
+        notAvailable: "Not available",
+        sizeLabel: "Size",
+        patternCountLabel: "Pattern Count",
+        generateChallan: "Generate Challan",
+        viewDetails: "View Details",
+        lotNumberGenerated: "Lot Number (Generated)",
+        createLotBtn: "Create Lot",
+        remove: "Remove",
+        rollNumber: "Roll Number",
+        layersLabel: "Layers",
+        weightUsedLabel: "Weight Used",
+        weightUsageProgress: "Weight Usage Progress",
+        availableLabel: "Available",
+        sizesAndPatterns: "Sizes and Patterns",
+        rollsUsed: "Rolls Used",
+        addNewSize: "Add New Size",
+        addAnotherRoll: "Add Another Roll",
+        totalPiecesCalc: "Total Pieces (Calculated)"
+      },
+      hi: {
+        cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड",
+        selectLanguage: "भाषा चुनें:",
+        welcomeUser: "स्वागत हे",
+        logout: "लॉगआउट",
+        existingCuttingLots: "मौजूदा काटिंग लॉट्स",
+        createNewCuttingLot: "नया काटिंग लॉट बनाएं",
+        idLabel: "आईडी",
+        lotNumberLabel: "लॉट नंबर",
+        skuLabel: "एसकेयू",
+        fabricTypeLabel: "फैब्रिक प्रकार",
+        remarkLabel: "टिप्पणी",
+        imageLabel: "छवि",
+        createdByLabel: "बनाने वाले",
+        creationTimeLabel: "बनाने का समय",
+        totalPiecesLabel: "कुल पीस",
+        sizesLabel: "साइज़",
+        actionsLabel: "कार्रवाई",
+        noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।",
+        notAvailable: "उपलब्ध नहीं",
+        sizeLabel: "साइज़",
+        patternCountLabel: "पैटर्न की संख्या",
+        generateChallan: "चालान बनाएं",
+        viewDetails: "विवरण देखें",
+        lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)",
+        createLotBtn: "लॉट तैयार करें",
+        remove: "हटाएं",
+        rollNumber: "रोल नंबर",
+        layersLabel: "लेयर्स",
+        weightUsedLabel: "उपयोग किया गया वज़न",
+        weightUsageProgress: "वज़न उपयोग की प्रगति",
+        availableLabel: "उपलब्ध",
+        sizesAndPatterns: "साइज़ और पैटर्न",
+        rollsUsed: "उपयोग किए गए रोल्स",
+        addNewSize: "नया साइज़ जोड़ें",
+        addAnotherRoll: "एक और रोल जोड़ें",
+        totalPiecesCalc: "कुल पीस (हिसाब से)"
+      }
+    };
 
-    // Debugging
+    let currentLanguage = "en"; // default
+
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      document.documentElement.lang = lang;
+      // Loop through all [data-i18n] elements and set textContent
+      const elements = document.querySelectorAll("[data-i18n]");
+      elements.forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        el.textContent = langData[lang][key] || el.textContent;
+      });
+    }
+
+    // Listen for radio button changes
+    document.addEventListener('DOMContentLoaded', () => {
+      const langRadios = document.querySelectorAll('input[name="language"]');
+      langRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          setLanguage(radio.value);
+        });
+      });
+      // Initialize with English (or whichever you like)
+      setLanguage("en");
+    });
+
+
+    // ====== SERVER DATA: Rolls by Fabric Type ======
+    const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>;
     console.log("rollsByFabricType:", rollsByFabricType);
 
-    // महत्वपूर्ण एलिमेंट्स
+    // Key elements
     const sizeTemplate = document.getElementById('sizeTemplate');
     const rollTemplate = document.getElementById('rollTemplate');
     const sizesContainer = document.getElementById('sizesContainer');
@@ -551,16 +742,12 @@
     const rollsContainer = document.getElementById('rollsContainer');
     const addRollBtn = document.getElementById('addRollBtn');
     const totalPiecesDisplay = document.getElementById('totalPiecesDisplay');
-    const lotForm = document.getElementById('lotForm');
     const fabricTypeSel = document.getElementById('fabric_type');
     const fabricTypeSearch = document.getElementById('fabric_type_search');
     const fabricTypeOptions = document.getElementById('fabric_type_options');
-    const skuInput = document.getElementById('sku');
-
-    // नया: "लॉट तैयार करें" बटन का संदर्भ
     const createLotBtn = document.getElementById('createLotBtn');
 
-    // डिबाउंस फ़ंक्शन
+    // ====== Debounce Function ======
     function debounce(func, delay) {
       let debounceTimer;
       return function(...args) {
@@ -570,10 +757,8 @@
       };
     }
 
-    // ऑटोकंप्लीट इनिशियलाइज़ करने का फ़ंक्शन
+    // ====== Autocomplete Initialization ======
     function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = []) {
-      const originalData = [...data];
-
       populateOptions();
 
       inputField.addEventListener('focus', () => {
@@ -596,6 +781,7 @@
         const filter = inputField.value.toLowerCase();
         const options = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
         let visibleCount = 0;
+
         options.forEach(option => {
           const text = option.textContent.toLowerCase();
           if (text.includes(filter)) {
@@ -614,7 +800,7 @@
           if (!noResult) {
             const li = document.createElement('li');
             li.classList.add('list-group-item', 'no-results');
-            li.textContent = 'कोई परिणाम नहीं मिला।';
+            li.textContent = 'No matching results.';
             optionsContainer.appendChild(li);
           }
         } else {
@@ -652,7 +838,6 @@
       });
 
       let currentFocus = -1;
-
       inputField.addEventListener('keydown', function(e) {
         const items = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
         if (e.key === 'ArrowDown') {
@@ -672,7 +857,7 @@
       });
 
       function addActive(items) {
-        if (!items) return false;
+        if (!items) return;
         removeActive(items);
         if (currentFocus >= items.length) currentFocus = 0;
         if (currentFocus < 0) currentFocus = items.length - 1;
@@ -714,13 +899,18 @@
       }
     }
 
-    // फैब्रिक प्रकारों की सूची
+    // Setup the fabric type autocomplete
     const fabricTypes = Object.keys(rollsByFabricType);
     const fabricTypeData = fabricTypes.map(ft => ({
       displayText: ft,
       value: ft
     }));
-    initializeAutocomplete(fabricTypeSearch, fabricTypeSel, fabricTypeOptions, fabricTypeData);
+    initializeAutocomplete(
+      fabricTypeSearch, 
+      fabricTypeSel, 
+      fabricTypeOptions, 
+      fabricTypeData
+    );
 
     function initializeRollNoAutocomplete(rollSection, fabricType) {
       const rollNoSel = rollSection.querySelector('.rollNoSel');
@@ -731,7 +921,7 @@
       const availableRolls = rollsByFabricType[fabricType] || [];
 
       const rollData = availableRolls.map(roll => ({
-        displayText: `${roll.roll_no} (उपलब्ध: ${roll.per_roll_weight} ${roll.unit}) (वेंडर: ${roll.vendor_name})`,
+        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
         value: roll.roll_no,
         availableWeight: roll.per_roll_weight,
         unit: roll.unit
@@ -739,8 +929,8 @@
 
       initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
 
-      rollNoSearch.placeholder = `रोल नंबर खोजें (${fabricType})...`;
-      weightUsedInput.placeholder = `उपयोग किया गया वज़न (${fabricType})...`;
+      rollNoSearch.placeholder = `Search Roll (${fabricType})...`;
+      weightUsedInput.placeholder = `Weight used (${fabricType})...`;
 
       rollNoSel.addEventListener('change', () => {
         const selectedRollNo = rollNoSel.value;
@@ -749,14 +939,14 @@
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
           availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
           weightUsedInput.max = selectedRoll.per_roll_weight;
-          weightUsedInput.placeholder = `रोल नंबर ${selectedRoll.roll_no} में उपयोग किया गया वज़न (${selectedRoll.unit})`;
+          weightUsedInput.placeholder = `Roll ${selectedRoll.roll_no} weight used (${selectedRoll.unit})`;
           updateWeightProgress(rollSection);
         } else {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
           availableWeightTxt.textContent = '0';
           weightUsedInput.value = '';
           weightUsedInput.removeAttribute('max');
-          weightUsedInput.placeholder = `उपयोग किया गया वज़न (${fabricType})...`;
+          weightUsedInput.placeholder = `Weight used (${fabricType})...`;
 
           const progressBar = rollSection.querySelector('.progress-bar');
           progressBar.style.width = '0%';
@@ -778,17 +968,17 @@
       });
     }
 
+    // ====== Add new size row ======
     function addNewSize() {
       const newSize = sizeTemplate.cloneNode(true);
       newSize.classList.remove('d-none');
       newSize.removeAttribute('id');
       sizesContainer.appendChild(newSize);
 
-      const sizeLabelSel = newSize.querySelector('.sizeLabelSel');
-
       const removeSizeBtn = newSize.querySelector('.removeSizeBtn');
       removeSizeBtn.addEventListener('click', () => {
         newSize.remove();
+        updateTotalPieces();
         checkRollsCompletion();
       });
 
@@ -796,12 +986,9 @@
       patternCountInput.addEventListener('input', () => {
         updateTotalPieces();
       });
-
-      sizeLabelSel.addEventListener('change', () => {
-        updateTotalPieces();
-      });
     }
 
+    // ====== Add new roll row ======
     function addNewRoll() {
       const newRoll = rollTemplate.cloneNode(true);
       newRoll.classList.remove('d-none');
@@ -827,12 +1014,13 @@
         checkRollsCompletion();
       });
 
+      // Based on currently selected fabric type
       const currentFabricType = fabricTypeSel.value;
       if (currentFabricType) {
         initializeRollNoAutocomplete(newRoll, currentFabricType);
       } else {
-        newRoll.querySelector('.rollNo_search').placeholder = 'रोल नंबर खोजें...';
-        weightUsedInput.placeholder = 'वज़न (मीटर या किलो) में दर्ज करें';
+        newRoll.querySelector('.rollNo_search').placeholder = 'Search Roll...';
+        weightUsedInput.placeholder = 'Weight used...';
       }
     }
 
@@ -862,6 +1050,7 @@
       }
     }
 
+    // ====== Calculate total pieces (patterns * layers) ======
     function updateTotalPieces() {
       let totalPatterns = 0;
       sizesContainer.querySelectorAll('.size-section:not(.d-none)').forEach(sr => {
@@ -890,18 +1079,16 @@
         const weightUsedInput = rollSection.querySelector('.weightUsedInput');
 
         const availableRolls = rollsByFabricType[selectedFabricType] || [];
-
         const rollData = availableRolls.map(roll => ({
-          displayText: `${roll.roll_no} (उपलब्ध: ${roll.per_roll_weight} ${roll.unit}) (वेंडर: ${roll.vendor_name})`,
+          displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
           value: roll.roll_no,
           availableWeight: roll.per_roll_weight,
           unit: roll.unit
         }));
 
         initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
-
-        rollNoSearch.placeholder = `रोल नंबर खोजें (${selectedFabricType})...`;
-        weightUsedInput.placeholder = `उपयोग किया गया वज़न (${selectedFabricType})...`;
+        rollNoSearch.placeholder = `Search Roll (${selectedFabricType})...`;
+        weightUsedInput.placeholder = `Weight used (${selectedFabricType})...`;
 
         const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
         availableWeightTxt.textContent = '0';
@@ -916,6 +1103,7 @@
       });
     }
 
+    // Fabric type change event
     fabricTypeSel.addEventListener('change', () => {
       const selectedFabricType = fabricTypeSel.value;
       if (selectedFabricType) {
@@ -931,9 +1119,11 @@
       checkRollsCompletion();
     });
 
+    // Button event listeners
     addSizeBtn.addEventListener('click', addNewSize);
     addRollBtn.addEventListener('click', addNewRoll);
 
+    // Initialize with 1 size row
     addNewSize();
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -950,6 +1140,7 @@
     function checkRollsCompletion() {
       const allRollSections = rollsContainer.querySelectorAll('.roll-section');
 
+      // If no roll sections yet, disable the final create-lot button
       if (allRollSections.length === 0) {
         createLotBtn.disabled = true;
         return;
@@ -961,7 +1152,7 @@
         const layers = roll.querySelector('.layersInput').value.trim();
         const weightUsed = roll.querySelector('.weightUsedInput').value.trim();
 
-        if (rollNo === '' || layers === '' || weightUsed === '') {
+        if (!rollNo || !layers || !weightUsed) {
           allFilled = false;
         }
       });
