@@ -89,18 +89,20 @@
       <input type="hidden" name="selectedTable" value="<%= selectedTable %>">
       
       <!-- Hidden input that will contain all search terms joined by spaces (for the server) -->
-      <input type="hidden" name="searchTerm" id="searchTermHidden" value="">
+      <input type="hidden" name="searchTerm" id="searchTermHidden" value="<%= searchTerm %>">
 
       <div class="col-12">
         <h5 class="mb-1">Table: <%= selectedTable %></h5>
         <p class="text-muted mb-2">
-          Select columns to search/export, then enter one or more keywords (press Tab/Enter after each).
+          1) Select columns to display (and optionally to search). <br/>
+          2) Choose whether to search in all selected columns or a single column. <br/>
+          3) Enter one or more keywords (press Tab/Enter after each).
         </p>
       </div>
 
-      <!-- Column checkboxes -->
+      <!-- Column checkboxes to determine which columns to display -->
       <div class="col-12 mb-3">
-        <label class="form-label fw-bold">Select Columns:</label>
+        <label class="form-label fw-bold">Columns to Display:</label>
         <div class="row">
           <% columnList.forEach(col => {
              const isChecked = chosenColumns.includes(col);
@@ -124,9 +126,24 @@
         </div>
       </div>
 
+      <!-- Select primary column to search (or "All Selected Columns") -->
+      <div class="col-md-4">
+        <label for="primaryColumn" class="form-label fw-bold">Search In Column:</label>
+        <select name="primaryColumn" id="primaryColumn" class="form-select">
+          <!-- If primaryColumn is empty, that means "search in all selected columns" -->
+          <option value="">All Selected Columns</option>
+          <% columnList.forEach(col => { %>
+            <option
+              value="<%= col %>"
+              <%= (primaryColumn === col) ? 'selected' : '' %>
+            ><%= col %></option>
+          <% }) %>
+        </select>
+      </div>
+
       <!-- Bulk Search Input (Tagging) -->
       <div class="col-md-6">
-        <label class="form-label fw-bold">Search Term(s) (Partial)</label>
+        <label class="form-label fw-bold">Keyword(s)</label>
         <div 
           class="tag-container" 
           id="tagContainer" 
@@ -195,15 +212,24 @@
 
 <!-- Tagging logic + Form submission script -->
 <script>
+  // Restore existing tags if searchTerm was previously used
   let tags = [];
+  const existing = "<%= searchTerm %>".trim();
+  if (existing) {
+    // For a true multi-tag scenario, you might split on spaces:
+    tags = existing.split(/\s+/).filter(Boolean);
+  }
 
   const hiddenInput = document.getElementById('searchTermHidden');
   const tagInput = document.getElementById('tagInput');
   const tagContainer = document.getElementById('tagContainer');
 
-  // If your server side "searchTerm" was previously used, you could parse & restore it here.
-  // Example: if it's in a global var <%= JSON.stringify(searchTerm) %> (but this code uses an empty default).
-  // For demonstration, we start fresh each time.
+  // Render any existing tags on page load
+  function renderExistingTags() {
+    tags.forEach(t => {
+      createChip(t);
+    });
+  }
 
   // On "Tab" or "Enter," create a new tag if there's text.
   tagInput.addEventListener('keydown', function(e) {
@@ -215,10 +241,12 @@
   });
 
   function addTag(text) {
-    // Add new text to our tag array
     tags.push(text);
+    createChip(text);
+    updateHiddenField();
+  }
 
-    // Create the chip element
+  function createChip(text) {
     const chip = document.createElement('span');
     chip.className = 'tag';
     chip.innerHTML = `
@@ -230,24 +258,20 @@
     
     // Insert chip before the input
     tagContainer.insertBefore(chip, tagInput);
-
-    // Update hidden input
-    updateHiddenField();
   }
 
   function removeTag(text, chipEl) {
-    // Remove from array
     tags = tags.filter(t => t !== text);
-    // Remove from DOM
     chipEl.remove();
-    // Update hidden
     updateHiddenField();
   }
 
   function updateHiddenField() {
-    // Join with spaces (or commas) to pass to server
     hiddenInput.value = tags.join(' ');
   }
+
+  // Initialize existing tags if any
+  renderExistingTags();
 
   function submitForm(actionVal) {
     document.getElementById('actionField').value = actionVal;
