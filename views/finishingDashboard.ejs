@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KOTTY - Finishing Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+  <!-- Bootstrap & FontAwesome -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <style>
+    /* ----------------------------------------
+       Base & Light Mode
+    ---------------------------------------- */
+    body {
+      background-color: #f8f9fa;
+      color: #212529;
+      transition: background-color 0.3s, color 0.3s;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .navbar-brand {
+      font-weight: 500;
+      font-size: 1.25rem;
+    }
+    .card {
+      border-radius: 6px;
+    }
+    .main-content {
+      flex: 1 0 auto; /* For optional sticky footer */
+    }
+
+    /* A fade-in animation for newly loaded entries */
+    .fade-in {
+      animation: fadeIn 0.4s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* Flash message colors */
+    .error {
+      color: #dc3545; /* or keep red */
+    }
+    .success {
+      color: #198754; /* or keep green */
+    }
+
+    /* ----------------------------------------
+       Dark Mode
+    ---------------------------------------- */
+    .dark-mode {
+      background-color: #121212;
+      color: #f8f9fa;
+    }
+    .dark-mode .navbar,
+    .dark-mode .nav-tabs .nav-link {
+      background-color: #1f1f1f !important;
+      color: #fff;
+    }
+    .dark-mode .navbar .navbar-toggler-icon {
+      filter: invert(1);
+    }
+    .dark-mode .card {
+      background-color: #1e1e1e;
+      color: #f8f9fa;
+      border-color: #2a2a2a;
+    }
+    .dark-mode .table-striped > tbody > tr:nth-of-type(odd) {
+      --bs-table-accent-bg: #2b2b2b;
+      color: #f8f9fa;
+    }
+    .dark-mode .table-bordered > :not(caption) > * > * {
+      border-color: #666;
+    }
+    .dark-mode .form-control {
+      background-color: #2b2b2b;
+      color: #f8f9fa;
+      border-color: #444;
+    }
+    .dark-mode input::placeholder {
+      color: #ccc;
+    }
+    .dark-mode select,
+    .dark-mode textarea {
+      background-color: #2b2b2b;
+      color: #f8f9fa;
+      border-color: #444;
+    }
+    .dark-mode .alert {
+      background-color: #2b2b2b;
+      color: #fff;
+      border-color: #444;
+    }
+    .dark-mode .btn-close {
+      filter: invert(1);
+    }
+
+    /* ----------------------------------------
+       Language Toggle
+    ---------------------------------------- */
+    [data-lang="en"] {
+      display: inline;
+    }
+    [data-lang="hi"] {
+      display: none;
+    }
+    .lang-hi [data-lang="en"] {
+      display: none !important;
+    }
+    .lang-hi [data-lang="hi"] {
+      display: inline !important;
+    }
+
+    /* ----------------------------------------
+       Autocomplete
+    ---------------------------------------- */
+    .autocomplete-items {
+      z-index: 9999; /* ensure on top */
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .autocomplete-items li.active {
+      background-color: #0d6efd;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand" href="#">
+        <i class="fas fa-clipboard-check"></i>
+        <span data-lang="en">Finishing</span>
+        <span data-lang="hi">फिनिशिंग</span>
+      </a>
+
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarContent"
+        aria-controls="navbarContent"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
+          <!-- Greeting -->
+          <li class="nav-item me-3 text-white">
+            <span data-lang="en">Welcome,</span>
+            <span data-lang="hi">स्वागत हे,</span>
+            <strong><%= user.username %></strong>
+          </li>
+
+          <!-- Dark Mode Toggle -->
+          <li class="nav-item me-3">
+            <button id="darkModeToggle" class="btn btn-sm btn-outline-light">
+              <i class="fas fa-moon"></i>
+              <span data-lang="en">Dark Mode</span>
+              <span data-lang="hi">डार्क मोड</span>
+            </button>
+          </li>
+
+          <!-- Language Toggle -->
+          <li class="nav-item me-3">
+            <div class="d-flex align-items-center text-white">
+              <label class="me-2">
+                <input type="radio" name="language" value="en" checked /> EN
+              </label>
+              <label>
+                <input type="radio" name="language" value="hi" /> हिंदी
+              </label>
+            </div>
+          </li>
+
+          <!-- Logout (if applicable) -->
+          <li class="nav-item">
+            <a href="/logout" class="btn btn-sm btn-danger">
+              <i class="fas fa-sign-out-alt"></i>
+              <span data-lang="en">Logout</span>
+              <span data-lang="hi">लॉगआउट</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="container my-4 main-content">
+    <!-- Flash Messages -->
+    <div class="mb-3">
+      <% if (error && error.length > 0) { %>
+        <div class="error">
+          <%= error.join(' | ') %>
+        </div>
+      <% } %>
+      <% if (success && success.length > 0) { %>
+        <div class="success">
+          <%= success.join(' | ') %>
+        </div>
+      <% } %>
+    </div>
+
+    <h1 class="mb-4">
+      <i class="fas fa-clipboard-check"></i>
+      <span data-lang="en">Finishing Dashboard</span>
+      <span data-lang="hi">फिनिशिंग डैशबोर्ड</span>
+    </h1>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="finishingTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link active"
+          id="create-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#createTabContent"
+          type="button"
+          role="tab"
+          aria-controls="createTabContent"
+          aria-selected="true"
+        >
+          <i class="fas fa-plus-circle"></i>
+          <span data-lang="en">Create Entry</span>
+          <span data-lang="hi">नया दर्ज करें</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link"
+          id="existing-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#existingTabContent"
+          type="button"
+          role="tab"
+          aria-controls="existingTabContent"
+          aria-selected="false"
+        >
+          <i class="fas fa-list"></i>
+          <span data-lang="en">Existing Entries</span>
+          <span data-lang="hi">मौजूदा एंट्री</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content mt-3" id="finishingTabsContent">
+      <!-- CREATE TAB -->
+      <div
+        class="tab-pane fade show active"
+        id="createTabContent"
+        role="tabpanel"
+        aria-labelledby="create-tab"
+      >
+        <div class="card">
+          <div class="card-header">
+            <h4 class="mb-0">
+              <i class="fas fa-plus-circle"></i>
+              <span data-lang="en">Create a New Finishing Entry</span>
+              <span data-lang="hi">नया फिनिशिंग एंट्री बनाएं</span>
+            </h4>
+          </div>
+          <div class="card-body">
+            <form action="/finishingdashboard/create" method="POST" enctype="multipart/form-data">
+              <!-- Lot Autocomplete -->
+              <div class="row mb-3">
+                <!-- Autocomplete-based lot selection -->
+                <div class="col-md-4 mb-3 mb-md-0">
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Select Lot</span>
+                    <span data-lang="hi">लॉट चुनें</span>
+                  </label>
+                  <div class="position-relative">
+                    <!-- Text input for user to search by SKU/lot -->
+                    <input
+                      type="text"
+                      id="selectedLotIdSearch"
+                      class="form-control"
+                      placeholder="Search lot by SKU or number..."
+                      autocomplete="off"
+                      required
+                    />
+                    <!-- Hidden input that stores the final chosen lot ID -->
+                    <input
+                      type="hidden"
+                      name="selectedLotId"
+                      id="selectedLotId"
+                      required
+                    />
+                    <!-- Autocomplete results -->
+                    <ul class="list-group autocomplete-items d-none position-absolute w-100" id="lotOptions"></ul>
+                  </div>
+                </div>
+
+                <!-- Remark -->
+                <div class="col-md-4 mb-3 mb-md-0">
+                  <label for="remark" class="form-label fw-semibold">
+                    <span data-lang="en">Remark (optional)</span>
+                    <span data-lang="hi">टिप्पणी (वैकल्पिक)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="remark"
+                    name="remark"
+                    class="form-control"
+                    placeholder="Any remark..."
+                  />
+                </div>
+
+                <!-- Image -->
+                <div class="col-md-4">
+                  <label for="image_file" class="form-label fw-semibold">
+                    <span data-lang="en">Image (optional)</span>
+                    <span data-lang="hi">छवि (वैकल्पिक)</span>
+                  </label>
+                  <input
+                    type="file"
+                    id="image_file"
+                    name="image_file"
+                    accept="image/*"
+                    class="form-control"
+                  />
+                </div>
+              </div>
+
+              <!-- Sizes Section -->
+              <div class="mt-4">
+                <h5 class="mb-2">
+                  <i class="fas fa-ruler-combined"></i>
+                  <span data-lang="en">Sizes</span>
+                  <span data-lang="hi">साइज़</span>
+                </h5>
+                <p class="small mb-2 text-muted">
+                  <span data-lang="en">Select a Lot, and any available sizes will appear below.</span>
+                  <span data-lang="hi">लॉट चुनते ही उपलब्ध साइज़ नीचे दिखाई देंगे।</span>
+                </p>
+                <div id="sizesContainer" class="row g-2">
+                  <!-- Filled dynamically via JS fetch -->
+                </div>
+              </div>
+
+              <!-- Submit -->
+              <button type="submit" class="btn btn-primary mt-4">
+                <i class="fas fa-check"></i>
+                <span data-lang="en">Create Finishing Entry</span>
+                <span data-lang="hi">एंट्री बनाएं</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXISTING ENTRIES TAB -->
+      <div
+        class="tab-pane fade"
+        id="existingTabContent"
+        role="tabpanel"
+        aria-labelledby="existing-tab"
+      >
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">
+            <i class="fas fa-list"></i>
+            <span data-lang="en">Existing Finishing Entries</span>
+            <span data-lang="hi">मौजूदा फिनिशिंग एंट्री</span>
+          </h4>
+          <!-- Download All Link -->
+          <a href="/finishingdashboard/download-all" class="btn btn-success">
+            <i class="fas fa-file-excel"></i>
+            <span data-lang="en">Download Excel</span>
+            <span data-lang="hi">एक्सेल डाउनलोड</span>
+          </a>
+        </div>
+
+        <!-- Search & Table -->
+        <div class="mb-3">
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="fas fa-search"></i>
+            </span>
+            <input
+              type="text"
+              id="searchInput"
+              class="form-control"
+              placeholder="Search by Lot No or SKU..."
+            />
+            <button id="searchBtn" class="btn btn-secondary">
+              <span data-lang="en">Search</span>
+              <span data-lang="hi">खोजें</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered align-middle" style="min-width: 700px;">
+            <thead class="table-light">
+              <tr>
+                <th>ID</th>
+                <th>Lot No</th>
+                <th>SKU</th>
+                <th>Total Pieces</th>
+                <th>Remark</th>
+                <th>Created At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="finishingTableBody">
+              <!-- Filled via JS (lazy loading) -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-center">
+          <button id="loadMoreBtn" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-down"></i>
+            <span data-lang="en">Load More</span>
+            <span data-lang="hi">और लोड करें</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       UPDATE MODAL (NEWLY ADDED)
+  =============================== -->
+  <div
+    class="modal fade"
+    id="updateModal"
+    tabindex="-1"
+    aria-labelledby="updateModalLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form id="updateForm" method="POST" action="">
+          <div class="modal-header">
+            <h5 class="modal-title" id="updateModalLabel">
+              <i class="fas fa-edit"></i>
+              <span data-lang="en">Update Finishing Data</span>
+              <span data-lang="hi">फिनिशिंग डेटा अपडेट करें</span>
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p>
+              <strong>
+                <span data-lang="en">Updating Entry ID:</span>
+                <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
+              </strong>
+              <span id="updatingEntryId">-</span>
+            </p>
+            <div class="table-responsive">
+              <table class="table table-bordered align-middle" id="updateSizesTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>
+                      <span data-lang="en">Size Label</span>
+                      <span data-lang="hi">साइज़</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">Already Used (for this entry)</span>
+                      <span data-lang="hi">पहले से उपयोग</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">Max Remain</span>
+                      <span data-lang="hi">अधिकतम शेष</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">New Pieces (Increment)</span>
+                      <span data-lang="hi">नए टुकड़े (वृद्धि)</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled by JS on modal open -->
+                </tbody>
+              </table>
+            </div>
+            <p class="small text-muted">
+              <span data-lang="en">Leave field blank or 0 if no increment.</span>
+              <span data-lang="hi">यदि फ़ील्ड खाली या 0 हो, तो उसमें कोई वृद्धि नहीं होगी।</span>
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <span data-lang="en">Cancel</span>
+              <span data-lang="hi">रद्द करें</span>
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i>
+              <span data-lang="en">Save Updates</span>
+              <span data-lang="hi">सेव करें</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <!-- END UPDATE MODAL -->
+
+  <!-- (Optional) Footer -->
+  <!-- <footer class="mt-auto py-3 bg-light">
+    <div class="container">
+      <span class="text-muted">© 2025 Kotty</span>
+    </div>
+  </footer> -->
+
+  <!-- Scripts -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
+  <script>
+    /*****************************************************
+     * DARK MODE TOGGLE
+     *****************************************************/
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+    });
+
+    /*****************************************************
+     * LANGUAGE TOGGLE
+     *****************************************************/
+    const langRadios = document.querySelectorAll('input[name="language"]');
+    langRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.value === 'hi') {
+          document.body.classList.add('lang-hi');
+        } else {
+          document.body.classList.remove('lang-hi');
+        }
+      });
+    });
+
+    /*****************************************************
+     * LOT AUTOCOMPLETE (for "Create" form)
+     *****************************************************/
+    const existingLots = <%- JSON.stringify(lots) %> || [];
+
+    // Convert each lot to { displayText, value } for easier filtering
+    const lotAutocompleteData = existingLots.map(l => ({
+      displayText: `${l.lot_no} (SKU: ${l.sku})`,
+      value: l.id
+    }));
+
+    const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
+    const selectedLotId = document.getElementById('selectedLotId');
+    const lotOptions = document.getElementById('lotOptions');
+    let currentFocusIndex = -1;
+
+    function populateLotOptions(listData) {
+      lotOptions.innerHTML = '';
+      listData.forEach(item => {
+        const li = document.createElement('li');
+        li.classList.add('list-group-item', 'list-group-item-action');
+        li.textContent = item.displayText;
+        li.dataset.value = item.value;
+        lotOptions.appendChild(li);
+      });
+    }
+
+    function showLotDropdown() {
+      lotOptions.classList.remove('d-none');
+      lotOptions.classList.add('d-block');
+    }
+    function hideLotDropdown() {
+      lotOptions.classList.remove('d-block');
+      lotOptions.classList.add('d-none');
+      currentFocusIndex = -1;
+    }
+
+    // When typing, filter the lot list
+    selectedLotIdSearch.addEventListener('input', () => {
+      const searchTerm = selectedLotIdSearch.value.trim().toLowerCase();
+      if (searchTerm.length === 0) {
+        hideLotDropdown();
+        return;
+      }
+      const filtered = lotAutocompleteData.filter(item =>
+        item.displayText.toLowerCase().includes(searchTerm)
+      );
+      if (filtered.length > 0) {
+        populateLotOptions(filtered);
+        showLotDropdown();
+      } else {
+        lotOptions.innerHTML = '';
+        hideLotDropdown();
+      }
+    });
+
+    // Keyboard navigation in the autocomplete
+    selectedLotIdSearch.addEventListener('keydown', (e) => {
+      const items = lotOptions.querySelectorAll('li');
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        currentFocusIndex++;
+        if (currentFocusIndex >= items.length) currentFocusIndex = items.length - 1;
+        setActiveItem(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        currentFocusIndex--;
+        if (currentFocusIndex < 0) currentFocusIndex = 0;
+        setActiveItem(items);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentFocusIndex > -1 && items[currentFocusIndex]) {
+          selectLotItem(items[currentFocusIndex]);
+        }
+      }
+    });
+
+    function setActiveItem(items) {
+      items.forEach((li, idx) => {
+        li.classList.toggle('active', idx === currentFocusIndex);
+      });
+    }
+
+    function selectLotItem(li) {
+      const val = li.dataset.value; // lot ID
+      selectedLotId.value = val;
+      selectedLotIdSearch.value = li.textContent;
+      hideLotDropdown();
+      loadSizesForLot(val);
+    }
+
+    // On click, pick that item
+    lotOptions.addEventListener('click', (e) => {
+      if (e.target && e.target.matches('li.list-group-item')) {
+        selectLotItem(e.target);
+      }
+    });
+
+    // Click outside => close dropdown
+    document.addEventListener('click', (e) => {
+      if (!selectedLotIdSearch.contains(e.target) && !lotOptions.contains(e.target)) {
+        hideLotDropdown();
+      }
+    });
+
+    /*****************************************************
+     * FETCH & RENDER LOT SIZES (for CREATE)
+     *****************************************************/
+    const sizesContainer = document.getElementById('sizesContainer');
+
+    async function loadSizesForLot(lotId) {
+      sizesContainer.innerHTML = '';
+      if (!lotId) return;
+
+      try {
+        const resp = await fetch(`/finishingdashboard/get-lot-sizes/${lotId}`);
+        if (!resp.ok) throw new Error('Failed to fetch lot sizes');
+        const sizes = await resp.json();
+        // sizes -> [ { id, size_label, total_pieces, used, remain }, ... ]
+
+        if (sizes.length === 0) {
+          sizesContainer.innerHTML =
+            '<div class="col-12 text-danger">No sizes available for this lot.</div>';
+          return;
+        }
+
+        sizes.forEach(s => {
+          const colDiv = document.createElement('div');
+          colDiv.classList.add('col-sm-6', 'col-md-4', 'col-lg-3');
+
+          colDiv.innerHTML = `
+            <div class="input-group">
+              <span class="input-group-text">
+                ${s.size_label}
+                <br /><small>Remain: ${s.remain}</small>
+              </span>
+              <input
+                type="number"
+                name="sizes[${s.id}]"
+                min="0"
+                max="${s.remain}"
+                value="0"
+                class="form-control"
+              />
+            </div>
+          `;
+          sizesContainer.appendChild(colDiv);
+        });
+      } catch (err) {
+        console.error('Error loading sizes:', err);
+        sizesContainer.innerHTML =
+          '<div class="col-12 text-danger">Error loading sizes.</div>';
+      }
+    }
+
+    /*****************************************************
+     * LAZY-LOADING FOR EXISTING ENTRIES
+     *****************************************************/
+    let offset = 0;
+    let hasMore = true;
+    let currentSearch = '';
+
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const tableBody = document.getElementById('finishingTableBody');
+
+    async function loadEntries() {
+      if (!hasMore) return;
+
+      try {
+        const res = await fetch(
+          `/finishingdashboard/list-entries?search=${encodeURIComponent(currentSearch)}&offset=${offset}`
+        );
+        if (!res.ok) throw new Error('Failed to load finishing entries');
+
+        const json = await res.json();
+        const rows = json.data || [];
+
+        rows.forEach(entry => {
+          const tr = document.createElement('tr');
+          tr.classList.add('fade-in');
+          tr.innerHTML = `
+            <td>${entry.id}</td>
+            <td>${entry.lot_no}</td>
+            <td>${entry.sku}</td>
+            <td>${entry.total_pieces}</td>
+            <td>${entry.remark || ''}</td>
+            <td>${entry.created_at}</td>
+            <td>
+              <!-- "Challan" link -->
+              <a href="/finishingdashboard/challan/${entry.id}" target="_blank" class="btn btn-sm btn-info mb-1">
+                <i class="fas fa-file-download"></i> Challan
+              </a>
+              <!-- "Update" button (NEW) -->
+              <button
+                class="btn btn-sm btn-warning mb-1"
+                data-bs-toggle="modal"
+                data-bs-target="#updateModal"
+                data-entry-id="${entry.id}"
+              >
+                <i class="fas fa-edit"></i>
+                <span data-lang="en">Update</span>
+                <span data-lang="hi">अपडेट</span>
+              </button>
+            </td>
+          `;
+          tableBody.appendChild(tr);
+        });
+
+        offset += rows.length;
+        hasMore = json.hasMore;
+        if (!hasMore) {
+          loadMoreBtn.disabled = true;
+        }
+      } catch (err) {
+        console.error('Error loading finishing entries:', err);
+      }
+    }
+
+    loadMoreBtn.addEventListener('click', loadEntries);
+
+    searchBtn.addEventListener('click', () => {
+      currentSearch = searchInput.value.trim();
+      offset = 0;
+      hasMore = true;
+      loadMoreBtn.disabled = false;
+      tableBody.innerHTML = '';
+      loadEntries();
+    });
+
+    // On page load, load initial chunk
+    loadEntries();
+
+    /*****************************************************
+     * UPDATE MODAL LOGIC
+     *****************************************************/
+    const updateModal = document.getElementById('updateModal');
+    const updateForm = document.getElementById('updateForm');
+    const updateSizesTable = document.getElementById('updateSizesTable');
+
+    if (updateModal) {
+      updateModal.addEventListener('show.bs.modal', async (event) => {
+        const button = event.relatedTarget;
+        const entryId = button.getAttribute('data-entry-id');
+
+        // Set the form's action to the correct finishing ID
+        updateForm.action = '/finishingdashboard/update/' + entryId;
+        document.getElementById('updatingEntryId').textContent = entryId;
+
+        // Clear the old table rows
+        updateSizesTable.querySelector('tbody').innerHTML = '';
+
+        // Fetch existing sizes + remain
+        try {
+          const res = await fetch(`/finishingdashboard/update/${entryId}/json`);
+          if (!res.ok) {
+            console.error('Error fetching finishing sizes. Status:', res.status);
+            return;
+          }
+          const data = await res.json();
+          if (!data.sizes) return;
+
+          data.sizes.forEach(sz => {
+            const tr = document.createElement('tr');
+
+            // Size Label
+            const tdLabel = document.createElement('td');
+            tdLabel.textContent = sz.size_label;
+            tr.appendChild(tdLabel);
+
+            // Already used in *this* finishing_data entry
+            const tdUsed = document.createElement('td');
+            tdUsed.textContent = sz.pieces; 
+            tr.appendChild(tdUsed);
+
+            // Remain (how many can still be added)
+            const tdRemain = document.createElement('td');
+            tdRemain.textContent = sz.remain;
+            tr.appendChild(tdRemain);
+
+            // "New Pieces" input
+            const tdInput = document.createElement('td');
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.min = '0';
+            inp.classList.add('form-control');
+            inp.placeholder = '0';
+            // We'll name them dynamically in the request body
+            // but we can do that on form submit.
+            inp.dataset.sizeLabel = sz.size_label;
+            tdInput.appendChild(inp);
+            tr.appendChild(tdInput);
+
+            updateSizesTable.querySelector('tbody').appendChild(tr);
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      });
+
+      // On form submit, build hidden fields for each increment
+      updateForm.addEventListener('submit', (e) => {
+        // Clean up any old hidden fields
+        const oldHiddenFields = document.querySelectorAll('.updateSizeField');
+        oldHiddenFields.forEach(f => f.remove());
+
+        const rows = updateSizesTable.querySelectorAll('tbody tr');
+        for (const row of rows) {
+          const sizeLabel = row.children[0].textContent;
+          const remain = parseInt(row.children[2].textContent, 10);
+          const input = row.children[3].querySelector('input');
+
+          let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
+          if (isNaN(val) || val < 0) val = 0;
+
+          // If user tries to exceed remain, block
+          if (val > remain) {
+            alert(`Cannot add ${val} for size [${sizeLabel}] because only ${remain} remain.`);
+            e.preventDefault();
+            return;
+          }
+
+          // If val > 0, we add a hidden input
+          if (val > 0) {
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.classList.add('updateSizeField');
+            hidden.name = `updateSizes[${sizeLabel}]`;
+            hidden.value = val;
+            updateForm.appendChild(hidden);
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
