@@ -1,217 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>KOTTY - <span data-i18n="stitchingDashboard">Stitching Dashboard</span></title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta charset="UTF-8" />
+  <title>KOTTY - Stitching Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
-  <!-- Bootstrap CSS -->
-  <link 
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+  <!-- Bootstrap & FontAwesome -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
     rel="stylesheet"
   />
-
-  <!-- Font Awesome (for icons) -->
-  <link 
-    rel="stylesheet" 
+  <link
+    rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
     crossorigin="anonymous"
     referrerpolicy="no-referrer"
   />
 
   <style>
+    /* ----------------------------------------
+       Base & Light Mode
+    ---------------------------------------- */
     body {
       background-color: #f8f9fa;
+      color: #212529;
+      transition: background-color 0.3s, color 0.3s;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     .card {
-      border-radius: 8px;
+      border-radius: 6px;
     }
-    .card-header-custom {
-      background: #f8f9fa;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #ddd;
-      border-top-left-radius: 8px;
-      border-top-right-radius: 8px;
-    }
-    .alert {
-      margin-top: 1rem;
-    }
-    .other-size-input {
-      display: none;
-    }
-    .btn:hover {
-      opacity: 0.9;
-    }
-    .nav-tabs .nav-link.active {
-      font-weight: 600;
-    }
-    .accordion-button {
-      border-radius: 0 !important;
-    }
-    .accordion-button:not(.collapsed) {
-      box-shadow: inset 0 -1px 0 rgba(0,0,0,.125);
+    .navbar-brand {
+      font-weight: 500;
+      font-size: 1.2rem;
     }
 
-    /* Autocomplete Styles */
+    /* The container for main content (to allow sticky footer if desired) */
+    .main-content {
+      flex: 1 0 auto;
+    }
+
     .autocomplete {
       position: relative;
       width: 100%;
-    }
-    .autocomplete input {
-      width: 100%;
-      padding: 0.375rem 0.75rem;
-      border: 1px solid #ced4da;
-      border-radius: 0.25rem;
-      box-sizing: border-box;
     }
     .autocomplete-items {
       position: absolute;
       border: 1px solid #ced4da;
       border-top: none;
-      z-index: 1000;
+      z-index: 999;
       top: 100%;
       left: 0;
       right: 0;
-      max-height: 200px;
+      max-height: 220px;
       overflow-y: auto;
       background-color: #fff;
-      animation: fadeIn 0.2s ease-in-out;
-      display: none; /* Hidden by default */
+      display: none;
     }
     .autocomplete-items li {
-      padding: 0.375rem 0.75rem;
+      padding: 0.4rem 0.75rem;
       cursor: pointer;
     }
-    .autocomplete-items li:hover, .autocomplete-active {
+    .autocomplete-items li:hover {
       background-color: #e9ecef;
     }
-    .highlight {
-      font-weight: bold;
-      background-color: yellow;
+
+    /* A fade-in animation for new loaded entries (lazy loading) */
+    .fade-in {
+      animation: fadeIn 0.4s ease-in;
     }
     @keyframes fadeIn {
       from { opacity: 0; }
-      to { opacity: 1; }
+      to   { opacity: 1; }
     }
 
-    .language-toggle {
-      margin-right: 1rem;
+    /* ----------------------------------------
+       Dark Mode
+    ---------------------------------------- */
+    .dark-mode {
+      background-color: #121212;
+      color: #f8f9fa;
+    }
+    .dark-mode .navbar, .dark-mode .nav-tabs .nav-link {
+      background-color: #1f1f1f !important;
       color: #fff;
     }
-    .language-toggle input {
-      margin-left: 5px;
-      margin-right: 2px;
+    .dark-mode .navbar .navbar-toggler-icon {
+      filter: invert(1);
+    }
+    .dark-mode .card {
+      background-color: #1e1e1e;
+      color: #f8f9fa;
+      border-color: #2a2a2a;
+    }
+    .dark-mode .modal-content {
+      background-color: #1e1e1e;
+      color: #f8f9fa;
+      border-color: #2a2a2a;
+    }
+    .dark-mode .table-bordered > :not(caption) > * > * {
+      border-color: #666;
+    }
+    .dark-mode .table-light {
+      background-color: #272727;
+      color: #fff;
+    }
+    .dark-mode .autocomplete-items {
+      background-color: #333;
+      color: #fff;
+      border-color: #444;
+    }
+    .dark-mode .autocomplete-items li:hover {
+      background-color: #4d4d4d;
+    }
+    .dark-mode .btn-close {
+      filter: invert(1);
+    }
+    .dark-mode .form-control {
+      background-color: #2b2b2b;
+      color: #f8f9fa;
+      border-color: #444;
+    }
+    .dark-mode input::placeholder {
+      color: #ccc;
+    }
+    .dark-mode select, .dark-mode textarea {
+      background-color: #2b2b2b;
+      color: #f8f9fa;
+      border-color: #444;
+    }
+    .dark-mode .input-group-text {
+      background-color: #2b2b2b;
+      border-color: #444;
+      color: #fff;
+    }
+    .dark-mode .alert {
+      background-color: #2b2b2b;
+      color: #fff;
+      border-color: #444;
+    }
+    .dark-mode a, .dark-mode .nav-link {
+      color: #a5d6ff;
+    }
+
+    /* ----------------------------------------
+       Language Toggle
+    ---------------------------------------- */
+    [data-lang="en"] {
+      display: inline;
+    }
+    [data-lang="hi"] {
+      display: none;
+    }
+    .lang-hi [data-lang="en"] {
+      display: none !important;
+    }
+    .lang-hi [data-lang="hi"] {
+      display: inline !important;
     }
   </style>
 </head>
 <body>
-
-  <!-- NAVBAR -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
+    <div class="container-fluid px-3">
       <a class="navbar-brand" href="#">
-        <i class="fas fa-tshirt"></i> <span data-i18n="kotty">KOTTY</span>
+        <i class="fas fa-tshirt"></i>
+        <span data-lang="en">KOTTY</span>
+        <span data-lang="hi">कोटी</span>
       </a>
-      <button 
-        class="navbar-toggler" 
-        type="button" 
-        data-bs-toggle="collapse" 
-        data-bs-target="#navbarContent" 
-        aria-controls="navbarContent" 
-        aria-expanded="false" 
+
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarContent"
+        aria-controls="navbarContent"
+        aria-expanded="false"
         aria-label="Toggle navigation"
       >
         <span class="navbar-toggler-icon"></span>
       </button>
+
       <div class="collapse navbar-collapse" id="navbarContent">
-        <!-- Language Toggle (Radio Buttons) -->
-        <div class="ms-auto d-flex align-items-center">
-          <div class="language-toggle">
-            <span data-i18n="selectLanguage">Select Language:</span>
-            <label>
-              <input type="radio" name="language" value="en" checked />
-              EN
-            </label>
-            <label>
-              <input type="radio" name="language" value="hi" />
-              HI
-            </label>
-          </div>
-          <ul class="navbar-nav">
-            <li class="nav-item">
-              <a class="nav-link" href="/logout">
-                <i class="fas fa-sign-out-alt"></i> <span data-i18n="logout">Logout</span>
-              </a>
-            </li>
-          </ul>
-        </div>
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <!-- Dark Mode Toggle -->
+          <li class="nav-item me-3">
+            <button id="darkModeToggle" class="btn btn-sm btn-outline-light">
+              <i class="fas fa-moon"></i>
+              <span data-lang="en">Dark Mode</span>
+              <span data-lang="hi">डार्क मोड</span>
+            </button>
+          </li>
+          <!-- Language Toggle -->
+          <li class="nav-item me-3">
+            <div class="d-flex align-items-center text-white">
+              <label class="me-2">
+                <input type="radio" name="language" value="en" checked /> EN
+              </label>
+              <label>
+                <input type="radio" name="language" value="hi" /> हिंदी
+              </label>
+            </div>
+          </li>
+          <!-- Logout -->
+          <li class="nav-item">
+            <a href="/logout" class="btn btn-sm btn-danger">
+              <i class="fas fa-sign-out-alt"></i>
+              <span data-lang="en">Logout</span>
+              <span data-lang="hi">लॉगआउट</span>
+            </a>
+          </li>
+        </ul>
       </div>
     </div>
   </nav>
 
-  <!-- MAIN CONTENT CONTAINER -->
-  <div class="container my-4">
-    <!-- FLASH MESSAGES -->
-    <% if (typeof error !== 'undefined' && error.length > 0) { %>
-      <div class="alert alert-danger">
-        <%= error %>
-      </div>
-    <% } %>
-    <% if (typeof success !== 'undefined' && success.length > 0) { %>
-      <div class="alert alert-success">
-        <%= success %>
-      </div>
-    <% } %>
+  <!-- Main Content -->
+  <div class="container my-4 main-content">
+    <!-- Flash Messages Partial -->
 
-    <!-- TABBED LAYOUT -->
+
+    <h2 class="mb-4">
+      <span data-lang="en">Stitching Dashboard</span>
+      <span data-lang="hi">सिलाई डैशबोर्ड</span>
+    </h2>
+
     <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
       <li class="nav-item" role="presentation">
-        <button 
-          class="nav-link active" 
-          id="create-tab" 
-          data-bs-toggle="tab" 
-          data-bs-target="#createTabContent" 
-          type="button" 
-          role="tab" 
-          aria-controls="createTabContent" 
+        <button
+          class="nav-link active"
+          id="create-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#createTabContent"
+          type="button"
+          role="tab"
+          aria-controls="createTabContent"
           aria-selected="true"
         >
-          <i class="fas fa-plus-circle"></i> <span data-i18n="createEntry">Create Entry</span>
+          <i class="fas fa-plus-circle"></i>
+          <span data-lang="en">Create Entry</span>
+          <span data-lang="hi">नई एंट्री</span>
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button 
-          class="nav-link" 
-          id="existing-tab" 
-          data-bs-toggle="tab" 
-          data-bs-target="#existingTabContent" 
-          type="button" 
-          role="tab" 
-          aria-controls="existingTabContent" 
+        <button
+          class="nav-link"
+          id="existing-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#existingTabContent"
+          type="button"
+          role="tab"
+          aria-controls="existingTabContent"
           aria-selected="false"
         >
-          <i class="fas fa-list"></i> <span data-i18n="existingEntries">Existing Entries</span>
+          <i class="fas fa-list"></i>
+          <span data-lang="en">Existing Entries</span>
+          <span data-lang="hi">मौजूदा एंट्री</span>
         </button>
       </li>
     </ul>
 
     <div class="tab-content mt-3" id="dashboardTabsContent">
-
-      <!-- CREATE NEW ENTRY TAB -->
-      <div 
-        class="tab-pane fade show active" 
-        id="createTabContent" 
-        role="tabpanel" 
+      <!-- CREATE TAB -->
+      <div
+        class="tab-pane fade show active"
+        id="createTabContent"
+        role="tabpanel"
         aria-labelledby="create-tab"
       >
         <div class="card">
           <div class="card-header">
             <h4 class="mb-0">
-              <i class="fas fa-plus-circle"></i> <span data-i18n="createNewStitchingEntry">Create New Stitching Entry</span>
+              <i class="fas fa-plus-circle"></i>
+              <span data-lang="en">Create New Stitching Entry</span>
+              <span data-lang="hi">नई सिलाई एंट्री</span>
             </h4>
           </div>
           <div class="card-body">
-            <!-- CREATE FORM -->
             <form
               id="createForm"
               action="/stitchingdashboard/create"
@@ -219,110 +287,100 @@
               enctype="multipart/form-data"
             >
               <div class="row mb-3">
-                <!-- Replace "Select Lot" with an autocomplete style -->
+                <!-- Select Lot -->
                 <div class="col-md-4 mb-3 mb-md-0">
-                  <label for="selectedLotIdSearch" class="form-label fw-semibold" data-i18n="selectLotLabel">
-                    Select Lot
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Select Lot</span>
+                    <span data-lang="hi">लॉट चुनें</span>
                   </label>
                   <div class="autocomplete">
-                    <!-- Visible input for searching -->
                     <input
                       type="text"
                       id="selectedLotIdSearch"
                       class="form-control"
-                      placeholder="Search Lot by SKU or number..."
-                      aria-autocomplete="list"
-                      aria-controls="lotOptions"
-                      aria-expanded="false"
-                      aria-haspopup="listbox"
+                      placeholder="Search lot by SKU or number..."
+                      autocomplete="off"
                       required
                     />
-                    <!-- Hidden input to store the actual selectedLotId value -->
                     <input
                       type="hidden"
                       name="selectedLotId"
                       id="selectedLotId"
                       required
                     />
-                    <!-- Autocomplete dropdown container -->
-                    <ul class="autocomplete-items list-group d-none" id="lotOptions" role="listbox"></ul>
+                    <ul class="autocomplete-items list-group d-none" id="lotOptions"></ul>
                   </div>
                 </div>
 
+                <!-- Remark -->
                 <div class="col-md-4 mb-3 mb-md-0">
-                  <label for="remark" class="form-label fw-semibold" data-i18n="remarkOptional">Remark (optional)</label>
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Remark (optional)</span>
+                    <span data-lang="hi">टिप्पणी (वैकल्पिक)</span>
+                  </label>
                   <input
                     type="text"
                     class="form-control"
                     name="remark"
-                    id="remark"
                     placeholder="Any remarks..."
                   />
                 </div>
+
+                <!-- Image -->
                 <div class="col-md-4">
-                  <label for="image_file" class="form-label fw-semibold" data-i18n="imageOptional">Image (optional)</label>
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Image (optional)</span>
+                    <span data-lang="hi">चित्र (वैकल्पिक)</span>
+                  </label>
                   <input
                     type="file"
                     class="form-control"
                     name="image_file"
-                    id="image_file"
                     accept="image/*"
                   />
                 </div>
               </div>
 
-              <!-- SIZES SECTION -->
-              <div id="sizeContainer">
-                <div class="row mb-3">
-                  <div class="col-md-6 mb-3 mb-md-0">
-                    <label class="form-label fw-semibold" data-i18n="sizeLabel">Size</label>
-                    <select 
-                      name="sizeLabels" 
-                      class="form-select size-label-select"
-                      onchange="toggleOtherInput(this)"
-                    >
-                      <option value="S">S</option>
-                      <option value="M">M</option>
-                      <option value="L">L</option>
-                      <option value="XL">XL</option>
-                      <option value="XXL">XXL</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <input
-                      type="text"
-                      name="customSizeLabels"
-                      class="form-control mt-2 other-size-input"
-                      placeholder="Enter custom size"
-                    />
-                  </div>
-                  <div class="col-md-4 mb-3 mb-md-0">
-                    <label class="form-label fw-semibold" data-i18n="piecesLabel">Pieces</label>
-                    <input
-                      type="number"
-                      name="pieceCounts"
-                      min="0"
-                      class="form-control"
-                      required
-                      placeholder="e.g. 10"
-                    />
-                  </div>
-                  <div class="col-md-2 d-flex align-items-end">
-                    <button
-                      type="button"
-                      class="btn btn-outline-secondary w-100"
-                      onclick="addSizeRow()"
-                    >
-                      + <span data-i18n="addMore">Add More</span>
-                    </button>
-                  </div>
+              <!-- Sizes -->
+              <div class="mt-4" id="lotSizesContainer" style="display:none;">
+                <h5>
+                  <span data-lang="en">Sizes for This Lot</span>
+                  <span data-lang="hi">इस लॉट के साइज़</span>
+                </h5>
+                <div class="table-responsive">
+                  <table class="table table-bordered align-middle" id="lotSizesTable">
+                    <thead class="table-light">
+                      <tr>
+                        <th>
+                          <span data-lang="en">Size Label</span>
+                          <span data-lang="hi">साइज़</span>
+                        </th>
+                        <th>
+                          <span data-lang="en">Max Available</span>
+                          <span data-lang="hi">अधिकतम उपलब्ध</span>
+                        </th>
+                        <th>
+                          <span data-lang="en">Enter Pieces</span>
+                          <span data-lang="hi">टुकड़े दर्ज करें</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="mt-2">
+                  <strong>
+                    <span data-lang="en">Total Pieces Selected:</span>
+                    <span data-lang="hi">कुल टुकड़े:</span>
+                  </strong>
+                  <span id="createTotalPieces">0</span>
                 </div>
               </div>
 
-              <button 
-                type="submit"
-                class="btn btn-primary"
-              >
-                <i class="fas fa-check"></i> <span data-i18n="createStitchingEntryBtn">Create Stitching Entry</span>
+              <button type="submit" class="btn btn-primary mt-3">
+                <i class="fas fa-check"></i>
+                <span data-lang="en">Create Stitching Entry</span>
+                <span data-lang="hi">सिलाई एंट्री बनाएं</span>
               </button>
             </form>
           </div>
@@ -330,114 +388,43 @@
       </div>
 
       <!-- EXISTING ENTRIES TAB -->
-      <div 
-        class="tab-pane fade" 
-        id="existingTabContent" 
-        role="tabpanel" 
+      <div
+        class="tab-pane fade"
+        id="existingTabContent"
+        role="tabpanel"
         aria-labelledby="existing-tab"
       >
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="mb-0"><i class="fas fa-list"></i> <span data-i18n="existingEntriesTitle">Existing Entries</span></h4>
+          <h4 class="mb-0">
+            <i class="fas fa-list"></i>
+            <span data-lang="en">Existing Entries</span>
+            <span data-lang="hi">मौजूदा एंट्री</span>
+          </h4>
           <a href="/stitchingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel"></i> <span data-i18n="downloadExcel">Download Excel</span>
+            <i class="fas fa-file-excel"></i>
+            <span data-lang="en">Download Excel</span>
+            <span data-lang="hi">एक्सेल डाउनलोड</span>
           </a>
         </div>
 
-        <!-- If there's data, display it in a Bootstrap accordion -->
-        <% if (myData && myData.length > 0) { %>
-          <div class="accordion" id="existingEntriesAccordion">
-            <% myData.forEach((item, index) => { %>
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="heading-<%= item.id %>">
-                  <button 
-                    class="accordion-button <%= index === 0 ? '' : 'collapsed' %>" 
-                    type="button" 
-                    data-bs-toggle="collapse" 
-                    data-bs-target="#collapse-<%= item.id %>" 
-                    aria-expanded="<%= index === 0 ? 'true' : 'false' %>" 
-                    aria-controls="collapse-<%= item.id %>"
-                  >
-                    <strong data-i18n="lotLabel">Lot:</strong> <%= item.lot_no %> 
-                    &nbsp; (SKU: <%= item.sku %>)
-                  </button>
-                </h2>
-                <div 
-                  id="collapse-<%= item.id %>" 
-                  class="accordion-collapse collapse <%= index === 0 ? 'show' : '' %>" 
-                  aria-labelledby="heading-<%= item.id %>" 
-                  data-bs-parent="#existingEntriesAccordion"
-                >
-                  <div class="accordion-body">
-                    <!-- Action Buttons (Challan / Update) -->
-                    <div class="d-flex justify-content-end mb-3">
-                      <a
-                        href="/stitchingdashboard/challan/<%= item.id %>"
-                        class="btn btn-sm btn-info me-2"
-                        target="_blank"
-                      >
-                        <i class="fas fa-file-download"></i> <span data-i18n="challan">Challan</span>
-                      </a>
-                      <button
-                        class="btn btn-sm btn-warning"
-                        data-bs-toggle="modal"
-                        data-bs-target="#updateModal"
-                        data-entry-id="<%= item.id %>"
-                      >
-                        <i class="fas fa-edit"></i> <span data-i18n="updateBtn">Update</span>
-                      </button>
-                    </div>
+        <!-- Search input for existing entries -->
+        <div class="input-group mb-3">
+          <span class="input-group-text">
+            <i class="fas fa-search"></i>
+          </span>
+          <input
+            type="text"
+            id="searchExisting"
+            class="form-control"
+            placeholder="Search by lot or SKU..."
+          />
+        </div>
 
-                    <!-- Entry Details -->
-                    <p class="mb-1">
-                      <strong data-i18n="idLabel">ID:</strong> <%= item.id %><br />
-                      <strong data-i18n="totalPiecesLabel">Total Pieces:</strong> <%= item.total_pieces %><br />
-                      <strong data-i18n="remarkLabel">Remark:</strong> <%= item.remark || 'N/A' %>
-                    </p>
-                    
-                    <!-- Image (if any) -->
-                    <% if (item.image_url) { %>
-                      <p class="mb-2">
-                        <strong data-i18n="imageLabel">Image:</strong><br />
-                        <img
-                          src="<%= item.image_url %>"
-                          alt="Stitch Image"
-                          style="max-height: 100px;"
-                          class="img-fluid"
-                        />
-                      </p>
-                    <% } %>
+        <!-- Container for lazy-loaded entries -->
+        <div id="existingEntriesContainer" class="accordion"></div>
 
-                    <!-- Sizes Table -->
-                    <div class="table-responsive">
-                      <table class="table table-sm table-bordered" style="min-width: 200px;">
-                        <thead class="table-light">
-                          <tr>
-                            <th data-i18n="sizeLabel">Size Label</th>
-                            <th data-i18n="piecesLabel">Pieces</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <% if (item.sizes && item.sizes.length > 0) { %>
-                            <% item.sizes.forEach((sz) => { %>
-                              <tr>
-                                <td><%= sz.size_label %></td>
-                                <td><%= sz.pieces %></td>
-                              </tr>
-                            <% }) %>
-                          <% } else { %>
-                            <tr><td colspan="2" data-i18n="noSizesFound">No sizes found.</td></tr>
-                          <% } %>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            <% }) %>
-          </div>
-        <% } else { %>
-          <p data-i18n="noDataFound">No stitching data found.</p>
-        <% } %>
+        <!-- IntersectionObserver sentinel -->
+        <div id="loadMoreSentinel" style="height: 60px;"></div>
       </div>
     </div>
   </div>
@@ -455,7 +442,9 @@
         <form id="updateForm" method="POST" action="">
           <div class="modal-header">
             <h5 class="modal-title" id="updateModalLabel">
-              <i class="fas fa-edit"></i> <span data-i18n="updateStitchingData">Update Stitching Data</span>
+              <i class="fas fa-edit"></i>
+              <span data-lang="en">Update Stitching Data</span>
+              <span data-lang="hi">सिलाई डेटा अपडेट करें</span>
             </h5>
             <button
               type="button"
@@ -466,78 +455,51 @@
           </div>
           <div class="modal-body">
             <p>
-              <strong data-i18n="updatingEntryIdLabel">Updating Entry ID:</strong> <span id="updatingEntryId">-</span>
+              <strong>
+                <span data-lang="en">Updating Entry ID:</span>
+                <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
+              </strong>
+              <span id="updatingEntryId">-</span>
             </p>
-
-            <!-- Existing sizes (increments) -->
-            <div id="existingSizesSection">
-              <!-- Filled dynamically via JS -->
+            <div class="table-responsive">
+              <table class="table table-bordered align-middle" id="updateSizesTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>
+                      <span data-lang="en">Size Label</span>
+                      <span data-lang="hi">साइज़</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">Already Used</span>
+                      <span data-lang="hi">पहले से उपयोग</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">Max Remain</span>
+                      <span data-lang="hi">अधिकतम शेष</span>
+                    </th>
+                    <th>
+                      <span data-lang="en">New Pieces (Increment)</span>
+                      <span data-lang="hi">नए टुकड़े (वृद्धि)</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
             </div>
-            <hr />
-
-            <!-- Add new sizes -->
-            <div class="mb-2">
-              <label class="form-label fw-semibold">
-                <span data-i18n="addNewSizes">Add New Size(s)</span>
-                <small class="fw-normal" data-i18n="otherSizeHint">(select “Other” to type custom size)</small>
-              </label>
-              <div id="newSizesContainer">
-                <div class="row mb-2">
-                  <div class="col-md-6 mb-2 mb-md-0">
-                    <select 
-                      name="newSizeLabels" 
-                      class="form-select new-size-label" 
-                      onchange="toggleOtherInput(this)"
-                    >
-                      <option value="">-- Select Size --</option>
-                      <option value="S">S</option>
-                      <option value="M">M</option>
-                      <option value="L">L</option>
-                      <option value="XL">XL</option>
-                      <option value="XXL">XXL</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <input
-                      type="text"
-                      name="customNewSizeLabels"
-                      class="form-control other-size-input mt-2"
-                      placeholder="Enter custom size"
-                    />
-                  </div>
-                  <div class="col-md-4 mb-2 mb-md-0">
-                    <input
-                      type="number"
-                      class="form-control"
-                      name="newSizePieces"
-                      placeholder="Pieces"
-                      min="0"
-                    />
-                  </div>
-                  <div class="col-md-2 d-flex align-items-center">
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary w-100"
-                      onclick="addNewSizeRow()"
-                    >
-                      + <span data-i18n="addMore">Add More</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+            <p class="small text-muted">
+              <span data-lang="en">If you leave a field blank, it counts as 0 increment.</span>
+              <span data-lang="hi">यदि कोई फ़ील्ड खाली छोड़ी गई तो वह 0 जोड़ेगी।</span>
+            </p>
           </div>
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-              data-i18n="cancelBtn"
-            >
-              Cancel
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <span data-lang="en">Cancel</span>
+              <span data-lang="hi">रद्द करें</span>
             </button>
             <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i> <span data-i18n="saveUpdatesBtn">Save Updates</span>
+              <i class="fas fa-save"></i>
+              <span data-lang="en">Save Updates</span>
+              <span data-lang="hi">सेव करें</span>
             </button>
           </div>
         </form>
@@ -545,420 +507,503 @@
     </div>
   </div>
 
-  <!-- ========== JS Dependencies ========== -->
-  <script 
-    src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js">
-  </script>
+  <!-- Footer (optional) -->
+  <!-- <footer class="mt-auto py-3 bg-light">
+    <div class="container">
+      <span class="text-muted">© 2025 Kotty</span>
+    </div>
+  </footer> -->
 
-  <script 
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
-  </script>
-
-  <!-- 4) Your Custom Script (Autocomplete + i18n toggling) -->
+  <!-- Scripts -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
   <script>
-    // ========== Language Data ==========
-    const langData = {
-      en: {
-        stitchingDashboard: "Stitching Dashboard",
-        kotty: "KOTTY",
-        selectLanguage: "Select Language:",
-        logout: "Logout",
-        createEntry: "Create Entry",
-        existingEntries: "Existing Entries",
-        createNewStitchingEntry: "Create New Stitching Entry",
-        selectLotLabel: "Select Lot",
-        remarkOptional: "Remark (optional)",
-        imageOptional: "Image (optional)",
-        sizeLabel: "Size",
-        piecesLabel: "Pieces",
-        addMore: "Add More",
-        createStitchingEntryBtn: "Create Stitching Entry",
-        existingEntriesTitle: "Existing Entries",
-        downloadExcel: "Download Excel",
-        lotLabel: "Lot:",
-        challan: "Challan",
-        updateBtn: "Update",
-        idLabel: "ID:",
-        totalPiecesLabel: "Total Pieces:",
-        remarkLabel: "Remark:",
-        imageLabel: "Image:",
-        noSizesFound: "No sizes found.",
-        noDataFound: "No stitching data found.",
-        updateStitchingData: "Update Stitching Data",
-        updatingEntryIdLabel: "Updating Entry ID:",
-        addNewSizes: "Add New Size(s)",
-        otherSizeHint: "(select “Other” to type custom size)",
-        cancelBtn: "Cancel",
-        saveUpdatesBtn: "Save Updates"
-      },
-      hi: {
-        stitchingDashboard: "सिलाई डैशबोर्ड",
-        kotty: "कोट्टी",
-        selectLanguage: "भाषा चुनें:",
-        logout: "लॉगआउट",
-        createEntry: "नया एंट्री",
-        existingEntries: "मौजूदा एंट्री",
-        createNewStitchingEntry: "नई सिलाई एंट्री बनाएं",
-        selectLotLabel: "लॉट चुनें",
-        remarkOptional: "टिप्पणी (वैकल्पिक)",
-        imageOptional: "छवि (वैकल्पिक)",
-        sizeLabel: "साइज़",
-        piecesLabel: "पीस",
-        addMore: "और जोड़ें",
-        createStitchingEntryBtn: "सिलाई एंट्री बनाएं",
-        existingEntriesTitle: "मौजूदा एंट्री",
-        downloadExcel: "एक्सेल डाउनलोड करें",
-        lotLabel: "लॉट:",
-        challan: "चालान",
-        updateBtn: "अपडेट करें",
-        idLabel: "आईडी:",
-        totalPiecesLabel: "कुल पीस:",
-        remarkLabel: "टिप्पणी:",
-        imageLabel: "छवि:",
-        noSizesFound: "कोई साइज़ नहीं मिला।",
-        noDataFound: "कोई सिलाई डेटा उपलब्ध नहीं है।",
-        updateStitchingData: "सिलाई डेटा अपडेट करें",
-        updatingEntryIdLabel: "अपडेटिंग एंट्री आईडी:",
-        addNewSizes: "नया साइज़ जोड़ें",
-        otherSizeHint: "(“Other” चुनें और साइज़ लिखें)",
-        cancelBtn: "रद्द करें",
-        saveUpdatesBtn: "सेव"
-      }
-    };
-
-    // On page load, default to English (you can persist user preference as needed).
-    let currentLanguage = "en";
-
-    function setLanguage(lang) {
-      currentLanguage = lang;
-      // Change <title> if needed
-      document.documentElement.lang = lang;
-
-      // For each data-i18n element, update textContent
-      const elements = document.querySelectorAll("[data-i18n]");
-      elements.forEach(el => {
-        const key = el.getAttribute("data-i18n");
-        el.textContent = langData[lang][key] || el.textContent;
-      });
-    }
-
-    // ========== Add event listeners to radio buttons ==========
-    document.addEventListener('DOMContentLoaded', () => {
-      const langRadios = document.querySelectorAll('input[name="language"]');
-      langRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          setLanguage(radio.value);
-        });
-      });
-
-      // Initialize with English or whichever default you want
-      setLanguage("en");
+    /*****************************************************
+     * Dark Mode Toggle
+     *****************************************************/
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
     });
 
+    /*****************************************************
+     * Language Toggle
+     *****************************************************/
+    const langRadios = document.querySelectorAll('input[name="language"]');
+    langRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.value === 'hi') {
+          document.body.classList.add('lang-hi');
+        } else {
+          document.body.classList.remove('lang-hi');
+        }
+      });
+    });
 
-    // ========== LOTS AUTOCOMPLETE ==========
+    /*****************************************************
+     * LOT AUTOCOMPLETE
+     * We only show matching items as the user types.
+     *****************************************************/
     const existingLots = <%- JSON.stringify(lots) %> || [];
+    // Convert to { displayText, value } array
+    const lotAutocompleteData = existingLots.map(l => ({
+      displayText: `${l.lot_no} (SKU: ${l.sku})`,
+      value: l.id
+    }));
+
     const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
     const selectedLotId = document.getElementById('selectedLotId');
     const lotOptions = document.getElementById('lotOptions');
+    let currentFocusIndex = -1;
 
-    const lotAutocompleteData = existingLots.map(lot => ({
-      displayText: `${lot.lot_no} (SKU: ${lot.sku})`,
-      value: lot.id
-    }));
-
-    function debounce(func, delay) {
-      let debounceTimer;
-      return function(...args) {
-        const context = this;
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => func.apply(context, args), delay);
-      };
+    function populateLotOptions(listData) {
+      lotOptions.innerHTML = '';
+      listData.forEach(item => {
+        const li = document.createElement('li');
+        li.classList.add('list-group-item', 'list-group-item-action');
+        li.textContent = item.displayText;
+        li.dataset.value = item.value;
+        lotOptions.appendChild(li);
+      });
     }
 
-    function initializeAutocomplete() {
-      populateOptions();
-
-      selectedLotIdSearch.addEventListener('focus', () => {
-        if (selectedLotIdSearch.value.trim() !== '') {
-          lotOptions.classList.remove('d-none');
-          lotOptions.classList.add('d-block');
-          selectedLotIdSearch.setAttribute('aria-expanded', 'true');
-        }
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!selectedLotIdSearch.contains(e.target) && !lotOptions.contains(e.target)) {
-          lotOptions.classList.remove('d-block');
-          lotOptions.classList.add('d-none');
-          selectedLotIdSearch.setAttribute('aria-expanded', 'false');
-        }
-      });
-
-      selectedLotIdSearch.addEventListener('input', debounce(() => {
-        const filter = selectedLotIdSearch.value.toLowerCase();
-        const options = lotOptions.querySelectorAll('li.list-group-item:not(.no-results)');
-        let visibleCount = 0;
-        options.forEach(option => {
-          const text = option.textContent.toLowerCase();
-          if (text.includes(filter)) {
-            option.style.display = 'block';
-            const regex = new RegExp(`(${filter})`, 'gi');
-            // highlight matching text
-            option.innerHTML = option.textContent.replace(regex, '<span class="highlight">$1</span>');
-            visibleCount++;
-          } else {
-            option.style.display = 'none';
-            option.innerHTML = option.textContent;
-          }
-        });
-
-        const noResult = lotOptions.querySelector('.no-results');
-        if (visibleCount === 0) {
-          if (!noResult) {
-            const li = document.createElement('li');
-            li.classList.add('list-group-item', 'no-results');
-            li.textContent = 'No matching results.';
-            lotOptions.appendChild(li);
-          }
-        } else {
-          if (noResult) {
-            noResult.remove();
-          }
-        }
-
-        if (selectedLotIdSearch.value.trim() !== '') {
-          lotOptions.classList.remove('d-none');
-          lotOptions.classList.add('d-block');
-          selectedLotIdSearch.setAttribute('aria-expanded', 'true');
-        } else {
-          lotOptions.classList.remove('d-block');
-          lotOptions.classList.add('d-none');
-          selectedLotIdSearch.setAttribute('aria-expanded', 'false');
-        }
-      }, 300));
-
-      lotOptions.addEventListener('click', (e) => {
-        if (e.target && e.target.matches('li.list-group-item') && !e.target.classList.contains('no-results')) {
-          const chosenVal = e.target.dataset.value;
-          selectedLotId.value = chosenVal;
-          selectedLotIdSearch.value = e.target.textContent;
-          lotOptions.classList.remove('d-block');
-          lotOptions.classList.add('d-none');
-          selectedLotIdSearch.setAttribute('aria-expanded', 'false');
-        }
-      });
-
-      let currentFocus = -1;
-      selectedLotIdSearch.addEventListener('keydown', function(e) {
-        const items = lotOptions.querySelectorAll('li.list-group-item:not(.no-results)');
-        if (e.key === 'ArrowDown') {
-          currentFocus++;
-          addActive(items);
-          e.preventDefault();
-        } else if (e.key === 'ArrowUp') {
-          currentFocus--;
-          addActive(items);
-          e.preventDefault();
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (currentFocus > -1 && items[currentFocus]) {
-            items[currentFocus].click();
-          }
-        }
-      });
-
-      function addActive(items) {
-        if (!items) return false;
-        removeActive(items);
-        if (currentFocus >= items.length) currentFocus = 0;
-        if (currentFocus < 0) currentFocus = items.length - 1;
-        items[currentFocus].classList.add('active');
-        items[currentFocus].setAttribute('aria-selected', 'true');
+    function showLotDropdown() {
+      if (!lotOptions.classList.contains('d-block')) {
+        lotOptions.classList.remove('d-none');
+        lotOptions.classList.add('d-block');
       }
-      function removeActive(items) {
-        items.forEach(item => {
-          item.classList.remove('active');
-          item.setAttribute('aria-selected', 'false');
-        });
-      }
+    }
+    function hideLotDropdown() {
+      lotOptions.classList.remove('d-block');
+      lotOptions.classList.add('d-none');
+      currentFocusIndex = -1;
+    }
 
-      function populateOptions() {
+    selectedLotIdSearch.addEventListener('input', () => {
+      const searchTerm = selectedLotIdSearch.value.trim().toLowerCase();
+      // If user hasn't typed anything, hide the list
+      if (searchTerm.length === 0) {
+        hideLotDropdown();
+        return;
+      }
+      // Filter
+      const filtered = lotAutocompleteData.filter(item =>
+        item.displayText.toLowerCase().includes(searchTerm)
+      );
+      if (filtered.length > 0) {
+        populateLotOptions(filtered);
+        showLotDropdown();
+      } else {
+        // No matches
         lotOptions.innerHTML = '';
-        lotAutocompleteData.forEach(lot => {
-          const li = document.createElement('li');
-          li.classList.add('list-group-item', 'list-group-item-action');
-          li.setAttribute('role', 'option');
-          li.setAttribute('aria-selected', 'false');
-          li.textContent = lot.displayText;
-          li.dataset.value = lot.value;
-          lotOptions.appendChild(li);
-        });
+        hideLotDropdown();
       }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      initializeAutocomplete();
     });
 
-    // ========== TOGGLE "OTHER" CUSTOM SIZE ==========
-    function toggleOtherInput(selectElem) {
-      const row = selectElem.closest('.row') || selectElem.closest('.col-md-6');
-      if (!row) return;
-      const otherInput = row.querySelector('.other-size-input');
-      if (!otherInput) return;
-      otherInput.style.display = (selectElem.value === 'Other') ? 'block' : 'none';
+    // Keyboard nav
+    selectedLotIdSearch.addEventListener('keydown', (e) => {
+      const items = lotOptions.querySelectorAll('li');
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        currentFocusIndex++;
+        if (currentFocusIndex >= items.length) currentFocusIndex = items.length - 1;
+        setActiveItem(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        currentFocusIndex--;
+        if (currentFocusIndex < 0) currentFocusIndex = 0;
+        setActiveItem(items);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentFocusIndex > -1 && items[currentFocusIndex]) {
+          selectLotItem(items[currentFocusIndex]);
+        }
+      }
+    });
+
+    function setActiveItem(items) {
+      items.forEach((li, idx) => {
+        li.classList.toggle('active', idx === currentFocusIndex);
+      });
     }
 
-    // ========== ADD/REMOVE SIZE ROWS IN CREATE FORM ==========
-    function addSizeRow() {
-      const container = document.getElementById('sizeContainer');
-      const rowHtml = `
-        <div class="row mb-3">
-          <div class="col-md-6 mb-3 mb-md-0">
-            <label class="form-label fw-semibold d-md-none" data-i18n="sizeLabel">Size</label>
-            <select name="sizeLabels" class="form-select size-label-select" onchange="toggleOtherInput(this)">
-              <option value="S">S</option>
-              <option value="M">M</option>
-              <option value="L">L</option>
-              <option value="XL">XL</option>
-              <option value="XXL">XXL</option>
-              <option value="Other">Other</option>
-            </select>
-            <input
-              type="text"
-              name="customSizeLabels"
-              class="form-control mt-2 other-size-input"
-              placeholder="Enter custom size"
-            />
-          </div>
-          <div class="col-md-4 mb-3 mb-md-0">
-            <label class="form-label fw-semibold d-md-none" data-i18n="piecesLabel">Pieces</label>
-            <input
-              type="number"
-              name="pieceCounts"
-              min="0"
-              class="form-control"
-              required
-              placeholder="e.g. 10"
-            />
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
-            <button 
-              type="button" 
-              class="btn btn-outline-danger w-100" 
-              onclick="removeRow(this)"
+    function selectLotItem(li) {
+      const val = li.dataset.value;
+      selectedLotId.value = val;
+      selectedLotIdSearch.value = li.textContent;
+      hideLotDropdown();
+      fetchLotSizes(val);
+    }
+
+    // Click selection
+    lotOptions.addEventListener('click', (e) => {
+      if (e.target && e.target.matches('li.list-group-item')) {
+        selectLotItem(e.target);
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!selectedLotIdSearch.contains(e.target) && !lotOptions.contains(e.target)) {
+        hideLotDropdown();
+      }
+    });
+
+    /*****************************************************
+     * FETCH LOT SIZES & RENDER
+     *****************************************************/
+    const lotSizesContainer = document.getElementById('lotSizesContainer');
+    const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
+    const createTotalPiecesElem = document.getElementById('createTotalPieces');
+
+    async function fetchLotSizes(lotId) {
+      try {
+        const res = await fetch(`/stitchingdashboard/get-lot-sizes/${lotId}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderLotSizes(data);
+      } catch (err) {
+        console.error('Error fetching lot sizes:', err);
+        lotSizesContainer.style.display = 'none';
+        lotSizesTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+      }
+    }
+
+    function renderLotSizes(sizesArr) {
+  lotSizesContainer.style.display = 'block';
+  lotSizesTableBody.innerHTML = '';
+  sizesArr.forEach(sz => {
+    const tr = document.createElement('tr');
+
+    const tdLabel = document.createElement('td');
+    tdLabel.textContent = sz.size_label;
+    tr.appendChild(tdLabel);
+
+    const tdRemain = document.createElement('td');
+    tdRemain.textContent = sz.remain;
+    tr.appendChild(tdRemain);
+
+    const tdInput = document.createElement('td');
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.min = '1';
+    inp.max = String(sz.remain);
+    inp.value = '0';
+    inp.classList.add('form-control');
+    inp.dataset.sizeId = sz.id;
+    
+    // *** Make the input required only for Create ***
+    inp.required = true;
+    
+    // on input, update total
+    inp.addEventListener('input', updateCreateTotal);
+    tdInput.appendChild(inp);
+    tr.appendChild(tdInput);
+
+    lotSizesTableBody.appendChild(tr);
+  });
+  updateCreateTotal();
+}
+
+    function updateCreateTotal() {
+      let sum = 0;
+      const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
+      inputs.forEach(inp => {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val > 0) {
+          sum += val;
+        }
+      });
+      createTotalPiecesElem.textContent = sum;
+    }
+
+    /*****************************************************
+     * CREATE FORM VALIDATION
+     *****************************************************/
+    const createForm = document.getElementById('createForm');
+    createForm.addEventListener('submit', (e) => {
+      const rows = lotSizesTableBody.querySelectorAll('tr');
+      if (!rows.length) {
+        alert('No sizes found or no lot selected!');
+        e.preventDefault();
+        return;
+      }
+      for (const row of rows) {
+        const remain = parseInt(row.children[1].textContent, 10);
+        const input = row.children[2].querySelector('input');
+        let val = parseInt(input.value, 10);
+        if (isNaN(val) || val < 0) {
+          alert(`Invalid input for size [${row.children[0].textContent}]`);
+          e.preventDefault();
+          return;
+        }
+        if (val > remain) {
+          alert(`You requested ${val} pieces for size [${row.children[0].textContent}] but only ${remain} remain!`);
+          e.preventDefault();
+          return;
+        }
+      }
+      // Build hidden fields
+      const old = document.querySelectorAll('.sizeMappingField');
+      old.forEach(el => el.remove());
+      for (const row of rows) {
+        const input = row.children[2].querySelector('input');
+        let val = parseInt(input.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > 0) {
+          const sizeId = input.dataset.sizeId;
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.classList.add('sizeMappingField');
+          hidden.name = `sizes[${sizeId}]`;
+          hidden.value = val;          
+          hidden.setAttribute('required', '');
+          createForm.appendChild(hidden);
+        }
+      }
+    });
+
+    /*****************************************************
+     * LAZY LOADING FOR EXISTING ENTRIES
+     *****************************************************/
+    let existingOffset = 0;
+    let loading = false;
+    let hasMore = true;
+    const existingContainer = document.getElementById('existingEntriesContainer');
+    const sentinel = document.getElementById('loadMoreSentinel');
+    const searchInput = document.getElementById('searchExisting');
+
+    async function loadMoreData() {
+      if (loading || !hasMore) return;
+      loading = true;
+      const searchTerm = searchInput.value.trim();
+
+      try {
+        const res = await fetch(`/stitchingdashboard/list-entries?offset=${existingOffset}&search=${encodeURIComponent(searchTerm)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const entries = data.data || [];
+        hasMore = data.hasMore;
+
+        entries.forEach(item => {
+          const card = document.createElement('div');
+          card.classList.add('accordion-item', 'fade-in');
+
+          const headerId = `heading-${item.id}`;
+          const collapseId = `collapse-${item.id}`;
+
+          card.innerHTML = `
+            <h2 class="accordion-header" id="${headerId}">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#${collapseId}"
+                aria-expanded="false"
+                aria-controls="${collapseId}"
+              >
+                <strong>Lot:</strong> ${item.lot_no}
+                &nbsp; (SKU: ${item.sku})
+                &nbsp; (Total Pieces: ${item.total_pieces})
+              </button>
+            </h2>
+            <div
+              id="${collapseId}"
+              class="accordion-collapse collapse"
+              aria-labelledby="${headerId}"
+              data-bs-parent="#existingEntriesContainer"
             >
-              - <span data-i18n="removeBtn">Remove</span>
-            </button>
-          </div>
-        </div>
-      `;
-      const temp = document.createElement('div');
-      temp.innerHTML = rowHtml;
-      container.appendChild(temp.firstElementChild);
-    }
-
-    function removeRow(btn) {
-      btn.closest('.row').remove();
-    }
-
-    // ========== UPDATE MODAL LOGIC ==========
-    const updateModal = document.getElementById('updateModal');
-    updateModal.addEventListener('show.bs.modal', function (event) {
-      const button = event.relatedTarget; 
-      const entryId = button.getAttribute('data-entry-id');
-      // Set form action
-      const updateForm = document.getElementById('updateForm');
-      updateForm.action = '/stitchingdashboard/update/' + entryId;
-      document.getElementById('updatingEntryId').textContent = entryId;
-
-      // Clear existing fields
-      document.getElementById('existingSizesSection').innerHTML = '';
-
-      // Fetch existing sizes
-      fetch('/stitchingdashboard/update/' + entryId + '/json')
-        .then((res) => res.json())
-        .then((data) => {
-          if (!data.sizes) return;
-          data.sizes.forEach((sz) => {
-            const html = `
-              <div class="row mb-2">
-                <div class="col-md-6 mb-2 mb-md-0">
-                  <label class="form-label fw-bold d-block">
-                    ${sz.size_label} (current: ${sz.pieces})
-                  </label>
-                  <input 
-                    type="hidden" 
-                    name="existingSizeLabels" 
-                    value="${sz.size_label}"
-                  />
+              <div class="accordion-body">
+                <div class="d-flex justify-content-end mb-3">
+                  <a
+                    href="/stitchingdashboard/challan/${item.id}"
+                    class="btn btn-sm btn-info me-2"
+                    target="_blank"
+                  >
+                    <i class="fas fa-file-download"></i> Challan
+                  </a>
+                  <button
+                    class="btn btn-sm btn-warning"
+                    data-bs-toggle="modal"
+                    data-bs-target="#updateModal"
+                    data-entry-id="${item.id}"
+                  >
+                    <i class="fas fa-edit"></i>
+                    <span data-lang="en">Update</span>
+                    <span data-lang="hi">अपडेट</span>
+                  </button>
                 </div>
-                <div class="col-md-6">
-                  <input
-                    type="number"
-                    class="form-control"
-                    name="existingIncrements"
-                    min="0"
-                    placeholder="Increment pieces by 0 or more"
-                  />
+                <p class="mb-2">
+                  <strong>ID:</strong> ${item.id}<br />
+                  <strong>Total Pieces:</strong> ${item.total_pieces}<br />
+                  <strong>Remark:</strong> ${item.remark || 'N/A'}
+                </p>
+                ${
+                  item.image_url
+                    ? `<p>
+                         <strong>Image:</strong><br />
+                         <img
+                           src="${item.image_url}"
+                           alt="Stitch"
+                           style="max-height: 100px;"
+                         />
+                       </p>`
+                    : ''
+                }
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered">
+                    <thead>
+                      <tr>
+                        <th>Size Label</th>
+                        <th>Pieces</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${
+                        item.sizes && item.sizes.length
+                          ? item.sizes.map(sz => `
+                              <tr>
+                                <td>${sz.size_label}</td>
+                                <td>${sz.pieces}</td>
+                              </tr>`).join('')
+                          : `<tr><td colspan="2">No sizes found.</td></tr>`
+                      }
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            `;
-            document.getElementById('existingSizesSection')
-              .insertAdjacentHTML('beforeend', html);
-          });
-        })
-        .catch((err) => {
-          console.error('Error fetching existing sizes:', err);
+            </div>
+          `;
+          existingContainer.appendChild(card);
         });
+
+        existingOffset += entries.length;
+      } catch (err) {
+        console.error('Error loading more data:', err);
+      } finally {
+        loading = false;
+      }
+    }
+
+    // IntersectionObserver
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        loadMoreData();
+      }
+    }, {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    });
+    observer.observe(sentinel);
+
+    // Reset and reload on search
+    searchInput.addEventListener('input', () => {
+      existingOffset = 0;
+      hasMore = true;
+      existingContainer.innerHTML = '';
+      loadMoreData();
     });
 
-    // ========== ADD NEW SIZE ROW IN UPDATE MODAL ==========
-    function addNewSizeRow() {
-      const container = document.getElementById('newSizesContainer');
-      const rowHtml = `
-        <div class="row mb-2">
-          <div class="col-md-6 mb-2 mb-md-0">
-            <select name="newSizeLabels" class="form-select new-size-label" onchange="toggleOtherInput(this)">
-              <option value="">-- Select Size --</option>
-              <option value="S">S</option>
-              <option value="M">M</option>
-              <option value="L">L</option>
-              <option value="XL">XL</option>
-              <option value="XXL">XXL</option>
-              <option value="Other">Other</option>
-            </select>
-            <input
-              type="text"
-              name="customNewSizeLabels"
-              class="form-control other-size-input mt-2"
-              placeholder="Enter custom size"
-            />
-          </div>
-          <div class="col-md-4 mb-2 mb-md-0">
-            <input
-              type="number"
-              class="form-control"
-              name="newSizePieces"
-              placeholder="Pieces"
-              min="0"
-            />
-          </div>
-          <div class="col-md-2 d-flex align-items-center">
-            <button 
-              type="button" 
-              class="btn btn-sm btn-outline-danger w-100" 
-              onclick="this.closest('.row').remove()"
-            >
-              - <span data-i18n="removeBtn">Remove</span>
-            </button>
-          </div>
-        </div>
-      `;
-      const temp = document.createElement('div');
-      temp.innerHTML = rowHtml;
-      container.appendChild(temp.firstElementChild);
+    // Load initial chunk
+    loadMoreData();
+
+    /*****************************************************
+     * UPDATE MODAL
+     *****************************************************/
+    const updateModal = document.getElementById('updateModal');
+    const updateForm = document.getElementById('updateForm');
+    const updateSizesTable = document.getElementById('updateSizesTable');
+    if (updateModal) {
+      updateModal.addEventListener('show.bs.modal', async (event) => {
+        const button = event.relatedTarget;
+        const entryId = button.getAttribute('data-entry-id');
+
+        updateForm.action = '/stitchingdashboard/update/' + entryId;
+        document.getElementById('updatingEntryId').textContent = entryId;
+
+        // Clear old
+        updateSizesTable.querySelector('tbody').innerHTML = '';
+
+        try {
+          const res = await fetch(`/stitchingdashboard/update/${entryId}/json`);
+          if (!res.ok) {
+            console.error('Error fetching existing sizes. Status:', res.status);
+            return;
+          }
+          const data = await res.json();
+          if (!data.sizes) return;
+
+          data.sizes.forEach(sz => {
+            const tr = document.createElement('tr');
+
+            const tdLabel = document.createElement('td');
+            tdLabel.textContent = sz.size_label;
+            tr.appendChild(tdLabel);
+
+            const tdUsed = document.createElement('td');
+            tdUsed.textContent = sz.pieces; // current usage in that entry
+            tr.appendChild(tdUsed);
+
+            const tdRemain = document.createElement('td');
+            tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
+            tr.appendChild(tdRemain);
+
+            const tdInput = document.createElement('td');
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.min = '0';
+            inp.value = ''; // blank => treat as 0
+            inp.classList.add('form-control');
+            inp.dataset.sizeLabel = sz.size_label;
+
+            tdInput.appendChild(inp);
+            tr.appendChild(tdInput);
+
+            updateSizesTable.querySelector('tbody').appendChild(tr);
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      });
+
+      // On submit, treat blank fields as 0
+      updateForm.addEventListener('submit', (e) => {
+        const oldFields = document.querySelectorAll('.updateSizeMappingField');
+        oldFields.forEach(f => f.remove());
+
+        const rows = updateSizesTable.querySelectorAll('tbody tr');
+        for (const row of rows) {
+          const lbl = row.children[0].textContent;
+          const remain = parseInt(row.children[2].textContent, 10);
+          const input = row.children[3].querySelector('input');
+          let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
+          if (isNaN(val) || val < 0) {
+            // If user typed negative or non-numeric, we force 0
+            val = 0;
+          }
+          // If val > remain, show an error
+          if (val > remain) {
+            alert(`Cannot add ${val} to size [${lbl}]. Max remain is ${remain}.`);
+            e.preventDefault();
+            return;
+          }
+          if (val > 0) {
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.classList.add('updateSizeMappingField');
+            hidden.name = `updateSizes[${lbl}]`;
+            hidden.value = val;
+            updateForm.appendChild(hidden);
+          }
+        }
+      });
     }
   </script>
 </body>
