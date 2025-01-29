@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kotty Search Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap 5 -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- Bootstrap Icons (Optional) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+  />
+  <style>
+    /* Tag styling for "bulk search" */
+    .tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border: 1px solid #ced4da;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      min-height: calc(1.5em + 0.75rem + 2px); 
+      background-color: #fff;
+      cursor: text;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      background-color: #0d6efd; /* Bootstrap primary color */
+      color: #fff;
+      border-radius: 0.375rem;
+      padding: 0 0.5rem;
+    }
+    .tag i {
+      cursor: pointer;
+      margin-left: 0.3rem;
+    }
+    .tag-input {
+      border: none;
+      outline: none;
+      min-width: 100px;
+      flex: 1;
+    }
+    .tag-input:focus {
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navbar with company branding & logout -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-bold">Kotty</span>
+    <div class="d-flex">
+      <a href="/logout" class="btn btn-outline-light">Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4">
+  <h1 class="mb-4">Search Dashboard</h1>
+
+  <!-- 1) CHOOSE TABLE (GET) -->
+  <form method="GET" action="/search-dashboard" class="row gy-3 card p-4 mb-4 shadow-sm">
+    <div class="col-md-6">
+      <label class="form-label"><strong>Choose Table</strong></label>
+      <select name="table" class="form-select" onchange="this.form.submit()">
+        <option value="">-- Select Table --</option>
+        <% allTables.forEach(tbl => { %>
+          <option
+            value="<%= tbl %>"
+            <%= (selectedTable === tbl) ? 'selected' : '' %>
+          ><%= tbl %></option>
+        <% }) %>
+      </select>
+    </div>
+  </form>
+
+  <!-- 2) If user picked a table, show columns & search form (POST) -->
+  <% if (selectedTable) { %>
+    <form method="POST" action="/search-dashboard" class="row gy-3 card p-4 shadow-sm">
+      <!-- Hidden fields to keep track of POST action & table -->
+      <input type="hidden" name="action" id="actionField" value="search">
+      <input type="hidden" name="selectedTable" value="<%= selectedTable %>">
+      
+      <!-- Hidden input that will contain all search terms joined by spaces (for the server) -->
+      <input type="hidden" name="searchTerm" id="searchTermHidden" value="">
+
+      <div class="col-12">
+        <h5 class="mb-1">Table: <%= selectedTable %></h5>
+        <p class="text-muted mb-2">
+          Select columns to search/export, then enter one or more keywords (press Tab/Enter after each).
+        </p>
+      </div>
+
+      <!-- Column checkboxes -->
+      <div class="col-12 mb-3">
+        <label class="form-label fw-bold">Select Columns:</label>
+        <div class="row">
+          <% columnList.forEach(col => {
+             const isChecked = chosenColumns.includes(col);
+          %>
+            <div class="col-md-3 mb-2">
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  name="chosenColumns"
+                  value="<%= col %>"
+                  id="<%= col %>"
+                  <%= isChecked ? 'checked' : '' %>
+                />
+                <label class="form-check-label" for="<%= col %>">
+                  <%= col %>
+                </label>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Bulk Search Input (Tagging) -->
+      <div class="col-md-6">
+        <label class="form-label fw-bold">Search Term(s) (Partial)</label>
+        <div 
+          class="tag-container" 
+          id="tagContainer" 
+          onclick="document.getElementById('tagInput').focus()"
+        >
+          <!-- The input for typing tags -->
+          <input
+            type="text"
+            class="tag-input"
+            id="tagInput"
+            placeholder="Type term and press Tab/Enter..."
+          />
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="col-12 d-flex gap-3 mt-2">
+        <button type="button" class="btn btn-success" onclick="submitForm('search')">
+          <i class="bi bi-search"></i> Search
+        </button>
+        <button type="button" class="btn btn-outline-primary" onclick="submitForm('export')">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Export
+        </button>
+      </div>
+    </form>
+
+    <!-- If we have results, display them -->
+    <% if (resultRows !== null) { %>
+      <hr/>
+      <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+          <i class="bi bi-table"></i> Results
+        </div>
+        <div class="card-body">
+          <% if (!resultRows.length) { %>
+            <p class="text-muted">No data found.</p>
+          <% } else {
+               const colNames = Object.keys(resultRows[0]);
+          %>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <% colNames.forEach(cn => { %>
+                      <th><%= cn %></th>
+                    <% }) %>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% resultRows.forEach(row => { %>
+                    <tr>
+                      <% colNames.forEach(cn => { %>
+                        <td><%= row[cn] %></td>
+                      <% }) %>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+  <% } %>
+</div>
+
+<!-- Tagging logic + Form submission script -->
+<script>
+  let tags = [];
+
+  const hiddenInput = document.getElementById('searchTermHidden');
+  const tagInput = document.getElementById('tagInput');
+  const tagContainer = document.getElementById('tagContainer');
+
+  // If your server side "searchTerm" was previously used, you could parse & restore it here.
+  // Example: if it's in a global var <%= JSON.stringify(searchTerm) %> (but this code uses an empty default).
+  // For demonstration, we start fresh each time.
+
+  // On "Tab" or "Enter," create a new tag if there's text.
+  tagInput.addEventListener('keydown', function(e) {
+    if ((e.key === 'Enter' || e.key === 'Tab') && this.value.trim() !== '') {
+      e.preventDefault();  // Prevent form submission or losing focus
+      addTag(this.value.trim());
+      this.value = '';
+    }
+  });
+
+  function addTag(text) {
+    // Add new text to our tag array
+    tags.push(text);
+
+    // Create the chip element
+    const chip = document.createElement('span');
+    chip.className = 'tag';
+    chip.innerHTML = `
+      ${text}
+      <i class="bi bi-x-circle"></i>
+    `;
+    // Handle remove
+    chip.querySelector('i').addEventListener('click', () => removeTag(text, chip));
+    
+    // Insert chip before the input
+    tagContainer.insertBefore(chip, tagInput);
+
+    // Update hidden input
+    updateHiddenField();
+  }
+
+  function removeTag(text, chipEl) {
+    // Remove from array
+    tags = tags.filter(t => t !== text);
+    // Remove from DOM
+    chipEl.remove();
+    // Update hidden
+    updateHiddenField();
+  }
+
+  function updateHiddenField() {
+    // Join with spaces (or commas) to pass to server
+    hiddenInput.value = tags.join(' ');
+  }
+
+  function submitForm(actionVal) {
+    document.getElementById('actionField').value = actionVal;
+    // The second form on the page is the POST form
+    document.forms[1].submit();
+  }
+</script>
+
+<!-- Bootstrap -->
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+></script>
+</body>
+</html>
