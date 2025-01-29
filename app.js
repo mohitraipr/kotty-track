@@ -50,6 +50,8 @@ const fabricManagerRoutes = require('./routes/fabricManagerRoutes'); // Import F
 const cuttingManagerRoutes = require('./routes/cuttingManagerRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const stitchingRoutes = require('./routes/stitchingRoutes');
+const finishingRoutes = require('./routes/finishingRoutes');
+const washingRoutes = require('./routes/washingRoutes');
 
 
 // Use Routes
@@ -61,7 +63,7 @@ app.use('/fabric-manager', fabricManagerRoutes); // Use Fabric Manager Routes
 app.use('/cutting-manager', cuttingManagerRoutes);
 app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
-
+app.use('/washingdashboard', washingRoutes);
 
 
 
