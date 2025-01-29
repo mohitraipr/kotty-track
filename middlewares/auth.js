@@ -41,7 +41,7 @@ function isFinishingMaster(req, res, next) {
     return hasRole('finishing')(req, res, next);
 }
 
-function isWashing(req, res, next) {
+function isWashingMaster(req, res, next) {
     return hasRole('washing')(req, res, next);
 }
 
