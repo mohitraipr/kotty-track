@@ -41,12 +41,16 @@ function isFinishingMaster(req, res, next) {
     return hasRole('finishing')(req, res, next);
 }
 
+function isWashing(req, res, next) {
+    return hasRole('washing')(req, res, next);
+}
+
 function isOperator(req, res, next) {
     return hasRole('operator')(req, res, next);
 }
 
 function isDepartmentUser(req, res, next) {
-    const departmentRoles = ['checking', 'washing', 'finishing', 'quality_assurance'];
+    const departmentRoles = ['checking', 'quality_assurance'];
     if (req.session && req.session.user && departmentRoles.includes(req.session.user.roleName)) {
         return next();
     }
@@ -62,5 +66,6 @@ module.exports = {
     isStitchingMaster,
     isFinishingMaster,
     isOperator,
+    isWashing,
     isDepartmentUser
 };
