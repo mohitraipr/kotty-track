@@ -26,7 +26,7 @@ async function getAllTables() {
 }
 
 /** 
- * Fetch all columns for a given table from `information_schema.columns`
+ * Fetch all columns for a given table
  */
 async function getColumnsForTable(tableName) {
   const sql = `
@@ -46,57 +46,76 @@ async function getColumnsForTable(tableName) {
 }
 
 /**
- * Perform a partial match across multiple columns.  
- * Now supports multiple keywords in `searchTerm` by splitting on whitespace.  
- * - If no columns: SELECT *  
- * - If no searchTerm: SELECT chosen columns, no WHERE  
- * - If multiple keywords in searchTerm: each keyword must match at least one column (OR).
+ * Perform a partial match with the possibility of searching in one “primary” column
+ * or across all chosen columns, using multiple keywords (split by whitespace).
+ *
+ * @param {string} tableName
+ * @param {string[]} columns   - The columns to SELECT (display)
+ * @param {string} searchTerm  - Possibly multiple keywords, e.g. "abc def"
+ * @param {string} primaryColumn - If set, only search in this column; if empty, search in all chosen columns
+ * @returns rows
  */
-async function searchByColumns(tableName, columns, searchTerm) {
-  // No columns => do "SELECT *"
+async function searchByColumns(tableName, columns, searchTerm, primaryColumn) {
+  // If no columns are selected, do "SELECT *" 
+  // (meaning the user doesn't pick anything to display)
   if (!columns || !columns.length) {
     const sql = `SELECT * FROM \`${tableName}\``;
     const [allRows] = await pool.query(sql);
     return allRows;
   }
 
-  // No searchTerm => just SELECT those columns, no WHERE
+  // Build "SELECT col1, col2, ..." 
+  const colList = columns.map(c => `\`${c}\``).join(', ');
+
+  // If searchTerm is empty, just SELECT columns with no WHERE
   if (!searchTerm) {
-    const colList = columns.map(c => `\`${c}\``).join(', ');
     const sql = `SELECT ${colList} FROM \`${tableName}\``;
-    const [allRows] = await pool.query(sql);
-    return allRows;
+    const [rows] = await pool.query(sql);
+    return rows;
   }
 
-  // Parse searchTerm into multiple terms (split on whitespace)
+  // Parse multiple space-separated terms
   const terms = searchTerm.split(/\s+/).filter(Boolean);
 
-  // Build OR conditions across all columns for each term
-  // For example, for 2 terms and 2 columns, we want:
-  // (col1 LIKE ? OR col2 LIKE ?) OR (col1 LIKE ? OR col2 LIKE ?)
-  // This means "any column matches term1" OR "any column matches term2"
-  const orBlocks = [];
-  const params = [];
+  let whereClause = '';
+  let params = [];
 
-  terms.forEach(term => {
-    const singleTermConditions = columns.map(col => `\`${col}\` LIKE ?`).join(' OR ');
-    orBlocks.push(`(${singleTermConditions})`);
-    // For each column, we push param
-    columns.forEach(() => params.push(`%${term}%`));
-  });
+  if (primaryColumn && columns.includes(primaryColumn)) {
+    // 1) Searching in a single "primary" column
+    // e.g. for terms ["abc","def"], we do:
+    // (primaryColumn LIKE ? OR primaryColumn LIKE ?)
+    // with each OR block for multiple terms => Actually we want an OR across the terms:
+    //   (col LIKE ? OR col LIKE ? OR col LIKE ?)
+    // But typically you might do: col LIKE ? AND col LIKE ? for an AND logic. 
+    // The user wants OR logic across multiple terms? Usually it's OR logic.
+    // We'll do: for each term => primaryColumn LIKE ? => OR
+    // So for 2 terms => (lot_no LIKE ? OR lot_no LIKE ?)
+    const orConditions = terms.map(() => `\`${primaryColumn}\` LIKE ?`).join(' OR ');
+    whereClause = `WHERE (${orConditions})`;
+    // Fill params
+    terms.forEach(t => params.push(`%${t}%`));
+  } else {
+    // 2) Searching across ALL chosen columns
+    // This is your existing logic:
+    // (col1 LIKE ? OR col2 LIKE ?) OR (col1 LIKE ? OR col2 LIKE ?) ...
+    const orBlocks = [];
+    terms.forEach(term => {
+      const singleTermConditions = columns.map(col => `\`${col}\` LIKE ?`).join(' OR ');
+      orBlocks.push(`(${singleTermConditions})`);
+      // For each column, we push param
+      columns.forEach(() => params.push(`%${term}%`));
+    });
+    whereClause = `WHERE ${orBlocks.join(' OR ')}`;
+  }
 
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-  const whereClause = orBlocks.join(' OR '); 
-  const sql = `SELECT ${colList} FROM \`${tableName}\` WHERE ${whereClause}`;
-
-  console.log('searchByColumns =>', sql, params);
+  const sql = `SELECT ${colList} FROM \`${tableName}\` ${whereClause}`;
+  console.log('[searchByColumns]', sql, params);
   const [rows] = await pool.query(sql, params);
   return rows;
 }
 
 // Single route: /search-dashboard
 router.route('/search-dashboard')
-  // GET => Render the page with table dropdown, or columns if table is selected
   .get(isAuthenticated, isOperator, async (req, res) => {
     try {
       const allTables = await getAllTables();
@@ -113,6 +132,7 @@ router.route('/search-dashboard')
         selectedTable,
         columnList,
         chosenColumns: [],
+        primaryColumn: '',     // new
         searchTerm: '',
         resultRows: null
       });
@@ -121,11 +141,9 @@ router.route('/search-dashboard')
       return res.status(500).send('Error loading search-dashboard');
     }
   })
-
-  // POST => handle searching or exporting
   .post(isAuthenticated, isOperator, async (req, res) => {
     try {
-      const { action, selectedTable, searchTerm } = req.body;
+      const { action, selectedTable, searchTerm, primaryColumn } = req.body;
       // chosenColumns might be an array or a single string
       let chosenColumns = req.body.chosenColumns || [];
       if (!Array.isArray(chosenColumns)) {
@@ -141,29 +159,35 @@ router.route('/search-dashboard')
           selectedTable: '',
           columnList: [],
           chosenColumns: [],
+          primaryColumn: '',
           searchTerm: '',
           resultRows: null
         });
       }
 
-      // Get the columns
+      // Get the columns for the chosen table
       const columnList = await getColumnsForTable(selectedTable);
 
-      // Do the partial-match query (which now supports multiple keywords)
-      const rows = await searchByColumns(selectedTable, chosenColumns, searchTerm);
+      // Perform the query
+      const rows = await searchByColumns(
+        selectedTable,
+        chosenColumns,
+        searchTerm,
+        primaryColumn
+      );
 
+      // Based on action
       if (action === 'search') {
-        // Render results
         return res.render('searchDashboard', {
           allTables,
           selectedTable,
           columnList,
           chosenColumns,
+          primaryColumn,
           searchTerm,
           resultRows: rows
         });
       } else if (action === 'export') {
-        // Export results to Excel
         if (!rows.length) {
           // No data => "No Data" file
           const wbEmpty = XLSX.utils.book_new();
@@ -174,7 +198,7 @@ router.route('/search-dashboard')
           res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           return res.send(emptyBuf);
         } else {
-          // Convert rows to sheet
+          // Convert rows to Excel
           const wb = XLSX.utils.book_new();
           const ws = XLSX.utils.json_to_sheet(rows);
           XLSX.utils.book_append_sheet(wb, ws, selectedTable);
@@ -184,7 +208,6 @@ router.route('/search-dashboard')
           return res.send(excelBuf);
         }
       } else {
-        // Unknown action => redirect
         return res.redirect('/search-dashboard');
       }
     } catch (err) {
