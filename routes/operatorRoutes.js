@@ -1,759 +1,741 @@
-/*********************************************************************
- * routes/operatorRoutes.js
- *
- * Features:
- * 1) Operator Dashboard (fancy UI)
- * 2) Confirm Cutting
- * 3) First-time assignment => /assign-lot-form/:lotNo + POST /assign-lot
- * 4) Partial pass leftover => /pass-lot/:assignmentId + POST /pass-lot
- * 5) target_day defaults to '2099-12-31' if not provided
- *********************************************************************/
-
+/**************************************************
+ * operatorRoutes.js
+ **************************************************/
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/db'); // Ensure your DB config is correct
-const { isAuthenticated, isOperator } = require('../middlewares/auth'); // Ensure these middleware functions are correctly implemented
+const { pool } = require('../config/db');
+const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
-// Optional: Define department flows
-const departmentFlow = {
-  denim: ['stitching_master', 'washing', 'finishing', 'marketplace'],
-  non_denim: ['stitching_master', 'finishing', 'marketplace']
-};
+/**
+ * Helper function to compute:
+ *  - totalCut
+ *  - totalStitched
+ *  - totalWashed
+ *  - totalFinished
+ * Then leftoverStitch = totalCut - totalStitched (ONLY if assignedStitch = true)
+ * leftoverWash = totalStitched - totalWashed (ONLY if assignedWash = true)
+ * leftoverFinish = totalWashed - totalFinished (ONLY if assignedFinish = true)
+ */
+async function computeLeftoversForLot(lot_no) {
+  // 1) totalCut
+  let totalCut = 0;
+  const [clRows] = await pool.query(`
+    SELECT total_pieces
+    FROM cutting_lots
+    WHERE lot_no = ?
+    LIMIT 1
+  `, [lot_no]);
+  if (clRows.length) {
+    totalCut = clRows[0].total_pieces || 0;
+  }
 
-// Helper function to get the next department role
-function getNextDept(flowType, currentRoleName) {
-  const flow = departmentFlow[flowType] || [];
-  const idx = flow.indexOf(currentRoleName);
-  if (idx === -1 || idx >= flow.length - 1) return null;
-  return flow[idx + 1];
+  // 2) totalStitched
+  let [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumStitched
+    FROM stitching_data
+    WHERE lot_no = ?
+  `, [lot_no]);
+  const totalStitched = rows[0].sumStitched || 0;
+
+  // 3) totalWashed
+  [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumWashed
+    FROM washing_data
+    WHERE lot_no = ?
+  `, [lot_no]);
+  const totalWashed = rows[0].sumWashed || 0;
+
+  // 4) totalFinished
+  [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumFinished
+    FROM finishing_data
+    WHERE lot_no = ?
+  `, [lot_no]);
+  const totalFinished = rows[0].sumFinished || 0;
+
+  // 5) Check if there's a Stitching assignment for this lot
+  const [stAssign] = await pool.query(`
+    SELECT COUNT(*) AS cnt
+    FROM stitching_assignments sa
+    JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+    WHERE c.lot_no = ?
+  `, [lot_no]);
+  const assignedStitch = stAssign[0].cnt > 0;
+
+  // 6) Check Washing assignment
+  const [wAssign] = await pool.query(`
+    SELECT COUNT(*) AS cnt
+    FROM washing_assignments wa
+    JOIN stitching_assignments sa ON wa.stitching_assignment_id = sa.id
+    JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+    WHERE c.lot_no = ?
+  `, [lot_no]);
+  const assignedWash = wAssign[0].cnt > 0;
+
+  // 7) Check Finishing assignment
+  const [fAssign] = await pool.query(`
+    SELECT COUNT(*) AS cnt
+    FROM finishing_assignments fa
+    LEFT JOIN stitching_assignments sa ON fa.stitching_assignment_id = sa.id
+    LEFT JOIN washing_assignments wa ON fa.washing_assignment_id = wa.id
+    LEFT JOIN cutting_lots c1 ON sa.cutting_lot_id = c1.id
+    LEFT JOIN stitching_assignments sa2 ON wa.stitching_assignment_id = sa2.id
+    LEFT JOIN cutting_lots c2 ON sa2.cutting_lot_id = c2.id
+    WHERE (c1.lot_no = ? OR c2.lot_no = ?)
+  `, [lot_no, lot_no]);
+  const assignedFinish = fAssign[0].cnt > 0;
+
+  // 8) If not assigned, leftover = null, else leftover = computed
+  const leftoverStitch = assignedStitch ? (totalCut - totalStitched) : null;
+  const leftoverWash   = assignedWash   ? (totalStitched - totalWashed) : null;
+  let leftoverFinish = null;
+  if (assignedFinish) {
+    // If washing is assigned, use totalWashed, else fall back to totalStitched
+    if (assignedWash) {
+      leftoverFinish = totalWashed - totalFinished;
+    } else {
+      leftoverFinish = totalStitched - totalFinished;
+    }
+  }
+
+  return { leftoverStitch, leftoverWash, leftoverFinish };
 }
 
-/*-------------------------------------------------------------------
-  GET /operator/dashboard
--------------------------------------------------------------------*/
+/**
+ * Sum up total pieces by user (optional "operator performance")
+ */
+async function computeOperatorPerformance() {
+  const perf = {}; // user_id => { username, totalStitched, totalWashed, totalFinished }
+
+  // stitching_data
+  let [rows] = await pool.query(`
+    SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumStitched
+    FROM stitching_data
+    GROUP BY user_id
+  `);
+  rows.forEach(r => {
+    if (!perf[r.user_id]) {
+      perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    }
+    perf[r.user_id].totalStitched = r.sumStitched || 0;
+  });
+
+  // washing_data
+  [rows] = await pool.query(`
+    SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumWashed
+    FROM washing_data
+    GROUP BY user_id
+  `);
+  rows.forEach(r => {
+    if (!perf[r.user_id]) {
+      perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    }
+    perf[r.user_id].totalWashed = r.sumWashed || 0;
+  });
+
+  // finishing_data
+  [rows] = await pool.query(`
+    SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumFinished
+    FROM finishing_data
+    GROUP BY user_id
+  `);
+  rows.forEach(r => {
+    if (!perf[r.user_id]) {
+      perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    }
+    perf[r.user_id].totalFinished = r.sumFinished || 0;
+  });
+
+  // attach usernames
+  const uids = Object.keys(perf);
+  if (!uids.length) return perf;
+
+  const [users] = await pool.query(`
+    SELECT id, username
+    FROM users
+    WHERE id IN (?)
+  `, [uids]);
+  users.forEach(u => {
+    if (perf[u.id]) {
+      perf[u.id].username = u.username;
+    }
+  });
+
+  return perf;
+}
+
+/**
+ * GET /operator/dashboard
+ *  - ALWAYS show all lots from cutting_lots (even unassigned)
+ *  - Also gather from stitching/washing/finishing assignments
+ *  - Then aggregator "lotDetails" for leftover pieces, etc.
+ */
 router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const operatorId = req.session.user.id;
-
-    // (A) Unconfirmed + Unassigned
-    const [unassignedRows] = await pool.query(`
+    // 1) STITCHING assignments
+    const [stitchingAssignments] = await pool.query(`
       SELECT
-        cl.id AS lot_id,
-        cl.lot_no,
-        cl.sku,
-        cl.fabric_type,
-        cl.flow_type,
-        cl.total_pieces,
-        cl.is_confirmed,
-        cls.size_label,
-        cls.total_pieces AS size_total_pieces,
-        u.username AS created_by
-      FROM cutting_lots cl
-      JOIN users u ON cl.user_id = u.id
-      JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
-      LEFT JOIN lot_assignments la ON la.cutting_lot_id = cl.id
-      WHERE la.id IS NULL
-        AND cl.is_confirmed = FALSE
-      ORDER BY cl.created_at DESC, cls.size_label ASC
+        sa.id,
+        sa.operator_id,
+        sa.user_id,
+        sa.cutting_lot_id,
+        sa.target_day,
+        sa.assigned_on,
+        u.username AS assignedUser,
+        (SELECT username FROM users WHERE id = sa.operator_id) AS operatorName,
+        c.lot_no AS lot_no,
+        c.sku AS sku
+      FROM stitching_assignments sa
+      JOIN users u ON sa.user_id = u.id
+      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+      ORDER BY sa.assigned_on DESC
     `);
 
-    // Organize unassigned lots by lot_id
-    const unassignedMap = {};
-    unassignedRows.forEach(row => {
-      if (!unassignedMap[row.lot_id]) {
-        unassignedMap[row.lot_id] = {
-          lot_id: row.lot_id,
-          lot_no: row.lot_no,
-          sku: row.sku,
-          fabric_type: row.fabric_type,
-          flow_type: row.flow_type,
-          total_pieces: row.total_pieces,
-          is_confirmed: row.is_confirmed,
-          created_by: row.created_by,
-          sizes: []
-        };
-      }
-      unassignedMap[row.lot_id].sizes.push({
-        size_label: row.size_label,
-        size_total_pieces: row.size_total_pieces
-      });
-    });
-    const unassignedLots = Object.values(unassignedMap);
-
-    // (B) Pending Operator Verification
-    const [pendingVerifyRows] = await pool.query(`
+    // 2) WASHING assignments
+    const [washingAssignments] = await pool.query(`
       SELECT
-        la.id AS assignment_id,
-        la.status,
-        la.assigned_at,
-        cl.lot_no,
-        cl.sku,
-        cl.fabric_type,
-        cl.flow_type,
-        u.username AS dept_user,
-        r.name AS dept_role
-      FROM lot_assignments la
-      JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-      JOIN users u ON la.assigned_to_user_id = u.id
-      JOIN roles r ON u.role_id = r.id
-      WHERE la.status = 'dept_submitted'
-        AND la.assigned_by_user_id = ?
-      ORDER BY la.assigned_at DESC
-    `, [operatorId]);
+        wa.id,
+        wa.operator_id,
+        wa.user_id,
+        wa.stitching_assignment_id,
+        wa.target_day,
+        wa.assigned_on,
+        u.username AS assignedUser,
+        (SELECT username FROM users WHERE id = wa.operator_id) AS operatorName,
 
-    // (C) Assigned (In Progress)
-    const [assignedRows] = await pool.query(`
-      SELECT
-        la.id AS assignment_id,
-        cl.lot_no,
-        cl.sku,
-        cl.fabric_type,
-        cl.flow_type,
-        la.assigned_pieces,
-        la.status,
-        la.assigned_at,
-        u.username AS assigned_to,
-        (
-          SELECT IFNULL(SUM(dc.confirmed_pieces), 0)
-          FROM department_confirmations dc
-          WHERE dc.lot_assignment_id = la.id
-        ) AS total_confirmed_by_dept
-      FROM lot_assignments la
-      JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-      JOIN users u ON la.assigned_to_user_id = u.id
-      WHERE la.assigned_by_user_id = ?
-        AND la.status NOT IN ('dept_submitted', 'completed')
-      ORDER BY la.assigned_at DESC
-    `, [operatorId]);
-
-    // (D) Confirmed but Unassigned
-    const [confirmedButUnassigned] = await pool.query(`
-      SELECT
-        cl.id AS lot_id,
-        cl.lot_no,
-        cl.sku,
-        cl.fabric_type,
-        cl.flow_type,
-        cl.total_pieces,
-        cl.is_confirmed
-      FROM cutting_lots cl
-      LEFT JOIN lot_assignments la ON la.cutting_lot_id = cl.id
-      WHERE la.id IS NULL
-        AND cl.is_confirmed = TRUE
-      ORDER BY cl.created_at DESC
+        sa.cutting_lot_id,
+        c.lot_no AS lot_no,
+        c.sku AS sku
+      FROM washing_assignments wa
+      JOIN users u ON wa.user_id = u.id
+      JOIN stitching_assignments sa ON wa.stitching_assignment_id = sa.id
+      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+      ORDER BY wa.assigned_on DESC
     `);
 
-    res.render('operatorDashboard', {
-      user: req.session.user,
-      unassignedLots,
-      pendingVerifications: pendingVerifyRows,
-      assignedAssignments: assignedRows,
-      confirmedButUnassigned
-    });
-  } catch (err) {
-    console.error('Error GET /operator/dashboard:', err);
-    req.flash('error', 'Failed to load Operator Dashboard.');
-    return res.redirect('/');
-  }
-});
+    // 3) FINISHING assignments
+    const [finishingAssignments] = await pool.query(`
+      SELECT
+        fa.id,
+        fa.operator_id,
+        fa.user_id,
+        fa.stitching_assignment_id,
+        fa.washing_assignment_id,
+        fa.target_day,
+        fa.assigned_on,
+        u.username AS assignedUser,
+        (SELECT username FROM users WHERE id = fa.operator_id) AS operatorName,
 
-/*-------------------------------------------------------------------
-  POST /operator/confirm-cutting
-  For unconfirmed + unassigned lots => confirm actual pieces
--------------------------------------------------------------------*/
-router.post('/confirm-cutting', isAuthenticated, isOperator, async (req, res) => {
-  try {
-    const { lot_no, sizes } = req.body;
-    if (!lot_no || !sizes || !Array.isArray(sizes)) {
-      throw new Error('Missing lot_no or sizes in confirm-cutting.');
-    }
+        sa.cutting_lot_id AS stitching_cut_lot_id,
+        c1.lot_no AS stitching_lot_no,
+        c1.sku    AS stitching_sku,
 
-    const [[lotRow]] = await pool.query(`
-      SELECT id, is_confirmed, flow_type
+        wa.id AS washingId,
+        sa2.cutting_lot_id AS washing_cut_lot_id,
+        c2.lot_no AS washing_lot_no,
+        c2.sku    AS washing_sku
+
+      FROM finishing_assignments fa
+      JOIN users u ON fa.user_id = u.id
+
+      LEFT JOIN stitching_assignments sa 
+             ON fa.stitching_assignment_id = sa.id
+      LEFT JOIN cutting_lots c1 
+             ON sa.cutting_lot_id = c1.id
+
+      LEFT JOIN washing_assignments wa 
+             ON fa.washing_assignment_id = wa.id
+      LEFT JOIN stitching_assignments sa2 
+             ON wa.stitching_assignment_id = sa2.id
+      LEFT JOIN cutting_lots c2 
+             ON sa2.cutting_lot_id = c2.id
+
+      ORDER BY fa.assigned_on DESC
+    `);
+
+    // 4) OPERATOR PERFORMANCE (Optional aggregator)
+    const operatorPerformance = await computeOperatorPerformance();
+
+    // ============================================================
+    // BUILD THE SET OF ALL LOT_NOS:
+    //  - from cutting_lots (to show unassigned lots too)
+    //  - from the assignment queries
+    // ============================================================
+    const allLotNos = new Set();
+
+    // a) from cutting_lots
+    const [allCuts] = await pool.query(`
+      SELECT lot_no
       FROM cutting_lots
-      WHERE lot_no = ?
-    `, [lot_no]);
+    `);
+    allCuts.forEach(row => allLotNos.add(row.lot_no));
 
-    if (!lotRow) {
-      throw new Error(`Lot not found: ${lot_no}`);
-    }
+    // b) from stitching
+    stitchingAssignments.forEach(a => {
+      if (a.lot_no) allLotNos.add(a.lot_no);
+    });
+    // c) from washing
+    washingAssignments.forEach(a => {
+      if (a.lot_no) allLotNos.add(a.lot_no);
+    });
+    // d) from finishing
+    finishingAssignments.forEach(a => {
+      if (a.stitching_lot_no) allLotNos.add(a.stitching_lot_no);
+      if (a.washing_lot_no) allLotNos.add(a.washing_lot_no);
+    });
 
-    if (lotRow.is_confirmed) {
-      throw new Error(`Lot ${lot_no} already confirmed.`);
-    }
+    const lotNoArray = [...allLotNos];
 
-    let totalActual = 0;
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
+    // ============================================================
+    // BUILD AGGREGATOR: lotDetails
+    // ============================================================
+    const lotDetails = {};
 
-      for (const s of sizes) {
-        const label = s.size_label;
-        const actual = parseInt(s.actual_received, 10) || 0;
-
-        // Verify the size exists
-        const [[szCheck]] = await conn.query(`
-          SELECT cls.id
-          FROM cutting_lot_sizes cls
-          JOIN cutting_lots c ON cls.cutting_lot_id = c.id
-          WHERE c.lot_no = ? AND cls.size_label = ?
-        `, [lot_no, label]);
-
-        if (!szCheck) {
-          throw new Error(`Size label ${label} not found in lot_no=${lot_no}`);
-        }
-
-        // Update the total_pieces for the size
-        await conn.query(`
-          UPDATE cutting_lot_sizes cls
-          JOIN cutting_lots c ON cls.cutting_lot_id = c.id
-          SET cls.total_pieces = ?
-          WHERE c.lot_no = ? AND cls.size_label = ?
-        `, [actual, lot_no, label]);
-
-        totalActual += actual;
-      }
-
-      // Finalize the lot confirmation
-      await conn.query(`
-        UPDATE cutting_lots
-        SET total_pieces = ?, is_confirmed = TRUE
+    for (const lot_no of lotNoArray) {
+      // 1) cutting_lots row
+      const [cutRows] = await pool.query(`
+        SELECT *
+        FROM cutting_lots
         WHERE lot_no = ?
-      `, [totalActual, lot_no]);
+        LIMIT 1
+      `, [lot_no]);
+      const cuttingLot = cutRows.length ? cutRows[0] : null;
 
-      await conn.commit();
-      conn.release();
+      // 2) cutting_lot_sizes
+      const [cuttingSizes] = await pool.query(`
+        SELECT *
+        FROM cutting_lot_sizes
+        WHERE cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ?
+        )
+        ORDER BY size_label
+      `, [lot_no]);
 
-      req.flash('success', `Cutting confirmed for lot_no=${lot_no} (flow=${lotRow.flow_type}).`);
-      return res.redirect('/operator/dashboard');
-    } catch (transErr) {
-      await conn.rollback();
-      conn.release();
-      console.error('Error in confirm-cutting transaction:', transErr);
-      req.flash('error', transErr.message);
-      return res.redirect('/operator/dashboard');
+      // 3) cutting_lot_rolls
+      const [cuttingRolls] = await pool.query(`
+        SELECT *
+        FROM cutting_lot_rolls
+        WHERE cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ?
+        )
+        ORDER BY roll_no
+      `, [lot_no]);
+
+      // 4) stitching_data (+ sizes)
+      const [stitchingData] = await pool.query(`
+        SELECT *
+        FROM stitching_data
+        WHERE lot_no = ?
+      `, [lot_no]);
+      const stitchingDataIds = stitchingData.map(sd => sd.id);
+      let stitchingDataSizes = [];
+      if (stitchingDataIds.length) {
+        const [szRows] = await pool.query(`
+          SELECT *
+          FROM stitching_data_sizes
+          WHERE stitching_data_id IN (?)
+        `, [stitchingDataIds]);
+        stitchingDataSizes = szRows;
+      }
+
+      // 5) washing_data (+ sizes)
+      const [washingData] = await pool.query(`
+        SELECT *
+        FROM washing_data
+        WHERE lot_no = ?
+      `, [lot_no]);
+      const washingDataIds = washingData.map(wd => wd.id);
+      let washingDataSizes = [];
+      if (washingDataIds.length) {
+        const [szRows] = await pool.query(`
+          SELECT *
+          FROM washing_data_sizes
+          WHERE washing_data_id IN (?)
+        `, [washingDataIds]);
+        washingDataSizes = szRows;
+      }
+
+      // 6) finishing_data (+ sizes)
+      const [finishingData] = await pool.query(`
+        SELECT *
+        FROM finishing_data
+        WHERE lot_no = ?
+      `, [lot_no]);
+      const finishingDataIds = finishingData.map(fd => fd.id);
+      let finishingDataSizes = [];
+      if (finishingDataIds.length) {
+        const [szRows] = await pool.query(`
+          SELECT *
+          FROM finishing_data_sizes
+          WHERE finishing_data_id IN (?)
+        `, [finishingDataIds]);
+        finishingDataSizes = szRows;
+      }
+
+      // 7) department_confirmations
+      const [departmentConfirmations] = await pool.query(`
+        SELECT dc.*
+        FROM department_confirmations dc
+        JOIN lot_assignments la ON dc.lot_assignment_id = la.id
+        WHERE la.cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ?
+        )
+      `, [lot_no]);
+
+      // 8) lot_assignments
+      const [lotAssignments] = await pool.query(`
+        SELECT *
+        FROM lot_assignments
+        WHERE cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ?
+        )
+      `, [lot_no]);
+
+      // compute leftover, but only if assigned in that dept
+      const { leftoverStitch, leftoverWash, leftoverFinish } = 
+        await computeLeftoversForLot(lot_no);
+
+      lotDetails[lot_no] = {
+        cuttingLot,
+        cuttingSizes,
+        cuttingRolls,
+        stitchingData,
+        stitchingDataSizes,
+        washingData,
+        washingDataSizes,
+        finishingData,
+        finishingDataSizes,
+        departmentConfirmations,
+        lotAssignments,
+
+        leftoverStitch,
+        leftoverWash,
+        leftoverFinish
+      };
     }
+
+    return res.render('operatorDashboard', {
+      stitchingAssignments,
+      washingAssignments,
+      finishingAssignments,
+      lotDetails,
+      operatorPerformance
+    });
   } catch (err) {
-    console.error('Error POST /operator/confirm-cutting:', err);
-    req.flash('error', err.message);
-    return res.redirect('/operator/dashboard');
+    console.error('Error loading operator dashboard:', err);
+    return res.status(500).send('Server error');
   }
 });
 
-/*-------------------------------------------------------------------
-  GET /operator/assign-lot-form/:lotNo
-  For the first-time assignment of a confirmed but unassigned lot
--------------------------------------------------------------------*/
-router.get('/assign-lot-form/:lotNo', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * GET /operator/dashboard/lot-tracking/:lot_no/download
+ * Single-lot download (placeholder)
+ */
+router.get('/dashboard/lot-tracking/:lot_no/download', isAuthenticated, isOperator, async (req, res) => {
+  const { lot_no } = req.params;
+  res.send(`Download for lot_no ${lot_no} not implemented yet!`);
+});
+
+/**
+ * GET /operator/dashboard/download-all-lots
+ * Big "Download All" (placeholder)
+ */
+router.get('/dashboard/download-all-lots', isAuthenticated, isOperator, async (req, res) => {
+  res.send('Download-all-lots not implemented yet!');
+});
+
+/*******************************************************
+ * The REST: listing users, picking lots, assigning
+ *******************************************************/
+
+/**
+ * GET /operator/dashboard/users-stitching
+ */
+router.get('/dashboard/users-stitching', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const lotNo = req.params.lotNo;
-    if (!lotNo) throw new Error('No lotNo param');
-
-    // Fetch the confirmed lot
-    const [[lot]] = await pool.query(`
-      SELECT id AS lot_id, lot_no, sku, fabric_type, flow_type, total_pieces, is_confirmed
-      FROM cutting_lots
-      WHERE lot_no = ?
-    `, [lotNo]);
-
-    if (!lot) {
-      req.flash('error', `Lot not found: ${lotNo}`);
-      return res.redirect('/operator/dashboard');
-    }
-
-    if (!lot.is_confirmed) {
-      req.flash('error', `Lot ${lotNo} is not confirmed yet.`);
-      return res.redirect('/operator/dashboard');
-    }
-
-    // Fetch sizes for the lot
-    const [sizeRows] = await pool.query(`
-      SELECT size_label, total_pieces
-      FROM cutting_lot_sizes
-      WHERE cutting_lot_id = ?
-    `, [lot.lot_id]);
-
-    // Fetch active department users
-    const [deptUsers] = await pool.query(`
-      SELECT u.id AS userId, u.username, r.name AS roleName
+    const [users] = await pool.query(`
+      SELECT u.id, u.username
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE r.name IN ('stitching_master', 'washing', 'finishing', 'marketplace')
-        AND u.is_active = TRUE
-      ORDER BY r.name, u.username
+      WHERE r.name = 'stitching_master'
+        AND u.is_active = 1
+      ORDER BY u.username ASC
     `);
-
-    res.render('assignLotForm', {
-      user: req.session.user,
-      lot,
-      sizes: sizeRows,
-      deptUsers
-    });
+    return res.json(users);
   } catch (err) {
-    console.error('Error GET /operator/assign-lot-form:', err);
-    req.flash('error', err.message);
-    return res.redirect('/operator/dashboard');
+    console.error('Error fetching stitching users:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-/*-------------------------------------------------------------------
-  POST /operator/assign-lot
-  Handle the first-time assignment of a lot to a department user
--------------------------------------------------------------------*/
-router.post('/assign-lot', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * GET /operator/dashboard/users-washing
+ */
+router.get('/dashboard/users-washing', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { lot_id, assigned_user_id, size_assignments, target_day } = req.body;
-    if (!lot_id || !assigned_user_id || !size_assignments || !Array.isArray(size_assignments)) {
-      throw new Error('Missing data in assign-lot.');
-    }
-
-    // Calculate total assigned pieces
-    let totalAssigned = 0;
-    for (const sz of size_assignments) {
-      const pcs = parseInt(sz.assign_pieces, 10) || 0;
-      totalAssigned += pcs;
-    }
-
-    // Set default target_day if not provided
-    const finalTargetDay = (target_day && target_day.trim() !== '') ? target_day : '2099-12-31';
-
-    const operatorId = req.session.user.id;
-    const conn = await pool.getConnection();
-
-    try {
-      await conn.beginTransaction();
-
-      // Create a new lot_assignment
-      const [laRes] = await conn.query(`
-        INSERT INTO lot_assignments
-          (cutting_lot_id, assigned_by_user_id, assigned_to_user_id, assigned_pieces, target_day, status)
-        VALUES
-          (?, ?, ?, ?, ?, 'assigned')
-      `, [
-        lot_id,
-        operatorId,
-        assigned_user_id,
-        totalAssigned,
-        finalTargetDay
-      ]);
-      const newAssignmentId = laRes.insertId;
-
-      // Create size_assignments
-      for (const sz of size_assignments) {
-        const label = sz.size_label;
-        const pcs = parseInt(sz.assign_pieces, 10) || 0;
-        if (pcs > 0) {
-          await conn.query(`
-            INSERT INTO size_assignments
-              (lot_assignment_id, size_label, assigned_pieces, completed_pieces, status)
-            VALUES
-              (?, ?, ?, 0, 'assigned')
-          `, [newAssignmentId, label, pcs]);
-        }
-      }
-
-      await conn.commit();
-      conn.release();
-
-      req.flash('success', 'Lot assigned to department successfully.');
-      return res.redirect('/operator/dashboard');
-    } catch (transErr) {
-      await conn.rollback();
-      conn.release();
-      console.error('Error in /assign-lot transaction:', transErr);
-      req.flash('error', transErr.message);
-      return res.redirect('/operator/dashboard');
-    }
-  } catch (err) {
-    console.error('Error POST /operator/assign-lot:', err);
-    req.flash('error', err.message);
-    return res.redirect('/operator/dashboard');
-  }
-});
-
-/*-------------------------------------------------------------------
-  GET /operator/pass-lot/:assignmentId
-  Display form to pass partial leftovers to next department, including target_day
--------------------------------------------------------------------*/
-router.get('/pass-lot/:assignmentId', isAuthenticated, isOperator, async (req, res) => {
-  try {
-    const assignmentId = parseInt(req.params.assignmentId, 10);
-    if (isNaN(assignmentId)) {
-      throw new Error('Invalid assignmentId param');
-    }
-
-    // Fetch old assignment details
-    const [[asg]] = await pool.query(`
-      SELECT la.id AS assignment_id,
-             la.cutting_lot_id,
-             la.assigned_pieces,
-             la.status,
-             la.assigned_at,
-             cl.lot_no,
-             cl.sku,
-             cl.fabric_type,
-             cl.flow_type,
-             u.username AS dept_user,
-             r.name AS dept_role
-      FROM lot_assignments la
-      JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-      JOIN users u ON la.assigned_to_user_id = u.id
-      JOIN roles r ON u.role_id = r.id
-      WHERE la.id = ?
-    `, [assignmentId]);
-
-    if (!asg) {
-      req.flash('error', `No assignment found for ID=${assignmentId}`);
-      return res.redirect('/operator/dashboard');
-    }
-
-    // Fetch size assignments and calculate leftovers
-    const [sizes] = await pool.query(`
-      SELECT
-        id AS size_asg_id,
-        size_label,
-        assigned_pieces,
-        completed_pieces
-      FROM size_assignments
-      WHERE lot_assignment_id = ?
-    `, [assignmentId]);
-
-    sizes.forEach(sz => {
-      sz.leftover = Math.max(0, sz.assigned_pieces - sz.completed_pieces);
-    });
-
-    // Fetch active department users for the next assignment
-    const [deptUsers] = await pool.query(`
-      SELECT u.id AS userId, u.username, r.name AS roleName
+    const [users] = await pool.query(`
+      SELECT u.id, u.username
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE r.name IN ('stitching_master', 'washing', 'finishing', 'marketplace')
-        AND u.is_active = TRUE
-      ORDER BY r.name, u.username
+      WHERE r.name = 'washing_master'
+        AND u.is_active = 1
+      ORDER BY u.username ASC
+    `);
+    return res.json(users);
+  } catch (err) {
+    console.error('Error fetching washing users:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /operator/dashboard/users-finishing
+ */
+router.get('/dashboard/users-finishing', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [users] = await pool.query(`
+      SELECT u.id, u.username
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE r.name = 'finishing'
+        AND u.is_active = 1
+      ORDER BY u.username ASC
+    `);
+    return res.json(users);
+  } catch (err) {
+    console.error('Error fetching finishing users:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /operator/dashboard/lots-stitching?user_id=xxx
+ * Return up to 5 cutting_lots not assigned to that user in stitching_assignments
+ */
+router.get('/dashboard/lots-stitching', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    if (!user_id) {
+      return res.status(400).json({ error: 'Missing user_id' });
+    }
+
+    const [lots] = await pool.query(`
+      SELECT c.id, c.lot_no, c.sku
+      FROM cutting_lots c
+      WHERE c.id NOT IN (
+        SELECT cutting_lot_id
+        FROM stitching_assignments
+        WHERE user_id = ?
+      )
+      ORDER BY c.created_at DESC
+      LIMIT 5
+    `, [user_id]);
+
+    return res.json(lots);
+  } catch (err) {
+    console.error('Error fetching cutting lots for stitching:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /operator/dashboard/lots-washing?user_id=xxx
+ * Return up to 5 stitching_assignments not yet assigned to that user in washing_assignments
+ */
+router.get('/dashboard/lots-washing', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    if (!user_id) {
+      return res.status(400).json({ error: 'Missing user_id' });
+    }
+
+    const [assignments] = await pool.query(`
+      SELECT sa.id,
+             sa.cutting_lot_id,
+             c.lot_no,
+             c.sku
+      FROM stitching_assignments sa
+      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+      WHERE sa.id NOT IN (
+        SELECT stitching_assignment_id
+        FROM washing_assignments
+        WHERE user_id = ?
+      )
+      ORDER BY sa.assigned_on DESC
+      LIMIT 5
+    `, [user_id]);
+
+    return res.json(assignments);
+  } catch (err) {
+    console.error('Error fetching stitching_assignments for washing:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /operator/dashboard/lots-finishing-from-stitching?user_id=xxx
+ * Return up to 5 stitching_assignments not used in finishing_assignments
+ * AND whose stitching_data.total_pieces > 0
+ */
+router.get('/dashboard/lots-finishing-from-stitching', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    if (!user_id) {
+      return res.status(400).json({ error: 'Missing user_id' });
+    }
+
+    // We only show if stitching_data > 0
+    const [lots] = await pool.query(`
+      SELECT sa.id,
+             c.lot_no,
+             c.sku
+      FROM stitching_assignments sa
+      JOIN cutting_lots c 
+        ON sa.cutting_lot_id = c.id
+      JOIN stitching_data sd
+        ON sd.lot_no = c.lot_no
+       AND sd.sku = c.sku
+      WHERE sa.id NOT IN (
+        SELECT stitching_assignment_id
+        FROM finishing_assignments
+        WHERE stitching_assignment_id IS NOT NULL
+      )
+      AND sd.total_pieces > 0
+      ORDER BY sa.assigned_on DESC
+      LIMIT 5
     `);
 
-    res.render('passLotForm', {
-      user: req.session.user,
-      assignment: asg,
-      sizes,
-      deptUsers
-    });
+    return res.json(lots);
   } catch (err) {
-    console.error('Error GET /operator/pass-lot:', err);
-    req.flash('error', err.message);
-    return res.redirect('/operator/dashboard');
+    console.error('Error finishing-from-stitching:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-/*-------------------------------------------------------------------
-  POST /operator/pass-lot
-  Handle passing partial leftovers to the next department, including target_day
--------------------------------------------------------------------*/
-router.post('/pass-lot', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * GET /operator/dashboard/lots-finishing-from-washing?user_id=xxx
+ * Return up to 5 washing_assignments not used in finishing_assignments
+ * AND whose washing_data.total_pieces > 0
+ */
+router.get('/dashboard/lots-finishing-from-washing', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { old_assignment_id, partialPass, next_dept_user_id, operator_remark, next_target_day } = req.body;
-    if (!old_assignment_id || !partialPass || !Array.isArray(partialPass) || !next_dept_user_id) {
-      throw new Error('Missing data to pass partial leftover.');
+    const { user_id } = req.query;
+    if (!user_id) {
+      return res.status(400).json({ error: 'Missing user_id' });
     }
 
-    const oldAsgId = parseInt(old_assignment_id, 10);
-    const nextUserId = parseInt(next_dept_user_id, 10);
-    const finalTargetDay = (next_target_day && next_target_day.trim() !== '') ? next_target_day : '2099-12-31';
+    const [lots] = await pool.query(`
+      SELECT wa.id,
+             sa.cutting_lot_id,
+             c.lot_no,
+             c.sku
+      FROM washing_assignments wa
+      JOIN stitching_assignments sa 
+        ON wa.stitching_assignment_id = sa.id
+      JOIN cutting_lots c
+        ON sa.cutting_lot_id = c.id
+      JOIN washing_data wd
+        ON wd.lot_no = c.lot_no
+       AND wd.sku = c.sku
+      WHERE wa.id NOT IN (
+        SELECT washing_assignment_id
+        FROM finishing_assignments
+        WHERE washing_assignment_id IS NOT NULL
+      )
+      AND wa.user_id = ?
+      AND wd.total_pieces > 0
+      ORDER BY wa.assigned_on DESC
+      LIMIT 5
+    `, [user_id]);
 
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      // Fetch old assignment details
-      const [[oldAsg]] = await conn.query(`
-        SELECT la.id, la.cutting_lot_id, la.assigned_pieces,
-               u.role_id, r.name AS dept_role_name,
-               cl.flow_type
-        FROM lot_assignments la
-        JOIN users u ON la.assigned_to_user_id = u.id
-        JOIN roles r ON u.role_id = r.id
-        JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-        WHERE la.id = ?
-      `, [oldAsgId]);
-
-      if (!oldAsg) {
-        throw new Error(`Old assignment not found: ID=${oldAsgId}`);
-      }
-
-      // Calculate total pieces to pass
-      let sumPassed = 0;
-      for (const p of partialPass) {
-        sumPassed += parseInt(p.pass_pieces, 10) || 0;
-      }
-
-      // Create new assignment for the next department with target_day
-      const operatorId = req.session.user.id;
-      const [newAsg] = await conn.query(`
-        INSERT INTO lot_assignments
-          (cutting_lot_id, assigned_by_user_id, assigned_to_user_id, assigned_pieces, target_day, status)
-        VALUES
-          (?, ?, ?, ?, ?, 'assigned')
-      `, [
-        oldAsg.cutting_lot_id,
-        operatorId,
-        nextUserId,
-        sumPassed,
-        finalTargetDay
-      ]);
-      const newAssignmentId = newAsg.insertId;
-
-      // Create size_assignments for the new assignment
-      for (const p of partialPass) {
-        const passPcs = parseInt(p.pass_pieces, 10) || 0;
-        if (passPcs > 0) {
-          await conn.query(`
-            INSERT INTO size_assignments
-              (lot_assignment_id, size_label, assigned_pieces, completed_pieces, status)
-            VALUES
-              (?, ?, ?, 0, 'assigned')
-          `, [newAssignmentId, p.size_label, passPcs]);
-        }
-      }
-
-      // Optional: Log the partial pass
-      if (sumPassed > 0) {
-        await conn.query(`
-          INSERT INTO department_confirmations
-            (lot_assignment_id, confirmed_by_user_id, confirmed_pieces, remarks)
-          VALUES
-            (?, ?, ?, ?)
-        `, [oldAsgId, operatorId, sumPassed, operator_remark || null]);
-      }
-
-      await conn.commit();
-      conn.release();
-
-      req.flash('success', `Passed ${sumPassed} pieces to next dept user=${nextUserId}. Remark=${operator_remark || 'none'}`);
-      return res.redirect('/operator/dashboard');
-    } catch (transErr) {
-      await conn.rollback();
-      conn.release();
-      console.error('Error in POST /operator/pass-lot transaction:', transErr);
-      req.flash('error', transErr.message);
-      return res.redirect('/operator/dashboard');
-    }
+    return res.json(lots);
   } catch (err) {
-    console.error('Error POST /operator/pass-lot:', err);
-    req.flash('error', err.message);
-    return res.redirect('/operator/dashboard');
+    console.error('Error finishing-from-washing:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-/*-------------------------------------------------------------------
-  GET /operator/verify/:assignmentId
-  Display verification form for partial completions
--------------------------------------------------------------------*/
-router.get('/verify/:assignmentId', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * POST /operator/dashboard/assign-stitching
+ */
+router.post('/dashboard/assign-stitching', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId, 10);
-    if (isNaN(assignmentId)) {
-      throw new Error('Invalid assignmentId param');
-    }
+    const { user_id, cutting_lot_id, target_day } = req.body;
+    const operator_id = req.session.user.id;
 
-    // Fetch assignment details
-    const [[asg]] = await pool.query(`
-      SELECT
-        la.id AS assignment_id,
-        cl.id AS lot_id,
-        cl.lot_no,
-        cl.sku,
-        cl.fabric_type,
-        cl.flow_type,
-        la.assigned_pieces,
-        la.status,
-        la.assigned_at,
-        u.username AS dept_user,
-        r.name AS dept_role
-      FROM lot_assignments la
-      JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-      JOIN users u ON la.assigned_to_user_id = u.id
-      JOIN roles r ON u.role_id = r.id
-      WHERE la.id = ?
-    `, [assignmentId]);
+    await pool.query(`
+      INSERT INTO stitching_assignments
+      (operator_id, user_id, cutting_lot_id, target_day, assigned_on)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [operator_id, user_id, cutting_lot_id, target_day || null]);
 
-    if (!asg) {
-      req.flash('error', `No assignment found for ID=${assignmentId}`);
-      return res.redirect('/operator/dashboard');
-    }
-
-    // Fetch size assignments
-    const [sizes] = await pool.query(`
-      SELECT
-        id AS size_asg_id,
-        size_label,
-        assigned_pieces,
-        completed_pieces,
-        status
-      FROM size_assignments
-      WHERE lot_assignment_id = ?
-    `, [assignmentId]);
-
-    res.render('verifyAssignment', {
-      user: req.session.user,
-      assignment: asg,
-      sizes
-    });
-  } catch (err) {
-    console.error('Error GET /operator/verify:', err);
-    req.flash('error', err.message);
     return res.redirect('/operator/dashboard');
+  } catch (err) {
+    console.error('Error assigning stitching:', err);
+    return res.status(500).send('Server error');
   }
 });
 
-/*-------------------------------------------------------------------
-  POST /operator/verify
-  Handle verification of partial completions
--------------------------------------------------------------------*/
-router.post('/verify', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * POST /operator/dashboard/assign-washing
+ */
+router.post('/dashboard/assign-washing', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { assignment_id, sizeSubmissions, operator_remark } = req.body;
-    if (!assignment_id || !sizeSubmissions || !Array.isArray(sizeSubmissions)) {
-      throw new Error('Missing verify data.');
-    }
+    const { user_id, stitching_assignment_id, target_day } = req.body;
+    const operator_id = req.session.user.id;
 
-    const assignmentId = parseInt(assignment_id, 10);
-    const conn = await pool.getConnection();
+    await pool.query(`
+      INSERT INTO washing_assignments
+      (operator_id, user_id, stitching_assignment_id, target_day, assigned_on)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [operator_id, user_id, stitching_assignment_id, target_day || null]);
 
-    try {
-      await conn.beginTransaction();
-
-      let sumConfirmedNow = 0;
-      for (const sc of sizeSubmissions) {
-        const sizeAsgId = parseInt(sc.size_asg_id, 10);
-        const finalCompleted = parseInt(sc.final_completed, 10) || 0;
-
-        // Fetch current size assignment
-        const [[szRow]] = await conn.query(`
-          SELECT assigned_pieces, completed_pieces
-          FROM size_assignments
-          WHERE id = ?
-        `, [sizeAsgId]);
-
-        if (!szRow) {
-          throw new Error(`No size_assignments row for ID=${sizeAsgId}`);
-        }
-
-        const leftover = szRow.assigned_pieces - szRow.completed_pieces;
-        const passThisTime = Math.min(leftover, finalCompleted);
-
-        // Update completed_pieces
-        const newTotal = szRow.completed_pieces + passThisTime;
-        await conn.query(`
-          UPDATE size_assignments
-          SET completed_pieces = ?
-          WHERE id = ?
-        `, [newTotal, sizeAsgId]);
-
-        // Log the confirmation
-        await conn.query(`
-          INSERT INTO department_confirmations
-            (lot_assignment_id, confirmed_by_user_id, confirmed_pieces, remarks)
-          VALUES
-            (?, ?, ?, ?)
-        `, [assignmentId, req.session.user.id, passThisTime, operator_remark || null]);
-
-        sumConfirmedNow += passThisTime;
-      }
-
-      // Check if there are any leftovers
-      const [[szStats]] = await conn.query(`
-        SELECT
-          SUM(assigned_pieces) AS sum_assigned,
-          SUM(completed_pieces) AS sum_completed
-        FROM size_assignments
-        WHERE lot_assignment_id = ?
-      `, [assignmentId]);
-
-      const leftoverTotal = (szStats.sum_assigned || 0) - (szStats.sum_completed || 0);
-      let newStatus = 'in_progress';
-      if (leftoverTotal <= 0) {
-        newStatus = 'completed';
-      }
-
-      // Update the assignment status
-      await conn.query(`
-        UPDATE lot_assignments
-        SET status = ?
-        WHERE id = ?
-      `, [newStatus, assignmentId]);
-
-      await conn.commit();
-      conn.release();
-
-      req.flash('success', `Partial verified: ${sumConfirmedNow}, leftover=${leftoverTotal}, remark=${operator_remark || 'none'}`);
-      return res.redirect('/operator/dashboard');
-    } catch (transErr) {
-      await conn.rollback();
-      conn.release();
-      console.error('Transaction Error /operator/verify:', transErr);
-      req.flash('error', transErr.message);
-      return res.redirect('/operator/dashboard');
-    }
-  } catch (err) {
-    console.error('Error POST /operator/verify:', err);
-    req.flash('error', err.message);
     return res.redirect('/operator/dashboard');
+  } catch (err) {
+    console.error('Error assigning washing:', err);
+    return res.status(500).send('Server error');
   }
 });
 
-/*-------------------------------------------------------------------
-  GET /operator/pendency/:lotNo
-  Display pendency summary for a specific lot
--------------------------------------------------------------------*/
-router.get('/pendency/:lotNo', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * POST /operator/dashboard/assign-finishing-from-stitching
+ */
+router.post('/dashboard/assign-finishing-from-stitching', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const lotNo = req.params.lotNo;
-    if (!lotNo) {
-      req.flash('error', 'No lotNo param');
-      return res.redirect('/operator/dashboard');
-    }
+    const { user_id, stitching_assignment_id, target_day } = req.body;
+    const operator_id = req.session.user.id;
 
-    // Fetch lot details
-    const [[lotRow]] = await pool.query(`
-      SELECT id AS lot_id, lot_no, sku, fabric_type, flow_type, total_pieces, is_confirmed
-      FROM cutting_lots
-      WHERE lot_no = ?
-    `, [lotNo]);
+    await pool.query(`
+      INSERT INTO finishing_assignments
+      (operator_id, user_id, stitching_assignment_id, target_day, assigned_on)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [operator_id, user_id, stitching_assignment_id, target_day || null]);
 
-    if (!lotRow) {
-      req.flash('error', `Lot not found: ${lotNo}`);
-      return res.redirect('/operator/dashboard');
-    }
-
-    // Fetch department assignments related to the lot
-    const [deptRows] = await pool.query(`
-      SELECT
-        la.id AS assignment_id,
-        la.assigned_pieces,
-        la.status,
-        la.assigned_at,
-        u.username AS assigned_to_user,
-        r.name AS assigned_to_role,
-        IFNULL(SUM(dc.confirmed_pieces), 0) AS total_confirmed
-      FROM lot_assignments la
-      JOIN cutting_lots cl ON la.cutting_lot_id = cl.id
-      JOIN users u ON la.assigned_to_user_id = u.id
-      JOIN roles r ON u.role_id = r.id
-      LEFT JOIN department_confirmations dc ON dc.lot_assignment_id = la.id
-      WHERE cl.id = ?
-      GROUP BY la.id
-      ORDER BY la.assigned_at
-    `, [lotRow.lot_id]);
-
-    res.render('pendency', {
-      user: req.session.user,
-      lot: lotRow,
-      deptAssignments: deptRows
-    });
-  } catch (err) {
-    console.error('Error GET /operator/pendency:', err);
-    req.flash('error', err.message);
     return res.redirect('/operator/dashboard');
+  } catch (err) {
+    console.error('Error assigning finishing (stitching):', err);
+    return res.status(500).send('Server error');
+  }
+});
+
+/**
+ * POST /operator/dashboard/assign-finishing-from-washing
+ */
+router.post('/dashboard/assign-finishing-from-washing', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { user_id, washing_assignment_id, target_day } = req.body;
+    const operator_id = req.session.user.id;
+
+    await pool.query(`
+      INSERT INTO finishing_assignments
+      (operator_id, user_id, washing_assignment_id, target_day, assigned_on)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [operator_id, user_id, washing_assignment_id, target_day || null]);
+
+    return res.redirect('/operator/dashboard');
+  } catch (err) {
+    console.error('Error assigning finishing (washing):', err);
+    return res.status(500).send('Server error');
   }
 });
 
