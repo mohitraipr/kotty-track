@@ -37,6 +37,10 @@ function isStitchingMaster(req, res, next) {
     return hasRole('stitching_master')(req, res, next);
 }
 
+function isFinishingMaster(req, res, next) {
+    return hasRole('finishing')(req, res, next);
+}
+
 function isOperator(req, res, next) {
     return hasRole('operator')(req, res, next);
 }
@@ -56,6 +60,7 @@ module.exports = {
     isFabricManager,
     isCuttingManager,
     isStitchingMaster,
+    isFinishingMaster,
     isOperator,
     isDepartmentUser
 };
