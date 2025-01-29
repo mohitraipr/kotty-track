@@ -52,7 +52,7 @@ const departmentRoutes = require('./routes/departmentRoutes');
 const stitchingRoutes = require('./routes/stitchingRoutes');
 const finishingRoutes = require('./routes/finishingRoutes');
 const washingRoutes = require('./routes/washingRoutes');
-
+const searchRoutes = require('./routes/searchRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -64,7 +64,7 @@ app.use('/cutting-manager', cuttingManagerRoutes);
 app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
 app.use('/washingdashboard', washingRoutes);
-
+app.use('/', searchRoutes);
 
 
 // Home Route
