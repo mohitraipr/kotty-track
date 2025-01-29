@@ -2,750 +2,1321 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Operator Dashboard</title>
+  <title>Operator Dashboard (Enhanced Details)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Bootstrap 5 CSS -->
   <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
     rel="stylesheet"
   />
-  <!-- Bootstrap Icons -->
+
+  <!-- DataTables CSS (Bootstrap 5 version) -->
   <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+    href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"
     rel="stylesheet"
   />
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- Custom CSS -->
+
+  <!-- Bootstrap Icons (optional, for <i class="bi ..."> icons) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+  />
+
   <style>
-    /* Global Styles */
     body {
-      font-family: 'Roboto', sans-serif;
-      background-color: #f4f6f9;
-      transition: background-color 0.3s, color 0.3s;
-    }
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.25rem;
-    }
-    .card-header {
-      font-weight: 500;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: none;
+      background-color: #f8f9fa;
     }
     .card {
-      border: none;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 24px rgba(0,0,0,0.1);
-    }
-    .nav-tabs .nav-link {
-      border: none;
-      border-bottom: 2px solid transparent;
-      transition: border-bottom 0.3s, background-color 0.3s;
-      white-space: nowrap;
-      padding: 0.75rem 1.25rem;
-      font-weight: 500;
-      color: #6c757d;
+      border-radius: 8px;
+      margin-bottom: 1rem;
     }
     .nav-tabs .nav-link.active {
-      border-bottom: 2px solid #0d6efd;
-      background-color: transparent;
-      color: #0d6efd;
+      font-weight: bold;
     }
-    .nav-tabs .nav-link:hover {
-      background-color: rgba(13, 110, 253, 0.05);
+    thead {
+      background-color: #e9ecef;
     }
-    .badge {
-      font-size: 0.85em;
+
+    /* =============== Leftover Badges for more flair =============== */
+    .leftover-badge {
+      padding: 0.4rem 0.75rem;
+      font-weight: 600;
+      border-radius: 0.5rem;
+      display: inline-block;
+      min-width: 60px;
+      text-align: center;
     }
-    /* Dark Mode Styles */
-    body.dark-mode {
-      background-color: #121212;
-      color: #e0e0e0;
+    .leftover-negative {
+      color: #fff !important;
+      background-color: #dc3545 !important; /* Danger */
     }
-    body.dark-mode .navbar {
-      background-color: #1f1f1f;
+    .leftover-zero {
+      color: #000 !important;
+      background-color: #ffc107 !important; /* Warning */
     }
-    body.dark-mode .card-header {
-      background-color: #2c2c2c !important;
-      color: #e0e0e0 !important;
+    .leftover-positive {
+      color: #fff !important;
+      background-color: #198754 !important; /* Success */
     }
-    body.dark-mode .card {
-      background-color: #1e1e1e;
-      color: #e0e0e0;
-      box-shadow: 0 4px 20px rgba(255,255,255,0.05);
+
+    /* =============== Summary Cards =============== */
+    .summary-card {
+      border-left: 5px solid #0d6efd; /* default accent */
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
-    body.dark-mode .nav-tabs .nav-link {
-      color: #adb5bd;
+    .summary-card.bg-stitching { border-left-color: #6f42c1; } /* Purple accent */
+    .summary-card.bg-washing   { border-left-color: #20c997; } /* Teal accent */
+    .summary-card.bg-finishing { border-left-color: #fd7e14; } /* Orange accent */
+    .summary-card.bg-lots      { border-left-color: #198754; } /* Green accent */
+    .summary-card i {
+      font-size: 2rem;
+      margin-right: 0.75rem;
     }
-    body.dark-mode .nav-tabs .nav-link.active {
-      color: #0d6efd;
-      border-bottom: 2px solid #0d6efd;
+    .summary-card .card-title {
+      font-size: 1rem;
+      font-weight: bold;
     }
-    body.dark-mode .alert {
-      background-color: #333333;
-      color: #e0e0e0;
+    .summary-card .display-6 {
+      margin: 0;
+      font-weight: 700;
     }
-    /* Sidebar Styles */
-    @media (min-width: 992px) {
-      #sidebar {
-        min-width: 250px;
-        max-width: 250px;
-        min-height: 100vh;
-        background-color: #343a40;
-        color: #fff;
-        position: fixed;
-        top: 0;
-        left: 0;
-        padding-top: 1rem;
-        transition: all 0.3s;
-        overflow-y: auto;
-      }
-      #sidebar .nav-link {
-        color: #adb5bd;
-        padding: 0.75rem 1.25rem;
-        border-radius: 0.5rem;
-        margin-bottom: 0.5rem;
-      }
-      #sidebar .nav-link.active {
-        color: #fff;
-        background-color: #495057;
-      }
-      #content {
-        margin-left: 250px;
-      }
+
+    /* =============== Collapsible Lot Details with Step Cards =============== */
+    .lot-step-card {
+      border-left: 5px solid #ccc;
+      margin-bottom: 1.5rem;
+      border-radius: 6px;
+      background-color: #fff;
     }
-    /* Responsive Adjustments */
-    @media (max-width: 991.98px) {
-      #sidebar {
-        display: none;
-      }
-      #content {
-        margin: 0;
-      }
-      /* Make navbar brand smaller on mobile */
-      .navbar-brand.d-lg-none {
-        font-size: 1rem;
-      }
-    }
-    /* Theme Toggle Button */
-    #themeToggle {
-      transition: transform 0.3s;
-    }
-    #themeToggle:hover {
-      transform: scale(1.1);
-    }
-    /* Scrollable Tabs on Small Screens */
-    @media (max-width: 576px) {
-      #operatorTabs {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-      }
-      #operatorTabs .nav-item {
-        flex: 0 0 auto;
-      }
-    }
-    /* Fullscreen Modals on Mobile */
-    @media (max-width: 576px) {
-      .modal-dialog {
-        max-width: 100%;
-        margin: 0;
-        height: 100%;
-      }
-      .modal-content {
-        height: 100%;
-        border-radius: 0;
-      }
-      .modal-body {
-        overflow-y: auto;
-      }
-    }
-    /* Enhanced Buttons */
-    .btn-custom {
-      border-radius: 20px;
-      padding: 0.5rem 1.5rem;
+    .lot-step-card .card-header {
+      display: flex;
+      align-items: center;
       font-weight: 500;
     }
-    /* Enhanced Form Elements */
-    .form-control:focus {
-      box-shadow: none;
-      border-color: #0d6efd;
+    .lot-step-card .card-header i {
+      font-size: 1.3rem;
+      margin-right: 0.5rem;
+    }
+    /* Step-specific colors */
+    .lot-step-cutting   { border-left-color: #0d6efd; } /* Cutting = Blue */
+    .lot-step-stitching { border-left-color: #6f42c1; } /* Stitching = Purple */
+    .lot-step-washing   { border-left-color: #20c997; } /* Washing = Teal */
+    .lot-step-finishing { border-left-color: #fd7e14; } /* Finishing = Orange */
+
+    /* Subtable accordions for smaller data sets like 'cutting_lot_sizes' etc. */
+    .accordion-button {
+      font-size: 0.9rem;
+    }
+    .accordion-button:not(.collapsed) {
+      color: #0d6efd; /* highlight color when open */
+      font-weight: 500;
     }
   </style>
 </head>
-<body class="bg-light">
-  <!-- Sidebar (for larger screens) -->
-  <nav id="sidebar" aria-label="Sidebar Navigation">
-    <div class="d-flex flex-column align-items-start px-3">
-      <a href="#" class="navbar-brand mb-4">
-        <i class="bi bi-speedometer2 me-2"></i> Operator Dashboard
-      </a>
-      <ul class="nav nav-pills flex-column w-100">
-        <li class="nav-item w-100">
-          <a href="#" class="nav-link active d-flex align-items-center">
-            <i class="bi bi-house-door-fill me-2"></i> Home
-          </a>
-        </li>
-        <!-- Add more sidebar links here if needed -->
-      </ul>
+<body>
+
+  <!-- ==================== NAVBAR ==================== -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand">
+        <i class="bi bi-speedometer2"></i>
+        Operator Dashboard
+      </span>
+      <div class="d-flex align-items-center">
+        <button class="btn btn-secondary btn-sm me-2" onclick="window.print()">
+          <i class="bi bi-printer"></i> Print Page
+        </button>
+        <a class="btn btn-success btn-sm" href="/operator/dashboard/download-all-lots" target="_blank">
+          <i class="bi bi-download"></i> Download All
+        </a>
+      </div>
     </div>
   </nav>
 
-  <!-- Main Content -->
-  <div id="content">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4" aria-label="Main Navigation">
-      <div class="container-fluid">
+  <div class="container py-4">
+    <h1 class="mb-4">Operator Dashboard</h1>
+
+    <!-- =============== TOP SUMMARY CARDS ROW =============== -->
+    <div class="row g-4 mb-4">
+      <div class="col-sm-6 col-md-3">
+        <div class="card summary-card bg-stitching text-dark">
+          <div class="card-body d-flex align-items-center">
+            <i class="bi bi-scissors text-muted"></i>
+            <div>
+              <h5 class="card-title">Stitching</h5>
+              <p class="display-6">
+                <% if (stitchingAssignments) { %>
+                  <%= stitchingAssignments.length %>
+                <% } else { %>
+                  0
+                <% } %>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="card summary-card bg-washing text-dark">
+          <div class="card-body d-flex align-items-center">
+            <i class="bi bi-droplet-half text-muted"></i>
+            <div>
+              <h5 class="card-title">Washing</h5>
+              <p class="display-6">
+                <% if (washingAssignments) { %>
+                  <%= washingAssignments.length %>
+                <% } else { %>
+                  0
+                <% } %>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="card summary-card bg-finishing text-dark">
+          <div class="card-body d-flex align-items-center">
+            <i class="bi bi-check2-circle text-muted"></i>
+            <div>
+              <h5 class="card-title">Finishing</h5>
+              <p class="display-6">
+                <% if (finishingAssignments) { %>
+                  <%= finishingAssignments.length %>
+                <% } else { %>
+                  0
+                <% } %>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <div class="card summary-card bg-lots text-dark">
+          <div class="card-body d-flex align-items-center">
+            <i class="bi bi-card-list text-muted"></i>
+            <div>
+              <h5 class="card-title">Total Lots</h5>
+              <p class="display-6">
+                <% 
+                  const totalLots = lotDetails ? Object.keys(lotDetails).length : 0;
+                %>
+                <%= totalLots %>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- end row -->
+
+    <!-- =============== Nav Tabs =============== -->
+    <ul class="nav nav-tabs" id="operatorTabs" role="tablist">
+      <li class="nav-item">
         <button
-          class="navbar-toggler"
+          class="nav-link active"
+          data-bs-toggle="tab"
+          data-bs-target="#stitchingTab"
           type="button"
-          data-bs-toggle="offcanvas"
-          data-bs-target="#offcanvasSidebar"
-          aria-controls="offcanvasSidebar"
-          aria-label="Toggle Navigation"
+          role="tab"
         >
-          <span class="navbar-toggler-icon"></span>
+          <i class="bi bi-scissors"></i> Stitching
         </button>
-        <a class="navbar-brand d-lg-none" href="#">
-          <i class="bi bi-speedometer2 me-2"></i> Dashboard
-        </a>
-        <div class="collapse navbar-collapse" id="navbarMenu">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            <!-- Placeholder for additional navbar items -->
-          </ul>
-          <div class="d-flex align-items-center">
-            <span class="navbar-text me-3">
-              Welcome, <strong><%= user.username %></strong>
-            </span>
-            <button id="themeToggle" class="btn btn-outline-light btn-sm me-2" aria-label="Toggle Dark Mode">
-              <i class="bi bi-moon me-1"></i> Dark Mode
-            </button>
-            <a href="/logout" class="btn btn-outline-light btn-sm">
-              <i class="bi bi-box-arrow-right me-1"></i> Logout
-            </a>
-          </div>
-        </div>
-      </div>
-    </nav>
-
-    <!-- Offcanvas Sidebar for Mobile -->
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
-      <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
-          <i class="bi bi-speedometer2 me-2"></i> Dashboard
-        </h5>
-        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <ul class="nav nav-pills flex-column">
-          <li class="nav-item">
-            <a href="#" class="nav-link active d-flex align-items-center">
-              <i class="bi bi-house-door-fill me-2"></i> Home
-            </a>
-          </li>
-          <!-- Add more offcanvas sidebar links here if needed -->
-        </ul>
-      </div>
-    </div>
-    <!-- End of Offcanvas Sidebar -->
-
-    <div class="container-fluid">
-      <% if (error && error.length > 0) { %>
-        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
-          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2" aria-hidden="true"></i>
-          <div><%= error[0] %></div>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-      <% } %>
-      <% if (success && success.length > 0) { %>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
-          <i class="bi bi-check-circle-fill flex-shrink-0 me-2" aria-hidden="true"></i>
-          <div><%= success[0] %></div>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-      <% } %>
-
-      <!-- Navigation Tabs -->
-      <ul class="nav nav-tabs mb-4" id="operatorTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link active"
-            id="unconfirmed-tab"
-            data-bs-toggle="tab"
-            data-bs-target="#unconfirmed"
-            type="button"
-            role="tab"
-            aria-controls="unconfirmed"
-            aria-selected="true"
-          >
-            <i class="bi bi-journal-text"></i> Unconfirmed
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="pending-tab"
-            data-bs-toggle="tab"
-            data-bs-target="#pending"
-            type="button"
-            role="tab"
-            aria-controls="pending"
-            aria-selected="false"
-          >
-            <i class="bi bi-exclamation-circle"></i> Pending
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="assigned-tab"
-            data-bs-toggle="tab"
-            data-bs-target="#assigned"
-            type="button"
-            role="tab"
-            aria-controls="assigned"
-            aria-selected="false"
-          >
-            <i class="bi bi-briefcase-fill"></i> Assigned
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="confirmed-tab"
-            data-bs-toggle="tab"
-            data-bs-target="#confirmed"
-            type="button"
-            role="tab"
-            aria-controls="confirmed"
-            aria-selected="false"
-          >
-            <i class="bi bi-patch-check-fill"></i> Confirmed
-          </button>
-        </li>
-      </ul>
-
-      <div class="tab-content" id="operatorTabsContent">
-        <!-- (A) Unconfirmed + Unassigned -->
-        <div
-          class="tab-pane fade show active"
-          id="unconfirmed"
-          role="tabpanel"
-          aria-labelledby="unconfirmed-tab"
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#washingTab"
+          type="button"
+          role="tab"
         >
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="text-secondary">
-              <i class="bi bi-journal-text me-2"></i> Unconfirmed + Unassigned
-            </h5>
-            <% if (unassignedLots && unassignedLots.length > 0) { %>
-              <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkConfirmModal">
-                <i class="bi bi-check-circle me-1"></i> Bulk Confirm
+          <i class="bi bi-droplet-half"></i> Washing
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#finishingTab"
+          type="button"
+          role="tab"
+        >
+          <i class="bi bi-check2-circle"></i> Finishing
+        </button>
+      </li>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#lotTrackingTab"
+          type="button"
+          role="tab"
+        >
+          <i class="bi bi-card-list"></i> Lot Tracking
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+      <!-- ======================================= -->
+      <!-- 1) STITCHING TAB                        -->
+      <!-- ======================================= -->
+      <div class="tab-pane fade show active" id="stitchingTab" role="tabpanel">
+        <!-- Assign Stitching Form -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <i class="bi bi-plus-circle"></i>
+            Assign Stitching Lot
+          </div>
+          <div class="card-body">
+            <form action="/operator/dashboard/assign-stitching" method="POST">
+              <!-- SELECT USER -->
+              <div class="mb-3">
+                <label for="stitchingUserSelect" class="form-label">Stitching User</label>
+                <select class="form-select" name="user_id" id="stitchingUserSelect" required>
+                  <option value="">-- Choose Stitching User --</option>
+                </select>
+              </div>
+
+              <!-- SELECT CUTTING LOT -->
+              <div class="mb-3">
+                <label for="stitchingLotSelect" class="form-label">Cutting Lot</label>
+                <select class="form-select" name="cutting_lot_id" id="stitchingLotSelect" required>
+                  <option value="">-- Select user first --</option>
+                </select>
+              </div>
+
+              <!-- TARGET DAY -->
+              <div class="mb-3">
+                <label for="stitchingTargetDay" class="form-label">Target Day</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  name="target_day"
+                  id="stitchingTargetDay"
+                />
+              </div>
+
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-arrow-right-circle"></i>
+                Assign Stitching
               </button>
-            <% } %>
+            </form>
           </div>
-          <% if (!unassignedLots || unassignedLots.length === 0) { %>
-            <div class="text-center text-muted py-5">
-              <i class="bi bi-box-seam-fill display-4"></i>
-              <p class="mt-3">No unconfirmed/unassigned lots found.</p>
-            </div>
-          <% } else { %>
-            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-              <% unassignedLots.forEach(lot => { %>
-                <div class="col">
-                  <div class="card h-100">
-                    <div class="card-header bg-primary text-white">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                          <i class="bi bi-tag-fill me-2"></i>
-                          Lot No: <%= lot.lot_no %>
-                        </div>
-                        <button
-                          class="btn btn-sm btn-light"
-                          data-bs-toggle="modal"
-                          data-bs-target="#confirmCuttingModal<%= lot.lot_no %>"
-                          aria-label="Confirm Cutting for Lot <%= lot.lot_no %>"
-                        >
-                          <i class="bi bi-check2-square me-1"></i> Confirm
-                        </button>
-                      </div>
-                    </div>
-                    <div class="card-body">
-                      <p>
-                        <strong>SKU:</strong> <%= lot.sku %> |
-                        <strong>Fabric:</strong> <%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)<br/>
-                        <strong>Total Expected:</strong> <%= lot.total_pieces %><br/>
-                        <strong>Created By:</strong> <%= lot.created_by %>
-                      </p>
-                      <p>
-                        <strong>Sizes:</strong>
-                        <% lot.sizes.forEach(sz => { %>
-                          <span class="badge bg-secondary me-1 mb-1">
-                            <%= sz.size_label %> (<%= sz.size_total_pieces %>)
-                          </span>
-                        <% }) %>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Confirm Cutting Modal -->
-                <div
-                  class="modal fade"
-                  id="confirmCuttingModal<%= lot.lot_no %>"
-                  tabindex="-1"
-                  aria-labelledby="confirmCuttingModalLabel<%= lot.lot_no %>"
-                  aria-hidden="true"
-                >
-                  <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content">
-                      <form method="POST" action="/operator/confirm-cutting">
-                        <div class="modal-header">
-                          <h5 class="modal-title" id="confirmCuttingModalLabel<%= lot.lot_no %>">
-                            Confirm Cutting for Lot <%= lot.lot_no %>
-                          </h5>
-                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                          <input type="hidden" name="lot_no" value="<%= lot.lot_no %>"/>
-                          <div class="mb-3">
-                            <label class="form-label">SKU</label>
-                            <input type="text" class="form-control" value="<%= lot.sku %>" disabled>
-                          </div>
-                          <div class="mb-3">
-                            <label class="form-label">Fabric</label>
-                            <input type="text" class="form-control" value="<%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)" disabled>
-                          </div>
-                          <div class="mb-3">
-                            <label class="form-label">Total Expected Pieces</label>
-                            <input type="number" class="form-control" value="<%= lot.total_pieces %>" disabled>
-                          </div>
-                          <div class="mb-3">
-                            <label class="form-label">Actual Received Pieces</label>
-                            <table class="table table-sm table-bordered">
-                              <thead>
-                                <tr>
-                                  <th>Size</th>
-                                  <th>Actual Received</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <% lot.sizes.forEach((sz, idx) => { %>
-                                  <tr>
-                                    <td>
-                                      <%= sz.size_label %>
-                                      <input type="hidden" name="sizes[<%= idx %>][size_label]" value="<%= sz.size_label %>"/>
-                                    </td>
-                                    <td>
-                                      <input
-                                        type="number"
-                                        class="form-control form-control-sm"
-                                        name="sizes[<%= idx %>][actual_received]"
-                                        min="0"
-                                        value="<%= sz.size_total_pieces %>"
-                                        required
-                                      />
-                                    </td>
-                                  </tr>
-                                <% }) %>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                        <div class="modal-footer">
-                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                          <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-check2-square me-1"></i> Confirm
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-                <!-- End of Confirm Cutting Modal -->
-              <% }) %>
-            </div>
-          <% } %>
         </div>
 
-        <!-- (B) Pending Operator Verification -->
-        <div
-          class="tab-pane fade"
-          id="pending"
-          role="tabpanel"
-          aria-labelledby="pending-tab"
-        >
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="text-secondary">
-              <i class="bi bi-exclamation-circle me-2"></i> Pending Operator Verification
+        <!-- Stitching Assignments Table -->
+        <div class="card">
+          <div class="card-header bg-light">
+            <h5 class="mb-0">
+              <i class="bi bi-table"></i>
+              Existing Stitching Assignments
             </h5>
           </div>
-          <% if (!pendingVerifications || pendingVerifications.length === 0) { %>
-            <div class="text-center text-muted py-5">
-              <i class="bi bi-hourglass-split display-4"></i>
-              <p class="mt-3">No assignments waiting for verification.</p>
-            </div>
-          <% } else { %>
-            <div class="table-responsive">
-              <table class="table table-hover align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th>Lot No</th>
-                    <th>SKU</th>
-                    <th>Fabric</th>
-                    <th>Status</th>
-                    <th>Dept User</th>
-                    <th>Assigned At</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% pendingVerifications.forEach(pv => { %>
-                    <tr>
-                      <td><%= pv.lot_no %></td>
-                      <td><%= pv.sku %></td>
-                      <td><%= pv.fabric_type %> (Flow: <%= pv.flow_type %>)</td>
-                      <td><span class="badge bg-warning text-dark"><%= pv.status %></span></td>
-                      <td><%= pv.dept_user %> (<%= pv.dept_role %>)</td>
-                      <td><%= new Date(pv.assigned_at).toLocaleString() %></td>
-                      <td>
-                        <a
-                          href="/operator/verify/<%= pv.assignment_id %>"
-                          class="btn btn-sm btn-info"
-                          aria-label="Verify Lot <%= pv.lot_no %>"
-                        >
-                          <i class="bi bi-eye me-1"></i> Verify
-                        </a>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          <% } %>
-        </div>
-
-        <!-- (C) Assigned (In Progress) -->
-        <div
-          class="tab-pane fade"
-          id="assigned"
-          role="tabpanel"
-          aria-labelledby="assigned-tab"
-        >
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="text-secondary">
-              <i class="bi bi-briefcase-fill me-2"></i> Assigned In Progress
-            </h5>
-          </div>
-          <% if (!assignedAssignments || assignedAssignments.length === 0) { %>
-            <div class="text-center text-muted py-5">
-              <i class="bi bi-hourglass-split display-4"></i>
-              <p class="mt-3">No assigned lots in progress.</p>
-            </div>
-          <% } else { %>
-            <div class="table-responsive">
-              <table class="table table-hover align-middle">
-                <thead class="table-dark">
-                  <tr>
-                    <th>Lot No</th>
-                    <th>Assigned</th>
-                    <th>Dept Confirmed</th>
-                    <th>Status</th>
-                    <th>Assigned At</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% assignedAssignments.forEach(a => {
-                       const leftover = a.assigned_pieces - a.total_confirmed_by_dept;
-                  %>
-                    <tr>
-                      <td><%= a.lot_no %></td>
-                      <td><%= a.assigned_pieces %></td>
-                      <td><%= a.total_confirmed_by_dept %></td>
-                      <td><span class="badge bg-primary"><%= a.status %></span></td>
-                      <td><%= new Date(a.assigned_at).toLocaleString() %></td>
-                      <td>
-                        <div class="d-flex gap-2">
-                          <a
-                            href="/operator/pendency/<%= a.lot_no %>"
-                            class="btn btn-sm btn-secondary"
-                            aria-label="View Pendency for Lot <%= a.lot_no %>"
-                          >
-                            <i class="bi bi-search me-1"></i> Pendency
-                          </a>
-                          <a
-                            href="/operator/pass-lot/<%= a.assignment_id %>"
-                            class="btn btn-sm btn-success"
-                            aria-label="Pass Partial for Lot <%= a.lot_no %>"
-                          >
-                            <i class="bi bi-arrow-right-square me-1"></i> Pass Partial
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          <% } %>
-        </div>
-
-        <!-- (D) Confirmed but Unassigned -->
-        <div
-          class="tab-pane fade"
-          id="confirmed"
-          role="tabpanel"
-          aria-labelledby="confirmed-tab"
-        >
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="text-secondary">
-              <i class="bi bi-patch-check-fill me-2"></i> Confirmed but Not Assigned
-            </h5>
-          </div>
-          <% if (!confirmedButUnassigned || confirmedButUnassigned.length === 0) { %>
-            <div class="text-center text-muted py-5">
-              <i class="bi bi-box-seam-fill display-4"></i>
-              <p class="mt-3">No confirmed-but-unassigned lots found.</p>
-            </div>
-          <% } else { %>
-            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-              <% confirmedButUnassigned.forEach(lot => { %>
-                <div class="col">
-                  <div class="card h-100">
-                    <div class="card-header bg-success text-white">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                          <i class="bi bi-tag-fill me-2"></i>
-                          Lot No: <%= lot.lot_no %>
-                        </div>
-                        <a
-                          href="/operator/assign-lot-form/<%= lot.lot_no %>"
-                          class="btn btn-sm btn-light"
-                          aria-label="Assign Next Dept for Lot <%= lot.lot_no %>"
-                        >
-                          <i class="bi bi-arrow-right-circle me-1"></i> Assign
-                        </a>
-                      </div>
-                    </div>
-                    <div class="card-body">
-                      <p>
-                        <strong>SKU:</strong> <%= lot.sku %> |
-                        <strong>Fabric:</strong> <%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)<br/>
-                        <strong>Total Pieces:</strong> <%= lot.total_pieces %>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              <% }) %>
-            </div>
-          <% } %>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Bulk Confirm Cutting Modal -->
-  <% if (unassignedLots && unassignedLots.length > 0) { %>
-    <div
-      class="modal fade"
-      id="bulkConfirmModal"
-      tabindex="-1"
-      aria-labelledby="bulkConfirmModalLabel"
-      aria-hidden="true"
-    >
-      <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-          <form method="POST" action="/operator/bulk-confirm-cutting">
-            <div class="modal-header">
-              <h5 class="modal-title" id="bulkConfirmModalLabel">Bulk Confirm Cutting</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
+          <div class="card-body">
+            <% if (stitchingAssignments && stitchingAssignments.length > 0) { %>
               <div class="table-responsive">
-                <table class="table table-bordered align-middle">
-                  <thead class="table-light">
+                <table
+                  class="table table-bordered table-striped align-middle"
+                  style="width: 100%;"
+                >
+                  <thead>
                     <tr>
+                      <th>ID</th>
+                      <th>Operator</th>
+                      <th>User</th>
                       <th>Lot No</th>
                       <th>SKU</th>
-                      <th>Fabric</th>
-                      <th>Total Expected</th>
-                      <th>Actual Received</th>
+                      <th>Target Day</th>
+                      <th>Assigned On</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <% unassignedLots.forEach((lot, lotIdx) => { %>
+                    <% stitchingAssignments.forEach(a => {
+                       const assignedOn = a.assigned_on
+                         ? a.assigned_on.toISOString().split('T')[0]
+                         : '';
+                       const targetDay = a.target_day
+                         ? a.target_day.toISOString().split('T')[0]
+                         : '';
+                    %>
                       <tr>
-                        <td>
-                          <%= lot.lot_no %>
-                          <input type="hidden" name="lots[<%= lotIdx %>][lot_no]" value="<%= lot.lot_no %>"/>
-                        </td>
-                        <td><%= lot.sku %></td>
-                        <td><%= lot.fabric_type %> (Flow: <%= lot.flow_type %>)</td>
-                        <td><%= lot.total_pieces %></td>
-                        <td>
-                          <input
-                            type="number"
-                            class="form-control form-control-sm"
-                            name="lots[<%= lotIdx %>][actual_received]"
-                            min="0"
-                            value="<%= lot.total_pieces %>"
-                            required
-                          />
-                        </td>
+                        <td><%= a.id %></td>
+                        <td><%= a.operatorName %></td>
+                        <td><%= a.assignedUser %></td>
+                        <td><%= a.lot_no %></td>
+                        <td><%= a.sku %></td>
+                        <td><%= targetDay %></td>
+                        <td><%= assignedOn %></td>
                       </tr>
                     <% }) %>
                   </tbody>
                 </table>
               </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-warning">
-                <i class="bi bi-check2-square me-1"></i> Confirm All
-              </button>
-            </div>
-          </form>
+            <% } else { %>
+              <p class="text-muted">No Stitching Assignments yet.</p>
+            <% } %>
+          </div>
         </div>
-      </div>
-    </div>
-  <% } %>
-  <!-- End of Bulk Confirm Cutting Modal -->
+      </div><!-- end #stitchingTab -->
 
-  <!-- Bootstrap JS with defer for non-blocking -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-    defer
-  ></script>
-  <!-- Dark Mode Toggle Script -->
-  <script defer>
-    document.addEventListener('DOMContentLoaded', () => {
-      const themeToggle = document.getElementById('themeToggle');
-      const body = document.body;
+      <!-- ======================================= -->
+      <!-- 2) WASHING TAB                          -->
+      <!-- ======================================= -->
+      <div class="tab-pane fade" id="washingTab" role="tabpanel">
+        <!-- Assign Washing Form -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <i class="bi bi-plus-circle"></i>
+            Assign Washing Lot
+          </div>
+          <div class="card-body">
+            <form action="/operator/dashboard/assign-washing" method="POST">
+              <div class="mb-3">
+                <label for="washingUserSelect" class="form-label">Washing User</label>
+                <select class="form-select" name="user_id" id="washingUserSelect" required>
+                  <option value="">-- Choose Washing User --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="washingLotSelect" class="form-label">Stitching Assignment</label>
+                <select
+                  class="form-select"
+                  name="stitching_assignment_id"
+                  id="washingLotSelect"
+                  required
+                >
+                  <option value="">-- Select user first --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="washingTargetDay" class="form-label">Target Day</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  name="target_day"
+                  id="washingTargetDay"
+                />
+              </div>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-arrow-right-circle"></i>
+                Assign Washing
+              </button>
+            </form>
+          </div>
+        </div>
 
-      // Initialize theme based on user preference
-      if (localStorage.getItem('theme') === 'dark') {
-        body.classList.add('dark-mode');
-        themeToggle.innerHTML = '<i class="bi bi-sun me-1"></i> Light Mode';
+        <!-- Washing Assignments Table -->
+        <div class="card">
+          <div class="card-header bg-light">
+            <h5 class="mb-0">
+              <i class="bi bi-table"></i>
+              Existing Washing Assignments
+            </h5>
+          </div>
+          <div class="card-body">
+            <% if (washingAssignments && washingAssignments.length > 0) { %>
+              <div class="table-responsive">
+                <table
+                  class="table table-bordered table-striped align-middle"
+                  style="width: 100%;"
+                >
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Operator</th>
+                      <th>User</th>
+                      <th>Lot No</th>
+                      <th>SKU</th>
+                      <th>Target Day</th>
+                      <th>Assigned On</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% washingAssignments.forEach(a => {
+                       const assignedOn = a.assigned_on
+                         ? a.assigned_on.toISOString().split('T')[0]
+                         : '';
+                       const targetDay = a.target_day
+                         ? a.target_day.toISOString().split('T')[0]
+                         : '';
+                    %>
+                      <tr>
+                        <td><%= a.id %></td>
+                        <td><%= a.operatorName %></td>
+                        <td><%= a.assignedUser %></td>
+                        <td><%= a.lot_no %></td>
+                        <td><%= a.sku %></td>
+                        <td><%= targetDay %></td>
+                        <td><%= assignedOn %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } else { %>
+              <p class="text-muted">No Washing Assignments yet.</p>
+            <% } %>
+          </div>
+        </div>
+      </div><!-- end #washingTab -->
+
+      <!-- ======================================= -->
+      <!-- 3) FINISHING TAB                        -->
+      <!-- ======================================= -->
+      <div class="tab-pane fade" id="finishingTab" role="tabpanel">
+        <!-- Assign Finishing (From Stitching) -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <i class="bi bi-plus-circle"></i>
+            Assign Finishing (From Stitching)
+          </div>
+          <div class="card-body">
+            <form action="/operator/dashboard/assign-finishing-from-stitching" method="POST">
+              <div class="mb-3">
+                <label for="finishingUserSelect1" class="form-label">Finishing User</label>
+                <select class="form-select" name="user_id" id="finishingUserSelect1" required>
+                  <option value="">-- Choose Finishing User --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="finishingLotSelect1" class="form-label">Stitching Assignment</label>
+                <select
+                  class="form-select"
+                  name="stitching_assignment_id"
+                  id="finishingLotSelect1"
+                  required
+                >
+                  <option value="">-- Select user first --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="finishingTargetDay1" class="form-label">Target Day</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  name="target_day"
+                  id="finishingTargetDay1"
+                />
+              </div>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-arrow-right-circle"></i>
+                Assign Finishing (Stitching)
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Assign Finishing (From Washing) -->
+        <div class="card mb-4">
+          <div class="card-header bg-primary text-white">
+            <i class="bi bi-plus-circle"></i>
+            Assign Finishing (From Washing)
+          </div>
+          <div class="card-body">
+            <form action="/operator/dashboard/assign-finishing-from-washing" method="POST">
+              <div class="mb-3">
+                <label for="finishingUserSelect2" class="form-label">Finishing User</label>
+                <select class="form-select" name="user_id" id="finishingUserSelect2" required>
+                  <option value="">-- Choose Finishing User --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="finishingLotSelect2" class="form-label">Washing Assignment</label>
+                <select
+                  class="form-select"
+                  name="washing_assignment_id"
+                  id="finishingLotSelect2"
+                  required
+                >
+                  <option value="">-- Select user first --</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="finishingTargetDay2" class="form-label">Target Day</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  name="target_day"
+                  id="finishingTargetDay2"
+                />
+              </div>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-arrow-right-circle"></i>
+                Assign Finishing (Washing)
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Existing Finishing Assignments -->
+        <div class="card">
+          <div class="card-header bg-light">
+            <h5 class="mb-0">
+              <i class="bi bi-table"></i>
+              Existing Finishing Assignments
+            </h5>
+          </div>
+          <div class="card-body">
+            <% if (finishingAssignments && finishingAssignments.length > 0) { %>
+              <div class="table-responsive">
+                <table
+                  class="table table-bordered table-striped align-middle"
+                  style="width: 100%;"
+                >
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Operator</th>
+                      <th>User</th>
+                      <th>Lot No</th>
+                      <th>SKU</th>
+                      <th>Target Day</th>
+                      <th>Assigned On</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% finishingAssignments.forEach(a => {
+                       const assignedOn = a.assigned_on
+                         ? a.assigned_on.toISOString().split('T')[0]
+                         : '';
+                       const targetDay = a.target_day
+                         ? a.target_day.toISOString().split('T')[0]
+                         : '';
+                       // Could come from stitching or washing
+                       const lotNo = a.stitching_lot_no || a.washing_lot_no;
+                       const sku   = a.stitching_sku     || a.washing_sku;
+                    %>
+                      <tr>
+                        <td><%= a.id %></td>
+                        <td><%= a.operatorName %></td>
+                        <td><%= a.assignedUser %></td>
+                        <td><%= lotNo %></td>
+                        <td><%= sku %></td>
+                        <td><%= targetDay %></td>
+                        <td><%= assignedOn %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } else { %>
+              <p class="text-muted">No Finishing Assignments yet.</p>
+            <% } %>
+          </div>
+        </div>
+      </div><!-- end #finishingTab -->
+
+      <!-- ======================================= -->
+      <!-- 4) LOT TRACKING TAB                     -->
+      <!-- ======================================= -->
+      <div class="tab-pane fade" id="lotTrackingTab" role="tabpanel">
+        <div class="card">
+          <div class="card-header bg-dark text-white">
+            <h4 class="mb-0">
+              <i class="bi bi-card-list"></i>
+              Lot Tracking
+            </h4>
+          </div>
+          <div class="card-body">
+            <p class="text-muted mb-4">
+              Shows every lot from <strong>cutting_lots</strong> (even if unassigned).<br />
+              Leftover columns display the remaining pieces only if assigned to that department.
+            </p>
+
+            <!-- (Optional) Operator Performance -->
+            <div class="card mb-4">
+              <div class="card-header bg-secondary text-white">
+                <i class="bi bi-people-fill"></i>
+                Operator Performance
+              </div>
+              <div class="card-body">
+                <% 
+                  const perfKeys = Object.keys(operatorPerformance || {});
+                  if (perfKeys.length) {
+                %>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-striped">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Stitched</th>
+                          <th>Washed</th>
+                          <th>Finished</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% perfKeys.forEach(uid => {
+                           const p = operatorPerformance[uid];
+                        %>
+                          <tr>
+                            <td><%= p.username || ('User ' + uid) %></td>
+                            <td><%= p.totalStitched %></td>
+                            <td><%= p.totalWashed %></td>
+                            <td><%= p.totalFinished %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% } else { %>
+                  <p class="text-muted">No operator performance data found.</p>
+                <% } %>
+              </div>
+            </div>
+
+            <!-- Main Lot Tracking Table (DataTables) -->
+            <% const allLotNos = Object.keys(lotDetails || {}); %>
+            <% if (!allLotNos.length) { %>
+              <p class="text-muted">No lots found.</p>
+            <% } else { %>
+              <div class="table-responsive">
+                <table
+                  id="tableLotTracking"
+                  class="table table-bordered table-striped align-middle"
+                  style="width: 100%;"
+                >
+                  <thead>
+                    <tr>
+                      <th>Lot No</th>
+                      <th>SKU</th>
+                      <th>Cut Pieces</th>
+                      <th>Leftover (Stitch)</th>
+                      <th>Leftover (Wash)</th>
+                      <th>Leftover (Finish)</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% allLotNos.forEach(lot_no => {
+                       const info = lotDetails[lot_no];
+                       let sku = '';
+                       let cutPieces = 0;
+                       if (info.cuttingLot) {
+                         sku = info.cuttingLot.sku;
+                         cutPieces = info.cuttingLot.total_pieces || 0;
+                       }
+
+                       // leftoverStitch, leftoverWash, leftoverFinish
+                       const leftoverStitchVal = (info.leftoverStitch !== null)
+                         ? info.leftoverStitch
+                         : 'N/A';
+                       const leftoverWashVal = (info.leftoverWash !== null)
+                         ? info.leftoverWash
+                         : 'N/A';
+                       const leftoverFinishVal = (info.leftoverFinish !== null)
+                         ? info.leftoverFinish
+                         : 'N/A';
+
+                       function leftoverBadge(val) {
+                         if (typeof val === 'number') {
+                           if (val < 0) return `<span class="leftover-badge leftover-negative">${val}</span>`;
+                           if (val === 0) return `<span class="leftover-badge leftover-zero">${val}</span>`;
+                           return `<span class="leftover-badge leftover-positive">${val}</span>`;
+                         }
+                         // If val is 'N/A' or null, return a neutral badge
+                         return `<span class="badge bg-secondary">${val}</span>`;
+                       }
+                    %>
+                      <tr>
+                        <td><%= lot_no %></td>
+                        <td><%= sku %></td>
+                        <td><%= cutPieces %></td>
+                        <td><%= leftoverBadge(leftoverStitchVal) %></td>
+                        <td><%= leftoverBadge(leftoverWashVal) %></td>
+                        <td><%= leftoverBadge(leftoverFinishVal) %></td>
+                        <td>
+                          <button
+                            class="btn btn-sm btn-info"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapseLot_<%= lot_no %>"
+                          >
+                            <i class="bi bi-eye-fill"></i> Details
+                          </button>
+                          <a
+                            class="btn btn-sm btn-success"
+                            href="/operator/dashboard/lot-tracking/<%= lot_no %>/download"
+                            target="_blank"
+                          >
+                            <i class="bi bi-download"></i> Download
+                          </a>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div><!-- .table-responsive -->
+            <% } %>
+          </div><!-- .card-body -->
+        </div><!-- .card -->
+
+        <!-- Collapsible Detail Sections (one per lot) placed OUTSIDE the table -->
+        <% if (allLotNos && allLotNos.length) {
+           allLotNos.forEach(lot_no => {
+             const info = lotDetails[lot_no];
+        %>
+          <div class="collapse container border rounded p-3 mb-4" id="collapseLot_<%= lot_no %>">
+            <h4 class="mb-3">
+              <i class="bi bi-card-text"></i>
+              Lot <%= lot_no %> Detailed Progress
+            </h4>
+
+            <!-- STEP CARD: CUTTING -->
+            <div class="card lot-step-card lot-step-cutting mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-scissors"></i>
+                <strong>Cutting Lot Info</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.cuttingLot) { %>
+                  <p><strong>Fabric Type:</strong> <%= info.cuttingLot.fabric_type || 'N/A' %></p>
+                  <p><strong>Remark:</strong> <%= info.cuttingLot.remark || 'N/A' %></p>
+                  <p><strong>Image URL:</strong> <%= info.cuttingLot.image_url || 'N/A' %></p>
+
+                  <div class="accordion mt-3" id="cuttingAccordion_<%= lot_no %>">
+                    <!-- cutting_lot_sizes -->
+                    <div class="accordion-item">
+                      <h2 class="accordion-header" id="headingCutSizes_<%= lot_no %>">
+                        <button
+                          class="accordion-button collapsed"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#collapseCutSizes_<%= lot_no %>"
+                          aria-expanded="false"
+                          aria-controls="collapseCutSizes_<%= lot_no %>"
+                        >
+                          Cutting Lot Sizes
+                        </button>
+                      </h2>
+                      <div
+                        id="collapseCutSizes_<%= lot_no %>"
+                        class="accordion-collapse collapse"
+                        data-bs-parent="#cuttingAccordion_<%= lot_no %>"
+                      >
+                        <div class="accordion-body">
+                          <% if (info.cuttingSizes && info.cuttingSizes.length > 0) { %>
+                            <div class="table-responsive">
+                              <table class="table table-sm table-bordered">
+                                <thead>
+                                  <tr>
+                                    <th>Size Label</th>
+                                    <th>Pattern Count</th>
+                                    <th>Total Pieces</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <% info.cuttingSizes.forEach(cs => { %>
+                                    <tr>
+                                      <td><%= cs.size_label %></td>
+                                      <td><%= cs.pattern_count %></td>
+                                      <td><%= cs.total_pieces %></td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
+                          <% } else { %>
+                            <p class="text-muted">No cutting_lot_sizes.</p>
+                          <% } %>
+                        </div>
+                      </div>
+                    </div><!-- end .accordion-item -->
+
+                    <!-- cutting_lot_rolls -->
+                    <div class="accordion-item">
+                      <h2 class="accordion-header" id="headingCutRolls_<%= lot_no %>">
+                        <button
+                          class="accordion-button collapsed"
+                          type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#collapseCutRolls_<%= lot_no %>"
+                          aria-expanded="false"
+                          aria-controls="collapseCutRolls_<%= lot_no %>"
+                        >
+                          Cutting Lot Rolls
+                        </button>
+                      </h2>
+                      <div
+                        id="collapseCutRolls_<%= lot_no %>"
+                        class="accordion-collapse collapse"
+                        data-bs-parent="#cuttingAccordion_<%= lot_no %>"
+                      >
+                        <div class="accordion-body">
+                          <% if (info.cuttingRolls && info.cuttingRolls.length > 0) { %>
+                            <div class="table-responsive">
+                              <table class="table table-sm table-bordered">
+                                <thead>
+                                  <tr>
+                                    <th>Roll No</th>
+                                    <th>Weight Used</th>
+                                    <th>Layers</th>
+                                    <th>Total Pieces</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <% info.cuttingRolls.forEach(r => { %>
+                                    <tr>
+                                      <td><%= r.roll_no %></td>
+                                      <td><%= r.weight_used %></td>
+                                      <td><%= r.layers %></td>
+                                      <td><%= r.total_pieces %></td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
+                          <% } else { %>
+                            <p class="text-muted">No cutting_lot_rolls.</p>
+                          <% } %>
+                        </div>
+                      </div>
+                    </div><!-- end .accordion-item -->
+                  </div><!-- end .accordion -->
+                <% } else { %>
+                  <p class="text-muted">No cutting_lots record found.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- .lot-step-card -->
+
+            <!-- STEP CARD: STITCHING -->
+            <div class="card lot-step-card lot-step-stitching mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-scissors"></i>
+                <strong>Stitching Data</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.stitchingData && info.stitchingData.length > 0) { %>
+                  <% info.stitchingData.forEach(sd => {
+                     const sSizes = info.stitchingDataSizes.filter(x => x.stitching_data_id === sd.id);
+                  %>
+                    <div class="border-start ps-3 mb-3">
+                      <p><strong>ID:</strong> <%= sd.id %></p>
+                      <p><strong>Total Pieces:</strong> <%= sd.total_pieces %></p>
+                      <p><strong>Remark:</strong> <%= sd.remark || 'N/A' %></p>
+                      <p><strong>Image URL:</strong> <%= sd.image_url || 'N/A' %></p>
+
+                      <% if (sSizes.length > 0) { %>
+                        <div class="table-responsive">
+                          <table class="table table-sm table-bordered mt-2">
+                            <thead>
+                              <tr>
+                                <th>Size Label</th>
+                                <th>Pieces</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% sSizes.forEach(sz => { %>
+                                <tr>
+                                  <td><%= sz.size_label %></td>
+                                  <td><%= sz.pieces %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } else { %>
+                        <p class="text-muted">No stitching_data_sizes found.</p>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                <% } else { %>
+                  <p class="text-muted">No stitching_data found.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- .lot-step-card -->
+
+            <!-- STEP CARD: WASHING -->
+            <div class="card lot-step-card lot-step-washing mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-droplet-half"></i>
+                <strong>Washing Data</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.washingData && info.washingData.length > 0) { %>
+                  <% info.washingData.forEach(wd => {
+                     const wSizes = info.washingDataSizes.filter(x => x.washing_data_id === wd.id);
+                  %>
+                    <div class="border-start ps-3 mb-3">
+                      <p><strong>ID:</strong> <%= wd.id %></p>
+                      <p><strong>Total Pieces:</strong> <%= wd.total_pieces %></p>
+                      <p><strong>Remark:</strong> <%= wd.remark || 'N/A' %></p>
+                      <p><strong>Image URL:</strong> <%= wd.image_url || 'N/A' %></p>
+
+                      <% if (wSizes.length > 0) { %>
+                        <div class="table-responsive">
+                          <table class="table table-sm table-bordered mt-2">
+                            <thead>
+                              <tr>
+                                <th>Size Label</th>
+                                <th>Pieces</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% wSizes.forEach(sz => { %>
+                                <tr>
+                                  <td><%= sz.size_label %></td>
+                                  <td><%= sz.pieces %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } else { %>
+                        <p class="text-muted">No washing_data_sizes found.</p>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                <% } else { %>
+                  <p class="text-muted">No washing_data found.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- .lot-step-card -->
+
+            <!-- STEP CARD: FINISHING -->
+            <div class="card lot-step-card lot-step-finishing mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-check2-circle"></i>
+                <strong>Finishing Data</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.finishingData && info.finishingData.length > 0) { %>
+                  <% info.finishingData.forEach(fd => {
+                     const fSizes = info.finishingDataSizes.filter(x => x.finishing_data_id === fd.id);
+                  %>
+                    <div class="border-start ps-3 mb-3">
+                      <p><strong>ID:</strong> <%= fd.id %></p>
+                      <p><strong>Total Pieces:</strong> <%= fd.total_pieces %></p>
+                      <p><strong>Remark:</strong> <%= fd.remark || 'N/A' %></p>
+                      <p><strong>Image URL:</strong> <%= fd.image_url || 'N/A' %></p>
+
+                      <% if (fSizes.length > 0) { %>
+                        <div class="table-responsive">
+                          <table class="table table-sm table-bordered mt-2">
+                            <thead>
+                              <tr>
+                                <th>Size Label</th>
+                                <th>Pieces</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% fSizes.forEach(sz => { %>
+                                <tr>
+                                  <td><%= sz.size_label %></td>
+                                  <td><%= sz.pieces %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } else { %>
+                        <p class="text-muted">No finishing_data_sizes found.</p>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                <% } else { %>
+                  <p class="text-muted">No finishing_data found.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- .lot-step-card -->
+
+            <!-- CARD: Department Confirmations -->
+            <div class="card mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-check-square"></i>
+                <strong>Department Confirmations</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.departmentConfirmations && info.departmentConfirmations.length > 0) { %>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Confirmed By</th>
+                          <th>Pieces</th>
+                          <th>Confirmed At</th>
+                          <th>Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% info.departmentConfirmations.forEach(dc => { %>
+                          <tr>
+                            <td><%= dc.id %></td>
+                            <td><%= dc.confirmed_by_user_id %></td>
+                            <td><%= dc.confirmed_pieces %></td>
+                            <td><%= dc.confirmed_at %></td>
+                            <td><%= dc.remarks || 'N/A' %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% } else { %>
+                  <p class="text-muted">No department_confirmations.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- end confirm card -->
+
+            <!-- CARD: Lot Assignments -->
+            <div class="card mb-4">
+              <div class="card-header bg-light">
+                <i class="bi bi-person-lines-fill"></i>
+                <strong>Lot Assignments</strong>
+              </div>
+              <div class="card-body">
+                <% if (info.lotAssignments && info.lotAssignments.length > 0) { %>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Assigned By</th>
+                          <th>Assigned To</th>
+                          <th>Assigned Pieces</th>
+                          <th>Status</th>
+                          <th>Assigned At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% info.lotAssignments.forEach(la => { %>
+                          <tr>
+                            <td><%= la.id %></td>
+                            <td><%= la.assigned_by_user_id %></td>
+                            <td><%= la.assigned_to_user_id %></td>
+                            <td><%= la.assigned_pieces %></td>
+                            <td><%= la.status || '' %></td>
+                            <td>
+                              <%= la.assigned_at
+                                 ? la.assigned_at.toISOString().split('T')[0]
+                                 : '' %>
+                            </td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% } else { %>
+                  <p class="text-muted">No lot_assignments.</p>
+                <% } %>
+              </div><!-- .card-body -->
+            </div><!-- end assignments card -->
+
+          </div><!-- .collapse (one per lot) -->
+        <% }) } %>
+      </div><!-- end #lotTrackingTab -->
+    </div><!-- end .tab-content -->
+  </div><!-- end .container -->
+
+  <!-- ========== JS ========== -->
+  <!-- jQuery (Required by DataTables) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+  <!-- Bootstrap 5 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- DataTables JS (Bootstrap 5 version) -->
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+  <script>
+    /****************************************************
+     *  STITCHING: Load users & lots
+     ****************************************************/
+    const stitchingUserSelect = document.getElementById('stitchingUserSelect');
+    const stitchingLotSelect  = document.getElementById('stitchingLotSelect');
+
+    async function loadStitchingUsers() {
+      try {
+        stitchingUserSelect.innerHTML = '<option value="">Loading...</option>';
+        const res = await fetch('/operator/dashboard/users-stitching');
+        const data = await res.json();
+        stitchingUserSelect.innerHTML = '<option value="">-- Choose Stitching User --</option>';
+        data.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          stitchingUserSelect.appendChild(opt);
+        });
+      } catch (err) {
+        stitchingUserSelect.innerHTML = '<option value="">Error loading users</option>';
       }
+    }
 
-      themeToggle.addEventListener('click', () => {
-        body.classList.toggle('dark-mode');
-        if (body.classList.contains('dark-mode')) {
-          themeToggle.innerHTML = '<i class="bi bi-sun me-1"></i> Light Mode';
-          localStorage.setItem('theme', 'dark');
-        } else {
-          themeToggle.innerHTML = '<i class="bi bi-moon me-1"></i> Dark Mode';
-          localStorage.setItem('theme', 'light');
+    stitchingUserSelect.addEventListener('change', async () => {
+      try {
+        stitchingLotSelect.innerHTML = '<option value="">Loading lots...</option>';
+        const userId = stitchingUserSelect.value;
+        if (!userId) {
+          stitchingLotSelect.innerHTML = '<option value="">-- Select user first --</option>';
+          return;
         }
-      });
+        const res = await fetch(`/operator/dashboard/lots-stitching?user_id=${userId}`);
+        const data = await res.json();
+        stitchingLotSelect.innerHTML = '<option value="">-- Choose Cutting Lot --</option>';
+        data.forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.id; // cutting_lot_id
+          opt.textContent = `Lot ${l.lot_no} (SKU: ${l.sku})`;
+          stitchingLotSelect.appendChild(opt);
+        });
+      } catch (err) {
+        stitchingLotSelect.innerHTML = '<option value="">Error loading lots</option>';
+      }
+    });
+
+    /****************************************************
+     *  WASHING: Load users & STITCHING assignments
+     ****************************************************/
+    const washingUserSelect = document.getElementById('washingUserSelect');
+    const washingLotSelect  = document.getElementById('washingLotSelect');
+
+    async function loadWashingUsers() {
+      try {
+        washingUserSelect.innerHTML = '<option value="">Loading...</option>';
+        const res = await fetch('/operator/dashboard/users-washing');
+        const data = await res.json();
+        washingUserSelect.innerHTML = '<option value="">-- Choose Washing User --</option>';
+        data.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          washingUserSelect.appendChild(opt);
+        });
+      } catch (err) {
+        washingUserSelect.innerHTML = '<option value="">Error loading users</option>';
+      }
+    }
+
+    washingUserSelect.addEventListener('change', async () => {
+      try {
+        washingLotSelect.innerHTML = '<option value="">Loading stitching assignments...</option>';
+        const userId = washingUserSelect.value;
+        if (!userId) {
+          washingLotSelect.innerHTML = '<option value="">-- Select user first --</option>';
+          return;
+        }
+        const res = await fetch(`/operator/dashboard/lots-washing?user_id=${userId}`);
+        const data = await res.json();
+        washingLotSelect.innerHTML = '<option value="">-- Choose Stitching Assignment --</option>';
+        data.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id; // stitching_assignment_id
+          opt.textContent = `Stitching #${a.id}, Lot ${a.lot_no}, SKU: ${a.sku}`;
+          washingLotSelect.appendChild(opt);
+        });
+      } catch (err) {
+        washingLotSelect.innerHTML = '<option value="">Error loading stitching assignments</option>';
+      }
+    });
+
+    /****************************************************
+     * FINISHING (from STITCHING)
+     ****************************************************/
+    const finishingUserSelect1 = document.getElementById('finishingUserSelect1');
+    const finishingLotSelect1  = document.getElementById('finishingLotSelect1');
+
+    async function loadFinishingUsers1() {
+      try {
+        finishingUserSelect1.innerHTML = '<option value="">Loading...</option>';
+        const res = await fetch('/operator/dashboard/users-finishing');
+        const data = await res.json();
+        finishingUserSelect1.innerHTML = '<option value="">-- Choose Finishing User --</option>';
+        data.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          finishingUserSelect1.appendChild(opt);
+        });
+      } catch (err) {
+        finishingUserSelect1.innerHTML = '<option value="">Error loading users</option>';
+      }
+    }
+
+    finishingUserSelect1.addEventListener('change', async () => {
+      try {
+        finishingLotSelect1.innerHTML = '<option value="">Loading lots...</option>';
+        const userId = finishingUserSelect1.value;
+        if (!userId) {
+          finishingLotSelect1.innerHTML = '<option value="">-- Select user first --</option>';
+          return;
+        }
+        const res = await fetch(`/operator/dashboard/lots-finishing-from-stitching?user_id=${userId}`);
+        const data = await res.json();
+        finishingLotSelect1.innerHTML = '<option value="">-- Choose Stitching Assignment --</option>';
+        data.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = `Stitching #${a.id}, Lot ${a.lot_no} (SKU: ${a.sku})`;
+          finishingLotSelect1.appendChild(opt);
+        });
+      } catch (err) {
+        finishingLotSelect1.innerHTML = '<option value="">Error loading lots</option>';
+      }
+    });
+
+    /****************************************************
+     * FINISHING (from WASHING)
+     ****************************************************/
+    const finishingUserSelect2 = document.getElementById('finishingUserSelect2');
+    const finishingLotSelect2  = document.getElementById('finishingLotSelect2');
+
+    async function loadFinishingUsers2() {
+      try {
+        finishingUserSelect2.innerHTML = '<option value="">Loading...</option>';
+        const res = await fetch('/operator/dashboard/users-finishing');
+        const data = await res.json();
+        finishingUserSelect2.innerHTML = '<option value="">-- Choose Finishing User --</option>';
+        data.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          finishingUserSelect2.appendChild(opt);
+        });
+      } catch (err) {
+        finishingUserSelect2.innerHTML = '<option value="">Error loading users</option>';
+      }
+    }
+
+    finishingUserSelect2.addEventListener('change', async () => {
+      try {
+        finishingLotSelect2.innerHTML = '<option value="">Loading lots...</option>';
+        const userId = finishingUserSelect2.value;
+        if (!userId) {
+          finishingLotSelect2.innerHTML = '<option value="">-- Select user first --</option>';
+          return;
+        }
+        const res = await fetch(`/operator/dashboard/lots-finishing-from-washing?user_id=${userId}`);
+        const data = await res.json();
+        finishingLotSelect2.innerHTML = '<option value="">-- Choose Washing Assignment --</option>';
+        data.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = `Washing #${a.id}, Lot ${a.lot_no} (SKU: ${a.sku})`;
+          finishingLotSelect2.appendChild(opt);
+        });
+      } catch (err) {
+        finishingLotSelect2.innerHTML = '<option value="">Error loading lots</option>';
+      }
+    });
+
+    // On page load, load all user lists:
+    loadStitchingUsers();
+    loadWashingUsers();
+    loadFinishingUsers1();
+    loadFinishingUsers2();
+
+    /****************************************************
+     * Initialize DataTables (for Lot Tracking)
+     ****************************************************/
+    $(document).ready(function() {
+      const lotTrackingTable = $('#tableLotTracking');
+      if (lotTrackingTable.length) {
+        lotTrackingTable.DataTable({
+          pageLength: 10,
+          lengthMenu: [10, 25, 50, 100],
+          order: [[0, 'asc']] // sort by the first column ascending
+        });
+      }
     });
   </script>
 </body>
