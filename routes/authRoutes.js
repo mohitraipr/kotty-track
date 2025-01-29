@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
       case 'finishing':
         res.redirect('/finishingDashboard');
         break;
-      case 'finishing':
+      case 'washing':
         res.redirect('/washingDashboard');
         break;
       case 'checking':
