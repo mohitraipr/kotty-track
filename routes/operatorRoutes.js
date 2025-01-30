@@ -528,7 +528,7 @@ router.get('/dashboard/lots-stitching', isAuthenticated, isOperator, async (req,
         WHERE user_id = ?
       )
       ORDER BY c.created_at DESC
-      LIMIT 5
+      
     `, [user_id]);
 
     return res.json(lots);
