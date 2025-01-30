@@ -562,7 +562,7 @@ router.get('/dashboard/lots-washing', isAuthenticated, isOperator, async (req, r
         WHERE user_id = ?
       )
       ORDER BY sa.assigned_on DESC
-      LIMIT 5
+    
     `, [user_id]);
 
     return res.json(assignments);
@@ -602,7 +602,7 @@ router.get('/dashboard/lots-finishing-from-stitching', isAuthenticated, isOperat
       )
       AND sd.total_pieces > 0
       ORDER BY sa.assigned_on DESC
-      LIMIT 5
+      
     `);
 
     return res.json(lots);
@@ -645,7 +645,7 @@ router.get('/dashboard/lots-finishing-from-washing', isAuthenticated, isOperator
       AND wa.user_id = ?
       AND wd.total_pieces > 0
       ORDER BY wa.assigned_on DESC
-      LIMIT 5
+      
     `, [user_id]);
 
     return res.json(lots);
