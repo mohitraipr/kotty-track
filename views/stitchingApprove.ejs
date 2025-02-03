@@ -1,0 +1,297 @@
+<!-- views/stitchingApprove.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Approve Stitching Assignments</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .main-content {
+      flex: 1 0 auto;
+    }
+    .sticky-subheader {
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+      background-color: #f8f9fa;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #dee2e6;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <i class="fas fa-tshirt me-2"></i> KOTTY
+      </a>
+      <div class="ms-auto d-flex gap-2">
+        <!-- Link back to the main Stitching Dashboard -->
+        <a href="/stitchingdashboard" class="btn btn-outline-light btn-sm">
+          <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+        <!-- Optional logout link -->
+        <a href="/logout" class="btn btn-sm btn-danger">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="container my-4 main-content">
+    <!-- FLASH MESSAGES -->
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="fas fa-exclamation-circle me-2"></i> <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% }) %>
+    <% } %>
+
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg) { %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="fas fa-check-circle me-2"></i> <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <% }) %>
+    <% } %>
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1 class="mb-0">
+        <i class="fas fa-check-circle"></i> Pending Stitching Assignments
+      </h1>
+    </div>
+
+    <!-- Sticky sub-header with search -->
+    <div class="sticky-subheader">
+      <div class="row">
+        <div class="col-sm-6">
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="fas fa-search"></i>
+            </span>
+            <input
+              type="text"
+              id="searchAssignments"
+              class="form-control"
+              placeholder="Search by lot or SKU..."
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card for pending approvals -->
+    <div class="card mt-2">
+      <div class="card-header">
+        <strong>Pending Approvals</strong>
+      </div>
+      <div class="card-body p-0">
+        <!-- We'll render a table of assignments here -->
+        <div class="table-responsive">
+          <table class="table table-striped mb-0" id="assignmentsTable">
+            <thead class="table-dark">
+              <tr>
+                <th scope="col">Assignment ID</th>
+                <th scope="col">Lot No</th>
+                <th scope="col">SKU</th>
+                <th scope="col">Assigned On</th>
+                <th scope="col">Remark</th>
+                <th scope="col" style="width: 180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- If no assignments, we'll show an alert (in JS) -->
+    <div id="noAssignmentsAlert" class="alert alert-info mt-3 d-none">
+      <i class="fas fa-info-circle me-2"></i>
+      No pending assignments found.
+    </div>
+  </div>
+
+  <!-- DENY MODAL -->
+  <div
+    class="modal fade"
+    id="denyModal"
+    tabindex="-1"
+    aria-labelledby="denyModalLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="denyForm" action="/stitchingdashboard/deny-lot" method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title" id="denyModalLabel">
+              <i class="fas fa-ban"></i> Deny Assignment
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="assignment_id" id="denyAssignmentId" value="" />
+            <div class="mb-3">
+              <label for="denial_remark" class="form-label">
+                <strong>Reason for Denial</strong>
+              </label>
+              <textarea
+                class="form-control"
+                name="denial_remark"
+                id="denial_remark"
+                rows="3"
+                required
+              ></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-danger">
+              <i class="fas fa-ban"></i> Deny
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
+  <script>
+    const searchAssignments = document.getElementById('searchAssignments');
+    const assignmentsTableBody = document.querySelector('#assignmentsTable tbody');
+    const noAssignmentsAlert = document.getElementById('noAssignmentsAlert');
+
+    let assignmentData = [];
+
+    // Fetch pending assignments from the server
+    async function fetchAssignments(search = '') {
+      try {
+        const resp = await fetch(`/stitchingdashboard/approve/list?search=${encodeURIComponent(search)}`);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        assignmentData = data.data || [];
+        renderAssignmentsTable();
+      } catch (err) {
+        console.error('Error fetching assignments:', err);
+        assignmentsTableBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-danger">
+              Error loading assignments. Please try again later.
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderAssignmentsTable() {
+      // Clear old
+      assignmentsTableBody.innerHTML = '';
+
+      if (!assignmentData.length) {
+        // Show the "No pending" alert
+        noAssignmentsAlert.classList.remove('d-none');
+        return;
+      } else {
+        noAssignmentsAlert.classList.add('d-none');
+      }
+
+      assignmentData.forEach(item => {
+        const tr = document.createElement('tr');
+
+        // Format date
+        const assignedOnDate = new Date(item.assigned_on).toLocaleString();
+
+        tr.innerHTML = `
+          <td>${item.assignment_id}</td>
+          <td>${item.lot_no}</td>
+          <td>${item.sku}</td>
+          <td>${assignedOnDate}</td>
+          <td>${item.assignment_remark || 'N/A'}</td>
+          <td>
+            <div class="d-flex flex-wrap gap-2">
+              <!-- Approve form -->
+              <form method="POST" action="/stitchingdashboard/approve-lot">
+                <input type="hidden" name="assignment_id" value="${item.assignment_id}">
+                <button type="submit" class="btn btn-success btn-sm">
+                  <i class="fas fa-check-circle"></i> Approve
+                </button>
+              </form>
+              <!-- Deny button triggers modal -->
+              <button
+                class="btn btn-danger btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#denyModal"
+                data-assignment-id="${item.assignment_id}"
+              >
+                <i class="fas fa-ban"></i> Deny
+              </button>
+            </div>
+          </td>
+        `;
+
+        assignmentsTableBody.appendChild(tr);
+      });
+    }
+
+    // On show Deny Modal
+    const denyModal = document.getElementById('denyModal');
+    denyModal.addEventListener('show.bs.modal', (event) => {
+      const button = event.relatedTarget;
+      const assignmentId = button.getAttribute('data-assignment-id');
+      document.getElementById('denyAssignmentId').value = assignmentId;
+      document.getElementById('denial_remark').value = '';
+    });
+
+    // Real-time search
+    searchAssignments.addEventListener('input', () => {
+      const val = searchAssignments.value.trim();
+      fetchAssignments(val);
+    });
+
+    // Initial load
+    fetchAssignments();
+  </script>
+</body>
+</html>
