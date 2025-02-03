@@ -1,71 +1,97 @@
-// middlewares/auth.js 
+// routes/authRoutes.js
 
-// Middleware to check if the user is authenticated
-function isAuthenticated(req, res, next) {
-    if (req.session && req.session.user) {
-        return next();
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const { pool } = require('../config/db');
+
+// GET /login
+router.get('/login', (req, res) => {
+  res.render('login');
+});
+
+// POST /login
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    req.flash('error', 'Please enter both username and password.');
+    return res.redirect('/login');
+  }
+
+  try {
+    const [users] = await pool.query(`
+      SELECT u.*, r.name AS roleName
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE u.username = ? AND u.is_active = TRUE
+    `, [username]);
+
+    if (users.length === 0) {
+      req.flash('error', 'Invalid username or password.');
+      return res.redirect('/login');
     }
-    req.flash('error', 'You must be logged in to view this page.');
-    res.redirect('/login');
-}
 
-// Middleware factory to check user roles
-function hasRole(roleName) {
-    return (req, res, next) => {
-        if (req.session && req.session.user && req.session.user.roleName === roleName) {
-            return next();
-        }
-        req.flash('error', 'You do not have permission to view this page.');
-        res.redirect('/');
+    const user = users[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      req.flash('error', 'Invalid username or password.');
+      return res.redirect('/login');
+    }
+
+    // Set user session
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      roleName: user.roleName
     };
-}
 
-// Specific role middlewares using the hasRole factory
-function isAdmin(req, res, next) {
-    return hasRole('admin')(req, res, next);
-}
-
-function isFabricManager(req, res, next) {
-    return hasRole('fabric_manager')(req, res, next);
-}
-
-function isCuttingManager(req, res, next) {
-    return hasRole('cutting_manager')(req, res, next);
-}
-
-function isStitchingMaster(req, res, next) {
-    return hasRole('stitching_master')(req, res, next);
-}
-
-function isFinishingMaster(req, res, next) {
-    return hasRole('finishing')(req, res, next);
-}
-
-function isWashingMaster(req, res, next) {
-    return hasRole('washing')(req, res, next);
-}
-
-function isOperator(req, res, next) {
-    return hasRole('operator')(req, res, next);
-}
-
-function isDepartmentUser(req, res, next) {
-    const departmentRoles = ['checking', 'quality_assurance'];
-    if (req.session && req.session.user && departmentRoles.includes(req.session.user.roleName)) {
-        return next();
+    // Redirect based on role
+    switch (user.roleName) {
+      case 'admin':
+        res.redirect('/admin');
+        break;
+      case 'cutting_manager':
+        res.redirect('/cutting-manager/dashboard');
+        break;
+      case 'fabric_manager':
+        res.redirect('/fabric-manager/dashboard');
+        break;
+      case 'stitching_master':
+        res.redirect('/stitchingdashboard');
+        break;
+      case 'operator':
+        res.redirect('/operator/dashboard');
+        break;
+      case 'finishing':
+        res.redirect('/finishingDashboard');
+        break;
+      case 'washing':
+          res.redirect('/washingdashboard');
+          break;
+      case 'checking':
+      case 'quality_assurance':
+        res.redirect('/department/dashboard');
+        break;
+      default:
+        res.redirect('/');
     }
-    req.flash('error', 'You do not have permission to view this page.');
-    res.redirect('/');
-}
+  } catch (err) {
+    console.error('Error during login:', err);
+    req.flash('error', 'An error occurred during login.');
+    res.redirect('/login');
+  }
+});
 
-module.exports = {
-    isAuthenticated,
-    isAdmin,
-    isFabricManager,
-    isCuttingManager,
-    isStitchingMaster,
-    isFinishingMaster,
-    isWashingMaster,
-    isOperator,
-    isDepartmentUser
-};
+// GET /logout
+router.get('/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      console.error('Error destroying session during logout:', err);
+    }
+    res.redirect('/login');
+  });
+});
+
+module.exports = router;
