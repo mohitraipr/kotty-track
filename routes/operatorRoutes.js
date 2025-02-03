@@ -1,408 +1,428 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Operator Dashboard – Enhanced Lot Tracking</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Google Fonts: Poppins for clarity and professionalism -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- DataTables CSS -->
-  <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-  <!-- DataTables Responsive CSS -->
-  <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <style>
-    /* Global Styles */
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #fafafa;
-      color: #333;
-      margin: 0;
-      padding-bottom: 2rem;
-    }
-    
-    /* Navbar: Subtle dark header for a professional tone */
-    .navbar {
-      background-color: #2c3e50;
-      border-bottom: 1px solid #222;
-    }
-    .navbar-brand {
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: #fff !important;
-    }
-    .navbar .btn {
-      margin-left: 10px;
-    }
-    
-    /* Cards: Clean, sharp, grid-aligned with white backgrounds */
-    .card {
-      background-color: #fff;
-      border: 1px solid #ddd;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      margin-bottom: 1.5rem;
-      border-radius: 0;
-    }
-    .card-header {
-      background-color: #f7f7f7;
-      border-bottom: 1px solid #ddd;
-      font-size: 1.25rem;
-      font-weight: 500;
-    }
-    
-    /* Form Controls: Neutral tones with sharp edges */
-    .form-control, .form-select {
-      border: 1px solid #ccc;
-      background-color: #fff;
-      color: #333;
-      border-radius: 0;
-    }
-    .form-control:focus, .form-select:focus {
-      border-color: #0056b3;
-      box-shadow: none;
-    }
-    ::placeholder {
-      color: #6c757d;
-    }
-    
-    /* Buttons: Professional, minimalist styling */
-    .btn {
-      border-radius: 0;
-      padding: 0.5rem 1rem;
-      font-weight: 500;
-      transition: background-color 0.3s, transform 0.3s;
-      border: none;
-    }
-    .btn-primary {
-      background-color: #0056b3;
-      color: #fff;
-    }
-    .btn-primary:hover {
-      background-color: #004494;
-    }
-    .btn-success {
-      background-color: #27ae60;
-      color: #fff;
-    }
-    .btn-success:hover {
-      background-color: #218838;
-    }
-    .btn-info {
-      background-color: #17a2b8;
-      color: #fff;
-    }
-    .btn-info:hover {
-      background-color: #138496;
-    }
-    .btn:hover {
-      transform: scale(1.02);
-    }
-    
-    /* DataTables: Clean table styling */
-    table.dataTable thead {
-      background-color: #eee;
-    }
-    table.dataTable thead th {
-      font-weight: 500;
-      border: none;
-    }
-    table.dataTable tbody tr:hover {
-      background-color: #f8f9fa;
-    }
-    table.dataTable tbody td {
-      vertical-align: middle;
-    }
-    
-    /* Leftover Badges: Minimal and informative */
-    .leftover-badge {
-      padding: 0.25rem 0.5rem;
-      font-weight: 600;
-      border: 1px solid transparent;
-      display: inline-block;
-      min-width: 50px;
-      text-align: center;
-      font-size: 0.9rem;
-      border-radius: 0;
-    }
-    .leftover-negative {
-      background-color: #e74c3c;
-      color: #fff;
-      border-color: #c0392b;
-    }
-    .leftover-zero {
-      background-color: #f1c40f;
-      color: #000;
-      border-color: #f39c12;
-    }
-    .leftover-positive {
-      background-color: #27ae60;
-      color: #fff;
-      border-color: #218838;
-    }
-    
-    /* Modal: Crisp and professional */
-    .modal-content {
-      background-color: #fff;
-      border: 1px solid #ddd;
-      border-radius: 0;
-    }
-    .modal-header {
-      background-color: #f7f7f7;
-      border-bottom: 1px solid #ddd;
-    }
-    
-    /* Headings */
-    h1 {
-      font-size: 2.25rem;
-      font-weight: 500;
-      text-align: center;
-      margin-bottom: 1.5rem;
-    }
-  </style>
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">
-        <i class="bi bi-speedometer2"></i> Operator Dashboard
-      </a>
-      <div>
-        <a class="btn btn-success btn-sm" href="/operator/dashboard/download-all-lots" target="_blank">
-          <i class="bi bi-download"></i> Download All
-        </a>
+/**************************************************
+ * operatorRoutes.js
+ * 
+ * This file has been modified to remove assignment-
+ * related endpoints and to enhance the lot tracking
+ * dashboard. In addition to previous features, it now
+ * also fetches (per lot) the last assigned user for 
+ * stitching, washing, and finishing.
+ **************************************************/
+const express = require('express');
+const router = express.Router();
+const { pool } = require('../config/db');
+const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
-        <a class="btn btn-success btn-sm" href="/search-dashboard" target="_blank">
-          <i class="bi bi-download"></i> Enhanced Search
-        </a>
-        
+/**
+ * Helper function: computeLeftoversForLot
+ * Returns an object with leftoverStitch, leftoverWash and leftoverFinish.
+ */
+async function computeLeftoversForLot(lot_no) {
+  // 1) totalCut
+  let totalCut = 0;
+  const [clRows] = await pool.query(
+    `SELECT total_pieces FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
+    [lot_no]
+  );
+  if (clRows.length) {
+    totalCut = clRows[0].total_pieces || 0;
+  }
 
-        <button class="btn btn-secondary btn-sm" onclick="window.print()">
-          <i class="bi bi-printer"></i> Print Page
-        </button>
-      </div>
-    </div>
-  </nav>
+  // 2) totalStitched
+  let [rows] = await pool.query(
+    `SELECT COALESCE(SUM(total_pieces),0) AS sumStitched FROM stitching_data WHERE lot_no = ?`,
+    [lot_no]
+  );
+  const totalStitched = rows[0].sumStitched || 0;
 
-  <div class="container py-4">
-    <h1>Enhanced Lot Tracking</h1>
-    
-    <!-- Search and Filter Section -->
-    <div class="card mb-4">
-      <div class="card-body">
-        <form method="GET" action="/operator/dashboard">
-          <div class="row g-3">
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" name="search" class="form-control" placeholder="Search by Lot No" value="<%= query.search || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
-                <input type="date" name="startDate" class="form-control" placeholder="Start Date" value="<%= query.startDate || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
-                <input type="date" name="endDate" class="form-control" placeholder="End Date" value="<%= query.endDate || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-sort-alpha-down"></i></span>
-                <select name="sortField" class="form-select">
-                  <option value="">Sort By</option>
-                  <option value="lot_no" <%= query.sortField === 'lot_no' ? 'selected' : '' %>>Lot No</option>
-                  <option value="sku" <%= query.sortField === 'sku' ? 'selected' : '' %>>SKU</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-funnel-fill"></i> Apply Filters
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-    
-    <!-- Lot Tracking Table -->
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-table"></i> Lot Tracking
-      </div>
-      <div class="card-body">
-        <% if (Object.keys(lotDetails).length === 0) { %>
-          <p class="text-muted">No lots found.</p>
-        <% } else { %>
-          <!-- The table is wrapped in a responsive container provided by DataTables Responsive -->
-          <table id="tableLotTracking" class="table table-bordered table-striped dt-responsive nowrap">
-            <thead>
-              <tr>
-                <th><i class="bi bi-hash"></i> Lot No</th>
-                <th><i class="bi bi-tags"></i> SKU</th>
-                <th><i class="bi bi-person"></i> Created By</th>
-                <th><i class="bi bi-scissors"></i> Cut Pieces</th>
-                <th><i class="bi bi-needle"></i> Leftover (Stitch)</th>
-                <th><i class="bi bi-droplet"></i> Leftover (Wash)</th>
-                <th><i class="bi bi-check2-circle"></i> Leftover (Finish)</th>
-                <th><i class="bi bi-gear"></i> Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% for (const lot_no in lotDetails) { 
-                   const info = lotDetails[lot_no];
-                   const sku = info.cuttingLot ? info.cuttingLot.sku : '';
-                   const createdBy = info.cuttingLot ? info.cuttingLot.created_by : 'N/A';
-                   const cutPieces = info.cuttingLot ? info.cuttingLot.total_pieces : 0;
-                   const leftoverStitchVal = (info.leftoverStitch !== null) ? info.leftoverStitch : 'N/A';
-                   const leftoverWashVal = (info.leftoverWash !== null) ? info.leftoverWash : 'N/A';
-                   const leftoverFinishVal = (info.leftoverFinish !== null) ? info.leftoverFinish : 'N/A';
-                   
-                   // Function to generate a badge for leftover values
-                   function leftoverBadge(val) {
-                     if (typeof val === 'number') {
-                       if (val < 0) return `<span class="badge bg-danger">${val}</span>`;
-                       if (val === 0) return `<span class="badge bg-warning text-dark">${val}</span>`;
-                       return `<span class="badge bg-success">${val}</span>`;
-                     }
-                     return `<span class="badge bg-secondary">${val}</span>`;
-                   }
-              %>
-              <tr>
-                <td><%= lot_no %></td>
-                <td><%= sku %></td>
-                <td><%= createdBy %></td>
-                <td><%= cutPieces %></td>
-                <td>
-                  <%- leftoverBadge(leftoverStitchVal) %>
-                  <small>(<%= info.stitchingAssignedUser ? info.stitchingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <%- leftoverBadge(leftoverWashVal) %>
-                  <small>(<%= info.washingAssignedUser ? info.washingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <%- leftoverBadge(leftoverFinishVal) %>
-                  <small>(<%= info.finishingAssignedUser ? info.finishingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <button class="btn btn-info btn-sm edit-btn"
-                    data-lot="<%= lot_no %>"
-                    data-total="<%= cutPieces %>"
-                    data-remark="<%= info.cuttingLot ? info.cuttingLot.remark : '' %>">
-                    <i class="bi bi-pencil"></i> Edit
-                  </button>
-                  <a class="btn btn-success btn-sm ms-2" href="/operator/dashboard/lot-tracking/<%= lot_no %>/download" target="_blank">
-                    <i class="bi bi-download"></i> Download
-                  </a>
-                </td>
-              </tr>
-              <% } %>
-            </tbody>
-          </table>
-        <% } %>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Edit Lot Modal -->
-  <div class="modal fade" id="editLotModal" tabindex="-1" aria-labelledby="editLotModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <form id="editLotForm" method="POST" action="/operator/dashboard/edit-lot">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="editLotModalLabel">
-              <i class="bi bi-pencil-square"></i> Edit Lot Details
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="lot_no" id="editLotNo">
-            <div class="mb-3">
-              <label for="editTotalPieces" class="form-label">Total Pieces (Override)</label>
-              <div class="input-group">
-                <input type="number" class="form-control" name="total_pieces" id="editTotalPieces" required>
-                <button class="btn btn-outline-secondary" type="button" id="cutButton">
-                  <i class="bi bi-scissors"></i> Cut
-                </button>
-              </div>
-            </div>
-            <div class="mb-3">
-              <label for="editRemark" class="form-label">Remark</label>
-              <textarea class="form-control" name="remark" id="editRemark" rows="3"></textarea>
-            </div>
-            <p class="text-muted">Override the calculated total pieces. Use the "Cut" button to subtract pieces if needed.</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <i class="bi bi-x-circle"></i> Cancel
-            </button>
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-save"></i> Save Changes
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-  
-  <!-- Scripts -->
-  <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- jQuery -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- DataTables JS -->
-  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-  <!-- DataTables Responsive JS -->
-  <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
-  <script>
-    // Initialize DataTable with responsive extension
-    $(document).ready(function() {
-      $('#tableLotTracking').DataTable({
-        responsive: true,
-        pageLength: 10,
-        lengthMenu: [10, 25, 50, 100],
-        order: [[0, 'asc']]
-      });
+  // 3) totalWashed
+  [rows] = await pool.query(
+    `SELECT COALESCE(SUM(total_pieces),0) AS sumWashed FROM washing_data WHERE lot_no = ?`,
+    [lot_no]
+  );
+  const totalWashed = rows[0].sumWashed || 0;
+
+  // 4) totalFinished
+  [rows] = await pool.query(
+    `SELECT COALESCE(SUM(total_pieces),0) AS sumFinished FROM finishing_data WHERE lot_no = ?`,
+    [lot_no]
+  );
+  const totalFinished = rows[0].sumFinished || 0;
+
+  // 5) Check if there is any stitching assignment for this lot
+  const [stAssign] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM stitching_assignments sa
+     JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+     WHERE c.lot_no = ?`,
+    [lot_no]
+  );
+  const assignedStitch = stAssign[0].cnt > 0;
+
+  // 6) Check washing assignment
+  const [wAssign] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM washing_assignments wa
+     JOIN stitching_assignments sa ON wa.stitching_assignment_id = sa.id
+     JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+     WHERE c.lot_no = ?`,
+    [lot_no]
+  );
+  const assignedWash = wAssign[0].cnt > 0;
+
+  // 7) Check finishing assignment
+  const [fAssign] = await pool.query(
+    `SELECT COUNT(*) AS cnt
+     FROM finishing_assignments fa
+     LEFT JOIN stitching_assignments sa ON fa.stitching_assignment_id = sa.id
+     LEFT JOIN washing_assignments wa ON fa.washing_assignment_id = wa.id
+     LEFT JOIN cutting_lots c1 ON sa.cutting_lot_id = c1.id
+     LEFT JOIN stitching_assignments sa2 ON wa.stitching_assignment_id = sa2.id
+     LEFT JOIN cutting_lots c2 ON sa2.cutting_lot_id = c2.id
+     WHERE (c1.lot_no = ? OR c2.lot_no = ?)`,
+    [lot_no, lot_no]
+  );
+  const assignedFinish = fAssign[0].cnt > 0;
+
+  // 8) Compute leftovers if assigned; otherwise null.
+  const leftoverStitch = assignedStitch ? (totalCut - totalStitched) : null;
+  const leftoverWash = assignedWash ? (totalStitched - totalWashed) : null;
+  let leftoverFinish = null;
+  if (assignedFinish) {
+    if (assignedWash) {
+      leftoverFinish = totalWashed - totalFinished;
+    } else {
+      leftoverFinish = totalStitched - totalFinished;
+    }
+  }
+
+  return { leftoverStitch, leftoverWash, leftoverFinish };
+}
+
+/**
+ * Helper function: computeOperatorPerformance
+ * Computes aggregated totals for each operator (by user_id)
+ */
+async function computeOperatorPerformance() {
+  const perf = {}; // user_id => { username, totalStitched, totalWashed, totalFinished }
+
+  // stitching_data
+  let [rows] = await pool.query(
+    `SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumStitched FROM stitching_data GROUP BY user_id`
+  );
+  rows.forEach(r => {
+    if (!perf[r.user_id]) perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    perf[r.user_id].totalStitched = r.sumStitched || 0;
+  });
+
+  // washing_data
+  [rows] = await pool.query(
+    `SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumWashed FROM washing_data GROUP BY user_id`
+  );
+  rows.forEach(r => {
+    if (!perf[r.user_id]) perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    perf[r.user_id].totalWashed = r.sumWashed || 0;
+  });
+
+  // finishing_data
+  [rows] = await pool.query(
+    `SELECT user_id, COALESCE(SUM(total_pieces),0) AS sumFinished FROM finishing_data GROUP BY user_id`
+  );
+  rows.forEach(r => {
+    if (!perf[r.user_id]) perf[r.user_id] = { totalStitched: 0, totalWashed: 0, totalFinished: 0 };
+    perf[r.user_id].totalFinished = r.sumFinished || 0;
+  });
+
+  // Attach usernames
+  const uids = Object.keys(perf);
+  if (uids.length) {
+    const [users] = await pool.query(
+      `SELECT id, username FROM users WHERE id IN (?)`,
+      [uids]
+    );
+    users.forEach(u => {
+      if (perf[u.id]) perf[u.id].username = u.username;
     });
-    
-    // Open the Edit modal and populate it with the selected lot's data.
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const lot_no = this.getAttribute('data-lot');
-        const total = this.getAttribute('data-total');
-        const remark = this.getAttribute('data-remark');
-        document.getElementById('editLotNo').value = lot_no;
-        document.getElementById('editTotalPieces').value = total;
-        document.getElementById('editRemark').value = remark;
-        var editModal = new bootstrap.Modal(document.getElementById('editLotModal'));
-        editModal.show();
+  }
+
+  return perf;
+}
+
+/**
+ * GET /operator/dashboard
+ * Enhanced lot tracking dashboard – no assignment forms.
+ * Supports filtering (search string and date range) and sorting.
+ * Aggregates data from cutting_lots, sizes, rolls and computes leftovers.
+ * Also fetches the last assigned user (if any) for stitching, washing and finishing.
+ */
+router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { search, startDate, endDate, sortField, sortOrder } = req.query;
+
+    // 1) Get all lot numbers from cutting_lots.
+    const [allCuts] = await pool.query(`SELECT lot_no FROM cutting_lots`);
+    const allLotNos = new Set();
+    allCuts.forEach(row => allLotNos.add(row.lot_no));
+    let lotNoArray = Array.from(allLotNos);
+
+    // 2) Apply search filter by lot_no substring.
+    if (search) {
+      lotNoArray = lotNoArray.filter(lot_no => lot_no.includes(search));
+    }
+
+    // 3) Apply date range filter (using cutting_lots.created_at).
+    if (startDate || endDate) {
+      const [filteredLots] = await pool.query(
+        `SELECT lot_no FROM cutting_lots
+         WHERE (? IS NULL OR created_at >= ?)
+           AND (? IS NULL OR created_at <= ?)`,
+        [startDate || null, startDate || null, endDate || null, endDate || null]
+      );
+      const filteredSet = new Set(filteredLots.map(r => r.lot_no));
+      lotNoArray = lotNoArray.filter(lot_no => filteredSet.has(lot_no));
+    }
+
+    // 4) Sorting if requested.
+    if (sortField) {
+      lotNoArray.sort((a, b) => {
+        if (sortOrder === 'desc') return b.localeCompare(a);
+        return a.localeCompare(b);
       });
-    });
-    
-    // Handle the "Cut" button functionality.
-    document.getElementById('cutButton').addEventListener('click', function() {
-      const currentVal = Number(document.getElementById('editTotalPieces').value);
-      const cutAmount = prompt("Enter the number of pieces to cut:", "0");
-      const cutNum = Number(cutAmount);
-      if (!isNaN(cutNum) && cutNum > 0) {
-        const newVal = currentVal - cutNum;
-        if (newVal < 0) {
-          alert("Resulting total cannot be negative!");
-        } else {
-          document.getElementById('editTotalPieces').value = newVal;
-        }
+    }
+
+    // 5) Build aggregator: for each lot_no, fetch associated data.
+    const lotDetails = {};
+    for (const lot_no of lotNoArray) {
+      // Query cutting_lots joined with users to get creator's username.
+      const [cutRows] = await pool.query(
+        `SELECT cl.*, u.username AS created_by 
+         FROM cutting_lots cl 
+         JOIN users u ON cl.user_id = u.id 
+         WHERE cl.lot_no = ? LIMIT 1`,
+        [lot_no]
+      );
+      const cuttingLot = cutRows.length ? cutRows[0] : null;
+
+      // cutting_lot_sizes
+      const [cuttingSizes] = await pool.query(
+        `SELECT * FROM cutting_lot_sizes
+         WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)
+         ORDER BY size_label`,
+        [lot_no]
+      );
+
+      // cutting_lot_rolls
+      const [cuttingRolls] = await pool.query(
+        `SELECT * FROM cutting_lot_rolls
+         WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)
+         ORDER BY roll_no`,
+        [lot_no]
+      );
+
+      // stitching_data and its sizes.
+      const [stitchingData] = await pool.query(
+        `SELECT * FROM stitching_data WHERE lot_no = ?`,
+        [lot_no]
+      );
+      const stitchingDataIds = stitchingData.map(sd => sd.id);
+      let stitchingDataSizes = [];
+      if (stitchingDataIds.length) {
+        const [szRows] = await pool.query(
+          `SELECT * FROM stitching_data_sizes WHERE stitching_data_id IN (?)`,
+          [stitchingDataIds]
+        );
+        stitchingDataSizes = szRows;
       }
+
+      // washing_data and its sizes.
+      const [washingData] = await pool.query(
+        `SELECT * FROM washing_data WHERE lot_no = ?`,
+        [lot_no]
+      );
+      const washingDataIds = washingData.map(wd => wd.id);
+      let washingDataSizes = [];
+      if (washingDataIds.length) {
+        const [szRows] = await pool.query(
+          `SELECT * FROM washing_data_sizes WHERE washing_data_id IN (?)`,
+          [washingDataIds]
+        );
+        washingDataSizes = szRows;
+      }
+
+      // finishing_data and its sizes.
+      const [finishingData] = await pool.query(
+        `SELECT * FROM finishing_data WHERE lot_no = ?`,
+        [lot_no]
+      );
+      const finishingDataIds = finishingData.map(fd => fd.id);
+      let finishingDataSizes = [];
+      if (finishingDataIds.length) {
+        const [szRows] = await pool.query(
+          `SELECT * FROM finishing_data_sizes WHERE finishing_data_id IN (?)`,
+          [finishingDataIds]
+        );
+        finishingDataSizes = szRows;
+      }
+
+      // department_confirmations (historical info).
+      const [departmentConfirmations] = await pool.query(
+        `SELECT dc.*
+         FROM department_confirmations dc
+         JOIN lot_assignments la ON dc.lot_assignment_id = la.id
+         WHERE la.cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)`,
+        [lot_no]
+      );
+
+      // lot_assignments (historical info).
+      const [lotAssignments] = await pool.query(
+        `SELECT * FROM lot_assignments
+         WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)`,
+        [lot_no]
+      );
+
+      // Compute leftovers.
+      const { leftoverStitch, leftoverWash, leftoverFinish } = await computeLeftoversForLot(lot_no);
+
+      // New queries: fetch the last assigned user for each department.
+      const [stitchingAssignRows] = await pool.query(
+        `SELECT u.username FROM stitching_assignments sa 
+         JOIN cutting_lots c ON sa.cutting_lot_id = c.id 
+         JOIN users u ON sa.user_id = u.id 
+         WHERE c.lot_no = ? ORDER BY sa.assigned_on DESC LIMIT 1`,
+         [lot_no]
+      );
+      const stitchingAssignedUser = stitchingAssignRows.length ? stitchingAssignRows[0].username : null;
+
+      const [washingAssignRows] = await pool.query(
+        `SELECT u.username FROM washing_assignments wa 
+         JOIN stitching_assignments sa ON wa.stitching_assignment_id = sa.id 
+         JOIN cutting_lots c ON sa.cutting_lot_id = c.id 
+         JOIN users u ON wa.user_id = u.id 
+         WHERE c.lot_no = ? ORDER BY wa.assigned_on DESC LIMIT 1`,
+         [lot_no]
+      );
+      const washingAssignedUser = washingAssignRows.length ? washingAssignRows[0].username : null;
+
+      const [finishingAssignRows] = await pool.query(
+        `SELECT u.username FROM finishing_assignments fa 
+         JOIN users u ON fa.user_id = u.id 
+         LEFT JOIN stitching_assignments sa ON fa.stitching_assignment_id = sa.id 
+         LEFT JOIN washing_assignments wa ON fa.washing_assignment_id = wa.id 
+         LEFT JOIN cutting_lots c ON (sa.cutting_lot_id = c.id OR wa.stitching_assignment_id = sa.id)
+         WHERE c.lot_no = ? ORDER BY fa.assigned_on DESC LIMIT 1`,
+         [lot_no]
+      );
+      const finishingAssignedUser = finishingAssignRows.length ? finishingAssignRows[0].username : null;
+
+      // Since we no longer have a lot_overrides table, set override to null.
+      const override = null;
+
+      lotDetails[lot_no] = {
+        cuttingLot,
+        cuttingSizes,
+        cuttingRolls,
+        stitchingData,
+        stitchingDataSizes,
+        washingData,
+        washingDataSizes,
+        finishingData,
+        finishingDataSizes,
+        departmentConfirmations,
+        lotAssignments,
+        leftoverStitch,
+        leftoverWash,
+        leftoverFinish,
+        stitchingAssignedUser,
+        washingAssignedUser,
+        finishingAssignedUser,
+        override
+      };
+    }
+
+    // 6) Compute operator performance (optional).
+    const operatorPerformance = await computeOperatorPerformance();
+
+    return res.render('operatorDashboard', {
+      lotDetails,
+      operatorPerformance,
+      query: { search, startDate, endDate, sortField, sortOrder }
     });
-  </script>
-</body>
-</html>
+  } catch (err) {
+    console.error('Error loading operator dashboard:', err);
+    return res.status(500).send('Server error');
+  }
+});
+
+// The edit-lot and export endpoints remain as in the previous version.
+router.post('/dashboard/edit-lot', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { lot_no, total_pieces, remark } = req.body;
+    if (!lot_no) return res.status(400).send('Lot number is required');
+
+    await pool.query(
+      `UPDATE cutting_lots SET total_pieces = ?, remark = ? WHERE lot_no = ?`,
+      [total_pieces || 0, remark || null, lot_no]
+    );
+
+    return res.redirect('/operator/dashboard');
+  } catch (err) {
+    console.error('Error editing lot:', err);
+    return res.status(500).send('Server error');
+  }
+});
+
+router.get('/dashboard/lot-tracking/:lot_no/download', isAuthenticated, isOperator, async (req, res) => {
+  const { lot_no } = req.params;
+  try {
+    const [cutRows] = await pool.query(
+      `SELECT * FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
+      [lot_no]
+    );
+    const cuttingLot = cutRows.length ? cutRows[0] : {};
+    const [sizes] = await pool.query(
+      `SELECT * FROM cutting_lot_sizes
+       WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)
+       ORDER BY size_label`,
+      [lot_no]
+    );
+    const [rolls] = await pool.query(
+      `SELECT * FROM cutting_lot_rolls
+       WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)
+       ORDER BY roll_no`,
+      [lot_no]
+    );
+    let csvContent = `Lot No,SKU,Fabric Type,Total Pieces,Remark\n`;
+    csvContent += `${cuttingLot.lot_no},${cuttingLot.sku},${cuttingLot.fabric_type},${cuttingLot.total_pieces},${cuttingLot.remark}\n\n`;
+    csvContent += `Sizes:\nSize Label,Pattern Count,Total Pieces\n`;
+    sizes.forEach(s => {
+      csvContent += `${s.size_label},${s.pattern_count},${s.total_pieces}\n`;
+    });
+    csvContent += `\nRolls:\nRoll No,Weight Used,Layers,Total Pieces\n`;
+    rolls.forEach(r => {
+      csvContent += `${r.roll_no},${r.weight_used},${r.layers},${r.total_pieces}\n`;
+    });
+    res.setHeader('Content-disposition', `attachment; filename=Lot_${lot_no}.csv`);
+    res.set('Content-Type', 'text/csv');
+    res.send(csvContent);
+  } catch (err) {
+    console.error('Error exporting lot:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.get('/dashboard/download-all-lots', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [allCuts] = await pool.query(`SELECT * FROM cutting_lots`);
+    let csvContent = `Lot No,SKU,Fabric Type,Total Pieces,Remark,Created At\n`;
+    allCuts.forEach(cut => {
+      csvContent += `${cut.lot_no},${cut.sku},${cut.fabric_type},${cut.total_pieces},${cut.remark},${cut.created_at}\n`;
+    });
+    res.setHeader('Content-disposition', `attachment; filename=All_Lots.csv`);
+    res.set('Content-Type', 'text/csv');
+    res.send(csvContent);
+  } catch (err) {
+    console.error('Error exporting all lots:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// ***** Assignment endpoints removed *****
+
+module.exports = router;
