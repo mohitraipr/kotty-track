@@ -207,7 +207,6 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
       const cuttingLotId = result.insertId;
 
       // Handle sizes if provided (arrays)
-      // Ensure size_label and pattern_count are arrays
       let sizes = [];
       if (Array.isArray(size_label) && Array.isArray(pattern_count)) {
         for (let i = 0; i < size_label.length; i++) {
@@ -239,7 +238,6 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
       }
 
       // Handle Rolls Used if provided
-      // Ensure roll_no, layers, weight_used are arrays
       let rolls = [];
       if (Array.isArray(roll_no) && Array.isArray(layers) && Array.isArray(weight_used)) {
         for (let i = 0; i < roll_no.length; i++) {
@@ -296,7 +294,6 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
       }
 
       // Calculate total_pieces
-      // Sum of pattern_counts across sizes
       const [sizeRows] = await conn.query(`
         SELECT pattern_count FROM cutting_lot_sizes WHERE cutting_lot_id = ?
       `, [cuttingLotId]);
@@ -306,7 +303,6 @@ router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('ima
         sumPatterns += size.pattern_count;
       }
 
-      // Sum of layers across rolls
       const [rollRowsSum] = await conn.query(`
         SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?
       `, [cuttingLotId]);
@@ -494,6 +490,124 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
     console.error('Error loading Lot Details:', err);
     req.flash('error', 'Failed to load Lot Details.');
     res.redirect('/cutting-manager/dashboard');
+  }
+});
+
+/* ------------------------------------------------------------------
+   NEW CODE for "Assign to Stitching" BELOW
+   ------------------------------------------------------------------ */
+
+/**
+ * GET /cutting-manager/assign-stitching
+ * Render the new page that shows lots not yet assigned to stitching.
+ */
+router.get('/assign-stitching', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    // We’ll just render our new EJS page. 
+    // The page itself will load lots & users via AJAX if you prefer 
+    // OR we can fetch here and pass to EJS directly. 
+    // For demonstration, we’ll do minimal data in the EJS; 
+    // lots & users can be fetched via additional routes or from here.
+    return res.render('assignStitching', {
+      user: req.session.user,
+      error: req.flash('error'),
+      success: req.flash('success')
+    });
+  } catch (err) {
+    console.error('Error rendering assign-stitching page:', err);
+    req.flash('error', 'Failed to load Assign to Stitching page.');
+    return res.redirect('/cutting-manager/dashboard');
+  }
+});
+
+/**
+ * GET /cutting-manager/assign-stitching/lots
+ * Returns JSON of unassigned lots (for the cutting master).
+ * "Unassigned" means no entry in stitching_assignments for that cutting_lot_id.
+ */
+router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const cuttingMasterId = req.session.user.id;
+    const [rows] = await pool.query(`
+      SELECT 
+        c.id AS cutting_lot_id,
+        c.lot_no,
+        c.sku,
+        c.created_at
+      FROM cutting_lots c
+      WHERE c.user_id = ?
+        AND c.id NOT IN (
+          SELECT s.cutting_lot_id 
+          FROM stitching_assignments s
+        )
+      ORDER BY c.created_at DESC
+    `, [cuttingMasterId]);
+
+    return res.json({ lots: rows });
+  } catch (error) {
+    console.error('Error fetching unassigned lots:', error);
+    return res.status(500).json({ error: 'Server error fetching lots.' });
+  }
+});
+
+/**
+ * GET /cutting-manager/assign-stitching/users
+ * Returns JSON of all stitching users
+ */
+router.get('/assign-stitching/users', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const [users] = await pool.query(`
+      SELECT id, username
+      FROM users
+      WHERE is_active = 1
+        AND role_id IN (SELECT id FROM roles WHERE name = 'stitching_master')
+      ORDER BY username
+    `);
+    return res.json({ users });
+  } catch (error) {
+    console.error('Error fetching stitching users:', error);
+    return res.status(500).json({ error: 'Server error fetching users.' });
+  }
+});
+
+/**
+ * POST /cutting-manager/assign-stitching
+ * AJAX request to assign a lot to a specific stitching user
+ * We use the column `assigner_cutting_master` instead of `operator_id`
+ * because you said you renamed it.
+ */
+router.post('/assign-stitching', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const { cutting_lot_id, user_id } = req.body;
+    if (!cutting_lot_id || !user_id) {
+      return res.status(400).json({ error: 'Missing cutting_lot_id or user_id' });
+    }
+
+    // Double-check that this lot belongs to the current cutting manager
+    const [checkRows] = await pool.query(`
+      SELECT id FROM cutting_lots 
+      WHERE id = ? AND user_id = ?
+      LIMIT 1
+    `, [cutting_lot_id, req.session.user.id]);
+    if (checkRows.length === 0) {
+      return res.status(403).json({ error: 'You do not own this lot or it does not exist.' });
+    }
+
+    // Insert into stitching_assignments
+    await pool.query(`
+      INSERT INTO stitching_assignments
+        (assigner_cutting_master, user_id, cutting_lot_id, assigned_on)
+      VALUES
+        (?, ?, ?, NOW())
+    `, [req.session.user.id, user_id, cutting_lot_id]);
+
+    // Everything successful
+    // We can also use req.flash if you want to see it after a redirect,
+    // but since we are doing AJAX, we’ll just respond with JSON:
+    return res.json({ success: true, message: 'Lot successfully assigned to stitching user.' });
+  } catch (error) {
+    console.error('Error assigning lot to stitching:', error);
+    return res.status(500).json({ error: 'Server error assigning lot.' });
   }
 });
 
