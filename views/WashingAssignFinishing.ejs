@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Assign to Finishing (Washing)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap 5 CSS & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <style>
+    body { background-color: #f8f9fa; }
+    .main-content { margin-top: 1rem; }
+    .card { box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="fas fa-tasks me-1"></i> Assign to Finishing</a>
+      <div class="ms-auto">
+        <a href="/washingdashboard" class="btn btn-outline-light btn-sm"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container main-content">
+    <!-- Flash Messages -->
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg){ %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg){ %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+
+    <h3 class="mb-3"><i class="fas fa-tasks"></i> Assign Partial Sizes to Finishing</h3>
+
+    <!-- Search Field -->
+    <div class="mb-3">
+      <label for="searchInput" class="form-label">Search by Lot or SKU:</label>
+      <input type="text" id="searchInput" class="form-control" placeholder="Type to filter..." />
+    </div>
+
+    <!-- Container for leftover sizes -->
+    <div id="assignmentsContainer"></div>
+
+    <!-- Form for submission -->
+    <form id="assignFinishingForm" method="POST" action="/washingdashboard/assign-finishing" class="mt-4">
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="target_day" class="form-label fw-semibold">Target Day (optional)</label>
+          <input type="date" name="target_day" id="target_day" class="form-control" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-paper-plane"></i> Submit Assignments
+      </button>
+    </form>
+  </div>
+
+  <!-- Bootstrap Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let finishingUsers = [];
+    let allData = []; // Array of objects: { washing_assignment_id, lot_no, sku, sizes: [ { size_label, pieces } ] }
+    const searchInput = document.getElementById('searchInput');
+    const assignmentsContainer = document.getElementById('assignmentsContainer');
+    const assignFinishingForm = document.getElementById('assignFinishingForm');
+
+    // Fetch finishing users (for washing, finishing users are fetched via the same endpoint)
+    async function fetchFinishingUsers() {
+      try {
+        const resp = await fetch('/stitchingdashboard/assign-finishing/users');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        finishingUsers = json.data || [];
+      } catch (err) {
+        console.error('[ERROR] fetchFinishingUsers =>', err);
+      }
+    }
+
+    // Fetch leftover sizes from washing assignments (via washing dashboard endpoint)
+    async function fetchUnassignedData() {
+      try {
+        const resp = await fetch('/washingdashboard/assign-finishing/data');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        allData = json.data || [];
+        renderData();
+      } catch (err) {
+        console.error('[ERROR] fetchUnassignedData =>', err);
+        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading data.</div>';
+      }
+    }
+
+    function renderData() {
+      assignmentsContainer.innerHTML = '';
+      if (!allData.length) {
+        assignmentsContainer.innerHTML = '<div class="alert alert-info">No unassigned sizes found.</div>';
+        return;
+      }
+      const filterVal = searchInput.value.trim().toLowerCase();
+      const filtered = allData.filter(entry => {
+        const combined = (entry.lot_no + ' ' + entry.sku).toLowerCase();
+        return combined.includes(filterVal);
+      });
+      if (!filtered.length) {
+        assignmentsContainer.innerHTML = '<div class="alert alert-warning">No matching results.</div>';
+        return;
+      }
+      filtered.forEach(entry => {
+        // entry: { washing_assignment_id, lot_no, sku, sizes: [ { size_label, pieces } ] }
+        const card = document.createElement('div');
+        card.classList.add('card', 'mb-3');
+        card.innerHTML = `
+          <div class="card-header bg-secondary text-white">
+            <strong>Lot:</strong> ${entry.lot_no} | 
+            <strong>SKU:</strong> ${entry.sku} | 
+            <span class="badge bg-light text-dark">WAssign ID: ${entry.washing_assignment_id}</span>
+          </div>
+          <div class="card-body">
+            <table class="table table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th>Size Label</th>
+                  <th>Pieces</th>
+                  <th>Assign Finishing User</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-asg-${entry.washing_assignment_id}"></tbody>
+            </table>
+          </div>
+        `;
+        assignmentsContainer.appendChild(card);
+        const tbody = document.getElementById(`tbody-asg-${entry.washing_assignment_id}`);
+        entry.sizes.forEach(sz => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${sz.size_label}</td>
+            <td>${sz.pieces}</td>
+            <td>
+              <select class="form-select finishingSelect">
+                <option value="">--Select Finishing User--</option>
+                ${finishingUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
+              </select>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    searchInput.addEventListener('input', renderData);
+
+    // On form submit, build hidden input with finishing assignment data
+    assignFinishingForm.addEventListener('submit', (e) => {
+      // Remove existing hidden inputs
+      document.querySelectorAll('.finishingAssignmentField').forEach(el => el.remove());
+      const finalObj = {};
+      allData.forEach(entry => {
+        const wAssignId = entry.washing_assignment_id;
+        const tbody = document.getElementById(`tbody-asg-${wAssignId}`);
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(r => {
+          const sizeLabel = r.cells[0].textContent.trim();
+          const finSelect = r.cells[2].querySelector('select.finishingSelect');
+          const finUserVal = finSelect.value;
+          if (finUserVal) {
+            if (!finalObj[finUserVal]) finalObj[finUserVal] = [];
+            finalObj[finUserVal].push({
+              washing_assignment_id: wAssignId,
+              size_label: sizeLabel
+            });
+          }
+        });
+      });
+      console.log('[DEBUG] Final assignment object =>', finalObj);
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'finishingAssignments';
+      hidden.value = JSON.stringify(finalObj);
+      hidden.classList.add('finishingAssignmentField');
+      assignFinishingForm.appendChild(hidden);
+    });
+
+    (async function init() {
+      await fetchFinishingUsers();
+      await fetchUnassignedData();
+    })();
+  </script>
+</body>
+</html>
