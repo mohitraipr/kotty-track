@@ -3,96 +3,108 @@
 <head>
   <meta charset="UTF-8">
   <title>Washing Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <!-- Bootstrap & FontAwesome -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap 5 CSS & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .navbar-brand { font-weight: 700; font-size: 1.4rem; }
+    .nav-tabs .nav-link { font-size: 1.1rem; font-weight: 500; }
+    .autocomplete-items {
+      position: absolute;
+      z-index: 1000;
+      width: 100%;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #ced4da;
+      display: none;
+    }
+    .autocomplete-items li { padding: 0.5rem; cursor: pointer; }
+    .autocomplete-items li:hover { background: #e9ecef; }
+  </style>
 </head>
 <body>
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
+    <div class="container">
       <a class="navbar-brand" href="#">Washing Dashboard</a>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-        aria-controls="navbarNav"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-sm btn-danger">Logout</a>
-          </li>
-        </ul>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <div class="d-flex gap-2">
+          <a href="/washingdashboard/approve" class="btn btn-outline-info btn-sm">
+            <i class="fas fa-check-circle"></i> Approvals
+          </a>
+          <a href="/washingdashboard/assign-finishing" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-tasks"></i> Assign to Finishing
+          </a>
+          <a href="/logout" class="btn btn-outline-danger btn-sm">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </a>
+        </div>
       </div>
     </div>
   </nav>
 
+  <!-- Main Container -->
   <div class="container my-4">
-    <!-- Flash messages -->
+    <!-- Flash Messages -->
     <% if (error && error.length) { %>
-      <div class="alert alert-danger"><%= error[0] %></div>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <%= error[0] %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
     <% } %>
     <% if (success && success.length) { %>
-      <div class="alert alert-success"><%= success[0] %></div>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= success[0] %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
     <% } %>
 
-    <h2>Washing Dashboard</h2>
+    <h2 class="mb-4">Washing Dashboard</h2>
 
-    <ul class="nav nav-tabs">
-      <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#createTab">
-          Create Entry
+    <!-- Tabs for Create & Existing Entries -->
+    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab" aria-selected="true">
+          <i class="fas fa-plus-circle me-1"></i> Create Entry
         </button>
       </li>
-      <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#existingTab">
-          Existing Entries
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="existing-tab" data-bs-toggle="tab" data-bs-target="#existingTab" type="button" role="tab" aria-selected="false">
+          <i class="fas fa-list me-1"></i> Existing Entries
         </button>
       </li>
     </ul>
 
     <div class="tab-content mt-3">
-      <!-- CREATE TAB -->
-      <div class="tab-pane fade show active" id="createTab">
-        <div class="card">
-          <div class="card-header">Create New Washing Entry</div>
+      <!-- CREATE ENTRY TAB -->
+      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-header bg-primary text-white">
+            Create New Washing Entry
+          </div>
           <div class="card-body">
             <form id="createForm" action="/washingdashboard/create" method="POST" enctype="multipart/form-data">
-              <div class="mb-3">
+              <div class="mb-3 position-relative">
                 <label for="selectedLotIdSearch" class="form-label">Select Lot</label>
-                <input type="text" id="selectedLotIdSearch" class="form-control" placeholder="Search assigned lot..." required />
-                <input type="hidden" name="selectedLotId" id="selectedLotId" required />
-                <ul class="list-group position-absolute" id="lotAutocomplete" style="z-index: 999;"></ul>
+                <input type="text" id="selectedLotIdSearch" class="form-control" placeholder="Search assigned lot..." required>
+                <input type="hidden" name="selectedLotId" id="selectedLotId" required>
+                <ul class="list-group autocomplete-items" id="lotAutocomplete"></ul>
               </div>
-
               <div class="mb-3">
                 <label class="form-label">Remark (optional)</label>
-                <input type="text" name="remark" class="form-control" />
+                <input type="text" name="remark" class="form-control" placeholder="Enter remark...">
               </div>
-
               <div class="mb-3">
                 <label class="form-label">Image (optional)</label>
-                <input type="file" name="image_file" class="form-control" accept="image/*" />
+                <input type="file" name="image_file" class="form-control" accept="image/*">
               </div>
-
-              <div class="mt-4" id="lotSizesContainer" style="display:none;">
-                <h5>Sizes for This Lot</h5>
+              <div id="lotSizesContainer" style="display:none;">
+                <h5 class="mt-4">Sizes for This Lot</h5>
                 <table class="table table-bordered" id="sizesTable">
-                  <thead>
+                  <thead class="table-light">
                     <tr>
                       <th>Size Label</th>
                       <th>Max Available</th>
@@ -102,38 +114,29 @@
                   <tbody></tbody>
                 </table>
                 <div class="mt-2">
-                  <strong>Total Pieces Selected:</strong>
-                  <span id="createTotalPieces">0</span>
+                  <strong>Total Pieces Selected: </strong><span id="createTotalPieces">0</span>
                 </div>
               </div>
-
-              <button type="submit" class="btn btn-primary mt-3">Create Washing Entry</button>
+              <button type="submit" class="btn btn-success mt-3">
+                <i class="fas fa-check me-1"></i> Create Washing Entry
+              </button>
             </form>
           </div>
         </div>
       </div>
 
       <!-- EXISTING ENTRIES TAB -->
-      <div class="tab-pane fade" id="existingTab">
+      <div class="tab-pane fade" id="existingTab" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="mb-0">Existing Washing Entries</h4>
+          <h4>Existing Washing Entries</h4>
           <a href="/washingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel"></i> Download Excel
+            <i class="fas fa-file-excel me-1"></i> Download Excel
           </a>
         </div>
-
         <div class="input-group mb-3">
-          <span class="input-group-text">
-            <i class="fas fa-search"></i>
-          </span>
-          <input
-            type="text"
-            id="searchExisting"
-            class="form-control"
-            placeholder="Search by lot or SKU..."
-          />
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU...">
         </div>
-
         <div id="existingEntriesContainer" class="accordion"></div>
         <div id="loadMoreSentinel" style="height: 60px;"></div>
       </div>
@@ -141,29 +144,18 @@
   </div>
 
   <!-- UPDATE MODAL -->
-  <div
-    class="modal fade"
-    id="updateModal"
-    tabindex="-1"
-    aria-labelledby="updateModalLabel"
-    aria-hidden="true"
-  >
+  <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <form id="updateForm" method="POST">
           <div class="modal-header">
             <h5 class="modal-title" id="updateModalLabel">Update Washing Data</h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <p><strong>Updating Entry ID: </strong><span id="updatingEntryId"></span></p>
+            <p><strong>Updating Entry ID:</strong> <span id="updatingEntryId"></span></p>
             <table class="table table-bordered" id="updateSizesTable">
-              <thead>
+              <thead class="table-light">
                 <tr>
                   <th>Size Label</th>
                   <th>Already Used</th>
@@ -173,7 +165,7 @@
               </thead>
               <tbody></tbody>
             </table>
-            <p class="small text-muted">Blank field = 0 increment.</p>
+            <p class="small text-muted">Leave blank for 0 increment.</p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -184,28 +176,23 @@
     </div>
   </div>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
+  <!-- Bootstrap Bundle JS and Custom Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Autocomplete for assigned lots
+    // ---------- Autocomplete for Lot Selection ----------
     const lotsData = <%- JSON.stringify(lots) %> || [];
     const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
     const selectedLotId = document.getElementById('selectedLotId');
     const lotAutocomplete = document.getElementById('lotAutocomplete');
 
-    let currentFocus = -1;
-
-    function showLotSuggestions() {
+    selectedLotIdSearch.addEventListener('input', () => {
       lotAutocomplete.innerHTML = '';
       const term = selectedLotIdSearch.value.toLowerCase();
       if (!term) {
         lotAutocomplete.style.display = 'none';
         return;
       }
-      const filtered = lotsData.filter(l =>
-        `${l.lot_no} ${l.sku}`.toLowerCase().includes(term)
-      );
+      const filtered = lotsData.filter(l => (`${l.lot_no} ${l.sku}`).toLowerCase().includes(term));
       if (!filtered.length) {
         lotAutocomplete.style.display = 'none';
         return;
@@ -218,13 +205,13 @@
         lotAutocomplete.appendChild(li);
       });
       lotAutocomplete.style.display = 'block';
-    }
-
-    selectedLotIdSearch.addEventListener('input', showLotSuggestions);
-
-    lotAutocomplete.addEventListener('click', async (e) => {
+    });
+    lotAutocomplete.addEventListener('click', (e) => {
       if (e.target && e.target.matches('li.list-group-item')) {
-        selectLotItem(e.target);
+        selectedLotIdSearch.value = e.target.textContent;
+        selectedLotId.value = e.target.dataset.value;
+        lotAutocomplete.style.display = 'none';
+        fetchLotSizes(e.target.dataset.value);
       }
     });
     document.addEventListener('click', (e) => {
@@ -233,14 +220,7 @@
       }
     });
 
-    async function selectLotItem(li) {
-      selectedLotIdSearch.value = li.textContent;
-      selectedLotId.value = li.dataset.value;
-      lotAutocomplete.style.display = 'none';
-      fetchLotSizes(li.dataset.value);
-    }
-
-    // Fetch lot sizes
+    // ---------- Fetch Lot Sizes ----------
     const lotSizesContainer = document.getElementById('lotSizesContainer');
     const sizesTableBody = document.querySelector('#sizesTable tbody');
     const createTotalPieces = document.getElementById('createTotalPieces');
@@ -252,7 +232,7 @@
         const data = await res.json();
         renderSizes(data);
       } catch (err) {
-        console.error('Error:', err);
+        console.error('Error fetching lot sizes:', err);
         lotSizesContainer.style.display = 'none';
         sizesTableBody.innerHTML = '';
       }
@@ -261,18 +241,14 @@
     function renderSizes(sizesArr) {
       sizesTableBody.innerHTML = '';
       lotSizesContainer.style.display = 'block';
-      let total = 0;
       sizesArr.forEach(sz => {
         const tr = document.createElement('tr');
-
         const tdLabel = document.createElement('td');
         tdLabel.textContent = sz.size_label;
         tr.appendChild(tdLabel);
-
         const tdRemain = document.createElement('td');
         tdRemain.textContent = sz.remain;
         tr.appendChild(tdRemain);
-
         const tdInput = document.createElement('td');
         const inp = document.createElement('input');
         inp.type = 'number';
@@ -284,7 +260,6 @@
         inp.addEventListener('input', updateTotal);
         tdInput.appendChild(inp);
         tr.appendChild(tdInput);
-
         sizesTableBody.appendChild(tr);
       });
       createTotalPieces.textContent = '0';
@@ -300,7 +275,7 @@
       createTotalPieces.textContent = sum;
     }
 
-    // Submit create form
+    // ---------- Create Form Submission ----------
     const createForm = document.getElementById('createForm');
     createForm.addEventListener('submit', (e) => {
       const rows = sizesTableBody.querySelectorAll('tr');
@@ -315,14 +290,13 @@
         let val = parseInt(input.value, 10);
         if (isNaN(val) || val < 0) val = 0;
         if (val > remain) {
-          alert(`You requested ${val} but only ${remain} remain for size ${row.children[0].textContent}`);
+          alert(`For size ${row.children[0].textContent}, you requested ${val} but only ${remain} remain!`);
           e.preventDefault();
           return;
         }
       });
       document.querySelectorAll('.sizeMappingField').forEach(f => f.remove());
       rows.forEach(row => {
-        const label = row.children[0].textContent;
         const input = row.children[2].querySelector('input');
         let val = parseInt(input.value, 10);
         if (isNaN(val) || val < 0) val = 0;
@@ -337,64 +311,45 @@
       });
     });
 
-    // Lazy-load existing
-    let offset = 0;
-    let loading = false;
-    let hasMore = true;
+    // ---------- Lazy Load Existing Entries ----------
+    let offset = 0, loading = false, hasMore = true;
     const existingContainer = document.getElementById('existingEntriesContainer');
     const sentinel = document.getElementById('loadMoreSentinel');
     const searchExisting = document.getElementById('searchExisting');
-
     async function loadMoreData() {
       if (loading || !hasMore) return;
       loading = true;
       const term = searchExisting.value.trim();
-
       try {
         const res = await fetch(`/washingdashboard/list-entries?offset=${offset}&search=${encodeURIComponent(term)}`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         const list = data.data || [];
         hasMore = data.hasMore;
-
         list.forEach(item => {
           const card = document.createElement('div');
           card.classList.add('accordion-item');
-
           const headerId = `heading-${item.id}`;
           const collapseId = `collapse-${item.id}`;
-
           card.innerHTML = `
             <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button"
-                      data-bs-toggle="collapse" data-bs-target="#${collapseId}"
-                      aria-expanded="false" aria-controls="${collapseId}">
-                Lot ${item.lot_no} (SKU: ${item.sku}) - Total Pieces: ${item.total_pieces}
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
+                Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
               </button>
             </h2>
-            <div id="${collapseId}" class="accordion-collapse collapse"
-                 aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
+            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
               <div class="accordion-body">
                 <div class="d-flex justify-content-end mb-3">
-                  <a href="/washingdashboard/challan/${item.id}" target="_blank"
-                     class="btn btn-sm btn-info me-2">
-                    Challan
+                  <a href="/washingdashboard/challan/${item.id}" target="_blank" class="btn btn-sm btn-info me-2">
+                    <i class="fas fa-file-alt"></i> Challan
                   </a>
-                  <button class="btn btn-sm btn-warning"
-                          data-bs-toggle="modal"
-                          data-bs-target="#updateModal"
-                          data-entry-id="${item.id}">
+                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#updateModal" data-entry-id="${item.id}">
                     Update
                   </button>
                 </div>
                 <p><strong>ID:</strong> ${item.id}</p>
                 <p><strong>Remark:</strong> ${item.remark || 'N/A'}</p>
-                ${
-                  item.image_url
-                    ? `<p><strong>Image:</strong><br>
-                       <img src="${item.image_url}" alt="WashingImg" style="max-width: 200px;"></p>`
-                    : ''
-                }
+                ${ item.image_url ? `<p><img src="${item.image_url}" style="max-width:200px;" /></p>` : '' }
                 <table class="table table-sm">
                   <thead>
                     <tr><th>Size Label</th><th>Pieces</th></tr>
@@ -402,12 +357,7 @@
                   <tbody>
                     ${
                       item.sizes && item.sizes.length
-                        ? item.sizes.map(sz => `
-                            <tr>
-                              <td>${sz.size_label}</td>
-                              <td>${sz.pieces}</td>
-                            </tr>
-                          `).join('')
+                        ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
                         : '<tr><td colspan="2">No sizes found</td></tr>'
                     }
                   </tbody>
@@ -417,22 +367,17 @@
           `;
           existingContainer.appendChild(card);
         });
-
         offset += list.length;
       } catch (err) {
-        console.error('Error loading data:', err);
+        console.error('Error loading existing entries:', err);
       } finally {
         loading = false;
       }
     }
-
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        loadMoreData();
-      }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMoreData();
     }, { threshold: 0.1 });
     observer.observe(sentinel);
-
     searchExisting.addEventListener('input', () => {
       offset = 0;
       hasMore = true;
@@ -441,26 +386,23 @@
     });
     loadMoreData();
 
-    // Update modal
+    // ---------- Update Modal Logic ----------
     const updateModal = document.getElementById('updateModal');
     const updateForm = document.getElementById('updateForm');
     const updateSizesTable = document.getElementById('updateSizesTable');
     const updatingEntryId = document.getElementById('updatingEntryId');
-
     if (updateModal) {
       updateModal.addEventListener('show.bs.modal', async (event) => {
         const button = event.relatedTarget;
         const entryId = button.getAttribute('data-entry-id');
         updatingEntryId.textContent = entryId;
         updateForm.action = '/washingdashboard/update/' + entryId;
-
         updateSizesTable.querySelector('tbody').innerHTML = '';
         try {
           const res = await fetch(`/washingdashboard/update/${entryId}/json`);
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
           if (!data.sizes) return;
-
           data.sizes.forEach(sz => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -468,8 +410,7 @@
               <td>${sz.pieces}</td>
               <td>${sz.remain != null ? sz.remain : 999999}</td>
               <td>
-                <input type="number" class="form-control" min="0" value=""
-                       data-size-label="${sz.size_label}" />
+                <input type="number" class="form-control" min="0" placeholder="0" data-size-label="${sz.size_label}">
               </td>
             `;
             updateSizesTable.querySelector('tbody').appendChild(tr);
@@ -478,16 +419,14 @@
           console.error('Error fetching update sizes:', err);
         }
       });
-
       updateForm.addEventListener('submit', (e) => {
-        const rowEls = updateSizesTable.querySelectorAll('tbody tr');
         document.querySelectorAll('.updateSizeMappingField').forEach(el => el.remove());
-
-        for (const row of rowEls) {
+        const rows = updateSizesTable.querySelectorAll('tbody tr');
+        for (const row of rows) {
           const label = row.children[0].textContent;
           const remain = parseInt(row.children[2].textContent, 10);
           const input = row.children[3].querySelector('input');
-          let val = parseInt(input.value || '0', 10);
+          let val = parseInt(input.value.trim() || '0', 10);
           if (isNaN(val) || val < 0) val = 0;
           if (val > remain) {
             alert(`Cannot add ${val} to size [${label}], only ${remain} remain`);
