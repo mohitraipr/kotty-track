@@ -65,7 +65,7 @@ module.exports = {
     isCuttingManager,
     isStitchingMaster,
     isFinishingMaster,
-    isOperator,
     isWashingMaster,
+    isOperator,
     isDepartmentUser
 };
