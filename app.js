@@ -53,6 +53,8 @@ const stitchingRoutes = require('./routes/stitchingRoutes');
 const finishingRoutes = require('./routes/finishingRoutes');
 const washingRoutes = require('./routes/washingRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const assigntowashingRoutes = require('./routes/assigntowashingRoutes');
+
 
 // Use Routes
 app.use('/', authRoutes);
@@ -65,7 +67,7 @@ app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
 app.use('/washingdashboard', washingRoutes);
 app.use('/', searchRoutes);
-
+app.use('/assign-to-washing', assigntowashingRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
