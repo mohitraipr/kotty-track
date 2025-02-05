@@ -533,6 +533,7 @@ router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (r
         c.id AS cutting_lot_id,
         c.lot_no,
         c.sku,
+        c.remark,
         c.created_at
       FROM cutting_lots c
       WHERE c.user_id = ?
