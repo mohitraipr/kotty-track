@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KOTTY Bulk Upload & Assignment Dashboard</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png">
+  <!-- Bootstrap CSS CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <style>
+    /* Global Styles */
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+    }
+    /* Navbar */
+    .navbar {
+      background-color: #ffffff;
+    }
+    .navbar-brand img {
+      height: 40px;
+      margin-right: 8px;
+    }
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      padding: 3rem 2rem;
+      text-align: center;
+      border-radius: 10px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .hero p {
+      font-size: 1.125rem;
+    }
+    /* Card Styles */
+    .card {
+      border: none;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      background: #fff;
+    }
+    .card-header {
+      background-color: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 1rem 1.5rem;
+    }
+    .card-header h2 {
+      font-size: 1.25rem;
+      margin: 0;
+      font-weight: 500;
+    }
+    .card-body {
+      padding: 1.5rem;
+    }
+    /* Buttons */
+    .btn-custom {
+      background: #28a745;
+      border: none;
+      color: #fff;
+      transition: background 0.3s;
+    }
+    .btn-custom:hover {
+      background: #218838;
+    }
+    .btn-download {
+      background: #007bff;
+      border: none;
+      color: #fff;
+      transition: background 0.3s;
+    }
+    .btn-download:hover {
+      background: #0069d9;
+    }
+    /* Flash Messages */
+    .alert {
+      border-radius: 10px;
+    }
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding: 1rem;
+      color: #6c757d;
+      font-size: 0.875rem;
+    }
+    @media (max-width: 767px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+      .hero p {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light shadow-sm mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="#">
+        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="KOTTY Logo">
+        KOTTY
+      </a>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1>Bulk Upload & Assignment Dashboard</h1>
+      <p>Manage your uploads and assignments with ease.</p>
+    </section>
+
+    <!-- Flash Messages -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <%= error %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= success %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+
+    <!-- Main Content -->
+    <div class="row g-4">
+      <!-- Bulk Create Lots Section -->
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <h2>Bulk Create Lots</h2>
+          </div>
+          <div class="card-body">
+            <p>
+              <a href="/bulk-upload/template" class="btn btn-download">
+                <i class="bi bi-download me-2"></i> Download Excel Template for Lots
+              </a>
+            </p>
+            <form action="/bulk-upload/upload-lots" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="excelFile" class="form-label">Select Excel File</label>
+                <input type="file" name="excelFile" id="excelFile" class="form-control" required>
+              </div>
+              <button type="submit" class="btn btn-custom w-100">Upload Lots</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Assign Lots Section -->
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <h2>Bulk Assign Lots to Stitching</h2>
+          </div>
+          <div class="card-body">
+            <p>
+              <a href="/bulk-assign/template" class="btn btn-download">
+                <i class="bi bi-download me-2"></i> Download Excel Template for Assignments
+              </a>
+            </p>
+            <form action="/bulk-assign" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label for="assignmentFile" class="form-label">Select Assignment Excel File</label>
+                <input type="file" name="excelFile" id="assignmentFile" class="form-control" required>
+              </div>
+              <button type="submit" class="btn btn-custom w-100">Upload Assignments</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; <%= new Date().getFullYear() %> KOTTY. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <!-- Bootstrap Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
