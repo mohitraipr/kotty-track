@@ -5,7 +5,7 @@
  * related endpoints and to enhance the lot tracking
  * dashboard. In addition to previous features, it now
  * also fetches (per lot) the last assigned user for 
- * stitching, washing, and finishing.
+ * stitching, washing, and finishing, and includes summary stats.
  **************************************************/
 const express = require('express');
 const router = express.Router();
@@ -151,6 +151,7 @@ async function computeOperatorPerformance() {
  * Supports filtering (search string and date range) and sorting.
  * Aggregates data from cutting_lots, sizes, rolls and computes leftovers.
  * Also fetches the last assigned user (if any) for stitching, washing and finishing.
+ * Additionally, fetches summary statistics: total lots cut, total pieces cut, and user count.
  */
 router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
   try {
@@ -339,10 +340,26 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
     // 6) Compute operator performance (optional).
     const operatorPerformance = await computeOperatorPerformance();
 
+    // 7) Fetch summary statistics:
+    // Total lots cut:
+    const [lotCountResult] = await pool.query(`SELECT COUNT(*) as lotCount FROM cutting_lots`);
+    const lotCount = lotCountResult[0].lotCount;
+
+    // Total pieces cut (sum of total_pieces from cutting_lots):
+    const [totalPiecesResult] = await pool.query(`SELECT COALESCE(SUM(total_pieces), 0) as totalPieces FROM cutting_lots`);
+    const totalPiecesCut = totalPiecesResult[0].totalPieces;
+
+    // Total users in the database:
+    const [userCountResult] = await pool.query(`SELECT COUNT(*) as userCount FROM users`);
+    const userCount = userCountResult[0].userCount;
+
     return res.render('operatorDashboard', {
       lotDetails,
       operatorPerformance,
-      query: { search, startDate, endDate, sortField, sortOrder }
+      query: { search, startDate, endDate, sortField, sortOrder },
+      lotCount,
+      totalPiecesCut,
+      userCount
     });
   } catch (err) {
     console.error('Error loading operator dashboard:', err);
