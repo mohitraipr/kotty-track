@@ -212,22 +212,17 @@
           <li class="nav-item">
             <a class="nav-link" href="/operator/dashboard/download-all-lots">
               <i class="bi bi-download"></i> Download All
-            </a>           
-          </li>
-
-<li class="nav-item">
-          <a class="nav-link" href="/search-dashboard">
+            </a>
+            <a class="nav-link" href="/search-dashboard">
               <i class="bi bi-download"></i> Enhanced Search
             </a>
-</li>
-<li class="nav-item">
-          <a class="nav-link" href="/assign-to-washing">
-              <i class="bi bi-download"></i> Assign To Washing
-            </a>
-</li>
+          </li>
           <li class="nav-item">
             <a class="nav-link" href="#" onclick="window.print()">
               <i class="bi bi-printer"></i> Print Page
+            </a>
+            <a class="nav-link" href="/assign-to-washing">
+              <i class="bi bi-download"></i> Assign To Washing
             </a>
           </li>
           <li class="nav-item">
@@ -242,6 +237,34 @@
 
   <div class="container py-4">
     <h1>Enhanced Lot Tracking</h1>
+    
+    <!-- New Summary Cards -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title">Lots Cut</h5>
+            <p class="card-text display-6"><%= lotCount %></p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title">Total Pieces Cut</h5>
+            <p class="card-text display-6"><%= totalPiecesCut %></p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card text-center">
+          <div class="card-body">
+            <h5 class="card-title">Users in Database</h5>
+            <p class="card-text display-6"><%= userCount %></p>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <!-- Search and Filter Section -->
     <div class="card mb-4">
