@@ -47,6 +47,8 @@ router.get('/approve/list', isAuthenticated, isStitchingMaster, async (req, res)
              sa.isApproved,
              sa.assignment_remark,
              c.lot_no,
+             c.total_pieces,
+             c.remark AS cutting_remark,
              c.sku
       FROM stitching_assignments sa
       JOIN cutting_lots c ON sa.cutting_lot_id = c.id
