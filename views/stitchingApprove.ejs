@@ -1,4 +1,3 @@
-<!-- views/stitchingApprove.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -36,6 +35,39 @@
       background-color: #f8f9fa;
       padding: 0.75rem 1rem;
       border-bottom: 1px solid #dee2e6;
+    }
+
+    /* Make table extremely mobile-friendly */
+    .table-responsive {
+      overflow-x: auto;
+    }
+    /* Optional: slightly smaller text on small devices */
+    @media (max-width: 576px) {
+      body {
+        font-size: 0.9rem;
+      }
+
+      /* Convert table to a card-like layout on very small screens */
+      .table thead {
+        display: none;
+      }
+      .table td {
+        display: block;
+        width: 100%;
+        border: none !important;
+        border-bottom: 1px solid #dee2e6 !important; /* a subtle row separation */
+      }
+      .table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        margin-right: 0.5rem;
+        display: inline-block;
+        min-width: 110px; /* Adjust as needed */
+        color: #495057;
+      }
+      .table td:last-child {
+        border-bottom: 2px solid #dee2e6 !important;
+      }
     }
   </style>
 </head>
@@ -119,7 +151,9 @@
               <tr>
                 <th scope="col">Assignment ID</th>
                 <th scope="col">Lot No</th>
+                <th scope="col">Remark From Cutting</th>
                 <th scope="col">SKU</th>
+                <th scope="col">Total Pieces</th>
                 <th scope="col">Assigned On</th>
                 <th scope="col">Remark</th>
                 <th scope="col" style="width: 180px;">Actions</th>
@@ -217,7 +251,7 @@
         console.error('Error fetching assignments:', err);
         assignmentsTableBody.innerHTML = `
           <tr>
-            <td colspan="6" class="text-danger">
+            <td colspan="8" class="text-danger">
               Error loading assignments. Please try again later.
             </td>
           </tr>
@@ -242,14 +276,18 @@
 
         // Format date
         const assignedOnDate = new Date(item.assigned_on).toLocaleString();
+        const cuttingRemark = item.cutting_remark || 'N/A';
+        const totalPieces = item.total_pieces || 'N/A';
 
         tr.innerHTML = `
-          <td>${item.assignment_id}</td>
-          <td>${item.lot_no}</td>
-          <td>${item.sku}</td>
-          <td>${assignedOnDate}</td>
-          <td>${item.assignment_remark || 'N/A'}</td>
-          <td>
+          <td data-label="Assignment ID">${item.assignment_id}</td>
+          <td data-label="Lot No">${item.lot_no}</td>
+          <td data-label="Remark From Cutting">${cuttingRemark}</td>
+          <td data-label="SKU">${item.sku}</td>
+          <td data-label="Total Pieces">${totalPieces}</td>
+          <td data-label="Assigned On">${assignedOnDate}</td>
+          <td data-label="Remark">${item.assignment_remark || 'N/A'}</td>
+          <td data-label="Actions">
             <div class="d-flex flex-wrap gap-2">
               <!-- Approve form -->
               <form method="POST" action="/stitchingdashboard/approve-lot">
