@@ -6,17 +6,17 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 /**
  * GET /assign-to-washing
- * Render the assignment dashboard with a dropdown of stitching operators (excluding those with "hoisery")
+ * Render the assignment dashboard with a dropdown of jeans assembly operators (excluding those with "hoisery")
  * and a list of washers.
  */
 router.get('/', isAuthenticated, isOperator, async (req, res) => {
   try {
-    // Fetch stitching users (excluding usernames that contain "hoisery")
-    const [stitchingUsers] = await pool.query(`
+    // Fetch jeans assembly users (exclude usernames that contain "hoisery")
+    const [assemblyUsers] = await pool.query(`
       SELECT u.id, u.username 
       FROM users u 
       JOIN roles r ON u.role_id = r.id 
-      WHERE r.name = 'stitching_master' 
+      WHERE r.name = 'jeans_assembly' 
         AND u.username NOT LIKE '%hoisery%'
       ORDER BY u.username ASC
     `);
@@ -32,7 +32,7 @@ router.get('/', isAuthenticated, isOperator, async (req, res) => {
     `);
 
     res.render('assignToWashingDashboard', {
-      stitchingUsers,
+      assemblyUsers,  // updated variable name for jeans assembly users
       washers,
       error: req.flash('error'),
       success: req.flash('success')
@@ -46,21 +46,21 @@ router.get('/', isAuthenticated, isOperator, async (req, res) => {
 
 /**
  * GET /assign-to-washing/data/:userId
- * Return stitching records (with their sizes) for the given stitching user.
+ * Return jeans assembly records (with their sizes) for the given jeans assembly user.
  * Only records that are not already assigned are returned.
  */
 router.get('/data/:userId', isAuthenticated, isOperator, async (req, res) => {
   try {
     const userId = req.params.userId;
     const [rows] = await pool.query(`
-      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces,
-             DATE(sd.created_at) AS created_date,
-             sds.size_label, sds.pieces
-      FROM stitching_data sd
-      LEFT JOIN stitching_data_sizes sds ON sd.id = sds.stitching_data_id
-      WHERE sd.user_id = ?
-        AND sd.id NOT IN (SELECT stitching_assignment_id FROM washing_assignments)
-      ORDER BY sd.created_at DESC, sd.id ASC
+      SELECT jad.id, jad.lot_no, jad.sku, jad.total_pieces,
+             DATE(jad.created_at) AS created_date,
+             jads.size_label, jads.pieces
+      FROM jeans_assembly_data jad
+      LEFT JOIN jeans_assembly_data_sizes jads ON jad.id = jads.jeans_assembly_data_id
+      WHERE jad.user_id = ?
+        AND jad.id NOT IN (SELECT jeans_assembly_assignment_id FROM washing_assignments)
+      ORDER BY jad.created_at DESC, jad.id ASC
     `, [userId]);
 
     // Group the results by created_date and by record id
@@ -96,52 +96,51 @@ router.get('/data/:userId', isAuthenticated, isOperator, async (req, res) => {
     result.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
     res.json(result);
   } catch (err) {
-    console.error('Error fetching stitching data:', err);
+    console.error('Error fetching jeans assembly data:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 /**
  * POST /assign-to-washing/assign
- * Create a washing assignment for the selected stitching record.
- * The assignment will store a snapshot of the sizes (from stitching_data_sizes) as sizes_json.
+ * Create a washing assignment for the selected jeans assembly record.
+ * The assignment will store a snapshot of the sizes (from jeans_assembly_data_sizes) as sizes_json.
  * We do not store the pieces separately; the latest pieces will be fetched dynamically later.
  * The assignment’s is_approved field is set to NULL (pending approval).
  */
 router.post('/assign', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { stitching_data_id, washer_id } = req.body;
-    if (!stitching_data_id || !washer_id) {
+    // Notice the parameter name has changed from stitching_data_id to jeans_assembly_data_id
+    const { jeans_assembly_data_id, washer_id } = req.body;
+    if (!jeans_assembly_data_id || !washer_id) {
       req.flash('error', 'Invalid parameters.');
       return res.redirect('/assign-to-washing');
     }
 
-    // Get the stitching data record using the provided stitching_data_id
-    const [[stitchRecord]] = await pool.query(
-      `SELECT * FROM stitching_data WHERE id = ?`,
-      [stitching_data_id]
+    // Get the jeans assembly data record using the provided id
+    const [[assemblyRecord]] = await pool.query(
+      `SELECT * FROM jeans_assembly_data WHERE id = ?`,
+      [jeans_assembly_data_id]
     );
-    if (!stitchRecord) {
-      req.flash('error', 'Stitching record not found.');
+    if (!assemblyRecord) {
+      req.flash('error', 'Jeans Assembly record not found.');
       return res.redirect('/assign-to-washing');
     }
 
-    // Get the sizes from stitching_data_sizes for this stitching record.
-    // This returns an array of objects like: [{ size_label: "25", pieces: 40 }, { size_label: "7XL", pieces: 40 }, ...]
+    // Get the sizes from jeans_assembly_data_sizes for this record.
     const [sizes] = await pool.query(
-      `SELECT size_label, pieces FROM stitching_data_sizes WHERE stitching_data_id = ?`,
-      [stitching_data_id]
+      `SELECT size_label, pieces FROM jeans_assembly_data_sizes WHERE jeans_assembly_data_id = ?`,
+      [jeans_assembly_data_id]
     );
     const sizes_json = JSON.stringify(sizes);
 
     // Insert a new washing assignment.
-    // Note: We store the stitching assignment id (which is the same as the stitching data id here)
-    // and set is_approved to NULL so that it will require manual approval.
+    // Note: We now record the jeans assembly assignment details
     await pool.query(`
       INSERT INTO washing_assignments
-        (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved)
+        (jeans_assembly_master_id, user_id, jeans_assembly_assignment_id, target_day, assigned_on, sizes_json, is_approved)
       VALUES (?, ?, ?, CURDATE(), NOW(), ?, NULL)
-    `, [stitchRecord.user_id, washer_id, stitching_data_id, sizes_json]);
+    `, [assemblyRecord.user_id, washer_id, jeans_assembly_data_id, sizes_json]);
 
     req.flash('success', 'Assignment created successfully and is pending approval.');
     res.redirect('/assign-to-washing');
