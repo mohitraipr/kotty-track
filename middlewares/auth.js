@@ -44,7 +44,9 @@ function isFinishingMaster(req, res, next) {
 function isWashingMaster(req, res, next) {
     return hasRole('washing')(req, res, next);
 }
-
+function isJeansAssemblyMaster(req, res, next) {
+    return hasRole('jeans_assembly')(req, res, next);
+}
 function isOperator(req, res, next) {
     return hasRole('operator')(req, res, next);
 }
@@ -66,6 +68,7 @@ module.exports = {
     isStitchingMaster,
     isFinishingMaster,
     isWashingMaster,
+    isJeansAssemblyMaster,
     isOperator,
     isDepartmentUser
 };
