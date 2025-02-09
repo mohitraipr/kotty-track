@@ -465,7 +465,7 @@
                   <thead>
                     <tr>
                       <th>Kit #</th>
-                      <th>Owner</th>
+                      <th>Total Pieces</th> <!-- Updated header -->
                       <th>Stitch Leftover</th>
                       <th>Wash Leftover</th>
                       <th>Finish Leftover</th>
@@ -476,7 +476,8 @@
                   <tbody>
                     <% Object.keys(lotDetails).forEach(kitNumber => {
                          const kit = lotDetails[kitNumber];
-                         const createdBy = kit.cuttingLot ? kit.cuttingLot.created_by : 'N/A';
+                         // Use total_pieces from cutting_lots instead of the owner name
+                         const totalPieces = kit.cuttingLot ? kit.cuttingLot.total_pieces : 'N/A';
                          const leftoverStitch = formatLeftover(kit.leftovers.leftoverStitch, kit.stitchingAssignedUser);
                          const leftoverWash   = formatLeftover(kit.leftovers.leftoverWash, kit.washingAssignedUser);
                          const leftoverFinish = formatLeftover(kit.leftovers.leftoverFinish, kit.finishingAssignedUser);
@@ -485,7 +486,7 @@
                     %>
                       <tr>
                         <td><%= kitNumber %></td>
-                        <td><%= createdBy %></td>
+                        <td><%= totalPieces %></td>
                         <td><%- leftoverStitch %></td>
                         <td><%- leftoverWash %></td>
                         <td><%- leftoverFinish %></td>
@@ -622,7 +623,7 @@
           <% }); %>
         </div>
         <!-- Pagination for Kit Details Accordion -->
-        <!-- The pagination container will be injected by the script if needed -->
+        <div id="kitDetailsPaginationContainer"></div>
       </div>
 
       <!-- Notes Tab -->
@@ -772,7 +773,6 @@
   <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
   <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
   <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
-
   <script>
     // Tooltips
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
@@ -803,11 +803,10 @@
       var totalItems = kitItems.length;
       var totalPages = Math.ceil(totalItems / itemsPerPage);
 
-      // Only add pagination if there is more than one page of kit details
       if(totalPages > 1) {
         // Create pagination container
         var paginationHTML = '<nav><ul class="pagination justify-content-center" id="kitPagination"></ul></nav>';
-        $("#kitDetailsPanel").append(paginationHTML);
+        $("#kitDetailsPaginationContainer").html(paginationHTML);
         for(var i = 1; i <= totalPages; i++){
           $("#kitPagination").append('<li class="page-item"><a class="page-link" href="#">' + i + '</a></li>');
         }
