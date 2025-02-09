@@ -8,10 +8,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- DataTables CSS -->
-  <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-  <!-- DataTables Responsive CSS -->
-  <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <style>
@@ -23,9 +19,8 @@
       margin: 0;
       padding-bottom: 2rem;
     }
-    a {
-      text-decoration: none;
-    }
+    a { text-decoration: none; }
+
     /* Navbar: Deep navy header with white text */
     .navbar {
       background-color: #003366;
@@ -36,25 +31,17 @@
       font-weight: 600;
       color: #fff !important;
     }
-    .navbar-brand img {
-      margin-right: 8px;
-    }
+    .navbar-brand img { margin-right: 8px; }
     .navbar-nav .nav-link {
       color: #fff !important;
       font-size: 1rem;
       margin-right: 15px;
     }
-    .navbar-nav .nav-link:hover {
-      color: #cce6ff !important;
-    }
-    /* Navbar toggler */
-    .navbar-toggler {
-      border-color: rgba(255,255,255,0.5);
-    }
-    .navbar-toggler-icon {
-      filter: brightness(0) invert(1);
-    }
-    /* Cards */
+    .navbar-nav .nav-link:hover { color: #cce6ff !important; }
+    .navbar-toggler { border-color: rgba(255,255,255,0.5); }
+    .navbar-toggler-icon { filter: brightness(0) invert(1); }
+
+    /* Summary Cards */
     .card {
       background-color: #fff;
       border: 1px solid #e3e3e3;
@@ -62,80 +49,31 @@
       margin-bottom: 1.5rem;
       border-radius: 0;
     }
-    .card-header {
-      background-color: #f7f7f7;
-      border-bottom: 1px solid #ddd;
-      font-size: 1.25rem;
+    .summary-card-body { padding: 1.5rem; text-align: center; }
+    .card-title { font-size: 1.2rem; font-weight: 500; }
+    .display-6 { font-size: 1.8rem; font-weight: 600; }
+
+    /* SKU Performance Table */
+    .table thead { background-color: #f0f0f0; }
+    .table-hover tbody tr:hover { background-color: #fafafa; }
+
+    /* Tabbed Interface */
+    .nav-tabs .nav-link {
+      color: #003366;
       font-weight: 500;
-    }
-    /* Form Controls */
-    .form-control, .form-select {
-      border: 1px solid #ccc;
-      background-color: #fff;
-      color: #333;
-      border-radius: 0;
-    }
-    .form-control:focus, .form-select:focus {
-      border-color: #0056b3;
-      box-shadow: none;
-    }
-    ::placeholder {
-      color: #888;
-    }
-    /* Buttons */
-    .btn {
-      border-radius: 0;
-      padding: 0.5rem 1rem;
-      font-weight: 500;
-      transition: background-color 0.3s;
-      border: none;
-    }
-    .btn i {
       margin-right: 5px;
+      border-radius: 0;
+      border: 1px solid transparent;
     }
-    .btn-primary {
-      background-color: #0056b3;
-      color: #fff;
+    .nav-tabs .nav-link:hover { background-color: #f1f1f1; color: #003366; }
+    .nav-tabs .nav-link.active {
+      background-color: #fff;
+      color: #003366;
+      border-color: #ddd #ddd #fff;
     }
-    .btn-primary:hover {
-      background-color: #004494;
-    }
-    .btn-success {
-      background-color: #28a745;
-      color: #fff;
-    }
-    .btn-success:hover {
-      background-color: #218838;
-    }
-    .btn-info {
-      background-color: #17a2b8;
-      color: #fff;
-    }
-    .btn-info:hover {
-      background-color: #138496;
-    }
-    .btn-danger {
-      background-color: #e74c3c;
-      color: #fff;
-    }
-    .btn-danger:hover {
-      background-color: #c0392b;
-    }
-    /* DataTables */
-    table.dataTable thead {
-      background-color: #f0f0f0;
-    }
-    table.dataTable thead th {
-      font-weight: 500;
-      border: none;
-    }
-    table.dataTable tbody tr:hover {
-      background-color: #f9f9f9;
-    }
-    table.dataTable tbody td {
-      vertical-align: middle;
-    }
-    /* Leftover Badges */
+    .tab-pane { margin-top: 1.5rem; }
+
+    /* Leftover Badge Styles (from your snippet) */
     .leftover-badge {
       padding: 0.25rem 0.5rem;
       font-weight: 600;
@@ -145,22 +83,28 @@
       font-size: 0.9rem;
       border-radius: 0;
     }
-    .leftover-negative {
-      background-color: #e74c3c;
+    .leftover-positive {
+      background-color: #27ae60;
       color: #fff;
-      border: 1px solid #c0392b;
+      border: 1px solid #218838;
     }
     .leftover-zero {
       background-color: #f1c40f;
       color: #000;
       border: 1px solid #f39c12;
     }
-    .leftover-positive {
-      background-color: #27ae60;
+    .leftover-negative {
+      background-color: #e74c3c;
       color: #fff;
-      border: 1px solid #218838;
+      border: 1px solid #c0392b;
     }
-    /* Modal */
+    .leftover-default {
+      background-color: #6c757d;
+      color: #fff;
+      border: 1px solid #5a6268;
+    }
+
+    /* Modal Styles */
     .modal-content {
       background-color: #fff;
       border: 1px solid #ddd;
@@ -170,63 +114,52 @@
       background-color: #f7f7f7;
       border-bottom: 1px solid #ddd;
     }
-    /* Headings */
-    h1 {
-      font-size: 2rem;
-      font-weight: 500;
-      text-align: center;
-      margin-bottom: 1.5rem;
-    }
-    /* Responsive adjustments */
-    @media (max-width: 576px) {
-      h1 {
-        font-size: 1.75rem;
-      }
-      .navbar-brand {
-        font-size: 1.5rem;
-      }
-      .btn {
-        font-size: 0.9rem;
-        padding: 0.4rem 0.8rem;
-      }
-      table.dataTable thead th, table.dataTable tbody td {
-        font-size: 0.8rem;
-      }
-    }
   </style>
 </head>
 <body>
-  <!-- Collapsible Navbar -->
-  <nav class="navbar navbar-expand-lg">
+
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-expand-lg" data-bs-toggle="tooltip" title="Operator Dashboard Navigation">
     <div class="container-fluid">
       <a class="navbar-brand" href="#">
-        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="Kotty Logo" width="30" height="30" class="d-inline-block align-text-top">
-        kotty
+        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png"
+             alt="Kotty Logo" width="30" height="30" class="d-inline-block align-text-top">
+        Kotty
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" 
-              aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown"
+              aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a class="nav-link" href="/operator/dashboard/download-all-lots">
+            <a class="nav-link" href="/operator/dashboard/download-all-lots" data-bs-toggle="tooltip" title="Download all lots as CSV">
               <i class="bi bi-download"></i> Download All
             </a>
-            <a class="nav-link" href="/search-dashboard">
-              <i class="bi bi-download"></i> Enhanced Search
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/operator/dashboard/leftovers/download" data-bs-toggle="tooltip" title="Download leftover data as CSV">
+              <i class="bi bi-download"></i> Download Leftovers
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="window.print()">
+            <a class="nav-link" href="/search-dashboard" data-bs-toggle="tooltip" title="Enhanced Search Dashboard">
+              <i class="bi bi-search"></i> Enhanced Search
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="window.print()" data-bs-toggle="tooltip" title="Print This Page">
               <i class="bi bi-printer"></i> Print Page
             </a>
-            <a class="nav-link" href="/assign-to-washing">
-              <i class="bi bi-download"></i> Assign To Washing
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/assign-to-washing" data-bs-toggle="tooltip" title="Assign this lot to washing">
+              <i class="bi bi-arrow-right-square"></i> Assign To Washing
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="/logout">
+            <a class="nav-link" href="/logout" data-bs-toggle="tooltip" title="Log Out">
               <i class="bi bi-box-arrow-right"></i> Log Out
             </a>
           </li>
@@ -235,186 +168,592 @@
     </div>
   </nav>
 
+  <!-- MAIN CONTAINER -->
   <div class="container py-4">
-    <h1>Enhanced Lot Tracking</h1>
-    
-    <!-- New Summary Cards -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="card text-center">
-          <div class="card-body">
-            <h5 class="card-title">Lots Cut</h5>
-            <p class="card-text display-6"><%= lotCount %></p>
+    <h1 class="text-center mb-4">Kotty Operator Dashboard</h1>
+
+    <!-- SUMMARY CARDS -->
+    <div class="row g-3 mb-4">
+      <!-- Total Lots -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Total Lots</h5>
+            <p class="display-6"><%= lotCount %></p>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card text-center">
-          <div class="card-body">
-            <h5 class="card-title">Total Pieces Cut</h5>
-            <p class="card-text display-6"><%= totalPiecesCut %></p>
+      <!-- Pieces Cut -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Cut</h5>
+            <p class="display-6"><%= totalPiecesCut %></p>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card text-center">
-          <div class="card-body">
-            <h5 class="card-title">Users in Database</h5>
-            <p class="card-text display-6"><%= userCount %></p>
+      <!-- Stitched -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Stitched</h5>
+            <p class="display-6"><%= totalStitched %></p>
+          </div>
+        </div>
+      </div>
+      <!-- Washed -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Washed</h5>
+            <p class="display-6"><%= totalWashed %></p>
+          </div>
+        </div>
+      </div>
+      <!-- Finished -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Finished</h5>
+            <p class="display-6"><%= totalFinished %></p>
+          </div>
+        </div>
+      </div>
+      <!-- Users -->
+      <div class="col-md-2">
+        <div class="card">
+          <div class="summary-card-body">
+            <h5 class="card-title">Users</h5>
+            <p class="display-6"><%= userCount %></p>
           </div>
         </div>
       </div>
     </div>
-    
-    <!-- Search and Filter Section -->
+
+    <!-- SKU PERFORMANCE -->
     <div class="card mb-4">
-      <div class="card-body">
-        <form method="GET" action="/operator/dashboard">
-          <div class="row g-3">
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" name="search" class="form-control" placeholder="Search by Lot No" value="<%= query.search || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
-                <input type="date" name="startDate" class="form-control" placeholder="Start Date" value="<%= query.startDate || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
-                <input type="date" name="endDate" class="form-control" placeholder="End Date" value="<%= query.endDate || '' %>">
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-lg-3">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-sort-alpha-down"></i></span>
-                <select name="sortField" class="form-select">
-                  <option value="">Sort By</option>
-                  <option value="lot_no" <%= query.sortField === 'lot_no' ? 'selected' : '' %>>Lot No</option>
-                  <option value="sku" <%= query.sortField === 'sku' ? 'selected' : '' %>>SKU</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="mt-3 text-end">
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-funnel-fill"></i> Apply Filters
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-    
-    <!-- Lot Tracking Table with Responsive DataTable -->
-    <div class="card">
       <div class="card-header">
-        <i class="bi bi-table"></i> Lot Tracking
+        <i class="bi bi-bar-chart"></i> SKU Performance (Top &amp; Bottom 5)
       </div>
       <div class="card-body">
-        <% if (Object.keys(lotDetails).length === 0) { %>
-          <p class="text-muted">No lots found.</p>
-        <% } else { %>
-          <table id="tableLotTracking" class="table table-bordered table-striped dt-responsive nowrap">
-            <thead>
-              <tr>
-                <th><i class="bi bi-hash"></i> Lot No</th>
-                <th><i class="bi bi-tags"></i> SKU</th>
-                <th><i class="bi bi-person"></i> Created By</th>
-                <th><i class="bi bi-scissors"></i> Cut Pieces</th>
-                <th><i class="bi bi-needle"></i> Leftover (Stitch)</th>
-                <th><i class="bi bi-droplet"></i> Leftover (Wash)</th>
-                <th><i class="bi bi-check2-circle"></i> Leftover (Finish)</th>
-                <th><i class="bi bi-gear"></i> Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% for (const lot_no in lotDetails) { 
-                   const info = lotDetails[lot_no];
-                   const sku = info.cuttingLot ? info.cuttingLot.sku : '';
-                   const createdBy = info.cuttingLot ? info.cuttingLot.created_by : 'N/A';
-                   const cutPieces = info.cuttingLot ? info.cuttingLot.total_pieces : 0;
-                   const leftoverStitchVal = (info.leftoverStitch !== null) ? info.leftoverStitch : 'N/A';
-                   const leftoverWashVal = (info.leftoverWash !== null) ? info.leftoverWash : 'N/A';
-                   const leftoverFinishVal = (info.leftoverFinish !== null) ? info.leftoverFinish : 'N/A';
-                   
-                   // Function to generate a badge for leftover values.
-                   function leftoverBadge(val) {
-                     if (typeof val === 'number') {
-                       if (val < 0) return `<span class="badge bg-danger">${val}</span>`;
-                       if (val === 0) return `<span class="badge bg-warning text-dark">${val}</span>`;
-                       return `<span class="badge bg-success">${val}</span>`;
-                     }
-                     return `<span class="badge bg-secondary">${val}</span>`;
-                   }
-              %>
-              <tr>
-                <td><%= lot_no %></td>
-                <td><%= sku %></td>
-                <td><%= createdBy %></td>
-                <td><%= cutPieces %></td>
-                <td>
-                  <%- leftoverBadge(leftoverStitchVal) %>
-                  <small>(<%= info.stitchingAssignedUser ? info.stitchingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <%- leftoverBadge(leftoverWashVal) %>
-                  <small>(<%= info.washingAssignedUser ? info.washingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <%- leftoverBadge(leftoverFinishVal) %>
-                  <small>(<%= info.finishingAssignedUser ? info.finishingAssignedUser : 'N/A' %>)</small>
-                </td>
-                <td>
-                  <button class="btn btn-info btn-sm edit-btn"
-                    data-lot="<%= lot_no %>"
-                    data-total="<%= cutPieces %>"
-                    data-remark="<%= info.cuttingLot ? info.cuttingLot.remark : '' %>">
-                    <i class="bi bi-pencil"></i> Edit
-                  </button>
-                  <a class="btn btn-success btn-sm ms-2" href="/operator/dashboard/lot-tracking/<%= lot_no %>/download" target="_blank">
-                    <i class="bi bi-download"></i> Download
-                  </a>
-                </td>
-              </tr>
-              <% } %>
-            </tbody>
-          </table>
-        <% } %>
+        <div class="row">
+          <!-- Top 5 SKUs -->
+          <div class="col-md-6">
+            <h5><i class="bi bi-arrow-up-right-circle"></i> Top 5 SKUs</h5>
+            <table class="table table-bordered table-sm">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Total Pieces</th>
+                  <th>% of Total Cut</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% advancedAnalytics.top5SKUs.forEach(item => { 
+                     let pct = advancedAnalytics.totalCut > 0 
+                              ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                              : '0.00';
+                %>
+                <tr>
+                  <td><%= item.sku %></td>
+                  <td><%= item.total %></td>
+                  <td><%= pct %>%</td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+          <!-- Bottom 5 SKUs -->
+          <div class="col-md-6">
+            <h5><i class="bi bi-arrow-down-right-circle"></i> Bottom 5 SKUs</h5>
+            <table class="table table-bordered table-sm">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Total Pieces</th>
+                  <th>% of Total Cut</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% advancedAnalytics.bottom5SKUs.forEach(item => { 
+                     let pct = advancedAnalytics.totalCut > 0 
+                              ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                              : '0.00';
+                %>
+                <tr>
+                  <td><%= item.sku %></td>
+                  <td><%= item.total %></td>
+                  <td><%= pct %>%</td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  
-  <!-- Edit Lot Modal -->
-  <div class="modal fade" id="editLotModal" tabindex="-1" aria-labelledby="editLotModalLabel" aria-hidden="true">
+
+    <!-- TABBED INTERFACE -->
+    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+      <!-- 1) Leftovers Tab (first and active) -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="leftovers-tab" data-bs-toggle="tab"
+                data-bs-target="#leftoversTab" type="button" role="tab"
+                aria-controls="leftoversTab" aria-selected="true">
+          <i class="bi bi-box-seam"></i> Leftovers
+        </button>
+      </li>
+      <!-- 2) Search Tab -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="search-tab" data-bs-toggle="tab"
+                data-bs-target="#searchTab" type="button" role="tab"
+                aria-controls="searchTab" aria-selected="false">
+          <i class="bi bi-search"></i> Search
+        </button>
+      </li>
+      <!-- 3) Advanced Search Tab -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="advSearch-tab" data-bs-toggle="tab"
+                data-bs-target="#advSearchTab" type="button" role="tab"
+                aria-controls="advSearchTab" aria-selected="false">
+          <i class="bi bi-funnel"></i> Advanced Search
+        </button>
+      </li>
+      <!-- 4) Lot Details Tab -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="lotDetails-tab" data-bs-toggle="tab"
+                data-bs-target="#lotDetailsTab" type="button" role="tab"
+                aria-controls="lotDetailsTab" aria-selected="false">
+          <i class="bi bi-card-list"></i> Lot Details
+        </button>
+      </li>
+      <!-- 5) Notes Tab -->
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="notes-tab" data-bs-toggle="tab"
+                data-bs-target="#notesTab" type="button" role="tab"
+                aria-controls="notesTab" aria-selected="false">
+          <i class="bi bi-info-circle"></i> Notes
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- 1) Leftovers Tab Pane -->
+      <div class="tab-pane fade show active" id="leftoversTab" role="tabpanel" aria-labelledby="leftovers-tab">
+        <div class="card mt-3">
+          <div class="card-header">
+            <i class="bi bi-box-seam"></i> All Lot Leftovers
+          </div>
+          <div class="card-body table-responsive">
+            <% if (Object.keys(lotDetails).length === 0) { %>
+              <p class="text-muted">No lots available.</p>
+            <% } else { %>
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>Lot No</th>
+                    <th>Username</th>
+                    <th>Stitch Leftover</th>
+                    <th>Wash Leftover</th>
+                    <th>Finish Leftover</th>
+                    <th>Jeans Leftover</th>
+                    <th>Remark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% Object.keys(lotDetails).forEach(lot_no => {
+                       const lot = lotDetails[lot_no];
+                       const createdBy = lot.cuttingLot ? lot.cuttingLot.created_by : 'N/A';
+                       const leftoverStitch = lot.leftovers.leftoverStitch;
+                       const leftoverWash = lot.leftovers.leftoverWash;
+                       const leftoverFinish = lot.leftovers.leftoverFinish;
+                       const leftoverJeans = lot.leftovers.leftoverJeans;
+                       const remark = lot.cuttingLot ? (lot.cuttingLot.remark || 'None') : 'None';
+                       
+                       // Helper to render a badge: if the value is a number, apply different classes.
+                       function renderBadge(val) {
+                         if (typeof val === 'number') {
+                           if (val > 0) return `<span class="leftover-badge leftover-positive">${val}</span>`;
+                           else if (val === 0) return `<span class="leftover-badge leftover-zero">${val}</span>`;
+                           else return `<span class="leftover-badge leftover-negative">${val}</span>`;
+                         }
+                         return `<span class="leftover-badge leftover-default">${val}</span>`;
+                       }
+                  %>
+                  <tr>
+                    <td><%= lot_no %></td>
+                    <td><%= createdBy %></td>
+                    <td><%- renderBadge(leftoverStitch) %></td>
+                    <td><%- renderBadge(leftoverWash) %></td>
+                    <td><%- renderBadge(leftoverFinish) %></td>
+                    <td><%- renderBadge(leftoverJeans) %></td>
+                    <td><%= remark %></td>
+                  </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2) Search Tab Pane -->
+      <div class="tab-pane fade" id="searchTab" role="tabpanel" aria-labelledby="search-tab">
+        <div class="card mt-3">
+          <div class="card-header">
+            <i class="bi bi-search"></i> Basic Search & Filters
+          </div>
+          <div class="card-body">
+            <form method="GET" action="/operator/dashboard">
+              <div class="row g-3">
+                <div class="col-12 col-md-6 col-lg-3">
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" class="form-control" placeholder="Search by Lot No" value="<%= query.search || '' %>">
+                  </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                    <input type="date" name="startDate" class="form-control" value="<%= query.startDate || '' %>">
+                  </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                    <input type="date" name="endDate" class="form-control" value="<%= query.endDate || '' %>">
+                  </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-sort-alpha-down"></i></span>
+                    <select name="sortField" class="form-select">
+                      <option value="">Sort By</option>
+                      <option value="lot_no" <%= query.sortField === 'lot_no' ? 'selected' : '' %>>Lot No</option>
+                      <option value="sku" <%= query.sortField === 'sku' ? 'selected' : '' %>>SKU</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="row g-3 mt-3">
+                <div class="col-12 col-md-6 col-lg-3">
+                  <label class="form-label">Category</label>
+                  <div class="d-flex align-items-center">
+                    <div class="form-check me-2">
+                      <input class="form-check-input" type="radio" name="category" value="all" id="allCat"
+                             <%= (!query.category || query.category === 'all') ? 'checked' : '' %>>
+                      <label class="form-check-label" for="allCat">All</label>
+                    </div>
+                    <div class="form-check me-2">
+                      <input class="form-check-input" type="radio" name="category" value="hoisery" id="hoiseryCat"
+                             <%= query.category === 'hoisery' ? 'checked' : '' %>>
+                      <label class="form-check-label" for="hoiseryCat">Hoisery</label>
+                    </div>
+                    <div class="form-check me-2">
+                      <input class="form-check-input" type="radio" name="category" value="denim" id="denimCat"
+                             <%= query.category === 'denim' ? 'checked' : '' %>>
+                      <label class="form-check-label" for="denimCat">Denim</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                  <label class="form-label">Results Per Page</label>
+                  <input type="number" name="limit" class="form-control" value="<%= limit %>">
+                </div>
+                <div class="col-12 col-md-6 col-lg-3 align-self-end">
+                  <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-funnel-fill"></i> Apply Filters
+                  </button>
+                </div>
+              </div>
+            </form>
+            <!-- Pagination (if applicable) -->
+            <div class="mt-4">
+              <% if (totalPages && totalPages > 1) { %>
+                <nav aria-label="Page navigation">
+                  <ul class="pagination">
+                    <% if (currentPage > 1) { %>
+                      <li class="page-item">
+                        <a class="page-link" href="?page=<%= currentPage - 1 %>&limit=<%= limit %>">&laquo;</a>
+                      </li>
+                    <% } else { %>
+                      <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                    <% } %>
+                    <% for (let i = 1; i <= totalPages; i++) { %>
+                      <li class="page-item <%= (i === currentPage) ? 'active' : '' %>">
+                        <a class="page-link" href="?page=<%= i %>&limit=<%= limit %>"><%= i %></a>
+                      </li>
+                    <% } %>
+                    <% if (currentPage < totalPages) { %>
+                      <li class="page-item">
+                        <a class="page-link" href="?page=<%= currentPage + 1 %>&limit=<%= limit %>">&raquo;</a>
+                      </li>
+                    <% } else { %>
+                      <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    <% } %>
+                  </ul>
+                </nav>
+                <p class="text-muted"><%= totalLotsFound %> result(s) found.</p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3) Advanced Search Tab Pane -->
+      <div class="tab-pane fade" id="advSearchTab" role="tabpanel" aria-labelledby="advSearch-tab">
+        <div class="card mt-3">
+          <div class="card-header">
+            <i class="bi bi-funnel"></i> Advanced Search
+          </div>
+          <div class="card-body">
+            <p class="text-muted">Include more specialized search criteria here (e.g., leftover thresholds, multi-SKU queries, operator-based filters, etc.).</p>
+            <!-- Placeholder advanced search form -->
+            <form>
+              <div class="mb-3">
+                <label class="form-label">Example Criteria</label>
+                <input type="text" class="form-control" placeholder="Enter advanced criteria...">
+              </div>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-search"></i> Perform Advanced Search
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4) Lot Details Tab Pane -->
+      <div class="tab-pane fade" id="lotDetailsTab" role="tabpanel" aria-labelledby="lotDetails-tab">
+        <div class="accordion mt-3" id="lotAccordion">
+          <% Object.keys(lotDetails).forEach((lot_no, index) => {
+               const lot = lotDetails[lot_no];
+               const cuttingLot = lot.cuttingLot;
+               const remark = cuttingLot ? (cuttingLot.remark || 'None') : 'None';
+          %>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-<%= index %>">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#collapse-<%= index %>" aria-expanded="false" aria-controls="collapse-<%= index %>">
+                Lot <%= lot_no %> | SKU: <%= cuttingLot ? cuttingLot.sku : 'N/A' %> | Status: <%= lot.status %> | Remark: <%= remark %>
+              </button>
+            </h2>
+            <div id="collapse-<%= index %>" class="accordion-collapse collapse"
+                 aria-labelledby="heading-<%= index %>" data-bs-parent="#lotAccordion">
+              <div class="accordion-body">
+                <div class="row">
+                  <div class="col-md-4">
+                    <p><strong>Created By:</strong> <%= cuttingLot ? cuttingLot.created_by : 'N/A' %></p>
+                    <p><strong>Total Pieces:</strong> <%= cuttingLot ? cuttingLot.total_pieces : 0 %></p>
+                    <p><strong>Remark:</strong> <%= remark %></p>
+                  </div>
+                  <div class="col-md-4">
+                    <p><strong>Leftovers:</strong></p>
+                    <ul class="list-unstyled">
+                      <li>Stitch: <%= lot.leftovers.leftoverStitch %></li>
+                      <li>Wash: <%= lot.leftovers.leftoverWash %></li>
+                      <li>Finish: <%= lot.leftovers.leftoverFinish %></li>
+                      <li>Jeans: <%= lot.leftovers.leftoverJeans %></li>
+                    </ul>
+                  </div>
+                  <div class="col-md-4">
+                    <p><strong>Assigned Operators:</strong></p>
+                    <ul class="list-unstyled">
+                      <li>Stitch: <%= lot.stitchingAssignedUser %></li>
+                      <li>Wash: <%= lot.washingAssignedUser %></li>
+                      <li>Finish: <%= lot.finishingAssignedUser %></li>
+                      <li>Jeans: <%= lot.jeansAssemblyAssignedUser %></li>
+                    </ul>
+                    <button class="btn btn-sm btn-info" data-bs-toggle="modal"
+                            data-bs-target="#editModal-<%= lot_no %>">
+                      <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <a class="btn btn-sm btn-success ms-2"
+                       href="/operator/dashboard/lot-tracking/<%= lot_no %>/download" target="_blank">
+                      <i class="bi bi-download"></i> Download CSV
+                    </a>
+                  </div>
+                </div>
+                <hr>
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6>Cutting Lot Sizes</h6>
+                    <% if (lot.cuttingSizes && lot.cuttingSizes.length) { %>
+                      <table class="table table-sm table-bordered">
+                        <thead>
+                          <tr>
+                            <th>Size Label</th>
+                            <th>Pattern Count</th>
+                            <th>Total Pieces</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% lot.cuttingSizes.forEach(sz => { %>
+                          <tr>
+                            <td><%= sz.size_label %></td>
+                            <td><%= sz.pattern_count %></td>
+                            <td><%= sz.total_pieces %></td>
+                          </tr>
+                          <% }); %>
+                        </tbody>
+                      </table>
+                    <% } else { %>
+                      <p class="text-muted">No cutting size info.</p>
+                    <% } %>
+                  </div>
+                  <div class="col-md-6">
+                    <h6>Cutting Lot Rolls</h6>
+                    <% if (lot.cuttingRolls && lot.cuttingRolls.length) { %>
+                      <table class="table table-sm table-bordered">
+                        <thead>
+                          <tr>
+                            <th>Roll No</th>
+                            <th>Weight Used</th>
+                            <th>Layers</th>
+                            <th>Total Pieces</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% lot.cuttingRolls.forEach(rl => { %>
+                          <tr>
+                            <td><%= rl.roll_no %></td>
+                            <td><%= rl.weight_used %></td>
+                            <td><%= rl.layers %></td>
+                            <td><%= rl.total_pieces %></td>
+                          </tr>
+                          <% }); %>
+                        </tbody>
+                      </table>
+                    <% } else { %>
+                      <p class="text-muted">No cutting roll info.</p>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <% }); %>
+        </div>
+      </div>
+
+      <!-- 5) Notes Tab Pane -->
+      <div class="tab-pane fade" id="notesTab" role="tabpanel" aria-labelledby="notes-tab">
+        <div class="card mt-3">
+          <div class="card-header">
+            <i class="bi bi-info-circle"></i> Dashboard Notes & Explanations
+          </div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Leftovers Tab:</strong> Displays leftover data for Stitch, Wash, Finish, and Jeans (if applicable) along with the lot's remark and the username (creator) for context.</li>
+              <li><strong>Search Tab:</strong> Provides basic filters (by lot number, date range, category, and sorting) along with pagination.</li>
+              <li><strong>Advanced Search Tab:</strong> Placeholder for adding more complex search criteria such as leftover thresholds or multi-SKU queries.</li>
+              <li><strong>Lot Details Tab:</strong> Shows detailed information for each lot (including cutting sizes, rolls, leftover breakdown, assigned operators, and remarks). You can edit these details via the Edit button.</li>
+              <li><strong>SKU Performance:</strong> Highlights the top 5 and bottom 5 SKUs (as percentages of the overall cut) immediately below the summary cards.</li>
+              <li><strong>Advanced Analytics & Operator Performance:</strong> Found below the tabs; summarizes conversion rates, turnaround times, pending lots, and operator stats.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADVANCED ANALYTICS -->
+    <div class="card mt-5">
+      <div class="card-header">
+        <i class="bi bi-bar-chart-line"></i> Advanced Analytics
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3">
+            <p><strong>Stitch Conversion:</strong> <%= advancedAnalytics.stitchConversion %>%</p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Wash Conversion:</strong> <%= advancedAnalytics.washConversion %>%</p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Finish Conversion:</strong> <%= advancedAnalytics.finishConversion %>%</p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Avg Turnaround:</strong> <%= advancedAnalytics.avgTurnaroundTime %> days</p>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-md-3">
+            <p><strong>Pending Lots:</strong> <%= advancedAnalytics.pendingLots %></p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Total Lots:</strong> <%= advancedAnalytics.totalLots %></p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Stitch Approval:</strong> <%= advancedAnalytics.stitchApprovalRate %>%</p>
+          </div>
+          <div class="col-md-3">
+            <p><strong>Wash Approval:</strong> <%= advancedAnalytics.washApprovalRate %>%</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPERATOR PERFORMANCE -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <i class="bi bi-people-fill"></i> Operator Performance
+      </div>
+      <div class="card-body table-responsive">
+        <table class="table table-bordered table-hover">
+          <thead class="table-secondary">
+            <tr>
+              <th>User ID</th>
+              <th>Username</th>
+              <th>Stitched</th>
+              <th>Washed</th>
+              <th>Finished</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% for (let userId in operatorPerformance) {
+                 let op = operatorPerformance[userId]; %>
+            <tr>
+              <td><%= userId %></td>
+              <td><%= op.username %></td>
+              <td><%= op.totalStitched %></td>
+              <td><%= op.totalWashed %></td>
+              <td><%= op.totalFinished %></td>
+            </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div> <!-- /container -->
+
+  <!-- EDIT LOT MODALS -->
+  <% Object.keys(lotDetails).forEach(lot_no => {
+       const lot = lotDetails[lot_no];
+       const cuttingLot = lot.cuttingLot;
+       const totalPieces = cuttingLot ? cuttingLot.total_pieces : 0;
+       const currentRemark = cuttingLot ? (cuttingLot.remark || '') : '';
+  %>
+  <div class="modal fade" id="editModal-<%= lot_no %>" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-      <form id="editLotForm" method="POST" action="/operator/dashboard/edit-lot">
+      <form method="POST" action="/operator/dashboard/edit-lot">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="editLotModalLabel">
-              <i class="bi bi-pencil-square"></i> Edit Lot Details
+            <h5 class="modal-title">
+              <i class="bi bi-pencil-square"></i> Edit Lot <%= lot_no %>
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <input type="hidden" name="lot_no" id="editLotNo">
+            <input type="hidden" name="lot_no" value="<%= lot_no %>">
             <div class="mb-3">
-              <label for="editTotalPieces" class="form-label">Total Pieces (Override)</label>
-              <div class="input-group">
-                <input type="number" class="form-control" name="total_pieces" id="editTotalPieces" required>
-                <button class="btn btn-outline-secondary" type="button" id="cutButton">
-                  <i class="bi bi-scissors"></i> Cut
-                </button>
-              </div>
+              <label class="form-label">Total Pieces</label>
+              <input type="number" class="form-control" name="total_pieces" value="<%= totalPieces %>" required>
             </div>
             <div class="mb-3">
-              <label for="editRemark" class="form-label">Remark</label>
-              <textarea class="form-control" name="remark" id="editRemark" rows="3"></textarea>
+              <label class="form-label">Remark</label>
+              <textarea class="form-control" name="remark" rows="3"><%= currentRemark %></textarea>
             </div>
-            <p class="text-muted">Override the calculated total pieces. Use the "Cut" button to subtract pieces if needed.</p>
+            <p class="text-muted small">Override total pieces or update remarks if needed.</p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -428,55 +767,15 @@
       </form>
     </div>
   </div>
-  
-  <!-- Scripts -->
-  <!-- Bootstrap JS -->
+  <% }); %>
+
+  <!-- BOOTSTRAP & OTHER SCRIPTS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- jQuery -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- DataTables JS -->
-  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-  <!-- DataTables Responsive JS -->
-  <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
   <script>
-    // Initialize DataTable with responsive extension
-    $(document).ready(function() {
-      $('#tableLotTracking').DataTable({
-        responsive: true,
-        pageLength: 10,
-        lengthMenu: [10, 25, 50, 100],
-        order: [[0, 'asc']]
-      });
-    });
-    
-    // Open the Edit modal and populate it with the selected lot's data.
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const lot_no = this.getAttribute('data-lot');
-        const total = this.getAttribute('data-total');
-        const remark = this.getAttribute('data-remark');
-        document.getElementById('editLotNo').value = lot_no;
-        document.getElementById('editTotalPieces').value = total;
-        document.getElementById('editRemark').value = remark;
-        var editModal = new bootstrap.Modal(document.getElementById('editLotModal'));
-        editModal.show();
-      });
-    });
-    
-    // Handle the "Cut" button functionality.
-    document.getElementById('cutButton').addEventListener('click', function() {
-      const currentVal = Number(document.getElementById('editTotalPieces').value);
-      const cutAmount = prompt("Enter the number of pieces to cut:", "0");
-      const cutNum = Number(cutAmount);
-      if (!isNaN(cutNum) && cutNum > 0) {
-        const newVal = currentVal - cutNum;
-        if (newVal < 0) {
-          alert("Resulting total cannot be negative!");
-        } else {
-          document.getElementById('editTotalPieces').value = newVal;
-        }
-      }
+    // Initialize all tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipTriggerList.forEach(function(el) {
+      new bootstrap.Tooltip(el);
     });
   </script>
 </body>
