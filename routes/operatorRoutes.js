@@ -11,7 +11,7 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 /**
  * computeAdvancedLeftoversForLot(lot_no, isAkshay)
  *
- * For lots created by akshay (isAkshay=true) the stages are:
+ * For lots created by Akshay (isAkshay=true) the stages are:
  *   Stitching → Jeans Assembly → Washing → Finishing,
  *   with leftovers computed as:
  *     - leftoverStitch = totalCut - totalStitched
@@ -171,8 +171,6 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
         leftoverFinish = totalStitched - totalFinished;
       }
     } else {
-      // FIX: Instead of calculating leftover when no finishing assignment exists,
-      // we now report "Not Assigned".
       leftoverFinish = "Not Assigned";
     }
   }
@@ -740,7 +738,6 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       }
 
       // finishing
-      // Use 'let' so we can reassign if needed.
       let [finishingData] = await pool.query(
         `SELECT * FROM finishing_data 
          WHERE lot_no = ?`,
@@ -797,7 +794,7 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
           }
         }
       } else {
-        // For hoisery lots, we hide further steps.
+        // For hoisery lots, hide further steps.
         washingData = [];
         washingDataSizes = [];
         finishingData = [];
@@ -845,7 +842,7 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
         status = "Not Assigned";
       }
 
-      // assigned users
+      // Assigned users:
       const [stAssign] = await pool.query(
         `SELECT u.username 
          FROM stitching_assignments sa
@@ -870,17 +867,33 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       );
       const washingAssignedUser = waAssign.length ? waAssign[0].username : "N/A";
 
-      const [fiAssign] = await pool.query(
-        `SELECT u.username
-         FROM finishing_assignments fa
-         JOIN washing_data wd ON fa.washing_assignment_id = wd.id
-         JOIN users u ON fa.user_id = u.id
-         WHERE wd.lot_no = ?
-         ORDER BY fa.assigned_on DESC 
-         LIMIT 1`,
-        [lot_no]
-      );
-      const finishingAssignedUser = fiAssign.length ? fiAssign[0].username : "N/A";
+      // FINISHING ASSIGNED USER: branch based on whether the lot is Akshay's.
+      let finishingAssignedUser = "N/A";
+      if (isAkshay) {
+        const [fiAssign] = await pool.query(
+          `SELECT u.username
+           FROM finishing_assignments fa
+           JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+           JOIN users u ON fa.user_id = u.id
+           WHERE wd.lot_no = ?
+           ORDER BY fa.assigned_on DESC 
+           LIMIT 1`,
+          [lot_no]
+        );
+        finishingAssignedUser = fiAssign.length ? fiAssign[0].username : "N/A";
+      } else {
+        const [fiAssign] = await pool.query(
+          `SELECT u.username
+           FROM finishing_assignments fa
+           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+           JOIN users u ON fa.user_id = u.id
+           WHERE sd.lot_no = ?
+           ORDER BY fa.assigned_on DESC 
+           LIMIT 1`,
+          [lot_no]
+        );
+        finishingAssignedUser = fiAssign.length ? fiAssign[0].username : "N/A";
+      }
 
       lotDetails[lot_no] = {
         cuttingLot,
