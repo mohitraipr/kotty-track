@@ -70,7 +70,7 @@ app.use('/', searchRoutes);
 app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
 app.use('/', bulkUploadRoutes);
-
+app.use('/finishingdashboard', finishingRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
