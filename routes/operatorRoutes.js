@@ -22,10 +22,14 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
  * For all other lots (hoisery), only stitching and finishing are used:
  *     - leftoverStitch = totalCut - totalStitched
  *     - leftoverWash = "N/A"
- *     - leftoverFinish = totalStitched - totalFinished
+ *     - leftoverFinish = totalStitched - totalFinished (if assigned & approved)
  *
  * In all cases, if an assignment exists but is still waiting/denied,
  * the corresponding status is returned.
+ *
+ * IMPORTANT FIX:
+ * For non-Akshay (hoisery) lots, if no finishing assignment exists, the
+ * leftoverFinish now returns "Not Assigned" rather than calculating the leftover.
  */
 async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
   // Get total pieces cut from the cutting_lots table.
@@ -88,7 +92,7 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
 
   let leftoverWash, leftoverFinish;
   if (isAkshay) {
-    // For akshay's lots: get total jeans assembly pieces.
+    // For Akshay's lots: get total jeans assembly pieces.
     let totalJeans = 0;
     const [jaRows] = await pool.query(
       `SELECT COALESCE(SUM(total_pieces),0) AS sumJeans 
@@ -98,7 +102,7 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
     );
     totalJeans = jaRows.length ? (jaRows[0].sumJeans || 0) : 0;
 
-    // --- Wash leftover for akshay ---
+    // --- Wash leftover for Akshay ---
     const [waAssignmentRows] = await pool.query(
       `SELECT is_approved 
        FROM washing_assignments wa
@@ -121,7 +125,7 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
       leftoverWash = "Not Assigned";
     }
 
-    // --- Finish leftover for akshay ---
+    // --- Finish leftover for Akshay ---
     const [faAssignmentRows] = await pool.query(
       `SELECT is_approved 
        FROM finishing_assignments fa
@@ -144,10 +148,10 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
       leftoverFinish = "Not Assigned";
     }
   } else {
-    // For hoisery (non-akshay) lots:
+    // For hoisery (non-Akshay) lots:
     leftoverWash = "N/A";
     // --- Finish leftover for hoisery ---
-    // Here we join finishing_assignments with stitching_data instead of washing_data.
+    // We now check for a finishing assignment joined with stitching_data.
     const [faAssignmentRows] = await pool.query(
       `SELECT is_approved 
        FROM finishing_assignments fa
@@ -167,8 +171,9 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
         leftoverFinish = totalStitched - totalFinished;
       }
     } else {
-      // If no finishing assignment exists, we assume the process is direct.
-      leftoverFinish = totalStitched - totalFinished;
+      // FIX: Instead of calculating leftover when no finishing assignment exists,
+      // we now report "Not Assigned".
+      leftoverFinish = "Not Assigned";
     }
   }
 
@@ -178,10 +183,10 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
 /**
  * computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay)
  *
- * For akshay’s lots, leftover jeans assembly is computed as:
+ * For Akshay’s lots, leftover jeans assembly is computed as:
  *    totalStitchedLocal - totalJeans (with waiting/denied statuses checked)
  *
- * For non-akshay (hoisery), jeans assembly is not applicable.
+ * For non-Akshay (hoisery), jeans assembly is not applicable.
  */
 async function computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay) {
   if (!isAkshay) {
@@ -675,7 +680,7 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       );
       const cuttingLot = cutRows.length ? cutRows[0] : null;
       
-      // Determine if this lot is by akshay
+      // Determine if this lot is by Akshay
       const isAkshay = (cuttingLot &&
                          cuttingLot.created_by &&
                          cuttingLot.created_by.toLowerCase() === 'akshay');
@@ -735,7 +740,7 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       }
 
       // finishing
-      // Change declaration to let so that we can reassign it later if needed.
+      // Use 'let' so we can reassign if needed.
       let [finishingData] = await pool.query(
         `SELECT * FROM finishing_data 
          WHERE lot_no = ?`,
@@ -752,7 +757,7 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
         finishingDataSizes = szRows;
       }
 
-      // jeans assembly (only for akshay)
+      // jeans assembly (only for Akshay)
       let jeansAssemblyData = [];
       let jeansAssemblyDataSizes = [];
       let jeansAssemblyAssignedUser = "N/A";
