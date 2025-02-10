@@ -9,9 +9,25 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 /**
- * computeAdvancedLeftoversForLot(lot_no)
+ * computeAdvancedLeftoversForLot(lot_no, isAkshay)
+ *
+ * For lots created by akshay (isAkshay=true) the stages are:
+ *   Stitching → Jeans Assembly → Washing → Finishing,
+ *   with leftovers computed as:
+ *     - leftoverStitch = totalCut - totalStitched
+ *     - leftoverJeans = (computed separately)
+ *     - leftoverWash = totalJeans - totalWashed
+ *     - leftoverFinish = totalWashed - totalFinished
+ *
+ * For all other lots (hoisery), only stitching and finishing are used:
+ *     - leftoverStitch = totalCut - totalStitched
+ *     - leftoverWash = "N/A"
+ *     - leftoverFinish = totalStitched - totalFinished
+ *
+ * In all cases, if an assignment exists but is still waiting/denied,
+ * the corresponding status is returned.
  */
-async function computeAdvancedLeftoversForLot(lot_no) {
+async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
   // Get total pieces cut from the cutting_lots table.
   const [clRows] = await pool.query(
     `SELECT total_pieces FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
@@ -70,63 +86,107 @@ async function computeAdvancedLeftoversForLot(lot_no) {
     leftoverStitch = "Not Assigned";
   }
 
-  // --- Wash leftover ---
-  const [waAssignmentRows] = await pool.query(
-    `SELECT is_approved 
-     FROM washing_assignments wa
-     JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-     WHERE jd.lot_no = ?
-     ORDER BY wa.assigned_on DESC 
-     LIMIT 1`,
-    [lot_no]
-  );
-  let leftoverWash;
-  if (waAssignmentRows.length) {
-    const waAssn = waAssignmentRows[0];
-    if (waAssn.is_approved === null) {
-      leftoverWash = "Waiting for approval";
-    } else if (waAssn.is_approved == 0) {
-      leftoverWash = "Denied";
-    } else {
-      leftoverWash = totalStitched - totalWashed;
-    }
-  } else {
-    leftoverWash = "Not Assigned";
-  }
+  let leftoverWash, leftoverFinish;
+  if (isAkshay) {
+    // For akshay's lots: get total jeans assembly pieces.
+    let totalJeans = 0;
+    const [jaRows] = await pool.query(
+      `SELECT COALESCE(SUM(total_pieces),0) AS sumJeans 
+         FROM jeans_assembly_data 
+         WHERE lot_no = ?`,
+      [lot_no]
+    );
+    totalJeans = jaRows.length ? (jaRows[0].sumJeans || 0) : 0;
 
-  // --- Finish leftover ---
-  const [faAssignmentRows] = await pool.query(
-    `SELECT is_approved 
-     FROM finishing_assignments fa
-     JOIN washing_data wd ON fa.washing_assignment_id = wd.id
-     WHERE wd.lot_no = ?
-     ORDER BY fa.assigned_on DESC 
-     LIMIT 1`,
-    [lot_no]
-  );
-  let leftoverFinish;
-  if (faAssignmentRows.length) {
-    const faAssn = faAssignmentRows[0];
-    if (faAssn.is_approved === null) {
-      leftoverFinish = "Waiting for approval";
-    } else if (faAssn.is_approved == 0) {
-      leftoverFinish = "Denied";
+    // --- Wash leftover for akshay ---
+    const [waAssignmentRows] = await pool.query(
+      `SELECT is_approved 
+       FROM washing_assignments wa
+       JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+       WHERE jd.lot_no = ?
+       ORDER BY wa.assigned_on DESC 
+       LIMIT 1`,
+      [lot_no]
+    );
+    if (waAssignmentRows.length) {
+      const waAssn = waAssignmentRows[0];
+      if (waAssn.is_approved === null) {
+        leftoverWash = "Waiting for approval";
+      } else if (waAssn.is_approved == 0) {
+        leftoverWash = "Denied";
+      } else {
+        leftoverWash = totalJeans - totalWashed;
+      }
     } else {
-      leftoverFinish = (waAssignmentRows.length)
-        ? (totalWashed - totalFinished)
-        : (totalStitched - totalFinished);
+      leftoverWash = "Not Assigned";
+    }
+
+    // --- Finish leftover for akshay ---
+    const [faAssignmentRows] = await pool.query(
+      `SELECT is_approved 
+       FROM finishing_assignments fa
+       JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+       WHERE wd.lot_no = ?
+       ORDER BY fa.assigned_on DESC 
+       LIMIT 1`,
+      [lot_no]
+    );
+    if (faAssignmentRows.length) {
+      const faAssn = faAssignmentRows[0];
+      if (faAssn.is_approved === null) {
+        leftoverFinish = "Waiting for approval";
+      } else if (faAssn.is_approved == 0) {
+        leftoverFinish = "Denied";
+      } else {
+        leftoverFinish = totalWashed - totalFinished;
+      }
+    } else {
+      leftoverFinish = "Not Assigned";
     }
   } else {
-    leftoverFinish = "Not Assigned";
+    // For hoisery (non-akshay) lots:
+    leftoverWash = "N/A";
+    // --- Finish leftover for hoisery ---
+    // Here we join finishing_assignments with stitching_data instead of washing_data.
+    const [faAssignmentRows] = await pool.query(
+      `SELECT is_approved 
+       FROM finishing_assignments fa
+       JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+       WHERE sd.lot_no = ?
+       ORDER BY fa.assigned_on DESC 
+       LIMIT 1`,
+      [lot_no]
+    );
+    if (faAssignmentRows.length) {
+      const faAssn = faAssignmentRows[0];
+      if (faAssn.is_approved === null) {
+        leftoverFinish = "Waiting for approval";
+      } else if (faAssn.is_approved == 0) {
+        leftoverFinish = "Denied";
+      } else {
+        leftoverFinish = totalStitched - totalFinished;
+      }
+    } else {
+      // If no finishing assignment exists, we assume the process is direct.
+      leftoverFinish = totalStitched - totalFinished;
+    }
   }
 
   return { leftoverStitch, leftoverWash, leftoverFinish };
 }
 
 /**
- * computeJeansLeftover(lot_no, totalStitchedLocal)
+ * computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay)
+ *
+ * For akshay’s lots, leftover jeans assembly is computed as:
+ *    totalStitchedLocal - totalJeans (with waiting/denied statuses checked)
+ *
+ * For non-akshay (hoisery), jeans assembly is not applicable.
  */
-async function computeJeansLeftover(lot_no, totalStitchedLocal) {
+async function computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay) {
+  if (!isAkshay) {
+    return "N/A";
+  }
   const [jaAssignRows] = await pool.query(
     `SELECT is_approved 
      FROM jeans_assembly_assignments ja
@@ -614,6 +674,11 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
         [lot_no]
       );
       const cuttingLot = cutRows.length ? cutRows[0] : null;
+      
+      // Determine if this lot is by akshay
+      const isAkshay = (cuttingLot &&
+                         cuttingLot.created_by &&
+                         cuttingLot.created_by.toLowerCase() === 'akshay');
 
       // cutting sizes
       const [cuttingSizes] = await pool.query(
@@ -670,7 +735,8 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       }
 
       // finishing
-      const [finishingData] = await pool.query(
+      // Change declaration to let so that we can reassign it later if needed.
+      let [finishingData] = await pool.query(
         `SELECT * FROM finishing_data 
          WHERE lot_no = ?`,
         [lot_no]
@@ -686,15 +752,11 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
         finishingDataSizes = szRows;
       }
 
-      // jeans assembly (not for hoisery)
+      // jeans assembly (only for akshay)
       let jeansAssemblyData = [];
       let jeansAssemblyDataSizes = [];
       let jeansAssemblyAssignedUser = "N/A";
-      if (
-        cuttingLot &&
-        cuttingLot.created_by &&
-        !cuttingLot.created_by.toLowerCase().includes('hoisery')
-      ) {
+      if (isAkshay) {
         const [jaData] = await pool.query(
           `SELECT * FROM jeans_assembly_data 
            WHERE lot_no = ?`,
@@ -730,13 +792,13 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
           }
         }
       } else {
-        // hide further steps for hoisery
+        // For hoisery lots, we hide further steps.
         washingData = [];
         washingDataSizes = [];
-        finishingData.length = 0;
-        finishingDataSizes.length = 0;
-        jeansAssemblyData.length = 0;
-        jeansAssemblyDataSizes.length = 0;
+        finishingData = [];
+        finishingDataSizes = [];
+        jeansAssemblyData = [];
+        jeansAssemblyDataSizes = [];
       }
 
       // department confirmations
@@ -758,13 +820,12 @@ router.get('/dashboard', isAuthenticated, isOperator, async (req, res) => {
       const lotAssignments = lotAssignResult;
 
       // leftovers
-      const leftovers = await computeAdvancedLeftoversForLot(lot_no);
-      const leftoverJeans = await computeJeansLeftover(lot_no, totalStitchedLocal);
+      const leftovers = await computeAdvancedLeftoversForLot(lot_no, isAkshay);
+      const leftoverJeans = await computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay);
 
-      // status
+      // status determination based on leftovers and assignment statuses
       let status = "Complete";
       const leftoverVals = Object.values(leftovers);
-
       if (
         leftoverVals.includes("Waiting for approval") ||
         leftoverVals.includes("Denied") ||
@@ -936,7 +997,17 @@ router.get('/dashboard/leftovers/download', isAuthenticated, isOperator, async (
     let csvContent = "Lot No,Leftover Stitch,Leftover Wash,Leftover Finish,Leftover Jeans\n";
     for (const lotRow of lots) {
       const lot_no = lotRow.lot_no;
-      const leftovers = await computeAdvancedLeftoversForLot(lot_no);
+      // To determine which formula to use, fetch the cutting lot’s created_by.
+      const [cutRows] = await pool.query(
+        `SELECT u.username AS created_by 
+         FROM cutting_lots cl
+         JOIN users u ON cl.user_id = u.id
+         WHERE cl.lot_no = ? 
+         LIMIT 1`,
+        [lot_no]
+      );
+      const isAkshay = (cutRows.length && cutRows[0].created_by.toLowerCase() === 'akshay');
+      const leftovers = await computeAdvancedLeftoversForLot(lot_no, isAkshay);
       const [stData] = await pool.query(
         `SELECT COALESCE(SUM(total_pieces),0) AS sumStitched 
          FROM stitching_data 
@@ -944,7 +1015,7 @@ router.get('/dashboard/leftovers/download', isAuthenticated, isOperator, async (
         [lot_no]
       );
       const totalStitchedLocal = stData[0].sumStitched || 0;
-      const leftoverJeans = await computeJeansLeftover(lot_no, totalStitchedLocal);
+      const leftoverJeans = await computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay);
       csvContent += `${lot_no},${leftovers.leftoverStitch},${leftovers.leftoverWash},${leftovers.leftoverFinish},${leftoverJeans}\n`;
     }
     res.setHeader('Content-disposition', 'attachment; filename=Leftovers.csv');
