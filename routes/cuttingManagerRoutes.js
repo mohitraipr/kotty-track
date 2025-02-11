@@ -11,12 +11,12 @@ const generateLotNumber = require('../utils/generateLotNumber'); // Import the u
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
+  destination: function (req, file, cb) {
     cb(null, 'uploads/'); // Ensure this directory exists
   },
-  filename: function(req, file, cb) {
+  filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname)); // e.g., 1598465759595.jpg
-  }
+  },
 });
 const upload = multer({ storage: storage });
 
@@ -24,7 +24,7 @@ const upload = multer({ storage: storage });
 async function getRollsByFabricType() {
   try {
     const [rows] = await pool.query(`
-      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight,fir.unit, v.name AS vendor_name
+      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight, fir.unit, v.name AS vendor_name
       FROM fabric_invoice_rolls fir
       JOIN fabric_invoices fi ON fir.invoice_id = fi.id
       JOIN vendors v ON fir.vendor_id = v.id
@@ -33,7 +33,7 @@ async function getRollsByFabricType() {
 
     // Transform the data into the desired format
     const rollsByFabricType = {};
-    rows.forEach(row => {
+    rows.forEach((row) => {
       if (!rollsByFabricType[row.fabric_type]) {
         rollsByFabricType[row.fabric_type] = [];
       }
@@ -41,7 +41,7 @@ async function getRollsByFabricType() {
         roll_no: row.roll_no,
         unit: row.unit,
         per_roll_weight: row.per_roll_weight,
-        vendor_name: row.vendor_name // Include vendor_name
+        vendor_name: row.vendor_name, // Include vendor_name
       });
     });
 
@@ -57,29 +57,25 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
   let conn;
   try {
     console.log('Session User:', req.session.user); // Debugging line
-
     const userId = req.session.user.id;
-
-    // Ensure userId is available
     if (!userId) {
       req.flash('error', 'User ID is missing in session.');
-      return res.redirect('/logout'); // Redirect to logout or login
+      return res.redirect('/logout');
     }
 
     // Start a transaction to generate lot_no safely
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // Generate a new lot number
     const username = req.session.user.username;
     const generatedLotNumber = await generateLotNumber(username, userId, conn);
 
-    // Commit the transaction
     await conn.commit();
     conn.release();
 
     // Fetch all cutting lots created by this cutting manager
-    const [cuttingLots] = await pool.query(`
+    const [cuttingLots] = await pool.query(
+      `
       SELECT 
         l.id,
         l.lot_no,
@@ -95,34 +91,41 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
       JOIN users u ON l.user_id = u.id
       WHERE l.user_id = ?
       ORDER BY l.created_at DESC
-    `, [userId]);
+    `,
+      [userId]
+    );
 
     // For each lot, fetch associated sizes
     for (let lot of cuttingLots) {
-      const [sizes] = await pool.query(`
+      const [sizes] = await pool.query(
+        `
         SELECT 
           cls.size_label,
           cls.pattern_count,
           cls.total_pieces
         FROM cutting_lot_sizes cls
         WHERE cls.cutting_lot_id = ?
-      `, [lot.id]);
-
+      `,
+        [lot.id]
+      );
       lot.sizes = sizes;
     }
 
-    // Fetch all department users (excluding cutting_manager)
-    const [departmentUsers] = await pool.query(`
+    // Fetch department users (excluding cutting_manager)
+    const [departmentUsers] = await pool.query(
+      `
       SELECT u.id, u.username, r.name AS role_name
       FROM users u
       JOIN roles r ON u.role_id = r.id
       WHERE r.name IN ('stitching_master', 'checking', 'washing', 'finishing', 'quality_assurance')
         AND u.is_active = TRUE
       ORDER BY r.name, u.username
-    `);
+    `
+    );
 
     // Fetch pending assignments for this cutting manager
-    const [pendingAssignments] = await pool.query(`
+    const [pendingAssignments] = await pool.query(
+      `
       SELECT 
         la.id AS assignment_id,
         l.lot_no,
@@ -143,13 +146,14 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
         ON la.id = dc.lot_assignment_id
       WHERE la.assigned_by_user_id = ?
       ORDER BY la.assigned_at DESC
-    `, [userId]);
+    `,
+      [userId]
+    );
 
     // Fetch rolls by fabric type
     const rollsByFabricType = await getRollsByFabricType();
 
-    // Render the dashboard with all necessary data
-    res.render('cuttingManagerDashboard', { // Ensure this matches your EJS file name
+    res.render('cuttingManagerDashboard', {
       user: req.session.user,
       cuttingLots,
       departmentUsers,
@@ -164,189 +168,231 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
     }
     console.error('Error loading Cutting Manager Dashboard:', err);
     req.flash('error', 'Failed to load Cutting Manager Dashboard.');
-    res.redirect('/'); // Adjust as needed
+    res.redirect('/');
   }
 });
 
 // POST /cutting-manager/create-lot
-// Handle creating a new cutting lot
-router.post('/create-lot', isAuthenticated, isCuttingManager, upload.single('image'), async (req, res) => {
-  const { lot_no, sku, fabric_type, remark, size_label, pattern_count, roll_no, layers, weight_used } = req.body;
-  const image = req.file;
+router.post(
+  '/create-lot',
+  isAuthenticated,
+  isCuttingManager,
+  upload.single('image'),
+  async (req, res) => {
+    const {
+      lot_no,
+      sku,
+      fabric_type,
+      remark,
+      size_label,
+      pattern_count,
+      roll_no,
+      layers,
+      weight_used,
+    } = req.body;
+    const image = req.file;
 
-  // Input validation
-  if (!lot_no || !sku || !fabric_type) {
-    req.flash('error', 'Lot No., SKU and Fabric Type are required.');
-    return res.redirect('/cutting-manager/dashboard');
-  }
+    // Input validation
+    if (!lot_no || !sku || !fabric_type) {
+      req.flash('error', 'Lot No., SKU and Fabric Type are required.');
+      return res.redirect('/cutting-manager/dashboard');
+    }
 
-  try {
-    const userId = req.session.user.id;
-    const username = req.session.user.username;
-
-    // Start a transaction
-    const conn = await pool.getConnection();
     try {
-      await conn.beginTransaction();
+      const userId = req.session.user.id;
+      const username = req.session.user.username;
 
-      // Insert the new cutting lot with total_pieces = 0
-      const [result] = await conn.query(`
-        INSERT INTO cutting_lots 
-          (lot_no, sku, fabric_type, remark, image_url, user_id, total_pieces)
-        VALUES 
-          (?, ?, ?, ?, ?, ?, 0)
-      `, [
-        lot_no,
-        sku,
-        fabric_type,
-        remark || null,
-        image ? image.path : null,
-        userId
-      ]);
+      // Start a transaction
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
 
-      const cuttingLotId = result.insertId;
-
-      // Handle sizes if provided (arrays)
-      let sizes = [];
-      if (Array.isArray(size_label) && Array.isArray(pattern_count)) {
-        for (let i = 0; i < size_label.length; i++) {
-          if (size_label[i] && pattern_count[i]) {
-            sizes.push({
-              size_label: size_label[i],
-              pattern_count: parseInt(pattern_count[i], 10)
-            });
-          }
-        }
-      } else if (size_label && pattern_count) {
-        // If only one size is provided
-        sizes.push({
-          size_label: size_label,
-          pattern_count: parseInt(pattern_count, 10)
-        });
-      }
-
-      // Insert sizes into cutting_lot_sizes
-      for (let size of sizes) {
-        if (size.size_label && !isNaN(size.pattern_count) && size.pattern_count > 0) {
-          await conn.query(`
-            INSERT INTO cutting_lot_sizes 
-              (cutting_lot_id, size_label, pattern_count, total_pieces, created_at)
-            VALUES 
-              (?, ?, ?, 0, NOW())
-          `, [cuttingLotId, size.size_label, size.pattern_count]);
-        }
-      }
-
-      // Handle Rolls Used if provided
-      let rolls = [];
-      if (Array.isArray(roll_no) && Array.isArray(layers) && Array.isArray(weight_used)) {
-        for (let i = 0; i < roll_no.length; i++) {
-          if (roll_no[i] && layers[i] && weight_used[i]) {
-            rolls.push({
-              roll_no: roll_no[i],
-              layers: parseInt(layers[i], 10),
-              weight_used: parseFloat(weight_used[i])
-            });
-          }
-        }
-      } else if (roll_no && layers && weight_used) {
-        // If only one roll is provided
-        rolls.push({
-          roll_no: roll_no,
-          layers: parseInt(layers, 10),
-          weight_used: parseFloat(weight_used)
-        });
-      }
-
-      // Insert rolls into cutting_lot_rolls and update fabric_invoice_rolls
-      for (let roll of rolls) {
-        // Check if the selected roll has enough weight
-        const [rollRows] = await conn.query(`
-          SELECT fir.per_roll_weight 
-          FROM fabric_invoice_rolls fir 
-          JOIN vendors v ON fir.vendor_id = v.id 
-          WHERE fir.roll_no = ? AND v.name IS NOT NULL FOR UPDATE
-        `, [roll.roll_no]);
-
-        if (rollRows.length === 0) {
-          throw new Error(`Roll No. ${roll.roll_no} does not exist.`);
-        }
-
-        const availableWeight = parseFloat(rollRows[0].per_roll_weight);
-        if (roll.weight_used > availableWeight) {
-          throw new Error(`Insufficient weight for Roll No. ${roll.roll_no}. Available: ${availableWeight}, Requested: ${roll.weight_used}`);
-        }
-
-        // Insert into cutting_lot_rolls
-        await conn.query(`
-          INSERT INTO cutting_lot_rolls 
-            (cutting_lot_id, roll_no, weight_used, layers, total_pieces, created_at)
+        // Insert the new cutting lot with total_pieces = 0
+        const [result] = await conn.query(
+          `
+          INSERT INTO cutting_lots 
+            (lot_no, sku, fabric_type, remark, image_url, user_id, total_pieces)
           VALUES 
-            (?, ?, ?, ?, 0, NOW())
-        `, [cuttingLotId, roll.roll_no, roll.weight_used, roll.layers]);
+            (?, ?, ?, ?, ?, ?, 0)
+        `,
+          [lot_no, sku, fabric_type, remark || null, image ? image.path : null, userId]
+        );
 
-        // Deduct the used weight from fabric_invoice_rolls
-        await conn.query(`
-          UPDATE fabric_invoice_rolls
-          SET per_roll_weight = per_roll_weight - ?
-          WHERE roll_no = ?
-        `, [roll.weight_used, roll.roll_no]);
-      }
+        const cuttingLotId = result.insertId;
 
-      // Calculate total_pieces
-      const [sizeRows] = await conn.query(`
-        SELECT pattern_count FROM cutting_lot_sizes WHERE cutting_lot_id = ?
-      `, [cuttingLotId]);
+        // Handle sizes if provided (using parseFloat for decimal values)
+        let sizes = [];
+        if (Array.isArray(size_label) && Array.isArray(pattern_count)) {
+          for (let i = 0; i < size_label.length; i++) {
+            if (size_label[i] && pattern_count[i]) {
+              sizes.push({
+                size_label: size_label[i],
+                pattern_count: parseFloat(pattern_count[i]),
+              });
+            }
+          }
+        } else if (size_label && pattern_count) {
+          sizes.push({
+            size_label: size_label,
+            pattern_count: parseFloat(pattern_count),
+          });
+        }
 
-      let sumPatterns = 0;
-      for (let size of sizeRows) {
-        sumPatterns += size.pattern_count;
-      }
+        // Insert sizes into cutting_lot_sizes
+        for (let size of sizes) {
+          if (size.size_label && !isNaN(size.pattern_count) && size.pattern_count > 0) {
+            await conn.query(
+              `
+              INSERT INTO cutting_lot_sizes 
+                (cutting_lot_id, size_label, pattern_count, total_pieces, created_at)
+              VALUES 
+                (?, ?, ?, 0, NOW())
+            `,
+              [cuttingLotId, size.size_label, size.pattern_count]
+            );
+          }
+        }
 
-      const [rollRowsSum] = await conn.query(`
-        SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?
-      `, [cuttingLotId]);
+        // Handle Rolls Used if provided (using parseFloat so decimals are preserved)
+        let rolls = [];
+        if (
+          Array.isArray(roll_no) &&
+          Array.isArray(layers) &&
+          Array.isArray(weight_used)
+        ) {
+          for (let i = 0; i < roll_no.length; i++) {
+            if (roll_no[i] && layers[i] && weight_used[i]) {
+              rolls.push({
+                roll_no: roll_no[i],
+                layers: parseFloat(layers[i]),
+                weight_used: parseFloat(weight_used[i]),
+              });
+            }
+          }
+        } else if (roll_no && layers && weight_used) {
+          rolls.push({
+            roll_no: roll_no,
+            layers: parseFloat(layers),
+            weight_used: parseFloat(weight_used),
+          });
+        }
 
-      const sumLayers = parseInt(rollRowsSum[0].total_layers, 10) || 0;
+        // Insert rolls into cutting_lot_rolls and update fabric_invoice_rolls
+        for (let roll of rolls) {
+          // Check if the selected roll has enough weight
+          const [rollRows] = await conn.query(
+            `
+            SELECT fir.per_roll_weight 
+            FROM fabric_invoice_rolls fir 
+            JOIN vendors v ON fir.vendor_id = v.id 
+            WHERE fir.roll_no = ? AND v.name IS NOT NULL FOR UPDATE
+          `,
+            [roll.roll_no]
+          );
 
-      // Total Pieces = Sum of Patterns * Sum of Layers
-      const totalPieces = sumPatterns * sumLayers;
+          if (rollRows.length === 0) {
+            throw new Error(`Roll No. ${roll.roll_no} does not exist.`);
+          }
 
-      // Update total_pieces in cutting_lots
-      await conn.query(`
-        UPDATE cutting_lots
-        SET total_pieces = ?
-        WHERE id = ?
-      `, [totalPieces, cuttingLotId]);
+          const availableWeight = parseFloat(rollRows[0].per_roll_weight);
+          if (roll.weight_used > availableWeight) {
+            throw new Error(
+              `Insufficient weight for Roll No. ${roll.roll_no}. Available: ${availableWeight}, Requested: ${roll.weight_used}`
+            );
+          }
 
-      // Update total_pieces in cutting_lot_sizes
-      for (let size of sizes) {
-        const totalPiecesPerSize = size.pattern_count * sumLayers;
-        await conn.query(`
-          UPDATE cutting_lot_sizes
+          // Insert into cutting_lot_rolls
+          await conn.query(
+            `
+            INSERT INTO cutting_lot_rolls 
+              (cutting_lot_id, roll_no, weight_used, layers, total_pieces, created_at)
+            VALUES 
+              (?, ?, ?, ?, 0, NOW())
+          `,
+            [cuttingLotId, roll.roll_no, roll.weight_used, roll.layers]
+          );
+
+          // Deduct the used weight from fabric_invoice_rolls
+          await conn.query(
+            `
+            UPDATE fabric_invoice_rolls
+            SET per_roll_weight = per_roll_weight - ?
+            WHERE roll_no = ?
+          `,
+            [roll.weight_used, roll.roll_no]
+          );
+        }
+
+        // Calculate total_pieces
+        const [sizeRows] = await conn.query(
+          `
+          SELECT pattern_count FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+        `,
+          [cuttingLotId]
+        );
+
+        let sumPatterns = 0;
+        for (let size of sizeRows) {
+          sumPatterns += parseFloat(size.pattern_count);
+        }
+
+        const [rollRowsSum] = await conn.query(
+          `
+          SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?
+        `,
+          [cuttingLotId]
+        );
+
+        const sumLayers = parseFloat(rollRowsSum[0].total_layers) || 0;
+
+        // Total Pieces = Sum of Patterns * Sum of Layers
+        const totalPieces = sumPatterns * sumLayers;
+
+        // Update total_pieces in cutting_lots
+        await conn.query(
+          `
+          UPDATE cutting_lots
           SET total_pieces = ?
-          WHERE cutting_lot_id = ? AND size_label = ?
-        `, [totalPiecesPerSize, cuttingLotId, size.size_label]);
+          WHERE id = ?
+        `,
+          [totalPieces, cuttingLotId]
+        );
+
+        // Update total_pieces in cutting_lot_sizes
+        for (let size of sizes) {
+          const totalPiecesPerSize = size.pattern_count * sumLayers;
+          await conn.query(
+            `
+            UPDATE cutting_lot_sizes
+            SET total_pieces = ?
+            WHERE cutting_lot_id = ? AND size_label = ?
+          `,
+            [totalPiecesPerSize, cuttingLotId, size.size_label]
+          );
+        }
+
+        await conn.commit();
+        conn.release();
+
+        req.flash(
+          'success',
+          `Cutting Lot ${lot_no} created successfully with Total Pieces: ${totalPieces}.`
+        );
+        res.redirect('/cutting-manager/dashboard');
+      } catch (err2) {
+        await conn.rollback();
+        conn.release();
+        console.error('Error creating Cutting Lot:', err2);
+        req.flash('error', err2.message || 'Failed to create Cutting Lot.');
+        res.redirect('/cutting-manager/dashboard');
       }
-
-      await conn.commit();
-      conn.release();
-
-      req.flash('success', `Cutting Lot ${lot_no} created successfully with Total Pieces: ${totalPieces}.`);
-      res.redirect('/cutting-manager/dashboard');
-    } catch (err2) {
-      await conn.rollback();
-      conn.release();
-      console.error('Error creating Cutting Lot:', err2);
-      req.flash('error', err2.message || 'Failed to create Cutting Lot.');
+    } catch (err) {
+      console.error('Database Connection Error:', err);
+      req.flash('error', 'Database connection failed.');
       res.redirect('/cutting-manager/dashboard');
     }
-  } catch (err) {
-    console.error('Database Connection Error:', err);
-    req.flash('error', 'Database connection failed.');
-    res.redirect('/cutting-manager/dashboard');
   }
-});
+);
 
 // GET /cutting-manager/generate-challan/:lotId
 router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async (req, res) => {
@@ -354,7 +400,8 @@ router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async 
 
   try {
     // Fetch lot details
-    const [lotRows] = await pool.query(`
+    const [lotRows] = await pool.query(
+      `
       SELECT 
         l.lot_no,
         l.sku,
@@ -366,7 +413,9 @@ router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async 
       FROM cutting_lots l
       JOIN users u ON l.user_id = u.id
       WHERE l.id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     if (lotRows.length === 0) {
       req.flash('error', 'Cutting Lot not found.');
@@ -403,30 +452,36 @@ router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async 
     }
 
     // Fetch sizes and patterns
-    const [sizes] = await pool.query(`
+    const [sizes] = await pool.query(
+      `
       SELECT size_label, pattern_count, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     if (sizes.length > 0) {
       doc.fontSize(14).text('Sizes and Patterns', { underline: true });
       doc.moveDown();
 
-      sizes.forEach(size => {
+      sizes.forEach((size) => {
         doc.fontSize(12).text(`Size: ${size.size_label}, Patterns: ${size.pattern_count}, Total Pieces: ${size.total_pieces}`);
       });
       doc.moveDown();
     }
 
     // Fetch rolls used
-    const [rolls] = await pool.query(`
+    const [rolls] = await pool.query(
+      `
       SELECT roll_no, weight_used, layers, total_pieces FROM cutting_lot_rolls WHERE cutting_lot_id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     if (rolls.length > 0) {
       doc.fontSize(14).text('Rolls Used', { underline: true });
       doc.moveDown();
 
-      rolls.forEach(roll => {
+      rolls.forEach((roll) => {
         doc.fontSize(12).text(`Roll No: ${roll.roll_no}, Weight Used: ${roll.weight_used}, Layers: ${roll.layers}, Total Pieces: ${roll.total_pieces}`);
       });
       doc.moveDown();
@@ -446,7 +501,8 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
 
   try {
     // Fetch lot details
-    const [lotRows] = await pool.query(`
+    const [lotRows] = await pool.query(
+      `
       SELECT 
         l.id,
         l.lot_no,
@@ -461,7 +517,9 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
       FROM cutting_lots l
       JOIN users u ON l.user_id = u.id
       WHERE l.id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     if (lotRows.length === 0) {
       req.flash('error', 'Cutting Lot not found.');
@@ -471,20 +529,26 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
     const lot = lotRows[0];
 
     // Fetch sizes and patterns
-    const [sizes] = await pool.query(`
+    const [sizes] = await pool.query(
+      `
       SELECT size_label, pattern_count, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     // Fetch rolls used
-    const [rolls] = await pool.query(`
+    const [rolls] = await pool.query(
+      `
       SELECT roll_no, weight_used, layers, total_pieces FROM cutting_lot_rolls WHERE cutting_lot_id = ?
-    `, [lotId]);
+    `,
+      [lotId]
+    );
 
     res.render('lotDetails', {
       user: req.session.user,
       lot,
       sizes,
-      rolls
+      rolls,
     });
   } catch (err) {
     console.error('Error loading Lot Details:', err);
@@ -503,15 +567,10 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
  */
 router.get('/assign-stitching', isAuthenticated, isCuttingManager, async (req, res) => {
   try {
-    // We’ll just render our new EJS page. 
-    // The page itself will load lots & users via AJAX if you prefer 
-    // OR we can fetch here and pass to EJS directly. 
-    // For demonstration, we’ll do minimal data in the EJS; 
-    // lots & users can be fetched via additional routes or from here.
     return res.render('assignStitching', {
       user: req.session.user,
       error: req.flash('error'),
-      success: req.flash('success')
+      success: req.flash('success'),
     });
   } catch (err) {
     console.error('Error rendering assign-stitching page:', err);
@@ -523,12 +582,12 @@ router.get('/assign-stitching', isAuthenticated, isCuttingManager, async (req, r
 /**
  * GET /cutting-manager/assign-stitching/lots
  * Returns JSON of unassigned lots (for the cutting master).
- * "Unassigned" means no entry in stitching_assignments for that cutting_lot_id.
  */
 router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (req, res) => {
   try {
     const cuttingMasterId = req.session.user.id;
-    const [rows] = await pool.query(`
+    const [rows] = await pool.query(
+      `
       SELECT 
         c.id AS cutting_lot_id,
         c.lot_no,
@@ -542,7 +601,9 @@ router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (r
           FROM stitching_assignments s
         )
       ORDER BY c.created_at DESC
-    `, [cuttingMasterId]);
+    `,
+      [cuttingMasterId]
+    );
 
     return res.json({ lots: rows });
   } catch (error) {
@@ -557,13 +618,15 @@ router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (r
  */
 router.get('/assign-stitching/users', isAuthenticated, isCuttingManager, async (req, res) => {
   try {
-    const [users] = await pool.query(`
+    const [users] = await pool.query(
+      `
       SELECT id, username
       FROM users
       WHERE is_active = 1
         AND role_id IN (SELECT id FROM roles WHERE name = 'stitching_master')
       ORDER BY username
-    `);
+    `
+    );
     return res.json({ users });
   } catch (error) {
     console.error('Error fetching stitching users:', error);
@@ -573,9 +636,7 @@ router.get('/assign-stitching/users', isAuthenticated, isCuttingManager, async (
 
 /**
  * POST /cutting-manager/assign-stitching
- * AJAX request to assign a lot to a specific stitching user
- * We use the column `assigner_cutting_master` instead of `operator_id`
- * because you said you renamed it.
+ * AJAX request to assign a lot to a specific stitching user.
  */
 router.post('/assign-stitching', isAuthenticated, isCuttingManager, async (req, res) => {
   try {
@@ -585,26 +646,29 @@ router.post('/assign-stitching', isAuthenticated, isCuttingManager, async (req, 
     }
 
     // Double-check that this lot belongs to the current cutting manager
-    const [checkRows] = await pool.query(`
+    const [checkRows] = await pool.query(
+      `
       SELECT id FROM cutting_lots 
       WHERE id = ? AND user_id = ?
       LIMIT 1
-    `, [cutting_lot_id, req.session.user.id]);
+    `,
+      [cutting_lot_id, req.session.user.id]
+    );
     if (checkRows.length === 0) {
       return res.status(403).json({ error: 'You do not own this lot or it does not exist.' });
     }
 
     // Insert into stitching_assignments
-    await pool.query(`
+    await pool.query(
+      `
       INSERT INTO stitching_assignments
         (assigner_cutting_master, user_id, cutting_lot_id, assigned_on)
       VALUES
         (?, ?, ?, NOW())
-    `, [req.session.user.id, user_id, cutting_lot_id]);
+    `,
+      [req.session.user.id, user_id, cutting_lot_id]
+    );
 
-    // Everything successful
-    // We can also use req.flash if you want to see it after a redirect,
-    // but since we are doing AJAX, we’ll just respond with JSON:
     return res.json({ success: true, message: 'Lot successfully assigned to stitching user.' });
   } catch (error) {
     console.error('Error assigning lot to stitching:', error);
