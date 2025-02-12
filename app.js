@@ -99,7 +99,7 @@ app.use((req, res) => {
 });
 
 // Start Server (ALB terminates SSL; your app listens over HTTP)
-const PORT = global.env.PORT || 443;
+const PORT = global.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
