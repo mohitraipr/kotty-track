@@ -15,14 +15,14 @@ const app = express();
 app.set('trust proxy', true);
 
 // Middleware to redirect HTTP requests to HTTPS
-app.use((req, res, next) => {
+/*app.use((req, res, next) => {
     // req.secure is set correctly because of trust proxy
     if (!req.secure) {
         return res.redirect('https://' + req.headers.host + req.url);
     }
     next();
 });
-
+*/
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
