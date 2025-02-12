@@ -4,9 +4,24 @@ const express = require('express');
 const session = require('express-session');
 const flash = require('connect-flash');
 const path = require('path');
-require('dotenv').config();
+
+// Load environment variables securely using secure-env
+const secureEnv = require('secure-env');
+global.env = secureEnv({ secret: 'mySecretPassword' }); // Replace with your actual secret
 
 const app = express();
+
+// Trust the ALB proxy so that Express correctly identifies the protocol
+app.set('trust proxy', true);
+
+// Middleware to redirect HTTP requests to HTTPS
+app.use((req, res, next) => {
+    // req.secure is set correctly because of trust proxy
+    if (!req.secure) {
+        return res.redirect('https://' + req.headers.host + req.url);
+    }
+    next();
+});
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
@@ -14,11 +29,11 @@ app.use(express.json());
 
 // Session Configuration
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your_session_secret',
+    secret: global.env.SESSION_SECRET || 'your_session_secret',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Set to true in production
+        secure: global.env.NODE_ENV === 'production', // With ALB and redirection, ensure cookies are sent only over HTTPS
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 // 1 day
     }
@@ -56,6 +71,7 @@ const searchRoutes = require('./routes/searchRoutes');
 const assigntowashingRoutes = require('./routes/assigntowashingRoutes');
 const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const jeansAssemblyRoutes = require('./routes/jeansAssemblyRoutes.js');
+
 // Use Routes
 app.use('/', authRoutes);
 app.use('/admin', adminRoutes);
@@ -65,12 +81,12 @@ app.use('/fabric-manager', fabricManagerRoutes); // Use Fabric Manager Routes
 app.use('/cutting-manager', cuttingManagerRoutes);
 app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
+app.use('/finishingdashboard', finishingRoutes);
 app.use('/washingdashboard', washingRoutes);
 app.use('/', searchRoutes);
 app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
 app.use('/', bulkUploadRoutes);
-app.use('/finishingdashboard', finishingRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
@@ -82,8 +98,8 @@ app.use((req, res) => {
     res.status(404).send('404 Not Found');
 });
 
-// Start Server
-const PORT = process.env.PORT || 3000;
+// Start Server (ALB terminates SSL; your app listens over HTTP)
+const PORT = global.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
