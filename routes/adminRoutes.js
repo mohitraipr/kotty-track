@@ -1,5 +1,3 @@
-// routes/adminRoutes.js
-
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const router = express.Router();
@@ -7,7 +5,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isAdmin } = require('../middlewares/auth');
 const { body, validationResult } = require('express-validator');
 
-// (Optional) fetchExistingTables if you want to list them somewhere
+// Utility: Fetch existing tables (if needed)
 async function fetchExistingTables() {
   const sql = `
     SELECT table_name 
@@ -22,13 +20,13 @@ async function fetchExistingTables() {
   return rows.map(r => r.table_name);
 }
 
-// GET /admin
+// GET /admin – Render admin page
 router.get('/', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    // 1) Roles
+    // 1) Fetch Roles
     const [roles] = await pool.query('SELECT * FROM roles');
 
-    // 2) Users (with role name)
+    // 2) Fetch Users with role names
     const [users] = await pool.query(`
       SELECT u.*, r.name AS role_name 
       FROM users u 
@@ -36,7 +34,7 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
       ORDER BY r.name, u.username
     `);
 
-    // 3) Dashboards
+    // 3) Fetch Dashboards
     const [dashboards] = await pool.query(`
       SELECT d.*, r.id AS role_id, r.name AS role_name 
       FROM dashboards d 
@@ -44,10 +42,8 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
       ORDER BY d.name
     `);
 
-    // Fetch existing tables
+    // (Optional) Existing tables and audit logs:
     const existingTables = await fetchExistingTables();
-
-    // Fetch audit logs (optional, can be moved to a separate page)
     const [auditLogs] = await pool.query(`
       SELECT al.id, u.username, al.action, al.details, al.performed_at 
       FROM audit_logs al 
@@ -56,7 +52,6 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
       LIMIT 100
     `);
 
-    // Render the admin view with the fetched data
     res.render('admin', { 
       user: req.session.user, 
       roles, 
@@ -72,8 +67,7 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
   }
 });
 
-// POST /admin/create-dashboard
-// Creates a brand-new table using the columns JSON, then inserts a dashboard entry
+// POST /admin/create-dashboard – Create new dashboard/table
 router.post(
   '/create-dashboard',
   isAuthenticated,
@@ -88,26 +82,16 @@ router.post(
     body('columns').notEmpty().withMessage('Columns JSON is required.')
   ],
   async (req, res) => {
-    /*
-      Expects form fields:
-      - dashboardName
-      - tableName
-      - roleId
-      - canUpdate (checkbox)
-      - columns (JSON array, e.g. [ { name: "fabric_type", type: "VARCHAR(100)", isNotNull: true }, ... ])
-    */
     const { dashboardName, tableName, roleId, columns } = req.body;
     let { canUpdate } = req.body;
     canUpdate = canUpdate === 'on' || canUpdate === 'true';
 
-    // Validate inputs
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       req.flash('error', errors.array().map(err => err.msg).join(' '));
       return res.redirect('/admin');
     }
 
-    // 1) parse columns
     let parsed;
     try {
       parsed = JSON.parse(columns);
@@ -121,7 +105,6 @@ router.post(
       return res.redirect('/admin');
     }
 
-    // 2) build CREATE TABLE statement
     let colDefs = parsed.map(col => {
       let def = `\`${col.name}\` ${col.type}`;
       if (col.isNotNull) {
@@ -129,7 +112,6 @@ router.post(
       }
       return def;
     }).join(', ');
-
     // Add primary key
     colDefs = `\`id\` INT AUTO_INCREMENT PRIMARY KEY, ${colDefs}`;
 
@@ -140,23 +122,17 @@ router.post(
     try {
       const conn = await pool.getConnection();
       try {
-        // 3) create table if not exists
         await conn.query(createTableSQL);
-
-        // 4) insert into dashboards
         await conn.query(
           `INSERT INTO dashboards (name, table_name, role_id, can_update)
            VALUES (?, ?, ?, ?)`,
           [dashboardName, tableName, roleId, canUpdate]
         );
-
-        // 5) Log the action
         await conn.query(
           `INSERT INTO audit_logs (user_id, action, details)
            VALUES (?, 'Create Dashboard', 'Created dashboard: ${dashboardName} with table: ${tableName}')`,
           [req.session.user.id]
         );
-
         conn.release();
       } catch (err2) {
         conn.release();
@@ -164,8 +140,6 @@ router.post(
         req.flash('error', 'Failed to create new table or dashboard.');
         return res.redirect('/admin');
       }
-
-      // success
       req.flash('success', 'Dashboard created successfully.');
       return res.redirect('/admin');
     } catch (err) {
@@ -176,41 +150,31 @@ router.post(
   }
 );
 
-// POST /admin/create-role
+// POST /admin/create-role – Create new role
 router.post(
   '/create-role',
   isAuthenticated,
   isAdmin,
-  [
-    body('roleName').trim().notEmpty().withMessage('Role name is required.')
-  ],
+  [body('roleName').trim().notEmpty().withMessage('Role name is required.')],
   async (req, res) => {
     const { roleName } = req.body;
-
-    // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       req.flash('error', errors.array().map(err => err.msg).join(' '));
       return res.redirect('/admin');
     }
-
     try {
-      // Check if role already exists
       const [existingRole] = await pool.query('SELECT id FROM roles WHERE name = ?', [roleName]);
       if (existingRole.length > 0) {
         req.flash('error', 'Role already exists.');
         return res.redirect('/admin');
       }
-
       await pool.query('INSERT INTO roles (name) VALUES (?)', [roleName]);
-
-      // Log the action
       await pool.query(
         `INSERT INTO audit_logs (user_id, action, details)
          VALUES (?, 'Create Role', 'Created role: ${roleName}')`,
         [req.session.user.id]
       );
-
       return res.redirect('/admin');
     } catch (err) {
       console.error('Error creating role:', err);
@@ -220,7 +184,7 @@ router.post(
   }
 );
 
-// POST /admin/create-user
+// POST /admin/create-user – Create new user
 router.post(
   '/create-user',
   isAuthenticated,
@@ -228,9 +192,8 @@ router.post(
   [
     body('username')
       .trim()
-      .notEmpty()
-      .withMessage('Username is required.')
-      .withMessage('Username must be alphanumeric.')
+      .notEmpty().withMessage('Username is required.')
+      .isAlphanumeric().withMessage('Username must be alphanumeric.')
       .custom(async (value) => {
         const [user] = await pool.query('SELECT id FROM users WHERE username = ?', [value]);
         if (user.length > 0) {
@@ -238,36 +201,28 @@ router.post(
         }
       }),
     body('password')
-      .notEmpty()
-      .withMessage('Password is required.')
-      .isLength({ min: 6 })
-      .withMessage('Password must be at least 6 characters long.'),
+      .notEmpty().withMessage('Password is required.')
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
     body('role_id').isInt().withMessage('Valid role is required.')
   ],
   async (req, res) => {
     const { username, password, role_id } = req.body;
-
-    // Validate inputs
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       req.flash('error', errors.array().map(err => err.msg).join(' '));
       return res.redirect('/admin');
     }
-
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
       await pool.query(
         'INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)',
         [username, hashedPassword, role_id]
       );
-
-      // Log the action
       await pool.query(
         `INSERT INTO audit_logs (user_id, action, details)
          VALUES (?, 'Create User', 'Created user: ${username}')`,
         [req.session.user.id]
       );
-
       req.flash('success', `User "${username}" created successfully.`);
       return res.redirect('/admin');
     } catch (err) {
@@ -278,7 +233,55 @@ router.post(
   }
 );
 
-// POST /admin/update-dashboard-role
+// POST /admin/update-user – Edit user (username and/or password)
+router.post(
+  '/update-user',
+  isAuthenticated,
+  isAdmin,
+  [
+    body('user_id').isInt().withMessage('Valid user ID is required.'),
+    body('username')
+      .trim()
+      .notEmpty().withMessage('Username is required.')
+      .isAlphanumeric().withMessage('Username must be alphanumeric.'),
+    body('password')
+      .optional()
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long if provided.')
+  ],
+  async (req, res) => {
+    const { user_id, username, password } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      req.flash('error', errors.array().map(err => err.msg).join(' '));
+      return res.redirect('/admin');
+    }
+    try {
+      let query, params;
+      if (password && password.trim() !== '') {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        query = 'UPDATE users SET username = ?, password = ? WHERE id = ?';
+        params = [username, hashedPassword, user_id];
+      } else {
+        query = 'UPDATE users SET username = ? WHERE id = ?';
+        params = [username, user_id];
+      }
+      await pool.query(query, params);
+      await pool.query(
+        `INSERT INTO audit_logs (user_id, action, details)
+         VALUES (?, 'Update User', 'Updated user ID ${user_id} with new username and/or password')`,
+        [req.session.user.id]
+      );
+      req.flash('success', 'User updated successfully.');
+      return res.redirect('/admin');
+    } catch (err) {
+      console.error('Error updating user:', err);
+      req.flash('error', 'Error updating user.');
+      return res.redirect('/admin');
+    }
+  }
+);
+
+// POST /admin/update-dashboard-role – Update dashboard role assignment
 router.post(
   '/update-dashboard-role',
   isAuthenticated,
@@ -289,28 +292,18 @@ router.post(
   ],
   async (req, res) => {
     const { dashboardId, roleId } = req.body;
-
-    // Validate inputs
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       req.flash('error', errors.array().map(err => err.msg).join(' '));
       return res.redirect('/admin');
     }
-
     try {
-      // Update the dashboard's role
-      await pool.query(
-        `UPDATE dashboards SET role_id = ? WHERE id = ?`,
-        [roleId, dashboardId]
-      );
-
-      // Log the action
+      await pool.query(`UPDATE dashboards SET role_id = ? WHERE id = ?`, [roleId, dashboardId]);
       await pool.query(
         `INSERT INTO audit_logs (user_id, action, details)
          VALUES (?, 'Update Dashboard Role', 'Updated dashboard ID ${dashboardId} to role ID ${roleId}')`,
         [req.session.user.id]
       );
-
       req.flash('success', 'Dashboard role updated successfully.');
       return res.redirect('/admin');
     } catch (err) {
@@ -321,48 +314,32 @@ router.post(
   }
 );
 
-// POST /admin/delete-user
+// POST /admin/delete-user – Delete a user (if needed)
 router.post(
   '/delete-user',
   isAuthenticated,
   isAdmin,
-  [
-    body('user_id').isInt().withMessage('Valid user ID is required.')
-  ],
+  [body('user_id').isInt().withMessage('Valid user ID is required.')],
   async (req, res) => {
     const { user_id } = req.body;
-
-    // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       req.flash('error', errors.array().map(err => err.msg).join(' '));
       return res.redirect('/admin');
     }
-
     try {
-      // Fetch the user before deletion for audit logging
-      const [userRows] = await pool.query(
-        'SELECT username FROM users WHERE id = ?',
-        [user_id]
-      );
-
+      const [userRows] = await pool.query('SELECT username FROM users WHERE id = ?', [user_id]);
       if (userRows.length === 0) {
         req.flash('error', 'User not found.');
         return res.redirect('/admin');
       }
-
       const username = userRows[0].username;
-
-      // Delete the user
       await pool.query('DELETE FROM users WHERE id = ?', [user_id]);
-
-      // Log the action
       await pool.query(
         `INSERT INTO audit_logs (user_id, action, details)
          VALUES (?, 'Delete User', 'Deleted user: ${username}')`,
         [req.session.user.id]
       );
-
       req.flash('success', `User "${username}" deleted successfully.`);
       return res.redirect('/admin');
     } catch (err) {
