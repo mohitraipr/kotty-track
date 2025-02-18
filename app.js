@@ -71,6 +71,7 @@ const searchRoutes = require('./routes/searchRoutes');
 const assigntowashingRoutes = require('./routes/assigntowashingRoutes');
 const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const jeansAssemblyRoutes = require('./routes/jeansAssemblyRoutes.js');
+const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
 
 // Use Routes
 app.use('/', authRoutes);
@@ -86,6 +87,7 @@ app.use('/washingdashboard', washingRoutes);
 app.use('/', searchRoutes);
 app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
+app.use("/operator", editCuttingLotRoutes);
 app.use('/', bulkUploadRoutes);
 
 // Home Route
