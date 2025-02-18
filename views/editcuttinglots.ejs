@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edit Cutting Lots</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f7f7f7;
+    }
+    .container {
+      margin-top: 20px;
+    }
+    .card {
+      margin-bottom: 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .spinner {
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    /* Navbar styling */
+    .navbar-custom {
+      background-color: #6c757d;
+    }
+    .navbar-custom .navbar-brand,
+    .navbar-custom .nav-link,
+    .navbar-custom .navbar-text {
+      color: #fff;
+    }
+    .nav-icon {
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-custom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/operator/dashboard">
+        <i class="bi bi-speedometer2 nav-icon"></i>Operator Panel
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"
+              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarContent">
+        <ul class="navbar-nav mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link" href="/operator/dashboard">
+              <i class="bi bi-house-door nav-icon"></i>Dashboard
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/logout">
+              <i class="bi bi-box-arrow-right nav-icon"></i>Logout
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1 class="mb-4"><i class="bi bi-pencil-square"></i> Edit Cutting Lots</h1>
+    
+    <!-- Cutting Master Selection -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <label for="masterSelect" class="form-label fw-bold">
+          <i class="bi bi-person-fill"></i> Select Cutting Master:
+        </label>
+        <select id="masterSelect" class="form-select">
+          <option value="">-- Select Cutting Master --</option>
+          <% masters.forEach(function(master) { %>
+            <option value="<%= master.id %>"><%= master.username %></option>
+          <% }); %>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Real-Time Global Search Container (hidden until a master is selected) -->
+    <div class="mb-3" id="lotListSearchContainer" style="display: none;">
+      <div class="input-group">
+        <input type="text" class="form-control" id="lotSearchInput" placeholder="Type to search in any column...">
+        <button class="btn btn-outline-secondary" type="button" id="lotSearchButton">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Lot List Section (loaded dynamically) -->
+    <div id="lotListContainer" class="mb-4"></div>
+  </div>
+  
+  <!-- Edit Lot Modal -->
+  <div class="modal fade" id="editLotModal" tabindex="-1" aria-labelledby="editLotModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editLotModalLabel"><i class="bi bi-pencil-square"></i> Edit Cutting Lot</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="editLotModalBody">
+          <!-- Dynamic content will be loaded here -->
+          <div class="spinner">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Scripts -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const masterSelect = document.getElementById("masterSelect");
+      const lotListContainer = document.getElementById("lotListContainer");
+      const lotListSearchContainer = document.getElementById("lotListSearchContainer");
+      const lotSearchInput = document.getElementById("lotSearchInput");
+      const lotSearchButton = document.getElementById("lotSearchButton");
+      const editLotModal = new bootstrap.Modal(document.getElementById("editLotModal"));
+      const editLotModalBody = document.getElementById("editLotModalBody");
+
+      // Variables to store current search and page state
+      let currentSearch = '';
+      let currentPage = 1;
+      let debounceTimer;
+
+      // Function to load the lot list for a given manager, page, and search query
+      function loadLotList(managerId, page = 1, search = '') {
+        currentPage = page;
+        currentSearch = search;
+        lotListContainer.innerHTML = `<div class="spinner">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>`;
+        const url = `/operator/editcuttinglots/lot-list?managerId=${managerId}&page=${page}&search=${encodeURIComponent(search)}`;
+        fetch(url)
+          .then(response => response.text())
+          .then(html => {
+            lotListContainer.innerHTML = html;
+            attachEditButtons(managerId);
+            attachPaginationListeners(managerId);
+          })
+          .catch(err => {
+            console.error("Error loading lot list:", err);
+            lotListContainer.innerHTML = `<div class="alert alert-danger" role="alert">
+              Failed to load lots. Please try again later.
+            </div>`;
+          });
+      }
+
+      // When a cutting master is selected, show the search container and load the lot list
+      masterSelect.addEventListener("change", function() {
+        const managerId = this.value;
+        if (managerId) {
+          lotListSearchContainer.style.display = 'block';
+          lotSearchInput.value = '';
+          loadLotList(managerId, 1, '');
+        } else {
+          lotListSearchContainer.style.display = 'none';
+          lotListContainer.innerHTML = '';
+        }
+      });
+
+      // Trigger search on button click
+      lotSearchButton.addEventListener("click", function() {
+        const managerId = masterSelect.value;
+        if (managerId) {
+          loadLotList(managerId, 1, lotSearchInput.value.trim());
+        }
+      });
+
+      // Real-time global search with debounce (300ms delay)
+      lotSearchInput.addEventListener("input", function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const managerId = masterSelect.value;
+          if (managerId) {
+            loadLotList(managerId, 1, lotSearchInput.value.trim());
+          }
+        }, 300);
+      });
+
+      // Attach click listeners to all Edit buttons in the loaded lot list
+      function attachEditButtons(managerId) {
+        document.querySelectorAll(".edit-lot-btn").forEach(function(button) {
+          button.addEventListener("click", function(e) {
+            e.preventDefault();
+            const lotId = this.getAttribute("data-lot-id");
+            loadEditForm(managerId, lotId);
+          });
+        });
+      }
+      
+      // Attach click listeners for pagination links
+      function attachPaginationListeners(managerId) {
+        document.querySelectorAll(".pagination-link").forEach(function(link) {
+          link.addEventListener("click", function(e) {
+            e.preventDefault();
+            const newPage = this.getAttribute("data-page");
+            loadLotList(managerId, newPage, currentSearch);
+          });
+        });
+      }
+      
+      // Load the edit form into the modal for the selected lot
+      function loadEditForm(managerId, lotId) {
+        editLotModalBody.innerHTML = `<div class="spinner">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>`;
+        fetch("/operator/editcuttinglots/edit-form?managerId=" + managerId + "&lotId=" + lotId)
+          .then(response => response.text())
+          .then(html => {
+            editLotModalBody.innerHTML = html;
+            attachFormListeners(managerId, lotId);
+            editLotModal.show();
+          })
+          .catch(err => {
+            console.error("Error loading edit form:", err);
+            editLotModalBody.innerHTML = `<div class="alert alert-danger" role="alert">
+              Failed to load edit form. Please try again later.
+            </div>`;
+          });
+      }
+      
+      // Attach event listeners to the form inputs and submit event inside the modal
+      function attachFormListeners(managerId, lotId) {
+        const modalContainer = editLotModalBody;
+        const patternInputs = modalContainer.querySelectorAll(".patternCountInput");
+        const layerInputs = modalContainer.querySelectorAll(".layersInput");
+        
+        function recalcTotals() {
+          let totalPatterns = 0, totalLayers = 0;
+          patternInputs.forEach(input => {
+            totalPatterns += parseFloat(input.value) || 0;
+          });
+          layerInputs.forEach(input => {
+            totalLayers += parseFloat(input.value) || 0;
+          });
+          const totalPieces = totalPatterns * totalLayers;
+          const totalDisplay = modalContainer.querySelector("#totalPiecesDisplay");
+          if (totalDisplay) totalDisplay.textContent = totalPieces.toFixed(2);
+          const sizeTotalFields = modalContainer.querySelectorAll(".sizeTotalPieces");
+          patternInputs.forEach((input, idx) => {
+            const pattern = parseFloat(input.value) || 0;
+            if (sizeTotalFields[idx]) sizeTotalFields[idx].value = (pattern * totalLayers).toFixed(2);
+          });
+        }
+        
+        patternInputs.forEach(input => input.addEventListener("input", recalcTotals));
+        layerInputs.forEach(input => input.addEventListener("input", recalcTotals));
+        recalcTotals();
+        
+        const updateForm = modalContainer.querySelector("#updateLotForm");
+        if (updateForm) {
+          updateForm.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const formData = new FormData(updateForm);
+            fetch("/operator/editcuttinglots/update?managerId=" + managerId + "&lotId=" + lotId, {
+              method: "POST",
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                // Show success alert
+                const alertDiv = document.createElement("div");
+                alertDiv.className = "alert alert-success";
+                alertDiv.textContent = "Lot updated successfully.";
+                document.querySelector(".container").prepend(alertDiv);
+                setTimeout(() => alertDiv.remove(), 3000);
+                
+                editLotModal.hide();
+                // Reload the current page of the lot list after update
+                loadLotList(managerId, currentPage, currentSearch);
+              } else {
+                const alertDiv = document.createElement("div");
+                alertDiv.className = "alert alert-danger mt-2";
+                alertDiv.textContent = "Update failed: " + data.error;
+                modalContainer.prepend(alertDiv);
+                setTimeout(() => alertDiv.remove(), 5000);
+              }
+            })
+            .catch(err => {
+              console.error("Error updating lot:", err);
+              const alertDiv = document.createElement("div");
+              alertDiv.className = "alert alert-danger mt-2";
+              alertDiv.textContent = "An error occurred during update.";
+              modalContainer.prepend(alertDiv);
+              setTimeout(() => alertDiv.remove(), 5000);
+            });
+          });
+        }
+      }
+    });
+  </script>
+  
+  <!-- Bootstrap Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
