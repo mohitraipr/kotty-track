@@ -5,7 +5,7 @@
  **************************************************/
 const express = require("express");
 const router = express.Router();
-const axios = require("axios");
+const axios = require('axios');
 const { pool } = require("../config/db");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 
@@ -483,7 +483,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         },
         status,
         stitchingAssignedUser,
-        jeansAssemblyAssignedUser,
+        jeansAssemblyAssignedUser, // new field added here
         washingAssignedUser,
         finishingAssignedUser,
         totalPiecesLeft,
