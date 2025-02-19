@@ -22,24 +22,26 @@
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css">
   <!-- Excel-like Tabulator theme styling -->
   <style>
-    /* Excel-like Tabulator theme */
-    .tabulator {
-      font-family: Calibri, sans-serif;
-      font-size: 11pt;
-      background: #fff;
-      border: 1px solid #ccc;
+    /* Global resets and transitions */
+    * { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease; }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      margin: 0;
+      padding-bottom: 3rem;
+      padding-top: 70px;
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
-    .tabulator .tabulator-header {
-      background: #f3f3f3;
-      border-bottom: 1px solid #ccc;
-      font-weight: bold;
-      color: #000;
+    a { text-decoration: none; color: inherit; }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .tabulator .tabulator-cell {
-      border: 1px solid #ddd;
-      padding: 4px;
-      color: #000;
-    }
+    
+    /* CSS Variables */
     :root {
       --primary-color: #0d6efd;
       --secondary-color: #6c757d;
@@ -70,25 +72,17 @@
       --stat-gradient-start: #33373b;
       --stat-gradient-end: #272a2e;
     }
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: var(--background-color);
-      color: var(--text-color);
-      margin: 0;
-      padding-bottom: 3rem;
-      padding-top: 70px;
-      transition: background-color 0.3s ease, color 0.3s ease;
-    }
-    a { text-decoration: none; color: inherit; }
-    * { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+
+    /* Top Navigation Bar */
     .top-nav {
-      background-color: var(--nav-bg);
+      background: linear-gradient(90deg, var(--nav-bg) 0%, #2b2d30 100%);
       border-bottom: 3px solid var(--nav-border);
       position: fixed;
       top: 0;
       width: 100%;
       z-index: 1030;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      padding: 0.5rem 1rem;
     }
     .top-nav .nav-brand {
       font-size: 1.7rem;
@@ -100,7 +94,10 @@
       font-size: 1rem;
       margin-right: 12px;
     }
-    .top-nav .nav-link:hover { color: #ced4da !important; }
+    .top-nav .nav-link:hover { 
+      color: #ced4da !important;
+      transform: scale(1.05);
+    }
     .top-nav .navbar-toggler { border-color: rgba(248,249,250,0.3); }
     .top-nav .navbar-toggler-icon { filter: invert(1); }
     .dark-mode-toggle {
@@ -108,10 +105,13 @@
       font-size: 1.2rem;
       color: var(--nav-text) !important;
     }
+    
+    /* Header */
     .portal-header {
       text-align: center;
       margin-top: 1rem;
       margin-bottom: 2rem;
+      animation: fadeIn 0.6s ease-out;
     }
     .portal-header h1 {
       font-size: 2rem;
@@ -122,6 +122,8 @@
       font-size: 1rem;
       color: var(--secondary-color);
     }
+    
+    /* Stat Cards */
     .stat-box {
       background: linear-gradient(135deg, var(--stat-gradient-start), var(--stat-gradient-end));
       border: none;
@@ -129,6 +131,7 @@
       text-align: center;
       padding: 1rem;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      animation: fadeIn 0.6s ease-out;
     }
     .stat-box .stat-title {
       font-size: 1rem;
@@ -141,11 +144,15 @@
       font-weight: 600;
       color: var(--primary-color);
     }
+    
+    /* Data Panels */
     .data-panel {
       background-color: var(--card-bg);
       border: 1px solid var(--panel-border);
-      border-radius: 4px;
+      border-radius: 8px;
       margin-bottom: 2rem;
+      overflow: hidden;
+      animation: fadeIn 0.6s ease-out;
     }
     .data-panel .panel-header {
       padding: 0.75rem 1rem;
@@ -158,6 +165,8 @@
       font-size: 1.1rem;
     }
     .data-panel .panel-body { padding: 1rem; }
+    
+    /* Tabs */
     .nav-tabs .nav-link {
       color: var(--text-color);
       font-weight: 500;
@@ -168,9 +177,11 @@
       color: var(--primary-color);
       border-bottom: none;
     }
-    .tab-content .tab-pane { margin-top: 1.5rem; }
+    .tab-content .tab-pane { margin-top: 1.5rem; animation: fadeIn 0.5s ease-in-out; }
+    
+    /* Modal Styling with subtle slide down */
     .modal-content {
-      border-radius: 4px;
+      border-radius: 8px;
       border: 1px solid var(--panel-border);
       background-color: var(--card-bg);
     }
@@ -179,11 +190,25 @@
       border-bottom: 1px solid var(--panel-border);
     }
     .modal-footer { border-top: 1px solid var(--panel-border); }
+    .modal.fade .modal-dialog {
+      transform: translateY(-50px);
+      transition: transform 0.3s ease-out;
+    }
+    .modal.fade.show .modal-dialog {
+      transform: translateY(0);
+    }
+    
+    /* Table actions and leftover value badges */
     .actions-col { white-space: nowrap; width: 120px; text-align: center; }
     .leftover-value { padding: 3px 8px; border-radius: 4px; display: inline-block; font-weight: 600; margin-right: 5px; }
     .leftover-zero { background-color: #f8d7da; color: #721c24; }
     .leftover-nonzero { background-color: #cce5ff; color: #004085; }
     .leftover-unassigned { color: #dc3545; font-weight: 700; }
+    
+    /* Button Hover Effects */
+    button:hover {
+      transform: translateY(-2px);
+    }
   </style>
 </head>
 <body>
@@ -194,7 +219,9 @@
         <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="Brand Logo" width="30" height="30" class="d-inline-block align-text-top">
         Kotty
       </a>
-      <button id="toggleDarkMode" class="btn btn-outline-light me-2">Toggle Theme</button>
+      <button id="toggleDarkMode" class="btn btn-outline-light me-2">
+        <i class="bi bi-sun"></i>
+      </button>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation" aria-controls="mainNavigation" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -279,13 +306,14 @@
   <div class="container">
     <!-- SKU INSIGHTS WITH DATE RANGE FILTER INSIDE THE CARD -->
     <div class="data-panel mb-4">
-      <div class="panel-header d-flex justify-content-between align-items-center">
-        <div>
-          <i class="bi bi-bar-chart-line"></i> SKU Insights
+      <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+        <div class="mb-2 mb-md-0">
+          <i class="bi bi-bar-chart-line"></i>
+          <span class="h5 mb-0">SKU Insights</span>
         </div>
-        <!-- Date Range Filter (applies only to SKU Insights) -->
+        <!-- Date Range Filter -->
         <div>
-          <form method="GET" action="/operator/dashboard" class="row g-2 align-items-end">
+          <form method="GET" action="/operator/dashboard" class="row g-2 align-items-center">
             <div class="col-auto">
               <label for="startDate" class="form-label mb-0">Start</label>
               <input type="date" id="startDate" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>">
@@ -683,14 +711,24 @@
       });
     });
 
-    // Dark Mode Toggle using Button
+    // Dark Mode Toggle using Button (with dynamic icon swap)
     const body = document.body;
     const toggleDarkModeBtn = document.getElementById('toggleDarkMode');
     const darkModePreference = localStorage.getItem('kottyDarkMode') === 'true';
-    if(darkModePreference){ body.classList.add('dark-mode'); }
+    if(darkModePreference){ 
+      body.classList.add('dark-mode'); 
+      toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
+    } else {
+      toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
+    }
     toggleDarkModeBtn.addEventListener('click', function(){
       body.classList.toggle('dark-mode');
       localStorage.setItem('kottyDarkMode', body.classList.contains('dark-mode'));
+      if (body.classList.contains('dark-mode')) {
+        toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
+      } else {
+        toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
+      }
     });
 
     // Prepare leftover data using JSON.stringify (including operator names, SKU, and a precomputed searchString)
