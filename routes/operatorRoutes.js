@@ -5,7 +5,7 @@
  **************************************************/
 const express = require("express");
 const router = express.Router();
-const axios = require('axios');
+const axios = require("axios");
 const { pool } = require("../config/db");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 
@@ -213,15 +213,15 @@ async function computeOperatorPerformance() {
 /**
  * computeAdvancedAnalytics(startDate, endDate)
  *
- * This function now computes overall totals as before and
+ * This function computes overall totals as before and
  * also fetches top 10 and bottom 10 SKUs based on the cutting lot
- * creation date. If startDate and endDate are provided via the query,
- * those are used; otherwise it defaults to the last 10 days.
+ * creation date. If startDate and endDate are provided, they are used;
+ * otherwise, the last 10 days are used.
  */
 async function computeAdvancedAnalytics(startDate, endDate) {
   const analytics = {};
   
-  // Overall totals remain unchanged.
+  // Overall totals
   const [cutTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalCut FROM cutting_lots");
   const [stitchTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalStitched FROM stitching_data");
   const [washTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalWashed FROM washing_data");
@@ -255,6 +255,7 @@ async function computeAdvancedAnalytics(startDate, endDate) {
   const [skuTotals] = await pool.query(skuQuery, skuQueryParams);
   analytics.top10SKUs = skuTotals;
 
+  // SKU Analytics - bottom 10 SKUs.
   let bottomQuery = "SELECT sku, SUM(total_pieces) AS total FROM cutting_lots ";
   let bottomQueryParams = [];
   if (startDate && endDate) {
@@ -483,7 +484,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         },
         status,
         stitchingAssignedUser,
-        jeansAssemblyAssignedUser, // new field added here
+        jeansAssemblyAssignedUser,
         washingAssignedUser,
         finishingAssignedUser,
         totalPiecesLeft,
