@@ -3,11 +3,17 @@
 // Middleware to check if the user is authenticated
 function isAuthenticated(req, res, next) {
     if (req.session && req.session.user) {
-        return next();
+      return next();
+    } else {
+      // If expecting JSON, return a JSON error response
+      if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      // Otherwise, redirect to login page
+      req.flash('error', 'You must be logged in to view this page.');
+      return res.redirect('/login');
     }
-    req.flash('error', 'You must be logged in to view this page.');
-    res.redirect('/login');
-}
+  }
 
 // Middleware factory to check user roles
 function hasRole(roleName) {
