@@ -584,15 +584,16 @@ router.get('/assign-finishing', isAuthenticated, isWashingMaster, (req, res) => 
 
 router.get('/assign-finishing/users', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      `
+    const [rows] = await pool.query(`
       SELECT u.id, u.username
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE r.name = 'finishing' AND u.is_active = 1
+      WHERE r.name = 'finishing'
+        AND u.is_active = 1
       ORDER BY u.username ASC
-      `
-    );
+    `);
+
+    
     return res.json({ data: rows });
   } catch (err) {
     console.error('[ERROR] GET /assign-finishing/users =>', err);
