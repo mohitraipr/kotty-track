@@ -149,9 +149,9 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
 async function computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay) {
   if (!isAkshay) return "N/A";
   const [jaAssignRows] = await pool.query(
-    "SELECT is_approved FROM jeans_assembly_assignments ja JOIN jeans_assembly_data jd ON ja.stitching_assignment_id = jd.id WHERE jd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
-    [lot_no]
-  );
+  "SELECT is_approved FROM jeans_assembly_assignments ja JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
+  [lot_no]
+);
   if (!jaAssignRows.length) return "Not Assigned";
   const jaAssn = jaAssignRows[0];
   if (jaAssn.is_approved === null) return "Waiting for approval";
