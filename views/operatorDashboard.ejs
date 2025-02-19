@@ -40,6 +40,7 @@
       padding: 4px;
       color: #000;
     }
+
     :root {
       --primary-color: #0d6efd;
       --secondary-color: #6c757d;
@@ -103,6 +104,7 @@
     .top-nav .nav-link:hover { color: #ced4da !important; }
     .top-nav .navbar-toggler { border-color: rgba(248,249,250,0.3); }
     .top-nav .navbar-toggler-icon { filter: invert(1); }
+    /* Removed the moon icon styles since it's replaced by a button */
     .dark-mode-toggle {
       cursor: pointer;
       font-size: 1.2rem;
@@ -153,7 +155,7 @@
       border-bottom: 1px solid var(--panel-border);
       font-weight: 500;
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: 0.5rem;
       font-size: 1.1rem;
     }
@@ -180,6 +182,7 @@
     }
     .modal-footer { border-top: 1px solid var(--panel-border); }
     .actions-col { white-space: nowrap; width: 120px; text-align: center; }
+    /* Original leftover styling for numbers and user names */
     .leftover-value { padding: 3px 8px; border-radius: 4px; display: inline-block; font-weight: 600; margin-right: 5px; }
     .leftover-zero { background-color: #f8d7da; color: #721c24; }
     .leftover-nonzero { background-color: #cce5ff; color: #004085; }
@@ -194,6 +197,7 @@
         <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="Brand Logo" width="30" height="30" class="d-inline-block align-text-top">
         Kotty
       </a>
+      <!-- Replaced Dark Mode Icon with a Button -->
       <button id="toggleDarkMode" class="btn btn-outline-light me-2">Toggle Theme</button>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation" aria-controls="mainNavigation" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -226,7 +230,7 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="/operator/editcuttinglots" data-bs-toggle="tooltip" title="Edit Lots">
+            <a class="nav-link" href="/operator/editcuttinglots" data-bs-toggle="tooltip" title="Assign Washing">
               <i class="bi bi-pencil-square"></i> Edit Lots
             </a>
           </li>
@@ -277,36 +281,13 @@
   </div>
 
   <div class="container">
-    <!-- SKU INSIGHTS WITH DATE RANGE FILTER -->
+    <!-- SKU INSIGHTS -->
     <div class="data-panel mb-4">
-      <div class="panel-header">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <i class="bi bi-bar-chart-line"></i> SKU Insights
-          </div>
-          <!-- Date range filter inside the SKU Insights header -->
-          <div>
-            <form method="GET" action="/operator/dashboard" class="row g-2 align-items-end">
-              <!-- Preserve other query parameters if needed -->
-              <div class="col-auto">
-                <label for="startDate" class="form-label mb-0">Start Date</label>
-                <input type="date" id="startDate" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>">
-              </div>
-              <div class="col-auto">
-                <label for="endDate" class="form-label mb-0">End Date</label>
-                <input type="date" id="endDate" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>">
-              </div>
-              <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
+      <div class="panel-header"><i class="bi bi-bar-chart-line"></i> SKU Insights</div>
       <div class="panel-body">
         <div class="row g-4">
           <div class="col-md-6">
-            <h6><i class="bi bi-arrow-up-square"></i> Top 10 SKUs</h6>
+            <h6><i class="bi bi-arrow-up-square"></i> Best 5 SKUs</h6>
             <table class="table table-striped table-bordered table-sm">
               <thead>
                 <tr>
@@ -316,7 +297,7 @@
                 </tr>
               </thead>
               <tbody>
-                <% advancedAnalytics.top10SKUs.forEach(function(item){ 
+                <% advancedAnalytics.top5SKUs.forEach(function(item){ 
                      var pct = advancedAnalytics.totalCut > 0 ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2) : '0.00';
                 %>
                   <tr>
@@ -329,7 +310,7 @@
             </table>
           </div>
           <div class="col-md-6">
-            <h6><i class="bi bi-arrow-down-square"></i> Bottom 10 SKUs</h6>
+            <h6><i class="bi bi-arrow-down-square"></i> Lowest 5 SKUs</h6>
             <table class="table table-striped table-bordered table-sm">
               <thead>
                 <tr>
@@ -339,7 +320,7 @@
                 </tr>
               </thead>
               <tbody>
-                <% advancedAnalytics.bottom10SKUs.forEach(function(item){
+                <% advancedAnalytics.bottom5SKUs.forEach(function(item){
                      var pct = advancedAnalytics.totalCut > 0 ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2) : '0.00';
                 %>
                   <tr>
@@ -599,7 +580,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="columnChooserModalLabel">Select Columns</h5>
-          <button type="button" class="btn btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <div id="columnChooserContent"></div>
@@ -655,6 +636,7 @@
       if(data.searchString && data.searchString.toLowerCase().indexOf(filterParams.toLowerCase()) > -1){
          return true;
       }
+      // fallback:
       for(var key in data){
         if(data[key] && data[key].toString().toLowerCase().indexOf(filterParams.toLowerCase()) > -1){
           return true;
@@ -702,6 +684,7 @@
         var kit = lotDetails[kitNumber];
         var sku = kit.cuttingLot ? kit.cuttingLot.sku : 'N/A';
         var totalPieces = kit.cuttingLot ? kit.cuttingLot.total_pieces : 'N/A';
+        // Precompute a searchString that concatenates key fields:
         var searchString = kitNumber + " " + sku + " " + totalPieces + " " +
                            kit.leftovers.leftoverStitch + " " +
                            kit.leftovers.leftoverJeans + " " +
@@ -764,6 +747,7 @@
       paginationSize: 100,
       columns: leftoverColumns,
       placeholder:"No Data Available",
+      // Use our custom global search filter for all rows:
       initialFilter:[
         {field:"searchString", type:"like", value:""}
       ]
@@ -816,27 +800,36 @@
 
     // Column Chooser: Populate and show modal on button click
     document.getElementById('columnChooser').addEventListener('click', function() {
+      // Get all columns from the Tabulator table
       let columns = table.getColumns();
       let container = document.getElementById('columnChooserContent');
-      container.innerHTML = '';
+      container.innerHTML = ''; // Clear any previous content
+      
       columns.forEach(function(col) {
         let field = col.getField();
+        // Only add columns that have a defined field (skip any internal columns)
         if(field) {
           let title = col.getDefinition().title;
           let isVisible = col.isVisible();
+          
+          // Create a checkbox for the column
           let checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.checked = isVisible;
           checkbox.setAttribute('data-field', field);
           checkbox.classList.add('form-check-input', 'me-2');
+          
           let label = document.createElement('label');
           label.classList.add('form-check-label');
           label.textContent = title;
+          
           let div = document.createElement('div');
           div.classList.add('form-check', 'mb-2');
           div.appendChild(checkbox);
           div.appendChild(label);
           container.appendChild(div);
+          
+          // Update column visibility when checkbox is toggled
           checkbox.addEventListener('change', function(){
              if(this.checked) {
                table.getColumn(field).show();
@@ -846,6 +839,8 @@
           });
         }
       });
+      
+      // Show the modal using Bootstrap's Modal API
       var modal = new bootstrap.Modal(document.getElementById('columnChooserModal'));
       modal.show();
     });
