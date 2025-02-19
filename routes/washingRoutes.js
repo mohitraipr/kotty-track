@@ -588,7 +588,7 @@ router.get('/assign-finishing/users', isAuthenticated, isWashingMaster, async (r
       SELECT u.id, u.username
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE r.name = 'finishing'
+      WHERE r.name = 'stitching1'
         AND u.is_active = 1
       ORDER BY u.username ASC
     `);   
