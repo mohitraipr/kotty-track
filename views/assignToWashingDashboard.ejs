@@ -52,22 +52,22 @@
       </div>
     <% } %>
 
-    <!-- Select Stitching Operator -->
+    <!-- Select Jeans Assembly Operator -->
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-secondary text-white">
-        Select Stitching Operator
+        Select Jeans Assembly Operator
       </div>
       <div class="card-body">
-        <select id="stitchingUserSelect" class="form-select">
+        <select id="assemblyUserSelect" class="form-select">
           <option value="">-- Select Operator --</option>
-          <% stitchingUsers.forEach(function(user){ %>
+          <% assemblyUsers.forEach(function(user){ %>
             <option value="<%= user.id %>"><%= user.username %></option>
           <% }); %>
         </select>
       </div>
     </div>
 
-    <!-- Accordion for stitching records (loaded via AJAX) -->
+    <!-- Accordion for Jeans Assembly records (loaded via AJAX) -->
     <div id="accordionContainer"></div>
   </div>
 
@@ -80,7 +80,8 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    $('#stitchingUserSelect').on('change', function(){
+    // When the operator selects a Jeans Assembly Operator, fetch unassigned records.
+    $('#assemblyUserSelect').on('change', function(){
       const userId = $(this).val();
       if (!userId) {
         $('#accordionContainer').html('');
@@ -92,7 +93,7 @@
         success: function(data) {
           let html = '';
           if (data.length === 0) {
-            html = '<div class="alert alert-info">No unassigned stitching records found for this operator.</div>';
+            html = '<div class="alert alert-info">No unassigned jeans assembly records found for this operator.</div>';
           } else {
             data.forEach((group, idx) => {
               html += `<div class="accordion mb-3" id="accordionGroup${idx}">`;
@@ -117,9 +118,10 @@
                   });
                   html += `    </ul>`;
                 }
-                // Assignment form for this stitching record
+                // Assignment form for this jeans assembly record.
                 html += `    <form method="POST" action="/assign-to-washing/assign" class="row g-3">`;
-                html += `      <input type="hidden" name="stitching_data_id" value="${entry.id}">`;
+                // Note: update the hidden field to use "jeans_assembly_data_id" instead of stitching_data_id.
+                html += `      <input type="hidden" name="jeans_assembly_data_id" value="${entry.id}">`;
                 html += `      <div class="col-md-6">`;
                 html += `        <select name="washer_id" class="form-select" required>`;
                 html += `          <option value="">-- Select Washer --</option>`;
