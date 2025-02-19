@@ -53,17 +53,17 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
   );
   const totalFinished = rows[0].sumFinished || 0;
 
-  // Stitch Leftover
+  // Stitch Leftover – note we use "is_approved" (with underscore)
   const [stAssignmentRows] = await pool.query(
-    "SELECT isApproved FROM stitching_assignments sa JOIN cutting_lots c ON sa.cutting_lot_id = c.id WHERE c.lot_no = ? ORDER BY sa.assigned_on DESC LIMIT 1",
+    "SELECT is_approved FROM stitching_assignments sa JOIN cutting_lots c ON sa.cutting_lot_id = c.id WHERE c.lot_no = ? ORDER BY sa.assigned_on DESC LIMIT 1",
     [lot_no]
   );
   let leftoverStitch;
   if (stAssignmentRows.length) {
     const stAssn = stAssignmentRows[0];
-    if (stAssn.isApproved === null) {
+    if (stAssn.is_approved === null) {
       leftoverStitch = "Waiting for approval";
-    } else if (stAssn.isApproved == 0) {
+    } else if (stAssn.is_approved == 0) {
       leftoverStitch = "Denied";
     } else {
       leftoverStitch = totalCut - totalStitched;
@@ -126,9 +126,9 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
     );
     if (faAssignmentRows.length) {
       const faAssn = faAssignmentRows[0];
-      if (faAssn.isApproved === null) {
+      if (faAssn.is_approved === null) {
         leftoverFinish = "Waiting for approval";
-      } else if (faAssn.isApproved == 0) {
+      } else if (faAssn.is_approved == 0) {
         leftoverFinish = "Denied";
       } else {
         leftoverFinish = totalStitched - totalFinished;
@@ -213,15 +213,12 @@ async function computeOperatorPerformance() {
 /**
  * computeAdvancedAnalytics(startDate, endDate)
  *
- * This function computes overall totals as before and
- * also fetches top 10 and bottom 10 SKUs based on the cutting lot
- * creation date. If startDate and endDate are provided, they are used;
- * otherwise, the last 10 days are used.
+ * Computes overall totals and fetches top 10 and bottom 10 SKUs based on cutting lot creation date.
+ * If startDate and endDate are provided, they are used; otherwise, the last 10 days are used.
  */
 async function computeAdvancedAnalytics(startDate, endDate) {
   const analytics = {};
   
-  // Overall totals
   const [cutTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalCut FROM cutting_lots");
   const [stitchTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalStitched FROM stitching_data");
   const [washTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalWashed FROM washing_data");
@@ -393,7 +390,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
       );
       const stitchingAssignedUser = stAssign.length ? stAssign[0].username : "N/A";
       
-      // Fetch Jeans Assembly Assigned User
+      // Jeans Assembly Assigned Operator
       let jeansAssemblyAssignedUser = "N/A";
       if (isAkshay) {
         const [jaAssign] = await pool.query(
