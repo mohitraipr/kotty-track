@@ -29,14 +29,16 @@ const upload = multer({ storage });
 router.get('/', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    // We use stitching_data only to obtain lot/sku details
+    // We use jeans_assembly_data to obtain lot/sku details.
+    // Note: washing_assignments now references jeans assembly via jeans_assembly_assignment_id.
     const [lots] = await pool.query(`
-      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces, sd.created_at
+      SELECT jd.id, jd.lot_no, jd.sku, jd.total_pieces, jd.created_at
       FROM washing_assignments wa
-      JOIN stitching_data sd ON wa.stitching_assignment_id = sd.id
+      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
       WHERE wa.user_id = ?
-        AND sd.lot_no NOT IN (SELECT lot_no FROM washing_data)
-      ORDER BY sd.created_at DESC
+        AND wa.is_approved = 1
+        AND jd.lot_no NOT IN (SELECT lot_no FROM washing_data)
+      ORDER BY jd.created_at DESC
       LIMIT 10
     `, [userId]);
     const errorMessages = req.flash('error');
@@ -71,21 +73,21 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // Get stitching_data record (for lot/sku details)
-    console.log('[DEBUG] Querying stitching_data for lot id:', selectedLotId);
-    const [[sd]] = await conn.query(`SELECT * FROM stitching_data WHERE id = ?`, [selectedLotId]);
-    if (!sd) {
+    // Get jeans_assembly_data record (for lot/sku details)
+    console.log('[DEBUG] Querying jeans_assembly_data for lot id:', selectedLotId);
+    const [[jd]] = await conn.query(`SELECT * FROM jeans_assembly_data WHERE id = ?`, [selectedLotId]);
+    if (!jd) {
       req.flash('error', 'Invalid lot selection.');
       await conn.rollback();
       conn.release();
       return res.redirect('/washingdashboard');
     }
-    console.log('[DEBUG] Stitching data found:', sd);
+    console.log('[DEBUG] Jeans Assembly data found:', jd);
 
     // Check if a washing entry already exists for this lot
-    const [[already]] = await conn.query(`SELECT id FROM washing_data WHERE lot_no = ?`, [sd.lot_no]);
+    const [[already]] = await conn.query(`SELECT id FROM washing_data WHERE lot_no = ?`, [jd.lot_no]);
     if (already) {
-      req.flash('error', `Lot ${sd.lot_no} already used for washing.`);
+      req.flash('error', `Lot ${jd.lot_no} already used for washing.`);
       await conn.rollback();
       conn.release();
       return res.redirect('/washingdashboard');
@@ -100,7 +102,8 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
         return res.redirect('/washingdashboard');
       }
       if (requested === 0) continue;
-      const [[sds]] = await conn.query(`SELECT * FROM stitching_data_sizes WHERE id = ?`, [sizeId]);
+      // Use jeans_assembly_data_sizes instead of stitching_data_sizes
+      const [[sds]] = await conn.query(`SELECT * FROM jeans_assembly_data_sizes WHERE id = ?`, [sizeId]);
       if (!sds) {
         req.flash('error', 'Bad size reference: ' + sizeId);
         await conn.rollback();
@@ -113,7 +116,7 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
         FROM washing_data_sizes wds
         JOIN washing_data wd ON wds.washing_data_id = wd.id
         WHERE wd.lot_no = ? AND wds.size_label = ?
-      `, [sd.lot_no, sds.size_label]);
+      `, [jd.lot_no, sds.size_label]);
       const used = usedRow.usedCount || 0;
       const remain = sds.pieces - used;
       if (requested > remain) {
@@ -130,17 +133,17 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
       conn.release();
       return res.redirect('/washingdashboard');
     }
-    console.log('[DEBUG] Inserting washing_data for lot:', sd.lot_no);
+    console.log('[DEBUG] Inserting washing_data for lot:', jd.lot_no);
     const [main] = await conn.query(`
       INSERT INTO washing_data
         (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
       VALUES (?, ?, ?, ?, ?, ?, NOW())
-    `, [userId, sd.lot_no, sd.sku, grandTotal, remark || null, image_url]);
+    `, [userId, jd.lot_no, jd.sku, grandTotal, remark || null, image_url]);
     const newId = main.insertId;
     for (const sizeId of Object.keys(sizesObj)) {
       const numVal = parseInt(sizesObj[sizeId], 10) || 0;
       if (numVal <= 0) continue;
-      const [[sds]] = await conn.query(`SELECT * FROM stitching_data_sizes WHERE id = ?`, [sizeId]);
+      const [[sds]] = await conn.query(`SELECT * FROM jeans_assembly_data_sizes WHERE id = ?`, [sizeId]);
       await conn.query(`
         INSERT INTO washing_data_sizes (washing_data_id, size_label, pieces)
         VALUES (?, ?, ?)
@@ -168,11 +171,11 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
 router.get('/get-lot-sizes/:lotId', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
     const lotId = req.params.lotId;
-    const [[stData]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [lotId]);
+    const [[stData]] = await pool.query(`SELECT * FROM jeans_assembly_data WHERE id = ?`, [lotId]);
     if (!stData) {
       return res.status(404).json({ error: 'Lot not found' });
     }
-    const [sizes] = await pool.query(`SELECT * FROM stitching_data_sizes WHERE stitching_data_id = ?`, [lotId]);
+    const [sizes] = await pool.query(`SELECT * FROM jeans_assembly_data_sizes WHERE jeans_assembly_data_id = ?`, [lotId]);
     const results = [];
     for (const size of sizes) {
       const [[usedRow]] = await pool.query(`
@@ -218,8 +221,8 @@ router.get('/update/:id/json', isAuthenticated, isWashingMaster, async (req, res
     const output = [];
     for (const sz of sizes) {
       const [[latest]] = await pool.query(`
-        SELECT pieces FROM stitching_data_sizes
-        WHERE stitching_data_id = (SELECT id FROM stitching_data WHERE lot_no = ? LIMIT 1)
+        SELECT pieces FROM jeans_assembly_data_sizes
+        WHERE jeans_assembly_data_id = (SELECT id FROM jeans_assembly_data WHERE lot_no = ? LIMIT 1)
           AND size_label = ?
         LIMIT 1
       `, [entry.lot_no, sz.size_label]);
@@ -274,13 +277,13 @@ router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) =>
       `, [entryId, lbl]);
       if (!existingRow) {
         const [[latest]] = await pool.query(`
-          SELECT pieces FROM stitching_data_sizes
-          WHERE stitching_data_id = (SELECT id FROM stitching_data WHERE lot_no = ? LIMIT 1)
+          SELECT pieces FROM jeans_assembly_data_sizes
+          WHERE jeans_assembly_data_id = (SELECT id FROM jeans_assembly_data WHERE lot_no = ? LIMIT 1)
             AND size_label = ?
           LIMIT 1
         `, [entry.lot_no, lbl]);
         if (!latest) {
-          throw new Error(`Size label ${lbl} not found in stitching_data_sizes`);
+          throw new Error(`Size label ${lbl} not found in jeans_assembly_data_sizes`);
         }
         const [[usedRow]] = await pool.query(`
           SELECT COALESCE(SUM(wds.pieces),0) as usedCount
@@ -300,13 +303,13 @@ router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) =>
         updatedTotal += increment;
       } else {
         const [[latest]] = await pool.query(`
-          SELECT pieces FROM stitching_data_sizes
-          WHERE stitching_data_id = (SELECT id FROM stitching_data WHERE lot_no = ? LIMIT 1)
+          SELECT pieces FROM jeans_assembly_data_sizes
+          WHERE jeans_assembly_data_id = (SELECT id FROM jeans_assembly_data WHERE lot_no = ? LIMIT 1)
             AND size_label = ?
           LIMIT 1
         `, [entry.lot_no, lbl]);
         if (!latest) {
-          throw new Error(`Size label ${lbl} not found in stitching_data_sizes`);
+          throw new Error(`Size label ${lbl} not found in jeans_assembly_data_sizes`);
         }
         const [[usedRow]] = await pool.query(`
           SELECT COALESCE(SUM(wds.pieces),0) as usedCount
@@ -497,6 +500,7 @@ router.get('/approve/list', isAuthenticated, isWashingMaster, async (req, res) =
     const userId = req.session.user.id;
     const searchTerm = req.query.search || '';
     const searchLike = `%${searchTerm}%`;
+    // Note: Join now uses jeans_assembly_data with updated column references.
     const [rows] = await pool.query(
       `
       SELECT wa.id AS assignment_id,
@@ -504,13 +508,13 @@ router.get('/approve/list', isAuthenticated, isWashingMaster, async (req, res) =
              wa.assigned_on,
              wa.is_approved,
              wa.assignment_remark,
-             sd.lot_no,
-             sd.sku
+             jd.lot_no,
+             jd.sku
       FROM washing_assignments wa
-      JOIN stitching_data sd ON wa.stitching_assignment_id = sd.id
+      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
       WHERE wa.user_id = ?
         AND wa.is_approved IS NULL
-        AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)
+        AND (jd.lot_no LIKE ? OR jd.sku LIKE ?)
       ORDER BY wa.assigned_on DESC
       `,
       [userId, searchLike, searchLike]
