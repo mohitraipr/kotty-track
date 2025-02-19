@@ -591,9 +591,7 @@ router.get('/assign-finishing/users', isAuthenticated, isWashingMaster, async (r
       WHERE r.name = 'finishing'
         AND u.is_active = 1
       ORDER BY u.username ASC
-    `);
-
-    
+    `);   
     return res.json({ data: rows });
   } catch (err) {
     console.error('[ERROR] GET /assign-finishing/users =>', err);
