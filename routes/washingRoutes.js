@@ -579,7 +579,7 @@ router.post('/deny-lot', isAuthenticated, isWashingMaster, async (req, res) => {
 router.get('/assign-finishing', isAuthenticated, isWashingMaster, (req, res) => {
   const error = req.flash('error');
   const success = req.flash('success');
-  return res.render('WashingAssignFinishing', { user: req.session.user, error, success });
+  return res.render('washingAssignFinishing', { user: req.session.user, error, success });
 });
 
 router.get('/assign-finishing/users', isAuthenticated, isWashingMaster, async (req, res) => {
@@ -588,7 +588,7 @@ router.get('/assign-finishing/users', isAuthenticated, isWashingMaster, async (r
       SELECT u.id, u.username
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE r.name = 'stitching1'
+      WHERE r.name = 'finishing'
         AND u.is_active = 1
       ORDER BY u.username ASC
     `);   
