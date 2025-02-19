@@ -52,8 +52,18 @@ function isFinishingMaster(req, res, next) {
 }
 
 function isWashingMaster(req, res, next) {
-    return hasRole('washing')(req, res, next);
+  if (req.session && req.session.user &&
+      (req.session.user.roleName === 'washing' || req.session.user.roleName === 'washing_master')) {
+    return next();
+  }
+  // For AJAX requests, return JSON error:
+  if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+    return res.status(403).json({ error: 'You do not have permission to view this resource.' });
+  }
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
 }
+
 function isJeansAssemblyMaster(req, res, next) {
     return hasRole('jeans_assembly')(req, res, next);
 }
