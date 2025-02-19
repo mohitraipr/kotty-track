@@ -75,12 +75,13 @@
     }
 
     // ---------------------------
-    // 1) Fetch finishing users from washing dashboard endpoint
+    // 1) Fetch finishing users from the endpoint
     // ---------------------------
     async function fetchFinishingUsers() {
       try {
         const resp = await fetch('/washingdashboard/assign-finishing/users', {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'  // Ensures cookies are sent with the request
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const json = await resp.json();
@@ -92,12 +93,13 @@
     }
 
     // ---------------------------
-    // 2) Fetch unassigned washing assignments (only those with leftover sizes)
+    // 2) Fetch unassigned washing assignments (with leftover sizes)
     // ---------------------------
     async function fetchUnassignedData() {
       try {
         const resp = await fetch('/washingdashboard/assign-finishing/data', {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const json = await resp.json();
@@ -211,6 +213,7 @@
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
+          credentials: 'same-origin',
           body: JSON.stringify(payload)
         });
         const result = await resp.json();
