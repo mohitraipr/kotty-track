@@ -5,6 +5,7 @@
  **************************************************/
 const express = require("express");
 const router = express.Router();
+const axios = require('axios');
 const { pool } = require("../config/db");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 
@@ -149,9 +150,9 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
 async function computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay) {
   if (!isAkshay) return "N/A";
   const [jaAssignRows] = await pool.query(
-  "SELECT is_approved FROM jeans_assembly_assignments ja JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
-  [lot_no]
-);
+    "SELECT is_approved FROM jeans_assembly_assignments ja JOIN jeans_assembly_data jd ON ja.stitching_assignment_id = jd.id WHERE jd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
+    [lot_no]
+  );
   if (!jaAssignRows.length) return "Not Assigned";
   const jaAssn = jaAssignRows[0];
   if (jaAssn.is_approved === null) return "Waiting for approval";
@@ -210,10 +211,17 @@ async function computeOperatorPerformance() {
 }
 
 /**
- * computeAdvancedAnalytics()
+ * computeAdvancedAnalytics(startDate, endDate)
+ *
+ * This function now computes overall totals as before and
+ * also fetches top 10 and bottom 10 SKUs based on the cutting lot
+ * creation date. If startDate and endDate are provided via the query,
+ * those are used; otherwise it defaults to the last 10 days.
  */
-async function computeAdvancedAnalytics() {
+async function computeAdvancedAnalytics(startDate, endDate) {
   const analytics = {};
+  
+  // Overall totals remain unchanged.
   const [cutTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalCut FROM cutting_lots");
   const [stitchTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalStitched FROM stitching_data");
   const [washTotals] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalWashed FROM washing_data");
@@ -234,11 +242,31 @@ async function computeAdvancedAnalytics() {
     ? ((analytics.totalFinished / analytics.totalStitched) * 100).toFixed(2)
     : "0.00";
 
-  const [skuTotals] = await pool.query("SELECT sku, SUM(total_pieces) AS total FROM cutting_lots GROUP BY sku ORDER BY total DESC");
-  analytics.top5SKUs = skuTotals.slice(0, 5);
-  analytics.bottom5SKUs = skuTotals.slice(-5).reverse();
+  // SKU Analytics - top 10 SKUs.
+  let skuQuery = "SELECT sku, SUM(total_pieces) AS total FROM cutting_lots ";
+  let skuQueryParams = [];
+  if (startDate && endDate) {
+    skuQuery += "WHERE created_at BETWEEN ? AND ? ";
+    skuQueryParams.push(startDate, endDate);
+  } else {
+    skuQuery += "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 DAY) ";
+  }
+  skuQuery += "GROUP BY sku ORDER BY total DESC LIMIT 10";
+  const [skuTotals] = await pool.query(skuQuery, skuQueryParams);
+  analytics.top10SKUs = skuTotals;
 
-  // (Additional analytics logic can be added here as needed)
+  let bottomQuery = "SELECT sku, SUM(total_pieces) AS total FROM cutting_lots ";
+  let bottomQueryParams = [];
+  if (startDate && endDate) {
+    bottomQuery += "WHERE created_at BETWEEN ? AND ? ";
+    bottomQueryParams.push(startDate, endDate);
+  } else {
+    bottomQuery += "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 DAY) ";
+  }
+  bottomQuery += "GROUP BY sku ORDER BY total ASC LIMIT 10";
+  const [bottomSkuTotals] = await pool.query(bottomQuery, bottomQueryParams);
+  analytics.bottom10SKUs = bottomSkuTotals;
+
   return analytics;
 }
 
@@ -355,7 +383,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         "SELECT * FROM lot_assignments WHERE cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?)",
         [lot_no]
       );
-      const lotAssignments = lotAssignResult; // Ensure lotAssignments is defined
+      const lotAssignments = lotAssignResult;
 
       // Assigned operators
       const [stAssign] = await pool.query(
@@ -363,6 +391,17 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         [lot_no]
       );
       const stitchingAssignedUser = stAssign.length ? stAssign[0].username : "N/A";
+      
+      // Fetch Jeans Assembly Assigned User
+      let jeansAssemblyAssignedUser = "N/A";
+      if (isAkshay) {
+        const [jaAssign] = await pool.query(
+          "SELECT u.username FROM jeans_assembly_assignments ja JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id JOIN users u ON ja.user_id = u.id WHERE sd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
+          [lot_no]
+        );
+        jeansAssemblyAssignedUser = jaAssign.length ? jaAssign[0].username : "N/A";
+      }
+      
       let washingAssignedUser = "N/A";
       if (isAkshay) {
         const [waAssign] = await pool.query(
@@ -444,6 +483,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         },
         status,
         stitchingAssignedUser,
+        jeansAssemblyAssignedUser, // new field added here
         washingAssignedUser,
         finishingAssignedUser,
         totalPiecesLeft,
@@ -461,7 +501,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
     const [totalFinishedResult] = await pool.query("SELECT COALESCE(SUM(total_pieces),0) AS totalFinished FROM finishing_data");
     const [userCountResult] = await pool.query("SELECT COUNT(*) AS userCount FROM users");
     const userCount = userCountResult[0].userCount;
-    const advancedAnalytics = await computeAdvancedAnalytics();
+    const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
 
     return res.render("operatorDashboard", {
       lotDetails,
