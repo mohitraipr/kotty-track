@@ -18,13 +18,17 @@ function isAuthenticated(req, res, next) {
 // Middleware factory to check user roles
 function hasRole(roleName) {
     return (req, res, next) => {
-        if (req.session && req.session.user && req.session.user.roleName === roleName) {
-            return next();
-        }
-        req.flash('error', 'You do not have permission to view this page.');
-        res.redirect('/');
+      if (req.session && req.session.user && req.session.user.roleName === roleName) {
+        return next();
+      }
+      // Check if client expects JSON
+      if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+        return res.status(403).json({ error: 'You do not have permission to view this resource.' });
+      }
+      req.flash('error', 'You do not have permission to view this page.');
+      return res.redirect('/');
     };
-}
+  }
 
 // Specific role middlewares using the hasRole factory
 function isAdmin(req, res, next) {
