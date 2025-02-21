@@ -554,7 +554,7 @@ router.post('/approve-lot', isAuthenticated, isJeansAssemblyMaster, async (req, 
       WHERE id = ?
         AND user_id = ?
     `, [remark, assignment_id, userId]);
-    return res.json({ success: true, message: 'Assignment approved successfully!' });
+    return res.redirect('/jeansassemblydashboard/approve');
   } catch (err) {
     console.error('[ERROR] POST /jeansassemblydashboard/approve-lot =>', err);
     return res.status(500).json({ error: 'Error approving assignment: ' + err.message });
