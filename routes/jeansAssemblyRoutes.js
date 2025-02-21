@@ -20,18 +20,13 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-/* ------------------------------------------------------------------
-   1) GET /jeansassemblydashboard
-   - Renders the main "Jeans Assembly Dashboard"
-   - Show only assignments that are is_approved=1
-     and not yet used in jeans_assembly_data
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 1) GET /jeansassemblydashboard
+//    Renders the main "Jeans Assembly Dashboard"
+// ------------------------------------------------------------------
 router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-
-    // NOTE the fix: `AND ja.is_approved = 1`
-    // so only approved jeans_assembly_assignments show up
     const [lots] = await pool.query(`
       SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces, sd.created_at
       FROM jeans_assembly_assignments ja
@@ -44,10 +39,8 @@ router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
       ORDER BY sd.created_at DESC
       LIMIT 10
     `, [userId]);
-
     const error = req.flash('error');
     const success = req.flash('success');
-
     return res.render('jeansAssemblyDashboard', {
       user: req.session.user,
       lots,
@@ -61,10 +54,10 @@ router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   }
 });
 
-/* ------------------------------------------------------------------
-   2) POST /jeansassemblydashboard/create
-   - Create new jeans_assembly_data from a chosen lot
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 2) POST /jeansassemblydashboard/create
+//    Create new jeans_assembly_data from a chosen lot
+// ------------------------------------------------------------------
 router.post('/create',
   isAuthenticated,
   isJeansAssemblyMaster,
@@ -74,22 +67,17 @@ router.post('/create',
     try {
       const userId = req.session.user.id;
       const { selectedLotId, remark } = req.body;
-
       let image_url = null;
       if (req.file) {
         image_url = '/uploads/' + req.file.filename;
       }
-
       const sizesObj = req.body.sizes || {};
       if (!Object.keys(sizesObj).length) {
         req.flash('error', 'No size data provided.');
         return res.redirect('/jeansassemblydashboard');
       }
-
       conn = await pool.getConnection();
       await conn.beginTransaction();
-
-      // 1) find the stitching_data row
       const [[sd]] = await conn.query(`
         SELECT *
         FROM stitching_data
@@ -101,8 +89,6 @@ router.post('/create',
         conn.release();
         return res.redirect('/jeansassemblydashboard');
       }
-
-      // 2) check if already used in jeans_assembly_data
       const [[already]] = await conn.query(`
         SELECT id FROM jeans_assembly_data
         WHERE lot_no = ?
@@ -113,8 +99,6 @@ router.post('/create',
         conn.release();
         return res.redirect('/jeansassemblydashboard');
       }
-
-      // 3) validate sizes
       let grandTotal = 0;
       for (const sizeId of Object.keys(sizesObj)) {
         const requested = parseInt(sizesObj[sizeId], 10) || 0;
@@ -125,7 +109,6 @@ router.post('/create',
           return res.redirect('/jeansassemblydashboard');
         }
         if (requested === 0) continue;
-
         const [[sds]] = await conn.query(`
           SELECT *
           FROM stitching_data_sizes
@@ -137,8 +120,6 @@ router.post('/create',
           conn.release();
           return res.redirect('/jeansassemblydashboard');
         }
-
-        // how many used so far
         const [[usedRow]] = await conn.query(`
           SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
           FROM jeans_assembly_data_sizes jds
@@ -162,16 +143,12 @@ router.post('/create',
         conn.release();
         return res.redirect('/jeansassemblydashboard');
       }
-
-      // 4) insert main record
       const [main] = await conn.query(`
         INSERT INTO jeans_assembly_data
           (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
         VALUES (?, ?, ?, ?, ?, ?, NOW())
       `, [userId, sd.lot_no, sd.sku, grandTotal, remark || null, image_url]);
       const newId = main.insertId;
-
-      // 5) insert sizes
       for (const sizeId of Object.keys(sizesObj)) {
         const requested = parseInt(sizesObj[sizeId], 10) || 0;
         if (requested > 0) {
@@ -186,10 +163,8 @@ router.post('/create',
           `, [newId, sds.size_label, requested]);
         }
       }
-
       await conn.commit();
       conn.release();
-
       req.flash('success', 'Jeans Assembly entry created successfully.');
       return res.redirect('/jeansassemblydashboard');
     } catch (err) {
@@ -204,14 +179,13 @@ router.post('/create',
   }
 );
 
-/* ------------------------------------------------------------------
-   3) GET /jeansassemblydashboard/get-lot-sizes/:lotId
-   Return size info (remain) from stitching_data_sizes
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 3) GET /jeansassemblydashboard/get-lot-sizes/:lotId
+//    Return size info (remain) from stitching_data_sizes
+// ------------------------------------------------------------------
 router.get('/get-lot-sizes/:lotId', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const lotId = req.params.lotId;
-
     const [[stData]] = await pool.query(`
       SELECT *
       FROM stitching_data
@@ -220,13 +194,11 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isJeansAssemblyMaster, asyn
     if (!stData) {
       return res.status(404).json({ error: 'Lot not found' });
     }
-
     const [sizes] = await pool.query(`
       SELECT *
       FROM stitching_data_sizes
       WHERE stitching_data_id = ?
     `, [lotId]);
-
     const results = [];
     for (const size of sizes) {
       const [[usedRow]] = await pool.query(`
@@ -252,32 +224,27 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isJeansAssemblyMaster, asyn
   }
 });
 
-/* ------------------------------------------------------------------
-   4) GET /jeansassemblydashboard/update/:id/json
-   Return existing data + remain for the update modal
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 4) GET /jeansassemblydashboard/update/:id/json
+//    Return existing data + remain for the update modal
+// ------------------------------------------------------------------
 router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const entryId = req.params.id;
     const userId = req.session.user.id;
-
     const [[entry]] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data
-      WHERE id = ?
-        AND user_id = ?
+      WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       return res.status(403).json({ error: 'Not found or no permission' });
     }
-
     const [sizes] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data_sizes
       WHERE jeans_assembly_data_id = ?
     `, [entryId]);
-
-    // find matching stitching_data by lot_no
     const [[sd]] = await pool.query(`
       SELECT *
       FROM stitching_data
@@ -285,22 +252,16 @@ router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (re
       LIMIT 1
     `, [entry.lot_no]);
     if (!sd) {
-      // no remain information available – return sizes with a default high remain
       const outNoRemain = sizes.map(sz => ({ ...sz, remain: 999999 }));
       return res.json({ sizes: outNoRemain });
     }
-
-    // build map from stitching_data_sizes
     const [sdSizes] = await pool.query(`
       SELECT size_label, pieces
       FROM stitching_data_sizes
       WHERE stitching_data_id = ?
     `, [sd.id]);
     const sdMap = {};
-    sdSizes.forEach(r => {
-      sdMap[r.size_label] = r.pieces;
-    });
-
+    sdSizes.forEach(r => { sdMap[r.size_label] = r.pieces; });
     const output = [];
     for (const sz of sizes) {
       const totalDept = sdMap[sz.size_label] || 0;
@@ -308,8 +269,7 @@ router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (re
         SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
         FROM jeans_assembly_data_sizes jds
         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-        WHERE jd.lot_no = ?
-          AND jds.size_label = ?
+        WHERE jd.lot_no = ? AND jds.size_label = ?
       `, [entry.lot_no, sz.size_label]);
       const used = usedRow.usedCount || 0;
       const remain = totalDept - used;
@@ -322,25 +282,23 @@ router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (re
   }
 });
 
-/* ------------------------------------------------------------------
-   5) POST /jeansassemblydashboard/update/:id
-   Increment existing pieces
--------------------------------------------------------------------*/
-router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+// ------------------------------------------------------------------
+// 5) POST /jeansassemblydashboard/update/:id
+//    Increment existing pieces
+//    Note: upload.none() is added to parse non-file form data
+// ------------------------------------------------------------------
+router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, upload.none(), async (req, res) => {
   let conn;
   try {
     const entryId = req.params.id;
     const userId = req.session.user.id;
     const updateSizes = req.body.updateSizes || {};
-
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
-    const [[entry]] = await conn.query(`
+    const [[entry]] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data
-      WHERE id = ?
-        AND user_id = ?
+      WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Record not found or no permission.');
@@ -348,9 +306,7 @@ router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, async (req, r
       conn.release();
       return res.redirect('/jeansassemblydashboard');
     }
-
-    // find stitching_data by lot_no
-    const [[sd]] = await conn.query(`
+    const [[sd]] = await pool.query(`
       SELECT *
       FROM stitching_data
       WHERE lot_no = ?
@@ -362,85 +318,64 @@ router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, async (req, r
       conn.release();
       return res.redirect('/jeansassemblydashboard');
     }
-
-    // build map from stitching_data_sizes
-    const [sdRows] = await conn.query(`
+    const [sdRows] = await pool.query(`
       SELECT size_label, pieces
       FROM stitching_data_sizes
       WHERE stitching_data_id = ?
     `, [sd.id]);
     const sdMap = {};
-    sdRows.forEach(r => {
-      sdMap[r.size_label] = r.pieces;
-    });
-
+    sdRows.forEach(r => { sdMap[r.size_label] = r.pieces; });
     let updatedTotal = entry.total_pieces;
-
     for (const lbl of Object.keys(updateSizes)) {
       let increment = parseInt(updateSizes[lbl], 10);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
-
       const totalDept = sdMap[lbl] || 0;
-      const [[usedRow]] = await conn.query(`
+      const [[usedRow]] = await pool.query(`
         SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
         FROM jeans_assembly_data_sizes jds
         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-        WHERE jd.lot_no = ?
-          AND jds.size_label = ?
+        WHERE jd.lot_no = ? AND jds.size_label = ?
       `, [entry.lot_no, lbl]);
       const used = usedRow.usedCount || 0;
       const remain = totalDept - used;
-
       if (increment > remain) {
         throw new Error(`Cannot add ${increment} for [${lbl}]; only ${remain} remain.`);
       }
-
-      // check if row exists
-      const [[existing]] = await conn.query(`
+      const [[existing]] = await pool.query(`
         SELECT *
         FROM jeans_assembly_data_sizes
-        WHERE jeans_assembly_data_id = ?
-          AND size_label = ?
+        WHERE jeans_assembly_data_id = ? AND size_label = ?
       `, [entryId, lbl]);
-
       if (!existing) {
-        // create new
-        await conn.query(`
+        await pool.query(`
           INSERT INTO jeans_assembly_data_sizes
             (jeans_assembly_data_id, size_label, pieces, created_at)
           VALUES (?, ?, ?, NOW())
         `, [entryId, lbl, increment]);
         updatedTotal += increment;
       } else {
-        // update existing
         const newCount = existing.pieces + increment;
-        await conn.query(`
+        await pool.query(`
           UPDATE jeans_assembly_data_sizes
           SET pieces = ?
           WHERE id = ?
         `, [newCount, existing.id]);
         updatedTotal += increment;
       }
-
-      // log the increment
-      await conn.query(`
+      await pool.query(`
         INSERT INTO jeans_assembly_data_updates
           (jeans_assembly_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
       `, [entryId, lbl, increment]);
     }
-
-    // update total
-    await conn.query(`
+    await pool.query(`
       UPDATE jeans_assembly_data
       SET total_pieces = ?
       WHERE id = ?
     `, [updatedTotal, entryId]);
-
     await conn.commit();
     conn.release();
-
     req.flash('success', 'Jeans assembly data updated successfully!');
     return res.redirect('/jeansassemblydashboard');
   } catch (err) {
@@ -454,40 +389,35 @@ router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, async (req, r
   }
 });
 
-/* ------------------------------------------------------------------
-   6) GET /jeansassemblydashboard/challan/:id
-   Display a summary (challan)
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 6) GET /jeansassemblydashboard/challan/:id
+//    Display a summary (challan)
+// ------------------------------------------------------------------
 router.get('/challan/:id', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const entryId = req.params.id;
-
     const [[row]] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data
-      WHERE id = ?
-        AND user_id = ?
+      WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!row) {
       req.flash('error', 'Challan not found or no permission.');
       return res.redirect('/jeansassemblydashboard');
     }
-
     const [sizes] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data_sizes
       WHERE jeans_assembly_data_id = ?
       ORDER BY id ASC
     `, [entryId]);
-
     const [updates] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data_updates
       WHERE jeans_assembly_data_id = ?
       ORDER BY updated_at ASC
     `, [entryId]);
-
     return res.render('jeansAssemblyChallan', {
       user: req.session.user,
       entry: row,
@@ -501,21 +431,19 @@ router.get('/challan/:id', isAuthenticated, isJeansAssemblyMaster, async (req, r
   }
 });
 
-/* ------------------------------------------------------------------
-   7) GET /jeansassemblydashboard/download-all
-   Export all jeans_assembly_data & sizes to Excel
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 7) GET /jeansassemblydashboard/download-all
+//    Export all jeans_assembly_data & sizes to Excel
+// ------------------------------------------------------------------
 router.get('/download-all', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-
     const [mainRows] = await pool.query(`
       SELECT *
       FROM jeans_assembly_data
       WHERE user_id = ?
       ORDER BY created_at ASC
     `, [userId]);
-
     const [allSizes] = await pool.query(`
       SELECT jas.*
       FROM jeans_assembly_data_sizes jas
@@ -523,11 +451,9 @@ router.get('/download-all', isAuthenticated, isJeansAssemblyMaster, async (req, 
       WHERE ja.user_id = ?
       ORDER BY jas.jeans_assembly_data_id, jas.id
     `, [userId]);
-
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'KottyLifestyle';
     workbook.created = new Date();
-
     const mainSheet = workbook.addWorksheet('JeansAssemblyData');
     mainSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
@@ -549,7 +475,6 @@ router.get('/download-all', isAuthenticated, isJeansAssemblyMaster, async (req, 
         created_at: r.created_at
       });
     });
-
     const sizesSheet = workbook.addWorksheet('JeansAssemblySizes');
     sizesSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
@@ -565,10 +490,8 @@ router.get('/download-all', isAuthenticated, isJeansAssemblyMaster, async (req, 
         pieces: s.pieces
       });
     });
-
     res.setHeader('Content-Disposition', 'attachment; filename="JeansAssemblyData.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
@@ -578,10 +501,9 @@ router.get('/download-all', isAuthenticated, isJeansAssemblyMaster, async (req, 
   }
 });
 
-/* ------------------------------------------------------------------
-   8) APPROVAL ROUTES
-   (e.g. /jeansassemblydashboard/approve, /approve/list, etc.)
--------------------------------------------------------------------*/
+// ------------------------------------------------------------------
+// 8) APPROVAL ROUTES
+// ------------------------------------------------------------------
 router.get('/approve', isAuthenticated, isJeansAssemblyMaster, (req, res) => {
   res.render('JeansAssemblyApprove', { user: req.session.user });
 });
@@ -591,7 +513,6 @@ router.get('/approve/list', isAuthenticated, isJeansAssemblyMaster, async (req, 
     const userId = req.session.user.id;
     const searchTerm = req.query.search || '';
     const likeStr = `%${searchTerm}%`;
-
     const [rows] = await pool.query(`
       SELECT
         ja.id AS assignment_id,
@@ -600,15 +521,17 @@ router.get('/approve/list', isAuthenticated, isJeansAssemblyMaster, async (req, 
         ja.is_approved,
         ja.assignment_remark,
         sd.lot_no,
-        sd.sku
+        sd.total_pieces,
+        c.remark AS cutting_remark,
+        c.sku
       FROM jeans_assembly_assignments ja
       JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+      JOIN cutting_lots c ON sd.lot_no = c.lot_no
       WHERE ja.user_id = ?
         AND (ja.is_approved IS NULL OR ja.is_approved = 0)
-        AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)
+        AND (sd.lot_no LIKE ? OR c.sku LIKE ?)
       ORDER BY ja.assigned_on DESC
     `, [userId, likeStr, likeStr]);
-
     return res.json({ data: rows });
   } catch (err) {
     console.error('[ERROR] GET /jeansassemblydashboard/approve/list =>', err);
@@ -619,19 +542,18 @@ router.get('/approve/list', isAuthenticated, isJeansAssemblyMaster, async (req, 
 router.post('/approve-lot', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { assignment_id } = req.body;
+    const { assignment_id, approval_remark } = req.body;
     if (!assignment_id) {
       return res.status(400).json({ error: 'No assignment_id provided.' });
     }
-
+    const remark = approval_remark && approval_remark.trim() ? approval_remark.trim() : null;
     await pool.query(`
       UPDATE jeans_assembly_assignments
       SET is_approved = 1,
-          assignment_remark = NULL
+          assignment_remark = ?
       WHERE id = ?
         AND user_id = ?
-    `, [assignment_id, userId]);
-
+    `, [remark, assignment_id, userId]);
     return res.json({ success: true, message: 'Assignment approved successfully!' });
   } catch (err) {
     console.error('[ERROR] POST /jeansassemblydashboard/approve-lot =>', err);
@@ -649,7 +571,6 @@ router.post('/deny-lot', isAuthenticated, isJeansAssemblyMaster, async (req, res
     if (!denial_remark || !denial_remark.trim()) {
       return res.status(400).json({ error: 'You must provide a remark for denial.' });
     }
-
     await pool.query(`
       UPDATE jeans_assembly_assignments
       SET is_approved = 0,
@@ -657,7 +578,6 @@ router.post('/deny-lot', isAuthenticated, isJeansAssemblyMaster, async (req, res
       WHERE id = ?
         AND user_id = ?
     `, [denial_remark.trim(), assignment_id, userId]);
-
     return res.json({ success: true, message: 'Assignment denied successfully.' });
   } catch (err) {
     console.error('[ERROR] POST /jeansassemblydashboard/deny-lot =>', err);
@@ -665,10 +585,6 @@ router.post('/deny-lot', isAuthenticated, isJeansAssemblyMaster, async (req, res
   }
 });
 
-/* ------------------------------------------------------------------
-   NEW: 9) GET /jeansassemblydashboard/list-entries
-   Return existing Jeans Assembly entries (with sizes) for lazy-loading.
--------------------------------------------------------------------*/
 router.get('/list-entries', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
