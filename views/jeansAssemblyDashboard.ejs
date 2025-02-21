@@ -41,7 +41,6 @@
         <i class="fas fa-people-carry"></i> Jeans Assembly Dashboard
       </a>
       <div class="ms-auto">
-        <!-- Example: approvals & finishing assignment links -->
         <a href="/jeansassemblydashboard/approve" class="btn btn-outline-info btn-sm me-2">
           <i class="fas fa-check-circle"></i> Approvals
         </a>        
@@ -53,8 +52,8 @@
   </nav>
 
   <div class="container my-4">
-    <!-- Flash Message Area -->
-    <div id="flashMessage"></div>
+    <!-- Include flash messages partial -->
+    <%- include('partials/flashMessages') %>
 
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
@@ -189,25 +188,10 @@
   <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ----------------------------------------
-    // 1) Show Flash Message
-    // ----------------------------------------
-    function showFlashMessage(type, message) {
-      const flashArea = document.getElementById('flashMessage');
-      flashArea.innerHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-          <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i> ${message}
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      `;
-    }
+    // 1) Flash Message is rendered via partial so no additional JS is needed.
 
-    // ----------------------------------------
-    // 2) LOT Autocomplete
-    // ----------------------------------------
-    // The server will pass a "lots" array as JSON via EJS
+    // 2) LOT Autocomplete – assuming lots are passed via EJS
     const lotsData = <%- JSON.stringify(lots) %> || [];
-
     const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
     const selectedLotId = document.getElementById('selectedLotId');
     const lotAutocomplete = document.getElementById('lotAutocomplete');
@@ -249,9 +233,7 @@
       }
     });
 
-    // ----------------------------------------
     // 3) Fetch & Render Lot Sizes
-    // ----------------------------------------
     const lotSizesContainer = document.getElementById('lotSizesContainer');
     const sizesTableBody = document.querySelector('#sizesTable tbody');
     const createTotalPieces = document.getElementById('createTotalPieces');
@@ -269,6 +251,7 @@
       }
     }
 
+    // Updated: Pre-fill the input field's value with the remain count.
     function renderSizes(sizesArr) {
       sizesTableBody.innerHTML = '';
       lotSizesContainer.style.display = 'block';
@@ -278,7 +261,7 @@
           <td>${sz.size_label}</td>
           <td>${sz.remain}</td>
           <td>
-            <input type="number" min="0" max="${sz.remain}" class="form-control" value="0" data-size-id="${sz.id}">
+            <input type="number" required min="1" max="${sz.remain}" class="form-control" value="${sz.remain}" data-size-id="${sz.id}">
           </td>
         `;
         sizesTableBody.appendChild(tr);
@@ -297,9 +280,7 @@
     }
     sizesTableBody.addEventListener('input', updateTotal);
 
-    // ----------------------------------------
     // 4) Submit Create Form (AJAX)
-    // ----------------------------------------
     const createForm = document.getElementById('createForm');
     createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -327,22 +308,18 @@
         } else {
           const result = await res.json().catch(() => ({}));
           if (result.success) {
-            showFlashMessage('success', result.message || 'Jeans Assembly entry created successfully.');
-            createForm.reset();
-            lotSizesContainer.style.display = 'none';
+            window.location.reload();
           } else {
-            showFlashMessage('danger', result.error || 'Error creating Jeans Assembly entry.');
+            alert(result.error || 'Error creating Jeans Assembly entry.');
           }
         }
       } catch (err) {
         console.error('Error creating jeans assembly entry:', err);
-        showFlashMessage('danger', 'Error creating jeans assembly entry.');
+        alert('Error creating jeans assembly entry.');
       }
     });
 
-    // ----------------------------------------
     // 5) Lazy Load Existing Entries
-    // ----------------------------------------
     let offset = 0;
     let loading = false;
     let hasMore = true;
@@ -424,9 +401,7 @@
     });
     loadMoreData(); // initial load
 
-    // ----------------------------------------
     // 6) Update Modal Logic
-    // ----------------------------------------
     const updateModal = document.getElementById('updateModal');
     const updateForm = document.getElementById('updateForm');
     const updateSizesTable = document.getElementById('updateSizesTable');
@@ -452,7 +427,7 @@
               <td>${sz.pieces}</td>
               <td>${sz.remain != null ? sz.remain : 999999}</td>
               <td>
-                <input type="number" class="form-control" min="0" placeholder="0" data-size-label="${sz.size_label}" />
+                <input type="number" class="form-control" min="0" placeholder="0" data-size-label="${sz.size_label}">
               </td>
             `;
             updateSizesTable.querySelector('tbody').appendChild(tr);
@@ -466,7 +441,6 @@
         e.preventDefault();
         // remove old hidden fields
         document.querySelectorAll('.updateSizeMappingField').forEach(el => el.remove());
-
         const rows = updateSizesTable.querySelector('tbody').querySelectorAll('tr');
         for (const row of rows) {
           const label = row.children[0].textContent;
@@ -487,7 +461,6 @@
             updateForm.appendChild(hidden);
           }
         }
-
         try {
           const formData = new FormData(updateForm);
           const res = await fetch(updateForm.action, {
