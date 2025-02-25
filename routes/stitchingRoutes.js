@@ -140,7 +140,7 @@ router.get('/', isAuthenticated, isStitchingMaster, async (req, res) => {
         AND sa.isApproved = 1
         AND c.lot_no NOT IN (SELECT lot_no FROM stitching_data)
       ORDER BY c.created_at DESC
-      LIMIT 10
+      LIMIT 100
       `,
       [userId]
     );
