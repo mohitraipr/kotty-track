@@ -133,7 +133,7 @@ router.get('/', isAuthenticated, isStitchingMaster, async (req, res) => {
     // Still use cutting_lots for lots not yet in stitching_data.
     const [lots] = await pool.query(
       `
-      SELECT c.id, c.lot_no, c.sku, c.total_pieces
+      SELECT c.id, c.lot_no, c.sku, c.total_pieces, c.remark AS cutting_remark
       FROM cutting_lots c
       JOIN stitching_assignments sa ON sa.cutting_lot_id = c.id
       WHERE sa.user_id = ?
@@ -233,8 +233,7 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isStitchingMaster, async (r
         SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
         FROM stitching_data_sizes sds
         JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ?
-          AND sds.size_label = ?
+        WHERE sd.lot_no = ? AND sds.size_label = ?
         `,
         [lot.lot_no, s.size_label]
       );
