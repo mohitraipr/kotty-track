@@ -415,7 +415,7 @@
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary mt-3">
+              <button type="submit" class="btn btn-primary">
                 <i class="fas fa-check"></i>
                 <span data-lang="en">Create Stitching Entry</span>
                 <span data-lang="hi">सिलाई एंट्री बनाएं</span>
@@ -575,9 +575,10 @@
      * LOT AUTOCOMPLETE
      * Only show matching items as the user types.
      *****************************************************/
+    // existingLots now contains cutting_remark along with lot_no, sku, etc.
     const existingLots = <%- JSON.stringify(lots) %> || [];
     const lotAutocompleteData = existingLots.map(l => ({
-      displayText: `${l.lot_no} (SKU: ${l.sku})`,
+      displayText: `${l.lot_no} (SKU: ${l.sku})${l.cutting_remark ? ' - ' + l.cutting_remark : ''}`,
       value: l.id
     }));
 
@@ -839,14 +840,10 @@
                   <strong>Total Pieces:</strong> ${item.total_pieces}<br>
                   <strong>Remark:</strong> ${item.remark || 'N/A'}
                 </p>
-                ${
-                  item.image_url
-                    ? `<p>
+                ${ item.image_url ? `<p>
                          <strong>Image:</strong><br>
                          <img src="${item.image_url}" alt="Stitch" style="max-height: 100px;">
-                       </p>`
-                    : ''
-                }
+                       </p>` : '' }
                 <div class="table-responsive">
                   <table class="table table-sm table-bordered">
                     <thead>
@@ -856,8 +853,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      ${
-                        item.sizes && item.sizes.length
+                      ${ item.sizes && item.sizes.length
                           ? item.sizes.map(sz => `
                               <tr>
                                 <td>${sz.size_label}</td>
@@ -993,6 +989,19 @@
         }
       });
     }
+
+    /*****************************************************
+     * DISABLE SUBMIT BUTTONS AFTER CLICK
+     * (Prevents accidental double submissions)
+     *****************************************************/
+    document.querySelectorAll('form').forEach(form => {
+      form.addEventListener('submit', function() {
+        const submitButton = this.querySelector('button[type="submit"]');
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+      });
+    });
   </script>
 </body>
 </html>
