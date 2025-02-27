@@ -734,15 +734,17 @@ router.get('/assign-finishing/users', isAuthenticated, isStitchingMaster, async 
   }
 });
 
+
 // GET /stitchingdashboard/assign-finishing/data
 router.get('/assign-finishing/data', isAuthenticated, isStitchingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    // Retrieve completed lots from stitching_data for this user.
+    // Retrieve completed lots from stitching_data for this user, joining with cutting_lots to get the cutting remark.
     const [stDataRows] = await pool.query(
       `
-      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces
+      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces, c.remark AS cutting_remark
       FROM stitching_data sd
+      JOIN cutting_lots c ON sd.lot_no = c.lot_no
       WHERE sd.user_id = ?
       `,
       [userId]
@@ -754,6 +756,7 @@ router.get('/assign-finishing/data', isAuthenticated, isStitchingMaster, async (
         stitching_assignment_id: sd.id,
         lot_no: sd.lot_no,
         sku: sd.sku,
+        cutting_remark: sd.cutting_remark,
         total_pieces: sd.total_pieces,
         sizes: []
       };
@@ -813,6 +816,7 @@ router.get('/assign-finishing/data', isAuthenticated, isStitchingMaster, async (
     return res.status(500).json({ error: err.message });
   }
 });
+
 
 // POST /stitchingdashboard/assign-finishing
 router.post('/assign-finishing', isAuthenticated, isStitchingMaster, async (req, res) => {
