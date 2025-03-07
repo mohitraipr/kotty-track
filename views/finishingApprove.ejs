@@ -7,15 +7,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <style>
-    /* Custom styles for improved mobile experience */
     body {
       padding-top: 70px;
       padding-bottom: 3rem;
     }
-    .table-responsive {
-      margin-top: 1rem;
+    /* When any form is submitted, disable all buttons on the page */
+    button:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
     }
-    /* Optional: hide the deny form entirely on mobile if desired */
+    /* Optional: Hide deny form on very small screens */
     @media (max-width: 576px) {
       .deny-form {
         display: none;
@@ -23,7 +24,7 @@
     }
   </style>
   <script>
-    // Disable all buttons when a form is submitted to prevent duplicate submissions.
+    // Disable all buttons on form submission to prevent duplicate submissions
     function disableAllButtons(form) {
       const buttons = document.querySelectorAll('button');
       buttons.forEach(btn => btn.disabled = true);
@@ -51,6 +52,12 @@
     <% } %>
 
     <h1 class="mb-4">Pending Finishing Assignments</h1>
+    
+    <!-- Live Search Input -->
+    <div class="mb-3">
+      <input type="text" id="liveSearch" class="form-control" placeholder="Search assignments..." />
+    </div>
+    
     <div class="table-responsive">
       <table class="table table-bordered table-striped align-middle">
         <thead class="table-light">
@@ -97,7 +104,8 @@
                     </div>
                     <button type="submit" class="btn btn-sm btn-success w-100">Approve</button>
                   </form>
-                  <!-- Deny Form (disabled, wrapped in a container with class 'deny-form') -->
+
+                  <!-- Deny Form (disabled) -->
                   <div class="deny-form">
                     <form action="/finishingdashboard/deny/<%= p.id %>" method="POST" onsubmit="disableAllButtons(this); return false;">
                       <div class="input-group input-group-sm mb-1">
@@ -115,6 +123,24 @@
       </table>
     </div>
   </div>
+
+  <!-- Live Search Script -->
+  <script>
+    document.getElementById('liveSearch').addEventListener('input', function() {
+      var searchValue = this.value.toLowerCase();
+      var rows = document.querySelectorAll('table tbody tr');
+      rows.forEach(function(row) {
+        // Check if row text contains search value
+        var rowText = row.textContent.toLowerCase();
+        if (rowText.indexOf(searchValue) > -1) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
