@@ -11,7 +11,6 @@ const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
 --------------------------------------------------- */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Use different destination if needed
     cb(null, path.join(__dirname, '..', 'uploads'));
   },
   filename: (req, file, cb) => {
@@ -27,7 +26,7 @@ const upload = multer({ storage });
 router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    // Fetch all finishing_assignments for the user that are approved
+    // Fetch approved assignments
     const [faRows] = await pool.query(`
       SELECT fa.*,
              CASE
@@ -41,43 +40,23 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
 
     const finalAssignments = [];
     for (let fa of faRows) {
-      let lotNo = null;
-      let sku = null;
+      let lotNo = null, sku = null;
       if (fa.stitching_assignment_id) {
-        const [[sd]] = await pool.query(`
-          SELECT *
-          FROM stitching_data
-          WHERE id = ?
-        `, [fa.stitching_assignment_id]);
+        const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
         if (!sd) continue;
-        lotNo = sd.lot_no;
-        sku = sd.sku;
+        lotNo = sd.lot_no; sku = sd.sku;
       } else if (fa.washing_assignment_id) {
-        const [[wd]] = await pool.query(`
-          SELECT *
-          FROM washing_data
-          WHERE id = ?
-        `, [fa.washing_assignment_id]);
+        const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
         if (!wd) continue;
-        lotNo = wd.lot_no;
-        sku = wd.sku;
-      } else {
-        continue;
-      }
-
-      // Skip if finishing_data already exists for this lot_no
-      const [[usedCheck]] = await pool.query(`
-        SELECT COUNT(*) as cnt
-        FROM finishing_data
-        WHERE lot_no = ?
-      `, [lotNo]);
+        lotNo = wd.lot_no; sku = wd.sku;
+      } else continue;
+      const [[usedCheck]] = await pool.query(`SELECT COUNT(*) as cnt FROM finishing_data WHERE lot_no = ?`, [lotNo]);
       if (usedCheck.cnt > 0) continue;
-
+      // Here you can also attach cutting information if available.
       fa.lot_no = lotNo;
       fa.sku = sku;
       finalAssignments.push(fa);
     }
-
     const errorMessages = req.flash('error');
     const successMessages = req.flash('success');
     return res.render('finishingDashboard', {
@@ -94,8 +73,7 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
 });
 
 /* =============================================================
-   2) LIST EXISTING FINISHING_DATA (AJAX): GET /list-entries
-   --> Modified to compute fullyDispatched
+   2) LIST EXISTING FINISHING_DATA (AJAX)
    ============================================================= */
 router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
@@ -105,8 +83,6 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
     if (isNaN(offset) || offset < 0) offset = 0;
     const limit = 5;
     const likeStr = `%${searchTerm}%`;
-
-    // 1) Get finishing_data rows
     const [rows] = await pool.query(`
       SELECT *
       FROM finishing_data
@@ -114,33 +90,19 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [userId, likeStr, likeStr, limit, offset]);
-    if (!rows.length) {
-      return res.json({ data: [], hasMore: false });
-    }
-
-    // 2) Get all finishing_data_sizes for these finishing_data IDs
+    if (!rows.length) return res.json({ data: [], hasMore: false });
     const ids = rows.map(r => r.id);
     const [sizeRows] = await pool.query(`
       SELECT *
       FROM finishing_data_sizes
       WHERE finishing_data_id IN (?)
     `, [ids]);
-
-    // Build a map of finishing_data_id -> array of sizes
     const sizesMap = {};
     sizeRows.forEach(s => {
       if (!sizesMap[s.finishing_data_id]) sizesMap[s.finishing_data_id] = [];
       sizesMap[s.finishing_data_id].push(s);
     });
-
-    // 3) Combine finishing_data + sizes
-    const dataOut = rows.map(r => ({
-      ...r,
-      sizes: sizesMap[r.id] || []
-    }));
-
-    // 4) For each finishing_data, compute if fullyDispatched
-    //    i.e. for each size, compare total pieces vs. sum of finishing_dispatches
+    const dataOut = rows.map(r => ({ ...r, sizes: sizesMap[r.id] || [] }));
     for (const item of dataOut) {
       let isFull = true;
       for (const sz of item.sizes) {
@@ -149,23 +111,16 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
           FROM finishing_dispatches
           WHERE finishing_data_id = ? AND size_label = ?
         `, [item.id, sz.size_label]);
-
-        if (dispSum.dispatched < sz.pieces) {
-          isFull = false;
-          break;
-        }
+        if (dispSum.dispatched < sz.pieces) { isFull = false; break; }
       }
       item.fullyDispatched = isFull;
     }
-
-    // 5) Check if there's more data
     const [[{ totalCount }]] = await pool.query(`
       SELECT COUNT(*) AS totalCount
       FROM finishing_data
       WHERE user_id = ? AND (lot_no LIKE ? OR sku LIKE ?)
     `, [userId, likeStr, likeStr]);
     const hasMore = offset + rows.length < totalCount;
-
     return res.json({ data: dataOut, hasMore });
   } catch (err) {
     console.error('Error finishing list-entries:', err);
@@ -175,7 +130,6 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
 
 /* =============================================================
    3) GET ASSIGNMENT SIZES (for Create Entry)
-       GET /get-assignment-sizes/:assignmentId
    ============================================================= */
 router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
@@ -186,51 +140,26 @@ router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMa
       WHERE id = ?
     `, [assignmentId]);
     if (!fa) return res.status(404).json({ error: 'Assignment not found.' });
-
     let lotNo = null, tableSizes = null, dataIdField = null, dataIdValue = null;
     if (fa.stitching_assignment_id) {
-      const [[sd]] = await pool.query(`
-        SELECT *
-        FROM stitching_data
-        WHERE id = ?
-      `, [fa.stitching_assignment_id]);
+      const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
       if (!sd) return res.json([]);
-      lotNo = sd.lot_no;
-      tableSizes = 'stitching_data_sizes';
-      dataIdField = 'stitching_data_id';
-      dataIdValue = sd.id;
+      lotNo = sd.lot_no; tableSizes = 'stitching_data_sizes'; dataIdField = 'stitching_data_id'; dataIdValue = sd.id;
     } else if (fa.washing_assignment_id) {
-      const [[wd]] = await pool.query(`
-        SELECT *
-        FROM washing_data
-        WHERE id = ?
-      `, [fa.washing_assignment_id]);
+      const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
       if (!wd) return res.json([]);
-      lotNo = wd.lot_no;
-      tableSizes = 'washing_data_sizes';
-      dataIdField = 'washing_data_id';
-      dataIdValue = wd.id;
-    } else {
-      return res.json([]);
-    }
-
+      lotNo = wd.lot_no; tableSizes = 'washing_data_sizes'; dataIdField = 'washing_data_id'; dataIdValue = wd.id;
+    } else return res.json([]);
     let assignedLabels = [];
-    try {
-      assignedLabels = JSON.parse(fa.sizes_json);
-    } catch (e) { assignedLabels = []; }
-    if (!Array.isArray(assignedLabels) || !assignedLabels.length) {
-      return res.json([]);
-    }
-
+    try { assignedLabels = JSON.parse(fa.sizes_json); } catch (e) { assignedLabels = []; }
+    if (!Array.isArray(assignedLabels) || !assignedLabels.length) return res.json([]);
     const [deptRows] = await pool.query(`
       SELECT size_label, pieces
       FROM ${tableSizes}
       WHERE ${dataIdField} = ?
     `, [dataIdValue]);
-
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
-
     const result = [];
     for (const lbl of assignedLabels) {
       const totalDept = deptMap[lbl] || 0;
@@ -241,12 +170,7 @@ router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMa
       `, [lotNo, lbl]);
       const used = usedRow.usedCount || 0;
       const remain = totalDept - used;
-      result.push({
-        size_label: lbl,
-        total_produced: totalDept,
-        used,
-        remain: remain < 0 ? 0 : remain
-      });
+      result.push({ size_label: lbl, total_produced: totalDept, used, remain: remain < 0 ? 0 : remain });
     }
     return res.json(result);
   } catch (err) {
@@ -266,15 +190,11 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
     const sizesObj = req.body.sizes || {};
     if (!Object.keys(sizesObj).length) {
       req.flash('error', 'No size data provided.');
-      return res.redirect('/finishingdashboard#createTab');
+      return res.redirect('/finishingdashboard');
     }
-
-    let image_url = null;
-    if (req.file) image_url = '/uploads/' + req.file.filename;
-
+    let image_url = req.file ? '/uploads/' + req.file.filename : null;
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
     const [[fa]] = await conn.query(`
       SELECT *
       FROM finishing_assignments
@@ -283,16 +203,15 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
     if (!fa) {
       req.flash('error', 'Invalid or unapproved finishing assignment.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#createTab');
+      return res.redirect('/finishingdashboard');
     }
-
     let lotNo, sku, tableSizes, dataIdField, dataIdValue;
     if (fa.stitching_assignment_id) {
       const [[sd]] = await conn.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
       if (!sd) {
         req.flash('error', 'Stitching data not found.');
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#createTab');
+        return res.redirect('/finishingdashboard');
       }
       lotNo = sd.lot_no; sku = sd.sku;
       tableSizes = 'stitching_data_sizes'; dataIdField = 'stitching_data_id'; dataIdValue = sd.id;
@@ -301,38 +220,33 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       if (!wd) {
         req.flash('error', 'Washing data not found.');
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#createTab');
+        return res.redirect('/finishingdashboard');
       }
       lotNo = wd.lot_no; sku = wd.sku;
       tableSizes = 'washing_data_sizes'; dataIdField = 'washing_data_id'; dataIdValue = wd.id;
     } else {
       req.flash('error', 'Assignment not linked to stitching or washing.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#createTab');
+      return res.redirect('/finishingdashboard');
     }
-
-    const [[alreadyUsed]] = await conn.query(`
-      SELECT COUNT(*) as cnt FROM finishing_data WHERE lot_no = ?
-    `, [lotNo]);
+    const [[alreadyUsed]] = await conn.query(`SELECT COUNT(*) as cnt FROM finishing_data WHERE lot_no = ?`, [lotNo]);
     if (alreadyUsed.cnt > 0) {
       req.flash('error', 'This lot no is already used in finishing_data.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#createTab');
+      return res.redirect('/finishingdashboard');
     }
-
     const [deptRows] = await conn.query(`
       SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?
     `, [dataIdValue]);
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
-
     let grandTotal = 0;
     for (const label in sizesObj) {
       const requested = parseInt(sizesObj[label], 10);
       if (isNaN(requested) || requested < 0) {
         req.flash('error', `Invalid count for size ${label}`);
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#createTab');
+        return res.redirect('/finishingdashboard');
       }
       if (requested === 0) continue;
       const totalDept = deptMap[label] || 0;
@@ -346,22 +260,20 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       if (requested > remain) {
         req.flash('error', `Cannot request ${requested} for size ${label}; only ${remain} remain.`);
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#createTab');
+        return res.redirect('/finishingdashboard');
       }
       grandTotal += requested;
     }
     if (grandTotal <= 0) {
       req.flash('error', 'No positive piece count provided.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#createTab');
+      return res.redirect('/finishingdashboard');
     }
-
     const [ins] = await conn.query(`
       INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
       VALUES (?, ?, ?, ?, ?, ?, NOW())
     `, [userId, lotNo, sku, grandTotal, remark || null, image_url]);
     const newId = ins.insertId;
-
     for (const label in sizesObj) {
       const requested = parseInt(sizesObj[label], 10) || 0;
       if (requested > 0) {
@@ -371,24 +283,20 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
         `, [newId, label, requested]);
       }
     }
-
     await conn.commit();
     conn.release();
     req.flash('success', 'Finishing entry created successfully.');
-    return res.redirect('/finishingdashboard#listTab');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error creating finishing data:', err);
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error creating finishing data: ' + err.message);
-    return res.redirect('/finishingdashboard#createTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
 /* =============================================================
-   5) APPROVAL ROUTES (GET /finishingdashboard/approve) & POST for Approve/Deny
+   5) APPROVAL ROUTES
    ============================================================= */
 router.get('/approve', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
@@ -403,23 +311,39 @@ router.get('/approve', isAuthenticated, isFinishingMaster, async (req, res) => {
       WHERE fa.user_id = ? AND (fa.is_approved = 0 OR fa.is_approved IS NULL)
       ORDER BY fa.assigned_on DESC
     `, [userId]);
-
     for (let row of pending) {
-      let lotNo = null, totalPieces = 0;
+      let lotNo = null, totalPieces = 0, sizes = [];
       if (row.stitching_assignment_id) {
         const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [row.stitching_assignment_id]);
-        if (sd) { lotNo = sd.lot_no; totalPieces = sd.total_pieces; }
+        if (sd) {
+          lotNo = sd.lot_no; 
+          totalPieces = sd.total_pieces;
+          const [sizeRows] = await pool.query(`SELECT size_label, pieces FROM stitching_data_sizes WHERE stitching_data_id = ?`, [sd.id]);
+          sizes = sizeRows;
+        }
       } else if (row.washing_assignment_id) {
         const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [row.washing_assignment_id]);
-        if (wd) { lotNo = wd.lot_no; totalPieces = wd.total_pieces; }
+        if (wd) {
+          lotNo = wd.lot_no; 
+          totalPieces = wd.total_pieces;
+          const [sizeRows] = await pool.query(`SELECT size_label, pieces FROM washing_data_sizes WHERE washing_data_id = ?`, [wd.id]);
+          sizes = sizeRows;
+        }
       }
-      let assignedSizes = [];
-      try { assignedSizes = JSON.parse(row.sizes_json); } catch(e){}
+      let cuttingRemark = '', cuttingSku = '';
+      if (lotNo) {
+        const [[cutData]] = await pool.query(`SELECT remark, sku FROM cutting_lots WHERE lot_no = ? LIMIT 1`, [lotNo]);
+        if (cutData) {
+          cuttingRemark = cutData.remark || '';
+          cuttingSku = cutData.sku || '';
+        }
+      }
       row.lot_no = lotNo || 'N/A';
       row.total_pieces = totalPieces || 0;
-      row.sizeCount = assignedSizes.length;
+      row.sizes = sizes;
+      row.cutting_remark = cuttingRemark;
+      row.cutting_sku = cuttingSku;
     }
-
     const errorMessages = req.flash('error');
     const successMessages = req.flash('success');
     return res.render('finishingApprove', {
@@ -445,11 +369,11 @@ router.post('/approve/:id', isAuthenticated, isFinishingMaster, async (req, res)
       WHERE id = ? AND user_id = ?
     `, [assignment_remark || null, assignmentId, userId]);
     req.flash('success', 'Assignment approved successfully.');
-    return res.redirect('/finishingdashboard/approve');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error approving finishing assignment:', err);
     req.flash('error', 'Could not approve: ' + err.message);
-    return res.redirect('/finishingdashboard/approve');
+    return res.redirect('/finishingdashboard');
   }
 });
 
@@ -463,11 +387,11 @@ router.post('/deny/:id', isAuthenticated, isFinishingMaster, async (req, res) =>
       WHERE id = ? AND user_id = ?
     `, [assignment_remark || null, assignmentId, userId]);
     req.flash('success', 'Assignment denied successfully.');
-    return res.redirect('/finishingdashboard/approve');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error denying finishing assignment:', err);
     req.flash('error', 'Could not deny: ' + err.message);
-    return res.redirect('/finishingdashboard/approve');
+    return res.redirect('/finishingdashboard');
   }
 });
 
@@ -482,11 +406,9 @@ router.get('/update/:id/json', isAuthenticated, isFinishingMaster, async (req, r
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) return res.status(403).json({ error: 'Not found or no permission' });
-
     const [sizes] = await pool.query(`
       SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ?
     `, [entryId]);
-
     let tableSizes, dataIdField, dataIdValue;
     const [[sd]] = await pool.query(`
       SELECT * FROM stitching_data WHERE lot_no = ? ORDER BY id DESC LIMIT 1
@@ -504,18 +426,15 @@ router.get('/update/:id/json', isAuthenticated, isFinishingMaster, async (req, r
         dataIdField = 'washing_data_id';
         dataIdValue = wd.id;
       } else {
-        // no dept data found, presumably means no remain
         const outNoRemain = sizes.map(sz => ({ ...sz, remain: 0 }));
         return res.json({ sizes: outNoRemain, fullyDispatched: true });
       }
     }
-
     const [deptRows] = await pool.query(`
       SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?
     `, [dataIdValue]);
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
-
     const output = [];
     let allDispatched = true;
     for (const sz of sizes) {
@@ -543,19 +462,16 @@ router.post('/update/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const userId = req.session.user.id;
     const entryId = req.params.id;
     const updateSizes = req.body.updateSizes || {};
-
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
     const [[entry]] = await conn.query(`
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Record not found or no permission.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#listTab');
+      return res.redirect('/finishingdashboard');
     }
-
     let tableSizes, dataIdField, dataIdValue;
     const [[sd]] = await conn.query(`
       SELECT * FROM stitching_data WHERE lot_no = ? LIMIT 1
@@ -575,22 +491,19 @@ router.post('/update/:id', isAuthenticated, isFinishingMaster, async (req, res) 
       } else {
         req.flash('error', 'No matching departmental data found.');
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#listTab');
+        return res.redirect('/finishingdashboard');
       }
     }
-
     const [deptRows] = await conn.query(`
       SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?
     `, [dataIdValue]);
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
-
     let updatedTotal = parseFloat(entry.total_pieces);
     for (const lbl of Object.keys(updateSizes)) {
       let increment = parseInt(updateSizes[lbl], 10);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
-
       const totalDept = deptMap[lbl] || 0;
       const [[usedRow]] = await conn.query(`
         SELECT COALESCE(SUM(fds.pieces),0) AS usedCount
@@ -600,7 +513,6 @@ router.post('/update/:id', isAuthenticated, isFinishingMaster, async (req, res) 
       const used = usedRow.usedCount || 0;
       const remain = totalDept - used;
       if (increment > remain) throw new Error(`Cannot add ${increment} for size ${lbl}, only ${remain} remain.`);
-
       const [[existing]] = await conn.query(`
         SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
       `, [entryId, lbl]);
@@ -617,29 +529,23 @@ router.post('/update/:id', isAuthenticated, isFinishingMaster, async (req, res) 
         `, [newCount, existing.id]);
         updatedTotal += increment;
       }
-
       await conn.query(`
         INSERT INTO finishing_data_updates (finishing_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
       `, [entryId, lbl, increment]);
     }
-
     await conn.query(`
       UPDATE finishing_data SET total_pieces = ? WHERE id = ?
     `, [updatedTotal, entryId]);
-
     await conn.commit();
     conn.release();
     req.flash('success', 'Finishing data updated successfully.');
-    return res.redirect('/finishingdashboard#listTab');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error updating finishing data:', err);
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error updating finishing data: ' + err.message);
-    return res.redirect('/finishingdashboard#listTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
@@ -654,20 +560,13 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
       req.flash('error', 'Challan not found or no permission.');
       return res.redirect('/finishingdashboard');
     }
-
     const [sizes] = await pool.query(`
       SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ? ORDER BY id ASC
     `, [entryId]);
     const [updates] = await pool.query(`
       SELECT * FROM finishing_data_updates WHERE finishing_data_id = ? ORDER BY updated_at ASC
     `, [entryId]);
-
-    return res.render('finishingChallan', {
-      user: req.session.user,
-      entry: row,
-      sizes,
-      updates
-    });
+    return res.render('finishingChallan', { user: req.session.user, entry: row, sizes, updates });
   } catch (err) {
     console.error('Error finishing challan:', err);
     req.flash('error', 'Error loading finishing challan: ' + err.message);
@@ -688,11 +587,9 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
       WHERE fd.user_id = ?
       ORDER BY fds.finishing_data_id, fds.id
     `, [userId]);
-
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'KottyLifestyle';
     workbook.created = new Date();
-
     const mainSheet = workbook.addWorksheet('FinishingData');
     mainSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
@@ -704,17 +601,8 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
       { header: 'Created At', key: 'created_at', width: 20 }
     ];
     mainRows.forEach(r => {
-      mainSheet.addRow({
-        id: r.id,
-        lot_no: r.lot_no,
-        sku: r.sku,
-        total_pieces: r.total_pieces,
-        remark: r.remark || '',
-        image_url: r.image_url || '',
-        created_at: r.created_at
-      });
+      mainSheet.addRow({ id: r.id, lot_no: r.lot_no, sku: r.sku, total_pieces: r.total_pieces, remark: r.remark || '', image_url: r.image_url || '', created_at: r.created_at });
     });
-
     const sizesSheet = workbook.addWorksheet('FinishingSizes');
     sizesSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
@@ -724,15 +612,8 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
       { header: 'Created At', key: 'created_at', width: 20 }
     ];
     allSizes.forEach(s => {
-      sizesSheet.addRow({
-        id: s.id,
-        finishing_data_id: s.finishing_data_id,
-        size_label: s.size_label,
-        pieces: s.pieces,
-        created_at: s.created_at
-      });
+      sizesSheet.addRow({ id: s.id, finishing_data_id: s.finishing_data_id, size_label: s.size_label, pieces: s.pieces, created_at: s.created_at });
     });
-
     res.setHeader('Content-Disposition', 'attachment; filename="FinishingData.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
@@ -746,9 +627,6 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
 
 /* =============================================================
    7) DISPATCH ROUTES
-   a) GET /dispatch/:id/json – returns available pieces (by size)
-   b) POST /dispatch/:id – process a dispatch submission for one finishing entry
-   c) POST /dispatch-all/:id – dispatch ALL remaining pieces for an entry
    ============================================================= */
 router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
@@ -758,11 +636,9 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) return res.status(403).json({ error: 'Not found or no permission' });
-
     const [sizes] = await pool.query(`
       SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ?
     `, [entryId]);
-
     const dispatchData = [];
     let allDispatched = true;
     for (const sz of sizes) {
@@ -774,12 +650,7 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
       const dispatched = dispatchSum.dispatched || 0;
       const available = sz.pieces - dispatched;
       if (available > 0) allDispatched = false;
-      dispatchData.push({
-        size_label: sz.size_label,
-        total_produced: sz.pieces,
-        dispatched,
-        available: available < 0 ? 0 : available
-      });
+      dispatchData.push({ size_label: sz.size_label, total_produced: sz.pieces, dispatched, available: available < 0 ? 0 : available });
     }
     return res.json({ sizes: dispatchData, lot_no: entry.lot_no, fullyDispatched: allDispatched });
   } catch (err) {
@@ -798,34 +669,30 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
       destination = req.body.customDestination;
       if (!destination) {
         req.flash('error', 'Please enter a custom destination.');
-        return res.redirect('/finishingdashboard#listTab');
+        return res.redirect('/finishingdashboard');
       }
     }
     const dispatchSizes = req.body.dispatchSizes || {};
-
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
     const [[entry]] = await conn.query(`
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Record not found or no permission.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#listTab');
+      return res.redirect('/finishingdashboard');
     }
-
     for (const size in dispatchSizes) {
       const qty = parseInt(dispatchSizes[size], 10);
       if (isNaN(qty) || qty <= 0) continue;
-
       const [[sizeData]] = await conn.query(`
         SELECT pieces FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
       `, [entryId, size]);
       if (!sizeData) {
         req.flash('error', `Size ${size} not found.`);
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#listTab');
+        return res.redirect('/finishingdashboard');
       }
       const produced = sizeData.pieces;
       const [[dispatchedRow]] = await conn.query(`
@@ -838,9 +705,8 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
       if (qty > available) {
         req.flash('error', `Cannot dispatch ${qty} for size ${size}; only ${available} available.`);
         await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard#listTab');
+        return res.redirect('/finishingdashboard');
       }
-
       const [[existingDispatch]] = await conn.query(`
         SELECT COALESCE(SUM(quantity),0) as totalSent
         FROM finishing_dispatches
@@ -853,23 +719,19 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [entryId, entry.lot_no, destination, size, qty, newTotalSent]);
     }
-
     await conn.commit();
     conn.release();
     req.flash('success', 'Dispatch recorded successfully.');
-    return res.redirect('/finishingdashboard#listTab');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error processing dispatch:', err);
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error processing dispatch: ' + err.message);
-    return res.redirect('/finishingdashboard#listTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
-router.post('/dispatch-all/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
+router.post('/dispatch-all/:id', isFinishingMaster, isAuthenticated, async (req, res) => {
   let conn;
   try {
     const userId = req.session.user.id;
@@ -879,26 +741,22 @@ router.post('/dispatch-all/:id', isAuthenticated, isFinishingMaster, async (req,
       destination = req.body.customDestination;
       if (!destination) {
         req.flash('error', 'Please enter a custom destination.');
-        return res.redirect('/finishingdashboard#bulkDispatchTab');
+        return res.redirect('/finishingdashboard');
       }
     }
-
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
     const [[entry]] = await conn.query(`
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Record not found or no permission.');
       await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard#bulkDispatchTab');
+      return res.redirect('/finishingdashboard');
     }
-
     const [sizes] = await conn.query(`
       SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ?
     `, [entryId]);
-
     for (const sz of sizes) {
       const produced = sz.pieces;
       const [[dispatchSum]] = await conn.query(`
@@ -922,32 +780,25 @@ router.post('/dispatch-all/:id', isAuthenticated, isFinishingMaster, async (req,
         `, [entryId, entry.lot_no, destination, sz.size_label, available, newTotalSent]);
       }
     }
-
     await conn.commit();
     conn.release();
     req.flash('success', 'Bulk dispatch recorded successfully.');
-    return res.redirect('/finishingdashboard#bulkDispatchTab');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error in bulk dispatch:', err);
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error in bulk dispatch: ' + err.message);
-    return res.redirect('/finishingdashboard#bulkDispatchTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
 /* =============================================================
    8) BULK DISPATCH VIA EXCEL
-       GET /download-bulk-template – downloads an Excel template.
-       POST /bulk-dispatch-excel – processes the uploaded Excel file.
    ============================================================= */
 router.get('/download-bulk-template', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('BulkDispatchTemplate');
-    // Template: Lot No, Destination, S, M, L, XL (adjust as needed)
     sheet.columns = [
       { header: 'Lot No', key: 'lot_no', width: 15 },
       { header: 'Destination', key: 'destination', width: 15 },
@@ -956,7 +807,6 @@ router.get('/download-bulk-template', isAuthenticated, isFinishingMaster, async 
       { header: 'L', key: 'L', width: 8 },
       { header: 'XL', key: 'XL', width: 8 }
     ];
-
     res.setHeader('Content-Disposition', 'attachment; filename="BulkDispatchTemplate.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
@@ -964,7 +814,7 @@ router.get('/download-bulk-template', isAuthenticated, isFinishingMaster, async 
   } catch (err) {
     console.error('Error downloading bulk template:', err);
     req.flash('error', 'Error downloading bulk template: ' + err.message);
-    return res.redirect('/finishingdashboard#bulkDispatchTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
@@ -973,16 +823,13 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
   try {
     if (!req.file) {
       req.flash('error', 'Please upload an Excel file.');
-      return res.redirect('/finishingdashboard#bulkDispatchTab');
+      return res.redirect('/finishingdashboard');
     }
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(req.file.path);
     const sheet = workbook.getWorksheet('BulkDispatchTemplate') || workbook.worksheets[0];
-
     conn = await pool.getConnection();
     await conn.beginTransaction();
-
-    // For each row in the template (skip header)
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
       const lotNo = row.getCell('A').value;
@@ -993,7 +840,6 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
         L: parseInt(row.getCell('E').value || 0, 10),
         XL: parseInt(row.getCell('F').value || 0, 10)
       };
-      // Find finishing_data for the given lot_no and user.
       conn.query(`SELECT * FROM finishing_data WHERE lot_no = ?`, [lotNo], async (err, results) => {
         if (err || !results || results.length === 0) return;
         const entry = results[0];
@@ -1011,12 +857,7 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
             `, [entry.id, size]);
             const available = produced - (dispatchSum.dispatched || 0);
             if (qty > available) continue;
-
-            if (destination === 'other') {
-              // If the user typed "other" in the Excel, we have no custom field. 
-              // Adjust logic as needed, or skip.
-              destination = 'other';
-            }
+            if (destination === 'other') destination = 'other';
             const [[existingDispatch]] = await conn.query(`
               SELECT COALESCE(SUM(quantity),0) as totalSent
               FROM finishing_dispatches
@@ -1032,19 +873,15 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
         }
       });
     });
-
     await conn.commit();
     conn.release();
     req.flash('success', 'Bulk dispatch via Excel processed successfully.');
-    return res.redirect('/finishingdashboard#bulkDispatchTab');
+    return res.redirect('/finishingdashboard');
   } catch (err) {
     console.error('Error in bulk dispatch via Excel:', err);
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error in bulk dispatch via Excel: ' + err.message);
-    return res.redirect('/finishingdashboard#bulkDispatchTab');
+    return res.redirect('/finishingdashboard');
   }
 });
 
