@@ -26,7 +26,7 @@ const upload = multer({ storage });
 router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    // Fetch approved assignments
+    // Fetch approved assignments for the user
     const [faRows] = await pool.query(`
       SELECT fa.*,
              CASE
@@ -44,19 +44,40 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
       if (fa.stitching_assignment_id) {
         const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
         if (!sd) continue;
-        lotNo = sd.lot_no; sku = sd.sku;
+        lotNo = sd.lot_no;
+        sku = sd.sku;
       } else if (fa.washing_assignment_id) {
         const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
         if (!wd) continue;
-        lotNo = wd.lot_no; sku = wd.sku;
-      } else continue;
+        lotNo = wd.lot_no;
+        sku = wd.sku;
+      } else {
+        continue;
+      }
+
+      // Skip this assignment if finishing_data already exists for this lot_no
       const [[usedCheck]] = await pool.query(`SELECT COUNT(*) as cnt FROM finishing_data WHERE lot_no = ?`, [lotNo]);
       if (usedCheck.cnt > 0) continue;
-      // Here you can also attach cutting information if available.
+      
+      // NEW CODE: Fetch cutting data (remark and sku) from cutting_lots using the lotNo
+      let cuttingRemark = '', cuttingSku = '';
+      if (lotNo) {
+        const [[cutData]] = await pool.query(`SELECT remark, sku FROM cutting_lots WHERE lot_no = ? LIMIT 1`, [lotNo]);
+        if (cutData) {
+          cuttingRemark = cutData.remark || '';
+          cuttingSku = cutData.sku || '';
+        }
+      }
+      
+      // Attach values to the assignment object
       fa.lot_no = lotNo;
       fa.sku = sku;
+      fa.cutting_remark = cuttingRemark;
+      fa.cutting_sku = cuttingSku;
+      
       finalAssignments.push(fa);
     }
+
     const errorMessages = req.flash('error');
     const successMessages = req.flash('success');
     return res.render('finishingDashboard', {
@@ -71,7 +92,6 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
     return res.redirect('/');
   }
 });
-
 /* =============================================================
    2) LIST EXISTING FINISHING_DATA (AJAX)
    ============================================================= */
