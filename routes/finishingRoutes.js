@@ -585,7 +585,7 @@ router.post('/update/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
 
-    let updatedTotal = entry.total_pieces;
+    let updatedTotal = parseFloat(entry.total_pieces);
     for (const lbl of Object.keys(updateSizes)) {
       let increment = parseInt(updateSizes[lbl], 10);
       if (isNaN(increment) || increment < 0) increment = 0;
