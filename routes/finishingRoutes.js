@@ -369,11 +369,11 @@ router.post('/approve/:id', isAuthenticated, isFinishingMaster, async (req, res)
       WHERE id = ? AND user_id = ?
     `, [assignment_remark || null, assignmentId, userId]);
     req.flash('success', 'Assignment approved successfully.');
-    return res.redirect('/finishingdashboard');
+    return res.redirect('/finishingdashboard/approve');
   } catch (err) {
     console.error('Error approving finishing assignment:', err);
     req.flash('error', 'Could not approve: ' + err.message);
-    return res.redirect('/finishingdashboard');
+    return res.redirect('/finishingdashboard/approve');
   }
 });
 
