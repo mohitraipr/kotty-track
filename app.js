@@ -94,6 +94,28 @@ app.use('/', bulkUploadRoutes);
 app.get('/', (req, res) => {
     res.redirect('/login');
 });
+app.get('/test', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Test Page</title>
+            <!-- Google tag (gtag.js) -->
+            <script async src="https://www.googletagmanager.com/gtag/js?id=G-W7PQ6S37K5"></script>
+            <script>
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-W7PQ6S37K5');
+            </script>
+        </head>
+        <body>
+            <h1>Test Completed</h1>
+        </body>
+        </html>
+    `);
+});
 
 // 404 Handler
 app.use((req, res) => {
