@@ -37,7 +37,7 @@ router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
           SELECT lot_no FROM jeans_assembly_data
         )
       ORDER BY sd.created_at DESC
-      LIMIT 10
+      LIMIT 100
     `, [userId]);
     const error = req.flash('error');
     const success = req.flash('success');
@@ -590,7 +590,7 @@ router.get('/list-entries', isAuthenticated, isJeansAssemblyMaster, async (req, 
     const userId = req.session.user.id;
     const offset = parseInt(req.query.offset, 10) || 0;
     const search = req.query.search ? `%${req.query.search}%` : '%';
-    const limit = 10;
+    const limit = 100;
     const [rows] = await pool.query(
       `
       SELECT ja_data.*,
