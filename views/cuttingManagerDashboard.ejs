@@ -1170,6 +1170,11 @@
 
       createLotBtn.disabled = !allFilled;
     }
+
+  document.getElementById('lotForm').addEventListener('submit', function(e) {
+  // Disable the create lot button to prevent multiple submissions.
+  document.getElementById('createLotBtn').disabled = true;
+});
   </script>
 </body>
 </html>
