@@ -300,7 +300,7 @@
                 .join('')}
             </select>
             <button
-              class="btn btn-sm btn-primary"
+              class="assign-btn btn btn-sm btn-primary"
               onclick="assignLot(${lot.cutting_lot_id})"
             >
               <i class="bi bi-send"></i> Assign
@@ -311,11 +311,17 @@
     }
 
     async function assignLot(cuttingLotId) {
+      // Disable all assign buttons to prevent duplicate assignments.
+      const assignButtons = document.querySelectorAll('.assign-btn');
+      assignButtons.forEach(btn => btn.disabled = true);
+
       try {
         const userSelect = document.getElementById(`userSelect_${cuttingLotId}`);
         const userId = userSelect.value;
         if (!userId) {
           showFlash('error', 'Please select a stitching user.');
+          // Re-enable buttons if no user is selected.
+          assignButtons.forEach(btn => btn.disabled = false);
           return;
         }
 
@@ -328,15 +334,19 @@
         const data = await resp.json();
         if (data.error) {
           showFlash('error', data.error);
+          // Re-enable assign buttons on error.
+          assignButtons.forEach(btn => btn.disabled = false);
         } else if (data.success) {
           showFlash('success', data.message || 'Assigned successfully.');
-          // Remove the lot from allLots
+          // Remove the assigned lot from allLots and re-render the accordion.
           allLots = allLots.filter(l => l.cutting_lot_id !== cuttingLotId);
           renderAccordion(allLots);
         }
       } catch (error) {
         console.error('Error assigning lot:', error);
         showFlash('error', 'Server error assigning lot.');
+        // Re-enable assign buttons in case of server error.
+        assignButtons.forEach(btn => btn.disabled = false);
       }
     }
 
