@@ -20,28 +20,23 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <!-- Tabulator CSS (for the Excel-like Leftovers grid) -->
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css">
-  <!-- Excel-like Tabulator theme styling -->
+
+  <!-- Inlined CSS for layout, theming, transitions -->
   <style>
-    /* Global resets and transitions */
-    * { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease; }
+    /* Global transitions for dark mode or other changes */
+    * {
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
     body {
       font-family: 'Poppins', sans-serif;
+      margin: 0;
+      padding-top: 70px; /* for fixed navbar offset */
+      padding-bottom: 3rem;
       background-color: var(--background-color);
       color: var(--text-color);
-      margin: 0;
-      padding-bottom: 3rem;
-      padding-top: 70px;
       transition: background-color 0.3s ease, color 0.3s ease;
     }
-    a { text-decoration: none; color: inherit; }
-
-    /* Animations */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* CSS Variables */
+    /* Default color variables */
     :root {
       --primary-color: #0d6efd;
       --secondary-color: #6c757d;
@@ -53,10 +48,8 @@
       --card-bg: #ffffff;
       --panel-border: #ddd;
       --hover-bg: #fafafa;
-      --table-head-bg: #f2f2f2;
-      --stat-gradient-start: #ffffff;
-      --stat-gradient-end: #f1f1f1;
     }
+    /* Dark mode overrides */
     .dark-mode {
       --primary-color: #0d6efd;
       --secondary-color: #a1a7b3;
@@ -68,12 +61,9 @@
       --card-bg: #272a2e;
       --panel-border: #33373b;
       --hover-bg: #2e3237;
-      --table-head-bg: #2c2f33;
-      --stat-gradient-start: #33373b;
-      --stat-gradient-end: #272a2e;
     }
 
-    /* Top Navigation Bar */
+    /* Navbar at top (fixed) */
     .top-nav {
       background: linear-gradient(90deg, var(--nav-bg) 0%, #2b2d30 100%);
       border-bottom: 3px solid var(--nav-border);
@@ -94,92 +84,89 @@
       font-size: 1rem;
       margin-right: 12px;
     }
-    .top-nav .nav-link:hover { 
+    .top-nav .nav-link:hover {
       color: #ced4da !important;
       transform: scale(1.05);
     }
-    .top-nav .navbar-toggler { border-color: rgba(248,249,250,0.3); }
-    .top-nav .navbar-toggler-icon { filter: invert(1); }
-    .dark-mode-toggle {
-      cursor: pointer;
-      font-size: 1.2rem;
-      color: var(--nav-text) !important;
-    }
-    
-    /* Header */
+
+    /* Portal header at top of page */
     .portal-header {
       text-align: center;
       margin-top: 1rem;
       margin-bottom: 2rem;
-      animation: fadeIn 0.6s ease-out;
     }
     .portal-header h1 {
       font-size: 2rem;
       font-weight: 600;
-      color: var(--text-color);
     }
     .portal-header p {
-      font-size: 1rem;
       color: var(--secondary-color);
     }
-    
-    /* Stat Cards */
+
+    /* Stat boxes row (cards) */
     .stat-box {
-      background: linear-gradient(135deg, var(--stat-gradient-start), var(--stat-gradient-end));
-      border: none;
+      background: #ffffff;
       border-radius: 8px;
       text-align: center;
       padding: 1rem;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      animation: fadeIn 0.6s ease-out;
     }
     .stat-box .stat-title {
       font-size: 1rem;
-      font-weight: 500;
-      margin-bottom: 0.3rem;
       color: var(--secondary-color);
+      margin-bottom: 0.3rem;
     }
     .stat-box .stat-value {
       font-size: 1.6rem;
       font-weight: 600;
       color: var(--primary-color);
     }
-    
-    /* Data Panels */
+
+    /* Data panels for general content sections */
     .data-panel {
       background-color: var(--card-bg);
       border: 1px solid var(--panel-border);
       border-radius: 8px;
       margin-bottom: 2rem;
-      overflow: hidden;
-      animation: fadeIn 0.6s ease-out;
     }
     .data-panel .panel-header {
       padding: 0.75rem 1rem;
       background-color: var(--background-color);
       border-bottom: 1px solid var(--panel-border);
       font-weight: 500;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
       font-size: 1.1rem;
     }
-    .data-panel .panel-body { padding: 1rem; }
-    
-    /* Tabs */
-    .nav-tabs .nav-link {
-      color: var(--text-color);
-      font-weight: 500;
-      border: 1px solid transparent;
+    .data-panel .panel-body {
+      padding: 1rem;
     }
-    .nav-tabs .nav-link.active {
-      background-color: var(--card-bg);
-      color: var(--primary-color);
-      border-bottom: none;
+
+    /* Subtle hover on clickable items */
+    button:hover, a.nav-link:hover {
+      transform: translateY(-2px);
     }
-    .tab-content .tab-pane { margin-top: 1.5rem; animation: fadeIn 0.5s ease-in-out; }
-    
-    /* Modal Styling with subtle slide down */
+
+    /* leftover-value badges in Tabulator */
+    .leftover-value {
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      font-weight: 600;
+      margin-right: 5px;
+    }
+    .leftover-zero {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .leftover-nonzero {
+      background-color: #cce5ff;
+      color: #004085;
+    }
+    .leftover-unassigned {
+      color: #dc3545;
+      font-weight: 700;
+    }
+
+    /* Crisp modals with a slight slide effect */
     .modal-content {
       border-radius: 8px;
       border: 1px solid var(--panel-border);
@@ -189,7 +176,9 @@
       background-color: var(--background-color);
       border-bottom: 1px solid var(--panel-border);
     }
-    .modal-footer { border-top: 1px solid var(--panel-border); }
+    .modal-footer {
+      border-top: 1px solid var(--panel-border);
+    }
     .modal.fade .modal-dialog {
       transform: translateY(-50px);
       transition: transform 0.3s ease-out;
@@ -197,34 +186,27 @@
     .modal.fade.show .modal-dialog {
       transform: translateY(0);
     }
-    
-    /* Table actions and leftover value badges */
-    .actions-col { white-space: nowrap; width: 120px; text-align: center; }
-    .leftover-value { padding: 3px 8px; border-radius: 4px; display: inline-block; font-weight: 600; margin-right: 5px; }
-    .leftover-zero { background-color: #f8d7da; color: #721c24; }
-    .leftover-nonzero { background-color: #cce5ff; color: #004085; }
-    .leftover-unassigned { color: #dc3545; font-weight: 700; }
-    
-    /* Button Hover Effects */
-    button:hover {
-      transform: translateY(-2px);
-    }
   </style>
 </head>
 <body>
-  <!-- TOP NAV BAR -->
+  <!-- NAVIGATION BAR -->
   <nav class="navbar navbar-expand-lg top-nav">
     <div class="container-fluid">
+      <!-- Brand -->
       <a class="navbar-brand nav-brand" href="#">
-        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="Brand Logo" width="30" height="30" class="d-inline-block align-text-top">
+        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" 
+             alt="Brand Logo" width="30" height="30" class="d-inline-block align-text-top">
         Kotty
       </a>
+      <!-- Dark Mode Toggle Button -->
       <button id="toggleDarkMode" class="btn btn-outline-light me-2">
         <i class="bi bi-sun"></i>
       </button>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation" aria-controls="mainNavigation" aria-expanded="false" aria-label="Toggle navigation">
+      <!-- Navbar Toggler for Mobile -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation">
         <span class="navbar-toggler-icon"></span>
       </button>
+      <!-- Right-Side Nav Links -->
       <div class="collapse navbar-collapse" id="mainNavigation">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
@@ -237,6 +219,7 @@
               <i class="bi bi-file-earmark-arrow-down"></i> Leftover CSV
             </a>
           </li>
+          <!-- Additional Tools/Links -->
           <li class="nav-item">
             <a class="nav-link" href="/search-dashboard" data-bs-toggle="tooltip" title="Search Module">
               <i class="bi bi-search"></i> Search
@@ -250,6 +233,11 @@
           <li class="nav-item">
             <a class="nav-link" href="/assign-to-washing" data-bs-toggle="tooltip" title="Assign Washing">
               <i class="bi bi-arrow-right-circle"></i> Washing
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/operator/pendency-report/stitching" data-bs-toggle="tooltip" title="Stitching Pendency">
+              <i class="bi bi-journal-arrow-down"></i> Pendency
             </a>
           </li>
           <li class="nav-item">
@@ -267,7 +255,7 @@
     </div>
   </nav>
 
-  <!-- HEADER -->
+  <!-- MAIN HEADER -->
   <div class="portal-header">
     <h1>Kotty Operator Dashboard</h1>
     <p class="text-muted">Enhanced Production &amp; Leftover Overview</p>
@@ -303,15 +291,15 @@
     </div>
   </div>
 
+  <!-- SKU INSIGHTS -->
   <div class="container">
-    <!-- SKU INSIGHTS WITH DATE RANGE FILTER INSIDE THE CARD -->
     <div class="data-panel mb-4">
       <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
         <div class="mb-2 mb-md-0">
           <i class="bi bi-bar-chart-line"></i>
           <span class="h5 mb-0">SKU Insights</span>
         </div>
-        <!-- Date Range Filter -->
+        <!-- Date Range Filter form -->
         <div>
           <form method="GET" action="/operator/dashboard" class="row g-2 align-items-center">
             <div class="col-auto">
@@ -341,8 +329,10 @@
                 </tr>
               </thead>
               <tbody>
-                <% advancedAnalytics.top10SKUs.forEach(function(item){ 
-                     var pct = advancedAnalytics.totalCut > 0 ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2) : '0.00';
+                <% advancedAnalytics.top10SKUs.forEach(function(item) {
+                     var pct = (advancedAnalytics.totalCut > 0)
+                               ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                               : '0.00';
                 %>
                   <tr>
                     <td><%= item.sku %></td>
@@ -364,8 +354,10 @@
                 </tr>
               </thead>
               <tbody>
-                <% advancedAnalytics.bottom10SKUs.forEach(function(item){
-                     var pct = advancedAnalytics.totalCut > 0 ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2) : '0.00';
+                <% advancedAnalytics.bottom10SKUs.forEach(function(item) {
+                     var pct = (advancedAnalytics.totalCut > 0)
+                               ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                               : '0.00';
                 %>
                   <tr>
                     <td><%= item.sku %></td>
@@ -380,7 +372,7 @@
       </div>
     </div>
 
-    <!-- TABS -->
+    <!-- TABS for Leftovers, Kit Details, and Notes -->
     <ul class="nav nav-tabs" id="inventoryTabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="leftover-tab" data-bs-toggle="tab" data-bs-target="#leftoverPanel" type="button" role="tab" aria-controls="leftoverPanel" aria-selected="true">
@@ -399,17 +391,18 @@
       </li>
     </ul>
 
+    <!-- Tab Content -->
     <div class="tab-content">
-      <!-- Leftovers Tab using Tabulator -->
+      <!-- Leftovers Tab (Tabulator) -->
       <div class="tab-pane fade show active" id="leftoverPanel" role="tabpanel" aria-labelledby="leftover-tab">
         <div class="data-panel mt-3">
           <div class="panel-header">
             <i class="bi bi-box2"></i> All Leftover Items (Read‑Only)
           </div>
           <div class="panel-body">
-            <!-- Radio Buttons for Lot Type Filtering -->
+            <!-- Radio Buttons for filtering by user type (Akshay vs. Non-Akshay) -->
             <div class="mb-3">
-              <label class="form-check-label me-2">Show: </label>
+              <label class="form-check-label me-2">Show:</label>
               <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="lotType" id="allLots" value="all" checked>
                 <label class="form-check-label" for="allLots">All</label>
@@ -423,22 +416,23 @@
                 <label class="form-check-label" for="nonAkshayLots">Non-Akshay</label>
               </div>
             </div>
-            <!-- Global Search and Columns Chooser Button -->
+            <!-- Global Search + Column Chooser -->
             <div class="mb-3 d-flex justify-content-between align-items-center">
               <input id="globalSearch" type="text" class="form-control me-2" placeholder="Global search in Leftovers...">
               <button id="columnChooser" class="btn btn-outline-secondary">Columns</button>
             </div>
-            <!-- Container for the Tabulator grid -->
+            <!-- Tabulator container -->
             <div id="leftoverTable"></div>
           </div>
         </div>
       </div>
 
-      <!-- Kit Details Tab (using DataTables) -->
+      <!-- Kit Details Tab (DataTables) -->
       <div class="tab-pane fade" id="kitDetailsPanel" role="tabpanel" aria-labelledby="kitDetails-tab">
         <div class="data-panel mt-3">
           <div class="panel-header"><i class="bi bi-card-list"></i> All Kit Details</div>
           <div class="panel-body">
+            <!-- Search box for dataTables kit table -->
             <div class="mb-3">
               <input type="text" id="filterKitDetails" class="form-control" placeholder="Search kit details...">
             </div>
@@ -466,12 +460,13 @@
                   </tr>
                 </thead>
                 <tbody>
+                  <!-- EJS loop over all lotDetails -->
                   <% Object.keys(lotDetails).forEach(function(kitNumber) {
-                         var kit = lotDetails[kitNumber];
-                         var cLot = kit.cuttingLot;
-                         if(!cLot) return;
-                         var totalPieces = cLot.total_pieces || 0;
-                         var creator = cLot.created_by || "N/A";
+                       var kit = lotDetails[kitNumber];
+                       var cLot = kit.cuttingLot;
+                       if(!cLot) return;
+                       var totalPieces = cLot.total_pieces || 0;
+                       var creator = cLot.created_by || "N/A";
                   %>
                     <tr>
                       <td><%= kitNumber %></td>
@@ -491,9 +486,11 @@
                       <td><%= kit.totalPiecesLeft %></td>
                       <td><%= kit.dispatchLeftover %></td>
                       <td>
+                        <!-- Button to open modal for editing kit data -->
                         <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal-<%= kitNumber %>">
                           <i class="bi bi-pencil-square"></i> Modify
                         </button>
+                        <!-- Link to CSV export for a single lot -->
                         <a class="btn btn-sm btn-success ms-2" href="/operator/dashboard/lot-tracking/<%= kitNumber %>/download" target="_blank">
                           <i class="bi bi-arrow-bar-down"></i> CSV
                         </a>
@@ -515,11 +512,10 @@
           </div>
           <div class="panel-body">
             <ul>
-              <li><strong>Hidden Category + Column Show/Hide:</strong> Rows are filtered by a hidden “Category” column. Additionally, for Non‑Akshay lots, certain columns (Assembly and Wash, along with their operator columns) are hidden.</li>
-              <li><strong>Total Leftover:</strong> Computed as: <code>Total Leftover = cutting_lots.total_pieces – sum(finishing_dispatches.quantity)</code>. If a lot was never assigned for finishing, the total left remains the full total pieces.</li>
-              <li><strong>Dispatch Leftover:</strong> Computed as: <code>Dispatch Leftover = sum(finishing_data.total_pieces) – sum(finishing_dispatches.quantity)</code>. If no finishing data exists, it shows "Not Assigned".</li>
-              <li><strong>Draggable Columns:</strong> All columns (outside of the Leftovers grid) are draggable using DataTables ColReorder.</li>
-              <li><strong>Dark Mode:</strong> Settings are saved in localStorage.</li>
+              <li><strong>Hidden Category + Column Show/Hide:</strong> The “Assembly” and “Wash” columns are hidden for Non‑Akshay lots, etc.</li>
+              <li><strong>Total Leftover:</strong> <code>cutting_lots.total_pieces – sum(finishing_dispatches.quantity)</code></li>
+              <li><strong>Dispatch Leftover:</strong> <code>sum(finishing_data.total_pieces) – sum(finishing_dispatches.quantity)</code></li>
+              <li><strong>Dark Mode:</strong> Toggled with localStorage; columns are draggable using DataTables ColReorder.</li>
             </ul>
           </div>
         </div>
@@ -560,7 +556,8 @@
             </tr>
           </thead>
           <tbody>
-            <% Object.keys(operatorPerformance).forEach(function(uid) { 
+            <!-- Summaries from operatorPerformance object -->
+            <% Object.keys(operatorPerformance).forEach(function(uid) {
                  var opObj = operatorPerformance[uid];
             %>
               <tr>
@@ -581,8 +578,9 @@
   <% Object.keys(lotDetails).forEach(function(kitNumber) {
        var kitData = lotDetails[kitNumber];
        var cLot = kitData.cuttingLot;
-       var totalPieces = cLot ? cLot.total_pieces : 0;
-       var existingRemark = cLot ? (cLot.remark || '') : '';
+       if(!cLot) return;
+       var totalPieces = cLot.total_pieces || 0;
+       var existingRemark = cLot.remark || '';
   %>
   <div class="modal fade" id="editModal-<%= kitNumber %>" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -602,7 +600,7 @@
               <label class="form-label">Remarks</label>
               <textarea class="form-control" name="remark" rows="3"><%= existingRemark %></textarea>
             </div>
-            <small class="text-muted">Override the number of pieces or adjust remarks as necessary.</small>
+            <small class="text-muted">You can override the piece count or adjust remarks as needed.</small>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -618,15 +616,16 @@
   </div>
   <% }); %>
 
-  <!-- Column Chooser Modal -->
+  <!-- COLUMN CHOOSER MODAL (for Tabulator) -->
   <div class="modal fade" id="columnChooserModal" tabindex="-1" aria-labelledby="columnChooserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="columnChooserModalLabel">Select Columns</h5>
-          <button type="button" class="btn btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <!-- Dynamically generated content from leftoverData columns -->
           <div id="columnChooserContent"></div>
         </div>
         <div class="modal-footer">
@@ -636,7 +635,7 @@
     </div>
   </div>
 
-  <!-- JS: jQuery, Bootstrap, DataTables, Tabulator -->
+  <!-- Scripts: jQuery, Bootstrap, DataTables, Tabulator -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -644,56 +643,35 @@
   <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
   <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
   <script src="https://cdn.datatables.net/colreorder/1.6.2/js/dataTables.colReorder.min.js"></script>
-  <!-- Tabulator JS -->
   <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
   <script>
-    // Custom formatter: show leftover with operator info for columns where desired
-    function formatLeftoverWithOperator(cell, formatterParams, onRendered) {
-      var value = cell.getValue();
-      var row = cell.getRow().getData();
-      var operatorField = formatterParams.operatorField;
-      var operator = row[operatorField] || 'N/A';
-      if(typeof value === "number"){
-         var cls = value === 0 ? "leftover-zero" : "leftover-nonzero";
-         var html = '<span class="leftover-value ' + cls + '">' + value + '</span>';
-         if(operatorField && operator && operator.toLowerCase() !== "n/a"){
-            html += ' <small class="text-muted">(User: ' + operator + ')</small>';
-         } else if(operatorField){
-            html += ' <small class="leftover-unassigned">(Unassigned)</small>';
-         }
-         return html;
-      }
-      return value;
+    /*************************************************
+     * 1) Initialize Dark Mode Toggle from localStorage
+     *************************************************/
+    const body = document.body;
+    const toggleDarkModeBtn = document.getElementById('toggleDarkMode');
+    // read preference
+    const darkModePreference = localStorage.getItem('kottyDarkMode') === 'true';
+    // apply if needed
+    if(darkModePreference){
+      body.classList.add('dark-mode');
+      toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
+    } else {
+      toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
     }
-    // Simple formatter for columns without operator info
-    function formatLeftover(cell, formatterParams, onRendered) {
-      var value = cell.getValue();
-      if(typeof value === "number"){
-        var cls = value === 0 ? "leftover-zero" : "leftover-nonzero";
-        return '<span class="leftover-value ' + cls + '">' + value + '</span>';
-      }
-      return value;
-    }
-
-    // Global search: use the precomputed searchString field
-    function customGlobalFilter(data, filterParams){
-      if(data.searchString && data.searchString.toLowerCase().indexOf(filterParams.toLowerCase()) > -1){
-         return true;
-      }
-      for(var key in data){
-        if(data[key] && data[key].toString().toLowerCase().indexOf(filterParams.toLowerCase()) > -1){
-          return true;
-        }
-      }
-      return false;
-    }
-
-    // Initialize Bootstrap tooltips
-    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el){
-      new bootstrap.Tooltip(el);
+    // handle toggle click
+    toggleDarkModeBtn.addEventListener('click', function(){
+      body.classList.toggle('dark-mode');
+      localStorage.setItem('kottyDarkMode', body.classList.contains('dark-mode'));
+      toggleDarkModeBtn.innerHTML = body.classList.contains('dark-mode')
+        ? '<i class="bi bi-moon"></i>'
+        : '<i class="bi bi-sun"></i>';
     });
 
-    // Initialize DataTables for Kit Details Table
+    /*************************************************
+     * 2) Initialize DataTables for the "Kit Details" table
+     *************************************************/
     $(document).ready(function(){
       var kitDetailsDT = $('#kitDetailsTable').DataTable({
         responsive: true,
@@ -703,40 +681,55 @@
         colReorder: true,
         language: { search: "Search kits:" }
       });
+      // custom filter
       $('#filterKitDetails').on('keyup', function(){
         kitDetailsDT.search(this.value).draw();
       });
-      $('.modal').on('shown.bs.modal', function(){
-        $(this).find('input:first').trigger('focus');
+      // init tooltips
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el){
+        new bootstrap.Tooltip(el);
       });
     });
 
-    // Dark Mode Toggle using Button (with dynamic icon swap)
-    const body = document.body;
-    const toggleDarkModeBtn = document.getElementById('toggleDarkMode');
-    const darkModePreference = localStorage.getItem('kottyDarkMode') === 'true';
-    if(darkModePreference){ 
-      body.classList.add('dark-mode'); 
-      toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
-    } else {
-      toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
-    }
-    toggleDarkModeBtn.addEventListener('click', function(){
-      body.classList.toggle('dark-mode');
-      localStorage.setItem('kottyDarkMode', body.classList.contains('dark-mode'));
-      if (body.classList.contains('dark-mode')) {
-        toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
-      } else {
-        toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
-      }
-    });
+    /*************************************************
+     * 3) Tabulator for "Leftovers" – leftoverData and columns
+     *************************************************/
+    // Custom leftover formatters
+    function formatLeftoverWithOperator(cell, formatterParams){
+      var value = cell.getValue();
+      var row = cell.getRow().getData();
+      var operatorField = formatterParams.operatorField;
+      var operator = row[operatorField] || 'N/A';
 
-    // Prepare leftover data using JSON.stringify (including operator names, SKU, and a precomputed searchString)
+      // if numeric leftover
+      if(typeof value === "number"){
+        var cls = (value === 0) ? "leftover-zero" : "leftover-nonzero";
+        var html = '<span class="leftover-value ' + cls + '">' + value + '</span>';
+        if(operatorField && operator && operator.toLowerCase() !== "n/a"){
+          html += ' <small class="text-muted">(User: ' + operator + ')</small>';
+        } else if(operatorField){
+          html += ' <small class="leftover-unassigned">(Unassigned)</small>';
+        }
+        return html;
+      }
+      return value; // string such as "Denied", "Waiting", etc.
+    }
+    function formatLeftover(cell){
+      var value = cell.getValue();
+      if(typeof value === "number"){
+        var cls = (value === 0) ? "leftover-zero" : "leftover-nonzero";
+        return '<span class="leftover-value ' + cls + '">' + value + '</span>';
+      }
+      return value;
+    }
+
+    // leftoverData from server side
     var leftoverData = <%- JSON.stringify(
       Object.keys(lotDetails).map(function(kitNumber){
         var kit = lotDetails[kitNumber];
         var sku = kit.cuttingLot ? kit.cuttingLot.sku : 'N/A';
         var totalPieces = kit.cuttingLot ? kit.cuttingLot.total_pieces : 'N/A';
+        // build a search string that includes relevant fields
         var searchString = kitNumber + " " + sku + " " + totalPieces + " " +
                            kit.leftovers.leftoverStitch + " " +
                            kit.leftovers.leftoverJeans + " " +
@@ -749,7 +742,7 @@
         return {
           kitNumber: kitNumber,
           sku: sku,
-          totalPieces: totalPieces,
+          totalPieces: (typeof totalPieces === 'number' ? totalPieces : 0),
           leftoverStitch: kit.leftovers.leftoverStitch,
           leftoverAssembly: kit.leftovers.leftoverJeans,
           leftoverWash: kit.leftovers.leftoverWash,
@@ -767,44 +760,74 @@
       })
     ) %>;
 
-    // Define Tabulator columns for the Leftovers grid:
+    // leftoverColumns definition
     var leftoverColumns = [
       {title:"Kit #", field:"kitNumber", headerFilter:"input", width:100},
       {title:"SKU", field:"sku", headerFilter:"input", width:150},
       {title:"Total Pieces", field:"totalPieces", headerFilter:"input", width:120},
-      {title:"Stitch Leftover", field:"leftoverStitch", headerFilter:"input", width:140,
-         formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "stitchingOperator" }
+      {
+        title:"Stitch Leftover", 
+        field:"leftoverStitch", 
+        headerFilter:"input", 
+        width:140,
+        formatter: formatLeftoverWithOperator, 
+        formatterParams: { operatorField: "stitchingOperator" }
       },
-      {title:"Assembly Leftover", field:"leftoverAssembly", headerFilter:"input", width:140, visible:true,
-         formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "assemblyOperator" }
+      {
+        title:"Assembly Leftover", 
+        field:"leftoverAssembly", 
+        headerFilter:"input", 
+        width:140, 
+        formatter: formatLeftoverWithOperator, 
+        formatterParams: { operatorField: "assemblyOperator" }
       },
-      {title:"Wash Leftover", field:"leftoverWash", headerFilter:"input", width:140, visible:true,
-         formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "washOperator" }
+      {
+        title:"Wash Leftover", 
+        field:"leftoverWash", 
+        headerFilter:"input", 
+        width:140, 
+        formatter: formatLeftoverWithOperator, 
+        formatterParams: { operatorField: "washOperator" }
       },
-      {title:"Finish Leftover", field:"leftoverFinish", headerFilter:"input", width:140,
-         formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "finishOperator" }
+      {
+        title:"Finish Leftover", 
+        field:"leftoverFinish", 
+        headerFilter:"input", 
+        width:140,
+        formatter: formatLeftoverWithOperator, 
+        formatterParams: { operatorField: "finishOperator" }
       },
       {title:"Remarks", field:"remark", headerFilter:"input", width:150},
-      {title:"Total Leftover", field:"totalPiecesLeft", headerFilter:"input", width:140, formatter: formatLeftover},
-      {title:"Dispatch Leftover", field:"dispatchLeftover", headerFilter:"input", width:140, formatter: formatLeftover}
+      {
+        title:"Total Leftover", 
+        field:"totalPiecesLeft", 
+        headerFilter:"input", 
+        width:140, 
+        formatter: formatLeftover
+      },
+      {
+        title:"Dispatch Leftover", 
+        field:"dispatchLeftover", 
+        headerFilter:"input", 
+        width:140, 
+        formatter: formatLeftover
+      }
     ];
 
-    // Initialize Tabulator for the Leftovers grid with local pagination (100 per page)
+    // build Tabulator table
     var table = new Tabulator("#leftoverTable", {
       data: leftoverData,
-      layout:"fitColumns",
-      movableColumns:true,
-      height:"400px",
-      pagination:"local",
+      layout: "fitColumns",
+      movableColumns: true,
+      height: "400px",
+      pagination: "local",
       paginationSize: 100,
       columns: leftoverColumns,
-      placeholder:"No Data Available",
-      initialFilter:[
-        {field:"searchString", type:"like", value:""}
-      ]
+      placeholder: "No Data Available",
+      initialFilter: [{field: "searchString", type: "like", value: ""}]
     });
 
-    // Global search for Leftovers:
+    // global search
     document.getElementById("globalSearch").addEventListener("keyup", function(){
       var keyword = this.value;
       if(keyword === ""){
@@ -814,34 +837,31 @@
       }
     });
 
-    // Wait for the table to be built before setting column filters
+    // on table built => apply radio filter
     table.on("tableBuilt", function(){
       updateLeftoverFilter();
     });
 
-    // Radio button filtering and column visibility for Leftovers
+    // radio filtering (akshay vs non-akshay vs all)
     function updateLeftoverFilter(){
-      var mode = document.querySelector('input[name="lotType"]:checked') ? document.querySelector('input[name="lotType"]:checked').value : "all";
+      var mode = document.querySelector('input[name="lotType"]:checked') 
+                 ? document.querySelector('input[name="lotType"]:checked').value 
+                 : "all";
       if(mode === "all"){
         table.clearFilter("lotType");
-        var colAssembly = table.getColumn("leftoverAssembly");
-        if(colAssembly){ colAssembly.show(); }
-        var colWash = table.getColumn("leftoverWash");
-        if(colWash){ colWash.show(); }
+        table.getColumn("leftoverAssembly")?.show();
+        table.getColumn("leftoverWash")?.show();
       } else if(mode === "akshay"){
         table.setFilter("lotType", "=", "akshay");
-        var colAssembly = table.getColumn("leftoverAssembly");
-        if(colAssembly){ colAssembly.show(); }
-        var colWash = table.getColumn("leftoverWash");
-        if(colWash){ colWash.show(); }
-      } else if(mode === "non-akshay"){
+        table.getColumn("leftoverAssembly")?.show();
+        table.getColumn("leftoverWash")?.show();
+      } else {
+        // non-akshay
         table.setFilter(function(data){
           return data.lotType !== "akshay";
         });
-        var colAssembly = table.getColumn("leftoverAssembly");
-        if(colAssembly){ colAssembly.hide(); }
-        var colWash = table.getColumn("leftoverWash");
-        if(colWash){ colWash.hide(); }
+        table.getColumn("leftoverAssembly")?.hide();
+        table.getColumn("leftoverWash")?.hide();
       }
       table.redraw();
     }
@@ -849,7 +869,7 @@
       radio.addEventListener('change', updateLeftoverFilter);
     });
 
-    // Column Chooser: Populate and show modal on button click
+    // Column Chooser => displays checkboxes for toggling columns
     document.getElementById('columnChooser').addEventListener('click', function() {
       let columns = table.getColumns();
       let container = document.getElementById('columnChooserContent');
@@ -859,28 +879,34 @@
         if(field) {
           let title = col.getDefinition().title;
           let isVisible = col.isVisible();
+          // build checkbox
           let checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.checked = isVisible;
           checkbox.setAttribute('data-field', field);
-          checkbox.classList.add('form-check-input', 'me-2');
+          checkbox.classList.add('form-check-input','me-2');
+
           let label = document.createElement('label');
           label.classList.add('form-check-label');
           label.textContent = title;
+
           let div = document.createElement('div');
-          div.classList.add('form-check', 'mb-2');
+          div.classList.add('form-check','mb-2');
           div.appendChild(checkbox);
           div.appendChild(label);
+
           container.appendChild(div);
+
           checkbox.addEventListener('change', function(){
-             if(this.checked) {
-               table.getColumn(field).show();
-             } else {
-               table.getColumn(field).hide();
-             }
+            if(this.checked) {
+              table.getColumn(field).show();
+            } else {
+              table.getColumn(field).hide();
+            }
           });
         }
       });
+      // show the modal
       var modal = new bootstrap.Modal(document.getElementById('columnChooserModal'));
       modal.show();
     });
