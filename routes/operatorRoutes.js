@@ -328,7 +328,7 @@ async function computeAdvancedAnalytics(startDate, endDate) {
   // (D) stitchApprovalRate => ratio of approved stitching_assignments to total
   const [[stTotals]] = await pool.query(`
     SELECT COUNT(*) AS totalAssigned,
-           SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) AS approvedCount
+           SUM(CASE WHEN isApproved=1 THEN 1 ELSE 0 END) AS approvedCount
     FROM stitching_assignments
   `);
   if(stTotals.totalAssigned > 0) {
