@@ -1,0 +1,229 @@
+<!-- operatorStitchingPendencyReport.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Operator – Stitching Pendency Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0">
+  <!-- Bootstrap CSS & Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Google Font: Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f8f9fa;
+      color: #343a40;
+      margin: 0;
+      padding-bottom: 2rem;
+      padding-top: 70px;
+    }
+    .navbar-brand { font-size: 1.5rem; font-weight: 600; }
+    .nav-link { color: #fff !important; }
+    .nav-link:hover { background-color: rgba(255,255,255,0.1); }
+    .header-container {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .header-container h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+    .header-container p {
+      color: #6c757d;
+    }
+    .card {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+    .card-header {
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+    }
+    .table thead th {
+      background-color: #343a40;
+      color: #fff;
+    }
+    .progress {
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-clipboard-data"></i> Pendency
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarPendency">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarPendency">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/operator/dashboard">
+              <i class="bi bi-arrow-left-circle"></i> Main Dashboard
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/logout">
+              <i class="bi bi-box-arrow-left"></i> Logout
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HEADER -->
+  <div class="container header-container mt-4">
+    <h1>Stitching Pendency Dashboard</h1>
+    <p class="lead">Overview of Pending and Completed Assignments for All Stitching Users</p>
+  </div>
+
+  <div class="container">
+    <!-- SUMMARY FOR ALL STITCHING USERS -->
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-bar-chart-line"></i> All Stitching Users Summary</h4>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Total Assignments</th>
+                <th>Completed</th>
+                <th>Pending</th>
+                <th>Completion Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% usersSummary.forEach(function(user) { 
+                   const rate = user.total_assignments > 0 
+                                ? ((user.completed_assignments / user.total_assignments) * 100).toFixed(0)
+                                : 0;
+              %>
+              <tr>
+                <td><%= user.username %></td>
+                <td><%= user.total_assignments %></td>
+                <td><%= user.completed_assignments %></td>
+                <td><%= user.pending_assignments %></td>
+                <td style="max-width: 200px;">
+                  <div class="progress">
+                    <div class="progress-bar bg-success" role="progressbar"
+                      style="width: <%= rate %>%;" aria-valuenow="<%= rate %>"
+                      aria-valuemin="0" aria-valuemax="100">
+                      <%= rate %>%
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAILED VIEW FOR A SELECTED USER -->
+    <div class="card">
+      <div class="card-header bg-secondary text-white">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+          <h4 class="mb-2 mb-md-0">
+            <i class="bi bi-person-lines-fill"></i> Detailed Report
+          </h4>
+          <!-- USER SELECTION FORM -->
+          <form method="GET" action="/operator/pendency-report/stitching" class="d-flex align-items-center">
+            <select name="user_id" class="form-select me-2" style="min-width:200px;">
+              <option value="">-- Select User --</option>
+              <% usersSummary.forEach(function(user) { %>
+                <option value="<%= user.user_id %>" <%= (query.user_id == user.user_id ? 'selected' : '') %>>
+                  <%= user.username %>
+                </option>
+              <% }); %>
+            </select>
+            <button type="submit" class="btn btn-outline-light">
+              <i class="bi bi-search"></i> View
+            </button>
+          </form>
+        </div>
+      </div>
+      <div class="card-body">
+        <% if (selectedUserId) { %>
+          <div class="mb-3">
+            <h5>Summary for Selected User</h5>
+            <ul class="list-group list-group-flush mb-3">
+              <li class="list-group-item">
+                <strong>Total Assigned Pieces:</strong> <%= detailedSummary.totalAssigned %>
+              </li>
+              <li class="list-group-item">
+                <strong>Total Pending Pieces:</strong> <%= detailedSummary.totalPending %>
+              </li>
+            </ul>
+            <a href="/operator/pendency-report/stitching/download?user_id=<%= selectedUserId %>" class="btn btn-success">
+              <i class="bi bi-file-earmark-excel"></i> Download Excel
+            </a>
+          </div>
+          <% if (detailedAssignments.length > 0) { %>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th>Lot No</th>
+                    <th>Total Pieces</th>
+                    <th>Stitched</th>
+                    <th>Pending</th>
+                    <th>Assigned On</th>
+                    <th>Size Breakdown</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% detailedAssignments.forEach(function(asg) { %>
+                    <tr>
+                      <td><%= asg.lot_no %></td>
+                      <td><%= asg.total_pieces %></td>
+                      <td><%= asg.stitched %></td>
+                      <td><%= asg.pending %></td>
+                      <td><%= new Date(asg.assigned_on).toLocaleString() %></td>
+                      <td>
+                        <% if (asg.sizes && asg.sizes.length) { %>
+                          <ul class="mb-0">
+                            <% asg.sizes.forEach(function(sz) { %>
+                              <li>
+                                <strong><%= sz.size_label %></strong>:
+                                <%= sz.stitched %> / <%= sz.total %> stitched,
+                                <%= sz.pending %> pending
+                              </li>
+                            <% }); %>
+                          </ul>
+                        <% } else { %>
+                          N/A
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <p class="text-center">No detailed assignments found for the selected user.</p>
+          <% } %>
+        <% } else { %>
+          <p class="text-center">Select a user from the dropdown above to view detailed assignment data.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOOTSTRAP JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
