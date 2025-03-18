@@ -51,15 +51,15 @@ async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
 
   // 3) leftoverStitch logic:
   const [stAssignmentRows] = await pool.query(
-    "SELECT is_approved FROM stitching_assignments sa JOIN cutting_lots c ON sa.cutting_lot_id = c.id WHERE c.lot_no = ? ORDER BY sa.assigned_on DESC LIMIT 1",
+    "SELECT isApproved FROM stitching_assignments sa JOIN cutting_lots c ON sa.cutting_lot_id = c.id WHERE c.lot_no = ? ORDER BY sa.assigned_on DESC LIMIT 1",
     [lot_no]
   );
   let leftoverStitch;
   if (stAssignmentRows.length) {
     const stAssn = stAssignmentRows[0];
-    if (stAssn.is_approved === null) {
+    if (stAssn.isApproved === null) {
       leftoverStitch = "Waiting for approval";
-    } else if (stAssn.is_approved == 0) {
+    } else if (stAssn.isApproved == 0) {
       leftoverStitch = "Denied";
     } else {
       leftoverStitch = totalCut - totalStitched;
