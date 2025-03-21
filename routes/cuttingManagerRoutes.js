@@ -91,7 +91,8 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
       JOIN users u ON l.user_id = u.id
       WHERE l.user_id = ?
       ORDER BY l.created_at DESC
-    `,
+      LIMIT 25
+      `,
       [userId]
     );
 
