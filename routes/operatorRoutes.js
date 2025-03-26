@@ -1345,5 +1345,446 @@ router.get('/pendency-report/finishing/download', isAuthenticated, isOperator, a
   }
 });
 
+// GET /operator/dashboard/converted-report
+router.get("/dashboard/converted-report", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    // Extract query parameters:
+    // - lotType: "all" | "akshay" | "non-akshay"
+    // - filterStage: "cutting" | "stitching" | "finishing" | "jeans" | "washing"
+    // - startDate & endDate: date range for the chosen stage
+    const { lotType = "all", filterStage = "cutting", startDate, endDate } = req.query;
+    const now = new Date();
+    const defaultEnd = now.toISOString().slice(0,10);
+    const defaultStart = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0,10);
+    const stageStart = startDate || defaultStart;
+    const stageEnd   = endDate || defaultEnd;
+    
+    // Build a lotType filter clause based on the creator username.
+    let lotTypeClause = "";
+    if (lotType === "akshay") {
+      lotTypeClause = " AND LOWER(u.username) = 'akshay'";
+    } else if (lotType === "non-akshay") {
+      lotTypeClause = " AND LOWER(u.username) <> 'akshay'";
+    }
+    
+    // Build the base query depending on the filterStage.
+    // For "cutting", use cutting_lots.created_at;
+    // for others, use a subquery to get the latest record's created_at.
+    let baseQuery = "";
+    let params = [];
+    if (filterStage === "cutting") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces, cl.created_at AS stageDate, u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE DATE(cl.created_at) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY cl.created_at DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "stitching") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM stitching_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM stitching_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "finishing") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM finishing_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM finishing_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "jeans") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM jeans_assembly_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM jeans_assembly_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "washing") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM washing_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM washing_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    }
+    
+    const [lots] = await pool.query(baseQuery, params);
+    
+    // For each lot, get additional stage data (stitching, finishing, and if Akshay: jeans assembly and washing).
+    const reportData = await Promise.all(lots.map(async (lot) => {
+      const lotNo = lot.lot_no;
+      const cuttingQty = parseFloat(lot.total_pieces) || 0;
+      const isAkshay = lot.created_by.toLowerCase() === "akshay";
+      
+      // Stitching Data
+      const [stRows] = await pool.query(
+        "SELECT COALESCE(SUM(total_pieces), 0) AS stitchingQuantity, MAX(created_at) AS stitchingDate FROM stitching_data WHERE lot_no = ?",
+        [lotNo]
+      );
+      const stitchingQuantity = parseFloat(stRows[0].stitchingQuantity) || 0;
+      const stitchingDate = stRows[0].stitchingDate ? new Date(stRows[0].stitchingDate) : null;
+      const [stOpRows] = await pool.query(
+        "SELECT u.username FROM stitching_assignments sa JOIN users u ON sa.user_id = u.id WHERE sa.cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?) ORDER BY sa.assigned_on DESC LIMIT 1",
+        [lotNo]
+      );
+      const stitchingUsername = stOpRows.length ? stOpRows[0].username : "N/A";
+      // Compute leftover from cutting not stitched.
+      const cuttingStitchingQty = cuttingQty - stitchingQuantity;
+      
+      // Finishing Data
+      const [fiRows] = await pool.query(
+        "SELECT COALESCE(SUM(total_pieces), 0) AS finishingQuantity, MAX(created_at) AS finishingDate FROM finishing_data WHERE lot_no = ?",
+        [lotNo]
+      );
+      const finishingQuantity = parseFloat(fiRows[0].finishingQuantity) || 0;
+      const finishingDate = fiRows[0].finishingDate ? new Date(fiRows[0].finishingDate) : null;
+      let finishingUsername = "N/A";
+      if (isAkshay) {
+        const [fiOpRows1] = await pool.query(
+          "SELECT u.username FROM finishing_assignments fa JOIN users u ON fa.user_id = u.id JOIN washing_data wd ON fa.washing_assignment_id = wd.id WHERE wd.lot_no = ? ORDER BY fa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        finishingUsername = fiOpRows1.length ? fiOpRows1[0].username : "N/A";
+      } else {
+        const [fiOpRows2] = await pool.query(
+          "SELECT u.username FROM finishing_assignments fa JOIN users u ON fa.user_id = u.id JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY fa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        finishingUsername = fiOpRows2.length ? fiOpRows2[0].username : "N/A";
+      }
+      
+      // For Akshay lots: Jeans Assembly & Washing Data
+      let jeansAssemblyQuantity = "N/A";
+      let jeansAssemblyDate = null;
+      let jeansAssemblyUser = "N/A";
+      let jeansStitchingQty = "N/A";
+      let washingQuantity = "N/A";
+      let washingDate = null;
+      let washingUsername = "N/A";
+      if (isAkshay) {
+        const [jaRows] = await pool.query(
+          "SELECT COALESCE(SUM(total_pieces), 0) AS jaQuantity, MAX(created_at) AS jaDate FROM jeans_assembly_data WHERE lot_no = ?",
+          [lotNo]
+        );
+        jeansAssemblyQuantity = parseFloat(jaRows[0].jaQuantity) || 0;
+        jeansAssemblyDate = jaRows[0].jaDate ? new Date(jaRows[0].jaDate) : null;
+        const [jaOpRows] = await pool.query(
+          "SELECT u.username FROM jeans_assembly_assignments ja JOIN users u ON ja.user_id = u.id JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        jeansAssemblyUser = jaOpRows.length ? jaOpRows[0].username : "N/A";
+        jeansStitchingQty = stitchingQuantity - jeansAssemblyQuantity;
+        
+        const [waRows] = await pool.query(
+          "SELECT COALESCE(SUM(total_pieces), 0) AS washingQuantity, MAX(created_at) AS washingDate FROM washing_data WHERE lot_no = ?",
+          [lotNo]
+        );
+        washingQuantity = parseFloat(waRows[0].washingQuantity) || 0;
+        washingDate = waRows[0].washingDate ? new Date(waRows[0].washingDate) : null;
+        const [waOpRows] = await pool.query(
+          "SELECT u.username FROM washing_assignments wa JOIN users u ON wa.user_id = u.id JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id WHERE jd.lot_no = ? ORDER BY wa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        washingUsername = waOpRows.length ? waOpRows[0].username : "N/A";
+      }
+      
+      return {
+        lot_no: lotNo,
+        remark: lot.remark,
+        sku: lot.sku,
+        total_pieces: cuttingQty,
+        created_at: new Date(lot.stageDate),
+        stitchingQuantity,
+        stitchingUsername,
+        stitchingDate,
+        cuttingStitchingQty,
+        finishingQuantity,
+        finishingUsername,
+        finishingDate,
+        isAkshay,
+        jeansAssemblyQuantity,
+        jeansAssemblyUser,
+        jeansAssemblyDate,
+        jeansStitchingQty,
+        washingQuantity,
+        washingUsername,
+        washingDate
+      };
+    }));
+    
+    const filters = {
+      lotType,
+      filterStage,
+      startDate: stageStart,
+      endDate: stageEnd
+    };
+    
+    return res.render("operatorConvertedReport", { reportData, filters });
+  } catch (err) {
+    console.error("Error generating converted report:", err);
+    return res.status(500).send("Server error");
+  }
+});
+
+// GET /operator/dashboard/converted-report/download
+router.get("/dashboard/converted-report/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    // Use the same query parameters and logic as the UI route
+    const { lotType = "all", filterStage = "cutting", startDate, endDate } = req.query;
+    const now = new Date();
+    const defaultEnd = now.toISOString().slice(0,10);
+    const defaultStart = new Date(now.getTime()-10*24*60*60*1000).toISOString().slice(0,10);
+    const stageStart = startDate || defaultStart;
+    const stageEnd   = endDate || defaultEnd;
+    
+    let lotTypeClause = "";
+    if (lotType === "akshay") {
+      lotTypeClause = " AND LOWER(u.username) = 'akshay'";
+    } else if (lotType === "non-akshay") {
+      lotTypeClause = " AND LOWER(u.username) <> 'akshay'";
+    }
+    
+    let baseQuery = "";
+    let params = [];
+    if (filterStage === "cutting") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces, cl.created_at AS stageDate, u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE DATE(cl.created_at) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY cl.created_at DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "stitching") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM stitching_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM stitching_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "finishing") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM finishing_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM finishing_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "jeans") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM jeans_assembly_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM jeans_assembly_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    } else if (filterStage === "washing") {
+      baseQuery = `
+        SELECT cl.lot_no, cl.remark, cl.sku, cl.total_pieces,
+          (SELECT MAX(created_at) FROM washing_data WHERE lot_no = cl.lot_no) AS stageDate,
+          u.username AS created_by
+        FROM cutting_lots cl 
+        JOIN users u ON cl.user_id = u.id
+        WHERE (SELECT MAX(created_at) FROM washing_data WHERE lot_no = cl.lot_no) BETWEEN ? AND ? ${lotTypeClause}
+        ORDER BY stageDate DESC
+      `;
+      params = [stageStart, stageEnd];
+    }
+    
+    const [lots] = await pool.query(baseQuery, params);
+    
+    const reportData = await Promise.all(lots.map(async (lot) => {
+      const lotNo = lot.lot_no;
+      const cuttingQty = parseFloat(lot.total_pieces) || 0;
+      const isAkshay = lot.created_by.toLowerCase() === "akshay";
+      
+      const [stRows] = await pool.query(
+        "SELECT COALESCE(SUM(total_pieces), 0) AS stitchingQuantity, MAX(created_at) AS stitchingDate FROM stitching_data WHERE lot_no = ?",
+        [lotNo]
+      );
+      const stitchingQuantity = parseFloat(stRows[0].stitchingQuantity) || 0;
+      const stitchingDate = stRows[0].stitchingDate ? new Date(stRows[0].stitchingDate) : null;
+      const [stOpRows] = await pool.query(
+        "SELECT u.username FROM stitching_assignments sa JOIN users u ON sa.user_id = u.id WHERE sa.cutting_lot_id = (SELECT id FROM cutting_lots WHERE lot_no = ?) ORDER BY sa.assigned_on DESC LIMIT 1",
+        [lotNo]
+      );
+      const stitchingUsername = stOpRows.length ? stOpRows[0].username : "N/A";
+      const cuttingStitchingQty = cuttingQty - stitchingQuantity;
+      
+      const [fiRows] = await pool.query(
+        "SELECT COALESCE(SUM(total_pieces), 0) AS finishingQuantity, MAX(created_at) AS finishingDate FROM finishing_data WHERE lot_no = ?",
+        [lotNo]
+      );
+      const finishingQuantity = parseFloat(fiRows[0].finishingQuantity) || 0;
+      const finishingDate = fiRows[0].finishingDate ? new Date(fiRows[0].finishingDate) : null;
+      let finishingUsername = "N/A";
+      if (isAkshay) {
+        const [fiOpRows1] = await pool.query(
+          "SELECT u.username FROM finishing_assignments fa JOIN users u ON fa.user_id = u.id JOIN washing_data wd ON fa.washing_assignment_id = wd.id WHERE wd.lot_no = ? ORDER BY fa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        finishingUsername = fiOpRows1.length ? fiOpRows1[0].username : "N/A";
+      } else {
+        const [fiOpRows2] = await pool.query(
+          "SELECT u.username FROM finishing_assignments fa JOIN users u ON fa.user_id = u.id JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY fa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        finishingUsername = fiOpRows2.length ? fiOpRows2[0].username : "N/A";
+      }
+      
+      let jeansAssemblyQuantity = "N/A";
+      let jeansAssemblyDate = null;
+      let jeansAssemblyUser = "N/A";
+      let jeansStitchingQty = "N/A";
+      let washingQuantity = "N/A";
+      let washingDate = null;
+      let washingUsername = "N/A";
+      if (isAkshay) {
+        const [jaRows] = await pool.query(
+          "SELECT COALESCE(SUM(total_pieces), 0) AS jaQuantity, MAX(created_at) AS jaDate FROM jeans_assembly_data WHERE lot_no = ?",
+          [lotNo]
+        );
+        jeansAssemblyQuantity = parseFloat(jaRows[0].jaQuantity) || 0;
+        jeansAssemblyDate = jaRows[0].jaDate ? new Date(jaRows[0].jaDate) : null;
+        const [jaOpRows] = await pool.query(
+          "SELECT u.username FROM jeans_assembly_assignments ja JOIN users u ON ja.user_id = u.id JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id WHERE sd.lot_no = ? ORDER BY ja.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        jeansAssemblyUser = jaOpRows.length ? jaOpRows[0].username : "N/A";
+        jeansStitchingQty = stitchingQuantity - jeansAssemblyQuantity;
+        
+        const [waRows] = await pool.query(
+          "SELECT COALESCE(SUM(total_pieces), 0) AS washingQuantity, MAX(created_at) AS washingDate FROM washing_data WHERE lot_no = ?",
+          [lotNo]
+        );
+        washingQuantity = parseFloat(waRows[0].washingQuantity) || 0;
+        washingDate = waRows[0].washingDate ? new Date(waRows[0].washingDate) : null;
+        const [waOpRows] = await pool.query(
+          "SELECT u.username FROM washing_assignments wa JOIN users u ON wa.user_id = u.id JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id WHERE jd.lot_no = ? ORDER BY wa.assigned_on DESC LIMIT 1",
+          [lotNo]
+        );
+        washingUsername = waOpRows.length ? waOpRows[0].username : "N/A";
+      }
+      
+      return {
+        lot_no: lotNo,
+        remark: lot.remark,
+        sku: lot.sku,
+        total_pieces: cuttingQty,
+        created_at: new Date(lot.stageDate),
+        stitchingQuantity,
+        stitchingUsername,
+        stitchingDate,
+        cuttingStitchingQty,
+        finishingQuantity,
+        finishingUsername,
+        finishingDate,
+        isAkshay,
+        jeansAssemblyQuantity,
+        jeansAssemblyUser,
+        jeansAssemblyDate,
+        jeansStitchingQty,
+        washingQuantity,
+        washingUsername,
+        washingDate
+      };
+    }));
+    
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Operator Dashboard - Converted Report";
+    const worksheet = workbook.addWorksheet("Converted Report");
+    
+    // Define columns – for all lots plus extra columns for Akshay.
+    let columns = [
+      { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "Remark", key: "remark", width: 20 },
+      { header: "SKU", key: "sku", width: 15 },
+      { header: "Total Pieces", key: "total_pieces", width: 15 },
+      { header: "Created At", key: "created_at", width: 20 },
+      { header: "Stitching Qty", key: "stitchingQuantity", width: 15 },
+      { header: "Stitching User", key: "stitchingUsername", width: 15 },
+      { header: "Stitching Date", key: "stitchingDate", width: 20 },
+      { header: "Cutting-Stitching Qty", key: "cuttingStitchingQty", width: 20 },
+      { header: "Finishing Qty", key: "finishingQuantity", width: 15 },
+      { header: "Finishing User", key: "finishingUsername", width: 15 },
+      { header: "Finishing Date", key: "finishingDate", width: 20 }
+    ];
+    // Add extra columns only if filtering for Akshay or All (and if the lot is Akshay).
+    if (lotType === "akshay" || lotType === "all") {
+      columns = columns.concat([
+        { header: "Jeans Assembly Qty", key: "jeansAssemblyQuantity", width: 20 },
+        { header: "Jeans Assembly User", key: "jeansAssemblyUser", width: 20 },
+        { header: "Jeans Assembly Date", key: "jeansAssemblyDate", width: 20 },
+        { header: "Jeans-Stitching Qty", key: "jeansStitchingQty", width: 20 },
+        { header: "Washing Qty", key: "washingQuantity", width: 15 },
+        { header: "Washing User", key: "washingUsername", width: 15 },
+        { header: "Washing Date", key: "washingDate", width: 20 }
+      ]);
+    }
+    worksheet.columns = columns;
+    
+    reportData.forEach(item => {
+      worksheet.addRow({
+        lot_no: item.lot_no,
+        remark: item.remark,
+        sku: item.sku,
+        total_pieces: item.total_pieces,
+        created_at: item.created_at.toLocaleString(),
+        stitchingQuantity: item.stitchingQuantity,
+        stitchingUsername: item.stitchingUsername,
+        stitchingDate: item.stitchingDate ? item.stitchingDate.toLocaleString() : "N/A",
+        cuttingStitchingQty: item.cuttingStitchingQty,
+        finishingQuantity: item.finishingQuantity,
+        finishingUsername: item.finishingUsername,
+        finishingDate: item.finishingDate ? item.finishingDate.toLocaleString() : "N/A",
+        jeansAssemblyQuantity: item.isAkshay ? item.jeansAssemblyQuantity : "N/A",
+        jeansAssemblyUser: item.isAkshay ? item.jeansAssemblyUser : "N/A",
+        jeansAssemblyDate: item.isAkshay && item.jeansAssemblyDate ? item.jeansAssemblyDate.toLocaleString() : "N/A",
+        jeansStitchingQty: item.isAkshay ? item.jeansStitchingQty : "N/A",
+        washingQuantity: item.isAkshay ? item.washingQuantity : "N/A",
+        washingUsername: item.isAkshay ? item.washingUsername : "N/A",
+        washingDate: item.isAkshay && item.washingDate ? item.washingDate.toLocaleString() : "N/A"
+      });
+    });
+    
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="ConvertedReport.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error generating Excel for converted report:", err);
+    res.status(500).send("Server error");
+  }
+});
+
 module.exports = router;
   
