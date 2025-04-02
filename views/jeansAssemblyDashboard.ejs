@@ -11,26 +11,8 @@
     body { background-color: #f8f9fa; }
     .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .nav-tabs .nav-link { font-weight: 500; }
-    /* Autocomplete styling */
-    .autocomplete-items {
-      position: absolute;
-      top: 100%;
-      left: 0; right: 0;
-      z-index: 1000;
-      max-height: 200px;
-      overflow-y: auto;
-      background: #fff;
-      border: 1px solid #ced4da;
-      border-top: none;
-    }
-    .autocomplete-items li {
-      cursor: pointer;
-      padding: 8px 12px;
-      list-style: none;
-    }
-    .autocomplete-items li:hover {
-      background: #f0f0f0;
-    }
+    /* Hide or remove any leftover autocomplete classes if present (not used now) */
+    .autocomplete-items { display: none !important; }
   </style>
 </head>
 <body>
@@ -43,7 +25,7 @@
       <div class="ms-auto">
         <a href="/jeansassemblydashboard/approve" class="btn btn-outline-info btn-sm me-2">
           <i class="fas fa-check-circle"></i> Approvals
-        </a>        
+        </a>
         <a href="/logout" class="btn btn-outline-danger btn-sm">
           <i class="fas fa-sign-out-alt"></i> Logout
         </a>
@@ -52,7 +34,7 @@
   </nav>
 
   <div class="container my-4">
-    <!-- Include flash messages partial -->
+    <!-- Flash Messages -->
     <%- include('partials/flashMessages') %>
 
     <!-- Tab Navigation -->
@@ -77,13 +59,19 @@
             <i class="fas fa-plus-circle"></i> Create New Jeans Assembly Entry
           </div>
           <div class="card-body">
+            <!-- This form will also have a "washer_id" to assign directly to washing -->
             <form id="createForm" enctype="multipart/form-data">
-              <!-- LOT Autocomplete -->
-              <div class="mb-3 position-relative">
-                <label for="selectedLotIdSearch" class="form-label">Select Lot</label>
-                <input type="text" id="selectedLotIdSearch" class="form-control" placeholder="Search assigned lot..." required />
-                <input type="hidden" name="selectedLotId" id="selectedLotId" required />
-                <ul class="list-group autocomplete-items" id="lotAutocomplete"></ul>
+              <!-- LOT Dropdown -->
+              <div class="mb-3">
+                <label for="selectedLotId" class="form-label">Select Lot</label>
+                <select name="selectedLotId" id="selectedLotId" class="form-select" required>
+                  <option value="">-- Choose a Lot --</option>
+                  <% lots.forEach(function(l) { %>
+                    <option value="<%= l.id %>">
+                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>)
+                    </option>
+                  <% }) %>
+                </select>
               </div>
 
               <div class="mb-3">
@@ -94,6 +82,20 @@
               <div class="mb-3">
                 <label class="form-label">Image (optional)</label>
                 <input type="file" name="image_file" class="form-control" accept="image/*" />
+              </div>
+
+              <!-- Immediately Assign to Washing -->
+              <div class="mb-3">
+                <label class="form-label">Assign to Washer</label>
+                <select name="washer_id" class="form-select">
+                  <option value="">-- Do not assign to washing --</option>
+                  <% washers.forEach(function(w) { %>
+                    <option value="<%= w.id %>"><%= w.username %></option>
+                  <% }) %>
+                </select>
+                <p class="text-muted small mb-0">
+                  If you select a washer here, the total pieces created will be assigned automatically.
+                </p>
               </div>
 
               <!-- Sizes for lot -->
@@ -170,7 +172,7 @@
               </thead>
               <tbody></tbody>
             </table>
-            <p class="small text-muted">Leave blank for 0 increment.</p>
+            <p class="small text-muted">Leave blank or zero for no increment.</p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -188,70 +190,31 @@
   <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // 1) Flash Message is rendered via partial so no additional JS is needed.
-
-    // 2) LOT Autocomplete – assuming lots are passed via EJS
-    const lotsData = <%- JSON.stringify(lots) %> || [];
-    const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
+    // 1) When user changes the LOT dropdown, fetch sizes
     const selectedLotId = document.getElementById('selectedLotId');
-    const lotAutocomplete = document.getElementById('lotAutocomplete');
-
-    selectedLotIdSearch.addEventListener('input', () => {
-      lotAutocomplete.innerHTML = '';
-      const term = selectedLotIdSearch.value.toLowerCase();
-      if (!term) {
-        lotAutocomplete.style.display = 'none';
-        return;
-      }
-      const filtered = lotsData.filter(l => (`${l.lot_no} ${l.sku}`).toLowerCase().includes(term));
-      if (!filtered.length) {
-        lotAutocomplete.style.display = 'none';
-        return;
-      }
-      filtered.forEach(item => {
-        const li = document.createElement('li');
-        li.classList.add('list-group-item');
-        li.innerHTML = `<i class="fas fa-warehouse me-1"></i> Lot ${item.lot_no} (SKU: ${item.sku})`;
-        li.dataset.value = item.id;
-        lotAutocomplete.appendChild(li);
-      });
-      lotAutocomplete.style.display = 'block';
-    });
-
-    lotAutocomplete.addEventListener('click', (e) => {
-      if (e.target && e.target.matches('li.list-group-item')) {
-        selectedLotIdSearch.value = e.target.textContent;
-        selectedLotId.value = e.target.dataset.value;
-        lotAutocomplete.style.display = 'none';
-        fetchLotSizes(e.target.dataset.value);
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!lotAutocomplete.contains(e.target) && !selectedLotIdSearch.contains(e.target)) {
-        lotAutocomplete.style.display = 'none';
-      }
-    });
-
-    // 3) Fetch & Render Lot Sizes
     const lotSizesContainer = document.getElementById('lotSizesContainer');
     const sizesTableBody = document.querySelector('#sizesTable tbody');
     const createTotalPieces = document.getElementById('createTotalPieces');
 
-    async function fetchLotSizes(lotId) {
+    selectedLotId.addEventListener('change', async () => {
+      const lotValue = selectedLotId.value;
+      if (!lotValue) {
+        sizesTableBody.innerHTML = '';
+        lotSizesContainer.style.display = 'none';
+        return;
+      }
       try {
-        const res = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotId}`);
+        const res = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotValue}`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         renderSizes(data);
       } catch (err) {
         console.error('Error fetching lot sizes:', err);
-        lotSizesContainer.style.display = 'none';
         sizesTableBody.innerHTML = '';
+        lotSizesContainer.style.display = 'none';
       }
-    }
+    });
 
-    // Updated: Pre-fill the input field's value with the remain count.
     function renderSizes(sizesArr) {
       sizesTableBody.innerHTML = '';
       lotSizesContainer.style.display = 'block';
@@ -261,7 +224,9 @@
           <td>${sz.size_label}</td>
           <td>${sz.remain}</td>
           <td>
-            <input type="number" required min="1" max="${sz.remain}" class="form-control" value="${sz.remain}" data-size-id="${sz.id}">
+            <input type="number" required min="1" max="${sz.remain}" class="form-control"
+                   value="${sz.remain}"
+                   data-size-id="${sz.id}">
           </td>
         `;
         sizesTableBody.appendChild(tr);
@@ -280,24 +245,27 @@
     }
     sizesTableBody.addEventListener('input', updateTotal);
 
-    // 4) Submit Create Form (AJAX)
+    // 2) Submit Create Form
     const createForm = document.getElementById('createForm');
     createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(createForm);
+
+      // gather size data
       const rows = sizesTableBody.querySelectorAll('tr');
       if (!rows.length) {
         alert('No sizes loaded. Please select a lot.');
         return;
       }
       rows.forEach(row => {
-        const input = row.children[2].querySelector('input');
+        const input = row.querySelector('input');
         let val = parseInt(input.value, 10);
         if (isNaN(val) || val < 0) val = 0;
         if (val > 0) {
           formData.append(`sizes[${input.dataset.sizeId}]`, val);
         }
       });
+
       try {
         const res = await fetch('/jeansassemblydashboard/create', {
           method: 'POST',
@@ -307,10 +275,10 @@
           window.location.href = res.url;
         } else {
           const result = await res.json().catch(() => ({}));
-          if (result.success) {
-            window.location.reload();
+          if (result.error) {
+            alert(result.error);
           } else {
-            alert(result.error || 'Error creating Jeans Assembly entry.');
+            window.location.reload();
           }
         }
       } catch (err) {
@@ -319,7 +287,7 @@
       }
     });
 
-    // 5) Lazy Load Existing Entries
+    // 3) Lazy Load Existing Entries
     let offset = 0;
     let loading = false;
     let hasMore = true;
@@ -344,33 +312,41 @@
           const collapseId = `collapse-${item.id}`;
           card.innerHTML = `
             <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
-                <i class="fas fa-box-open me-1"></i> Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
+                <i class="fas fa-box-open me-1"></i>
+                Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
               </button>
             </h2>
-            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
+            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}"
+                 data-bs-parent="#existingEntriesContainer">
               <div class="accordion-body">
                 <div class="d-flex justify-content-end mb-3">
                   <a href="/jeansassemblydashboard/challan/${item.id}" target="_blank" class="btn btn-sm btn-info me-2">
                     <i class="fas fa-file-alt"></i> Challan
                   </a>
-                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#updateModal" data-entry-id="${item.id}">
+                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
+                          data-bs-target="#updateModal" data-entry-id="${item.id}">
                     <i class="fas fa-edit"></i> Update
                   </button>
                 </div>
                 <p><strong>ID:</strong> ${item.id}</p>
                 <p><strong>Remark:</strong> ${item.remark || 'N/A'}</p>
-                ${ item.image_url ? `<p><img src="${item.image_url}" style="max-width:200px;" /></p>` : '' }
+                ${
+                  item.image_url
+                    ? `<p><img src="${item.image_url}" style="max-width:200px;" /></p>`
+                    : ''
+                }
                 <table class="table table-sm">
                   <thead>
                     <tr><th>Size Label</th><th>Pieces</th></tr>
                   </thead>
                   <tbody>
-                    ${
-                      item.sizes && item.sizes.length
-                        ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
-                        : '<tr><td colspan="2">No sizes found</td></tr>'
-                    }
+                  ${
+                    item.sizes && item.sizes.length
+                      ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
+                      : '<tr><td colspan="2">No sizes found</td></tr>'
+                  }
                   </tbody>
                 </table>
               </div>
@@ -401,7 +377,7 @@
     });
     loadMoreData(); // initial load
 
-    // 6) Update Modal Logic
+    // 4) Update Modal Logic
     const updateModal = document.getElementById('updateModal');
     const updateForm = document.getElementById('updateForm');
     const updateSizesTable = document.getElementById('updateSizesTable');
@@ -427,7 +403,8 @@
               <td>${sz.pieces}</td>
               <td>${sz.remain != null ? sz.remain : 999999}</td>
               <td>
-                <input type="number" class="form-control" min="0" placeholder="0" data-size-label="${sz.size_label}">
+                <input type="number" class="form-control" min="0" placeholder="0"
+                       data-size-label="${sz.size_label}">
               </td>
             `;
             updateSizesTable.querySelector('tbody').appendChild(tr);
