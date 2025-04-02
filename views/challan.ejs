@@ -1,113 +1,328 @@
-<!-- views/challan.ejs -->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Challan - <%= entry.id %></title>
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-  >
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-  >
+  <title>Stitching & Finishing Challan</title>
   <style>
+    /* A4 page settings for printing (helps keep it on one page) */
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    @media print {
+      /* Force single-page print if content size allows */
+      html, body {
+        height: 100%;
+        overflow: hidden; /* hides any spillover, if needed */
+      }
+      .challan-container {
+        page-break-inside: avoid;
+      }
+      /* Optionally reduce font size further to squeeze content */
+      /* body {
+        font-size: 11px;
+      } */
+    }
+
+    /* Body background: softly merging mint green and pink */
     body {
-      background-color: #f8f9fa;
-      min-height: 100vh;
-      color: #212529;
+      margin: 0;
+      padding: 0;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      background: linear-gradient(135deg, #E9FFE5 0%, #FFE5F3 100%);
     }
+
+    /* The main container with a white background for readability */
     .challan-container {
+      width: 100%;
+      max-width: 780px; /* keep narrower to help fit on one page */
+      margin: 10px auto; 
       background: #fff;
-      border-radius: 0.75rem;
-      padding: 2rem;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-      margin: 2rem auto;
-      max-width: 800px;
+      border: 2px solid #000;
+      padding: 20px;
+      box-sizing: border-box;
+      position: relative;
+      /* subtle box-shadow if you want it to stand out (optional): */
+      /* box-shadow: 0 0 10px rgba(0,0,0,0.2); */
     }
-    .kotty-heading {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #fd7e14;
-      margin-bottom: 1rem;
+
+    /* Company Header / Title */
+    .company-header {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .company-header h1 {
+      font-size: 20px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .company-header p {
+      margin: 2px 0;
+      font-size: 12px;
+    }
+    .challan-title {
+      text-align: center;
+      text-transform: uppercase;
+      font-weight: bold;
+      text-decoration: underline;
+      margin: 10px 0 15px 0;
+    }
+
+    /* Info table for challan details */
+    table.info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    table.info-table td {
+      vertical-align: top;
+      padding: 4px 6px;
+    }
+    .label {
+      width: 35%;
+      font-weight: bold;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .value {
+      width: 65%;
+      font-size: 12px;
+    }
+
+    /* Data tables (Sizes, etc.) */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+    .data-table th,
+    .data-table td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .data-table th {
+      font-weight: bold;
+    }
+    .data-table caption {
+      margin-bottom: 6px;
+      font-weight: bold;
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    /* Section headings */
+    .section-heading {
+      font-size: 14px;
+      margin-top: 20px;
+      margin-bottom: 6px;
+      text-decoration: underline;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    /* Assignments & Updates */
+    .assignments p,
+    .updates p {
+      margin: 2px 0;
+      font-size: 12px;
+    }
+
+    /* Signatures */
+    .signature-section {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-box {
+      width: 45%;
       text-align: center;
     }
-    hr {
-      margin: 1rem 0;
+    .signature-line {
+      margin-top: 40px;
+      border-top: 1px solid #000;
+      width: 80%;
+      margin: 0 auto;
+      padding-top: 5px;
     }
-    .updates-table th, .updates-table td {
-      padding: 0.5rem;
+
+    /* Action buttons (just a Print button here) */
+    .action-buttons {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .action-buttons button {
+      padding: 8px 12px;
+      border: 1px solid #000;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      margin: 5px;
+      text-transform: uppercase;
+    }
+    .action-buttons button:hover {
+      background: #f4f4f4;
     }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="challan-container">
-    <div class="kotty-heading">KOTTY LIFESTYLE PRIVATE LTD.</div>
+<div class="challan-container">
 
-    <h5>Challan for Stitching Data #<%= entry.id %></h5>
-    <hr>
+  <!-- Header -->
+  <div class="company-header">
+    <h1>Kotty Lifestyle Private Limited</h1>
+    <p>GB-65, Bharat Vihar, Lakkarpur, Faridabad, 121009</p>
+    <p>Mobile: 8920374028</p>
+  </div>
 
-    <p><strong>Lot No:</strong> <%= entry.lot_no %></p>
-    <p><strong>SKU:</strong> <%= entry.sku %></p>
-    <p><strong>Total Pieces:</strong> <%= entry.total_pieces %></p>
-    <% if (entry.remark) { %>
-      <p><strong>Remark:</strong> <%= entry.remark %></p>
-    <% } %>
-    <p><strong>Created At:</strong> <%= new Date(entry.created_at).toLocaleString() %></p>
-    <hr>
+  <div class="challan-title">Stitching to Finishing / Jeans Assembly Challan</div>
 
-    <h6>Current Sizes &amp; Pieces</h6>
-    <% if (sizes && sizes.length > 0) { %>
-      <ul>
-        <% sizes.forEach(s => { %>
-          <li><%= s.size_label %>: <%= s.pieces %> pcs</li>
-        <% }) %>
-      </ul>
-    <% } else { %>
-      <p><em>No sizes found.</em></p>
-    <% } %>
+  <!-- Basic Challan Info -->
+  <table class="info-table">
+    <tr>
+      <td class="label">Challan No:</td>
+      <td class="value">1234</td>
+    </tr>
+    <tr>
+      <td class="label">Challan Date:</td>
+      <td class="value"><% if (finishingAssignments && finishingAssignments.length > 0) { %>
+        <%= finishingAssignments[0].assigned_on %>
+      <% } else if (jeansAssignments && jeansAssignments.length > 0) { %>
+        <%= jeansAssignments[0].assigned_on %>
+      <% } else { %>
+        ---
+      <% } %></td>
+    </tr>
+    <tr>
+      <td class="label">Lot No:</td>
+      <td class="value"><%= entry.lot_no %></td>
+    </tr>
+    <tr>
+      <td class="label">SKU Number:</td>
+      <td class="value"><%= entry.sku %></td>
+    </tr>    
+    <tr>
+      <td class="label">Assigned To:</td>
+      <td class="value">
+        <% if (finishingAssignments && finishingAssignments.length > 0) { %>
+          <%= finishingAssignments[0].assignedUserName %>
+        <% } else if (jeansAssignments && jeansAssignments.length > 0) { %>
+          <%= jeansAssignments[0].assignedUserName %>
+        <% } else { %>
+          ---
+        <% } %>
+      </td>
+    </tr>
+    <tr>
+      <td class="label">GSTIN:</td>
+      <td class="value">06AAGJDHCSDUYB</td>
+    </tr>
+    <tr>
+      <td class="label">Entry ID:</td>
+      <td class="value"><%= entry.id %></td>
+    </tr>
+  </table>
 
-    <hr>
-    <h6>Updates History</h6>
-    <% if (updates && updates.length > 0) { %>
-      <div class="table-responsive">
-        <table class="table table-bordered updates-table align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>Updated At</th>
-              <th>Size Label</th>
-              <th>Pieces Added</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% updates.forEach(u => { %>
-              <tr>
-                <td><%= new Date(u.updated_at).toLocaleString() %></td>
-                <td><%= u.size_label %></td>
-                <td>+<%= u.pieces %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+  <!-- Size Details -->
+  <table class="data-table">
+    <caption>Size Details</caption>
+    <tr>
+      <th>Size Label</th>
+      <th>Pieces</th>
+    </tr>
+    <% sizes.forEach(sz => { %>
+      <tr>
+        <td><%= sz.size_label %></td>
+        <td><%= sz.pieces %></td>
+      </tr>
+    <% }) %>
+  </table>
+  <p><strong>Total Pieces:</strong> <%= entry.total_pieces %></p>
+
+  <!-- Finishing Assignments -->
+  <div class="section-heading">Finishing Assignments</div>
+  <% if (finishingAssignments && finishingAssignments.length > 0) { %>
+    <% finishingAssignments.forEach(fa => { %>
+      <div class="assignments">
+        <p><strong>Assigned To:</strong> <%= fa.assignedUserName %></p>
+        <p><strong>Assigned By:</strong> <%= fa.masterUserName %></p>
+        <p><strong>Status:</strong>
+          <% if (fa.is_approved === null) { %>
+            Pending
+          <% } else if (fa.is_approved === 1) { %>
+            Approved
+          <% } else { %>
+            Denied
+          <% } %>
+        </p>
+        <p><strong>Assigned On:</strong> <%= fa.assigned_on %></p>
+        <p><strong>Target Day:</strong> <%= fa.target_day || 'N/A' %></p>
       </div>
-    <% } else { %>
-      <p><em>No updates done so far.</em></p>
-    <% } %>
+      <hr/>
+    <% }) %>
+  <% } else { %>
+    <p>No finishing assignments found.</p>
+  <% } %>
 
-    <hr>
-    <div class="d-flex flex-wrap gap-2 justify-content-end mt-3">
-      <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
-        <i class="bi bi-printer"></i> Print
-      </button>
-      <a href="/stitchingdashboard" class="btn btn-secondary btn-sm">
-        Back to Dashboard
-      </a>
+  <!-- Jeans Assembly Assignments -->
+  <div class="section-heading">Jeans Assembly Assignments</div>
+  <% if (jeansAssignments && jeansAssignments.length > 0) { %>
+    <% jeansAssignments.forEach(ja => { %>
+      <div class="assignments">
+        <p><strong>Assigned To:</strong> <%= ja.assignedUserName %></p>
+        <p><strong>Assigned By:</strong> <%= ja.masterUserName %></p>
+        <p><strong>Status:</strong>
+          <% if (ja.is_approved === null) { %>
+            Pending
+          <% } else if (ja.is_approved === 1) { %>
+            Approved
+          <% } else { %>
+            Denied
+          <% } %>
+        </p>
+        <p><strong>Assigned On:</strong> <%= ja.assigned_on %></p>
+        <p><strong>Target Day:</strong> <%= ja.target_day || 'N/A' %></p>
+      </div>
+      <hr/>
+    <% }) %>
+  <% } else { %>
+    <p>No jeans assembly assignments found.</p>
+  <% } %>
+
+  <!-- Update Logs -->
+  <div class="section-heading">Update Logs</div>
+  <% if (updates && updates.length) { %>
+    <div class="updates">
+      <% updates.forEach(u => { %>
+        <p><strong><%= u.size_label %>:</strong> +<%= u.pieces %> on <%= u.updated_at %></p>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <p>No updates found.</p>
+  <% } %>
+
+  <!-- Signature Section -->
+  <div class="signature-section">
+    <div class="signature-box">
+      <p><strong>Receiver’s Signature</strong></p>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <p><strong>Authorized Signatory</strong></p>
+      <div class="signature-line"></div>
     </div>
   </div>
-</div>
+
+  <!-- Print/PDF Button -->
+  <div class="action-buttons">
+    <button onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+</div> <!-- .challan-container -->
 
 </body>
 </html>
