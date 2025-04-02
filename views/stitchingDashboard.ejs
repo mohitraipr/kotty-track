@@ -18,9 +18,6 @@
   />
 
   <style>
-    /* ----------------------------------------
-       Base & Light Mode Styles
-    ---------------------------------------- */
     body {
       background-color: #f8f9fa;
       color: #212529;
@@ -37,40 +34,9 @@
       font-weight: 500;
       font-size: 1.2rem;
     }
-    /* Container for main content (allows for a sticky footer if needed) */
     .main-content {
       flex: 1 0 auto;
     }
-    /* ----------------------------------------
-       Autocomplete Styles
-    ---------------------------------------- */
-    .autocomplete {
-      position: relative;
-      width: 100%;
-    }
-    .autocomplete-items {
-      position: absolute;
-      border: 1px solid #ced4da;
-      border-top: none;
-      z-index: 999;
-      top: 100%;
-      left: 0;
-      right: 0;
-      max-height: 220px;
-      overflow-y: auto;
-      background-color: #fff;
-      display: none;
-    }
-    .autocomplete-items li {
-      padding: 0.4rem 0.75rem;
-      cursor: pointer;
-    }
-    .autocomplete-items li:hover {
-      background-color: #e9ecef;
-    }
-    /* ----------------------------------------
-       Fade-in Animation for Lazy Loading
-    ---------------------------------------- */
     .fade-in {
       animation: fadeIn 0.4s ease-in;
     }
@@ -78,9 +44,6 @@
       from { opacity: 0; }
       to   { opacity: 1; }
     }
-    /* ----------------------------------------
-       Dark Mode Styles
-    ---------------------------------------- */
     .dark-mode {
       background-color: #121212;
       color: #f8f9fa;
@@ -110,29 +73,17 @@
       background-color: #272727;
       color: #fff;
     }
-    .dark-mode .autocomplete-items {
-      background-color: #333;
-      color: #fff;
-      border-color: #444;
-    }
-    .dark-mode .autocomplete-items li:hover {
-      background-color: #4d4d4d;
-    }
     .dark-mode .btn-close {
       filter: invert(1);
     }
-    .dark-mode .form-control {
+    .dark-mode .form-control,
+    .dark-mode select, .dark-mode textarea {
       background-color: #2b2b2b;
       color: #f8f9fa;
       border-color: #444;
     }
     .dark-mode input::placeholder {
       color: #ccc;
-    }
-    .dark-mode select, .dark-mode textarea {
-      background-color: #2b2b2b;
-      color: #f8f9fa;
-      border-color: #444;
     }
     .dark-mode .input-group-text {
       background-color: #2b2b2b;
@@ -147,9 +98,6 @@
     .dark-mode a, .dark-mode .nav-link {
       color: #a5d6ff;
     }
-    /* ----------------------------------------
-       Language Toggle Styles
-    ---------------------------------------- */
     [data-lang="en"] {
       display: inline;
     }
@@ -161,23 +109,6 @@
     }
     .lang-hi [data-lang="hi"] {
       display: inline !important;
-    }
-    /* ----------------------------------------
-       Mobile Friendly Adjustments
-    ---------------------------------------- */
-    @media (max-width: 767px) {
-      .navbar-nav {
-        text-align: center;
-      }
-      .navbar-nav .nav-item {
-        margin: 0.5rem 0;
-      }
-      .container {
-        padding: 0 15px;
-      }
-      .card {
-        margin: 10px 0;
-      }
     }
   </style>
 </head>
@@ -243,7 +174,7 @@
           <li class="nav-item me-2">
             <a href="/stitchingdashboard/approve" class="btn btn-outline-light btn-sm">
               <i class="fas fa-check-circle"></i>
-              <span data-lang="en">Approve</span>              
+              <span data-lang="en">Approve</span>
             </a>
           </li>
           <!-- Logout -->
@@ -258,6 +189,26 @@
       </div>
     </div>
   </nav>
+
+  <!-- Flash Messages -->
+  <div class="container mt-3">
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg){ %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg){ %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
 
   <!-- Main Content -->
   <div class="container my-4 main-content">
@@ -313,8 +264,8 @@
           <div class="card-header">
             <h4 class="mb-0">
               <i class="fas fa-plus-circle"></i>
-              <span data-lang="en">Create New Stitching Entry</span>
-              <span data-lang="hi">नई सिलाई एंट्री</span>
+              <span data-lang="en">Create New Stitching Entry & Assign</span>
+              <span data-lang="hi">नई सिलाई एंट्री बनाएं और असाइन करें</span>
             </h4>
           </div>
           <div class="card-body">
@@ -325,29 +276,26 @@
               enctype="multipart/form-data"
             >
               <div class="row mb-3">
-                <!-- Select Lot -->
+                <!-- Select Lot (SIMPLE DROPDOWN) -->
                 <div class="col-md-4 mb-3 mb-md-0">
                   <label class="form-label fw-semibold">
                     <span data-lang="en">Select Lot</span>
                     <span data-lang="hi">लॉट चुनें</span>
                   </label>
-                  <div class="autocomplete">
-                    <input
-                      type="text"
-                      id="selectedLotIdSearch"
-                      class="form-control"
-                      placeholder="Search lot by SKU or number..."
-                      autocomplete="off"
-                      required
-                    />
-                    <input
-                      type="hidden"
-                      name="selectedLotId"
-                      id="selectedLotId"
-                      required
-                    />
-                    <ul class="autocomplete-items list-group d-none" id="lotOptions"></ul>
-                  </div>
+                  <select
+                    id="selectedLotId"
+                    name="selectedLotId"
+                    class="form-select"
+                    required
+                  >
+                    <option value="">-- Choose a lot --</option>
+                    <% lots.forEach(function(l) { %>
+                      <option value="<%= l.id %>">
+                        <%= l.lot_no %> (SKU: <%= l.sku %>)
+                        <% if (l.cutting_remark) { %>- <%= l.cutting_remark %><% } %>
+                      </option>
+                    <% }) %>
+                  </select>
                 </div>
 
                 <!-- Remark -->
@@ -389,18 +337,10 @@
                   <table class="table table-bordered align-middle" id="lotSizesTable">
                     <thead class="table-light">
                       <tr>
-                        <th>
-                          <span data-lang="en">Size Label</span>
-                          <span data-lang="hi">साइज़</span>
-                        </th>
-                        <th>
-                          <span data-lang="en">Max Available</span>
-                          <span data-lang="hi">अधिकतम उपलब्ध</span>
-                        </th>
-                        <th>
-                          <span data-lang="en">Enter Pieces</span>
-                          <span data-lang="hi">टुकड़े दर्ज करें</span>
-                        </th>
+                        <th>Size Label</th>
+                        <th>Max Available</th>
+                        <th>Enter Pieces</th>
+                        <th>Assign To User (Optional)</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
@@ -415,10 +355,10 @@
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary">
+              <button type="submit" class="btn btn-primary mt-3">
                 <i class="fas fa-check"></i>
-                <span data-lang="en">Create Stitching Entry</span>
-                <span data-lang="hi">सिलाई एंट्री बनाएं</span>
+                <span data-lang="en">Create & Assign</span>
+                <span data-lang="hi">बनाएं और असाइन करें</span>
               </button>
             </form>
           </div>
@@ -460,7 +400,6 @@
 
         <!-- Container for lazy-loaded entries -->
         <div id="existingEntriesContainer" class="accordion"></div>
-
         <!-- IntersectionObserver sentinel -->
         <div id="loadMoreSentinel" style="height: 60px;"></div>
       </div>
@@ -503,30 +442,18 @@
               <table class="table table-bordered align-middle" id="updateSizesTable">
                 <thead class="table-light">
                   <tr>
-                    <th>
-                      <span data-lang="en">Size Label</span>
-                      <span data-lang="hi">साइज़</span>
-                    </th>
-                    <th>
-                      <span data-lang="en">Already Used</span>
-                      <span data-lang="hi">पहले से उपयोग</span>
-                    </th>
-                    <th>
-                      <span data-lang="en">Max Remain</span>
-                      <span data-lang="hi">अधिकतम शेष</span>
-                    </th>
-                    <th>
-                      <span data-lang="en">New Pieces (Increment)</span>
-                      <span data-lang="hi">नए टुकड़े (वृद्धि)</span>
-                    </th>
+                    <th>Size Label</th>
+                    <th>Already Used</th>
+                    <th>Max Remain</th>
+                    <th>New Pieces (Increment)</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
               </table>
             </div>
             <p class="small text-muted">
-              <span data-lang="en">If you leave a field blank, it counts as 0 increment.</span>
-              <span data-lang="hi">यदि कोई फ़ील्ड खाली छोड़ी गई तो वह 0 जोड़ेगी।</span>
+              <span data-lang="en">Leave a field blank or zero for no increment.</span>
+              <span data-lang="hi">0 या खाली छोड़ें तो कुछ नहीं जुड़ेगा।</span>
             </p>
           </div>
           <div class="modal-footer">
@@ -545,21 +472,17 @@
     </div>
   </div>
 
-  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     /*****************************************************
-     * Dark Mode Toggle
+     * DARK MODE / LANGUAGE
      *****************************************************/
     const darkModeToggle = document.getElementById('darkModeToggle');
     darkModeToggle.addEventListener('click', () => {
       document.body.classList.toggle('dark-mode');
     });
 
-    /*****************************************************
-     * Language Toggle
-     *****************************************************/
     const langRadios = document.querySelectorAll('input[name="language"]');
     langRadios.forEach(radio => {
       radio.addEventListener('change', (e) => {
@@ -572,131 +495,45 @@
     });
 
     /*****************************************************
-     * LOT AUTOCOMPLETE
-     * Only show matching items as the user types.
+     * CREATE TAB
      *****************************************************/
-    // existingLots now contains cutting_remark along with lot_no, sku, etc.
-    const existingLots = <%- JSON.stringify(lots) %> || [];
-    const lotAutocompleteData = existingLots.map(l => ({
-      displayText: `${l.lot_no} (SKU: ${l.sku})${l.cutting_remark ? ' - ' + l.cutting_remark : ''}`,
-      value: l.id
-    }));
-
-    const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
-    const selectedLotId = document.getElementById('selectedLotId');
-    const lotOptions = document.getElementById('lotOptions');
-    let currentFocusIndex = -1;
-
-    function populateLotOptions(listData) {
-      lotOptions.innerHTML = '';
-      listData.forEach(item => {
-        const li = document.createElement('li');
-        li.classList.add('list-group-item', 'list-group-item-action');
-        li.textContent = item.displayText;
-        li.dataset.value = item.value;
-        lotOptions.appendChild(li);
-      });
-    }
-
-    function showLotDropdown() {
-      if (!lotOptions.classList.contains('d-block')) {
-        lotOptions.classList.remove('d-none');
-        lotOptions.classList.add('d-block');
-      }
-    }
-    function hideLotDropdown() {
-      lotOptions.classList.remove('d-block');
-      lotOptions.classList.add('d-none');
-      currentFocusIndex = -1;
-    }
-
-    selectedLotIdSearch.addEventListener('input', () => {
-      const searchTerm = selectedLotIdSearch.value.trim().toLowerCase();
-      if (searchTerm.length === 0) {
-        hideLotDropdown();
-        return;
-      }
-      const filtered = lotAutocompleteData.filter(item =>
-        item.displayText.toLowerCase().includes(searchTerm)
-      );
-      if (filtered.length > 0) {
-        populateLotOptions(filtered);
-        showLotDropdown();
-      } else {
-        lotOptions.innerHTML = '';
-        hideLotDropdown();
-      }
-    });
-
-    // Keyboard navigation for autocomplete
-    selectedLotIdSearch.addEventListener('keydown', (e) => {
-      const items = lotOptions.querySelectorAll('li');
-      if (!items.length) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        currentFocusIndex++;
-        if (currentFocusIndex >= items.length) currentFocusIndex = items.length - 1;
-        setActiveItem(items);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        currentFocusIndex--;
-        if (currentFocusIndex < 0) currentFocusIndex = 0;
-        setActiveItem(items);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (currentFocusIndex > -1 && items[currentFocusIndex]) {
-          selectLotItem(items[currentFocusIndex]);
-        }
-      }
-    });
-
-    function setActiveItem(items) {
-      items.forEach((li, idx) => {
-        li.classList.toggle('active', idx === currentFocusIndex);
-      });
-    }
-
-    function selectLotItem(li) {
-      const val = li.dataset.value;
-      selectedLotId.value = val;
-      selectedLotIdSearch.value = li.textContent;
-      hideLotDropdown();
-      fetchLotSizes(val);
-    }
-
-    // Click selection for autocomplete
-    lotOptions.addEventListener('click', (e) => {
-      if (e.target && e.target.matches('li.list-group-item')) {
-        selectLotItem(e.target);
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!selectedLotIdSearch.contains(e.target) && !lotOptions.contains(e.target)) {
-        hideLotDropdown();
-      }
-    });
-
-    /*****************************************************
-     * FETCH LOT SIZES & RENDER
-     *****************************************************/
+    let assignableUsers = [];
+    const lotSelect = document.getElementById('selectedLotId');
     const lotSizesContainer = document.getElementById('lotSizesContainer');
     const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
     const createTotalPiecesElem = document.getElementById('createTotalPieces');
 
-    async function fetchLotSizes(lotId) {
+    // On change of lot dropdown, fetch sizes
+    lotSelect.addEventListener('change', async () => {
+      const val = lotSelect.value;
+      if (!val) {
+        lotSizesContainer.style.display = 'none';
+        lotSizesTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+        return;
+      }
       try {
-        const res = await fetch(`/stitchingdashboard/get-lot-sizes/${lotId}`);
+        // fetch sizes
+        const res = await fetch(`/stitchingdashboard/get-lot-sizes/${val}`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        renderLotSizes(data);
+        const sizesData = await res.json();
+
+        // fetch assignable users if not loaded yet
+        if (!assignableUsers.length) {
+          const resp = await fetch('/stitchingdashboard/create/assignable-users');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const json = await resp.json();
+          assignableUsers = json.data || [];
+        }
+
+        renderLotSizes(sizesData);
       } catch (err) {
-        console.error('Error fetching lot sizes:', err);
+        console.error('Error fetching lot sizes or users:', err);
         lotSizesContainer.style.display = 'none';
         lotSizesTableBody.innerHTML = '';
         createTotalPiecesElem.textContent = '0';
       }
-    }
+    });
 
     function renderLotSizes(sizesArr) {
       lotSizesContainer.style.display = 'block';
@@ -704,26 +541,46 @@
       sizesArr.forEach(sz => {
         const tr = document.createElement('tr');
 
+        // 1) Size label
         const tdLabel = document.createElement('td');
         tdLabel.textContent = sz.size_label;
         tr.appendChild(tdLabel);
 
+        // 2) Max available
         const tdRemain = document.createElement('td');
         tdRemain.textContent = sz.remain;
         tr.appendChild(tdRemain);
 
+        // 3) Enter pieces (default = max remain)
         const tdInput = document.createElement('td');
         const inp = document.createElement('input');
         inp.type = 'number';
-        inp.min = '1';
+        inp.min = '0';
         inp.max = String(sz.remain);
-        inp.value = '0';
+        inp.value = String(sz.remain); // default to remain
         inp.classList.add('form-control');
         inp.dataset.sizeId = sz.id;
         inp.required = true;
         inp.addEventListener('input', updateCreateTotal);
         tdInput.appendChild(inp);
         tr.appendChild(tdInput);
+
+        // 4) Assign user (optional)
+        const tdAssign = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.classList.add('form-select');
+        const optNone = document.createElement('option');
+        optNone.value = '';
+        optNone.textContent = '--No Assignment--';
+        sel.appendChild(optNone);
+        assignableUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          sel.appendChild(opt);
+        });
+        tdAssign.appendChild(sel);
+        tr.appendChild(tdAssign);
 
         lotSizesTableBody.appendChild(tr);
       });
@@ -742,54 +599,65 @@
       createTotalPiecesElem.textContent = sum;
     }
 
-    /*****************************************************
-     * CREATE FORM VALIDATION
-     *****************************************************/
+    // On create form submission, build hidden fields for `sizes` and `assignments`
     const createForm = document.getElementById('createForm');
     createForm.addEventListener('submit', (e) => {
-      const rows = lotSizesTableBody.querySelectorAll('tr');
-      if (!rows.length) {
-        alert('No sizes found or no lot selected!');
+      const val = lotSelect.value;
+      if (!val) {
         e.preventDefault();
+        alert('Please select a lot first.');
         return;
       }
+
+      const rows = lotSizesTableBody.querySelectorAll('tr');
+      if (!rows.length) {
+        e.preventDefault();
+        alert('No sizes found for this lot!');
+        return;
+      }
+
+      // remove old hidden fields
+      document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
+      document.querySelectorAll('.assignmentField').forEach(el => el.remove());
+
       for (const row of rows) {
         const remain = parseInt(row.children[1].textContent, 10);
         const input = row.children[2].querySelector('input');
-        let val = parseInt(input.value, 10);
-        if (isNaN(val) || val < 0) {
-          alert(`Invalid input for size [${row.children[0].textContent}]`);
+        let valNum = parseInt(input.value, 10);
+        if (isNaN(valNum) || valNum < 0) valNum = 0;
+        if (valNum > remain) {
           e.preventDefault();
+          alert(`Requested ${valNum} but only ${remain} remain for size ${row.children[0].textContent}`);
           return;
         }
-        if (val > remain) {
-          alert(`You requested ${val} pieces for size [${row.children[0].textContent}] but only ${remain} remain!`);
-          e.preventDefault();
-          return;
-        }
-      }
-      // Build hidden fields for submission
-      const old = document.querySelectorAll('.sizeMappingField');
-      old.forEach(el => el.remove());
-      for (const row of rows) {
-        const input = row.children[2].querySelector('input');
-        let val = parseInt(input.value, 10);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 0) {
+
+        // sizes[sizeId] = valNum
+        if (valNum > 0) {
           const sizeId = input.dataset.sizeId;
-          const hidden = document.createElement('input');
-          hidden.type = 'hidden';
-          hidden.classList.add('sizeMappingField');
-          hidden.name = `sizes[${sizeId}]`;
-          hidden.value = val;
-          hidden.setAttribute('required', '');
-          createForm.appendChild(hidden);
+          const hiddenSize = document.createElement('input');
+          hiddenSize.type = 'hidden';
+          hiddenSize.classList.add('sizeMappingField');
+          hiddenSize.name = `sizes[${sizeId}]`;
+          hiddenSize.value = valNum;
+          createForm.appendChild(hiddenSize);
+        }
+
+        // assignments[sizeId] = userId
+        const sel = row.children[3].querySelector('select');
+        if (sel.value) {
+          const sizeId = input.dataset.sizeId;
+          const hiddenAssign = document.createElement('input');
+          hiddenAssign.type = 'hidden';
+          hiddenAssign.classList.add('assignmentField');
+          hiddenAssign.name = `assignments[${sizeId}]`;
+          hiddenAssign.value = sel.value;
+          createForm.appendChild(hiddenAssign);
         }
       }
     });
 
     /*****************************************************
-     * LAZY LOADING FOR EXISTING ENTRIES
+     * EXISTING ENTRIES (LAZY LOAD)
      *****************************************************/
     let existingOffset = 0;
     let loading = false;
@@ -802,7 +670,6 @@
       if (loading || !hasMore) return;
       loading = true;
       const searchTerm = searchInput.value.trim();
-
       try {
         const res = await fetch(`/stitchingdashboard/list-entries?offset=${existingOffset}&search=${encodeURIComponent(searchTerm)}`);
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -813,13 +680,16 @@
         entries.forEach(item => {
           const card = document.createElement('div');
           card.classList.add('accordion-item', 'fade-in');
-
           const headerId = `heading-${item.id}`;
           const collapseId = `collapse-${item.id}`;
 
           card.innerHTML = `
             <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
+              <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#${collapseId}"
+                aria-expanded="false"
+                aria-controls="${collapseId}">
                 <strong>Lot:</strong> ${item.lot_no} &nbsp; (SKU: ${item.sku}) &nbsp; (Total Pieces: ${item.total_pieces})
               </button>
             </h2>
@@ -829,7 +699,8 @@
                   <a href="/stitchingdashboard/challan/${item.id}" class="btn btn-sm btn-info me-2" target="_blank">
                     <i class="fas fa-file-download"></i> Challan
                   </a>
-                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#updateModal" data-entry-id="${item.id}">
+                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
+                    data-bs-target="#updateModal" data-entry-id="${item.id}">
                     <i class="fas fa-edit"></i>
                     <span data-lang="en">Update</span>
                     <span data-lang="hi">अपडेट</span>
@@ -840,10 +711,14 @@
                   <strong>Total Pieces:</strong> ${item.total_pieces}<br>
                   <strong>Remark:</strong> ${item.remark || 'N/A'}
                 </p>
-                ${ item.image_url ? `<p>
+                ${
+                  item.image_url
+                    ? `<p>
                          <strong>Image:</strong><br>
                          <img src="${item.image_url}" alt="Stitch" style="max-height: 100px;">
-                       </p>` : '' }
+                       </p>`
+                    : ''
+                }
                 <div class="table-responsive">
                   <table class="table table-sm table-bordered">
                     <thead>
@@ -853,7 +728,8 @@
                       </tr>
                     </thead>
                     <tbody>
-                      ${ item.sizes && item.sizes.length
+                      ${
+                        (item.sizes && item.sizes.length)
                           ? item.sizes.map(sz => `
                               <tr>
                                 <td>${sz.size_label}</td>
@@ -878,7 +754,6 @@
       }
     }
 
-    // IntersectionObserver for lazy loading
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {
         loadMoreData();
@@ -890,7 +765,6 @@
     });
     observer.observe(sentinel);
 
-    // Reset and reload on search
     searchInput.addEventListener('input', () => {
       existingOffset = 0;
       hasMore = true;
@@ -898,8 +772,7 @@
       loadMoreData();
     });
 
-    // Load initial chunk of data
-    loadMoreData();
+    loadMoreData(); // initial load
 
     /*****************************************************
      * UPDATE MODAL
@@ -907,19 +780,18 @@
     const updateModal = document.getElementById('updateModal');
     const updateForm = document.getElementById('updateForm');
     const updateSizesTable = document.getElementById('updateSizesTable');
+    let currentUpdateEntryId = null;
+
     if (updateModal) {
       updateModal.addEventListener('show.bs.modal', async (event) => {
         const button = event.relatedTarget;
-        const entryId = button.getAttribute('data-entry-id');
-
-        updateForm.action = '/stitchingdashboard/update/' + entryId;
-        document.getElementById('updatingEntryId').textContent = entryId;
-
-        // Clear old data
+        currentUpdateEntryId = button.getAttribute('data-entry-id');
+        updateForm.action = '/stitchingdashboard/update/' + currentUpdateEntryId;
+        document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
         updateSizesTable.querySelector('tbody').innerHTML = '';
 
         try {
-          const res = await fetch(`/stitchingdashboard/update/${entryId}/json`);
+          const res = await fetch(`/stitchingdashboard/update/${currentUpdateEntryId}/json`);
           if (!res.ok) {
             console.error('Error fetching existing sizes. Status:', res.status);
             return;
@@ -930,18 +802,22 @@
           data.sizes.forEach(sz => {
             const tr = document.createElement('tr');
 
+            // Size Label
             const tdLabel = document.createElement('td');
             tdLabel.textContent = sz.size_label;
             tr.appendChild(tdLabel);
 
+            // Already used
             const tdUsed = document.createElement('td');
             tdUsed.textContent = sz.pieces;
             tr.appendChild(tdUsed);
 
+            // Max remain
             const tdRemain = document.createElement('td');
             tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
             tr.appendChild(tdRemain);
 
+            // New pieces
             const tdInput = document.createElement('td');
             const inp = document.createElement('input');
             inp.type = 'number';
@@ -959,20 +835,25 @@
         }
       });
 
-      // On submit, treat blank fields as 0
-      updateForm.addEventListener('submit', (e) => {
-        const oldFields = document.querySelectorAll('.updateSizeMappingField');
-        oldFields.forEach(f => f.remove());
+      // after the modal closes, let's re-fetch existing entries
+      updateModal.addEventListener('hidden.bs.modal', () => {
+        existingOffset = 0;
+        hasMore = true;
+        existingContainer.innerHTML = '';
+        loadMoreData();
+      });
 
+      updateForm.addEventListener('submit', (e) => {
+        document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
         const rows = updateSizesTable.querySelectorAll('tbody tr');
+
         for (const row of rows) {
-          const lbl = row.children[0].textContent;
-          const remain = parseInt(row.children[2].textContent, 10);
-          const input = row.children[3].querySelector('input');
+          const lbl = row.cells[0].textContent;
+          const remain = parseInt(row.cells[2].textContent, 10);
+          const input = row.cells[3].querySelector('input');
           let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
-          if (isNaN(val) || val < 0) {
-            val = 0;
-          }
+          if (isNaN(val) || val < 0) val = 0;
+
           if (val > remain) {
             alert(`Cannot add ${val} to size [${lbl}]. Max remain is ${remain}.`);
             e.preventDefault();
@@ -991,8 +872,7 @@
     }
 
     /*****************************************************
-     * DISABLE SUBMIT BUTTONS AFTER CLICK
-     * (Prevents accidental double submissions)
+     * DISABLE SUBMIT BUTTONS AFTER CLICK (Optional)
      *****************************************************/
     document.querySelectorAll('form').forEach(form => {
       form.addEventListener('submit', function() {
