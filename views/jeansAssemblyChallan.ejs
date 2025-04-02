@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Stitching to Washing / Jeans Assembly Challan</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    @media print {
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
+      .challan-container {
+        page-break-inside: avoid;
+      }
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      background: linear-gradient(135deg, #E9FFE5 0%, #FFE5F3 100%);
+    }
+
+    .challan-container {
+      width: 100%;
+      max-width: 780px;
+      margin: 10px auto;
+      background: #fff;
+      border: 2px solid #000;
+      padding: 20px;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .company-header {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .company-header h1 {
+      font-size: 20px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .company-header p {
+      margin: 2px 0;
+      font-size: 12px;
+    }
+    .challan-title {
+      text-align: center;
+      text-transform: uppercase;
+      font-weight: bold;
+      text-decoration: underline;
+      margin: 10px 0 15px 0;
+    }
+
+    table.info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    table.info-table td {
+      vertical-align: top;
+      padding: 4px 6px;
+    }
+    .label {
+      width: 35%;
+      font-weight: bold;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .value {
+      width: 65%;
+      font-size: 12px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+    .data-table th,
+    .data-table td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .data-table th {
+      font-weight: bold;
+    }
+    .data-table caption {
+      margin-bottom: 6px;
+      font-weight: bold;
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    .section-heading {
+      font-size: 14px;
+      margin-top: 20px;
+      margin-bottom: 6px;
+      text-decoration: underline;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    .assignments p { margin: 2px 0; font-size: 12px; }
+    .updates p { margin: 2px 0; font-size: 12px; }
+
+    .signature-section {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-box {
+      width: 45%;
+      text-align: center;
+    }
+    .signature-line {
+      margin-top: 40px;
+      border-top: 1px solid #000;
+      width: 80%;
+      margin: 0 auto;
+      padding-top: 5px;
+    }
+
+    .action-buttons {
+      text-align: center;
+      margin-top: 15px;
+    }
+    .action-buttons button {
+      padding: 8px 12px;
+      border: 1px solid #000;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      margin: 5px;
+      text-transform: uppercase;
+    }
+    .action-buttons button:hover {
+      background: #f4f4f4;
+    }
+  </style>
+</head>
+<body>
+
+<div class="challan-container">
+
+  <!-- Header -->
+  <div class="company-header">
+    <h1>Kotty Lifestyle Private Limited</h1>
+    <p>GB-65, Bharat Vihar, Lakkarpur, Faridabad, 121009</p>
+    <p>Mobile: 8920374028</p>
+  </div>
+
+  <div class="challan-title">Stitching To Washing / Jeans Assembly Challan</div>
+
+  <!-- Basic Info -->
+  <table class="info-table">
+    <tr>
+      <td class="label">Challan No:</td>
+      <td class="value"><%= entry.id %></td>
+    </tr>
+    <tr>
+      <td class="label">Challan Date:</td>
+      <td class="value">
+        <% if (washingAssignments && washingAssignments.length > 0) { %>
+          <%= washingAssignments[0].assigned_on %>
+        <% } else { %>
+          ---
+        <% } %>
+      </td>
+    </tr>
+    <tr>
+      <td class="label">Lot No:</td>
+      <td class="value"><%= entry.lot_no %></td>
+    </tr>
+    <tr>
+      <td class="label">SKU Number:</td>
+      <td class="value"><%= entry.sku %></td>
+    </tr>
+    <tr>
+      <td class="label">Assigned To:</td>
+      <td class="value">
+        <% if (washingAssignments && washingAssignments.length > 0) { %>
+          <%= washingAssignments[0].assignedUserName %>
+        <% } else { %>
+          ---
+        <% } %>
+      </td>
+    </tr>
+    <tr>
+      <td class="label">GSTIN:</td>
+      <td class="value">06AAGJDHCSDUYB</td>
+    </tr>
+    <tr>
+      <td class="label">Entry ID:</td>
+      <td class="value"><%= entry.id %></td>
+    </tr>
+  </table>
+
+  <!-- Size Details -->
+  <table class="data-table">
+    <caption>Size Details</caption>
+    <thead>
+      <tr>
+        <th>Size Label</th>
+        <th>Pieces</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% sizes.forEach(sz => { %>
+        <tr>
+          <td><%= sz.size_label %></td>
+          <td><%= sz.pieces %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <p><strong>Total Pieces:</strong> <%= entry.total_pieces %></p>
+
+  <!-- Washing Assignments -->
+  <div class="section-heading">Washing Assignments</div>
+  <% if (washingAssignments && washingAssignments.length > 0) { %>
+    <% washingAssignments.forEach(wa => { %>
+      <div class="assignments">
+        <p><strong>Assigned To:</strong> <%= wa.assignedUserName %></p>
+        <p><strong>Assigned By:</strong> <%= wa.masterUserName %></p>
+        <p><strong>Status:</strong>
+          <% if (wa.is_approved === null) { %>
+            Pending
+          <% } else if (wa.is_approved === 1) { %>
+            Approved
+          <% } else { %>
+            Denied
+          <% } %>
+        </p>
+        <p><strong>Assigned On:</strong> <%= wa.assigned_on %></p>
+        <p><strong>Target Day:</strong> <%= wa.target_day || 'N/A' %></p>
+      </div>
+      <hr/>
+    <% }) %>
+  <% } else { %>
+    <p>No washing assignments found.</p>
+  <% } %>
+
+  <!-- Update Logs -->
+  <div class="section-heading">Update Logs</div>
+  <% if (updates && updates.length) { %>
+    <div class="updates">
+      <% updates.forEach(u => { %>
+        <p><strong><%= u.size_label %>:</strong> +<%= u.pieces %> on <%= u.updated_at %></p>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <p>No updates found.</p>
+  <% } %>
+
+  <!-- Signature Section -->
+  <div class="signature-section">
+    <div class="signature-box">
+      <p><strong>Receiver’s Signature</strong></p>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <p><strong>Authorized Signatory</strong></p>
+      <div class="signature-line"></div>
+    </div>
+  </div>
+
+  <!-- Print/PDF Button -->
+  <div class="action-buttons">
+    <button onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+</div> <!-- .challan-container -->
+
+</body>
+</html>
