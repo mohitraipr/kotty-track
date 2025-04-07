@@ -456,7 +456,6 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
   }
 });
 
-// GET /stitchingdashboard/update/:id/json
 router.get('/update/:id/json', isAuthenticated, isStitchingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -465,8 +464,7 @@ router.get('/update/:id/json', isAuthenticated, isStitchingMaster, async (req, r
     const [[entry]] = await pool.query(`
       SELECT *
       FROM stitching_data
-      WHERE id = ?
-        AND user_id = ?
+      WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       return res.status(403).json({ error: 'No permission or not found' });
@@ -479,32 +477,39 @@ router.get('/update/:id/json', isAuthenticated, isStitchingMaster, async (req, r
       ORDER BY id ASC
     `, [entryId]);
 
+    console.log(`Updating entry ${entryId} for lot ${entry.lot_no}`);
+    console.log('Fetched stitching_data_sizes:', sizes);
+
     // For each size, figure out how many remain
     const output = [];
     for (const sz of sizes) {
+      console.log(`Processing size label: ${sz.size_label} (ID: ${sz.id})`);
+
       const [[cls]] = await pool.query(`
         SELECT *
         FROM cutting_lot_sizes
-        WHERE cutting_lot_id = (SELECT id
-                                FROM cutting_lots
-                                WHERE lot_no = ? LIMIT 1)
-          AND size_label = ?
+        WHERE cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ? LIMIT 1
+        ) AND size_label = ?
       `, [entry.lot_no, sz.size_label]);
+
       if (!cls) {
-        // if not found, a mismatch might exist
+        console.log(`No cutting_lot_sizes record found for lot ${entry.lot_no} with size label ${sz.size_label}`);
         output.push({ ...sz, remain: 99999 });
         continue;
       }
+
+      console.log(`Found cutting lot size:`, cls);
 
       const [[usedRow]] = await pool.query(`
         SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
         FROM stitching_data_sizes sds
         JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ?
-          AND sds.size_label = ?
+        WHERE sd.lot_no = ? AND sds.size_label = ?
       `, [entry.lot_no, sz.size_label]);
       const used = usedRow.usedCount || 0;
       const remainNow = cls.total_pieces - used;
+      console.log(`For size ${sz.size_label}: total=${cls.total_pieces}, used=${used}, remain=${remainNow < 0 ? 0 : remainNow}`);
       output.push({ ...sz, remain: remainNow < 0 ? 0 : remainNow });
     }
 
@@ -515,6 +520,7 @@ router.get('/update/:id/json', isAuthenticated, isStitchingMaster, async (req, r
   }
 });
 
+
 // POST /stitchingdashboard/update/:id
 router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) => {
   let conn;
@@ -523,15 +529,16 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
     const entryId = req.params.id;
     const updateSizes = req.body.updateSizes || {};
 
+    console.log(`Update request for entry ${entryId}:`, updateSizes);
+
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // 1) Validate stitching_data record
+    // Validate stitching_data record
     const [[entry]] = await conn.query(`
       SELECT *
       FROM stitching_data
-      WHERE id = ?
-        AND user_id = ?
+      WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Record not found or no permission');
@@ -540,29 +547,30 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
       return res.redirect('/stitchingdashboard');
     }
 
-    // 2) For each size label, add the increment
     let updatedGrandTotal = entry.total_pieces;
     for (const lbl of Object.keys(updateSizes)) {
       let increment = parseInt(updateSizes[lbl], 10);
+      console.log(`Processing update for size label: ${lbl}, increment: ${increment}`);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
 
       const [[existingRow]] = await conn.query(`
         SELECT *
         FROM stitching_data_sizes
-        WHERE stitching_data_id = ?
-          AND size_label = ?
+        WHERE stitching_data_id = ? AND size_label = ?
       `, [entryId, lbl]);
 
-      // Check remain
+      // Fetch the cutting lot size for the given lot and size label
       const [[cls]] = await conn.query(`
         SELECT *
         FROM cutting_lot_sizes
-        WHERE cutting_lot_id = (SELECT id
-                                FROM cutting_lots
-                                WHERE lot_no = ? LIMIT 1)
-          AND size_label = ?
+        WHERE cutting_lot_id = (
+          SELECT id FROM cutting_lots WHERE lot_no = ? LIMIT 1
+        ) AND size_label = ?
       `, [entry.lot_no, lbl]);
+
+      console.log(`For size label ${lbl}: fetched cutting lot size record:`, cls);
+
       if (!cls) {
         throw new Error(`Size label ${lbl} not found in cutting_lot_sizes for lot ${entry.lot_no}.`);
       }
@@ -571,46 +579,46 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
         SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
         FROM stitching_data_sizes sds
         JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ?
-          AND sds.size_label = ?
+        WHERE sd.lot_no = ? AND sds.size_label = ?
       `, [entry.lot_no, lbl]);
       const used = usedRow.usedCount || 0;
       const remainGlobal = cls.total_pieces - used;
+      console.log(`For size ${lbl}: total=${cls.total_pieces}, used=${used}, remain=${remainGlobal}`);
+
       if (increment > remainGlobal) {
         throw new Error(`Cannot add ${increment} to size [${lbl}]. Max remain is ${remainGlobal}.`);
       }
 
       if (!existingRow) {
-        // Insert new row in stitching_data_sizes
         await conn.query(`
           INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
           VALUES (?, ?, ?)
         `, [entryId, lbl, increment]);
+        console.log(`Inserted new row for size label ${lbl} with ${increment} pieces.`);
       } else {
-        // Update existing row
         const newPieceCount = existingRow.pieces + increment;
         await conn.query(`
           UPDATE stitching_data_sizes
           SET pieces = ?
           WHERE id = ?
         `, [newPieceCount, existingRow.id]);
+        console.log(`Updated size label ${lbl}: previous=${existingRow.pieces}, new=${newPieceCount}`);
       }
 
       updatedGrandTotal += increment;
-
-      // Log this update
       await conn.query(`
         INSERT INTO stitching_data_updates (stitching_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
       `, [entryId, lbl, increment]);
+      console.log(`Logged update for size label ${lbl} with increment ${increment}`);
     }
 
-    // 3) Update total in stitching_data
     await conn.query(`
       UPDATE stitching_data
       SET total_pieces = ?
       WHERE id = ?
     `, [updatedGrandTotal, entryId]);
+    console.log(`Updated stitching_data total_pieces to ${updatedGrandTotal}`);
 
     await conn.commit();
     conn.release();
@@ -627,6 +635,7 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
     return res.redirect('/stitchingdashboard');
   }
 });
+
 
 // GET /stitchingdashboard/challan/:id
 // GET /stitchingdashboard/challan/:id
