@@ -2088,7 +2088,7 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
       } else {
         // hosiery finishing is from stitching_data
         const [faRows] = await pool.query(`
-          SELECT fa.isApproved, fa.assigned_on, fa.user_id
+          SELECT fa.is_approved, fa.assigned_on, fa.user_id
           FROM finishing_assignments fa
           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
           WHERE sd.lot_no = ?
@@ -2101,9 +2101,9 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
           const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [fa.user_id]);
           const fOpName = opRow ? opRow.username : "Unknown";
 
-          if (fa.isApproved === null) {
+          if (fa.is_approved === null) {
             finishingStatus = `Has Not been Approved By ${fOpName}`;
-          } else if (fa.isApproved == 0) {
+          } else if (fa.is_approved == 0) {
             finishingStatus = `Denied by ${fOpName}`;
           } else {
             // isApproved=1
