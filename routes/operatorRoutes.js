@@ -1344,7 +1344,9 @@ router.get('/pendency-report/finishing/download', isAuthenticated, isOperator, a
     res.status(500).send("Server error");
   }
 });
+// Add this new route at the end of your operatorRoutes.js
 
+// GET /operator/dashboard/converted-report
 // GET /operator/dashboard/converted-report
 router.get("/dashboard/converted-report", isAuthenticated, isOperator, async (req, res) => {
   try {
@@ -1791,9 +1793,31 @@ router.get("/dashboard/converted-report/download", isAuthenticated, isOperator, 
  * for each department (Cutting, Stitching, Assembly, Washing, Finishing).
  * “download=1” triggers Excel export instead of HTML.
  ********************************************************************/
-router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res) => {
+/**
+ * GET /operator/dashboard/pic-report
+ * 
+ * Lets the user filter by:
+ *  • Lot Type (all, denim, hosiery) – denim if lot_no starts with "AK" or "UM".
+ *  • Department (all, cutting, stitching, assembly, washing, finishing).
+ *  • Status (all, pending, inline, completed, denied, not_assigned).
+ *  • Date Filter: createdAt or assignedOn
+ *  • Start/End date
+ * 
+ * The key logic is a CHAIN approach:
+ *   Cutting → Stitching → (Denim only) Assembly → (Denim only) Washing → Finishing
+ * 
+ * If a department is NOT assigned, we mark *that* dept and all subsequent
+ * depts as "In {previous dept}."
+ * 
+ * This ensures if, say, there's no stitching assignment,
+ * everything from stitching onward is "In Cutting."
+ * 
+ * Or if there's a stitching assignment but no assembly assignment,
+ * then assembly, washing, finishing = "In Stitching."
+ */
+router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
-    // 1) Grab query parameters:
+    // 1) Parse query
     const {
       lotType = "all",            // "all" | "denim" | "hosiery"
       department = "all",         // "all" | "cutting" | "stitching" | "assembly" | "washing" | "finishing"
@@ -1801,24 +1825,19 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
       dateFilter = "createdAt",   // "createdAt" | "assignedOn"
       startDate = "",
       endDate = "",
-      download = ""              // if "1", we send Excel; else show EJS
+      download = ""
     } = req.query;
 
-    // 2) Convert date range into real filters
-    // If no startDate/endDate provided, you may default to last 30 days, or show everything.
+    // 2) Build date filtering for cutting_lots (createdAt) or assignments (assignedOn)
     let dateWhere = "";
-    let dateParams = [];
+    const dateParams = [];
     if (startDate && endDate) {
       if (dateFilter === "createdAt") {
         dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
       } else if (dateFilter === "assignedOn") {
-        // We'll handle assignedOn checks via subqueries or specialized logic
-        // but for simplicity, let's just filter lots that have an assignment in that date range
-        // for the chosen department. If department=all, we might skip or do OR conditions, etc.
-        // This can get complicated quickly. We'll do a simplified approach:
-        //  - If department = "stitching", we check the last stitching_assignments date
-        //  - If "all", we skip. (You can refine as needed.)
+        // Filter by assignment dates for the chosen department if not "all"
+        // (You can refine or expand to handle all depts if needed.)
         if (department === "stitching") {
           dateWhere = `
             AND EXISTS (
@@ -1858,7 +1877,7 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
               LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
               LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
               JOIN cutting_lots c2 ON (
-                (wd.lot_no = c2.lot_no) OR (sd.lot_no = c2.lot_no)
+                wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no
               )
               WHERE c2.lot_no = cl.lot_no
                 AND DATE(fa.assigned_on) BETWEEN ? AND ?
@@ -1866,24 +1885,38 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
           `;
           dateParams.push(startDate, endDate);
         }
-        // If department = "all" or "cutting", we skip dateFilter on assignedOn for simplicity
       }
     }
 
-    // 3) Build the query to fetch basic lot info
-    // We'll just pull all cutting_lots that match any date filter or lotType filter.
+    // 3) Build "lotType" filter
     let lotTypeClause = "";
     if (lotType === "denim") {
-      // "Denim" = lot_no starts with "AK" or "UM" (case-insensitive)
-      lotTypeClause = " AND (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%') ";
+      // Denim => lot_no starts with AK or UM (case-insensitive)
+      lotTypeClause = `
+        AND (
+          UPPER(cl.lot_no) LIKE 'AK%'
+          OR UPPER(cl.lot_no) LIKE 'UM%'
+        )
+      `;
     } else if (lotType === "hosiery") {
-      // "Hosiery" = everything else
-      lotTypeClause = " AND (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%') ";
+      // Hosiery => everything else
+      lotTypeClause = `
+        AND (
+          UPPER(cl.lot_no) NOT LIKE 'AK%'
+          AND UPPER(cl.lot_no) NOT LIKE 'UM%'
+        )
+      `;
     }
 
-    // Combine everything:
+    // 4) Fetch from cutting_lots
     const baseQuery = `
-      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark, u.username AS created_by
+      SELECT
+        cl.lot_no,
+        cl.sku,
+        cl.total_pieces,
+        cl.created_at,
+        cl.remark,
+        u.username AS created_by
       FROM cutting_lots cl
       JOIN users u ON cl.user_id = u.id
       WHERE 1=1
@@ -1893,293 +1926,105 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
     `;
     const [lots] = await pool.query(baseQuery, dateParams);
 
-    // 4) For each lot, gather departmental quantities + assignment info:
+    // 5) Prepare results
     const finalData = [];
     for (const lot of lots) {
       const lotNo = lot.lot_no;
-      const isDenim = isDenimLot(lotNo); // helper function below
+      const isDenim = isDenimLot(lotNo); // "AK"/"UM" => denim
       const totalCut = parseFloat(lot.total_pieces) || 0;
 
-      // =========== STITCHING ===========
-      let [stRows] = await pool.query(`
-        SELECT COALESCE(SUM(sd.total_pieces),0) AS sumStitched,
-               MAX(sd.created_at) AS lastStitchDate
-        FROM stitching_data sd
-        WHERE sd.lot_no = ?
-      `, [lotNo]);
-      const stitchedQty = parseFloat(stRows[0].sumStitched) || 0;
+      // Gather sums from each data table
+      const stitchedQty   = await getStitchedQty(lotNo);
+      const assembledQty  = isDenim ? await getAssembledQty(lotNo) : 0;
+      const washedQty     = isDenim ? await getWashedQty(lotNo) : 0;
+      const finishedQty   = await getFinishedQty(lotNo);
 
-      // last stitching assignment
-      const [stAssign] = await pool.query(`
-        SELECT sa.isApproved, sa.assigned_on, sa.user_id, sa.id
-        FROM stitching_assignments sa
-        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-        WHERE c.lot_no = ?
-        ORDER BY sa.assigned_on DESC
-        LIMIT 1
-      `, [lotNo]);
-      let stitchStatus = "Not Assigned";
-      let stitchOp = "";
-      let stitchAssignedOn = "";
-      if (stAssign.length) {
-        const stA = stAssign[0];
-        stitchAssignedOn = stA.assigned_on ? new Date(stA.assigned_on).toLocaleString() : "";
-        // find operator name
-        const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [stA.user_id]);
-        const stitchOpName = opRow ? opRow.username : "Unknown";
+      // Grab the last assignment rows
+      const stAssign  = await getLastStitchingAssignment(lotNo);
+      const asmAssign = isDenim ? await getLastAssemblyAssignment(lotNo) : null;
+      const washAssign= isDenim ? await getLastWashingAssignment(lotNo) : null;
+      const finAssign = await getLastFinishingAssignment(lotNo, isDenim);
 
-        if (stA.isApproved === null) {
-          stitchStatus = `Has Not been Approved By ${stitchOpName}`;
-        } else if (stA.isApproved == 0) {
-          stitchStatus = `Denied by ${stitchOpName}`;
-        } else {
-          // isApproved=1
-          // check if fully completed
-          if (stitchedQty >= totalCut) {
-            stitchStatus = "Completed";
-          } else if (stitchedQty > 0) {
-            const pendingQty = totalCut - stitchedQty;
-            stitchStatus = `${pendingQty} Pending`; // partial
-          } else {
-            stitchStatus = "In-Line"; // no actual production yet
-          }
-        }
-        stitchOp = stitchOpName;
-      }
-
-      // =========== ASSEMBLY (DENIM ONLY) ===========
-      let assembledQty = 0, assemblyStatus = "N/A", assemblyOp = "N/A", assemblyAssignedOn = "";
-      if (isDenim) {
-        const [asmRows] = await pool.query(`
-          SELECT COALESCE(SUM(total_pieces),0) AS sumAsm FROM jeans_assembly_data
-          WHERE lot_no = ?
-        `, [lotNo]);
-        assembledQty = parseFloat(asmRows[0].sumAsm) || 0;
-
-        // last assembly assignment
-        const [asmAssign] = await pool.query(`
-          SELECT ja.is_approved, ja.assigned_on, ja.user_id
-          FROM jeans_assembly_assignments ja
-          JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-          WHERE sd.lot_no = ?
-          ORDER BY ja.assigned_on DESC
-          LIMIT 1
-        `, [lotNo]);
-        if (asmAssign.length) {
-          const aA = asmAssign[0];
-          assemblyAssignedOn = aA.assigned_on ? new Date(aA.assigned_on).toLocaleString() : "";
-          const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [aA.user_id]);
-          const asmOpName = opRow ? opRow.username : "Unknown";
-
-          if (aA.is_approved === null) {
-            assemblyStatus = `Has Not been Approved By ${asmOpName}`;
-          } else if (aA.is_approved == 0) {
-            assemblyStatus = `Denied by ${asmOpName}`;
-          } else {
-            // is_approved=1
-            // check completed or partial
-            if (assembledQty >= stitchedQty && stitchedQty > 0) {
-              assemblyStatus = "Completed";
-            } else if (assembledQty > 0) {
-              const pendingAsm = stitchedQty - assembledQty;
-              assemblyStatus = `${pendingAsm} Pending`;
-            } else {
-              assemblyStatus = "In-Line";
-            }
-          }
-          assemblyOp = asmOpName;
-        } else {
-          // no assignment
-          assemblyStatus = "Not Assigned";
-        }
-      }
-
-      // =========== WASHING (DENIM ONLY) ===========
-      let washedQty = 0, washingStatus = "N/A", washingOp = "N/A", washingAssignedOn = "";
-      if (isDenim) {
-        const [wRows] = await pool.query(`
-          SELECT COALESCE(SUM(total_pieces),0) AS sumWash
-          FROM washing_data
-          WHERE lot_no = ?
-        `, [lotNo]);
-        washedQty = parseFloat(wRows[0].sumWash) || 0;
-
-        // last washing assignment
-        const [washAssign] = await pool.query(`
-          SELECT wa.is_approved, wa.assigned_on, wa.user_id
-          FROM washing_assignments wa
-          JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-          WHERE jd.lot_no = ?
-          ORDER BY wa.assigned_on DESC
-          LIMIT 1
-        `, [lotNo]);
-        if (washAssign.length) {
-          const wA = washAssign[0];
-          washingAssignedOn = wA.assigned_on ? new Date(wA.assigned_on).toLocaleString() : "";
-          const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [wA.user_id]);
-          const wOpName = opRow ? opRow.username : "Unknown";
-
-          if (wA.is_approved === null) {
-            washingStatus = `Has Not been Approved By ${wOpName}`;
-          } else if (wA.is_approved == 0) {
-            washingStatus = `Denied by ${wOpName}`;
-          } else {
-            // is_approved=1
-            // check completed or partial
-            if (washedQty >= assembledQty && assembledQty > 0) {
-              washingStatus = "Completed";
-            } else if (washedQty > 0) {
-              const pendingWash = assembledQty - washedQty;
-              washingStatus = `${pendingWash} Pending`;
-            } else {
-              washingStatus = "In-Line";
-            }
-          }
-          washingOp = wOpName;
-        } else {
-          washingStatus = "Not Assigned";
-        }
-      }
-
-      // =========== FINISHING ===========
-      let finishedQty = 0, finishingStatus = "Not Assigned";
-      let finishingOp = "", finishingAssignedOn = "";
-      const [fRows] = await pool.query(`
-        SELECT COALESCE(SUM(total_pieces),0) AS sumFin
-        FROM finishing_data
-        WHERE lot_no = ?
-      `, [lotNo]);
-      finishedQty = parseFloat(fRows[0].sumFin) || 0;
-
-      // finishing assignment depends on denim or hosiery
-      if (isDenim) {
-        const [faRows] = await pool.query(`
-          SELECT fa.is_approved, fa.assigned_on, fa.user_id
-          FROM finishing_assignments fa
-          JOIN washing_data wd ON fa.washing_assignment_id = wd.id
-          WHERE wd.lot_no = ?
-          ORDER BY fa.assigned_on DESC
-          LIMIT 1
-        `, [lotNo]);
-        if (faRows.length) {
-          const fa = faRows[0];
-          finishingAssignedOn = fa.assigned_on ? new Date(fa.assigned_on).toLocaleString() : "";
-          const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [fa.user_id]);
-          const fOpName = opRow ? opRow.username : "Unknown";
-
-          if (fa.is_approved === null) {
-            finishingStatus = `Has Not been Approved By ${fOpName}`;
-          } else if (fa.is_approved == 0) {
-            finishingStatus = `Denied by ${fOpName}`;
-          } else {
-            // is_approved=1
-            // partial or done
-            if (finishedQty >= washedQty && washedQty > 0) {
-              finishingStatus = "Completed";
-            } else if (finishedQty > 0) {
-              const pendingFin = washedQty - finishedQty;
-              finishingStatus = `${pendingFin} Pending`;
-            } else {
-              finishingStatus = "In-Line";
-            }
-          }
-          finishingOp = fOpName;
-        }
-      } else {
-        // hosiery finishing is from stitching_data
-        const [faRows] = await pool.query(`
-          SELECT fa.is_approved, fa.assigned_on, fa.user_id
-          FROM finishing_assignments fa
-          JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-          WHERE sd.lot_no = ?
-          ORDER BY fa.assigned_on DESC
-          LIMIT 1
-        `, [lotNo]);
-        if (faRows.length) {
-          const fa = faRows[0];
-          finishingAssignedOn = fa.assigned_on ? new Date(fa.assigned_on).toLocaleString() : "";
-          const [[opRow]] = await pool.query("SELECT username FROM users WHERE id = ?", [fa.user_id]);
-          const fOpName = opRow ? opRow.username : "Unknown";
-
-          if (fa.is_approved === null) {
-            finishingStatus = `Has Not been Approved By ${fOpName}`;
-          } else if (fa.is_approved == 0) {
-            finishingStatus = `Denied by ${fOpName}`;
-          } else {
-            // isApproved=1
-            if (finishedQty >= stitchedQty && stitchedQty > 0) {
-              finishingStatus = "Completed";
-            } else if (finishedQty > 0) {
-              const pendingFin = stitchedQty - finishedQty;
-              finishingStatus = `${pendingFin} Pending`;
-            } else {
-              finishingStatus = "In-Line";
-            }
-          }
-          finishingOp = fOpName;
-        }
-      }
-
-      // 5) Now we filter by the user’s chosen “department” + “status” if needed.
-      // If department="all", we keep this row no matter what, but we check if the “status” is matched
-      // for at least one step. Or you can define logic that if ANY step matches status, you keep it.
-      // For simplicity, we’ll do: if department != "all", we only look at that step’s status.
-      // If status != "all", we check if that step’s status is it.
-
-      // get a small helper: department info
-      const deptInfo = getDeptInfo({
-        lotNo,
-        isDenim,
-        department,
-        // stitching
-        stitchStatus,
-        // assembly
+      // Build each department’s status using a chain approach
+      const {
+        stitchingStatus,
+        stitchingOp,
+        stitchingAssignedOn,
         assemblyStatus,
-        // washing
+        assemblyOp,
+        assemblyAssignedOn,
         washingStatus,
-        // finishing
+        washingOp,
+        washingAssignedOn,
+        finishingStatus,
+        finishingOp,
+        finishingAssignedOn
+      } = getDepartmentStatuses({
+        isDenim,
+        totalCut,
+        stitchedQty,
+        assembledQty,
+        washedQty,
+        finishedQty,
+        stAssign,
+        asmAssign,
+        washAssign,
+        finAssign
+      });
+
+      // 6) Now filter out by department & status
+      const deptResult = filterByDept({
+        department,
+        isDenim,
+        stitchingStatus,
+        assemblyStatus,
+        washingStatus,
         finishingStatus
       });
-      // deptInfo will have { showRow: bool, actualStatus: string }
-      if (!deptInfo.showRow) {
-        // skip this lot
+      if (!deptResult.showRow) {
+        // skip
         continue;
       }
-
-      // check status
+      // if user selected a status != all, check if that step’s status matches
       if (status !== "all") {
-        // compare case-insensitively
-        const sLow = deptInfo.actualStatus.toLowerCase();
+        const check = deptResult.actualStatus.toLowerCase();
         const want = status.toLowerCase();
-        // We'll do a simple match approach:
-        if (!sLow.includes(want)) {
-          // e.g. if want="denied" but sLow="has not been approved by user",
-          // we won't match. Adjust as needed.
-          if (want === "denied" && sLow.includes("denied")) {
-            // pass
+
+        // If user said "not_assigned", that means we want "In Cutting", "In Stitching", etc.
+        // So let's unify the logic
+        if (want === "not_assigned") {
+          // We'll treat any string starting with "In " as "not assigned"
+          if (!check.startsWith("in ")) {
+            continue;
           }
-          else if (want === "not_assigned" && sLow.includes("not assigned")) {
+        } else if (!check.includes(want)) {
+          // handle small synonyms: "inline" => "in-line"
+          if (want === "inline" && check.includes("in-line")) {
             // pass
-          }
-          else if (!sLow.includes(want)) {
+          } else if (want === "pending" && check.includes("pending")) {
+            // pass
+          } else if (want === "denied" && check.includes("denied")) {
+            // pass
+          } else if (want === "completed" && check.includes("completed")) {
+            // pass
+          } else {
             continue;
           }
         }
       }
 
-      // If we got here, we keep the row
+      // 7) All filters passed => add row
       finalData.push({
         lotNo,
         sku: lot.sku,
-        isDenim,
         lotType: isDenim ? "Denim" : "Hosiery",
         totalCut,
         createdAt: lot.created_at ? new Date(lot.created_at).toLocaleDateString() : "",
         remark: lot.remark || "",
 
-        stitchAssignedOn,
-        stitchOp,
-        stitchStatus,
+        stitchAssignedOn: stitchingAssignedOn,
+        stitchOp: stitchingOp,
+        stitchStatus: stitchingStatus,
         stitchedQty,
 
         assemblyAssignedOn,
@@ -2199,109 +2044,80 @@ router.get('/dashboard/pic-report', isAuthenticated, isOperator, async (req, res
       });
     }
 
-    // 6) If download=1, send Excel; else render EJS
+    // 8) Download or Render
     if (download === "1") {
-      return exportPICExcel(res, finalData, { lotType, department, status, dateFilter, startDate, endDate });
+      return exportPICExcel(res, finalData);
     } else {
       return res.render("operatorPICReport", {
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
       });
     }
-
   } catch (err) {
     console.error("Error in /dashboard/pic-report:", err);
     return res.status(500).send("Server error");
   }
 });
 
-
-/********************************************************************
- * Helper function: checks if a given lotNo is denim.
- * Denim if starts with AK or UM (case-insensitive).
- ********************************************************************/
-function isDenimLot(lotNo = "") {
-  const upper = lotNo.toUpperCase();
-  return upper.startsWith("AK") || upper.startsWith("UM");
+/** 
+ * HELPER: isDenimLot => true if lotNo starts with "AK" or "UM" 
+ */
+function isDenimLot(lotNo="") {
+  const up = lotNo.toUpperCase();
+  return up.startsWith("AK") || up.startsWith("UM");
 }
 
-
-/********************************************************************
- * Helper function: decides whether we “show” a lot row if the user
- * picks a department filter. We also pick which status to check for
- * that department so that the “status” filter can apply.
- ********************************************************************/
-function getDeptInfo({
-  lotNo,
-  isDenim,
+/**
+ * HELPER: filterByDept – decides if we show the row based on user’s "department"
+ * and returns the actualStatus for "status" filter matching.
+ */
+function filterByDept({
   department,
-  stitchStatus,
+  isDenim,
+  stitchingStatus,
   assemblyStatus,
   washingStatus,
   finishingStatus
 }) {
-  // If department = "all", we just choose the "broadest" or the "lowest"?
-  // For simplicity, we'll say “actualStatus” is finishing if denim or finishing if hosiery.
-  // Or you can pick your own logic. Alternatively, you can keep the row if ANY department’s
-  // status is not "N/A". Let’s do it that way: if department=all, we always show the row,
-  // but the “actualStatus” we pass back is “(cutting-lots are always done?), or finishing, or ???”
-  // It’s up to you. We'll just return finishingStatus if the lot has a real finishing assignment,
-  // else if it’s denim but no finishing, we fallback to washing, etc.
-  // Or simpler: we always show the row for “all,” and define actualStatus = “mixed.” 
-  // But that means the “status” filter might not be exactly correct. 
-  // If you want a more precise approach, you might need multiple rows or advanced logic.
-  // For brevity, here’s a simplistic approach:
-
   let showRow = true;
   let actualStatus = "N/A";
 
   if (department === "all") {
-    // just show the row, use finishing if not "N/A" else washing, etc.
-    // you could also combine statuses. It's up to you.
+    // We pick finishing if it’s not "N/A," else washing, else assembly, else stitching
     if (isDenim) {
-      // check finishing first
       if (!finishingStatus.startsWith("N/A")) actualStatus = finishingStatus;
       else if (!washingStatus.startsWith("N/A")) actualStatus = washingStatus;
       else if (!assemblyStatus.startsWith("N/A")) actualStatus = assemblyStatus;
-      else actualStatus = stitchStatus;
+      else actualStatus = stitchingStatus;
     } else {
       // hosiery
       if (!finishingStatus.startsWith("N/A")) actualStatus = finishingStatus;
-      else actualStatus = stitchStatus;
+      else actualStatus = stitchingStatus;
     }
     return { showRow, actualStatus };
   }
 
-  // If department = "cutting", we have no “cutting assignments,” so maybe we consider everything “completed” or “N/A.” 
-  // If you want to skip or show them anyway, define it:
   if (department === "cutting") {
-    // For simplicity, let’s just show them all as “Completed” from day 1. 
-    // If you want to skip them, set showRow=false.
+    // If the user chooses "cutting," you might always show "Completed" or skip entirely.
+    // Let’s say we show everything as "Completed from day 1." 
     actualStatus = "Completed";
     return { showRow, actualStatus };
   }
 
-  // If department = "stitching"
   if (department === "stitching") {
-    if (stitchStatus === "N/A") {
-      // we used "Not Assigned" or other strings, never "N/A" for stitching though
-      // so you can detect that or do a check
-    }
-    actualStatus = stitchStatus;
+    actualStatus = stitchingStatus;
     return { showRow, actualStatus };
   }
 
-  // assembly
   if (department === "assembly") {
     if (!isDenim) {
-      // Not relevant for hosiery
+      // no assembly in hosiery
       return { showRow: false, actualStatus: "N/A" };
     }
     actualStatus = assemblyStatus;
     return { showRow, actualStatus };
   }
 
-  // washing
   if (department === "washing") {
     if (!isDenim) {
       return { showRow: false, actualStatus: "N/A" };
@@ -2310,62 +2126,500 @@ function getDeptInfo({
     return { showRow, actualStatus };
   }
 
-  // finishing
   if (department === "finishing") {
     actualStatus = finishingStatus;
     return { showRow, actualStatus };
   }
 
   // fallback
-  return { showRow, actualStatus: "N/A" };
+  return { showRow, actualStatus };
 }
 
+/** 
+ * HELPER: getDepartmentStatuses – the chain logic
+ * 
+ *  For Denim: 
+ *   1) If no stitching assignment => 
+ *      stitching="In Cutting", assembly/washing/finishing="In Cutting" => done
+ *   2) If stitching is Denied => 
+ *      stitching="Denied by X", assembly/washing/finishing="In Stitching" => done
+ *   3) If stitching is NotApproved => 
+ *      stitching="Has Not been Approved By X", assembly/washing/finishing="In Stitching" => done
+ *   4) If stitching is Approved => partial or complete => we fill "In-Line"/"x Pending"/"Completed"
+ *      then move on to Assembly:
+ *      • If no assembly => assembly/washing/finishing="In Stitching"
+ *      • Else check approval => possibly "Denied", then washing/finishing="In Assembly", etc.
+ *      • If assembly is good => partial or complete => "Pending" or "Completed"
+ *        move to washing, etc...
+ *      and so forth until finishing.
+ * 
+ * For Hosiery:
+ *   1) If no stitching => stitching/finishing="In Cutting"
+ *   2) If stitching is Denied => stitching="Denied...", finishing="In Stitching"
+ *   3) If notApproved => stitching="Has Not...", finishing="In Stitching"
+ *   4) If approved => partial or complete => proceed to finishing
+ *      If no finishing => finishing="In Stitching"
+ *      else check finishing assignment => done
+ */
+function getDepartmentStatuses({
+  isDenim,
+  totalCut,
+  stitchedQty,
+  assembledQty,
+  washedQty,
+  finishedQty,
+  stAssign,
+  asmAssign,
+  washAssign,
+  finAssign
+}) {
+  // For convenience, define placeholders
+  let stitchingStatus  = "N/A";
+  let stitchingOp      = "";
+  let stitchingAssignedOn = "";
+  let assemblyStatus   = isDenim ? "N/A" : "—"; // just for clarity
+  let assemblyOp       = "";
+  let assemblyAssignedOn = "";
+  let washingStatus    = isDenim ? "N/A" : "—";
+  let washingOp        = "";
+  let washingAssignedOn= "";
+  let finishingStatus  = "N/A";
+  let finishingOp      = "";
+  let finishingAssignedOn= "";
 
-/********************************************************************
- * exportPICExcel(res, finalData, filters)
- * Creates an Excel from finalData, writes to res.
- ********************************************************************/
-async function exportPICExcel(res, rows, filters) {
+  //
+  // 1) Stitching
+  //
+  if (!stAssign) {
+    // no stitching assignment => from stitching onward is "In Cutting"
+    stitchingStatus = "In Cutting";
+    if (isDenim) {
+      assemblyStatus = "In Cutting";
+      washingStatus  = "In Cutting";
+      finishingStatus= "In Cutting";
+    } else {
+      finishingStatus= "In Cutting";
+    }
+    // done
+    return {
+      stitchingStatus, stitchingOp, stitchingAssignedOn,
+      assemblyStatus, assemblyOp, assemblyAssignedOn,
+      washingStatus, washingOp, washingAssignedOn,
+      finishingStatus, finishingOp, finishingAssignedOn
+    };
+  } else {
+    const { isApproved, assigned_on, user_id } = stAssign;
+    if (assigned_on) {
+      stitchingAssignedOn = new Date(assigned_on).toLocaleString();
+    }
+    // operator
+    const stOpName = user_id ? (/* we would have looked up the user before? or store it in stAssign? */ stAssign.opName || "Unknown") : "";
+    stitchingOp = stOpName;
+
+    if (isApproved === null) {
+      stitchingStatus = `Has Not been Approved By ${stOpName}`;
+      if (isDenim) {
+        assemblyStatus = "In Stitching";
+        washingStatus  = "In Stitching";
+        finishingStatus= "In Stitching";
+      } else {
+        finishingStatus= "In Stitching";
+      }
+      return {
+        stitchingStatus, stitchingOp, stitchingAssignedOn,
+        assemblyStatus, assemblyOp, assemblyAssignedOn,
+        washingStatus, washingOp, washingAssignedOn,
+        finishingStatus, finishingOp, finishingAssignedOn
+      };
+    } else if (isApproved == 0) {
+      stitchingStatus = `Denied by ${stOpName}`;
+      if (isDenim) {
+        assemblyStatus = "In Stitching";
+        washingStatus  = "In Stitching";
+        finishingStatus= "In Stitching";
+      } else {
+        finishingStatus= "In Stitching";
+      }
+      return {
+        stitchingStatus, stitchingOp, stitchingAssignedOn,
+        assemblyStatus, assemblyOp, assemblyAssignedOn,
+        washingStatus, washingOp, washingAssignedOn,
+        finishingStatus, finishingOp, finishingAssignedOn
+      };
+    } else {
+      // isApproved=1 => partial or complete
+      if (stitchedQty === 0) {
+        stitchingStatus = "In-Line"; // assigned, not started
+      } else if (stitchedQty >= totalCut && totalCut > 0) {
+        stitchingStatus = "Completed";
+      } else {
+        const pend = totalCut - stitchedQty;
+        stitchingStatus = `${pend} Pending`;
+      }
+    }
+  }
+
+  //
+  // 2) Assembly (denim only)
+  //
+  if (isDenim) {
+    if (!asmAssign) {
+      // no assembly => assembly/washing/finishing = "In Stitching"
+      assemblyStatus = "In Stitching";
+      washingStatus  = "In Stitching";
+      finishingStatus= "In Stitching";
+      return {
+        stitchingStatus, stitchingOp, stitchingAssignedOn,
+        assemblyStatus, assemblyOp, assemblyAssignedOn,
+        washingStatus, washingOp, washingAssignedOn,
+        finishingStatus, finishingOp, finishingAssignedOn
+      };
+    } else {
+      const { is_approved, assigned_on, user_id } = asmAssign;
+      assemblyAssignedOn = assigned_on ? new Date(assigned_on).toLocaleString() : "";
+      const asmOpName = asmAssign.opName || "Unknown";
+      assemblyOp = asmOpName;
+
+      if (is_approved === null) {
+        assemblyStatus = `Has Not been Approved By ${asmOpName}`;
+        washingStatus  = "In Assembly";
+        finishingStatus= "In Assembly";
+        return {
+          stitchingStatus, stitchingOp, stitchingAssignedOn,
+          assemblyStatus, assemblyOp, assemblyAssignedOn,
+          washingStatus, washingOp, washingAssignedOn,
+          finishingStatus, finishingOp, finishingAssignedOn
+        };
+      } else if (is_approved == 0) {
+        assemblyStatus = `Denied by ${asmOpName}`;
+        washingStatus  = "In Assembly";
+        finishingStatus= "In Assembly";
+        return {
+          stitchingStatus, stitchingOp, stitchingAssignedOn,
+          assemblyStatus, assemblyOp, assemblyAssignedOn,
+          washingStatus, washingOp, washingAssignedOn,
+          finishingStatus, finishingOp, finishingAssignedOn
+        };
+      } else {
+        // is_approved=1 => partial or complete
+        if (assembledQty === 0) {
+          assemblyStatus = "In-Line";
+        } else if (assembledQty >= stitchedQty && stitchedQty > 0) {
+          assemblyStatus = "Completed";
+        } else {
+          const pend = stitchedQty - assembledQty;
+          assemblyStatus = `${pend} Pending`;
+        }
+      }
+    }
+  }
+
+  //
+  // 3) Washing (denim only)
+  //
+  if (isDenim) {
+    if (!washAssign) {
+      washingStatus  = "In Assembly";
+      finishingStatus= "In Assembly";
+      return {
+        stitchingStatus, stitchingOp, stitchingAssignedOn,
+        assemblyStatus, assemblyOp, assemblyAssignedOn,
+        washingStatus, washingOp, washingAssignedOn,
+        finishingStatus, finishingOp, finishingAssignedOn
+      };
+    } else {
+      const { is_approved, assigned_on, user_id } = washAssign;
+      washingAssignedOn = assigned_on ? new Date(assigned_on).toLocaleString() : "";
+      const washOpName = washAssign.opName || "Unknown";
+      washingOp = washOpName;
+
+      if (is_approved === null) {
+        washingStatus = `Has Not been Approved By ${washOpName}`;
+        finishingStatus = "In Washing";
+        return {
+          stitchingStatus, stitchingOp, stitchingAssignedOn,
+          assemblyStatus, assemblyOp, assemblyAssignedOn,
+          washingStatus, washingOp, washingAssignedOn,
+          finishingStatus, finishingOp, finishingAssignedOn
+        };
+      } else if (is_approved == 0) {
+        washingStatus = `Denied by ${washOpName}`;
+        finishingStatus = "In Washing";
+        return {
+          stitchingStatus, stitchingOp, stitchingAssignedOn,
+          assemblyStatus, assemblyOp, assemblyAssignedOn,
+          washingStatus, washingOp, washingAssignedOn,
+          finishingStatus, finishingOp, finishingAssignedOn
+        };
+      } else {
+        // approved => partial or complete
+        if (washedQty === 0) {
+          washingStatus = "In-Line";
+        } else if (washedQty >= assembledQty && assembledQty > 0) {
+          washingStatus = "Completed";
+        } else {
+          const pend = assembledQty - washedQty;
+          washingStatus = `${pend} Pending`;
+        }
+      }
+    }
+  }
+
+  //
+  // 4) Finishing
+  //
+  if (!finAssign) {
+    // "In Washing" if denim, else "In Stitching" if hosiery
+    finishingStatus = isDenim ? "In Washing" : "In Stitching";
+    return {
+      stitchingStatus, stitchingOp, stitchingAssignedOn,
+      assemblyStatus, assemblyOp, assemblyAssignedOn,
+      washingStatus, washingOp, washingAssignedOn,
+      finishingStatus, finishingOp, finishingAssignedOn
+    };
+  } else {
+    // we have a finishing assignment
+    const { is_approved, isApproved, assigned_on, user_id } = finAssign;
+    const finalIsApproved = (typeof is_approved !== "undefined") ? is_approved : isApproved;
+    if (assigned_on) {
+      finishingAssignedOn = new Date(assigned_on).toLocaleString();
+    }
+    const finOpName = finAssign.opName || "Unknown";
+    finishingOp = finOpName;
+
+    if (finalIsApproved === null) {
+      finishingStatus = `Has Not been Approved By ${finOpName}`;
+    } else if (finalIsApproved == 0) {
+      finishingStatus = `Denied by ${finOpName}`;
+    } else {
+      // approved => partial or complete
+      if (isDenim) {
+        // finishing vs. washed
+        if (finishedQty === 0) {
+          finishingStatus = "In-Line";
+        } else if (finishedQty >= washedQty && washedQty > 0) {
+          finishingStatus = "Completed";
+        } else {
+          const pend = washedQty - finishedQty;
+          finishingStatus = `${pend} Pending`;
+        }
+      } else {
+        // hosiery => finishing vs. stitched
+        if (finishedQty === 0) {
+          finishingStatus = "In-Line";
+        } else if (finishedQty >= stitchedQty && stitchedQty > 0) {
+          finishingStatus = "Completed";
+        } else {
+          const pend = stitchedQty - finishedQty;
+          finishingStatus = `${pend} Pending`;
+        }
+      }
+    }
+  }
+
+  return {
+    stitchingStatus, stitchingOp, stitchingAssignedOn,
+    assemblyStatus, assemblyOp, assemblyAssignedOn,
+    washingStatus, washingOp, washingAssignedOn,
+    finishingStatus, finishingOp, finishingAssignedOn
+  };
+}
+
+/** 
+ * QUICK HELPERS to fetch sums/assignments 
+ * (In your real code, you might do these lookups inline
+ * or unify them, but here they're separated for clarity.)
+ */
+async function getStitchedQty(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumStitched
+    FROM stitching_data
+    WHERE lot_no = ?
+  `, [lotNo]);
+  return parseFloat(rows[0].sumStitched) || 0;
+}
+async function getAssembledQty(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumAsm
+    FROM jeans_assembly_data
+    WHERE lot_no = ?
+  `, [lotNo]);
+  return parseFloat(rows[0].sumAsm) || 0;
+}
+async function getWashedQty(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumWash
+    FROM washing_data
+    WHERE lot_no = ?
+  `, [lotNo]);
+  return parseFloat(rows[0].sumWash) || 0;
+}
+async function getFinishedQty(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT COALESCE(SUM(total_pieces),0) AS sumFin
+    FROM finishing_data
+    WHERE lot_no = ?
+  `, [lotNo]);
+  return parseFloat(rows[0].sumFin) || 0;
+}
+
+/** 
+ * Return the last Stitching assignment for this lot, plus operator name if needed 
+ */
+async function getLastStitchingAssignment(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT sa.id, sa.isApproved, sa.assigned_on, sa.user_id
+    FROM stitching_assignments sa
+    JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+    WHERE c.lot_no = ?
+    ORDER BY sa.assigned_on DESC
+    LIMIT 1
+  `, [lotNo]);
+  if (!rows.length) return null;
+
+  const assign = rows[0];
+  // fetch operator name
+  if (assign.user_id) {
+    const [[u]] = await pool.query(`
+      SELECT username FROM users WHERE id=?
+    `, [assign.user_id]);
+    assign.opName = u ? u.username : "Unknown";
+  }
+  return assign;
+}
+
+/** 
+ * Last Jeans Assembly assignment for a denim lot 
+ */
+async function getLastAssemblyAssignment(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT ja.id, ja.is_approved, ja.assigned_on, ja.user_id
+    FROM jeans_assembly_assignments ja
+    JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+    WHERE sd.lot_no = ?
+    ORDER BY ja.assigned_on DESC
+    LIMIT 1
+  `, [lotNo]);
+  if (!rows.length) return null;
+  const assign = rows[0];
+  if (assign.user_id) {
+    const [[u]] = await pool.query(`
+      SELECT username FROM users WHERE id=?
+    `, [assign.user_id]);
+    assign.opName = u ? u.username : "Unknown";
+  }
+  return assign;
+}
+
+/** 
+ * Last Washing assignment for a denim lot 
+ */
+async function getLastWashingAssignment(lotNo) {
+  const [rows] = await pool.query(`
+    SELECT wa.id, wa.is_approved, wa.assigned_on, wa.user_id
+    FROM washing_assignments wa
+    JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+    WHERE jd.lot_no = ?
+    ORDER BY wa.assigned_on DESC
+    LIMIT 1
+  `, [lotNo]);
+  if (!rows.length) return null;
+  const assign = rows[0];
+  if (assign.user_id) {
+    const [[u]] = await pool.query(`
+      SELECT username FROM users WHERE id=?
+    `, [assign.user_id]);
+    assign.opName = u ? u.username : "Unknown";
+  }
+  return assign;
+}
+
+/** 
+ * Last Finishing assignment:
+ *  - Denim => finishing_assignments linked from washing_data
+ *  - Hosiery => finishing_assignments linked from stitching_data
+ */
+async function getLastFinishingAssignment(lotNo, isDenim) {
+  if (isDenim) {
+    const [rows] = await pool.query(`
+      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.user_id
+      FROM finishing_assignments fa
+      JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+      WHERE wd.lot_no = ?
+      ORDER BY fa.assigned_on DESC
+      LIMIT 1
+    `, [lotNo]);
+    if (!rows.length) return null;
+    const assign = rows[0];
+    if (assign.user_id) {
+      const [[u]] = await pool.query(`
+        SELECT username FROM users WHERE id=?
+      `, [assign.user_id]);
+      assign.opName = u ? u.username : "Unknown";
+    }
+    return assign;
+  } else {
+    // hosiery
+    const [rows] = await pool.query(`
+      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.user_id
+      FROM finishing_assignments fa
+      JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+      WHERE sd.lot_no = ?
+      ORDER BY fa.assigned_on DESC
+      LIMIT 1
+    `, [lotNo]);
+    if (!rows.length) return null;
+    const assign = rows[0];
+    if (assign.user_id) {
+      const [[u]] = await pool.query(`
+        SELECT username FROM users WHERE id=?
+      `, [assign.user_id]);
+      assign.opName = u ? u.username : "Unknown";
+    }
+    return assign;
+  }
+}
+
+/** 
+ * exportPICExcel – simpler version: 
+ * Creates an Excel from finalData and sends to the client.
+ */
+async function exportPICExcel(res, finalData) {
   const ExcelJS = require("exceljs");
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Pendency/In-Line/Completed Report";
+  workbook.creator = "PIC Report";
   const sheet = workbook.addWorksheet("PIC-Report");
 
-  // columns
   sheet.columns = [
     { header: "Lot No", key: "lotNo", width: 15 },
-    { header: "SKU", key: "sku", width: 15 },
-    { header: "Lot Type", key: "lotType", width: 15 },
-    { header: "Total Cut", key: "totalCut", width: 12 },
+    { header: "SKU", key: "sku", width: 12 },
+    { header: "Lot Type", key: "lotType", width: 10 },
+    { header: "Total Cut", key: "totalCut", width: 10 },
     { header: "Created At", key: "createdAt", width: 15 },
     { header: "Remark", key: "remark", width: 20 },
 
-    // Stitching
-    { header: "Stitching Assigned On", key: "stitchAssignedOn", width: 20 },
-    { header: "Stitching Operator", key: "stitchOp", width: 20 },
-    { header: "Stitching Status", key: "stitchStatus", width: 25 },
+    { header: "Stitch Assigned On", key: "stitchAssignedOn", width: 20 },
+    { header: "Stitch Operator", key: "stitchOp", width: 15 },
+    { header: "Stitch Status", key: "stitchStatus", width: 25 },
     { header: "Stitched Qty", key: "stitchedQty", width: 15 },
 
-    // Assembly
     { header: "Assembly Assigned On", key: "assemblyAssignedOn", width: 20 },
-    { header: "Assembly Operator", key: "assemblyOp", width: 20 },
+    { header: "Assembly Operator", key: "assemblyOp", width: 15 },
     { header: "Assembly Status", key: "assemblyStatus", width: 25 },
     { header: "Assembled Qty", key: "assembledQty", width: 15 },
 
-    // Washing
     { header: "Washing Assigned On", key: "washingAssignedOn", width: 20 },
-    { header: "Washing Operator", key: "washingOp", width: 20 },
+    { header: "Washing Operator", key: "washingOp", width: 15 },
     { header: "Washing Status", key: "washingStatus", width: 25 },
     { header: "Washed Qty", key: "washedQty", width: 15 },
 
-    // Finishing
     { header: "Finishing Assigned On", key: "finishingAssignedOn", width: 20 },
-    { header: "Finishing Operator", key: "finishingOp", width: 20 },
+    { header: "Finishing Operator", key: "finishingOp", width: 15 },
     { header: "Finishing Status", key: "finishingStatus", width: 25 },
     { header: "Finished Qty", key: "finishedQty", width: 15 }
   ];
 
-  rows.forEach(r => {
+  finalData.forEach(r => {
     sheet.addRow({
       lotNo: r.lotNo,
       sku: r.sku,
@@ -2402,5 +2656,14 @@ async function exportPICExcel(res, rows, filters) {
   res.end();
 }
 
+
 module.exports = router;
+
+
+
+
+
+
+
+
   
