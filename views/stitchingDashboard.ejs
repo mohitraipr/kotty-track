@@ -863,7 +863,7 @@
             const hidden = document.createElement('input');
             hidden.type = 'hidden';
             hidden.classList.add('updateSizeMappingField');
-            hidden.name = `updateSizes[${lbl}]`;
+            hidden.name = `updateSizes[size_${lbl}]`;
             hidden.value = val;
             updateForm.appendChild(hidden);
           }
