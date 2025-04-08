@@ -548,8 +548,9 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
     }
 
     let updatedGrandTotal = entry.total_pieces;
-    for (const lbl of Object.keys(updateSizes)) {
-      let increment = parseInt(updateSizes[lbl], 10);
+    for (const key of Object.keys(updateSizes)) {
+      const lbl = key.replace(/^size_/, ''); // Remove prefix to get actual size label
+      let increment = parseInt(updateSizes[key], 10);     
       console.log(`Processing update for size label: ${lbl}, increment: ${increment}`);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
