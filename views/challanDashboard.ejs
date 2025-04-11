@@ -7,10 +7,8 @@
   <!-- Bootstrap CSS CDN for styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
-    /* Optional: Ensure button and table have proper spacing */
-    .load-more-container {
-      margin: 20px 0;
-    }
+    .load-more-container { margin: 20px 0; }
+    .action-buttons { margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -39,11 +37,12 @@
       <input type="text" id="searchInput" class="form-control" placeholder="Search by SKU, Lot No, or Cutting Remark" value="<%= search %>">
     </div>
 
-    <!-- Responsive Table for Challan Assignments -->
+    <!-- Responsive Table for Challan Assignments with Selectable Rows -->
     <div class="table-responsive">
       <table class="table table-striped table-bordered" id="assignmentsTable">
         <thead>
           <tr>
+            <th><input type="checkbox" id="selectAllCheckbox"></th>
             <th>ID</th>
             <th>Lot No</th>
             <th>SKU</th>
@@ -61,7 +60,8 @@
         <tbody>
           <% if (assignments && assignments.length) { %>
             <% assignments.forEach(a => { %>
-              <tr>
+              <tr data-id="<%= a.washing_id %>">
+                <td><input type="checkbox" class="rowCheckbox"></td>
                 <td><%= a.washing_id %></td>
                 <td><%= a.lot_no %></td>
                 <td><%= a.sku %></td>
@@ -86,20 +86,68 @@
             <% }); %>
           <% } else { %>
             <tr id="noRecordsRow">
-              <td colspan="12" class="text-center">No records found.</td>
+              <td colspan="13" class="text-center">No records found.</td>
             </tr>
           <% } %>
         </tbody>
       </table>
     </div>
 
-    <!-- Load More Button with progress indicator -->
+    <!-- Load More Button -->
     <div class="text-center load-more-container">
       <button id="loadMoreBtn" class="btn btn-primary">Load More</button>
     </div>
+
+    <!-- Action Buttons for Selection -->
+    <div class="action-buttons text-center">
+      <button id="selectAllBtn" class="btn btn-secondary" disabled>Select All</button>
+      <button id="generateChallanBtn" class="btn btn-info" disabled>Generate Challan</button>
+      <button id="downloadChallanBtn" class="btn btn-success" disabled>Download Challan</button>
+    </div>
   </div>
 
-  <!-- JavaScript for Realtime Search & Pagination -->
+  <!-- Modal for Generating Challan -->
+  <div class="modal fade" id="challanModal" tabindex="-1" role="dialog" aria-labelledby="challanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="challanModalLabel">Generate Challan</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Table to display selected records -->
+          <div class="table-responsive">
+            <table class="table table-bordered" id="modalTable">
+              <thead>
+                <tr>
+                  <th>Lot No (Challan)</th>
+                  <th>SKU</th>
+                  <th>Total Pieces</th>
+                  <th>Cutting Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Selected rows will be inserted here via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="confirmChallanBtn" type="button" class="btn btn-primary" disabled>Confirm (Disabled)</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Include jQuery, Popper.js, and Bootstrap JS for modal functionality -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+  <!-- JavaScript for Realtime Search, Pagination & Row Selection -->
   <script>
     // Debounce function: delays execution until user stops typing.
     function debounce(func, wait) {
@@ -110,11 +158,12 @@
       };
     }
 
-    // Global variables to track current state.
+    // Global variables to track state.
     let currentOffset = document.querySelectorAll('#assignmentsTable tbody tr').length;
     let currentSearchQuery = document.getElementById('searchInput').value;
+    let selectedRows = [];
 
-    // Append new assignments to the table (if append is true) or replace table content.
+    // Update the table rows (append or replace).
     function updateTable(assignments, append = false) {
       const tbody = document.querySelector('#assignmentsTable tbody');
       if (!append) {
@@ -126,7 +175,9 @@
                                 (a.is_approved === 0) ? '<span class="badge badge-danger">Denied</span>' :
                                 '<span class="badge badge-warning">Pending</span>';
           const tr = document.createElement('tr');
+          tr.setAttribute('data-id', a.washing_id);
           tr.innerHTML = `
+            <td><input type="checkbox" class="rowCheckbox"></td>
             <td>${a.washing_id}</td>
             <td>${a.lot_no}</td>
             <td>${a.sku}</td>
@@ -143,20 +194,20 @@
           tbody.appendChild(tr);
         });
       } else if (!append) {
-          tbody.innerHTML = `<tr><td colspan="12" class="text-center">No records found.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="13" class="text-center">No records found.</td></tr>`;
       }
+      attachCheckboxHandlers();
     }
 
-    // Fetch search results (for realtime search).
+    // Fetch search results (for realtime search)
     async function fetchSearchResults(query) {
-      currentOffset = 0; // Reset offset for new search
+      currentOffset = 0; // Reset offset for a new search.
       const url = '/challandashboard/search?search=' + encodeURIComponent(query) + '&offset=' + currentOffset;
       try {
         const response = await fetch(url);
         const data = await response.json();
         updateTable(data.assignments, false);
         currentOffset += data.assignments.length;
-        // Disable the "Load More" button if fewer than 50 records are returned.
         document.getElementById('loadMoreBtn').disabled = (data.assignments.length < 50);
         document.getElementById('loadMoreBtn').textContent = data.assignments.length < 50 ? 'No more records' : 'Load More';
       } catch (error) {
@@ -164,22 +215,19 @@
       }
     }
 
-    // Load more data using the current search criteria or initial load.
+    // Load more data based on current search criteria or default view.
     async function loadMoreData() {
       const loadMoreBtn = document.getElementById('loadMoreBtn');
       loadMoreBtn.disabled = true;
       loadMoreBtn.textContent = 'Loading...';
-
-      // Choose endpoint based on whether a search query is active.
-      const url = currentSearchQuery.trim() !== '' 
-            ? '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery) + '&offset=' + currentOffset 
-            : '/challandashboard?offset=' + currentOffset;
+      const baseUrl = currentSearchQuery.trim() !== '' 
+            ? '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery) 
+            : '/challandashboard';
+      const url = baseUrl + '&offset=' + currentOffset;
       try {
         const response = await fetch(url);
-        const data = currentSearchQuery.trim() !== '' ? await response.json() : null;
-        // For non-search, we assume JSON conversion as well (even though initial render is EJS)
-        // It is recommended to have both endpoints return JSON when called via fetch.
-        let assignments = currentSearchQuery.trim() !== '' ? data.assignments : [];
+        const data = currentSearchQuery.trim() !== '' ? await response.json() : { assignments: [] };
+        let assignments = data.assignments;
         updateTable(assignments, true);
         if (assignments.length) {
           currentOffset += assignments.length;
@@ -195,7 +243,43 @@
       }
     }
 
-    // Attach load more functionality.
+    // Manage checkbox selection and update global selectedRows array.
+    function attachCheckboxHandlers() {
+      const checkboxes = document.querySelectorAll('.rowCheckbox');
+      checkboxes.forEach(checkbox => {
+        checkbox.onchange = () => {
+          selectedRows = [];
+          document.querySelectorAll('.rowCheckbox').forEach(cb => {
+            if (cb.checked) {
+              // Retrieve row data from the parent row.
+              const tr = cb.closest('tr');
+              selectedRows.push({
+                washing_id: tr.getAttribute('data-id'),
+                lot_no: tr.children[2].textContent,
+                sku: tr.children[3].textContent,
+                total_pieces: tr.children[4].textContent,
+                cutting_remark: tr.children[6].textContent,
+              });
+            }
+          });
+          // Enable buttons if any rows are selected.
+          const enableState = selectedRows.length > 0;
+          document.getElementById('generateChallanBtn').disabled = !enableState;
+          document.getElementById('downloadChallanBtn').disabled = !enableState;
+          document.getElementById('selectAllBtn').disabled = false;
+        }
+      });
+    }
+
+    // "Select All" functionality.
+    document.getElementById('selectAllCheckbox').addEventListener('change', function() {
+      const checked = this.checked;
+      document.querySelectorAll('.rowCheckbox').forEach(cb => cb.checked = checked);
+      // Trigger change event to update selection.
+      document.querySelectorAll('.rowCheckbox').forEach(cb => cb.onchange());
+    });
+
+    // Attach event to load more button.
     document.getElementById('loadMoreBtn').addEventListener('click', loadMoreData);
 
     // Debounced search event handler.
@@ -205,6 +289,29 @@
       currentOffset = 0;
       fetchSearchResults(currentSearchQuery);
     }, 300));
+
+    // "Generate Challan" button click handler.
+    document.getElementById('generateChallanBtn').addEventListener('click', function() {
+      const modalTbody = document.querySelector('#modalTable tbody');
+      modalTbody.innerHTML = '';
+      selectedRows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.lot_no}</td>
+          <td>${row.sku}</td>
+          <td>${row.total_pieces}</td>
+          <td>${row.cutting_remark || ''}</td>
+        `;
+        modalTbody.appendChild(tr);
+      });
+      // Show the modal using Bootstrap's modal method.
+      $('#challanModal').modal('show');
+    });
+
+    // "Download Challan" button can have a similar event handler (for now, you might alert the selected data)
+    document.getElementById('downloadChallanBtn').addEventListener('click', function() {
+      alert('Download Challan functionality would process selected data: ' + JSON.stringify(selectedRows));
+    });
   </script>
 </body>
 </html>
