@@ -1,172 +1,312 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Washing Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 5 CSS & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <meta charset="UTF-8" />
+  <title>KOTTY - Washing Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+  <!-- Bootstrap & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
   <style>
-    body { background-color: #f8f9fa; }
-    .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .nav-tabs .nav-link { font-weight: 500; }
-    /* Autocomplete styling */
-    .autocomplete-items {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      max-height: 200px;
-      overflow-y: auto;
-      background: #fff;
-      border: 1px solid #ced4da;
-      border-top: none;
+    body {
+      background-color: #f8f9fa;
+      color: #212529;
+      transition: background-color 0.3s, color 0.3s;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    .autocomplete-items li {
-      cursor: pointer;
-      padding: 8px 12px;
-    }
-    .autocomplete-items li:hover {
-      background: #f0f0f0;
-    }
+    .card { border-radius: 6px; margin-bottom: 20px; }
+    .navbar-brand { font-weight: 500; font-size: 1.2rem; }
+    .main-content { flex: 1 0 auto; }
+    .fade-in { animation: fadeIn 0.4s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .dark-mode { background-color: #121212; color: #f8f9fa; }
+    .dark-mode .navbar,
+    .dark-mode .nav-tabs .nav-link { background-color: #1f1f1f !important; color: #fff; }
+    .dark-mode .card { background-color: #1e1e1e; color: #f8f9fa; border-color: #2a2a2a; }
+    .dark-mode .modal-content { background-color: #1e1e1e; color: #f8f9fa; border-color: #2a2a2a; }
+    .dark-mode .table-bordered > :not(caption) > * > * { border-color: #666; }
+    .dark-mode .table-light { background-color: #272727; color: #fff; }
+    .dark-mode .btn-close { filter: invert(1); }
+    .dark-mode .form-control,
+    .dark-mode select, .dark-mode textarea { background-color: #2b2b2b; color: #f8f9fa; border-color: #444; }
+    .dark-mode input::placeholder { color: #ccc; }
+    .dark-mode .input-group-text { background-color: #2b2b2b; border-color: #444; color: #fff; }
+    .dark-mode .alert { background-color: #2b2b2b; color: #fff; border-color: #444; }
+    .dark-mode a, .dark-mode .nav-link { color: #a5d6ff; }
+    [data-lang="en"] { display: inline; }
+    [data-lang="hi"] { display: none; }
+    .lang-hi [data-lang="en"] { display: none !important; }
+    .lang-hi [data-lang="hi"] { display: inline !important; }
   </style>
 </head>
 <body>
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
+    <div class="container-fluid px-3">
       <a class="navbar-brand" href="#">
-        <i class="fas fa-tshirt"></i> Washing Dashboard
+        <i class="fas fa-tshirt"></i>
+        <span data-lang="en">KOTTY</span>
+        <span data-lang="hi">कोटी</span>
       </a>
-      <div class="ms-auto">
-        <a href="/washingdashboard/approve" class="btn btn-outline-info btn-sm me-2">
-          <i class="fas fa-check-circle"></i> Approvals
-        </a>
-        <a href="/washingdashboard/assign-finishing" class="btn btn-outline-primary btn-sm me-2">
-          <i class="fas fa-tasks"></i> Assign to Finishing
-        </a>
-        <a href="/logout" class="btn btn-outline-danger btn-sm">
-          <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent"
+        aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <!-- Dark Mode Toggle -->
+          <li class="nav-item me-3">
+            <button id="darkModeToggle" class="btn btn-sm btn-outline-light">
+              <i class="fas fa-moon"></i>
+              <span data-lang="en">Dark Mode</span>
+              <span data-lang="hi">डार्क मोड</span>
+            </button>
+          </li>
+          <!-- Language Toggle -->
+          <li class="nav-item me-3">
+            <div class="d-flex align-items-center text-white">
+              <label class="me-2">
+                <input type="radio" name="language" value="en" checked /> EN
+              </label>
+              <label>
+                <input type="radio" name="language" value="hi" /> हिंदी
+              </label>
+            </div>
+          </li>
+          <!-- Navigation Link for Assignment -->
+          <li class="nav-item me-2">
+            <a href="/washingdashboard/assign-washing-in" class="btn btn-outline-light btn-sm">
+              <i class="fas fa-check-circle"></i>
+              <span data-lang="en">Assign Washing-In</span>
+              <span data-lang="hi">वाशिंग इन असाइन करें</span>
+            </a>
+          </li>
+          <!-- Logout -->
+          <li class="nav-item">
+            <a href="/logout" class="btn btn-sm btn-danger">
+              <i class="fas fa-sign-out-alt"></i>
+              <span data-lang="en">Logout</span>
+              <span data-lang="hi">लॉगआउट</span>
+            </a>
+          </li>
+        </ul>
       </div>
     </div>
   </nav>
 
-  <div class="container my-4">
-    <!-- Flash Message Area -->
-    <div id="flashMessage"></div>
+  <!-- Flash Messages -->
+  <div class="container mt-3">
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg){ %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg){ %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
 
-    <!-- Tab Navigation -->
+  <!-- Main Content -->
+  <div class="container my-4 main-content">
+    <h2 class="mb-4">
+      <span data-lang="en">Washing Dashboard</span>
+      <span data-lang="hi">वाशिंग डैशबोर्ड</span>
+    </h2>
+
     <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
-      <li class="nav-item">
-        <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab">
-          <i class="fas fa-plus-circle me-1"></i> Create Entry
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTabContent" type="button" role="tab" aria-controls="createTabContent"
+          aria-selected="true">
+          <i class="fas fa-plus-circle"></i>
+          <span data-lang="en">Create Entry</span>
+          <span data-lang="hi">नई एंट्री</span>
         </button>
       </li>
-      <li class="nav-item">
-        <button class="nav-link" id="existing-tab" data-bs-toggle="tab" data-bs-target="#existingTab" type="button" role="tab">
-          <i class="fas fa-list me-1"></i> Existing Entries
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="existing-tab" data-bs-toggle="tab" data-bs-target="#existingTabContent" type="button" role="tab" aria-controls="existingTabContent"
+          aria-selected="false">
+          <i class="fas fa-list"></i>
+          <span data-lang="en">Existing Entries</span>
+          <span data-lang="hi">मौजूदा एंट्री</span>
         </button>
       </li>
     </ul>
 
-    <div class="tab-content mt-3">
-      <!-- Create Entry Tab -->
-      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-header bg-primary text-white">
-            <i class="fas fa-plus-circle"></i> Create New Washing Entry
+    <div class="tab-content mt-3" id="dashboardTabsContent">
+      <!-- CREATE TAB -->
+      <div class="tab-pane fade show active" id="createTabContent" role="tabpanel" aria-labelledby="create-tab">
+        <div class="card">
+          <div class="card-header">
+            <h4 class="mb-0">
+              <i class="fas fa-plus-circle"></i>
+              <span data-lang="en">Create New Washing Entry & Assign</span>
+              <span data-lang="hi">नई वाशिंग एंट्री बनाएं और असाइन करें</span>
+            </h4>
           </div>
           <div class="card-body">
-            <form id="createForm" enctype="multipart/form-data">
-              <div class="mb-3 position-relative">
-                <label for="selectedLotIdSearch" class="form-label">Select Lot</label>
-                <input type="text" id="selectedLotIdSearch" class="form-control" placeholder="Search assigned lot..." required>
-                <input type="hidden" name="selectedLotId" id="selectedLotId" required>
-                <ul class="list-group autocomplete-items" id="lotAutocomplete"></ul>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Remark (optional)</label>
-                <input type="text" name="remark" class="form-control" placeholder="Enter remark...">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Image (optional)</label>
-                <input type="file" name="image_file" class="form-control" accept="image/*">
-              </div>
-              <div id="lotSizesContainer" style="display:none;">
-                <h5 class="mt-4">Sizes for This Lot</h5>
-                <table class="table table-bordered" id="sizesTable">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Size Label</th>
-                      <th>Max Available</th>
-                      <th>Enter Pieces</th>
-                    </tr>
-                  </thead>
-                  <tbody></tbody>
-                </table>
-                <div class="mt-2">
-                  <strong>Total Pieces Selected: </strong><span id="createTotalPieces">0</span>
+            <form id="createForm" action="/washingdashboard/create" method="POST" enctype="multipart/form-data">
+              <div class="row mb-3">
+                <!-- Select Lot Dropdown (Populated from server-side "lots") -->
+                <div class="col-md-4 mb-3 mb-md-0">
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Select Lot</span>
+                    <span data-lang="hi">लॉट चुनें</span>
+                  </label>
+                  <select id="selectedLotId" name="selectedLotId" class="form-select" required>
+                    <option value="">-- Choose a lot --</option>
+                    <% lots.forEach(function(l) { %>
+                      <option value="<%= l.id %>">
+                        <%= l.lot_no %> (SKU: <%= l.sku %>)
+                        <% if (l.remark) { %>- <%= l.remark %><% } %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </div>
+                <!-- Remark -->
+                <div class="col-md-4 mb-3 mb-md-0">
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Remark (optional)</span>
+                    <span data-lang="hi">टिप्पणी (वैकल्पिक)</span>
+                  </label>
+                  <input type="text" class="form-control" name="remark" placeholder="Any remarks..." />
+                </div>
+                <!-- Image -->
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">
+                    <span data-lang="en">Image (optional)</span>
+                    <span data-lang="hi">चित्र (वैकल्पिक)</span>
+                  </label>
+                  <input type="file" class="form-control" name="image_file" accept="image/*" />
                 </div>
               </div>
-              <button type="submit" class="btn btn-success mt-3">
-                <i class="fas fa-check me-1"></i> Create Washing Entry
+
+              <!-- Sizes (loaded dynamically from the selected lot) -->
+              <div class="mt-4" id="lotSizesContainer" style="display:none;">
+                <h5>
+                  <span data-lang="en">Sizes for This Lot</span>
+                  <span data-lang="hi">इस लॉट के साइज़</span>
+                </h5>
+                <div class="table-responsive">
+                  <table class="table table-bordered align-middle" id="lotSizesTable">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Size Label</th>
+                        <th>Max Available</th>
+                        <th>Enter Pieces</th>
+                        <th>Assign To User (Optional)</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="mt-2">
+                  <strong>
+                    <span data-lang="en">Total Pieces Selected:</span>
+                    <span data-lang="hi">कुल टुकड़े:</span>
+                  </strong>
+                  <span id="createTotalPieces">0</span>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary mt-3">
+                <i class="fas fa-check"></i>
+                <span data-lang="en">Create & Assign</span>
+                <span data-lang="hi">बनाएं और असाइन करें</span>
               </button>
             </form>
           </div>
         </div>
       </div>
 
-      <!-- Existing Entries Tab -->
-      <div class="tab-pane fade" id="existingTab" role="tabpanel">
+      <!-- EXISTING ENTRIES TAB -->
+      <div class="tab-pane fade" id="existingTabContent" role="tabpanel" aria-labelledby="existing-tab">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4><i class="fas fa-list"></i> Existing Washing Entries</h4>
+          <h4 class="mb-0">
+            <i class="fas fa-list"></i>
+            <span data-lang="en">Existing Entries</span>
+            <span data-lang="hi">मौजूदा एंट्री</span>
+          </h4>
           <a href="/washingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel me-1"></i> Download Excel
+            <i class="fas fa-file-excel"></i>
+            <span data-lang="en">Download Excel</span>
+            <span data-lang="hi">एक्सेल डाउनलोड</span>
           </a>
         </div>
+
+        <!-- Search input for existing entries -->
         <div class="input-group mb-3">
           <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU...">
+          <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU..." />
         </div>
+
+        <!-- Container for lazy-loaded entries -->
         <div id="existingEntriesContainer" class="accordion"></div>
+        <!-- IntersectionObserver sentinel for lazy loading -->
         <div id="loadMoreSentinel" style="height: 60px;"></div>
       </div>
     </div>
   </div>
 
-  <!-- Update Modal -->
+  <!-- UPDATE MODAL (structure similar to stitching update modal) -->
   <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
-        <form id="updateForm">
+        <form id="updateForm" method="POST" action="">
           <div class="modal-header">
-            <h5 class="modal-title" id="updateModalLabel"><i class="fas fa-edit"></i> Update Washing Data</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h5 class="modal-title" id="updateModalLabel">
+              <i class="fas fa-edit"></i>
+              <span data-lang="en">Update Washing Data</span>
+              <span data-lang="hi">वाशिंग डेटा अपडेट करें</span>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <p><strong>Updating Entry ID:</strong> <span id="updatingEntryId"></span></p>
-            <table class="table table-bordered" id="updateSizesTable">
-              <thead class="table-light">
-                <tr>
-                  <th>Size Label</th>
-                  <th>Already Used</th>
-                  <th>Max Remain</th>
-                  <th>New Pieces (Increment)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-            <p class="small text-muted">Leave blank for 0 increment.</p>
+            <p>
+              <strong>
+                <span data-lang="en">Updating Entry ID:</span>
+                <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
+              </strong>
+              <span id="updatingEntryId">-</span>
+            </p>
+            <div class="table-responsive">
+              <table class="table table-bordered align-middle" id="updateSizesTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>Size Label</th>
+                    <th>Already Used</th>
+                    <th>Max Remain</th>
+                    <th>New Pieces (Increment)</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="small text-muted">
+              <span data-lang="en">Leave a field blank or zero for no increment.</span>
+              <span data-lang="hi">0 या खाली छोड़ें तो कुछ नहीं जुड़ेगा।</span>
+            </p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <i class="fas fa-times"></i> Cancel
+              <span data-lang="en">Cancel</span>
+              <span data-lang="hi">रद्द करें</span>
             </button>
             <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i> Save Updates
+              <i class="fas fa-save"></i>
+              <span data-lang="en">Save Updates</span>
+              <span data-lang="hi">सेव करें</span>
             </button>
           </div>
         </form>
@@ -174,158 +314,189 @@
     </div>
   </div>
 
-  <!-- Bootstrap Bundle JS -->
+  <!-- jQuery and Bootstrap Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ---------------------------
-    // Helper: Flash Message
-    // ---------------------------
-    function showFlashMessage(type, message) {
-      const flashArea = document.getElementById('flashMessage');
-      flashArea.innerHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-          <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i> ${message}
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      `;
-    }
+    /*****************************************************
+     * DARK MODE / LANGUAGE
+     *****************************************************/
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+    });
 
-    // ---------------------------
-    // Lot Selection Autocomplete
-    // ---------------------------
-    const lotsData = <%- JSON.stringify(lots) %> || [];
-    const selectedLotIdSearch = document.getElementById('selectedLotIdSearch');
-    const selectedLotId = document.getElementById('selectedLotId');
-    const lotAutocomplete = document.getElementById('lotAutocomplete');
-
-    selectedLotIdSearch.addEventListener('input', () => {
-      lotAutocomplete.innerHTML = '';
-      const term = selectedLotIdSearch.value.toLowerCase();
-      if (!term) {
-        lotAutocomplete.style.display = 'none';
-        return;
-      }
-      const filtered = lotsData.filter(l => (`${l.lot_no} ${l.sku}`).toLowerCase().includes(term));
-      if (!filtered.length) {
-        lotAutocomplete.style.display = 'none';
-        return;
-      }
-      filtered.forEach(item => {
-        const li = document.createElement('li');
-        li.classList.add('list-group-item');
-        li.innerHTML = `<i class="fas fa-warehouse me-1"></i> Lot ${item.lot_no} (SKU: ${item.sku})`;
-        li.dataset.value = item.id;
-        lotAutocomplete.appendChild(li);
+    const langRadios = document.querySelectorAll('input[name="language"]');
+    langRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.value === 'hi') {
+          document.body.classList.add('lang-hi');
+        } else {
+          document.body.classList.remove('lang-hi');
+        }
       });
-      lotAutocomplete.style.display = 'block';
-    });
-    lotAutocomplete.addEventListener('click', (e) => {
-      if (e.target && e.target.matches('li.list-group-item')) {
-        selectedLotIdSearch.value = e.target.textContent;
-        selectedLotId.value = e.target.dataset.value;
-        lotAutocomplete.style.display = 'none';
-        fetchLotSizes(e.target.dataset.value);
-      }
-    });
-    document.addEventListener('click', (e) => {
-      if (!lotAutocomplete.contains(e.target) && !selectedLotIdSearch.contains(e.target)) {
-        lotAutocomplete.style.display = 'none';
-      }
     });
 
-    // ---------------------------
-    // Fetch Lot Sizes & Render
-    // ---------------------------
+    /*****************************************************
+     * CREATE TAB LOGIC (Washing Dashboard)
+     *****************************************************/
+    let assignableUsers = [];
+    const lotSelect = document.getElementById('selectedLotId');
     const lotSizesContainer = document.getElementById('lotSizesContainer');
-    const sizesTableBody = document.querySelector('#sizesTable tbody');
-    const createTotalPieces = document.getElementById('createTotalPieces');
+    const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
+    const createTotalPiecesElem = document.getElementById('createTotalPieces');
 
-    async function fetchLotSizes(lotId) {
-      try {
-        const res = await fetch(`/washingdashboard/get-lot-sizes/${lotId}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        renderSizes(data);
-      } catch (err) {
-        console.error('Error fetching lot sizes:', err);
+    lotSelect.addEventListener('change', async () => {
+      const val = lotSelect.value;
+      if (!val) {
         lotSizesContainer.style.display = 'none';
-        sizesTableBody.innerHTML = '';
+        lotSizesTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+        return;
       }
-    }
+      try {
+        // Fetch lot sizes from washing endpoint
+        const res = await fetch(`/washingdashboard/get-lot-sizes/${val}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const sizesData = await res.json();
 
-    function renderSizes(sizesArr) {
-      sizesTableBody.innerHTML = '';
+        // Fetch assignable washing users if not already loaded
+        if (!assignableUsers.length) {
+          const resp = await fetch('/washingdashboard/create/assignable-users');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const json = await resp.json();
+          assignableUsers = json.data || [];
+        }
+        renderLotSizes(sizesData);
+      } catch (err) {
+        console.error('Error fetching lot sizes or users:', err);
+        lotSizesContainer.style.display = 'none';
+        lotSizesTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+      }
+    });
+
+    function renderLotSizes(sizesArr) {
       lotSizesContainer.style.display = 'block';
+      lotSizesTableBody.innerHTML = '';
       sizesArr.forEach(sz => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${sz.size_label}</td>
-          <td>${sz.remain}</td>
-          <td>
-            <input type="number" min="0" max="${sz.remain}" class="form-control" value="0" data-size-id="${sz.id}">
-          </td>
-        `;
-        sizesTableBody.appendChild(tr);
+
+        // Size Label
+        const tdLabel = document.createElement('td');
+        tdLabel.textContent = sz.size_label;
+        tr.appendChild(tdLabel);
+
+        // Max Available
+        const tdRemain = document.createElement('td');
+        tdRemain.textContent = sz.remain;
+        tr.appendChild(tdRemain);
+
+        // Enter Pieces (default = max remain)
+        const tdInput = document.createElement('td');
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.max = String(sz.remain);
+        inp.value = String(sz.remain);
+        inp.classList.add('form-control');
+        inp.dataset.sizeId = sz.id;
+        inp.required = true;
+        inp.addEventListener('input', updateCreateTotal);
+        tdInput.appendChild(inp);
+        tr.appendChild(tdInput);
+
+        // Assign To Washing-In User (Optional)
+        const tdAssign = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.classList.add('form-select');
+        const optNone = document.createElement('option');
+        optNone.value = '';
+        optNone.textContent = '--No Assignment--';
+        sel.appendChild(optNone);
+        assignableUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          sel.appendChild(opt);
+        });
+        tdAssign.appendChild(sel);
+        tr.appendChild(tdAssign);
+
+        lotSizesTableBody.appendChild(tr);
       });
-      createTotalPieces.textContent = '0';
+      updateCreateTotal();
     }
 
-    function updateTotal() {
+    function updateCreateTotal() {
       let sum = 0;
-      const inputs = sizesTableBody.querySelectorAll('input');
+      const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
       inputs.forEach(inp => {
         const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) sum += val;
+        if (!isNaN(val) && val > 0) {
+          sum += val;
+        }
       });
-      createTotalPieces.textContent = sum;
+      createTotalPiecesElem.textContent = sum;
     }
-    sizesTableBody.addEventListener('input', updateTotal);
 
-    // ---------------------------
-    // AJAX Create Form Submission
-    // ---------------------------
+    // Build hidden fields for sizes and assignments on create form submission
     const createForm = document.getElementById('createForm');
-    createForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(createForm);
-      const rows = sizesTableBody.querySelectorAll('tr');
-      if (!rows.length) {
-        alert('No sizes loaded. Please select a lot.');
+    createForm.addEventListener('submit', (e) => {
+      const selectedLot = lotSelect.value;
+      if (!selectedLot) {
+        e.preventDefault();
+        alert('Please select a lot first.');
         return;
       }
+      const rows = lotSizesTableBody.querySelectorAll('tr');
+      if (!rows.length) {
+        e.preventDefault();
+        alert('No sizes found for this lot!');
+        return;
+      }
+      // Remove previous hidden fields
+      document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
+      document.querySelectorAll('.assignmentField').forEach(el => el.remove());
+
       rows.forEach(row => {
+        const remain = parseInt(row.children[1].textContent, 10);
         const input = row.children[2].querySelector('input');
-        let val = parseInt(input.value, 10);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 0) {
-          formData.append(`sizes[${input.dataset.sizeId}]`, val);
+        let piecesRequested = parseInt(input.value, 10);
+        if (isNaN(piecesRequested) || piecesRequested < 0) piecesRequested = 0;
+        if (piecesRequested > remain) {
+          e.preventDefault();
+          alert(`Requested ${piecesRequested} but only ${remain} remain for size ${row.children[0].textContent}`);
+          return;
+        }
+        if (piecesRequested > 0) {
+          const sizeId = input.dataset.sizeId;
+          const hiddenSize = document.createElement('input');
+          hiddenSize.type = 'hidden';
+          hiddenSize.classList.add('sizeMappingField');
+          hiddenSize.name = `sizes[${sizeId}]`;
+          hiddenSize.value = piecesRequested;
+          createForm.appendChild(hiddenSize);
+        }
+        // Also append assignment if any
+        const sel = row.children[3].querySelector('select');
+        if (sel.value) {
+          const sizeId = input.dataset.sizeId;
+          const hiddenAssign = document.createElement('input');
+          hiddenAssign.type = 'hidden';
+          hiddenAssign.classList.add('assignmentField');
+          hiddenAssign.name = `assignments[${sizeId}]`;
+          hiddenAssign.value = sel.value;
+          createForm.appendChild(hiddenAssign);
         }
       });
-      try {
-        const res = await fetch('/washingdashboard/create', {
-          method: 'POST',
-          body: formData
-        });
-        // If the backend sends a redirect, follow it
-        if (res.redirected) {
-          window.location.href = res.url;
-        } else {
-          const result = await res.json();
-          if (result.success) {
-            showFlashMessage('success', result.message || 'Washing entry created successfully.');
-            createForm.reset();
-            lotSizesContainer.style.display = 'none';
-          } else {
-            showFlashMessage('danger', result.error || 'Error creating washing entry.');
-          }
-        }
-      } catch (err) {
-        console.error('Error creating washing entry:', err);
-        showFlashMessage('danger', 'Error creating washing entry.');
-      }
     });
 
-    // ---------------------------
+    /*****************************************************
+     * EXISTING ENTRIES & UPDATE MODAL (Similar to stitching)
+     *****************************************************/
+    // [The remaining code (lazy-load existing entries and update modal functionality) remains similar to your stitching dashboard.
+      // ---------------------------
     // Lazy Load Existing Entries
     // ---------------------------
     let offset = 0, loading = false, hasMore = true;
@@ -475,6 +646,7 @@
         }
       });
     }
+
   </script>
 </body>
 </html>
