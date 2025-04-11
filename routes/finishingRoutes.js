@@ -33,7 +33,6 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
              CASE
                WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
                WHEN fa.washing_in_data_id IS NOT NULL THEN 'Washing'
-               WHEN fa.washing_in_assignment_id IS NOT NULL THEN 'Washing-In'
              END AS department
       FROM finishing_assignments fa
       WHERE fa.user_id = ? 
