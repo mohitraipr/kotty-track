@@ -5,9 +5,11 @@ const { isAuthenticated } = require('../middlewares/auth');
 
 // GET /challandashboard
 // Renders the main Challan Dashboard with initial records.
+// This route accepts an optional "offset" query parameter.
 router.get('/', isAuthenticated, async (req, res) => {
   try {
-    // On initial load, fetch all records (no search filter).
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const limit = 50;
     const [assignments] = await pool.query(`
       SELECT 
         wa.id AS washing_id,
@@ -28,9 +30,10 @@ router.get('/', isAuthenticated, async (req, res) => {
       JOIN users u ON wa.user_id = u.id
       JOIN users m ON wa.jeans_assembly_master_id = m.id
       ORDER BY wa.assigned_on DESC
-      LIMIT 100
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
     
+    // On initial load render the EJS view.
     res.render('challanDashboard', {
       assignments,
       search: '',
@@ -46,10 +49,12 @@ router.get('/', isAuthenticated, async (req, res) => {
 });
 
 // GET /challandashboard/search
-// API endpoint for real‑time search requests.
+// API endpoint for real‑time search requests with pagination support.
 router.get('/search', isAuthenticated, async (req, res) => {
   try {
     const searchQuery = req.query.search ? req.query.search.trim() : '';
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const limit = 50;
     const likeStr = `%${searchQuery}%`;
     const [assignments] = await pool.query(`
       SELECT 
@@ -72,8 +77,8 @@ router.get('/search', isAuthenticated, async (req, res) => {
       JOIN users m ON wa.jeans_assembly_master_id = m.id
       WHERE jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?
       ORDER BY wa.assigned_on DESC
-      LIMIT 100
-    `, [likeStr, likeStr, likeStr]);
+      LIMIT ? OFFSET ?
+    `, [likeStr, likeStr, likeStr, limit, offset]);
     
     res.json({ assignments });
   } catch (error) {
@@ -83,4 +88,3 @@ router.get('/search', isAuthenticated, async (req, res) => {
 });
 
 module.exports = router;
- 
