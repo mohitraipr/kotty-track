@@ -1,0 +1,239 @@
+<!-- views/washingAssignWashingIn.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assign to Washing In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body { background-color: #f8f9fa; }
+    .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#">
+        <i class="fas fa-tasks"></i> Assign to Washing In
+      </a>
+      <div class="ms-auto">
+        <a href="/washingin" class="btn btn-outline-light btn-sm me-2">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/logout" class="btn btn-outline-danger btn-sm">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </div>
+    </div>
+  </nav>
+  
+  <div class="container my-4">
+    <!-- Flash Message Area -->
+    <div id="flashMessage"></div>
+    
+    <h3 class="mb-3"><i class="fas fa-tasks"></i> Assign Partial Sizes to Washing In</h3>
+    
+    <!-- Search Field -->
+    <div class="mb-3">
+      <label for="searchInput" class="form-label">Search by Lot or SKU:</label>
+      <input type="text" id="searchInput" class="form-control" placeholder="Type to filter...">
+    </div>
+    
+    <!-- Container for unassigned data from washing_data -->
+    <div id="assignmentsContainer"></div>
+    
+    <!-- Form for Washing In Assignment (AJAX submission) -->
+    <form id="assignWashingInForm" class="mt-4">
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="target_day" class="form-label fw-semibold">Target Day (optional)</label>
+          <input type="date" name="target_day" id="target_day" class="form-control">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-paper-plane"></i> Submit Washing In Assignments
+      </button>
+    </form>
+  </div>
+
+  <!-- Bootstrap Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Global variables
+    let washingInUsers = [];
+    let allData = []; // => Array of objects like: { washing_data_id, lot_no, sku, sizes: [{ size_label, pieces }] }
+
+    const searchInput = document.getElementById('searchInput');
+    const assignmentsContainer = document.getElementById('assignmentsContainer');
+    const assignWashingInForm = document.getElementById('assignWashingInForm');
+    const flashMessageDiv = document.getElementById('flashMessage');
+
+    // Flash message helper
+    function showFlashMessage(type, message) {
+      flashMessageDiv.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+          <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i> ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      `;
+    }
+
+    // Fetch washing_in users
+    async function fetchWashingInUsers() {
+      try {
+        const resp = await fetch('/washingdashboard/assign-washing-in/users', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        washingInUsers = json.data || [];
+      } catch (err) {
+        console.error('[ERROR] fetchWashingInUsers =>', err);
+        showFlashMessage('danger', 'Error fetching washing_in users.');
+      }
+    }
+
+    // Fetch unassigned data from washing_data
+    async function fetchUnassignedData() {
+      try {
+        const resp = await fetch('/washingdashboard/assign-washing-in/data', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        allData = json.data || [];
+        renderData();
+      } catch (err) {
+        console.error('[ERROR] fetchUnassignedData =>', err);
+        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading data.</div>';
+      }
+    }
+
+    function renderData() {
+      assignmentsContainer.innerHTML = '';
+      if (!allData.length) {
+        assignmentsContainer.innerHTML = '<div class="alert alert-info">No unassigned sizes found.</div>';
+        return;
+      }
+      const filterVal = searchInput.value.trim().toLowerCase();
+      const filtered = allData.filter(entry =>
+        (`${entry.lot_no} ${entry.sku}`).toLowerCase().includes(filterVal)
+      );
+      if (!filtered.length) {
+        assignmentsContainer.innerHTML = '<div class="alert alert-warning">No matching results.</div>';
+        return;
+      }
+      // For each "entry": { washing_data_id, lot_no, sku, sizes: [...] }
+      filtered.forEach(entry => {
+        const wDataId = entry.washing_data_id; // ID from washing_data
+        const card = document.createElement('div');
+        card.classList.add('card', 'mb-3');
+        card.innerHTML = `
+          <div class="card-header bg-secondary text-white">
+            <strong>Lot:</strong> ${entry.lot_no} |
+            <strong>SKU:</strong> ${entry.sku} |
+            <span class="badge bg-light text-dark">WashData ID: ${wDataId}</span>
+          </div>
+          <div class="card-body">
+            <table class="table table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th>Size Label</th>
+                  <th>Pieces</th>
+                  <th>Assign Washing In User</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-asg-${wDataId}"></tbody>
+            </table>
+          </div>
+        `;
+        assignmentsContainer.appendChild(card);
+        const tbody = document.getElementById(`tbody-asg-${wDataId}`);
+        entry.sizes.forEach(sz => {
+          const tr = document.createElement('tr');
+          const optionsHtml = washingInUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+          tr.innerHTML = `
+            <td>${sz.size_label}</td>
+            <td>${sz.pieces}</td>
+            <td>
+              <select class="form-select washingInSelect">
+                <option value="">--Select Washing In User--</option>
+                ${optionsHtml}
+              </select>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    searchInput.addEventListener('input', renderData);
+
+    // On form submit, gather selected Washing In users for each size
+    assignWashingInForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const finalObj = {};
+
+      // Loop over allData again to read user selections
+      allData.forEach(entry => {
+        const wDataId = entry.washing_data_id;
+        const tbody = document.getElementById(`tbody-asg-${wDataId}`);
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(r => {
+          const sizeLabel = r.cells[0].textContent.trim();
+          const selectElem = r.cells[2].querySelector('select.washingInSelect');
+          const userId = selectElem.value;
+          if (userId) {
+            // front-end final object => { userId: [ { washing_data_id, size_label }, ... ] }
+            if (!finalObj[userId]) finalObj[userId] = [];
+            finalObj[userId].push({
+              washing_data_id: wDataId,    // <-- the route expects "washing_data_id"
+              size_label: sizeLabel
+            });
+          }
+        });
+      });
+
+      const payload = {
+        target_day: document.getElementById('target_day').value,
+        washingInAssignments: finalObj
+      };
+
+      try {
+        const resp = await fetch('/washingdashboard/assign-washing-in', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        if (result.success) {
+          showFlashMessage('success', result.message || 'Washing In assignments submitted successfully!');
+          // Re-fetch data so we remove assigned items from the UI
+          await fetchUnassignedData();
+        } else {
+          showFlashMessage('danger', result.error || 'Error submitting assignments.');
+        }
+      } catch (err) {
+        console.error('[ERROR] Washing In Assignment Submission =>', err);
+        showFlashMessage('danger', 'Error submitting assignments.');
+      }
+    });
+
+    (async function init() {
+      await fetchWashingInUsers();
+      await fetchUnassignedData();
+    })();
+  </script>
+</body>
+</html>
