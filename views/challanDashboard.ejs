@@ -6,6 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Bootstrap CSS CDN for styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    /* Optional: Ensure button and table have proper spacing */
+    .load-more-container {
+      margin: 20px 0;
+    }
+  </style>
 </head>
 <body>
   <div class="container mt-4">
@@ -33,62 +39,69 @@
       <input type="text" id="searchInput" class="form-control" placeholder="Search by SKU, Lot No, or Cutting Remark" value="<%= search %>">
     </div>
 
-    <!-- Challan Assignments Table -->
-    <table class="table table-striped table-bordered" id="assignmentsTable">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Lot No</th>
-          <th>SKU</th>
-          <th>Total Pieces</th>
-          <th>Assembly Remark</th>
-          <th>Cutting Remark</th>
-          <th>Target Day</th>
-          <th>Assigned On</th>
-          <th>Approval Status</th>
-          <th>Assignment Remark</th>
-          <th>Washer</th>
-          <th>Master</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (assignments && assignments.length) { %>
-          <% assignments.forEach(a => { %>
-            <tr>
-              <td><%= a.washing_id %></td>
-              <td><%= a.lot_no %></td>
-              <td><%= a.sku %></td>
-              <td><%= a.total_pieces %></td>
-              <td><%= a.assembly_remark %></td>
-              <td><%= a.cutting_remark %></td>
-              <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
-              <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
-              <td>
-                <% if (a.is_approved === 1) { %>
-                  <span class="badge badge-success">Approved</span>
-                <% } else if (a.is_approved === 0) { %>
-                  <span class="badge badge-danger">Denied</span>
-                <% } else { %>
-                  <span class="badge badge-warning">Pending</span>
-                <% } %>
-              </td>
-              <td><%= a.assignment_remark || '' %></td>
-              <td><%= a.washer_username %></td>
-              <td><%= a.master_username %></td>
-            </tr>
-          <% }); %>
-        <% } else { %>
+    <!-- Responsive Table for Challan Assignments -->
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered" id="assignmentsTable">
+        <thead>
           <tr>
-            <td colspan="12" class="text-center">No records found.</td>
+            <th>ID</th>
+            <th>Lot No</th>
+            <th>SKU</th>
+            <th>Total Pieces</th>
+            <th>Assembly Remark</th>
+            <th>Cutting Remark</th>
+            <th>Target Day</th>
+            <th>Assigned On</th>
+            <th>Approval Status</th>
+            <th>Assignment Remark</th>
+            <th>Washer</th>
+            <th>Master</th>
           </tr>
-        <% } %>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <% if (assignments && assignments.length) { %>
+            <% assignments.forEach(a => { %>
+              <tr>
+                <td><%= a.washing_id %></td>
+                <td><%= a.lot_no %></td>
+                <td><%= a.sku %></td>
+                <td><%= a.total_pieces %></td>
+                <td><%= a.assembly_remark %></td>
+                <td><%= a.cutting_remark %></td>
+                <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
+                <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
+                <td>
+                  <% if (a.is_approved === 1) { %>
+                    <span class="badge badge-success">Approved</span>
+                  <% } else if (a.is_approved === 0) { %>
+                    <span class="badge badge-danger">Denied</span>
+                  <% } else { %>
+                    <span class="badge badge-warning">Pending</span>
+                  <% } %>
+                </td>
+                <td><%= a.assignment_remark || '' %></td>
+                <td><%= a.washer_username %></td>
+                <td><%= a.master_username %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr id="noRecordsRow">
+              <td colspan="12" class="text-center">No records found.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Load More Button with progress indicator -->
+    <div class="text-center load-more-container">
+      <button id="loadMoreBtn" class="btn btn-primary">Load More</button>
+    </div>
   </div>
 
-  <!-- JavaScript for Realtime Search -->
+  <!-- JavaScript for Realtime Search & Pagination -->
   <script>
-    // Debounce function: delays execution until user stops typing for a specified delay.
+    // Debounce function: delays execution until user stops typing.
     function debounce(func, wait) {
       let timeout;
       return function(...args) {
@@ -97,21 +110,16 @@
       };
     }
 
-    // Fetch search results from our API endpoint.
-    async function fetchSearchResults(query) {
-      try {
-        const response = await fetch('/challandashboard/search?search=' + encodeURIComponent(query));
-        const data = await response.json();
-        updateTable(data.assignments);
-      } catch (error) {
-        console.error('Error fetching search results:', error);
-      }
-    }
+    // Global variables to track current state.
+    let currentOffset = document.querySelectorAll('#assignmentsTable tbody tr').length;
+    let currentSearchQuery = document.getElementById('searchInput').value;
 
-    // Update the table with new results.
-    function updateTable(assignments) {
+    // Append new assignments to the table (if append is true) or replace table content.
+    function updateTable(assignments, append = false) {
       const tbody = document.querySelector('#assignmentsTable tbody');
-      tbody.innerHTML = '';
+      if (!append) {
+        tbody.innerHTML = '';
+      }
       if (assignments && assignments.length) {
         assignments.forEach(a => {
           const approvalBadge = (a.is_approved === 1) ? '<span class="badge badge-success">Approved</span>' :
@@ -134,16 +142,69 @@
           `;
           tbody.appendChild(tr);
         });
-      } else {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center">No records found.</td></tr>`;
+      } else if (!append) {
+          tbody.innerHTML = `<tr><td colspan="12" class="text-center">No records found.</td></tr>`;
       }
     }
 
-    // Listen for input events and perform a debounced search.
+    // Fetch search results (for realtime search).
+    async function fetchSearchResults(query) {
+      currentOffset = 0; // Reset offset for new search
+      const url = '/challandashboard/search?search=' + encodeURIComponent(query) + '&offset=' + currentOffset;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        updateTable(data.assignments, false);
+        currentOffset += data.assignments.length;
+        // Disable the "Load More" button if fewer than 50 records are returned.
+        document.getElementById('loadMoreBtn').disabled = (data.assignments.length < 50);
+        document.getElementById('loadMoreBtn').textContent = data.assignments.length < 50 ? 'No more records' : 'Load More';
+      } catch (error) {
+        console.error('Error fetching search results:', error);
+      }
+    }
+
+    // Load more data using the current search criteria or initial load.
+    async function loadMoreData() {
+      const loadMoreBtn = document.getElementById('loadMoreBtn');
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = 'Loading...';
+
+      // Choose endpoint based on whether a search query is active.
+      const url = currentSearchQuery.trim() !== '' 
+            ? '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery) + '&offset=' + currentOffset 
+            : '/challandashboard?offset=' + currentOffset;
+      try {
+        const response = await fetch(url);
+        const data = currentSearchQuery.trim() !== '' ? await response.json() : null;
+        // For non-search, we assume JSON conversion as well (even though initial render is EJS)
+        // It is recommended to have both endpoints return JSON when called via fetch.
+        let assignments = currentSearchQuery.trim() !== '' ? data.assignments : [];
+        updateTable(assignments, true);
+        if (assignments.length) {
+          currentOffset += assignments.length;
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = 'Load More';
+        } else {
+          loadMoreBtn.textContent = 'No more records';
+        }
+      } catch (error) {
+        console.error('Error loading more data:', error);
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load More';
+      }
+    }
+
+    // Attach load more functionality.
+    document.getElementById('loadMoreBtn').addEventListener('click', loadMoreData);
+
+    // Debounced search event handler.
     const searchInput = document.getElementById('searchInput');
     searchInput.addEventListener('input', debounce((e) => {
-      fetchSearchResults(e.target.value);
-    }, 300));  // Adjust the delay (in milliseconds) as needed.
+      currentSearchQuery = e.target.value;
+      currentOffset = 0;
+      fetchSearchResults(currentSearchQuery);
+    }, 300));
   </script>
 </body>
 </html>
