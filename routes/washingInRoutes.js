@@ -1,0 +1,977 @@
+// routes/washingInRoutes.js
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const multer = require('multer');
+const ExcelJS = require('exceljs');
+const { pool } = require('../config/db');
+
+// If you have authentication middlewares for "washingInMaster" role:
+const { isAuthenticated, isWashingInMaster } = require('../middlewares/auth');
+
+// ----------------------------------------------
+// MULTER SETUP (for optional image uploads)
+// ----------------------------------------------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '..', 'uploads'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + file.originalname;
+    cb(null, 'washingIn-' + uniqueSuffix);
+  }
+});
+const upload = multer({ storage });
+
+/*===================================================================
+  1) APPROVE / DENY WASHING IN ASSIGNMENTS
+===================================================================*/
+
+// GET /washingin/approve
+router.get('/approve', isAuthenticated, isWashingInMaster, (req, res) => {
+  const error = req.flash('error');
+  const success = req.flash('success');
+  // Render an EJS (or any templating) page that shows "Approve washing_in_assignments"
+  return res.render('washingInApprove', {
+    user: req.session.user,
+    error,
+    success
+  });
+});
+
+// GET /washingin/approve/list => returns pending assignments (is_approved IS NULL)
+router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const searchTerm = req.query.search || '';
+    const searchLike = `%${searchTerm}%`;
+
+    // Example: each washing_in_assignments row references washing_data
+    const [rows] = await pool.query(`
+      SELECT wia.id AS assignment_id,
+             wia.sizes_json,
+             wia.assigned_on,
+             wia.is_approved,
+             wia.assignment_remark,
+             wd.lot_no,
+             wd.sku
+      FROM washing_in_assignments wia
+      JOIN washing_data wd ON wia.washing_data_id = wd.id
+      WHERE wia.user_id = ?
+        AND wia.is_approved IS NULL
+        AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
+      ORDER BY wia.assigned_on DESC
+    `, [userId, searchLike, searchLike]);
+
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/approve/list =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingin/approve-lot
+router.post('/approve-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { assignment_id } = req.body;
+
+    if (!assignment_id) {
+      req.flash('error', 'No assignment_id provided.');
+      return res.redirect('/washingin/approve');
+    }
+
+    await pool.query(`
+      UPDATE washing_in_assignments
+      SET is_approved = 1,
+          assignment_remark = NULL
+      WHERE id = ? AND user_id = ?
+    `, [assignment_id, userId]);
+
+    req.flash('success', 'Assignment approved successfully!');
+    return res.redirect('/washingin/approve');
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/approve-lot =>', err);
+    req.flash('error', 'Error approving assignment: ' + err.message);
+    return res.redirect('/washingin/approve');
+  }
+});
+
+// POST /washingin/deny-lot
+router.post('/deny-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { assignment_id, denial_remark } = req.body;
+
+    if (!assignment_id) {
+      req.flash('error', 'No assignment_id provided.');
+      return res.redirect('/washingin/approve');
+    }
+    if (!denial_remark || !denial_remark.trim()) {
+      req.flash('error', 'You must provide a remark for denial.');
+      return res.redirect('/washingin/approve');
+    }
+
+    await pool.query(`
+      UPDATE washing_in_assignments
+      SET is_approved = 0,
+          assignment_remark = ?
+      WHERE id = ? AND user_id = ?
+    `, [denial_remark.trim(), assignment_id, userId]);
+
+    req.flash('success', 'Assignment denied successfully.');
+    return res.redirect('/washingin/approve');
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/deny-lot =>', err);
+    req.flash('error', 'Error denying assignment: ' + err.message);
+    return res.redirect('/washingin/approve');
+  }
+});
+
+/*===================================================================
+  2) WASHING IN DASHBOARD: CREATE, LIST, UPDATE, CHALLAN, DOWNLOAD
+===================================================================*/
+
+// GET /washingin
+router.get('/', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    // Example query: show only approved washing_in_assignments for the current user,
+    //   and filter out any lot_no that has already been used in washing_in_data for this user.
+    //   That means we select from `washing_data` joined to `washing_in_assignments`
+    //   which has is_approved = 1, and no existing washing_in_data record for that lot_no & user.
+    const [lots] = await pool.query(`
+      SELECT wd.id, wd.lot_no, wd.sku, wd.total_pieces
+      FROM washing_data wd
+      JOIN washing_in_assignments wia ON wia.washing_data_id = wd.id
+      WHERE wia.user_id = ?
+        AND wia.is_approved = 1
+        AND wd.lot_no NOT IN (
+          SELECT lot_no
+          FROM washing_in_data
+          WHERE user_id = ?
+        )
+      ORDER BY wd.id DESC
+    `, [userId, userId]);
+
+    const error = req.flash('error');
+    const success = req.flash('success');
+    return res.render('washingInDashboard', {
+      user: req.session.user,
+      lots,
+      error,
+      success
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin =>', err);
+    req.flash('error', 'Cannot load washingIn dashboard data.');
+    return res.redirect('/');
+  }
+});
+
+// GET /washingin/list-entries => for lazy loading the existing washing_in_data
+router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const search = req.query.search || '';
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const limit = 5;
+    const searchLike = `%${search}%`;
+
+    const [rows] = await pool.query(`
+      SELECT *
+      FROM washing_in_data
+      WHERE user_id = ?
+        AND (lot_no LIKE ? OR sku LIKE ?)
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, searchLike, searchLike, limit, offset]);
+
+    if (!rows.length) {
+      return res.json({ data: [], hasMore: false });
+    }
+
+    // gather ids
+    const ids = rows.map(r => r.id);
+    const [sizeRows] = await pool.query(`
+      SELECT *
+      FROM washing_in_data_sizes
+      WHERE washing_in_data_id IN (?)
+    `, [ids]);
+
+    // map sizes
+    const sizeMap = {};
+    sizeRows.forEach(s => {
+      if (!sizeMap[s.washing_in_data_id]) {
+        sizeMap[s.washing_in_data_id] = [];
+      }
+      sizeMap[s.washing_in_data_id].push(s);
+    });
+
+    const data = rows.map(r => ({
+      ...r,
+      sizes: sizeMap[r.id] || []
+    }));
+
+    // check total for pagination
+    const [[{ totalCount }]] = await pool.query(`
+      SELECT COUNT(*) AS totalCount
+      FROM washing_in_data
+      WHERE user_id = ?
+        AND (lot_no LIKE ? OR sku LIKE ?)
+    `, [userId, searchLike, searchLike]);
+    const hasMore = offset + rows.length < totalCount;
+
+    return res.json({ data, hasMore });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/list-entries =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingin/get-lot-sizes/:washingDataId
+//   to fetch sizes for a chosen washing_data record (similar to how we do it in stitching/washing).
+//   Or if you prefer to fetch from the original table that your user will pick from:
+router.get('/get-lot-sizes/:wdId', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const wdId = req.params.wdId;
+
+    // 1) find the washing_data row
+    const [[wd]] = await pool.query(`
+      SELECT *
+      FROM washing_data
+      WHERE id = ?
+    `, [wdId]);
+    if (!wd) {
+      return res.status(404).json({ error: 'washing_data not found' });
+    }
+
+    // 2) gather sizes from washing_data_sizes
+    const [sizes] = await pool.query(`
+      SELECT *
+      FROM washing_data_sizes
+      WHERE washing_data_id = ?
+    `, [wdId]);
+
+    // 3) for each size_label, see how many have already been used in washing_in_data
+    const output = [];
+    for (const s of sizes) {
+      const [[usedRow]] = await pool.query(`
+        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
+        FROM washing_in_data_sizes wids
+        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+        WHERE wid.lot_no = ?
+          AND wids.size_label = ?
+      `, [wd.lot_no, s.size_label]);
+      const used = usedRow.usedCount || 0;
+      const remain = s.pieces - used;
+      output.push({
+        id: s.id,
+        size_label: s.size_label,
+        total_pieces: s.pieces,
+        used,
+        remain: remain < 0 ? 0 : remain
+      });
+    }
+
+    return res.json(output);
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/get-lot-sizes =>', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// OPTIONAL: GET /washingin/create/assignable-users => if you want to assign from washing_in_data to finishing
+router.get('/create/assignable-users', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    // Suppose we have finishing users with role 'finishing'
+    const [rows] = await pool.query(`
+      SELECT u.id, u.username
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE r.name = 'finishing'
+        AND u.is_active = 1
+      ORDER BY u.username ASC
+    `);
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/create/assignable-users =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingin/create => Insert new washing_in_data
+router.post('/create', isAuthenticated, isWashingInMaster, upload.single('image_file'), async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const userId = req.session.user.id;
+    const { selectedWashingDataId, remark } = req.body;
+    const sizesObj = req.body.sizes || {};  // e.g. sizes[sizeId] = pieces
+    const assignmentsObj = req.body.assignments || {}; // e.g. assignments[sizeId] = finishingUserId
+
+    let image_url = null;
+    if (req.file) {
+      image_url = '/uploads/' + req.file.filename;
+    }
+
+    // 1) Validate the washing_data row
+    const [[wd]] = await conn.query(`
+      SELECT *
+      FROM washing_data
+      WHERE id = ?
+    `, [selectedWashingDataId]);
+    if (!wd) {
+      req.flash('error', 'Invalid or no washing_data selected.');
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingin');
+    }
+
+    // 2) Ensure it's actually assigned & approved for the current user
+    const [[assignRow]] = await conn.query(`
+      SELECT id
+      FROM washing_in_assignments
+      WHERE user_id = ?
+        AND washing_data_id = ?
+        AND is_approved = 1
+      LIMIT 1
+    `, [userId, selectedWashingDataId]);
+    if (!assignRow) {
+      req.flash('error', 'Not approved or not assigned to you.');
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingin');
+    }
+
+    // 3) Ensure that we have NOT already used this lot_no
+    const [[alreadyUsed]] = await conn.query(`
+      SELECT id
+      FROM washing_in_data
+      WHERE lot_no = ?
+        AND user_id = ?
+      LIMIT 1
+    `, [wd.lot_no, userId]);
+    if (alreadyUsed) {
+      req.flash('error', `Lot no. ${wd.lot_no} already used for washingIn by you.`);
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingin');
+    }
+
+    // 4) Validate user piece entries
+    let grandTotal = 0;
+    for (const sizeId of Object.keys(sizesObj)) {
+      const userCount = parseInt(sizesObj[sizeId], 10);
+      if (isNaN(userCount) || userCount < 0) {
+        req.flash('error', `Invalid piece count for sizeId ${sizeId}`);
+        await conn.rollback();
+        conn.release();
+        return res.redirect('/washingin');
+      }
+      if (userCount === 0) continue;
+
+      // fetch from washing_data_sizes
+      const [[wds]] = await conn.query(`
+        SELECT *
+        FROM washing_data_sizes
+        WHERE id = ?
+      `, [sizeId]);
+      if (!wds) {
+        req.flash('error', 'Invalid size reference: ' + sizeId);
+        await conn.rollback();
+        conn.release();
+        return res.redirect('/washingin');
+      }
+
+      // how many used so far in washing_in_data
+      const [[usedRow]] = await conn.query(`
+        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
+        FROM washing_in_data_sizes wids
+        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+        WHERE wid.lot_no = ?
+          AND wids.size_label = ?
+      `, [wd.lot_no, wds.size_label]);
+      const used = usedRow.usedCount || 0;
+      const remain = wds.pieces - used;
+      if (userCount > remain) {
+        req.flash(
+          'error',
+          `Cannot create: requested ${userCount} for size [${wds.size_label}] but only ${remain} remain.`
+        );
+        await conn.rollback();
+        conn.release();
+        return res.redirect('/washingin');
+      }
+
+      grandTotal += userCount;
+    }
+
+    if (grandTotal <= 0) {
+      req.flash('error', 'No pieces requested (> 0).');
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingin');
+    }
+
+    // 5) Insert main row
+    const [mainInsert] = await conn.query(`
+      INSERT INTO washing_in_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [userId, wd.lot_no, wd.sku, grandTotal, remark || null, image_url]);
+    const newId = mainInsert.insertId;
+
+    // 6) Insert sizes
+    for (const sizeId of Object.keys(sizesObj)) {
+      const val = parseInt(sizesObj[sizeId], 10) || 0;
+      if (val <= 0) continue;
+
+      const [[wds]] = await conn.query(`
+        SELECT *
+        FROM washing_data_sizes
+        WHERE id = ?
+      `, [sizeId]);
+
+      await conn.query(`
+        INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
+        VALUES (?, ?, ?, NOW())
+      `, [newId, wds.size_label, val]);
+    }
+
+    // 7) (Optional) Assign partial sizes to finishing
+    //    Suppose finishing_assignments table has columns (washing_in_master_id, user_id, washing_in_data_id, sizes_json, is_approved, etc.)
+    const assignMap = {};
+    for (const sizeId of Object.keys(assignmentsObj)) {
+      const assignedFinUserId = assignmentsObj[sizeId];
+      if (!assignedFinUserId) continue;
+
+      // get the label
+      const [[wds]] = await conn.query(`
+        SELECT size_label
+        FROM washing_data_sizes
+        WHERE id = ?
+      `, [sizeId]);
+      if (!assignMap[assignedFinUserId]) {
+        assignMap[assignedFinUserId] = [];
+      }
+      assignMap[assignedFinUserId].push(wds.size_label);
+    }
+
+    for (const finUserId of Object.keys(assignMap)) {
+      const arrLabels = assignMap[finUserId];
+      if (!arrLabels.length) continue;
+      const sizesJson = JSON.stringify(arrLabels);
+
+      await conn.query(`
+        INSERT INTO finishing_assignments
+          (washing_in_master_id, user_id, washing_in_data_id, target_day, assigned_on, sizes_json, is_approved)
+        VALUES (?, ?, ?, NULL, NOW(), ?, NULL)
+      `, [userId, finUserId, newId, sizesJson]);
+    }
+
+    await conn.commit();
+    conn.release();
+
+    req.flash('success', 'Washing In entry created successfully (with optional finishing assignments)!');
+    return res.redirect('/washingin');
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/create =>', err);
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    req.flash('error', 'Error creating washingIn data: ' + err.message);
+    return res.redirect('/washingin');
+  }
+});
+
+// GET /washingin/update/:id/json => fetch the existing sizes for incremental updates
+router.get('/update/:id/json', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const entryId = req.params.id;
+    const userId = req.session.user.id;
+
+    const [[entry]] = await pool.query(`
+      SELECT *
+      FROM washing_in_data
+      WHERE id = ?
+        AND user_id = ?
+    `, [entryId, userId]);
+    if (!entry) {
+      return res.status(403).json({ error: 'No permission or not found' });
+    }
+
+    // fetch the row sizes
+    const [sizes] = await pool.query(`
+      SELECT *
+      FROM washing_in_data_sizes
+      WHERE washing_in_data_id = ?
+      ORDER BY id ASC
+    `, [entryId]);
+
+    // for each size, compute remain from the original washing_data_sizes
+    const output = [];
+    for (const sz of sizes) {
+      // 1) find the total allowed from washing_data_sizes
+      const [[wdsRow]] = await pool.query(`
+        SELECT wds.pieces
+        FROM washing_data_sizes wds
+        JOIN washing_data wd ON wds.washing_data_id = wd.id
+        WHERE wd.lot_no = ?
+          AND wds.size_label = ?
+        LIMIT 1
+      `, [entry.lot_no, sz.size_label]);
+      const totalAllowed = wdsRow ? wdsRow.pieces : 0;
+
+      // 2) how many used so far in washing_in_data
+      const [[usedRow]] = await pool.query(`
+        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
+        FROM washing_in_data_sizes wids
+        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+        WHERE wid.lot_no = ?
+          AND wids.size_label = ?
+      `, [entry.lot_no, sz.size_label]);
+      const used = usedRow.usedCount || 0;
+      const remain = totalAllowed - used;
+
+      output.push({
+        ...sz,
+        remain: remain < 0 ? 0 : remain
+      });
+    }
+
+    return res.json({ sizes: output });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/update/:id/json =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingin/update/:id => handle incremental piece additions
+router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const entryId = req.params.id;
+    const userId = req.session.user.id;
+    const updateSizes = req.body.updateSizes || {}; // e.g. updateSizes[size_L] = incrementVal
+
+    // verify user
+    const [[entry]] = await conn.query(`
+      SELECT *
+      FROM washing_in_data
+      WHERE id = ?
+        AND user_id = ?
+    `, [entryId, userId]);
+    if (!entry) {
+      req.flash('error', 'Record not found or no permission.');
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingin');
+    }
+
+    let updatedTotal = entry.total_pieces;
+
+    for (const lbl of Object.keys(updateSizes)) {
+      let increment = parseInt(updateSizes[lbl], 10);
+      if (isNaN(increment) || increment < 0) increment = 0;
+      if (increment === 0) continue;
+
+      // 1) fetch totalAllowed from washing_data_sizes
+      const [[wdsRow]] = await conn.query(`
+        SELECT wds.pieces
+        FROM washing_data_sizes wds
+        JOIN washing_data wd ON wds.washing_data_id = wd.id
+        WHERE wd.lot_no = ?
+          AND wds.size_label = ?
+        LIMIT 1
+      `, [entry.lot_no, lbl]);
+      const totalAllowed = wdsRow ? wdsRow.pieces : 0;
+
+      // 2) how many used so far
+      const [[usedRow]] = await conn.query(`
+        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
+        FROM washing_in_data_sizes wids
+        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+        WHERE wid.lot_no = ?
+          AND wids.size_label = ?
+      `, [entry.lot_no, lbl]);
+      const used = usedRow.usedCount || 0;
+      const remain = totalAllowed - used;
+      if (increment > remain) {
+        throw new Error(`Cannot add ${increment} to size [${lbl}]. Only ${remain} remain.`);
+      }
+
+      // 3) either update or insert
+      const [[existingRow]] = await conn.query(`
+        SELECT *
+        FROM washing_in_data_sizes
+        WHERE washing_in_data_id = ?
+          AND size_label = ?
+      `, [entryId, lbl]);
+
+      if (!existingRow) {
+        await conn.query(`
+          INSERT INTO washing_in_data_sizes
+            (washing_in_data_id, size_label, pieces, created_at)
+          VALUES (?, ?, ?, NOW())
+        `, [entryId, lbl, increment]);
+      } else {
+        const newCount = existingRow.pieces + increment;
+        await conn.query(`
+          UPDATE washing_in_data_sizes
+          SET pieces = ?
+          WHERE id = ?
+        `, [newCount, existingRow.id]);
+      }
+
+      // 4) update total
+      updatedTotal += increment;
+
+      // 5) record the update in washing_in_data_updates
+      await conn.query(`
+        INSERT INTO washing_in_data_updates
+          (washing_in_data_id, size_label, pieces, updated_at)
+        VALUES (?, ?, ?, NOW())
+      `, [entryId, lbl, increment]);
+    }
+
+    // finally update the main row
+    await conn.query(`
+      UPDATE washing_in_data
+      SET total_pieces = ?
+      WHERE id = ?
+    `, [updatedTotal, entryId]);
+
+    await conn.commit();
+    conn.release();
+
+    req.flash('success', 'WashingIn data updated successfully!');
+    return res.redirect('/washingin');
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/update/:id =>', err);
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    req.flash('error', 'Error updating washingIn data: ' + err.message);
+    return res.redirect('/washingin');
+  }
+});
+
+// GET /washingin/challan/:id => show a "challan" summary
+router.get('/challan/:id', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const entryId = req.params.id;
+
+    const [[row]] = await pool.query(`
+      SELECT *
+      FROM washing_in_data
+      WHERE id = ?
+        AND user_id = ?
+    `, [entryId, userId]);
+    if (!row) {
+      req.flash('error', 'Challan not found or no permission.');
+      return res.redirect('/washingin');
+    }
+
+    const [sizes] = await pool.query(`
+      SELECT *
+      FROM washing_in_data_sizes
+      WHERE washing_in_data_id = ?
+      ORDER BY id ASC
+    `, [entryId]);
+
+    const [updates] = await pool.query(`
+      SELECT *
+      FROM washing_in_data_updates
+      WHERE washing_in_data_id = ?
+      ORDER BY updated_at ASC
+    `, [entryId]);
+
+    // Render an EJS page that displays the row, the sizes, and the update logs
+    return res.render('washingInChallan', {
+      user: req.session.user,
+      entry: row,
+      sizes,
+      updates
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/challan/:id =>', err);
+    req.flash('error', 'Error loading challan: ' + err.message);
+    return res.redirect('/washingin');
+  }
+});
+
+// GET /washingin/download-all => export data to Excel
+router.get('/download-all', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    // fetch main rows
+    const [mainRows] = await pool.query(`
+      SELECT *
+      FROM washing_in_data
+      WHERE user_id = ?
+      ORDER BY created_at ASC
+    `, [userId]);
+
+    // fetch size rows
+    const [allSizes] = await pool.query(`
+      SELECT wids.*
+      FROM washing_in_data_sizes wids
+      JOIN washing_in_data wid ON wid.id = wids.washing_in_data_id
+      WHERE wid.user_id = ?
+      ORDER BY wids.washing_in_data_id, wids.id
+    `, [userId]);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'KottyLifestyle';
+    workbook.created = new Date();
+
+    const mainSheet = workbook.addWorksheet('WashingInData');
+    mainSheet.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Total Pieces', key: 'total_pieces', width: 12 },
+      { header: 'Remark', key: 'remark', width: 25 },
+      { header: 'Image URL', key: 'image_url', width: 30 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+
+    mainRows.forEach(r => {
+      mainSheet.addRow({
+        id: r.id,
+        lot_no: r.lot_no,
+        sku: r.sku,
+        total_pieces: r.total_pieces,
+        remark: r.remark || '',
+        image_url: r.image_url || '',
+        created_at: r.created_at
+      });
+    });
+
+    const sizesSheet = workbook.addWorksheet('WashingInSizes');
+    sizesSheet.columns = [
+      { header: 'ID', key: 'id', width: 6 },
+      { header: 'WashingIn ID', key: 'washing_in_data_id', width: 12 },
+      { header: 'Size Label', key: 'size_label', width: 12 },
+      { header: 'Pieces', key: 'pieces', width: 8 },
+      { header: 'Created At', key: 'created_at', width: 20 }
+    ];
+
+    allSizes.forEach(s => {
+      sizesSheet.addRow({
+        id: s.id,
+        washing_in_data_id: s.washing_in_data_id,
+        size_label: s.size_label,
+        pieces: s.pieces,
+        created_at: s.created_at
+      });
+    });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="WashingInData.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/download-all =>', err);
+    req.flash('error', 'Could not download Excel: ' + err.message);
+    return res.redirect('/washingin');
+  }
+});
+
+/*=================================================================================
+   3) OPTIONAL: ASSIGN WASHING_IN_DATA TO FINISHING (SAME PATTERN AS STITCHING)
+=================================================================================*/
+
+// GET /washingin/assign-finishing
+router.get('/assign-finishing', isAuthenticated, isWashingInMaster, (req, res) => {
+  const error = req.flash('error');
+  const success = req.flash('success');
+  return res.render('washingInAssignFinishing', {
+    user: req.session.user,
+    error,
+    success
+  });
+});
+
+// GET /washingin/assign-finishing/users => finishing users
+router.get('/assign-finishing/users', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT u.id, u.username
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE r.name = 'finishing'
+        AND u.is_active = 1
+      ORDER BY u.username ASC
+    `);
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/assign-finishing/users =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingin/assign-finishing/data
+router.get('/assign-finishing/data', isAuthenticated, isWashingInMaster, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+  
+      // fetch all washing_in_data for current user with their sizes
+      const [mainRows] = await pool.query(`
+        SELECT wid.id AS washing_in_data_id, wid.lot_no, wid.sku, wid.total_pieces,
+               wids.size_label, wids.pieces
+        FROM washing_in_data wid
+        JOIN washing_in_data_sizes wids ON wid.id = wids.washing_in_data_id
+        WHERE wid.user_id = ?
+      `, [userId]);
+  
+      if (!mainRows.length) return res.json({ data: [] });
+  
+      // fetch already assigned sizes
+      const [finRows] = await pool.query(`
+        SELECT washing_in_data_id, sizes_json
+        FROM finishing_assignments
+        WHERE washing_in_master_id = ?
+      `, [userId]);
+  
+      // Create map of assigned sizes
+      const assignedMap = {};
+      finRows.forEach(r => {
+        if (!assignedMap[r.washing_in_data_id]) {
+          assignedMap[r.washing_in_data_id] = new Set();
+        }
+        try {
+          const sizes = JSON.parse(r.sizes_json);
+          if (Array.isArray(sizes)) {
+            sizes.forEach(size => assignedMap[r.washing_in_data_id].add(size));
+          }
+        } catch (e) {
+          console.error('Error parsing sizes_json:', e);
+        }
+      });
+  
+      // Group data by washing_in_data_id
+      const dataMap = {};
+      mainRows.forEach(row => {
+        if (!dataMap[row.washing_in_data_id]) {
+          dataMap[row.washing_in_data_id] = {
+            washing_in_data_id: row.washing_in_data_id,
+            lot_no: row.lot_no,
+            sku: row.sku,
+            total_pieces: row.total_pieces,
+            sizes: []
+          };
+        }
+        
+        // Only include sizes not already assigned
+        const assignedSizes = assignedMap[row.washing_in_data_id] || new Set();
+        if (!assignedSizes.has(row.size_label)) {
+          dataMap[row.washing_in_data_id].sizes.push({
+            size_label: row.size_label,
+            pieces: row.pieces
+          });
+        }
+      });
+  
+      // Convert to array and filter out entries with no sizes
+      const output = Object.values(dataMap).filter(d => d.sizes.length > 0);
+      return res.json({ data: output });
+    } catch (err) {
+      console.error('[ERROR] GET /washingin/assign-finishing/data =>', err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+
+  // POST /washingin/assign-finishing
+router.post('/assign-finishing', isAuthenticated, isWashingInMaster, async (req, res) => {
+    let conn;
+    try {
+      conn = await pool.getConnection();
+      await conn.beginTransaction();
+  
+      const userId = req.session.user.id;
+      const { target_day } = req.body;
+      
+      // Expecting format: { userId: [{ washing_in_data_id, size_label }] }
+      const assignments = req.body.finishingAssignments || {};
+  
+      // Validate we have assignments
+      if (Object.keys(assignments).length === 0) {
+        req.flash('error', 'No assignments provided');
+        await conn.rollback();
+        conn.release();
+        return res.redirect('/washingin/assign-finishing');
+      }
+  
+      // Process each user's assignments
+      for (const [finUserId, sizeAssignments] of Object.entries(assignments)) {
+        if (!sizeAssignments || !Array.isArray(sizeAssignments)) continue;
+  
+        // Group by washing_in_data_id
+        const assignmentsByWashingId = {};
+        sizeAssignments.forEach(({ washing_in_data_id, size_label }) => {
+          if (!assignmentsByWashingId[washing_in_data_id]) {
+            assignmentsByWashingId[washing_in_data_id] = [];
+          }
+          assignmentsByWashingId[washing_in_data_id].push(size_label);
+        });
+  
+        // Create assignment records
+        for (const [washingId, sizeLabels] of Object.entries(assignmentsByWashingId)) {
+          // Validate ownership
+          const [[exists]] = await conn.query(`
+            SELECT id FROM washing_in_data 
+            WHERE id = ? AND user_id = ?
+          `, [washingId, userId]);
+  
+          if (!exists) {
+            throw new Error(`Invalid washing_in_data_id ${washingId} for user ${userId}`);
+          }
+  
+          await conn.query(`
+            INSERT INTO finishing_assignments (
+              washing_in_master_id, 
+              user_id, 
+              washing_in_data_id, 
+              target_day, 
+              assigned_on, 
+              sizes_json, 
+              is_approved
+            ) VALUES (?, ?, ?, ?, NOW(), ?, NULL)
+          `, [
+            userId,
+            finUserId,
+            washingId,
+            target_day || null,
+            JSON.stringify(sizeLabels)
+          ]);
+        }
+      }
+  
+      await conn.commit();
+      conn.release();
+      req.flash('success', 'Assignments created successfully');
+      return res.redirect('/washingin/assign-finishing');
+    } catch (err) {
+      console.error('[ERROR] POST /washingin/assign-finishing =>', err);
+      if (conn) {
+        await conn.rollback();
+        conn.release();
+      }
+      req.flash('error', 'Failed to create assignments: ' + err.message);
+      return res.redirect('/washingin/assign-finishing');
+    }
+  });
+
+module.exports = router;
