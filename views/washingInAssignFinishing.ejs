@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assign to Finishing - Washing In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap 5 CSS & FontAwesome -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body { background-color: #f8f9fa; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="#">
+        <i class="fas fa-tasks"></i> Assign to Finishing
+      </a>
+      <div class="ms-auto">
+        <a href="/washingin" class="btn btn-outline-light btn-sm me-2">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/logout" class="btn btn-danger btn-sm">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <!-- Flash Messages -->
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg){ %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg){ %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+
+    <h2 class="mb-3"><i class="fas fa-tasks"></i> Assign Partial Sizes to Finishing</h2>
+
+    <!-- Search Field -->
+    <div class="mb-3">
+      <input type="text" id="searchInput" class="form-control" placeholder="Search by lot or SKU..." />
+    </div>
+
+    <!-- Container for available washing_in_data for assignment -->
+    <div id="assignmentsContainer"></div>
+
+    <!-- Assignment Form -->
+    <form id="finishingAssignForm" class="mt-3">
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <label for="target_day" class="form-label">Target Day (optional)</label>
+          <input type="date" id="target_day" name="target_day" class="form-control" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-paper-plane"></i> Submit Assignments
+      </button>
+    </form>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let finishingUsers = [];
+    let allData = []; // Data format: [{ washing_in_data_id, lot_no, sku, sizes: [{size_label, pieces}] }, ...]
+    const searchInput = document.getElementById('searchInput');
+    const assignmentsContainer = document.getElementById('assignmentsContainer');
+    const finishingAssignForm = document.getElementById('finishingAssignForm');
+
+    async function fetchFinishingUsers() {
+      try {
+        const resp = await fetch('/washingin/assign-finishing/users', { credentials: 'same-origin' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        finishingUsers = json.data || [];
+      } catch (err) {
+        console.error('[ERROR] fetchFinishingUsers =>', err);
+      }
+    }
+
+    async function fetchUnassignedData() {
+      try {
+        const resp = await fetch('/washingin/assign-finishing/data', { credentials: 'same-origin' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        allData = json.data || [];
+        renderData();
+      } catch (err) {
+        console.error('[ERROR] fetchUnassignedData =>', err);
+        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading data.</div>';
+      }
+    }
+
+    function renderData() {
+      assignmentsContainer.innerHTML = '';
+      const filterVal = searchInput.value.trim().toLowerCase();
+      const filtered = allData.filter(d => (`${d.lot_no} ${d.sku}`).toLowerCase().includes(filterVal));
+      if (!filtered.length) {
+        assignmentsContainer.innerHTML = '<div class="alert alert-info">No data found.</div>';
+        return;
+      }
+      filtered.forEach(entry => {
+        const card = document.createElement('div');
+        card.classList.add('card', 'mb-3');
+        card.innerHTML = `
+          <div class="card-header bg-secondary text-white">
+            <strong>Lot:</strong> ${entry.lot_no} | <strong>SKU:</strong> ${entry.sku}
+          </div>
+          <div class="card-body">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th>Size Label</th>
+                  <th>Pieces</th>
+                  <th>Assign Finishing User</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-fin-${entry.washing_in_data_id}"></tbody>
+            </table>
+          </div>
+        `;
+        assignmentsContainer.appendChild(card);
+        const tbody = document.getElementById(`tbody-fin-${entry.washing_in_data_id}`);
+        entry.sizes.forEach(sz => {
+          const tr = document.createElement('tr');
+          const userOptions = finishingUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+          tr.innerHTML = `
+            <td>${sz.size_label}</td>
+            <td>${sz.pieces}</td>
+            <td>
+              <select class="form-select finishingSelect">
+                <option value="">--No Assignment--</option>
+                ${userOptions}
+              </select>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    searchInput.addEventListener('input', renderData);
+
+    finishingAssignForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const target_day = document.getElementById('target_day').value;
+      // Build finishingAssignments object: { userId: [ { washing_in_data_id, size_label }, ... ] }
+      const finalObj = {};
+      allData.forEach(entry => {
+        const tableBody = document.getElementById(`tbody-fin-${entry.washing_in_data_id}`);
+        if (!tableBody) return;
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(r => {
+  const size_label = r.cells[0].textContent.trim(); // Changed from sizeLabel to size_label
+  const selectElem = r.cells[2].querySelector('select');
+  const userId = selectElem.value;
+  if (userId) {
+    if (!finalObj[userId]) finalObj[userId] = [];
+    finalObj[userId].push({
+      washing_in_data_id: entry.washing_in_data_id,
+      size_label // Now this matches the variable name
+    });
+  }
+});
+      });
+      const payload = { target_day, finishingAssignments: finalObj };
+      try {
+        const resp = await fetch('/washingin/assign-finishing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'same-origin'
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        window.location.reload();
+      } catch (err) {
+        console.error('[ERROR] finishingAssign submission =>', err);
+      }
+    });
+
+    (async () => {
+      await fetchFinishingUsers();
+      await fetchUnassignedData();
+    })();
+  </script>
+</body>
+</html>
