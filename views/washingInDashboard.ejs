@@ -1,0 +1,661 @@
+<!-- views/washingin.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KOTTY - Washing In Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+  <!-- Bootstrap & FontAwesome -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+      color: #212529;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .card {
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .navbar-brand {
+      font-weight: 500;
+      font-size: 1.2rem;
+    }
+    .fade-in {
+      animation: fadeIn 0.4s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    .main-content {
+      flex: 1 0 auto;
+    }
+    #loadMoreSentinel {
+      height: 40px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand" href="#">
+        <i class="fas fa-water"></i> Washing In
+      </a>
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <!-- Approve link -->
+          <li class="nav-item me-2">
+            <a href="/washingin/approve" class="btn btn-outline-light btn-sm">
+              <i class="fas fa-check-circle"></i> Approve
+            </a>
+          </li>
+          <!-- Assign finishing (optional) -->
+          <li class="nav-item me-2">
+            <a href="/washingin/assign-finishing" class="btn btn-outline-light btn-sm">
+              <i class="fas fa-user-check"></i> Assign Finishing
+            </a>
+          </li>
+          <!-- Logout (example) -->
+          <li class="nav-item">
+            <a href="/logout" class="btn btn-sm btn-danger">
+              <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flash Messages -->
+  <div class="container mt-3">
+    <% if (error && error.length > 0) { %>
+      <% error.forEach(function(msg){ %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+    <% if (success && success.length > 0) { %>
+      <% success.forEach(function(msg){ %>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <%= msg %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
+
+  <!-- Main Content -->
+  <div class="container my-4 main-content">
+    <h2 class="mb-4">
+      <i class="fas fa-water"></i> Washing In Dashboard
+    </h2>
+
+    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link active"
+          id="create-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#createTabContent"
+          type="button"
+          role="tab"
+          aria-controls="createTabContent"
+          aria-selected="true"
+        >
+          <i class="fas fa-plus-circle"></i> Create Entry
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button
+          class="nav-link"
+          id="existing-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#existingTabContent"
+          type="button"
+          role="tab"
+          aria-controls="existingTabContent"
+          aria-selected="false"
+        >
+          <i class="fas fa-list"></i> Existing Entries
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content mt-3" id="dashboardTabsContent">
+      <!-- CREATE TAB -->
+      <div
+        class="tab-pane fade show active"
+        id="createTabContent"
+        role="tabpanel"
+        aria-labelledby="create-tab"
+      >
+        <div class="card">
+          <div class="card-header">
+            <h4 class="mb-0">
+              <i class="fas fa-plus-circle"></i> Create New Washing In Entry
+            </h4>
+          </div>
+          <div class="card-body">
+            <form
+              id="createForm"
+              action="/washingin/create"
+              method="POST"
+              enctype="multipart/form-data"
+            >
+              <!-- 1) SELECT which "washing_data" ID you're using (fetched in Node as "lots") -->
+              <div class="row mb-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Select Washing Data</label>
+                  <select id="selectedWashingDataId" name="selectedWashingDataId" class="form-select" required>
+                    <option value="">-- Choose --</option>
+                    <% lots.forEach(function(l) { %>
+                      <option value="<%= l.id %>">
+                        <%= l.lot_no %> (SKU: <%= l.sku %>) - total: <%= l.total_pieces %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </div>
+                <!-- remark -->
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Remark (optional)</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    name="remark"
+                    placeholder="Any remarks..."
+                  />
+                </div>
+                <!-- image -->
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Image (optional)</label>
+                  <input
+                    type="file"
+                    class="form-control"
+                    name="image_file"
+                    accept="image/*"
+                  />
+                </div>
+              </div>
+
+              <!-- 2) Sizes Table (dynamically populated) -->
+              <div id="sizeSection" style="display:none;">
+                <h5>Sizes for This Washing Data</h5>
+                <div class="table-responsive">
+                  <table class="table table-bordered align-middle" id="sizeTable">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Size Label</th>
+                        <th>Max Available</th>
+                        <th>Enter Pieces</th>
+                        <th>Assign to Finishing (Optional)</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div class="mt-2">
+                  <strong>Total Pieces Selected:</strong>
+                  <span id="createTotalPieces">0</span>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary mt-3">
+                <i class="fas fa-check"></i> Create & Assign
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXISTING ENTRIES TAB -->
+      <div
+        class="tab-pane fade"
+        id="existingTabContent"
+        role="tabpanel"
+        aria-labelledby="existing-tab"
+      >
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">
+            <i class="fas fa-list"></i> Existing Entries
+          </h4>
+          <a href="/washingin/download-all" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> Download Excel
+          </a>
+        </div>
+
+        <!-- Search input for existing entries -->
+        <div class="input-group mb-3">
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input
+            type="text"
+            id="searchExisting"
+            class="form-control"
+            placeholder="Search by lot or SKU..."
+          />
+        </div>
+
+        <!-- Container for lazy-loaded entries -->
+        <div id="existingEntriesContainer" class="accordion"></div>
+        <!-- IntersectionObserver sentinel -->
+        <div id="loadMoreSentinel"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPDATE MODAL -->
+  <div
+    class="modal fade"
+    id="updateModal"
+    tabindex="-1"
+    aria-labelledby="updateModalLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form id="updateForm" method="POST" action="">
+          <div class="modal-header">
+            <h5 class="modal-title" id="updateModalLabel">
+              <i class="fas fa-edit"></i> Update Washing In Data
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p><strong>Updating Entry ID:</strong> <span id="updatingEntryId">-</span></p>
+            <div class="table-responsive">
+              <table class="table table-bordered align-middle" id="updateSizesTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>Size Label</th>
+                    <th>Already Used</th>
+                    <th>Max Remain</th>
+                    <th>New Pieces (Increment)</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="small text-muted">Leave blank or zero if no increment.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save"></i> Save Updates
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // ================================================
+    // 1) CREATE FORM: Fetch sizes & assign finishing
+    // ================================================
+    let finishingUsers = []; // we'll load once, if needed
+    const selWashingData = document.getElementById('selectedWashingDataId');
+    const sizeSection = document.getElementById('sizeSection');
+    const sizeTableBody = document.querySelector('#sizeTable tbody');
+    const createTotalPiecesElem = document.getElementById('createTotalPieces');
+    const createForm = document.getElementById('createForm');
+
+    selWashingData.addEventListener('change', async () => {
+      const val = selWashingData.value;
+      if (!val) {
+        sizeSection.style.display = 'none';
+        sizeTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+        return;
+      }
+      // fetch sizes from /washingin/get-lot-sizes/:wdId
+      try {
+        const res = await fetch(`/washingin/get-lot-sizes/${val}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        // fetch finishing users if not loaded
+        if (!finishingUsers.length) {
+          const userRes = await fetch('/washingin/create/assignable-users');
+          if (userRes.ok) {
+            const j = await userRes.json();
+            finishingUsers = j.data || [];
+          }
+        }
+
+        renderSizes(data);
+      } catch (err) {
+        console.error('Error fetching sizes:', err);
+        sizeSection.style.display = 'none';
+        sizeTableBody.innerHTML = '';
+        createTotalPiecesElem.textContent = '0';
+      }
+    });
+
+    function renderSizes(sizes) {
+      sizeSection.style.display = 'block';
+      sizeTableBody.innerHTML = '';
+      sizes.forEach(s => {
+        const tr = document.createElement('tr');
+        // label
+        const tdLabel = document.createElement('td');
+        tdLabel.textContent = s.size_label;
+        tr.appendChild(tdLabel);
+        // remain
+        const tdRemain = document.createElement('td');
+        tdRemain.textContent = s.remain;
+        tr.appendChild(tdRemain);
+        // input
+        const tdInput = document.createElement('td');
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.max = String(s.remain);
+        inp.value = String(s.remain); // default
+        inp.classList.add('form-control');
+        inp.dataset.sizeId = s.id;
+        inp.addEventListener('input', updateCreateTotal);
+        tdInput.appendChild(inp);
+        tr.appendChild(tdInput);
+        // finishing assignment
+        const tdAssign = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.classList.add('form-select');
+        const optNone = document.createElement('option');
+        optNone.value = '';
+        optNone.textContent = '--No Assignment--';
+        sel.appendChild(optNone);
+        finishingUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          sel.appendChild(opt);
+        });
+        tdAssign.appendChild(sel);
+        tr.appendChild(tdAssign);
+
+        sizeTableBody.appendChild(tr);
+      });
+      updateCreateTotal();
+    }
+
+    function updateCreateTotal() {
+      let sum = 0;
+      const inputs = sizeTableBody.querySelectorAll('input[type="number"]');
+      inputs.forEach(inp => {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val > 0) sum += val;
+      });
+      createTotalPiecesElem.textContent = sum;
+    }
+
+    // on form submit, build hidden fields for `sizes[sizeId]` and `assignments[sizeId]`
+    createForm.addEventListener('submit', (e) => {
+      document.querySelectorAll('.sizeField').forEach(f => f.remove());
+      document.querySelectorAll('.assignField').forEach(f => f.remove());
+
+      const rows = sizeTableBody.querySelectorAll('tr');
+      for (const row of rows) {
+        const remain = parseInt(row.cells[1].textContent, 10);
+        const input = row.cells[2].querySelector('input');
+        let val = parseInt(input.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > remain) {
+          e.preventDefault();
+          alert(
+            `Requested ${val} but only ${remain} remain for size ${row.cells[0].textContent}`
+          );
+          return;
+        }
+        if (val > 0) {
+          const hiddenSize = document.createElement('input');
+          hiddenSize.type = 'hidden';
+          hiddenSize.classList.add('sizeField');
+          hiddenSize.name = `sizes[${input.dataset.sizeId}]`;
+          hiddenSize.value = val;
+          createForm.appendChild(hiddenSize);
+        }
+        // finishing
+        const sel = row.cells[3].querySelector('select');
+        if (sel.value) {
+          const hiddenAssign = document.createElement('input');
+          hiddenAssign.type = 'hidden';
+          hiddenAssign.classList.add('assignField');
+          hiddenAssign.name = `assignments[${input.dataset.sizeId}]`;
+          hiddenAssign.value = sel.value;
+          createForm.appendChild(hiddenAssign);
+        }
+      }
+    });
+
+    // ================================================
+    // 2) EXISTING ENTRIES (LAZY LOAD + SEARCH)
+    // ================================================
+    let existingOffset = 0;
+    let loading = false;
+    let hasMore = true;
+    const searchInput = document.getElementById('searchExisting');
+    const existingContainer = document.getElementById('existingEntriesContainer');
+    const sentinel = document.getElementById('loadMoreSentinel');
+
+    async function loadMoreEntries() {
+      if (loading || !hasMore) return;
+      loading = true;
+      const searchVal = searchInput.value.trim();
+      try {
+        const res = await fetch(`/washingin/list-entries?offset=${existingOffset}&search=${encodeURIComponent(searchVal)}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const items = data.data || [];
+        hasMore = data.hasMore;
+
+        items.forEach(it => {
+          const card = document.createElement('div');
+          card.classList.add('accordion-item', 'fade-in');
+          const headerId = `heading-${it.id}`;
+          const collapseId = `collapse-${it.id}`;
+
+          // build size rows
+          let sizeRows = '';
+          if (it.sizes && it.sizes.length) {
+            sizeRows = it.sizes.map(s => `
+              <tr>
+                <td>${s.size_label}</td>
+                <td>${s.pieces}</td>
+              </tr>
+            `).join('');
+          } else {
+            sizeRows = `<tr><td colspan="2">No sizes found.</td></tr>`;
+          }
+
+          card.innerHTML = `
+            <h2 class="accordion-header" id="${headerId}">
+              <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#${collapseId}"
+                aria-expanded="false" aria-controls="${collapseId}">
+                <strong>Lot:</strong> ${it.lot_no} (SKU: ${it.sku}) - Total: ${it.total_pieces}
+              </button>
+            </h2>
+            <div id="${collapseId}" class="accordion-collapse collapse"
+                aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
+              <div class="accordion-body">
+                <div class="d-flex justify-content-end mb-3">
+                  <a href="/washingin/challan/${it.id}" class="btn btn-info btn-sm me-2" target="_blank">
+                    <i class="fas fa-file-download"></i> Challan
+                  </a>
+                  <button class="btn btn-warning btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#updateModal"
+                    data-entry-id="${it.id}">
+                    <i class="fas fa-edit"></i> Update
+                  </button>
+                </div>
+                <p>
+                  <strong>ID:</strong> ${it.id}<br>
+                  <strong>Total Pieces:</strong> ${it.total_pieces}<br>
+                  <strong>Remark:</strong> ${it.remark || 'N/A'}
+                </p>
+                ${
+                  it.image_url
+                    ? `<p><strong>Image:</strong><br>
+                       <img src="${it.image_url}" alt="WashingIn" style="max-height:100px;"></p>`
+                    : ''
+                }
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered">
+                    <thead>
+                      <tr>
+                        <th>Size Label</th>
+                        <th>Pieces</th>
+                      </tr>
+                    </thead>
+                    <tbody>${sizeRows}</tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          `;
+          existingContainer.appendChild(card);
+        });
+
+        existingOffset += items.length;
+      } catch (err) {
+        console.error('Error loading more entries:', err);
+      } finally {
+        loading = false;
+      }
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        loadMoreEntries();
+      }
+    }, { root: null, rootMargin: '0px', threshold: 0.1 });
+    observer.observe(sentinel);
+
+    searchInput.addEventListener('input', () => {
+      existingOffset = 0;
+      hasMore = true;
+      existingContainer.innerHTML = '';
+      loadMoreEntries();
+    });
+
+    loadMoreEntries(); // initial
+
+    // ================================================
+    // 3) UPDATE MODAL
+    // ================================================
+    const updateModal = document.getElementById('updateModal');
+    const updateForm = document.getElementById('updateForm');
+    const updateSizesTable = document.getElementById('updateSizesTable');
+    let currentUpdateEntryId = null;
+
+    if (updateModal) {
+      updateModal.addEventListener('show.bs.modal', async (event) => {
+        const button = event.relatedTarget;
+        currentUpdateEntryId = button.getAttribute('data-entry-id');
+        updateForm.action = `/washingin/update/${currentUpdateEntryId}`;
+        document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
+        updateSizesTable.querySelector('tbody').innerHTML = '';
+
+        try {
+          const res = await fetch(`/washingin/update/${currentUpdateEntryId}/json`);
+          if (!res.ok) {
+            console.error('Error fetching existing sizes. Status:', res.status);
+            return;
+          }
+          const data = await res.json();
+          if (!data.sizes) return;
+          data.sizes.forEach(sz => {
+            const tr = document.createElement('tr');
+            // label
+            const tdLabel = document.createElement('td');
+            tdLabel.textContent = sz.size_label;
+            tr.appendChild(tdLabel);
+            // used (the total so far for that size in that record)
+            const tdUsed = document.createElement('td');
+            tdUsed.textContent = sz.pieces;
+            tr.appendChild(tdUsed);
+            // remain
+            const tdRemain = document.createElement('td');
+            tdRemain.textContent = sz.remain;
+            tr.appendChild(tdRemain);
+            // input
+            const tdInput = document.createElement('td');
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.min = '0';
+            inp.classList.add('form-control');
+            inp.dataset.sizeLabel = sz.size_label;
+            tdInput.appendChild(inp);
+            tr.appendChild(tdInput);
+
+            updateSizesTable.querySelector('tbody').appendChild(tr);
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      });
+
+      // after update, refresh the list
+      updateModal.addEventListener('hidden.bs.modal', () => {
+        existingOffset = 0;
+        hasMore = true;
+        existingContainer.innerHTML = '';
+        loadMoreEntries();
+      });
+
+      // on form submit, build hidden fields
+      updateForm.addEventListener('submit', (e) => {
+        document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
+        const rows = updateSizesTable.querySelector('tbody').querySelectorAll('tr');
+        for (const row of rows) {
+          const label = row.cells[0].textContent;
+          const remain = parseInt(row.cells[2].textContent, 10);
+          const inp = row.cells[3].querySelector('input');
+          let val = parseInt(inp.value || '0', 10);
+          if (isNaN(val) || val < 0) val = 0;
+          if (val > remain) {
+            alert(`Cannot add ${val} to size [${label}]; only ${remain} remain.`);
+            e.preventDefault();
+            return;
+          }
+          if (val > 0) {
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.classList.add('updateSizeMappingField');
+            hidden.name = `updateSizes[${label}]`;
+            hidden.value = val;
+            updateForm.appendChild(hidden);
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
