@@ -94,6 +94,10 @@ app.use('/washingin', washingIN);
 app.get('/', (req, res) => {
     res.redirect('/login');
 });
+
+const challanDashboardRoutes = require('./routes/challanDashboardRoutes');
+app.use('/challandashboard', challanDashboardRoutes);
+
 app.get('/test', (req, res) => {
     res.send(`
         <!DOCTYPE html>
