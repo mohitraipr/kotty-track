@@ -39,7 +39,7 @@ router.get('/', isAuthenticated, isWashingMaster, async (req, res) => {
           WHERE user_id = ?
         )
       ORDER BY jd.created_at DESC
-      LIMIT 10
+      
     `, [userId, userId]);
 
     const errorMessages = req.flash('error');
