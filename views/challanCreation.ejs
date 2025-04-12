@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delivery Challan</title>
+  <style>
+    /* Basic reset and styling */
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      margin: 0;
+      padding: 20px;
+      color: #000;
+      line-height: 1.2;
+    }
+    .header, .footer {
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
+    .sub-header {
+      text-align: center;
+      margin-top: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .sender-info, .challan-info, .consignee-info {
+      margin-top: 10px;
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .sender-info td, .challan-info td, .consignee-info td {
+      padding: 3px 5px;
+    }
+    .challan-info {
+      margin-top: 20px;
+      border: 1px solid #000;
+    }
+    .challan-info td {
+      border: 1px solid #000;
+    }
+    .consignee-info {
+      margin-top: 10px;
+      border: 1px solid #000;
+    }
+    .consignee-info td {
+      border: 1px solid #000;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    .items-table th, .items-table td {
+      border: 1px solid #000;
+      padding: 4px 6px;
+      text-align: center;
+    }
+    .items-table th {
+      background: #f0f0f0;
+    }
+    .totals-table {
+      width: 100%;
+      margin-top: 5px;
+      border-collapse: collapse;
+    }
+    .totals-table td {
+      padding: 3px 5px;
+      border: 1px solid #000;
+    }
+    .right {
+      text-align: right;
+    }
+    .center {
+      text-align: center;
+    }
+    .small {
+      font-size: 11px;
+    }
+    .signatory {
+      margin-top: 40px;
+      text-align: left;
+    }
+    .signatory-line {
+      margin-top: 40px;
+      border-top: 1px solid #000;
+      width: 200px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Header (hidden header line if needed) -->
+  <div class="header small">
+    DELIVERY_CHALLAN_JOB/25-26/<%= challan.challanNo.split('/').pop() %>_ClearTax
+  </div>
+  
+  <!-- Main Title -->
+  <div class="header">
+    <h1>DELIVERY CHALLAN</h1>
+  </div>
+  
+  <!-- Sender Details -->
+  <table class="sender-info" width="100%">
+    <tr>
+      <td class="center" colspan="3">
+        <strong><%= challan.sender.name %></strong><br>
+        <%= challan.sender.address %>
+      </td>
+    </tr>
+    <tr>
+      <td class="center"><strong>GSTIN</strong><br><%= challan.sender.gstin %></td>
+      <td class="center"><strong>State</strong><br><%= challan.sender.state %></td>
+      <td class="center"><strong>PAN</strong><br><%= challan.sender.pan %></td>
+    </tr>
+  </table>
+  
+  <!-- Challan Info -->
+  <table class="challan-info" width="100%">
+    <tr>
+      <td width="25%"><strong>Challan Date</strong></td>
+      <td width="25%"><strong>Challan No.</strong></td>
+      <td width="25%"><strong>Reference No.</strong></td>
+      <td width="25%"><strong>Challan Type</strong></td>
+    </tr>
+    <tr>
+      <td class="center"><%= challan.challanDate %></td>
+      <td class="center"><%= challan.challanNo %></td>
+      <td class="center"><%= challan.referenceNo || '-' %></td>
+      <td class="center"><%= challan.challanType %></td>
+    </tr>
+  </table>
+  
+  <!-- Consignee Details -->
+  <table class="consignee-info" width="100%">
+    <tr>
+      <td width="33%"><strong>Consignee Name</strong></td>
+      <td width="67%"><%= challan.consignee.name %></td>
+    </tr>
+    <tr>
+      <td><strong>Consignee Address</strong></td>
+      <td><%= challan.consignee.address %></td>
+    </tr>
+    <tr>
+      <td width="33%"><strong>Consignee GSTIN</strong></td>
+      <td width="67%"><%= challan.consignee.gstin %></td>
+    </tr>
+    <tr>
+      <td class="center" colspan="2"><strong>Place of Supply: <%= challan.consignee.placeOfSupply %></strong></td>
+    </tr>
+  </table>
+  
+  <!-- Items Table -->
+  <table class="items-table" width="100%">
+    <thead>
+      <tr>
+        <th style="width: 5%;">S.No.</th>
+        <th style="width: 35%;">Item (Lot No, SKU, Cutting Remark)</th>
+        <th style="width: 15%;">HSN/SAC</th>
+        <th style="width: 10%;">Quantity</th>
+        <th style="width: 10%;">Rate / Item (₹)</th>
+        <th style="width: 10%;">Discount (₹)</th>
+        <th style="width: 15%;">Taxable Value (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% challan.items.forEach((item, index) => { %>
+        <tr>
+          <td class="center"><%= index + 1 %>.</td>
+          <td style="text-align: left;">
+            Lot No: <%= item.lot_no %>, SKU: <%= item.sku %><br>
+            <%= item.cutting_remark ? "Cutting Remark: " + item.cutting_remark : "" %>
+          </td>
+          <td class="center"><%= item.hsnSac %></td>
+          <td class="center"><%= item.quantityFormatted %></td>
+          <td class="right"><%= parseFloat(item.rate).toFixed(2) %></td>
+          <td class="right"><%= parseFloat(item.discount).toFixed(2) %></td>
+          <td class="right"><%= parseFloat(item.taxableValue).toFixed(2) %></td>
+        </tr>
+      <% }); %>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6" class="right"><strong>Total</strong></td>
+        <td class="right"><strong><%= parseFloat(challan.totalTaxableValue).toFixed(2) %></strong></td>
+      </tr>
+    </tfoot>
+  </table>
+  
+  <!-- Totals Summary -->
+  <table class="totals-table" width="100%" style="margin-top: 5px;">
+    <tr>
+      <td width="50%"><strong>Taxable Amount (₹):</strong></td>
+      <td class="right" width="50%"><%= parseFloat(challan.totalTaxableValue).toFixed(2) %></td>
+    </tr>
+    <tr>
+      <td><strong>Total Tax (₹):</strong></td>
+      <td class="right">0.00</td>
+    </tr>
+    <tr>
+      <td><strong>Total Value (₹):</strong></td>
+      <td class="right"><%= parseFloat(challan.totalAmount).toFixed(2) %></td>
+    </tr>
+  </table>
+  
+  <!-- Amount in Words -->
+  <p style="margin-top: 10px;"><strong>Total amount (in words):</strong> <%= challan.totalAmountInWords %></p>
+  
+  <!-- Footer -->
+  <div class="footer">
+    <p>For <strong><%= challan.sender.name %></strong></p>
+    <div class="signatory">_____________________ <br> Authorised Signatory</div>
+  </div>
+</body>
+</html>
