@@ -47,7 +47,7 @@
   <header class="dashboard-header d-flex justify-content-between align-items-center">
     <h1>Challan Dashboard</h1>
     <div class="action-btns">
-      <button id="selectAllBtn" class="btn btn-light" disabled>Select All</button>
+      <button id="selectAllBtn" class="btn btn-light">Select All</button>
       <button id="generateChallanBtn" class="btn btn-light" disabled>Generate Challan</button>
       <button id="downloadChallanBtn" class="btn btn-light" disabled>Download Challan</button>
     </div>
@@ -171,7 +171,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button id="confirmChallanBtn" type="button" class="btn btn-primary" disabled>Confirm (Disabled)</button>
+          <button id="confirmChallanBtn" type="button" class="btn btn-primary">Confirm</button>
           <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
         </div>
       </div>
@@ -179,13 +179,13 @@
   </div>
 
   <!-- jQuery, Popper.js, and Bootstrap JS for modal and interactions -->
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
   
   <!-- JavaScript for Realtime Search, Pagination & Row Selection -->
   <script>
-    // Debounce function: delays execution until user stops typing.
+    // Debounce: delay execution until user stops typing.
     function debounce(func, wait) {
       let timeout;
       return function(...args) {
@@ -194,12 +194,12 @@
       };
     }
 
-    // Global variables to track state.
+    // Global state variables.
     let currentOffset = document.querySelectorAll('#assignmentsTable tbody tr').length;
-    let currentSearchQuery = document.getElementById('searchInput').value;
+    let currentSearchQuery = document.getElementById('searchInput').value || '';
     let selectedRows = [];
 
-    // Update table content (append or replace).
+    // Update or append table rows.
     function updateTable(assignments, append = false) {
       const tbody = document.querySelector('#assignmentsTable tbody');
       if (!append) {
@@ -258,13 +258,12 @@
       const loadMoreBtn = document.getElementById('loadMoreBtn');
       loadMoreBtn.disabled = true;
       loadMoreBtn.textContent = 'Loading...';
-      const baseUrl = currentSearchQuery.trim() !== ''
-        ? '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery)
-        : '/challandashboard';
+      // Always call the search endpoint—empty query returns all records.
+      const baseUrl = '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery);
       const url = baseUrl + '&offset=' + currentOffset;
       try {
         const response = await fetch(url);
-        const data = currentSearchQuery.trim() !== '' ? await response.json() : { assignments: [] };
+        const data = await response.json();
         let assignments = data.assignments;
         updateTable(assignments, true);
         if (assignments.length) {
@@ -281,11 +280,13 @@
       }
     }
 
-    // Checkbox handling for row selection.
+    // Attach change event handlers for row checkboxes.
     function attachCheckboxHandlers() {
       const checkboxes = document.querySelectorAll('.rowCheckbox');
       checkboxes.forEach(checkbox => {
-        checkbox.onchange = () => {
+        // Remove any previous listener.
+        checkbox.removeEventListener('change', checkbox.changeHandler);
+        checkbox.changeHandler = function() {
           selectedRows = [];
           document.querySelectorAll('.rowCheckbox').forEach(cb => {
             if (cb.checked) {
@@ -302,16 +303,28 @@
           const enableState = selectedRows.length > 0;
           document.getElementById('generateChallanBtn').disabled = !enableState;
           document.getElementById('downloadChallanBtn').disabled = !enableState;
-          document.getElementById('selectAllBtn').disabled = false;
-        }
+        };
+        checkbox.addEventListener('change', checkbox.changeHandler);
       });
     }
 
     // "Select All" checkbox functionality.
     document.getElementById('selectAllCheckbox').addEventListener('change', function() {
       const checked = this.checked;
-      document.querySelectorAll('.rowCheckbox').forEach(cb => cb.checked = checked);
-      document.querySelectorAll('.rowCheckbox').forEach(cb => cb.onchange());
+      document.querySelectorAll('.rowCheckbox').forEach(cb => {
+        cb.checked = checked;
+        cb.dispatchEvent(new Event('change'));
+      });
+    });
+
+    // "Select All" button functionality.
+    document.getElementById('selectAllBtn').addEventListener('click', function() {
+      document.querySelectorAll('.rowCheckbox').forEach(cb => {
+        if (!cb.checked) {
+          cb.checked = true;
+          cb.dispatchEvent(new Event('change'));
+        }
+      });
     });
 
     // Load More button event.
@@ -346,6 +359,23 @@
     document.getElementById('downloadChallanBtn').addEventListener('click', function() {
       alert('Download Challan would process selected data: ' + JSON.stringify(selectedRows));
     });
+
+    // "Confirm" button in modal: dynamically create and submit a form.
+    document.getElementById('confirmChallanBtn').addEventListener('click', function() {
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/challandashboard/generate';
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'selectedRows';
+      input.value = JSON.stringify(selectedRows);
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    });
+
+    // Ensure handlers are attached after the DOM loads.
+    document.addEventListener('DOMContentLoaded', attachCheckboxHandlers);
   </script>
 </body>
 </html>
