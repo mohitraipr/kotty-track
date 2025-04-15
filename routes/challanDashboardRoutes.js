@@ -73,6 +73,7 @@ router.get('/', isAuthenticated, async (req, res) => {
     const offset = parseInt(req.query.offset, 10) || 0;
     const limit = 50;
 
+    // Important: we only show wa.is_approved=1
     const [assignments] = await pool.query(`
       SELECT
         wa.id AS washing_id,
@@ -93,6 +94,7 @@ router.get('/', isAuthenticated, async (req, res) => {
       JOIN users u ON wa.user_id = u.id
       JOIN users m ON wa.jeans_assembly_master_id = m.id
       WHERE ${EXCLUDE_USED_LOTS_CLAUSE}
+        AND wa.is_approved = 1
       ORDER BY wa.assigned_on DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
@@ -145,6 +147,7 @@ router.get('/search', isAuthenticated, async (req, res) => {
       JOIN users u ON wa.user_id = u.id
       JOIN users m ON wa.jeans_assembly_master_id = m.id
       WHERE ${EXCLUDE_USED_LOTS_CLAUSE}
+        AND wa.is_approved = 1
     `;
     const params = [];
 
@@ -162,7 +165,6 @@ router.get('/search', isAuthenticated, async (req, res) => {
       }
       baseQuery += ` AND (${conditions.join(' OR ')}) `;
     } else if (searchQuery) {
-      // single term
       const likeStr = `%${searchQuery}%`;
       baseQuery += ` AND (jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?) `;
       params.push(likeStr, likeStr, likeStr);
@@ -243,6 +245,7 @@ router.post('/create', isAuthenticated, async (req, res) => {
       return res.redirect('/challandashboard');
     }
 
+    // 1) Validate the chosen washer is from washers array
     const washerIDNum = parseInt(washerId, 10);
     if (!washers.includes(washerIDNum)) {
       req.flash('error', 'Invalid or unknown washer selected');
@@ -250,7 +253,31 @@ router.post('/create', isAuthenticated, async (req, res) => {
       return res.redirect('/challandashboard');
     }
 
-    // Check if any items are already used
+    // 2) Ensure each washing_id is "approved" (wa.is_approved=1)
+    // Gather the washing_ids
+    const washingIds = items.map(i => parseInt(i.washing_id, 10));
+    if (!washingIds.length) {
+      req.flash('error', 'No valid washing items found');
+      connection.release();
+      return res.redirect('/challandashboard');
+    }
+
+    // Check if any is not is_approved=1
+    const [checkApproved] = await connection.query(`
+      SELECT COUNT(*) AS total
+        FROM washing_assignments
+       WHERE id IN (?)
+         AND is_approved = 1
+    `, [washingIds]);
+
+    // Compare the count
+    if (checkApproved.length && checkApproved[0].total !== washingIds.length) {
+      req.flash('error', 'Cannot create challan; some selected lots are not approved or don’t exist.');
+      connection.release();
+      return res.redirect('/challandashboard');
+    }
+
+    // 3) Check if any items are already used
     for (const item of items) {
       const washingId = parseInt(item.washing_id, 10);
       const [used] = await connection.query(`
@@ -360,7 +387,6 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
     const userId = req.session.user.id;
     const challanId = parseInt(req.params.challanId, 10);
 
-    // Pull the challan
     const [rows] = await pool.query(`
       SELECT *
         FROM challan
@@ -390,7 +416,6 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
       return res.redirect('/');
     }
 
-    // Parse items JSON
     let parsedItems;
     try {
       if (typeof challanRow.items === 'string') {
@@ -428,7 +453,7 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
       totalAmountInWords: challanRow.total_amount_in_words
     };
 
-    // We can reuse the same EJS for washers or jeansAssembly
+    // Reuse the same EJS for washers or jeansAssembly
     res.render('challanCreation', { challan: challanData });
 
   } catch (error) {
