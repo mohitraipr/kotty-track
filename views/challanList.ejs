@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Challan List</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-3">
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger">
+        <% error.forEach(msg => { %><p><%= msg %></p><% }); %>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success">
+        <% success.forEach(msg => { %><p><%= msg %></p><% }); %>
+      </div>
+    <% } %>
+
+    <h1>Challan List</h1>
+
+    <form method="GET" action="/challanlist" class="form-inline my-3">
+      <input type="text" name="search" value="<%= search %>" class="form-control mr-2" placeholder="Search by Challan No or Lot No">
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <table class="table table-bordered table-striped">
+      <thead class="thead-light">
+        <tr>
+          <th>ID</th>
+          <th>Challan No</th>
+          <th>Date</th>
+          <th>Consignee</th>
+          <th>Total Value</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (challans && challans.length) { %>
+          <% challans.forEach(ch => { %>
+            <tr>
+              <td><%= ch.id %></td>
+              <td><%= ch.challan_no %></td>
+              <td><%= ch.challan_date.toISOString().split('T')[0] %></td>
+              <td><%= ch.consignee_name %></td>
+              <td><%= ch.total_amount %></td>
+              <td>
+                <a href="/challandashboard/view/<%= ch.id %>" class="btn btn-sm btn-info">View/Print</a>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="6" class="text-center">No Challans Found</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
