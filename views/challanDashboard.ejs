@@ -4,20 +4,21 @@
   <meta charset="UTF-8">
   <title>Challan Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap CSS -->
+  <!-- Bootstrap CSS (example: 4.5.2) + Font Awesome -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    integrity="sha512-buD2vAa2mW1yj78BzFzM/6kWTHpveG62CmG0cy8bcS9A7cdsI1hD2eiGeBv1rCR3dOfh1JvHS5hLSG/T0YX1ZA=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
   <style>
     body {
       background-color: #f8f9fa;
     }
-    .dashboard-header {
-      background-color: #007bff;
-      color: #fff;
-      padding: 15px 20px;
-    }
-    .dashboard-header h1 {
-      margin: 0;
-      font-size: 1.75rem;
+    .navbrand-icon {
+      margin-right: 8px;
     }
     .action-btns {
       display: flex;
@@ -35,7 +36,6 @@
     .load-more-container {
       margin: 15px 0;
     }
-    /* Modal styling */
     .modal-header {
       background-color: #007bff;
       color: #fff;
@@ -43,339 +43,408 @@
   </style>
 </head>
 <body>
-  <!-- Fixed Header -->
-  <header class="dashboard-header d-flex justify-content-between align-items-center">
-    <h1>Challan Dashboard</h1>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <a class="navbar-brand" href="#">
+    <i class="fas fa-file-invoice navbrand-icon"></i>
+    KOTTY CHALLAN
+  </a>
+  <button
+    class="navbar-toggler"
+    type="button"
+    data-toggle="collapse"
+    data-target="#navbarNav"
+    aria-controls="navbarNav"
+    aria-expanded="false"
+    aria-label="Toggle navigation"
+  >
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarNav">
+    <!-- Left side (optional) -->
+    <ul class="navbar-nav mr-auto">
+      <!-- You can add more nav items here if needed -->
+    </ul>
+    <!-- Right side links -->
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" href="/challandashboard">
+          <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/challanlist">
+          <i class="fas fa-list"></i> Challan List
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="/logout" class="btn btn-sm btn-danger ml-2">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+<!-- END NAVBAR -->
+
+<div class="container">
+  <!-- Flash Messages -->
+  <% if (error && error.length) { %>
+    <div class="alert alert-danger mt-3">
+      <% error.forEach(msg => { %>
+        <p><%= msg %></p>
+      <% }); %>
+    </div>
+  <% } %>
+  <% if (success && success.length) { %>
+    <div class="alert alert-success mt-3">
+      <% success.forEach(msg => { %>
+        <p><%= msg %></p>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <!-- Header Actions -->
+  <header class="d-flex justify-content-between align-items-center mt-3">
+    <h2 class="mb-0">
+      <i class="fas fa-tachometer-alt"></i> Challan Dashboard
+    </h2>
     <div class="action-btns">
-      <button id="selectAllBtn" class="btn btn-light">Select All</button>
-      <button id="generateChallanBtn" class="btn btn-light" disabled>Generate Challan</button>
-      <button id="downloadChallanBtn" class="btn btn-light" disabled>Download Challan</button>
+      <button id="selectAllBtn" class="btn btn-outline-primary">
+        <i class="fas fa-check-double"></i> Select All
+      </button>
+      <button id="generateChallanBtn" class="btn btn-primary" disabled>
+        <i class="fas fa-file-invoice"></i> Generate Challan
+      </button>
+      <button id="downloadChallanBtn" class="btn btn-success" disabled>
+        <i class="fas fa-download"></i> Download Challan
+      </button>
     </div>
   </header>
 
-  <div class="container">
-    <!-- Flash Messages -->
-    <% if (error && error.length) { %>
-      <div class="alert alert-danger mt-3">
-        <% error.forEach(msg => { %>
-          <p><%= msg %></p>
-        <% }); %>
-      </div>
-    <% } %>
-    <% if (success && success.length) { %>
-      <div class="alert alert-success mt-3">
-        <% success.forEach(msg => { %>
-          <p><%= msg %></p>
-        <% }); %>
-      </div>
-    <% } %>
+  <!-- Search Field -->
+  <div class="row search-container align-items-center">
+    <div class="col-md-6 mt-3">
+      <input
+        type="text"
+        id="searchInput"
+        class="form-control"
+        placeholder="Search by SKU, Lot No, or Cutting Remark"
+        value="<%= search %>"
+      />
+    </div>
+  </div>
 
-    <!-- Search Field -->
-    <div class="row search-container align-items-center">
-      <div class="col-md-6">
-        <input type="text" id="searchInput" class="form-control" placeholder="Search by SKU, Lot No, or Cutting Remark" value="<%= search %>">
+  <!-- Table Card -->
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0" id="assignmentsTable">
+          <thead class="thead-light">
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
+              <th>ID</th>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Total Pieces</th>
+              <th>Assembly Remark</th>
+              <th>Cutting Remark</th>
+              <th>Target Day</th>
+              <th>Assigned On</th>
+              <th>Approval Status</th>
+              <th>Assignment Remark</th>
+              <th>Washer</th>
+              <th>Master</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (assignments && assignments.length) { %>
+              <% assignments.forEach(a => { %>
+                <tr data-id="<%= a.washing_id %>">
+                  <td><input type="checkbox" class="rowCheckbox"></td>
+                  <td><%= a.washing_id %></td>
+                  <td><%= a.lot_no %></td>
+                  <td><%= a.sku %></td>
+                  <td><%= a.total_pieces %></td>
+                  <td><%= a.assembly_remark %></td>
+                  <td><%= a.cutting_remark %></td>
+                  <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
+                  <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
+                  <td>
+                    <% if (a.is_approved === 1) { %>
+                      <span class="badge badge-success">Approved</span>
+                    <% } else if (a.is_approved === 0) { %>
+                      <span class="badge badge-danger">Denied</span>
+                    <% } else { %>
+                      <span class="badge badge-warning">Pending</span>
+                    <% } %>
+                  </td>
+                  <td><%= a.assignment_remark || '' %></td>
+                  <td><%= a.washer_username %></td>
+                  <td><%= a.master_username %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr id="noRecordsRow">
+                <td colspan="13" class="text-center">No records found.</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <!-- Table Card -->
-    <div class="card">
-      <div class="card-body p-0">
+  <!-- Load More Button -->
+  <div class="text-center load-more-container">
+    <button id="loadMoreBtn" class="btn btn-info">Load More</button>
+  </div>
+</div>
+
+<!-- Generate Challan Modal -->
+<div class="modal fade" id="challanModal" tabindex="-1" role="dialog" aria-labelledby="challanModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="challanModalLabel">Generate Challan</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true" class="text-white">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
         <div class="table-responsive">
-          <table class="table table-striped table-bordered mb-0" id="assignmentsTable">
+          <table class="table table-bordered" id="modalTable">
             <thead class="thead-light">
               <tr>
-                <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
-                <th>ID</th>
-                <th>Lot No</th>
+                <th>Challan (Lot No)</th>
                 <th>SKU</th>
                 <th>Total Pieces</th>
-                <th>Assembly Remark</th>
                 <th>Cutting Remark</th>
-                <th>Target Day</th>
-                <th>Assigned On</th>
-                <th>Approval Status</th>
-                <th>Assignment Remark</th>
-                <th>Washer</th>
-                <th>Master</th>
               </tr>
             </thead>
             <tbody>
-              <% if (assignments && assignments.length) { %>
-                <% assignments.forEach(a => { %>
-                  <tr data-id="<%= a.washing_id %>">
-                    <td><input type="checkbox" class="rowCheckbox"></td>
-                    <td><%= a.washing_id %></td>
-                    <td><%= a.lot_no %></td>
-                    <td><%= a.sku %></td>
-                    <td><%= a.total_pieces %></td>
-                    <td><%= a.assembly_remark %></td>
-                    <td><%= a.cutting_remark %></td>
-                    <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
-                    <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
-                    <td>
-                      <% if (a.is_approved === 1) { %>
-                        <span class="badge badge-success">Approved</span>
-                      <% } else if (a.is_approved === 0) { %>
-                        <span class="badge badge-danger">Denied</span>
-                      <% } else { %>
-                        <span class="badge badge-warning">Pending</span>
-                      <% } %>
-                    </td>
-                    <td><%= a.assignment_remark || '' %></td>
-                    <td><%= a.washer_username %></td>
-                    <td><%= a.master_username %></td>
-                  </tr>
-                <% }); %>
-              <% } else { %>
-                <tr id="noRecordsRow">
-                  <td colspan="13" class="text-center">No records found.</td>
-                </tr>
-              <% } %>
+              <!-- Selected rows will be injected here via JavaScript -->
             </tbody>
           </table>
         </div>
       </div>
-    </div>
-
-    <!-- Load More Button -->
-    <div class="text-center load-more-container">
-      <button id="loadMoreBtn" class="btn btn-primary">Load More</button>
-    </div>
-  </div>
-
-  <!-- Generate Challan Modal -->
-  <div class="modal fade" id="challanModal" tabindex="-1" role="dialog" aria-labelledby="challanModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="challanModalLabel">Generate Challan</h5>
-          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true" class="text-white">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="table-responsive">
-            <table class="table table-bordered" id="modalTable">
-              <thead class="thead-light">
-                <tr>
-                  <th>Challan (Lot No)</th>
-                  <th>SKU</th>
-                  <th>Total Pieces</th>
-                  <th>Cutting Remark</th>
-                </tr>
-              </thead>
-              <tbody>
-                <!-- Selected rows will be injected here via JavaScript -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button id="confirmChallanBtn" type="button" class="btn btn-primary">Confirm</button>
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-        </div>
+      <div class="modal-footer">
+        <button id="confirmChallanBtn" type="button" class="btn btn-primary">Confirm</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- jQuery, Popper.js, and Bootstrap JS for modal and interactions -->
-  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-  
-  <!-- JavaScript for Realtime Search, Pagination & Row Selection -->
-  <script>
-    // Debounce: delay execution until user stops typing.
-    function debounce(func, wait) {
-      let timeout;
-      return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-      };
+<!-- jQuery, Popper.js, Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+<!-- Full JavaScript Code (Real-time search, pagination, row selection) -->
+<script>
+  // Debounce: delay execution until user stops typing.
+  function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  // Global state variables.
+  let currentOffset = document.querySelectorAll('#assignmentsTable tbody tr').length;
+  let currentSearchQuery = document.getElementById('searchInput').value || '';
+  let selectedRows = [];
+
+  // Update or append table rows.
+  function updateTable(assignments, append = false) {
+    const tbody = document.querySelector('#assignmentsTable tbody');
+    if (!append) {
+      tbody.innerHTML = '';
     }
 
-    // Global state variables.
-    let currentOffset = document.querySelectorAll('#assignmentsTable tbody tr').length;
-    let currentSearchQuery = document.getElementById('searchInput').value || '';
-    let selectedRows = [];
+    if (assignments && assignments.length) {
+      assignments.forEach(a => {
+        const approvalBadge = (a.is_approved === 1)
+          ? '<span class="badge badge-success">Approved</span>'
+          : (a.is_approved === 0)
+            ? '<span class="badge badge-danger">Denied</span>'
+            : '<span class="badge badge-warning">Pending</span>';
 
-    // Update or append table rows.
-    function updateTable(assignments, append = false) {
-      const tbody = document.querySelector('#assignmentsTable tbody');
-      if (!append) {
-        tbody.innerHTML = '';
-      }
-      if (assignments && assignments.length) {
-        assignments.forEach(a => {
-          const approvalBadge = (a.is_approved === 1)
-            ? '<span class="badge badge-success">Approved</span>'
-            : (a.is_approved === 0)
-              ? '<span class="badge badge-danger">Denied</span>'
-              : '<span class="badge badge-warning">Pending</span>';
-          const tr = document.createElement('tr');
-          tr.setAttribute('data-id', a.washing_id);
-          tr.innerHTML = `
-            <td><input type="checkbox" class="rowCheckbox"></td>
-            <td>${a.washing_id}</td>
-            <td>${a.lot_no}</td>
-            <td>${a.sku}</td>
-            <td>${a.total_pieces}</td>
-            <td>${a.assembly_remark || ''}</td>
-            <td>${a.cutting_remark || ''}</td>
-            <td>${a.target_day ? new Date(a.target_day).toLocaleDateString() : ''}</td>
-            <td>${a.assigned_on ? new Date(a.assigned_on).toLocaleString() : ''}</td>
-            <td>${approvalBadge}</td>
-            <td>${a.assignment_remark || ''}</td>
-            <td>${a.washer_username}</td>
-            <td>${a.master_username}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } else if (!append) {
-        tbody.innerHTML = `<tr><td colspan="13" class="text-center">No records found.</td></tr>`;
-      }
-      attachCheckboxHandlers();
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-id', a.washing_id);
+        tr.innerHTML = `
+          <td><input type="checkbox" class="rowCheckbox"></td>
+          <td>${a.washing_id}</td>
+          <td>${a.lot_no}</td>
+          <td>${a.sku}</td>
+          <td>${a.total_pieces}</td>
+          <td>${a.assembly_remark || ''}</td>
+          <td>${a.cutting_remark || ''}</td>
+          <td>${a.target_day ? new Date(a.target_day).toLocaleDateString() : ''}</td>
+          <td>${a.assigned_on ? new Date(a.assigned_on).toLocaleString() : ''}</td>
+          <td>${approvalBadge}</td>
+          <td>${a.assignment_remark || ''}</td>
+          <td>${a.washer_username}</td>
+          <td>${a.master_username}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } else if (!append) {
+      tbody.innerHTML = '<tr><td colspan="13" class="text-center">No records found.</td></tr>';
     }
+    attachCheckboxHandlers();
+  }
 
-    // Fetch search results (real‑time).
-    async function fetchSearchResults(query) {
-      currentOffset = 0;
-      const url = '/challandashboard/search?search=' + encodeURIComponent(query) + '&offset=' + currentOffset;
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        updateTable(data.assignments, false);
-        currentOffset += data.assignments.length;
-        document.getElementById('loadMoreBtn').disabled = (data.assignments.length < 50);
-        document.getElementById('loadMoreBtn').textContent = data.assignments.length < 50 ? 'No more records' : 'Load More';
-      } catch (error) {
-        console.error('Error fetching search results:', error);
-      }
+  // Fetch search results (real-time).
+  async function fetchSearchResults(query) {
+    currentOffset = 0;
+    const url = '/challandashboard/search?search=' + encodeURIComponent(query) + '&offset=' + currentOffset;
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      updateTable(data.assignments, false);
+      currentOffset += data.assignments.length;
+      document.getElementById('loadMoreBtn').disabled = (data.assignments.length < 50);
+      document.getElementById('loadMoreBtn').textContent = data.assignments.length < 50 ? 'No more records' : 'Load More';
+    } catch (error) {
+      console.error('Error fetching search results:', error);
     }
+  }
 
-    // Load more data.
-    async function loadMoreData() {
-      const loadMoreBtn = document.getElementById('loadMoreBtn');
-      loadMoreBtn.disabled = true;
-      loadMoreBtn.textContent = 'Loading...';
-      // Always call the search endpoint—empty query returns all records.
-      const baseUrl = '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery);
-      const url = baseUrl + '&offset=' + currentOffset;
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        let assignments = data.assignments;
-        updateTable(assignments, true);
-        if (assignments.length) {
-          currentOffset += assignments.length;
-          loadMoreBtn.disabled = false;
-          loadMoreBtn.textContent = 'Load More';
-        } else {
-          loadMoreBtn.textContent = 'No more records';
-        }
-      } catch (error) {
-        console.error('Error loading more data:', error);
+  // Load more data.
+  async function loadMoreData() {
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = 'Loading...';
+
+    // Always call the search endpoint—empty query returns all records.
+    const baseUrl = '/challandashboard/search?search=' + encodeURIComponent(currentSearchQuery);
+    const url = baseUrl + '&offset=' + currentOffset;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      let assignments = data.assignments;
+      updateTable(assignments, true);
+
+      if (assignments.length) {
+        currentOffset += assignments.length;
         loadMoreBtn.disabled = false;
         loadMoreBtn.textContent = 'Load More';
+      } else {
+        loadMoreBtn.textContent = 'No more records';
       }
+    } catch (error) {
+      console.error('Error loading more data:', error);
+      loadMoreBtn.disabled = false;
+      loadMoreBtn.textContent = 'Load More';
     }
+  }
 
-    // Attach change event handlers for row checkboxes.
-    function attachCheckboxHandlers() {
-      const checkboxes = document.querySelectorAll('.rowCheckbox');
-      checkboxes.forEach(checkbox => {
-        // Remove any previous listener.
-        checkbox.removeEventListener('change', checkbox.changeHandler);
-        checkbox.changeHandler = function() {
-          selectedRows = [];
-          document.querySelectorAll('.rowCheckbox').forEach(cb => {
-            if (cb.checked) {
-              const tr = cb.closest('tr');
-              selectedRows.push({
-                washing_id: tr.getAttribute('data-id'),
-                lot_no: tr.children[2].textContent,
-                sku: tr.children[3].textContent,
-                total_pieces: tr.children[4].textContent,
-                cutting_remark: tr.children[6].textContent
-              });
-            }
-          });
-          const enableState = selectedRows.length > 0;
-          document.getElementById('generateChallanBtn').disabled = !enableState;
-          document.getElementById('downloadChallanBtn').disabled = !enableState;
-        };
-        checkbox.addEventListener('change', checkbox.changeHandler);
-      });
-    }
+  // Attach change event handlers for row checkboxes.
+  function attachCheckboxHandlers() {
+    const checkboxes = document.querySelectorAll('.rowCheckbox');
+    checkboxes.forEach(checkbox => {
+      // Remove any previous listener.
+      checkbox.removeEventListener('change', checkbox.changeHandler);
 
-    // "Select All" checkbox functionality.
-    document.getElementById('selectAllCheckbox').addEventListener('change', function() {
-      const checked = this.checked;
-      document.querySelectorAll('.rowCheckbox').forEach(cb => {
-        cb.checked = checked;
+      checkbox.changeHandler = function() {
+        selectedRows = [];
+        document.querySelectorAll('.rowCheckbox').forEach(cb => {
+          if (cb.checked) {
+            const tr = cb.closest('tr');
+            selectedRows.push({
+              washing_id: tr.getAttribute('data-id'),
+              lot_no: tr.children[2].textContent,
+              sku: tr.children[3].textContent,
+              total_pieces: tr.children[4].textContent,
+              cutting_remark: tr.children[6].textContent
+            });
+          }
+        });
+        const enableState = selectedRows.length > 0;
+        document.getElementById('generateChallanBtn').disabled = !enableState;
+        document.getElementById('downloadChallanBtn').disabled = !enableState;
+      };
+      checkbox.addEventListener('change', checkbox.changeHandler);
+    });
+  }
+
+  // "Select All" checkbox functionality.
+  document.getElementById('selectAllCheckbox').addEventListener('change', function() {
+    const checked = this.checked;
+    document.querySelectorAll('.rowCheckbox').forEach(cb => {
+      cb.checked = checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+
+  // "Select All" button functionality.
+  document.getElementById('selectAllBtn').addEventListener('click', function() {
+    document.querySelectorAll('.rowCheckbox').forEach(cb => {
+      if (!cb.checked) {
+        cb.checked = true;
         cb.dispatchEvent(new Event('change'));
-      });
+      }
     });
+  });
 
-    // "Select All" button functionality.
-    document.getElementById('selectAllBtn').addEventListener('click', function() {
-      document.querySelectorAll('.rowCheckbox').forEach(cb => {
-        if (!cb.checked) {
-          cb.checked = true;
-          cb.dispatchEvent(new Event('change'));
-        }
-      });
+  // Load More button event.
+  document.getElementById('loadMoreBtn').addEventListener('click', loadMoreData);
+
+  // Debounced search.
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('input', debounce((e) => {
+    currentSearchQuery = e.target.value;
+    currentOffset = 0;
+    fetchSearchResults(currentSearchQuery);
+  }, 300));
+
+  // "Generate Challan" button event.
+  document.getElementById('generateChallanBtn').addEventListener('click', function() {
+    const modalTbody = document.querySelector('#modalTable tbody');
+    modalTbody.innerHTML = '';
+    selectedRows.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${row.lot_no}</td>
+        <td>${row.sku}</td>
+        <td>${row.total_pieces}</td>
+        <td>${row.cutting_remark || ''}</td>
+      `;
+      modalTbody.appendChild(tr);
     });
+    $('#challanModal').modal('show');
+  });
 
-    // Load More button event.
-    document.getElementById('loadMoreBtn').addEventListener('click', loadMoreData);
+  // "Download Challan" button event.
+  document.getElementById('downloadChallanBtn').addEventListener('click', function() {
+    alert('Download Challan would process selected data: ' + JSON.stringify(selectedRows));
+  });
 
-    // Debounced search.
-    const searchInput = document.getElementById('searchInput');
-    searchInput.addEventListener('input', debounce((e) => {
-      currentSearchQuery = e.target.value;
-      currentOffset = 0;
-      fetchSearchResults(currentSearchQuery);
-    }, 300));
+  // "Confirm" button in modal: dynamically create and submit a form.
+  document.getElementById('confirmChallanBtn').addEventListener('click', function() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/challandashboard/generate';
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'selectedRows';
+    input.value = JSON.stringify(selectedRows);
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  });
 
-    // "Generate Challan" button event.
-    document.getElementById('generateChallanBtn').addEventListener('click', function() {
-      const modalTbody = document.querySelector('#modalTable tbody');
-      modalTbody.innerHTML = '';
-      selectedRows.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row.lot_no}</td>
-          <td>${row.sku}</td>
-          <td>${row.total_pieces}</td>
-          <td>${row.cutting_remark || ''}</td>
-        `;
-        modalTbody.appendChild(tr);
-      });
-      $('#challanModal').modal('show');
-    });
+  // Ensure handlers are attached after the DOM loads.
+  document.addEventListener('DOMContentLoaded', attachCheckboxHandlers);
+</script>
 
-    // "Download Challan" button event.
-    document.getElementById('downloadChallanBtn').addEventListener('click', function() {
-      alert('Download Challan would process selected data: ' + JSON.stringify(selectedRows));
-    });
-
-    // "Confirm" button in modal: dynamically create and submit a form.
-    document.getElementById('confirmChallanBtn').addEventListener('click', function() {
-      var form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/challandashboard/generate';
-      var input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'selectedRows';
-      input.value = JSON.stringify(selectedRows);
-      form.appendChild(input);
-      document.body.appendChild(form);
-      form.submit();
-    });
-
-    // Ensure handlers are attached after the DOM loads.
-    document.addEventListener('DOMContentLoaded', attachCheckboxHandlers);
-  </script>
 </body>
 </html>
