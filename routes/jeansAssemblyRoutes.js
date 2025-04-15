@@ -688,7 +688,7 @@ router.post('/approve-lot', isAuthenticated, isJeansAssemblyMaster, async (req, 
 
     await pool.query(`
       UPDATE jeans_assembly_assignments
-      SET is_approved = 1,
+      SET is_approved = 1,approved_on = NOW(),
           assignment_remark = ?
       WHERE id = ?
         AND user_id = ?
