@@ -79,7 +79,7 @@ router.post('/approve-lot', isAuthenticated, isStitchingMaster, async (req, res)
 
     await pool.query(`
       UPDATE stitching_assignments
-      SET isApproved = 1, assignment_remark = NULL
+      SET isApproved = 1,approved_on = NOW(), assignment_remark = NULL
       WHERE id = ? AND user_id = ?
     `, [assignment_id, userId]);
 
@@ -108,7 +108,7 @@ router.post('/deny-lot', isAuthenticated, isStitchingMaster, async (req, res) =>
 
     await pool.query(`
       UPDATE stitching_assignments
-      SET isApproved = 0, assignment_remark = ?
+      SET isApproved = 0,approved_on = NOW(), assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [denial_remark.trim(), assignment_id, userId]);
 
