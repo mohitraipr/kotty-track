@@ -605,7 +605,7 @@ router.post('/approve-lot', isAuthenticated, isWashingMaster, async (req, res) =
     }
     await pool.query(`
       UPDATE washing_assignments
-      SET is_approved = 1, assignment_remark = NULL
+      SET is_approved = 1,approved_on = NOW(), assignment_remark = NULL
       WHERE id = ? AND user_id = ?
     `, [assignment_id, userId]);
     return res.json({ success: true, message: 'Assignment approved successfully!' });
@@ -628,7 +628,7 @@ router.post('/deny-lot', isAuthenticated, isWashingMaster, async (req, res) => {
     }
     await pool.query(`
       UPDATE washing_assignments
-      SET is_approved = 0, assignment_remark = ?
+      SET is_approved = 0, approved_on = NOW(), assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [denial_remark.trim(), assignment_id, userId]);
     return res.json({ success: true, message: 'Assignment denied successfully.' });
