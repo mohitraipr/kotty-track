@@ -325,6 +325,7 @@
           <th class="text-right">Rate / Item (₹)</th>
           <th class="text-right">Taxable Value (₹)</th>
           <th class="text-center">CGST (₹)</th>
+          <th class="text-center">IGST (₹)</th>
           <th class="text-center">SGST / UTGST (₹)</th>
           <th class="text-right">CESS (₹)</th>
           <th class="text-right">Total (₹)</th>
@@ -346,6 +347,7 @@
             </td>
             <td class="text-center">0.00 @0.00%</td>
             <td class="text-center">0.00 @0.00%</td>
+            <td class="text-center">0.00 @0.00%</td>
             <td class="text-right">0.00</td>
             <td class="text-right">
               <%= parseFloat(item.taxableValue).toLocaleString('en-IN') %>
@@ -355,10 +357,19 @@
         <!-- Totals Row -->
         <tr>
           <td colspan="4" class="text-right" style="font-weight:bold;">Total</td>
+          <!-- Column 5: Total Taxable Value -->
           <td class="text-right" style="font-weight:bold;">
             <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %>
           </td>
-          <td colspan="3" class="text-right">0.00</td>
+          <!-- Column 6: CGST Total -->
+          <td class="text-right">0.00</td>
+          <!-- Column 7: IGST Total -->
+          <td class="text-right">0.00</td>
+          <!-- Column 8: SGST Total -->
+          <td class="text-right">0.00</td>
+          <!-- Column 9: CESS Total -->
+          <td class="text-right">0.00</td>
+          <!-- Column 10: Final Total Amount -->
           <td class="text-right" style="font-weight:bold;">
             <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %>
           </td>
@@ -371,7 +382,7 @@
       <div><strong>Taxable Amount:</strong> ₹ <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %></div>
       <div><strong>Total Tax:</strong> ₹ 0.00</div>
       <div><strong>Total Value:</strong> ₹ <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %></div>
-      <div style="margin-top:10px;"><strong>Total amount :</strong><br><%= challan.totalAmountInWords %></div>
+      <div style="margin-top:10px;"><strong>Total amount:</strong><br><%= challan.totalAmountInWords %></div>
     </div>
 
     <!-- Footer with Signatory -->
