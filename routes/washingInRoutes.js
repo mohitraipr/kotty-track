@@ -83,7 +83,7 @@ router.post('/approve-lot', isAuthenticated, isWashingInMaster, async (req, res)
 
     await pool.query(`
       UPDATE washing_in_assignments
-      SET is_approved = 1,
+      SET is_approved = 1,approved_on = NOW(),
           assignment_remark = NULL
       WHERE id = ? AND user_id = ?
     `, [assignment_id, userId]);
@@ -114,7 +114,7 @@ router.post('/deny-lot', isAuthenticated, isWashingInMaster, async (req, res) =>
 
     await pool.query(`
       UPDATE washing_in_assignments
-      SET is_approved = 0,
+      SET is_approved = 0,approved_on = NOW(),
           assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [denial_remark.trim(), assignment_id, userId]);
