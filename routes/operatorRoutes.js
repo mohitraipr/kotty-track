@@ -1511,7 +1511,7 @@ function getDepartmentStatuses({
   totalCut,
   stitchedQty,
   assembledQty,
-  washInQty,
+  washingInQty,
   washedQty,
   finishedQty,
   stAssign,
@@ -1715,14 +1715,14 @@ function getDepartmentStatuses({
       };
     } else {
       // partial or complete
-      // washInQty vs. next-upstream qty: if denim => compare w/ assembledQty, else compare w/ stitchedQty
+      // washingInQty vs. next-upstream qty: if denim => compare w/ assembledQty, else compare w/ stitchedQty
       const compareQty = isDenim ? assembledQty : stitchedQty;
-      if (washInQty === 0) {
+      if (washingInQty === 0) {
         washingInStatus = "In-Line";
-      } else if (washInQty >= compareQty && compareQty > 0) {
+      } else if (washingInQty >= compareQty && compareQty > 0) {
         washingInStatus = "Completed";
       } else {
-        const pend = compareQty - washInQty;
+        const pend = compareQty - washingInQty;
         washingInStatus = `${pend} Pending`;
       }
     }
@@ -1770,10 +1770,10 @@ function getDepartmentStatuses({
         // partial/complete
         if (washedQty === 0) {
           washingStatus = "In-Line";
-        } else if (washedQty >= washInQty && washInQty > 0) {
+        } else if (washedQty >= washingInQty && washingInQty > 0) {
           washingStatus = "Completed";
         } else {
-          const pend = washInQty - washedQty;
+          const pend = washingInQty - washedQty;
           washingStatus = `${pend} Pending`;
         }
       }
@@ -1817,10 +1817,10 @@ function getDepartmentStatuses({
         // compare finishing w/ washing_in
         if (finishedQty === 0) {
           finishingStatus = "In-Line";
-        } else if (finishedQty >= washInQty && washInQty > 0) {
+        } else if (finishedQty >= washingInQty && washingInQty > 0) {
           finishingStatus = "Completed";
         } else {
-          const pend = washInQty - finishedQty;
+          const pend = washingInQty - finishedQty;
           finishingStatus = `${pend} Pending`;
         }
       }
@@ -2055,7 +2055,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       // gather data from each stage
       const stitchedQty = await getStitchedQty(lotNo);
       const assembledQty = denim ? await getAssembledQty(lotNo) : 0;
-      const washInQty = await getWashingInQty(lotNo);
+      const washingInQty = await getWashingInQty(lotNo);
       const washedQty = denim ? await getWashedQty(lotNo) : 0;
       const finishedQty = await getFinishedQty(lotNo);
 
@@ -2077,7 +2077,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         totalCut,
         stitchedQty,
         assembledQty,
-        washInQty,
+        washingInQty,
         washedQty,
         finishedQty,
         stAssign,
