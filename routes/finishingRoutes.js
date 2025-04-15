@@ -385,7 +385,7 @@ router.post('/approve/:id', isAuthenticated, isFinishingMaster, async (req, res)
     const assignmentId = req.params.id;
     const { assignment_remark } = req.body;
     await pool.query(`
-      UPDATE finishing_assignments SET is_approved = 1, assignment_remark = ?
+      UPDATE finishing_assignments SET is_approved = 1,approved_on = NOW(), assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [assignment_remark || null, assignmentId, userId]);
     req.flash('success', 'Assignment approved successfully.');
@@ -403,7 +403,7 @@ router.post('/deny/:id', isAuthenticated, isFinishingMaster, async (req, res) =>
     const assignmentId = req.params.id;
     const { assignment_remark } = req.body;
     await pool.query(`
-      UPDATE finishing_assignments SET is_approved = 2, assignment_remark = ?
+      UPDATE finishing_assignments SET is_approved = 2, approved_on = NOW(),assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [assignment_remark || null, assignmentId, userId]);
     req.flash('success', 'Assignment denied successfully.');
