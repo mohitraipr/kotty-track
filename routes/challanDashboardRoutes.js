@@ -5,11 +5,26 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated } = require('../middlewares/auth');
 
+// Fiscal year for DC numbers
 const FISCAL_YEAR = '25-26'; // e.g. DC/25-26/1
 
 // Hard-coded user IDs
 const washers = [49, 62, 59, 56, 57, 58, 60, 54, 64, 61];
 const jeansAssembly = [44, 13];
+
+// Washer short-codes for Challan Number (two words => pick each initial)
+const WASHER_SHORT_CODES = {
+  49: 'AW', // ADS WASHER
+  62: 'MW', // MEENA TRADING
+  59: 'MT', // MAA TARA
+  56: 'VW', // VAISHNAVI WASHING
+  57: 'SB', // SHREE BALA JI WASHING
+  58: 'PE', // PRITY ENTERPRISES
+  60: 'SG', // SHREE GANESH WASHING
+  54: 'RE', // RAJ ENTERPRISES
+  64: 'AE', // ANSHIK ENTERPRISES
+  61: 'HP', // H.P GARMENTS
+};
 
 // ----------------- HELPER FUNCTION: getNextChallanCounter ----------------- //
 async function getNextChallanCounter(washerId) {
@@ -17,32 +32,40 @@ async function getNextChallanCounter(washerId) {
   try {
     await connection.beginTransaction();
 
-    const [rows] = await connection.query(`
+    const [rows] = await connection.query(
+      `
       SELECT id, current_counter
         FROM washer_challan_counters
        WHERE washer_id = ? AND year_range = ?
        FOR UPDATE
-    `, [washerId, FISCAL_YEAR]);
+    `,
+      [washerId, FISCAL_YEAR]
+    );
 
     let newCounter = 1;
     if (rows.length === 0) {
-      await connection.query(`
+      await connection.query(
+        `
         INSERT INTO washer_challan_counters (washer_id, year_range, current_counter)
         VALUES (?, ?, 1)
-      `, [washerId, FISCAL_YEAR]);
+      `,
+        [washerId, FISCAL_YEAR]
+      );
     } else {
       newCounter = rows[0].current_counter + 1;
-      await connection.query(`
+      await connection.query(
+        `
         UPDATE washer_challan_counters
            SET current_counter = ?
          WHERE id = ?
-      `, [newCounter, rows[0].id]);
+      `,
+        [newCounter, rows[0].id]
+      );
     }
 
     await connection.commit();
     connection.release();
     return newCounter;
-
   } catch (err) {
     await connection.rollback();
     connection.release();
@@ -74,7 +97,8 @@ router.get('/', isAuthenticated, async (req, res) => {
     const limit = 50;
 
     // Important: we only show wa.is_approved=1
-    const [assignments] = await pool.query(`
+    const [assignments] = await pool.query(
+      `
       SELECT
         wa.id AS washing_id,
         jd.lot_no,
@@ -97,14 +121,16 @@ router.get('/', isAuthenticated, async (req, res) => {
         AND wa.is_approved = 1
       ORDER BY wa.assigned_on DESC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `,
+      [limit, offset]
+    );
 
     res.render('challanDashboard', {
       assignments,
       search: '',
       user: req.session.user,
       error: req.flash('error'),
-      success: req.flash('success')
+      success: req.flash('success'),
     });
   } catch (error) {
     console.error('[ERROR] GET /challandashboard:', error);
@@ -153,7 +179,10 @@ router.get('/search', isAuthenticated, async (req, res) => {
 
     // If there's a comma-separated list of terms
     if (searchQuery.includes(',')) {
-      const terms = searchQuery.split(',').map(t => t.trim()).filter(Boolean);
+      const terms = searchQuery
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
       if (!terms.length) {
         return res.json({ assignments: [] });
       }
@@ -178,7 +207,6 @@ router.get('/search', isAuthenticated, async (req, res) => {
 
     const [assignments] = await pool.query(baseQuery, params);
     return res.json({ assignments });
-
   } catch (error) {
     console.error('[ERROR] GET /challandashboard/search:', error);
     return res.status(500).json({ error: error.message });
@@ -203,18 +231,21 @@ router.post('/generate', isAuthenticated, async (req, res) => {
     }
 
     // Retrieve washers from DB or your array
-    const [washerRows] = await pool.query(`
+    const [washerRows] = await pool.query(
+      `
       SELECT id, username 
         FROM users
        WHERE id IN (?)
        ORDER BY username ASC
-    `, [washers]);
+    `,
+      [washers]
+    );
 
     res.render('challanGeneration', {
       selectedRows,
       washers: washerRows,
       error: req.flash('error'),
-      success: req.flash('success')
+      success: req.flash('success'),
     });
   } catch (error) {
     console.error('[ERROR] POST /challandashboard/generate:', error);
@@ -255,7 +286,7 @@ router.post('/create', isAuthenticated, async (req, res) => {
 
     // 2) Ensure each washing_id is "approved" (wa.is_approved=1)
     // Gather the washing_ids
-    const washingIds = items.map(i => parseInt(i.washing_id, 10));
+    const washingIds = items.map((i) => parseInt(i.washing_id, 10));
     if (!washingIds.length) {
       req.flash('error', 'No valid washing items found');
       connection.release();
@@ -263,16 +294,22 @@ router.post('/create', isAuthenticated, async (req, res) => {
     }
 
     // Check if any is not is_approved=1
-    const [checkApproved] = await connection.query(`
+    const [checkApproved] = await connection.query(
+      `
       SELECT COUNT(*) AS total
         FROM washing_assignments
        WHERE id IN (?)
          AND is_approved = 1
-    `, [washingIds]);
+    `,
+      [washingIds]
+    );
 
     // Compare the count
     if (checkApproved.length && checkApproved[0].total !== washingIds.length) {
-      req.flash('error', 'Cannot create challan; some selected lots are not approved or don’t exist.');
+      req.flash(
+        'error',
+        'Cannot create challan; some selected lots are not approved or don’t exist.'
+      );
       connection.release();
       return res.redirect('/challandashboard');
     }
@@ -280,12 +317,15 @@ router.post('/create', isAuthenticated, async (req, res) => {
     // 3) Check if any items are already used
     for (const item of items) {
       const washingId = parseInt(item.washing_id, 10);
-      const [used] = await connection.query(`
+      const [used] = await connection.query(
+        `
         SELECT id
           FROM challan
          WHERE JSON_SEARCH(items, 'one', CAST(? AS CHAR), NULL, '$[*].washing_id') IS NOT NULL
          LIMIT 1
-      `, [washingId]);
+      `,
+        [washingId]
+      );
       if (used.length > 0) {
         req.flash('error', `Lot with washing_id=${washingId} is already in challan #${used[0].id}`);
         connection.release();
@@ -302,18 +342,68 @@ router.post('/create', isAuthenticated, async (req, res) => {
       pan: "AAGCK0951K"
     };
 
-    // Hardcoded washers
+    // Hardcoded washers -> placeOfSupply references
     const consigneeMapping = {
-      49: { name: "ADS WASHER", gstin: "07HQOPK1686K1Z2", address: "I-112, JAITPUR EXTENSION, PART-1, BADARPUR, South East Delhi, Delhi, 110044", placeOfSupply: "07-DELHI" },
-      62: { name: "MEENA TRADING WASHER", gstin: "09DERPG5827R1ZF", address: "Ground Floor, S 113, Harsha Compound, Loni Road Industrial Area, Mohan Nagar, Ghaziabad, Uttar Pradesh, 201003", placeOfSupply: "09-UTTAR PRADESH" },
-      59: { name: "MAA TARA ENTERPRISES", gstin: "07AMLPM6699N1ZX", address: "G/F, B/P R/S, B-200, Main Sindhu Farm Road, Meethapur Extension, New Delhi, South East Delhi, Delhi, 110044", placeOfSupply: "07-DELHI" },
-      56: { name: "VAISHNAVI WASHING", gstin: "09BTJPM9580J1ZU", address: "VILL-ASGARPUR, SEC-126, NOIDA, UTTAR PRADESH, Gautambuddha Nagar, Uttar Pradesh, 201301", placeOfSupply: "09-UTTAR PRADESH" },
-      57: { name: "SHREE BALA JI WASHING", gstin: "07ARNPP7012K1ZF", address: "KH NO.490/1/2/3, VILLAGE MOLARBAND, NEAR SAPERA BASTI, BADARPUR, South Delhi, Delhi, 110044", placeOfSupply: "07-DELHI" },
-      58: { name: "PRITY ENTERPRISES", gstin: "07BBXPS1234F1ZD", address: "G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044", placeOfSupply: "07-DELHI" },
-      60: { name: "SHREE GANESH WASHING", gstin: "06AHPPC4743G1ZE", address: "2/2,6-2, KITA 2, AREA 7, KILLLA NO. 1/2/2, SIDHOLA, TIGAON, Faridabad, Haryana, 121101", placeOfSupply: "06-HARYANA" },
-      54: { name: "RAJ ENTERPRISES WASHING", gstin: "07KWWPS3671F1ZL", address: "H No-199J Gali no-6, Block - A, Numbardar Colony Meethapur, Badarpur, New Delhi, South East Delhi, Delhi, 110044", placeOfSupply: "07-DELHI" },
-      64: { name: "ANSHIK ENTERPRISES WASHING", gstin: "09BGBPC8487K1ZX", address: "00, Sultanpur, Main Rasta, Near J P Hospital, Noida, Gautambuddha Nagar, Uttar Pradesh, 201304", placeOfSupply: "09-UTTAR PRADESH" },
-      61: { name: "H.P GARMENTS", gstin: "06CVKPS2554J1Z4", address: "PLOT NO-5, NANGLA GAJI PUR ROAD, NEAR ANTRAM CHOWK, Nangla Gujran, Faridabad, Haryana, 121005", placeOfSupply: "06-HARYANA" }
+      49: {
+        name: "ADS WASHER",
+        gstin: "07HQOPK1686K1Z2",
+        address: "I-112, JAITPUR EXTENSION, PART-1, BADARPUR, South East Delhi, Delhi, 110044",
+        placeOfSupply: "07-DELHI"
+      },
+      62: {
+        name: "MEENA TRADING WASHER",
+        gstin: "09DERPG5827R1ZF",
+        address: "Ground Floor, S 113, Harsha Compound, Loni Road Industrial Area, Mohan Nagar, Ghaziabad, Uttar Pradesh, 201003",
+        placeOfSupply: "09-UTTAR PRADESH"
+      },
+      59: {
+        name: "MAA TARA ENTERPRISES",
+        gstin: "07AMLPM6699N1ZX",
+        address: "G/F, B/P R/S, B-200, Main Sindhu Farm Road, Meethapur Extension, New Delhi, South East Delhi, Delhi, 110044",
+        placeOfSupply: "07-DELHI"
+      },
+      56: {
+        name: "VAISHNAVI WASHING",
+        gstin: "09BTJPM9580J1ZU",
+        address: "VILL-ASGARPUR, SEC-126, NOIDA, UTTAR PRADESH, Gautambuddha Nagar, Uttar Pradesh, 201301",
+        placeOfSupply: "09-UTTAR PRADESH"
+      },
+      57: {
+        name: "SHREE BALA JI WASHING",
+        gstin: "07ARNPP7012K1ZF",
+        address: "KH NO.490/1/2/3, VILLAGE MOLARBAND, NEAR SAPERA BASTI, BADARPUR, South Delhi, Delhi, 110044",
+        placeOfSupply: "07-DELHI"
+      },
+      58: {
+        name: "PRITY ENTERPRISES",
+        gstin: "07BBXPS1234F1ZD",
+        address: "G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044",
+        placeOfSupply: "07-DELHI"
+      },
+      60: {
+        name: "SHREE GANESH WASHING",
+        gstin: "06AHPPC4743G1ZE",
+        address: "2/2,6-2, KITA 2, AREA 7, KILLLA NO. 1/2/2, SIDHOLA, TIGAON, Faridabad, Haryana, 121101",
+        placeOfSupply: "06-HARYANA"
+      },
+      54: {
+        name: "RAJ ENTERPRISES WASHING",
+        gstin: "07KWWPS3671F1ZL",
+        address: "H No-199J Gali no-6, Block - A, Numbardar Colony Meethapur, Badarpur, New Delhi, South East Delhi, Delhi, 110044",
+        placeOfSupply: "07-DELHI"
+      },
+      64: {
+        name: "ANSHIK ENTERPRISES WASHING",
+        gstin: "09BGBPC8487K1ZX",
+        address: "00, Sultanpur, Main Rasta, Near J P Hospital, Noida, Gautambuddha Nagar, Uttar Pradesh, 201304",
+        placeOfSupply: "09-UTTAR PRADESH"
+      },
+      61: {
+        name: "H.P GARMENTS",
+        gstin: "06CVKPS2554J1Z4",
+        address: "PLOT NO-5, NANGLA GAJI PUR ROAD, NEAR ANTRAM CHOWK, Nangla Gujran, Faridabad, Haryana, 121005",
+        placeOfSupply: "06-HARYANA"
+      },
     };
 
     const consignee = consigneeMapping[washerIDNum];
@@ -323,9 +413,9 @@ router.post('/create', isAuthenticated, async (req, res) => {
       return res.redirect('/challandashboard');
     }
 
-    // Basic rate logic
+    // Basic rate logic (dummy, can adjust)
     const ratePerItem = 200;
-    items.forEach(item => {
+    items.forEach((item) => {
       item.hsnSac = "62034200";
       item.rate = ratePerItem;
       item.discount = 0;
@@ -335,11 +425,14 @@ router.post('/create', isAuthenticated, async (req, res) => {
     const totalTaxableValue = items.reduce((sum, it) => sum + it.taxableValue, 0);
     const totalAmount = totalTaxableValue;
 
-    // Next challan counter
+    // Next challan counter for that washer
     const nextCounter = await getNextChallanCounter(washerIDNum);
-    const challanNo = `DC/${FISCAL_YEAR}/${nextCounter}`;
 
-    // Insert
+    // Use short code for the new DC number
+    const shortCode = WASHER_SHORT_CODES[washerIDNum] || 'XX';
+    const challanNo = `DC/${shortCode}/${FISCAL_YEAR}/${nextCounter}`;
+
+    // Insert the new Challan
     const insertQuery = `
       INSERT INTO challan
         (challan_date, challan_no, reference_no, challan_type,
@@ -372,7 +465,6 @@ router.post('/create', isAuthenticated, async (req, res) => {
     const newChallanId = result.insertId;
     connection.release();
     return res.redirect(`/challandashboard/view/${newChallanId}`);
-
   } catch (error) {
     console.error('[ERROR] POST /challandashboard/create:', error);
     connection.release();
@@ -387,11 +479,14 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
     const userId = req.session.user.id;
     const challanId = parseInt(req.params.challanId, 10);
 
-    const [rows] = await pool.query(`
+    const [rows] = await pool.query(
+      `
       SELECT *
         FROM challan
        WHERE id = ?
-    `, [challanId]);
+    `,
+      [challanId]
+    );
 
     if (!rows.length) {
       req.flash('error', 'Challan not found');
@@ -405,7 +500,7 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
     // - washers => can view only if challanRow.consignee_id = userId
     // - others => block
     if (jeansAssembly.includes(userId)) {
-      // OK
+      // Allowed
     } else if (washers.includes(userId)) {
       if (challanRow.consignee_id !== userId) {
         req.flash('error', 'Not authorized to view this challan.');
@@ -455,7 +550,6 @@ router.get('/view/:challanId', isAuthenticated, async (req, res) => {
 
     // Reuse the same EJS for washers or jeansAssembly
     res.render('challanCreation', { challan: challanData });
-
   } catch (error) {
     console.error('[ERROR] GET /challandashboard/view:', error);
     req.flash('error', 'Error loading challan');
@@ -504,7 +598,7 @@ router.get('/challanlist', isAuthenticated, async (req, res) => {
       challans: rows,
       search,
       error: req.flash('error'),
-      success: req.flash('success')
+      success: req.flash('success'),
     });
   } catch (err) {
     console.error('[ERROR] GET /challanlist:', err);
