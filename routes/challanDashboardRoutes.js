@@ -376,7 +376,7 @@ router.post('/create', isAuthenticated, async (req, res) => {
       },
       58: {
         name: "PRITY ENTERPRISES",
-        gstin: "07BBXPS1234F1ZD",
+        gstin: "07BTMPC8553Q1ZW",
         address: "G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044",
         placeOfSupply: "07-DELHI"
       },
