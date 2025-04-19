@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Washing Challan – <%= entry.lot_no %></title>
+
+  <!-- -----------  PRINT & LAYOUT SET‑UP ----------- -->
+  <style>
+    @page       { size: A4; margin: 10mm; }
+    @media print {
+      html,body { height: 100%; overflow: hidden; }
+      .no-print { display:none !important; }
+    }
+
+    /* -------------  BASE STYLES ------------- */
+    *               { box-sizing:border-box; }
+    body            {
+      margin:0; padding:0;
+      font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+      font-size:13px; line-height:1.4;
+      background:linear-gradient(135deg,#e4f5ec 0%,#fff0f6 100%);
+    }
+    .challan-wrap   {
+      max-width:800px;
+      margin:20px auto;
+      background:#fff;
+      border-radius:8px;
+      box-shadow:0 2px 6px rgba(0,0,0,.12);
+      padding:24px 32px;
+    }
+    h1,h2,h3        { margin:0; font-weight:600; }
+    h1              { font-size:20px; letter-spacing:.5px; }
+    .meta, .meta td { font-size:13px; }
+    .meta           { width:100%; margin-top:12px; border-collapse:collapse; }
+    .meta td        { padding:4px 0; }
+    .section-title  { margin:22px 0 8px; font-size:15px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+    table.list      { width:100%; border-collapse:collapse; }
+    table.list th,
+    table.list td   { border:1px solid #ccc; padding:6px 8px; text-align:center; }
+    table.list th   { background:#f1f1f1; font-weight:600; }
+    .tot-row td     { font-weight:600; }
+
+    /* -------------  FOOTERS & SIGN‑OFF ------------- */
+    .signatures     { display:flex; justify-content:space-between; margin-top:40px; }
+    .sig-box        { width:32%; text-align:center; border-top:1px solid #000; padding-top:4px; }
+
+    /* -------------  BUTTONS ------------- */
+    .btn-print      {
+      display:inline-block; padding:6px 12px; margin-bottom:16px;
+      font-size:13px; border:none; border-radius:4px;
+      background:#007bff; color:#fff; cursor:pointer; transition:background .2s;
+    }
+    .btn-print:hover{ background:#0056b3; }
+  </style>
+</head>
+<body>
+  <div class="challan-wrap">
+    <!-- -----------  HEADER  ----------- -->
+    <button class="btn-print no-print" onclick="window.print()">Print</button>
+    <h1 style="text-align:center;">KOTTY LIFESTYLE</h1>
+    <h2 style="text-align:center; font-size:16px; margin-top:4px;">Washing Challan</h2>
+
+    <!-- -----------  META  ----------- -->
+    <table class="meta">
+      <tr>
+        <td><strong>Challan ID:</strong></td>
+        <td>#<%= entry.id %></td>
+        <td><strong>Date:</strong></td>
+        <td>
+          <%
+            const d = new Date(entry.created_at);
+            const pad = n => (n<10?'0':'')+n;
+          %>
+          <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Lot No:</strong></td><td><%= entry.lot_no %></td>
+        <td><strong>SKU:</strong></td><td><%= entry.sku %></td>
+      </tr>
+      <tr>
+        <td><strong>Total Pieces:</strong></td><td><%= entry.total_pieces %></td>
+        <td><strong>Created By:</strong></td><td><%= user.username %></td>
+      </tr>
+      <tr>
+        <td><strong>Remark:</strong></td>
+        <td colspan="3"><%= entry.remark || '—' %></td>
+      </tr>
+    </table>
+
+    <!-- -----------  IMAGE (OPTIONAL) ----------- -->
+    <% if (entry.image_url) { %>
+      <div style="margin:16px 0; text-align:center;">
+        <img src="<%= entry.image_url %>" alt="Attached Image" style="max-width:100%; max-height:250px; border:1px solid #ccc; border-radius:4px;">
+      </div>
+    <% } %>
+
+    <!-- -----------  SIZE BREAKDOWN  ----------- -->
+    <h3 class="section-title">Size Breakdown</h3>
+    <table class="list">
+      <thead>
+        <tr>
+          <th>Sl No.</th>
+          <th>Size Label</th>
+          <th>Pieces</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% let grandTot = 0; %>
+        <% sizes.forEach((sz,i)=>{ grandTot += sz.pieces; %>
+          <tr>
+            <td><%= i+1 %></td>
+            <td><%= sz.size_label %></td>
+            <td><%= sz.pieces %></td>
+          </tr>
+        <% }); %>
+        <tr class="tot-row">
+          <td colspan="2">Total</td>
+          <td><%= grandTot %></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- -----------  UPDATE LOG  ----------- -->
+    <% if (updates.length) { %>
+      <h3 class="section-title">Updates (Log)</h3>
+      <table class="list">
+        <thead>
+          <tr>
+            <th>Sl No.</th>
+            <th>Date &amp; Time</th>
+            <th>Size</th>
+            <th>Pieces Added</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% updates.forEach((u,i)=>{ %>
+            <tr>
+              <td><%= i+1 %></td>
+              <td>
+                <% const up = new Date(u.updated_at); %>
+                <%= pad(up.getDate()) %>-<%= pad(up.getMonth()+1) %>-<%= up.getFullYear() %>
+                <%= pad(up.getHours()) %>:<%= pad(up.getMinutes()) %>
+              </td>
+              <td><%= u.size_label %></td>
+              <td><%= u.pieces %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <!-- -----------  SIGNATURES  ----------- -->
+    <div class="signatures">
+      <div class="sig-box">Issued By</div>
+      <div class="sig-box">Checked By</div>
+      <div class="sig-box">Received By</div>
+    </div>
+  </div>
+
+  <!-- -----------  OPTIONAL: AUTO‑PRINT ON LOAD -----------
+  <script>
+    window.addEventListener('load',()=>window.print());
+  </script>
+  ---------------------------------------------- -->
+</body>
+</html>
