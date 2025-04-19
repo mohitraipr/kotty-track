@@ -1,15 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Washing In Approvals</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 5 CSS & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap 5 & FontAwesome -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    rel="stylesheet"
+  />
   <style>
     body { background-color: #f8f9fa; }
-    .spinner { display: none; }
   </style>
 </head>
 <body>
@@ -24,39 +29,92 @@
       </div>
     </div>
   </nav>
-  
+
   <div class="container my-4">
+    <!-- Flash messages -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger">
+        <ul class="mb-0">
+          <% error.forEach(msg => { %>
+            <li><%= msg %></li>
+          <% }) %>
+        </ul>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success">
+        <ul class="mb-0">
+          <% success.forEach(msg => { %>
+            <li><%= msg %></li>
+          <% }) %>
+        </ul>
+      </div>
+    <% } %>
+
     <h2 class="mb-4">Pending Washing In Assignments</h2>
+
     <!-- Search Field -->
     <div class="mb-3">
-      <input type="text" id="searchInput" class="form-control" placeholder="Search by Lot or SKU">
+      <input
+        type="text"
+        id="searchInput"
+        class="form-control"
+        placeholder="Search by Lot or SKU"
+        autocomplete="off"
+      />
     </div>
-    <!-- Spinner -->
-    <div id="spinner" class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
+
+    <!-- Spinner (hidden by default) -->
+    <div id="spinner" class="spinner-border text-primary d-none" role="status">
+      <span class="visually-hidden">Loading…</span>
     </div>
-    <!-- Container for assignments -->
+
+    <!-- Assignments Container -->
     <div id="assignmentsContainer"></div>
   </div>
 
   <!-- Deny Modal -->
-  <div class="modal fade" id="denyModal" tabindex="-1" aria-labelledby="denyModalLabel" aria-hidden="true">
+  <div
+    class="modal fade"
+    id="denyModal"
+    tabindex="-1"
+    aria-labelledby="denyModalLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog">
       <div class="modal-content">
         <form id="denyForm">
           <div class="modal-header">
-            <h5 class="modal-title" id="denyModalLabel"><i class="fas fa-ban"></i> Deny Assignment</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h5 class="modal-title" id="denyModalLabel">
+              <i class="fas fa-ban"></i> Deny Assignment
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
           </div>
           <div class="modal-body">
-            <input type="hidden" id="denyAssignmentId">
+            <input type="hidden" id="denyAssignmentId" />
             <div class="mb-3">
-              <label for="denialRemark" class="form-label">Reason for Denial</label>
-              <textarea id="denialRemark" class="form-control" rows="3" required></textarea>
+              <label for="denialRemark" class="form-label">
+                Reason for Denial
+              </label>
+              <textarea
+                id="denialRemark"
+                class="form-control"
+                rows="3"
+                required
+              ></textarea>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
               <i class="fas fa-times"></i> Cancel
             </button>
             <button type="submit" class="btn btn-danger">
@@ -67,120 +125,149 @@
       </div>
     </div>
   </div>
-  
-  <!-- Bootstrap Bundle JS -->
+
+  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <script>
-    const assignmentsContainer = document.getElementById('assignmentsContainer');
-    const searchInput = document.getElementById('searchInput');
-    const spinner = document.getElementById('spinner');
+    document.addEventListener('DOMContentLoaded', () => {
+      const container = document.getElementById('assignmentsContainer');
+      const spinner   = document.getElementById('spinner');
+      const search    = document.getElementById('searchInput');
+      const denyForm  = document.getElementById('denyForm');
+      let denyModal   = new bootstrap.Modal(document.getElementById('denyModal'));
 
-    async function loadAssignments() {
-      spinner.style.display = 'block';
-      try {
-        const term = encodeURIComponent(searchInput.value.trim());
-        const res = await fetch(`/washingin/approve/list?search=${term}`, {
-          headers: { 'Accept': 'application/json' },
-          credentials: 'same-origin'
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        renderAssignments(data.data);
-      } catch (err) {
-        console.error('[ERROR] loadAssignments:', err);
-        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading assignments.</div>';
-      } finally {
-        spinner.style.display = 'none';
-      }
-    }
-
-    function renderAssignments(assignments) {
-      assignmentsContainer.innerHTML = '';
-      if (!assignments.length) {
-        assignmentsContainer.innerHTML = '<div class="alert alert-info">No pending assignments found.</div>';
-        return;
-      }
-      assignments.forEach(assg => {
-        const card = document.createElement('div');
-        card.classList.add('card', 'mb-3');
-        const assignedOn = new Date(assg.assigned_on).toLocaleString();
-        card.innerHTML = `
-          <div class="card-header">
-            <strong>Lot:</strong> ${assg.lot_no} | <strong>SKU:</strong> ${assg.sku}
-            <small class="text-muted">Assigned: ${assignedOn}</small>
-          </div>
-          <div class="card-body">
-            <p><strong>Assignment ID:</strong> ${assg.assignment_id}</p>
-            <div class="d-flex gap-2">
-              <button class="btn btn-success btn-sm approveBtn" data-id="${assg.assignment_id}">
-                <i class="fas fa-check"></i> Approve
-              </button>
-              <button class="btn btn-danger btn-sm denyBtn" data-id="${assg.assignment_id}">
-                <i class="fas fa-ban"></i> Deny
-              </button>
-            </div>
-          </div>
-        `;
-        assignmentsContainer.appendChild(card);
-      });
-      document.querySelectorAll('.approveBtn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          try {
-            const res = await fetch('/washingin/approve-lot', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ assignment_id: id }),
-              credentials: 'same-origin'
-            });
-            const json = await res.json();
-            if (json.success) {
-              loadAssignments();
-            } else {
-              alert(json.error || 'Error approving assignment.');
-            }
-          } catch (err) {
-            console.error('[ERROR] Approve AJAX:', err);
-          }
-        });
-      });
-      document.querySelectorAll('.denyBtn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-id');
-          document.getElementById('denyAssignmentId').value = id;
-          const denyModal = new bootstrap.Modal(document.getElementById('denyModal'));
-          denyModal.show();
-        });
-      });
-    }
-
-    document.getElementById('denyForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const assignment_id = document.getElementById('denyAssignmentId').value;
-      const denial_remark = document.getElementById('denialRemark').value;
-      try {
-        const res = await fetch('/washingin/deny-lot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignment_id, denial_remark }),
-          credentials: 'same-origin'
-        });
-        const json = await res.json();
-        if (json.success) {
-          const denyModalEl = document.getElementById('denyModal');
-          const modal = bootstrap.Modal.getInstance(denyModalEl);
-          modal.hide();
-          loadAssignments();
-        } else {
-          alert(json.error || 'Error denying assignment.');
+      async function loadAssignments() {
+        container.innerHTML = '';            // clear stale
+        spinner.classList.remove('d-none');
+        try {
+          const term = encodeURIComponent(search.value.trim());
+          const res  = await fetch(`/washingin/approve/list?search=${term}`, {
+            credentials: 'same-origin'
+          });
+          if (!res.ok) throw new Error(res.statusText);
+          const { data } = await res.json();
+          renderAssignments(data);
+        } catch (err) {
+          console.error('[ERROR] loadAssignments:', err);
+          container.innerHTML =
+            '<div class="alert alert-danger">Error loading assignments.</div>';
+        } finally {
+          spinner.classList.add('d-none');
         }
-      } catch (err) {
-        console.error('[ERROR] Deny AJAX:', err);
       }
-    });
 
-    searchInput.addEventListener('input', loadAssignments);
-    loadAssignments();
+      function renderAssignments(list) {
+        if (!list.length) {
+          container.innerHTML =
+            '<div class="alert alert-info">No pending assignments found.</div>';
+          return;
+        }
+        list.forEach(a => {
+          const assignedOn = new Date(a.assigned_on).toLocaleString();
+          const card = document.createElement('div');
+          card.className = 'card mb-3';
+          card.innerHTML = `
+            <div class="card-header">
+              <strong>Lot:</strong> ${a.lot_no}
+              | <strong>SKU:</strong> ${a.sku}
+              | <strong>Pieces:</strong> ${a.total_pieces}
+              <small class="text-muted">Assigned: ${assignedOn}</small>
+            </div>
+            <div class="card-body">
+              <p><strong>Assignment ID:</strong> ${a.assignment_id}</p>
+              <p><strong>Cutting Remark:</strong> ${a.cutting_remark || '—'}</p>
+              <div class="d-flex gap-2">
+                <button
+                  type="button"
+                  class="btn btn-success btn-sm approveBtn"
+                  data-id="${a.assignment_id}"
+                >
+                  <i class="fas fa-check"></i> Approve
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger btn-sm denyBtn"
+                  data-id="${a.assignment_id}"
+                >
+                  <i class="fas fa-ban"></i> Deny
+                </button>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        // wire up approve
+        container.querySelectorAll('.approveBtn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            try {
+              const res = await fetch('/washingin/approve-lot', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignment_id: id })
+              });
+              if (!res.ok) throw new Error(res.statusText);
+              const json = await res.json();
+              if (json.success) loadAssignments();
+              else alert(json.error || 'Could not approve.');
+            } catch (e) {
+              console.error('[ERROR] Approve:', e);
+              alert('Network or server error.');
+            }
+          });
+        });
+
+        // wire up deny
+        container.querySelectorAll('.denyBtn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.getElementById('denyAssignmentId').value = btn.dataset.id;
+            document.getElementById('denialRemark').value       = '';
+            denyModal.show();
+          });
+        });
+      }
+
+      // handle deny form submit
+      denyForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const assignment_id  = document.getElementById('denyAssignmentId').value;
+        const denial_remark  = document.getElementById('denialRemark').value.trim();
+        if (!denial_remark) {
+          alert('Please enter a reason for denial.');
+          return;
+        }
+        try {
+          const res = await fetch('/washingin/deny-lot', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignment_id, denial_remark })
+          });
+          if (!res.ok) throw new Error(res.statusText);
+          const json = await res.json();
+          if (json.success) {
+            denyModal.hide();
+            loadAssignments();
+          } else {
+            alert(json.error || 'Could not deny.');
+          }
+        } catch (e) {
+          console.error('[ERROR] Deny:', e);
+          alert('Network or server error.');
+        }
+      });
+
+      // events
+      search.addEventListener('input', () => {
+        loadAssignments();
+      });
+
+      // initial
+      loadAssignments();
+    });
   </script>
 </body>
 </html>
