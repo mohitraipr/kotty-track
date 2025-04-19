@@ -41,25 +41,32 @@ router.get('/approve', isAuthenticated, isWashingInMaster, (req, res) => {
   });
 });
 
-// GET /washingin/approve/list => returns pending assignments (is_approved IS NULL)
+// GET /washingin/approve/list
 router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId     = req.session.user.id;
     const searchTerm = req.query.search || '';
     const searchLike = `%${searchTerm}%`;
 
-    // Example: each washing_in_assignments row references washing_data
     const [rows] = await pool.query(`
-      SELECT wia.id AS assignment_id,
-             wia.sizes_json,
-             wia.assigned_on,
-             wia.is_approved,
-             wia.assignment_remark,
-             wd.lot_no,
-             wd.sku
+      SELECT
+        wia.id            AS assignment_id,
+        wia.sizes_json,
+        wia.assigned_on,
+        wia.is_approved,
+        wia.assignment_remark,
+
+        wd.lot_no,
+        wd.sku,
+        wd.total_pieces,               -- <- from washing_data
+
+        cl.remark       AS cutting_remark  -- <- from cutting_lots
       FROM washing_in_assignments wia
-      JOIN washing_data wd ON wia.washing_data_id = wd.id
-      WHERE wia.user_id = ?
+      JOIN washing_data wd
+        ON wia.washing_data_id = wd.id
+      LEFT JOIN cutting_lots cl
+        ON cl.lot_no = wd.lot_no
+      WHERE wia.user_id     = ?
         AND wia.is_approved IS NULL
         AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
       ORDER BY wia.assigned_on DESC
@@ -75,29 +82,28 @@ router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res)
 // POST /washingin/approve-lot
 router.post('/approve-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId       = req.session.user.id;
     const { assignment_id } = req.body;
-
     if (!assignment_id) {
-      req.flash('error', 'No assignment_id provided.');
-      return res.redirect('/washingin/approve');
+      return res.status(400).json({ success: false, error: 'No assignment_id provided.' });
     }
 
     await pool.query(`
       UPDATE washing_in_assignments
-      SET is_approved = 1,approved_on = NOW(),
+      SET is_approved    = 1,
+          approved_on    = NOW(),
           assignment_remark = NULL
       WHERE id = ? AND user_id = ?
     `, [assignment_id, userId]);
 
-    req.flash('success', 'Assignment approved successfully!');
-    return res.redirect('/washingin/approve');
+    // **Return JSON** so the front‑end AJAX can see success immediately
+    return res.json({ success: true, message: 'Assignment approved successfully!' });
   } catch (err) {
     console.error('[ERROR] POST /washingin/approve-lot =>', err);
-    req.flash('error', 'Error approving assignment: ' + err.message);
-    return res.redirect('/washingin/approve');
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 // POST /washingin/deny-lot
 router.post('/deny-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
@@ -1051,127 +1057,87 @@ router.get('/assign-rewash/data/:wdId', isAuthenticated, isWashingInMaster, asyn
 });
 
 // 3) Create a new rewash request
-// routes/washingInRoutes.js  (drop‑in replacement)
+router.post('/assign-rewash', isAuthenticated, isWashingInMaster, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const userId = req.session.user.id;
+    const { selectedWashingDataId, sizes = {} } = req.body;
+    // 1) Validate lot
+    const [[wd]] = await conn.query(`SELECT * FROM washing_data WHERE id = ?`, [selectedWashingDataId]);
+    if (!wd) throw new Error('Invalid lot selection.');
 
-router.post(
-  '/assign-rewash',
-  isAuthenticated,
-  isWashingInMaster,
-  async (req, res) => {
-    let conn;
-    try {
-      conn = await pool.getConnection();
-      await conn.beginTransaction();
-
-      const userId = req.session.user.id;
-      const { selectedWashingDataId, sizes = {} } = req.body;
-
-      // 1) Validate lot
-      const [[wd]] = await conn.query(
-        'SELECT * FROM washing_data WHERE id = ?',
-        [selectedWashingDataId]
-      );
-      if (!wd) throw new Error('Invalid lot selection.');
-
-      // 2) Normalise & validate size requests
-      const clean = [];              // [{ row, pieces }]
-      let grandTotal = 0;
-
-      for (const rawKey in sizes) {
-        const pieces = Number(sizes[rawKey]) || 0;
-        if (pieces <= 0) continue;   // ignore blanks / zeros
-
-        let row = null;
-
-        // A. try as numeric id
-        if (/^\d+$/.test(rawKey)) {
-          const [[byId]] = await conn.query(
-            'SELECT * FROM washing_data_sizes WHERE id = ?',
-            [Number(rawKey)]
-          );
-          if (byId) row = byId;
-        }
-
-        // B. fallback: treat as size_label
-        if (!row) {
-          const [[byLbl]] = await conn.query(
-            `SELECT * FROM washing_data_sizes
-              WHERE washing_data_id = ? AND size_label = ?`,
-            [wd.id, rawKey]
-          );
-          if (byLbl) row = byLbl;
-        }
-
-        if (!row) {
-          throw new Error(`Bad size reference (“${rawKey}”).`);
-        }
-
-        if (pieces > row.pieces) {
-          throw new Error(
-            `Requested ${pieces} > available ${row.pieces} for size “${row.size_label}”.`
-          );
-        }
-
-        clean.push({ row, pieces });
-        grandTotal += pieces;
-      }
-
-      if (grandTotal === 0) {
-        throw new Error('You must request at least one piece for rewash.');
-      }
-
-      // 3) Insert master rewash record
-      const [ins] = await conn.query(
-        `INSERT INTO rewash_requests
-           (washing_data_id, user_id, lot_no, sku, total_requested, status)
-         VALUES (?, ?, ?, ?, ?, 'pending')`,
-        [wd.id, userId, wd.lot_no, wd.sku, grandTotal]
-      );
-      const rrId = ins.insertId;
-
-      // 4) Apply every size
-      for (const { row, pieces } of clean) {
-        // 4a) detail table
-        await conn.query(
-          `INSERT INTO rewash_request_sizes
-             (rewash_request_id, size_label, pieces_requested)
-           VALUES (?, ?, ?)`,
-          [rrId, row.size_label, pieces]
-        );
-
-        // 4b) deduct pools
-        await conn.query(
-          'UPDATE washing_data_sizes SET pieces = pieces - ? WHERE id = ?',
-          [pieces, row.id]
-        );
-        await conn.query(
-          'UPDATE washing_data SET total_pieces = total_pieces - ? WHERE id = ?',
-          [pieces, wd.id]
-        );
-
-        // 4c) log negative update
-        await conn.query(
-          `INSERT INTO washing_data_updates
-             (washing_data_id, size_label, pieces)
-           VALUES (?, ?, ?)`,
-          [wd.id, row.size_label, -pieces]
-        );
-      }
-
-      await conn.commit();
-      req.flash('success', 'Rewash request created successfully!');
-      res.redirect('/washingin/assign-rewash');
-    } catch (err) {
-      if (conn) await conn.rollback();
-      console.error('[ERROR] POST /assign-rewash =>', err);
-      req.flash('error', err.message);
-      res.redirect('/washingin/assign-rewash');
-    } finally {
-      if (conn) conn.release();
+    // 2) Compute total_requested & ensure <= available
+    let totalReq = 0;
+    for (let sizeId in sizes) {
+      const reqCount = parseInt(sizes[sizeId], 10) || 0;
+      if (reqCount < 0) throw new Error('Invalid piece count.');
+      if (reqCount > 0) totalReq += reqCount;
     }
-  }
-);
+    if (totalReq <= 0) throw new Error('No pieces requested.');
 
+    // 3) Insert into rewash_requests
+    const [rr] = await conn.query(`
+      INSERT INTO rewash_requests
+        (washing_data_id, user_id, lot_no, sku, total_requested, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+    `, [wd.id, userId, wd.lot_no, wd.sku, totalReq]);
+    const rewashId = rr.insertId;
+
+    // 4) Insert each size & deduct from washing_data_sizes + log in washing_data_updates
+    for (let sizeId in sizes) {
+      const reqCount = parseInt(sizes[sizeId], 10) || 0;
+      if (reqCount <= 0) continue;
+
+      // fetch size row
+      const [[srow]] = await conn.query(`
+        SELECT * FROM washing_data_sizes WHERE id = ?
+      `, [sizeId]);
+      if (!srow) throw new Error('Bad size reference.');
+
+      if (reqCount > srow.pieces) throw new Error(`Requested ${reqCount} exceeds available ${srow.pieces} for ${srow.size_label}`);
+
+      // record request size
+      await conn.query(`
+        INSERT INTO rewash_request_sizes
+          (rewash_request_id, size_label, pieces_requested)
+        VALUES (?, ?, ?)
+      `, [rewashId, srow.size_label, reqCount]);
+
+      // deduct from washing_data_sizes
+      await conn.query(`
+        UPDATE washing_data_sizes
+        SET pieces = pieces - ?
+        WHERE id = ?
+      `, [reqCount, sizeId]);
+
+      // deduct from washing_data.total_pieces
+      await conn.query(`
+        UPDATE washing_data
+        SET total_pieces = total_pieces - ?
+        WHERE id = ?
+      `, [reqCount, wd.id]);
+
+      // log negative update
+      await conn.query(`
+        INSERT INTO washing_data_updates
+          (washing_data_id, size_label, pieces)
+        VALUES (?, ?, ?)
+      `, [wd.id, srow.size_label, -reqCount]);
+    }
+
+    await conn.commit();
+    req.flash('success', 'Rewash request created successfully!');
+    res.redirect('/washingin/assign-rewash');
+  } catch (err) {
+    await conn.rollback();
+    console.error('[ERROR] POST /assign-rewash =>', err);
+    req.flash('error', err.message);
+    res.redirect('/washingin/assign-rewash');
+  } finally {
+    conn.release();
+  }
+});
 
 // 4) List pending rewash requests
 router.get('/assign-rewash/pending', isAuthenticated, isWashingInMaster, (req, res) => {
