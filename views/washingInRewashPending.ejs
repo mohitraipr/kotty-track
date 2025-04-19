@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KOTTY | Pending Rewash</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- FontAwesome -->
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</head>
+<body class="bg-light">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand fw-bold" href="#"><i class="fas fa-retweet me-1"></i>KOTTY</a>
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="/washingin/assign-rewash"><i class="fas fa-sync-alt me-1"></i>New Rewash</a></li>
+        <li class="nav-item"><a class="nav-link" href="/washingin"><i class="fas fa-home me-1"></i>Dashboard</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container my-5">
+    <!-- Card wrapper -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-hourglass-half me-1"></i>Pending Rewash Requests</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Lot No</th>
+                <th scope="col">Requested</th>
+                <th scope="col">Requested On</th>
+                <th scope="col" class="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="pendingBody">
+              <!-- rows inserted via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bootstrap & Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    async function loadPending() {
+      try {
+        const res = await fetch('/washingin/assign-rewash/pending/list');
+        const { data } = await res.json();
+        const body = document.getElementById('pendingBody');
+        body.innerHTML = '';
+
+        if (!data.length) {
+          body.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">
+                <i class="fas fa-check-circle me-2"></i>No pending rewash requests.
+              </td>
+            </tr>`;
+          return;
+        }
+
+        data.forEach(r => {
+          const date = new Date(r.created_at).toLocaleString();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <th scope="row">${r.id}</th>
+            <td>${r.lot_no}</td>
+            <td>${r.total_requested}</td>
+            <td>${date}</td>
+            <td class="text-center">
+              <form method="POST" action="/washingin/assign-rewash/pending/${r.id}/complete">
+                <button type="submit" class="btn btn-success btn-sm">
+                  <i class="fas fa-check"></i> Complete
+                </button>
+              </form>
+            </td>
+          `;
+          body.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error loading pending requests:', err);
+        const body = document.getElementById('pendingBody');
+        body.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-center text-danger py-4">
+              <i class="fas fa-exclamation-triangle me-2"></i>Failed to load data.
+            </td>
+          </tr>`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadPending);
+  </script>
+</body>
+</html>
