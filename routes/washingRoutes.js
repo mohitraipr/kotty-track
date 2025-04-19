@@ -566,32 +566,41 @@ router.get('/approve', isAuthenticated, isWashingMaster, (req, res) => {
 });
 
 // GET /washingdashboard/approve/list
+// GET /washingdashboard/approve/list
 router.get('/approve/list', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId     = req.session.user.id;
     const searchTerm = req.query.search || '';
     const searchLike = `%${searchTerm}%`;
 
     const [rows] = await pool.query(`
-      SELECT wa.id AS assignment_id,
-             wa.sizes_json,
-             wa.assigned_on,
-             wa.is_approved,
-             wa.assignment_remark,
-             jd.lot_no,
-             jd.sku
+      SELECT
+        wa.id            AS assignment_id,
+        wa.sizes_json,
+        wa.assigned_on,
+        wa.is_approved,
+        wa.assignment_remark,
+
+        jd.lot_no,
+        jd.sku,
+        jd.total_pieces,
+
+        cl.remark       AS cutting_remark
       FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-      WHERE wa.user_id = ?
+      JOIN jeans_assembly_data jd
+        ON wa.jeans_assembly_assignment_id = jd.id
+      LEFT JOIN cutting_lots cl
+        ON cl.lot_no = jd.lot_no
+      WHERE wa.user_id    = ?
         AND wa.is_approved IS NULL
-        AND (jd.lot_no LIKE ? OR jd.sku LIKE ?)
+        AND ( jd.lot_no LIKE ? OR jd.sku LIKE ? )
       ORDER BY wa.assigned_on DESC
     `, [userId, searchLike, searchLike]);
 
     return res.json({ data: rows });
   } catch (err) {
     console.error('[ERROR] GET /washingdashboard/approve/list =>', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Could not load assignments: ' + err.message });
   }
 });
 
