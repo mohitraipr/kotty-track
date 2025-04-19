@@ -42,24 +42,32 @@ router.get('/approve', isAuthenticated, isWashingInMaster, (req, res) => {
 });
 
 // GET /washingin/approve/list => returns pending assignments (is_approved IS NULL)
+// GET /washingin/approve/list
 router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res) => {
   try {
-    const userId = req.session.user.id;
+    const userId     = req.session.user.id;
     const searchTerm = req.query.search || '';
     const searchLike = `%${searchTerm}%`;
 
-    // Example: each washing_in_assignments row references washing_data
     const [rows] = await pool.query(`
-      SELECT wia.id AS assignment_id,
-             wia.sizes_json,
-             wia.assigned_on,
-             wia.is_approved,
-             wia.assignment_remark,
-             wd.lot_no,
-             wd.sku
+      SELECT
+        wia.id            AS assignment_id,
+        wia.sizes_json,
+        wia.assigned_on,
+        wia.is_approved,
+        wia.assignment_remark,
+
+        wd.lot_no,
+        wd.sku,
+        wd.total_pieces,               -- <- from washing_data
+
+        cl.remark       AS cutting_remark  -- <- from cutting_lots
       FROM washing_in_assignments wia
-      JOIN washing_data wd ON wia.washing_data_id = wd.id
-      WHERE wia.user_id = ?
+      JOIN washing_data wd
+        ON wia.washing_data_id = wd.id
+      LEFT JOIN cutting_lots cl
+        ON cl.lot_no = wd.lot_no
+      WHERE wia.user_id     = ?
         AND wia.is_approved IS NULL
         AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
       ORDER BY wia.assigned_on DESC
@@ -69,6 +77,31 @@ router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res)
   } catch (err) {
     console.error('[ERROR] GET /washingin/approve/list =>', err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingin/approve-lot
+router.post('/approve-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId       = req.session.user.id;
+    const { assignment_id } = req.body;
+    if (!assignment_id) {
+      return res.status(400).json({ success: false, error: 'No assignment_id provided.' });
+    }
+
+    await pool.query(`
+      UPDATE washing_in_assignments
+      SET is_approved    = 1,
+          approved_on    = NOW(),
+          assignment_remark = NULL
+      WHERE id = ? AND user_id = ?
+    `, [assignment_id, userId]);
+
+    // **Return JSON** so the front‑end AJAX can see success immediately
+    return res.json({ success: true, message: 'Assignment approved successfully!' });
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/approve-lot =>', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
