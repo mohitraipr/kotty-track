@@ -9,7 +9,6 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet" />
   <style>
     body { background-color: #f8f9fa; }
-    .spinner { display: none; }
   </style>
 </head>
 <body>
@@ -32,8 +31,8 @@
       <input type="text" id="searchInput" class="form-control" placeholder="Search by Lot or SKU" />
     </div>
 
-    <!-- Spinner -->
-    <div id="spinner" class="spinner-border text-primary" role="status">
+    <!-- Spinner (hidden by default) -->
+    <div id="spinner" class="spinner-border text-primary d-none" role="status">
       <span class="visually-hidden">Loading…</span>
     </div>
 
@@ -43,27 +42,30 @@
 
   <!-- Deny Modal -->
   <div class="modal fade" id="denyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content">
-      <form id="denyForm">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="fas fa-ban"></i> Deny Assignment</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" id="denyAssignmentId" />
-          <div class="mb-3">
-            <label for="denialRemark" class="form-label">Reason for Denial</label>
-            <textarea id="denialRemark" class="form-control" required></textarea>
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="denyForm">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-ban"></i> Deny Assignment</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Deny</button>
-        </div>
-      </form>
-    </div></div>
+          <div class="modal-body">
+            <input type="hidden" id="denyAssignmentId" />
+            <div class="mb-3">
+              <label for="denialRemark" class="form-label">Reason for Denial</label>
+              <textarea id="denialRemark" class="form-control" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger">Deny</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
+  <!-- Bootstrap JS + your script -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const container = document.getElementById('assignmentsContainer');
@@ -71,31 +73,39 @@
     const search    = document.getElementById('searchInput');
 
     async function loadAssignments() {
-      spinner.style.display = 'inline-block';
+      // show spinner
+      spinner.classList.remove('d-none');
+
       try {
         const term = encodeURIComponent(search.value.trim());
-        const res  = await fetch(\`/washingdashboard/approve/list?search=\${term}\`);
+        const res  = await fetch(`/washingdashboard/approve/list?search=${term}`);
         if (!res.ok) throw new Error(res.statusText);
+
         const { data } = await res.json();
         renderAssignments(data);
-      } catch (e) {
+
+      } catch (err) {
+        console.error('[ERROR] loadAssignments:', err);
         container.innerHTML = '<div class="alert alert-danger">Error loading assignments.</div>';
-        console.error(e);
       } finally {
-        spinner.style.display = 'none';
+        // hide spinner
+        spinner.classList.add('d-none');
       }
     }
 
     function renderAssignments(list) {
       container.innerHTML = '';
+
       if (!list.length) {
         container.innerHTML = '<div class="alert alert-info">No pending assignments found.</div>';
         return;
       }
+
       list.forEach(a => {
         const card = document.createElement('div');
         card.className = 'card mb-3';
         const assignedOn = new Date(a.assigned_on).toLocaleString();
+
         card.innerHTML = `
           <div class="card-header">
             <strong>Lot:</strong> ${a.lot_no}
@@ -107,10 +117,10 @@
             <p><strong>Assignment ID:</strong> ${a.assignment_id}</p>
             <p><strong>Cutting Remark:</strong> ${a.cutting_remark || '—'}</p>
             <div class="d-flex gap-2">
-              <button class="btn btn-success btn-sm approveBtn" data-id="${a.assignment_id}">
+              <button type="button" class="btn btn-success btn-sm approveBtn" data-id="${a.assignment_id}">
                 <i class="fas fa-check"></i> Approve
               </button>
-              <button class="btn btn-danger btn-sm denyBtn" data-id="${a.assignment_id}">
+              <button type="button" class="btn btn-danger btn-sm denyBtn" data-id="${a.assignment_id}">
                 <i class="fas fa-ban"></i> Deny
               </button>
             </div>
@@ -119,38 +129,39 @@
         container.appendChild(card);
       });
 
-      // Approve handlers
+      // bind approve buttons
       container.querySelectorAll('.approveBtn').forEach(btn => {
-        btn.onclick = async () => {
+        btn.addEventListener('click', async () => {
           const id = btn.dataset.id;
           const res = await fetch('/washingdashboard/approve-lot', {
             method: 'POST',
-            headers: {'Content-Type':'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ assignment_id: id })
           });
           const json = await res.json();
           if (json.success) loadAssignments();
           else alert(json.error || 'Could not approve.');
-        };
+        });
       });
 
-      // Deny handlers
+      // bind deny buttons
       container.querySelectorAll('.denyBtn').forEach(btn => {
-        btn.onclick = () => {
+        btn.addEventListener('click', () => {
           document.getElementById('denyAssignmentId').value = btn.dataset.id;
           new bootstrap.Modal(document.getElementById('denyModal')).show();
-        };
+        });
       });
     }
 
-    // Deny form submit
-    document.getElementById('denyForm').onsubmit = async e => {
+    // handle deny form submission
+    document.getElementById('denyForm').addEventListener('submit', async e => {
       e.preventDefault();
-      const assignment_id  = document.getElementById('denyAssignmentId').value;
-      const denial_remark  = document.getElementById('denialRemark').value;
+      const assignment_id = document.getElementById('denyAssignmentId').value;
+      const denial_remark = document.getElementById('denialRemark').value;
+
       const res = await fetch('/washingdashboard/deny-lot', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignment_id, denial_remark })
       });
       const json = await res.json();
@@ -160,9 +171,12 @@
       } else {
         alert(json.error || 'Could not deny.');
       }
-    };
+    });
 
-    search.oninput = loadAssignments;
+    // search on input
+    search.addEventListener('input', loadAssignments);
+
+    // initial load
     loadAssignments();
   </script>
 </body>
