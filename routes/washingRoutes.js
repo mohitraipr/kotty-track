@@ -48,7 +48,7 @@ router.get('/', isAuthenticated, isWashingMaster, async (req, res) => {
           WHERE user_id = ?
         )
       ORDER BY jd.created_at DESC
-      LIMIT 10
+     
     `, [userId, userId]);
 
     // Now each lot object has cutting_remark as well
