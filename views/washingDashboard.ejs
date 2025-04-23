@@ -6,105 +6,90 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
   <!-- Bootstrap & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+
+  <!-- Select2 CSS (for searchable dropdown) -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
+    rel="stylesheet"
+  />
+
   <style>
     body {
       background-color: #f8f9fa;
       color: #212529;
-      transition: background-color 0.3s, color 0.3s;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
-    .card { border-radius: 6px; margin-bottom: 20px; }
-    .navbar-brand { font-weight: 500; font-size: 1.2rem; }
-    .main-content { flex: 1 0 auto; }
-    .fade-in { animation: fadeIn 0.4s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .dark-mode { background-color: #121212; color: #f8f9fa; }
-    .dark-mode .navbar,
-    .dark-mode .nav-tabs .nav-link { background-color: #1f1f1f !important; color: #fff; }
-    .dark-mode .card { background-color: #1e1e1e; color: #f8f9fa; border-color: #2a2a2a; }
-    .dark-mode .modal-content { background-color: #1e1e1e; color: #f8f9fa; border-color: #2a2a2a; }
-    .dark-mode .table-bordered > :not(caption) > * > * { border-color: #666; }
-    .dark-mode .table-light { background-color: #272727; color: #fff; }
-    .dark-mode .btn-close { filter: invert(1); }
-    .dark-mode .form-control,
-    .dark-mode select, .dark-mode textarea { background-color: #2b2b2b; color: #f8f9fa; border-color: #444; }
-    .dark-mode input::placeholder { color: #ccc; }
-    .dark-mode .input-group-text { background-color: #2b2b2b; border-color: #444; color: #fff; }
-    .dark-mode .alert { background-color: #2b2b2b; color: #fff; border-color: #444; }
-    .dark-mode a, .dark-mode .nav-link { color: #a5d6ff; }
-    [data-lang="en"] { display: inline; }
-    [data-lang="hi"] { display: none; }
-    .lang-hi [data-lang="en"] { display: none !important; }
-    .lang-hi [data-lang="hi"] { display: inline !important; }
+    .card {
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .navbar-brand {
+      font-weight: 500;
+      font-size: 1.2rem;
+    }
+    .main-content {
+      flex: 1 0 auto;
+    }
+    .fade-in {
+      animation: fadeIn 0.4s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    /* When using Select2, ensure the container is 100% wide in Bootstrap forms */
+    .select2-container {
+      width: 100% !important;
+    }
   </style>
 </head>
 <body>
-  <!-- Navbar -->
+  <!-- NAVBAR -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid px-3">
       <a class="navbar-brand" href="#">
-        <i class="fas fa-tshirt"></i>
-        <span data-lang="en">KOTTY</span>
-        <span data-lang="hi">कोटी</span>
+        <i class="fas fa-tshirt"></i> KOTTY
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent"
-        aria-expanded="false" aria-label="Toggle navigation">
+      <!-- Toggler for mobile screens -->
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarContent"
+        aria-controls="navbarContent"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarContent">
         <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-          <!-- Dark Mode Toggle -->
-          <li class="nav-item me-3">
-            <button id="darkModeToggle" class="btn btn-sm btn-outline-light">
-              <i class="fas fa-moon"></i>
-              <span data-lang="en">Dark Mode</span>
-              <span data-lang="hi">डार्क मोड</span>
-            </button>
-          </li>
-          <!-- Language Toggle -->
-          <li class="nav-item me-3">
-            <div class="d-flex align-items-center text-white">
-              <label class="me-2">
-                <input type="radio" name="language" value="en" checked /> EN
-              </label>
-              <label>
-                <input type="radio" name="language" value="hi" /> हिंदी
-              </label>
-            </div>
-          </li>
-          <!-- Navigation Link for Assignment -->
-<li class="nav-item me-2">
-            <a href="/washingdashboard/aPPROVE" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-check-circle"></i>
-              <span data-lang="en">Approve Lots</span>
-              <span data-lang="hi"></span>
-            </a>
-          </li>
-<li class="nav-item me-2">
-            <a href="/challandashboard/challanlist" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-check-circle"></i>
-              <span data-lang="en">Challan List</span>
-              <span data-lang="hi"></span>
+          <!-- Example: Approve, etc. -->
+          <li class="nav-item me-2">
+            <a href="/washingdashboard/approve" class="btn btn-outline-light btn-sm">
+              <i class="fas fa-check-circle"></i> Approve
             </a>
           </li>
           <li class="nav-item me-2">
             <a href="/washingdashboard/assign-washing-in" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-check-circle"></i>
-              <span data-lang="en">Assign Washing-In</span>
-              <span data-lang="hi">वाशिंग इन असाइन करें</span>
+              <i class="fas fa-user-check"></i> Assign Washing-In
             </a>
           </li>
-          <!-- Logout -->
           <li class="nav-item">
             <a href="/logout" class="btn btn-sm btn-danger">
-              <i class="fas fa-sign-out-alt"></i>
-              <span data-lang="en">Logout</span>
-              <span data-lang="hi">लॉगआउट</span>
+              <i class="fas fa-sign-out-alt"></i> Logout
             </a>
           </li>
         </ul>
@@ -132,86 +117,99 @@
     <% } %>
   </div>
 
-  <!-- Main Content -->
+  <!-- MAIN CONTENT -->
   <div class="container my-4 main-content">
     <h2 class="mb-4">
-      <span data-lang="en">Washing Dashboard</span>
-      <span data-lang="hi">वाशिंग डैशबोर्ड</span>
+      <i class="fas fa-water"></i> Washing Dashboard
     </h2>
 
-    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTabContent" type="button" role="tab" aria-controls="createTabContent"
-          aria-selected="true">
-          <i class="fas fa-plus-circle"></i>
-          <span data-lang="en">Create Entry</span>
-          <span data-lang="hi">नई एंट्री</span>
+    <ul class="nav nav-tabs" role="tablist">
+      <li class="nav-item">
+        <button
+          class="nav-link active"
+          data-bs-toggle="tab"
+          data-bs-target="#createTab"
+          type="button"
+          role="tab"
+        >
+          <i class="fas fa-plus-circle"></i> Create Entry
         </button>
       </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="existing-tab" data-bs-toggle="tab" data-bs-target="#existingTabContent" type="button" role="tab" aria-controls="existingTabContent"
-          aria-selected="false">
-          <i class="fas fa-list"></i>
-          <span data-lang="en">Existing Entries</span>
-          <span data-lang="hi">मौजूदा एंट्री</span>
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          data-bs-toggle="tab"
+          data-bs-target="#existingTab"
+          type="button"
+          role="tab"
+        >
+          <i class="fas fa-list"></i> Existing Entries
         </button>
       </li>
     </ul>
 
-    <div class="tab-content mt-3" id="dashboardTabsContent">
+    <div class="tab-content mt-3">
       <!-- CREATE TAB -->
-      <div class="tab-pane fade show active" id="createTabContent" role="tabpanel" aria-labelledby="create-tab">
+      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
         <div class="card">
           <div class="card-header">
             <h4 class="mb-0">
-              <i class="fas fa-plus-circle"></i>
-              <span data-lang="en">Create New Washing Entry & Assign</span>
-              <span data-lang="hi">नई वाशिंग एंट्री बनाएं और असाइन करें</span>
+              <i class="fas fa-plus-circle"></i> Create New Washing Entry
             </h4>
           </div>
           <div class="card-body">
-            <form id="createForm" action="/washingdashboard/create" method="POST" enctype="multipart/form-data">
+            <form
+              id="createForm"
+              action="/washingdashboard/create"
+              method="POST"
+              enctype="multipart/form-data"
+            >
               <div class="row mb-3">
-                <!-- Select Lot Dropdown (Populated from server-side "lots") -->
-                <div class="col-md-4 mb-3 mb-md-0">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Select Lot</span>
-                    <span data-lang="hi">लॉट चुनें</span>
-                  </label>
-                  <select id="selectedLotId" name="selectedLotId" class="form-select" required>
+                <!-- 1) SELECT LOT with cutting_remark in the option text -->
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Select Lot</label>
+                  <select
+                    id="selectedLotId"
+                    name="selectedLotId"
+                    class="form-select"
+                    required
+                  >
                     <option value="">-- Choose a lot --</option>
-                    <% lots.forEach(function(l) { %>
+                    <% lots.forEach((l) => { %>
                       <option value="<%= l.id %>">
                         <%= l.lot_no %> (SKU: <%= l.sku %>)
-                        <% if (l.remark) { %>- <%= l.remark %><% } %>
+                        <% if (l.cutting_remark) { %>
+                          - <%= l.cutting_remark %>
+                        <% } %>
                       </option>
                     <% }) %>
                   </select>
                 </div>
-                <!-- Remark -->
-                <div class="col-md-4 mb-3 mb-md-0">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Remark (optional)</span>
-                    <span data-lang="hi">टिप्पणी (वैकल्पिक)</span>
-                  </label>
-                  <input type="text" class="form-control" name="remark" placeholder="Any remarks..." />
-                </div>
-                <!-- Image -->
+                <!-- REMARK -->
                 <div class="col-md-4">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Image (optional)</span>
-                    <span data-lang="hi">चित्र (वैकल्पिक)</span>
-                  </label>
-                  <input type="file" class="form-control" name="image_file" accept="image/*" />
+                  <label class="form-label fw-semibold">Remark (optional)</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    name="remark"
+                    placeholder="Any remarks..."
+                  />
+                </div>
+                <!-- IMAGE -->
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold">Image (optional)</label>
+                  <input
+                    type="file"
+                    class="form-control"
+                    name="image_file"
+                    accept="image/*"
+                  />
                 </div>
               </div>
 
-              <!-- Sizes (loaded dynamically from the selected lot) -->
-              <div class="mt-4" id="lotSizesContainer" style="display:none;">
-                <h5>
-                  <span data-lang="en">Sizes for This Lot</span>
-                  <span data-lang="hi">इस लॉट के साइज़</span>
-                </h5>
+              <!-- Size section (hidden until user selects a lot) -->
+              <div class="mt-4" id="lotSizesContainer" style="display: none;">
+                <h5>Sizes for This Lot</h5>
                 <div class="table-responsive">
                   <table class="table table-bordered align-middle" id="lotSizesTable">
                     <thead class="table-light">
@@ -219,25 +217,20 @@
                         <th>Size Label</th>
                         <th>Max Available</th>
                         <th>Enter Pieces</th>
-                        <th>Assign To User (Optional)</th>
+                        <th>Assign to Washing-In (Optional)</th>
                       </tr>
                     </thead>
                     <tbody></tbody>
                   </table>
                 </div>
                 <div class="mt-2">
-                  <strong>
-                    <span data-lang="en">Total Pieces Selected:</span>
-                    <span data-lang="hi">कुल टुकड़े:</span>
-                  </strong>
+                  <strong>Total Pieces Selected:</strong>
                   <span id="createTotalPieces">0</span>
                 </div>
               </div>
 
               <button type="submit" class="btn btn-primary mt-3">
-                <i class="fas fa-check"></i>
-                <span data-lang="en">Create & Assign</span>
-                <span data-lang="hi">बनाएं और असाइन करें</span>
+                <i class="fas fa-check"></i> Create & Assign
               </button>
             </form>
           </div>
@@ -245,53 +238,60 @@
       </div>
 
       <!-- EXISTING ENTRIES TAB -->
-      <div class="tab-pane fade" id="existingTabContent" role="tabpanel" aria-labelledby="existing-tab">
+      <div class="tab-pane fade" id="existingTab" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h4 class="mb-0">
-            <i class="fas fa-list"></i>
-            <span data-lang="en">Existing Entries</span>
-            <span data-lang="hi">मौजूदा एंट्री</span>
+            <i class="fas fa-list"></i> Existing Entries
           </h4>
           <a href="/washingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel"></i>
-            <span data-lang="en">Download Excel</span>
-            <span data-lang="hi">एक्सेल डाउनलोड</span>
+            <i class="fas fa-file-excel"></i> Download Excel
           </a>
         </div>
 
-        <!-- Search input for existing entries -->
+        <!-- Search Input -->
         <div class="input-group mb-3">
           <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU..." />
+          <input
+            type="text"
+            id="searchExisting"
+            class="form-control"
+            placeholder="Search by lot or SKU..."
+          />
         </div>
 
-        <!-- Container for lazy-loaded entries -->
+        <!-- Lazy-loaded container -->
         <div id="existingEntriesContainer" class="accordion"></div>
-        <!-- IntersectionObserver sentinel for lazy loading -->
-        <div id="loadMoreSentinel" style="height: 60px;"></div>
+        <!-- Sentinel for IntersectionObserver -->
+        <div id="loadMoreSentinel" style="height: 50px;"></div>
       </div>
     </div>
   </div>
 
-  <!-- UPDATE MODAL (structure similar to stitching update modal) -->
-  <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <!-- UPDATE MODAL -->
+  <div
+    class="modal fade"
+    id="updateModal"
+    tabindex="-1"
+    aria-labelledby="updateModalLabel"
+    aria-hidden="true"
+  >
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <form id="updateForm" method="POST" action="">
           <div class="modal-header">
             <h5 class="modal-title" id="updateModalLabel">
-              <i class="fas fa-edit"></i>
-              <span data-lang="en">Update Washing Data</span>
-              <span data-lang="hi">वाशिंग डेटा अपडेट करें</span>
+              <i class="fas fa-edit"></i> Update Washing Data
             </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
           </div>
           <div class="modal-body">
             <p>
-              <strong>
-                <span data-lang="en">Updating Entry ID:</span>
-                <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
-              </strong>
+              <strong>Updating Entry ID:</strong>
               <span id="updatingEntryId">-</span>
             </p>
             <div class="table-responsive">
@@ -308,19 +308,15 @@
               </table>
             </div>
             <p class="small text-muted">
-              <span data-lang="en">Leave a field blank or zero for no increment.</span>
-              <span data-lang="hi">0 या खाली छोड़ें तो कुछ नहीं जुड़ेगा।</span>
+              Leave blank or zero if no increment.
             </p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <span data-lang="en">Cancel</span>
-              <span data-lang="hi">रद्द करें</span>
+              Cancel
             </button>
             <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i>
-              <span data-lang="en">Save Updates</span>
-              <span data-lang="hi">सेव करें</span>
+              <i class="fas fa-save"></i> Save Updates
             </button>
           </div>
         </form>
@@ -328,339 +324,362 @@
     </div>
   </div>
 
-  <!-- jQuery and Bootstrap Bundle -->
+  <!-- JS: jQuery, Bootstrap, and Select2 -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
   <script>
-    /*****************************************************
-     * DARK MODE / LANGUAGE
-     *****************************************************/
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    darkModeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark-mode');
-    });
-
-    const langRadios = document.querySelectorAll('input[name="language"]');
-    langRadios.forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        if (e.target.value === 'hi') {
-          document.body.classList.add('lang-hi');
-        } else {
-          document.body.classList.remove('lang-hi');
-        }
+    $(document).ready(function() {
+      // Initialize Select2 for the lot dropdown:
+      $('#selectedLotId').select2({
+        placeholder: 'Select a lot',
+        allowClear: false,          // Force user to select from existing options
+        minimumResultsForSearch: 0  // Always show the search box
       });
-    });
 
-    /*****************************************************
-     * CREATE TAB LOGIC (Washing Dashboard)
-     *****************************************************/
-    let assignableUsers = [];
-    const lotSelect = document.getElementById('selectedLotId');
-    const lotSizesContainer = document.getElementById('lotSizesContainer');
-    const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
-    const createTotalPiecesElem = document.getElementById('createTotalPieces');
+      const $lotSelect           = $('#selectedLotId');
+      const $lotSizesContainer   = $('#lotSizesContainer');
+      const $lotSizesTableBody   = $('#lotSizesTable tbody');
+      const $createTotalPieces   = $('#createTotalPieces');
+      const $createForm          = $('#createForm');
 
-    lotSelect.addEventListener('change', async () => {
-      const val = lotSelect.value;
-      if (!val) {
-        lotSizesContainer.style.display = 'none';
-        lotSizesTableBody.innerHTML = '';
-        createTotalPiecesElem.textContent = '0';
-        return;
-      }
-      try {
-        // Fetch lot sizes from washing endpoint
-        const res = await fetch(`/washingdashboard/get-lot-sizes/${val}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const sizesData = await res.json();
+      let finishingUsersCache    = []; // assignable "washing_in" users, lazy-loaded
 
-        // Fetch assignable washing users if not already loaded
-        if (!assignableUsers.length) {
-          const resp = await fetch('/washingdashboard/create/assignable-users');
-          if (!resp.ok) throw new Error('HTTP ' + resp.status);
-          const json = await resp.json();
-          assignableUsers = json.data || [];
-        }
-        renderLotSizes(sizesData);
-      } catch (err) {
-        console.error('Error fetching lot sizes or users:', err);
-        lotSizesContainer.style.display = 'none';
-        lotSizesTableBody.innerHTML = '';
-        createTotalPiecesElem.textContent = '0';
-      }
-    });
-
-    function renderLotSizes(sizesArr) {
-      lotSizesContainer.style.display = 'block';
-      lotSizesTableBody.innerHTML = '';
-      sizesArr.forEach(sz => {
-        const tr = document.createElement('tr');
-
-        // Size Label
-        const tdLabel = document.createElement('td');
-        tdLabel.textContent = sz.size_label;
-        tr.appendChild(tdLabel);
-
-        // Max Available
-        const tdRemain = document.createElement('td');
-        tdRemain.textContent = sz.remain;
-        tr.appendChild(tdRemain);
-
-        // Enter Pieces (default = max remain)
-        const tdInput = document.createElement('td');
-        const inp = document.createElement('input');
-        inp.type = 'number';
-        inp.min = '0';
-        inp.max = String(sz.remain);
-        inp.value = String(sz.remain);
-        inp.classList.add('form-control');
-        inp.dataset.sizeId = sz.id;
-        inp.required = true;
-        inp.addEventListener('input', updateCreateTotal);
-        tdInput.appendChild(inp);
-        tr.appendChild(tdInput);
-
-        // Assign To Washing-In User (Optional)
-        const tdAssign = document.createElement('td');
-        const sel = document.createElement('select');
-        sel.classList.add('form-select');
-        const optNone = document.createElement('option');
-        optNone.value = '';
-        optNone.textContent = '--No Assignment--';
-        sel.appendChild(optNone);
-        assignableUsers.forEach(u => {
-          const opt = document.createElement('option');
-          opt.value = u.id;
-          opt.textContent = u.username;
-          sel.appendChild(opt);
-        });
-        tdAssign.appendChild(sel);
-        tr.appendChild(tdAssign);
-
-        lotSizesTableBody.appendChild(tr);
-      });
-      updateCreateTotal();
-    }
-
-    function updateCreateTotal() {
-      let sum = 0;
-      const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
-      inputs.forEach(inp => {
-        const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) {
-          sum += val;
-        }
-      });
-      createTotalPiecesElem.textContent = sum;
-    }
-
-    // Build hidden fields for sizes and assignments on create form submission
-    const createForm = document.getElementById('createForm');
-    createForm.addEventListener('submit', (e) => {
-      const selectedLot = lotSelect.value;
-      if (!selectedLot) {
-        e.preventDefault();
-        alert('Please select a lot first.');
-        return;
-      }
-      const rows = lotSizesTableBody.querySelectorAll('tr');
-      if (!rows.length) {
-        e.preventDefault();
-        alert('No sizes found for this lot!');
-        return;
-      }
-      // Remove previous hidden fields
-      document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
-      document.querySelectorAll('.assignmentField').forEach(el => el.remove());
-
-      rows.forEach(row => {
-        const remain = parseInt(row.children[1].textContent, 10);
-        const input = row.children[2].querySelector('input');
-        let piecesRequested = parseInt(input.value, 10);
-        if (isNaN(piecesRequested) || piecesRequested < 0) piecesRequested = 0;
-        if (piecesRequested > remain) {
-          e.preventDefault();
-          alert(`Requested ${piecesRequested} but only ${remain} remain for size ${row.children[0].textContent}`);
+      // On lot change => fetch size info and finishing users
+      $lotSelect.on('change', async function() {
+        const val = $(this).val();
+        if (!val) {
+          $lotSizesContainer.hide();
+          $lotSizesTableBody.empty();
+          $createTotalPieces.text('0');
           return;
         }
-        if (piecesRequested > 0) {
-          const sizeId = input.dataset.sizeId;
-          const hiddenSize = document.createElement('input');
-          hiddenSize.type = 'hidden';
-          hiddenSize.classList.add('sizeMappingField');
-          hiddenSize.name = `sizes[${sizeId}]`;
-          hiddenSize.value = piecesRequested;
-          createForm.appendChild(hiddenSize);
-        }
-        // Also append assignment if any
-        const sel = row.children[3].querySelector('select');
-        if (sel.value) {
-          const sizeId = input.dataset.sizeId;
-          const hiddenAssign = document.createElement('input');
-          hiddenAssign.type = 'hidden';
-          hiddenAssign.classList.add('assignmentField');
-          hiddenAssign.name = `assignments[${sizeId}]`;
-          hiddenAssign.value = sel.value;
-          createForm.appendChild(hiddenAssign);
+        try {
+          // 1) fetch sizes
+          const res = await fetch(`/washingdashboard/get-lot-sizes/${val}`);
+          if (!res.ok) throw new Error('Error fetching lot sizes. Status: ' + res.status);
+          const sizesData = await res.json();
+
+          // 2) fetch finishingUsers (washing_in) if not loaded
+          if (!finishingUsersCache.length) {
+            const userRes = await fetch('/washingdashboard/create/assignable-users');
+            if (userRes.ok) {
+              const json = await userRes.json();
+              finishingUsersCache = json.data || [];
+            }
+          }
+
+          renderLotSizes(sizesData, finishingUsersCache);
+        } catch (err) {
+          console.error(err);
+          $lotSizesContainer.hide();
+          $lotSizesTableBody.empty();
+          $createTotalPieces.text('0');
         }
       });
-    });
 
-    /*****************************************************
-     * EXISTING ENTRIES & UPDATE MODAL (Similar to stitching)
-     *****************************************************/
-    // [The remaining code (lazy-load existing entries and update modal functionality) remains similar to your stitching dashboard.
-      // ---------------------------
-    // Lazy Load Existing Entries
-    // ---------------------------
-    let offset = 0, loading = false, hasMore = true;
-    const existingContainer = document.getElementById('existingEntriesContainer');
-    const sentinel = document.getElementById('loadMoreSentinel');
-    const searchExisting = document.getElementById('searchExisting');
+      function renderLotSizes(sizes, finishingUsers) {
+        $lotSizesContainer.show();
+        $lotSizesTableBody.empty();
 
-    async function loadMoreData() {
-      if (loading || !hasMore) return;
-      loading = true;
-      const term = searchExisting.value.trim();
-      try {
-        const res = await fetch(`/washingdashboard/list-entries?offset=${offset}&search=${encodeURIComponent(term)}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const list = data.data || [];
-        hasMore = data.hasMore;
-        list.forEach(item => {
-          const card = document.createElement('div');
-          card.classList.add('accordion-item');
-          const headerId = `heading-${item.id}`;
-          const collapseId = `collapse-${item.id}`;
-          card.innerHTML = `
-            <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
-                <i class="fas fa-box-open me-1"></i> Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
-              </button>
-            </h2>
-            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
-              <div class="accordion-body">
-                <div class="d-flex justify-content-end mb-3">
-                  <a href="/washingdashboard/challan/${item.id}" target="_blank" class="btn btn-sm btn-info me-2">
-                    <i class="fas fa-file-alt"></i> Challan
-                  </a>
-                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#updateModal" data-entry-id="${item.id}">
-                    <i class="fas fa-edit"></i> Update
-                  </button>
-                </div>
-                <p><strong>ID:</strong> ${item.id}</p>
-                <p><strong>Remark:</strong> ${item.remark || 'N/A'}</p>
-                ${ item.image_url ? `<p><img src="${item.image_url}" style="max-width:200px;" /></p>` : '' }
-                <table class="table table-sm">
-                  <thead>
-                    <tr><th>Size Label</th><th>Pieces</th></tr>
-                  </thead>
-                  <tbody>
-                    ${
-                      item.sizes && item.sizes.length
-                        ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
-                        : '<tr><td colspan="2">No sizes found</td></tr>'
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `;
-          existingContainer.appendChild(card);
+        sizes.forEach(sz => {
+          const $tr = $(`
+            <tr>
+              <td>${sz.size_label}</td>
+              <td>${sz.remain}</td>
+              <td>
+                <input
+                  type="number"
+                  class="form-control"
+                  min="0"
+                  max="${sz.remain}"
+                  value="${sz.remain}"
+                  data-size-id="${sz.id}"
+                />
+              </td>
+              <td>
+                <select class="form-select">
+                  <option value="">--No Assignment--</option>
+                </select>
+              </td>
+            </tr>
+          `);
+          // Populate finishing users
+          const $sel = $tr.find('select');
+          finishingUsers.forEach(u => {
+            $sel.append(`<option value="${u.id}">${u.username}</option>`);
+          });
+
+          // On input => update total
+          $tr.find('input[type="number"]').on('input', updateTotal);
+
+          $lotSizesTableBody.append($tr);
         });
-        offset += list.length;
-      } catch (err) {
-        console.error('Error loading existing entries:', err);
-      } finally {
-        loading = false;
+        updateTotal();
       }
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) loadMoreData();
-    }, { threshold: 0.1 });
-    observer.observe(sentinel);
-    searchExisting.addEventListener('input', () => {
-      offset = 0;
-      hasMore = true;
-      existingContainer.innerHTML = '';
-      loadMoreData();
-    });
-    loadMoreData();
 
-    // ---------------------------
-    // Update Modal Logic
-    // ---------------------------
-    const updateModal = document.getElementById('updateModal');
-    const updateForm = document.getElementById('updateForm');
-    const updateSizesTable = document.getElementById('updateSizesTable');
-    const updatingEntryId = document.getElementById('updatingEntryId');
-    if (updateModal) {
-      updateModal.addEventListener('show.bs.modal', async (event) => {
-        const button = event.relatedTarget;
-        const entryId = button.getAttribute('data-entry-id');
-        updatingEntryId.textContent = entryId;
-        updateForm.action = '/washingdashboard/update/' + entryId;
-        updateSizesTable.querySelector('tbody').innerHTML = '';
+      function updateTotal() {
+        let sum = 0;
+        $lotSizesTableBody.find('input[type="number"]').each(function() {
+          const val = parseInt($(this).val(), 10);
+          if (!isNaN(val) && val > 0) sum += val;
+        });
+        $createTotalPieces.text(sum);
+      }
+
+      // On form submit => create hidden fields
+      $createForm.on('submit', function(e) {
+        // Remove old dynamic fields
+        $('.sizeMappingField').remove();
+        $('.assignmentField').remove();
+
+        $lotSizesTableBody.find('tr').each(function() {
+          const $row = $(this);
+          const sizeLabel = $row.children().first().text();
+          const remain    = parseInt($row.children().eq(1).text(), 10);
+          const $input    = $row.find('input[type="number"]');
+          let pieces      = parseInt($input.val(), 10);
+          if (isNaN(pieces) || pieces < 0) pieces = 0;
+          if (pieces > remain) {
+            e.preventDefault();
+            alert(`Requested ${pieces}, but only ${remain} remain for size ${sizeLabel}.`);
+            return false; // Stop form submission
+          }
+          if (pieces > 0) {
+            // Add hidden field for "sizes[sizeId]"
+            const sizeId = $input.data('sizeId');
+            $(`<input>`, {
+              type: 'hidden',
+              name: `sizes[${sizeId}]`,
+              value: pieces,
+              class: 'sizeMappingField'
+            }).appendTo($createForm);
+          }
+          // assignment
+          const $sel = $row.find('select');
+          if ($sel.val()) {
+            const sizeId = $input.data('sizeId');
+            $(`<input>`, {
+              type: 'hidden',
+              name: `assignments[${sizeId}]`,
+              value: $sel.val(),
+              class: 'assignmentField'
+            }).appendTo($createForm);
+          }
+        });
+      });
+
+      /********************************************
+       * LAZY LOAD EXISTING ENTRIES + SEARCH
+       ********************************************/
+      let offset   = 0;
+      let loading  = false;
+      let hasMore  = true;
+
+      const $existingContainer = $('#existingEntriesContainer');
+      const $searchExisting    = $('#searchExisting');
+      const sentinel           = document.getElementById('loadMoreSentinel');
+
+      async function loadMoreEntries() {
+        if (loading || !hasMore) return;
+        loading = true;
+        const term = $searchExisting.val().trim();
+        try {
+          const res = await fetch(`/washingdashboard/list-entries?offset=${offset}&search=${encodeURIComponent(term)}`);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const items = data.data || [];
+          hasMore = data.hasMore;
+
+          items.forEach(it => {
+            const headerId   = `heading-${it.id}`;
+            const collapseId = `collapse-${it.id}`;
+            let sizeRows = '';
+
+            if (it.sizes && it.sizes.length) {
+              sizeRows = it.sizes.map(s => `
+                <tr>
+                  <td>${s.size_label}</td>
+                  <td>${s.pieces}</td>
+                </tr>
+              `).join('');
+            } else {
+              sizeRows = `<tr><td colspan="2">No sizes found.</td></tr>`;
+            }
+
+            const cardHtml = `
+              <div class="accordion-item fade-in">
+                <h2 class="accordion-header" id="${headerId}">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#${collapseId}"
+                    aria-expanded="false"
+                    aria-controls="${collapseId}"
+                  >
+                    <strong>Lot:</strong> ${it.lot_no} (SKU: ${it.sku}) - Total: ${it.total_pieces}
+                  </button>
+                </h2>
+                <div
+                  id="${collapseId}"
+                  class="accordion-collapse collapse"
+                  aria-labelledby="${headerId}"
+                  data-bs-parent="#existingEntriesContainer"
+                >
+                  <div class="accordion-body">
+                    <div class="d-flex justify-content-end mb-3">
+                      <a
+                        href="/washingdashboard/challan/${it.id}"
+                        class="btn btn-info btn-sm me-2"
+                        target="_blank"
+                      >
+                        <i class="fas fa-file-download"></i> Challan
+                      </a>
+                      <button
+                        class="btn btn-warning btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#updateModal"
+                        data-entry-id="${it.id}"
+                      >
+                        <i class="fas fa-edit"></i> Update
+                      </button>
+                    </div>
+                    <p><strong>ID:</strong> ${it.id} <br>
+                       <strong>Remark:</strong> ${it.remark || 'N/A'}<br>
+                       ${ it.image_url ? `<img src="${it.image_url}" style="max-height:150px;" alt="WashingImage">` : '' }
+                    </p>
+                    <div class="table-responsive">
+                      <table class="table table-sm table-bordered">
+                        <thead>
+                          <tr><th>Size Label</th><th>Pieces</th></tr>
+                        </thead>
+                        <tbody>${sizeRows}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+
+            $existingContainer.append(cardHtml);
+          });
+
+          offset += items.length;
+        } catch (err) {
+          console.error(err);
+        } finally {
+          loading = false;
+        }
+      }
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreEntries();
+        }
+      }, { root: null, rootMargin: '0px', threshold: 0.1 });
+      observer.observe(sentinel);
+
+      // On search => reset
+      $searchExisting.on('input', () => {
+        offset = 0;
+        hasMore = true;
+        $existingContainer.empty();
+        loadMoreEntries();
+      });
+
+      loadMoreEntries(); // initial
+
+      /********************************************
+       * UPDATE MODAL
+       ********************************************/
+      const $updateModal      = $('#updateModal');
+      const $updateForm       = $('#updateForm');
+      const $updateSizesTable = $('#updateSizesTable tbody');
+      const $updatingEntryId  = $('#updatingEntryId');
+
+      $updateModal.on('show.bs.modal', async function(e) {
+        const button  = e.relatedTarget;
+        const entryId = $(button).data('entry-id');
+        $updatingEntryId.text(entryId);
+        $updateForm.attr('action', `/washingdashboard/update/${entryId}`);
+        $updateSizesTable.empty();
+
+        // Fetch existing sizes info
         try {
           const res = await fetch(`/washingdashboard/update/${entryId}/json`);
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
           if (!data.sizes) return;
+
           data.sizes.forEach(sz => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${sz.size_label}</td>
-              <td>${sz.pieces}</td>
-              <td>${sz.remain != null ? sz.remain : 999999}</td>
-              <td>
-                <input type="number" class="form-control" min="0" placeholder="0" data-size-label="${sz.size_label}">
-              </td>
-            `;
-            updateSizesTable.querySelector('tbody').appendChild(tr);
+            const tr = $(`
+              <tr>
+                <td>${sz.size_label}</td>
+                <td>${sz.pieces}</td>
+                <td>${sz.remain}</td>
+                <td>
+                  <input
+                    type="number"
+                    class="form-control"
+                    min="0"
+                    placeholder="0"
+                    data-size-label="${sz.size_label}"
+                  />
+                </td>
+              </tr>
+            `);
+            $updateSizesTable.append(tr);
           });
         } catch (err) {
-          console.error('Error fetching update sizes:', err);
+          console.error(err);
         }
       });
-      updateForm.addEventListener('submit', async (e) => {
+
+      // After closing => refresh
+      $updateModal.on('hidden.bs.modal', function() {
+        offset = 0;
+        hasMore = true;
+        $existingContainer.empty();
+        loadMoreEntries();
+      });
+
+      // Submit => build hidden fields
+      $updateForm.on('submit', async function(e) {
         e.preventDefault();
-        document.querySelectorAll('.updateSizeMappingField').forEach(el => el.remove());
-        const rows = updateSizesTable.querySelectorAll('tbody tr');
-        for (const row of rows) {
-          const label = row.children[0].textContent;
-          const remain = parseInt(row.children[2].textContent, 10);
-          const input = row.children[3].querySelector('input');
-          let val = parseInt(input.value.trim() || '0', 10);
+        $('.updateSizeMappingField').remove();
+
+        let valid = true;
+        $updateSizesTable.find('tr').each(function() {
+          const $row  = $(this);
+          const label = $row.children().eq(0).text();
+          const remain = parseInt($row.children().eq(2).text(), 10);
+          const $inp = $row.find('input');
+          let val    = parseInt($inp.val() || '0', 10);
           if (isNaN(val) || val < 0) val = 0;
           if (val > remain) {
-            alert(`Cannot add ${val} to size [${label}], only ${remain} remain`);
-            return;
+            alert(`Cannot add ${val} to size [${label}]; only ${remain} remain.`);
+            valid = false;
+            return false; // break
           }
           if (val > 0) {
-            const hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.classList.add('updateSizeMappingField');
-            hidden.name = `updateSizes[${label}]`;
-            hidden.value = val;
-            updateForm.appendChild(hidden);
+            $('<input>', {
+              type:  'hidden',
+              name:  `updateSizes[${label}]`,
+              value: val,
+              class: 'updateSizeMappingField'
+            }).appendTo($updateForm);
           }
-        }
-        try {
-          const formData = new FormData(updateForm);
-          const res = await fetch(updateForm.action, {
-            method: 'POST',
-            body: formData
-          });
-          if (res.redirected) {
-            window.location.href = res.url;
-          }
-        } catch (err) {
-          console.error('Error updating washing data:', err);
-        }
-      });
-    }
+        });
 
+        if (!valid) return;
+
+        // Proceed with form submission via fetch or normal POST
+        // Normal post:
+        this.submit();
+      });
+    });
   </script>
 </body>
 </html>
