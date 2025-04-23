@@ -22,33 +22,41 @@ const upload = multer({ storage });
 /*------------------------------------------
   1) WASHING DASHBOARD ENDPOINTS
 ------------------------------------------*/
-
+// GET /washingdashboard
 router.get('/', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
 
-    // Example: fetch "lots" from washing_assignments that are approved from Jeans
+    // Now with LEFT JOIN to cutting_lots for remark
     const [lots] = await pool.query(`
-      SELECT jd.id, jd.lot_no, jd.sku, jd.total_pieces, jd.created_at
+      SELECT jd.id,
+             jd.lot_no,
+             jd.sku,
+             jd.total_pieces,
+             jd.created_at,
+             cl.remark AS cutting_remark
       FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+      JOIN jeans_assembly_data jd
+        ON wa.jeans_assembly_assignment_id = jd.id
+      LEFT JOIN cutting_lots cl
+        ON cl.lot_no = jd.lot_no  -- or whichever column matches
       WHERE wa.user_id = ?
         AND wa.is_approved = 1
         AND jd.lot_no NOT IN (
-          SELECT lot_no FROM washing_data
+          SELECT lot_no
+          FROM washing_data
           WHERE user_id = ?
         )
       ORDER BY jd.created_at DESC
-      
+      LIMIT 10
     `, [userId, userId]);
 
-    const errorMessages = req.flash('error');
-    const successMessages = req.flash('success');
+    // Now each lot object has cutting_remark as well
     return res.render('washingDashboard', {
       user: req.session.user,
       lots,
-      error: errorMessages,
-      success: successMessages
+      error: req.flash('error'),
+      success: req.flash('success')
     });
   } catch (err) {
     console.error('[ERROR] GET /washingdashboard =>', err);
@@ -56,6 +64,8 @@ router.get('/', isAuthenticated, isWashingMaster, async (req, res) => {
     return res.redirect('/');
   }
 });
+
+
 
 router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_file'), async (req, res) => {
   let conn;
@@ -604,6 +614,7 @@ router.get('/approve/list', isAuthenticated, isWashingMaster, async (req, res) =
   }
 });
 
+
 // POST /washingdashboard/approve-lot
 router.post('/approve-lot', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
@@ -614,7 +625,7 @@ router.post('/approve-lot', isAuthenticated, isWashingMaster, async (req, res) =
     }
     await pool.query(`
       UPDATE washing_assignments
-      SET is_approved = 1,approved_on = NOW(), assignment_remark = NULL
+      SET is_approved = 1, assignment_remark = NULL
       WHERE id = ? AND user_id = ?
     `, [assignment_id, userId]);
     return res.json({ success: true, message: 'Assignment approved successfully!' });
@@ -637,7 +648,7 @@ router.post('/deny-lot', isAuthenticated, isWashingMaster, async (req, res) => {
     }
     await pool.query(`
       UPDATE washing_assignments
-      SET is_approved = 0, approved_on = NOW(), assignment_remark = ?
+      SET is_approved = 0, assignment_remark = ?
       WHERE id = ? AND user_id = ?
     `, [denial_remark.trim(), assignment_id, userId]);
     return res.json({ success: true, message: 'Assignment denied successfully.' });
