@@ -1347,5 +1347,288 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     return res.status(500).send("Server error");
   }
 });
+// At top of your routes file, ensure you import isStitchingMaster:
+const { isStitchingMaster } = require("../middlewares/auth");
+
+/**************************************************
+ * Stitching TAT Dashboard
+ **************************************************/
+router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    // 1) Gather all users who actually have stitching assignments
+    const [stitchingMasters] = await pool.query(`
+      SELECT DISTINCT u.id, u.username
+        FROM users u
+        JOIN stitching_assignments sa
+          ON sa.user_id = u.id
+    `);
+
+    const masterCards = [];
+
+    for (const m of stitchingMasters) {
+      const masterId = m.id;
+
+      // pendingApproval:
+      const [pendingRows] = await pool.query(`
+        SELECT COALESCE(SUM(cl.total_pieces),0) AS pendingPieces
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl
+            ON sa.cutting_lot_id = cl.id
+         WHERE sa.user_id = ?
+           AND sa.isApproved IS NULL
+      `, [masterId]);
+      const pendingApproval = parseFloat(pendingRows[0].pendingPieces) || 0;
+
+      // inLinePieces:
+      const [inLineRows] = await pool.query(`
+        SELECT COALESCE(SUM(cl.total_pieces), 0) AS inLineSum
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl
+            ON sa.cutting_lot_id = cl.id
+         WHERE sa.user_id = ?
+           AND sa.isApproved = 1
+           AND (
+                (
+                  (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM jeans_assembly_assignments ja
+                      JOIN stitching_data sd
+                        ON ja.stitching_assignment_id = sd.id
+                     WHERE sd.lot_no = cl.lot_no
+                       AND ja.is_approved IS NOT NULL
+                  )
+                )
+                OR
+                (
+                  (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM finishing_assignments fa
+                      JOIN stitching_data sd
+                        ON fa.stitching_assignment_id = sd.id
+                     WHERE sd.lot_no = cl.lot_no
+                       AND fa.is_approved IS NOT NULL
+                  )
+                )
+           )
+      `, [masterId]);
+      const inLinePieces = parseFloat(inLineRows[0].inLineSum) || 0;
+
+      masterCards.push({
+        masterId: m.id,
+        username: m.username,
+        pendingApproval,
+        inLinePieces
+      });
+    }
+
+    res.render("operatorStitchingTat", { masterCards });
+  } catch (err) {
+    console.error("Error in /stitching-tat:", err);
+    return res.status(500).send("Server error in /stitching-tat");
+  }
+});
+
+/**************************************************
+ * Operator detail for one Stitching Master
+ **************************************************/
+router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const masterId = parseInt(req.params.masterId, 10);
+    if (isNaN(masterId)) {
+      return res.status(400).send("Invalid Master ID");
+    }
+
+    // 1) Fetch user info (no role filter)
+    const [[masterUser]] = await pool.query(`
+      SELECT id, username
+        FROM users
+       WHERE id = ?
+    `, [masterId]);
+    if (!masterUser) {
+      return res.status(404).send("Stitching Master not found");
+    }
+
+    // 2) Fetch approved stitching assignments
+    const [assignments] = await pool.query(`
+      SELECT sa.assigned_on    AS stitchAssignedOn,
+             cl.lot_no,
+             cl.sku,
+             cl.total_pieces,
+             cl.remark         AS cutting_remark
+        FROM stitching_assignments sa
+        JOIN cutting_lots cl
+          ON sa.cutting_lot_id = cl.id
+       WHERE sa.user_id    = ?
+         AND sa.isApproved = 1
+       ORDER BY sa.assigned_on DESC
+    `, [masterId]);
+
+    const detailRows = [];
+    const currentDate = new Date();
+
+    function isDenimLot(lotNo) {
+      const up = lotNo.toUpperCase();
+      return up.startsWith("AK") || up.startsWith("UM");
+    }
+
+    for (const a of assignments) {
+      const { lot_no, sku, total_pieces, cutting_remark, stitchAssignedOn } = a;
+      const denim = isDenimLot(lot_no);
+      let nextAssignedOn = null;
+
+      if (denim) {
+        const [asmRows] = await pool.query(`
+          SELECT ja.assigned_on AS nextAssignedOn
+            FROM jeans_assembly_assignments ja
+            JOIN stitching_data sd
+              ON ja.stitching_assignment_id = sd.id
+           WHERE sd.lot_no = ?
+             AND ja.is_approved IS NOT NULL
+           ORDER BY ja.assigned_on ASC
+           LIMIT 1
+        `, [lot_no]);
+        if (asmRows.length) nextAssignedOn = asmRows[0].nextAssignedOn;
+      } else {
+        const [finRows] = await pool.query(`
+          SELECT fa.assigned_on AS nextAssignedOn
+            FROM finishing_assignments fa
+            JOIN stitching_data sd
+              ON fa.stitching_assignment_id = sd.id
+           WHERE sd.lot_no = ?
+             AND fa.is_approved IS NOT NULL
+           ORDER BY fa.assigned_on ASC
+           LIMIT 1
+        `, [lot_no]);
+        if (finRows.length) nextAssignedOn = finRows[0].nextAssignedOn;
+      }
+
+      let tatDays = 0;
+      if (stitchAssignedOn) {
+        const start = new Date(stitchAssignedOn).getTime();
+        const end   = nextAssignedOn
+          ? new Date(nextAssignedOn).getTime()
+          : currentDate.getTime();
+        tatDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+      }
+
+      detailRows.push({
+        lotNo: lot_no,
+        sku,
+        totalPieces: total_pieces,
+        cuttingRemark: cutting_remark,
+        assignedOn: stitchAssignedOn,
+        nextDeptAssignedOn: nextAssignedOn,
+        tatDays
+      });
+    }
+
+    res.render("operatorStitchingTatDetail", {
+      masterUser,
+      detailRows,
+      currentDate
+    });
+  } catch (err) {
+    console.error("Error in /stitching-tat/:masterId:", err);
+    return res.status(500).send("Server error in /stitching-tat/:masterId");
+  }
+});
+
+/**************************************************
+ * Stitching Master’s own TAT – /stitching/my-tat
+ **************************************************/
+router.get(
+  "/stitching/my-tat",
+  isAuthenticated,
+  isStitchingMaster,
+  async (req, res) => {
+    try {
+      const masterId = req.user.id;
+
+      // Fetch approved stitching assignments
+      const [assignments] = await pool.query(`
+        SELECT sa.assigned_on    AS stitchAssignedOn,
+               cl.lot_no,
+               cl.sku,
+               cl.total_pieces,
+               cl.remark         AS cutting_remark
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl
+            ON sa.cutting_lot_id = cl.id
+         WHERE sa.user_id    = ?
+           AND sa.isApproved = 1
+         ORDER BY sa.assigned_on DESC
+      `, [masterId]);
+
+      const detailRows = [];
+      const currentDate = new Date();
+
+      function isDenimLot(lotNo) {
+        const up = lotNo.toUpperCase();
+        return up.startsWith("AK") || up.startsWith("UM");
+      }
+
+      for (const a of assignments) {
+        const { lot_no, sku, total_pieces, cutting_remark, stitchAssignedOn } = a;
+        const denim = isDenimLot(lot_no);
+        let nextAssignedOn = null;
+
+        if (denim) {
+          const [asmRows] = await pool.query(`
+            SELECT ja.assigned_on AS nextAssignedOn
+              FROM jeans_assembly_assignments ja
+              JOIN stitching_data sd
+                ON ja.stitching_assignment_id = sd.id
+             WHERE sd.lot_no = ?
+               AND ja.is_approved IS NOT NULL
+             ORDER BY ja.assigned_on ASC
+             LIMIT 1
+          `, [lot_no]);
+          if (asmRows.length) nextAssignedOn = asmRows[0].nextAssignedOn;
+        } else {
+          const [finRows] = await pool.query(`
+            SELECT fa.assigned_on AS nextAssignedOn
+              FROM finishing_assignments fa
+              JOIN stitching_data sd
+                ON fa.stitching_assignment_id = sd.id
+             WHERE sd.lot_no = ?
+               AND fa.is_approved IS NOT NULL
+             ORDER BY fa.assigned_on ASC
+             LIMIT 1
+          `, [lot_no]);
+          if (finRows.length) nextAssignedOn = finRows[0].nextAssignedOn;
+        }
+
+        let tatDays = 0;
+        if (stitchAssignedOn) {
+          const start = new Date(stitchAssignedOn).getTime();
+          const end   = nextAssignedOn
+            ? new Date(nextAssignedOn).getTime()
+            : currentDate.getTime();
+          tatDays = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+        }
+
+        detailRows.push({
+          lotNo: lot_no,
+          sku,
+          totalPieces: total_pieces,
+          cuttingRemark: cutting_remark,
+          assignedOn: stitchAssignedOn,
+          nextDeptAssignedOn: nextAssignedOn,
+          tatDays
+        });
+      }
+
+      res.render("stitchingMasterTatView", {
+        detailRows,
+        currentDate
+      });
+    } catch (err) {
+      console.error("Error in /stitching/my-tat:", err);
+      return res.status(500).send("Server error in /stitching/my-tat");
+    }
+  }
+);
 
 module.exports = router;
