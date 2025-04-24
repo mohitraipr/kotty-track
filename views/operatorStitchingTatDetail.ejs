@@ -43,8 +43,12 @@
     th {
       background: #f8f8f8;
     }
-    tr:nth-child(even) td {
-      background: #fcfcfc;
+    /* Color-coded rows */
+    .red-row {
+      background-color: #ffe8e8; /* light red background */
+    }
+    .green-row {
+      background-color: #e8ffe8; /* light green background */
     }
   </style>
 </head>
@@ -74,8 +78,14 @@
       </tr>
     </thead>
     <tbody>
-      <% detailRows.forEach((row) => { %>
-        <tr>
+      <% detailRows.forEach((row) => {
+         // If TAT > 3 => "red-row", else "green-row"
+         const rowClass = (row.tatDays > 3) ? "red-row" : "green-row";
+
+         // Extra label in the TAT cell => e.g. "4 (TAT Crossed)" or "2 (Within TAT)"
+         const tatLabel = (row.tatDays > 3) ? " (TAT Crossed)" : " (Within TAT)";
+      %>
+        <tr class="<%= rowClass %>">
           <td><%= row.lotNo %></td>
           <td><%= row.sku %></td>
           <td><%= row.status %></td>
@@ -83,7 +93,7 @@
           <td><%= row.cuttingRemark %></td>
           <td><%= row.assignedOnStr %></td>
           <td><%= row.nextDeptAssignedOnStr %></td>
-          <td><%= row.tatDays %></td>
+          <td><%= row.tatDays %><%= tatLabel %></td>
         </tr>
       <% }); %>
     </tbody>
