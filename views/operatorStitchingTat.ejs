@@ -1,35 +1,57 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Operator Stitching TAT Dashboard</title>
+  <title>Operator Stitching TAT (Summary)</title>
   <style>
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     .card {
       border: 1px solid #ccc;
-      margin: 10px;
       padding: 10px;
-      display: inline-block;
-      width: 250px;
+      width: 200px;
+      box-sizing: border-box;
     }
-    .card h3 { margin: 0 0 10px; }
-    .card p { margin: 5px 0; }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    .card p {
+      margin: 3px 0;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <h1>Operator TAT Overview (Stitching)</h1>
+  <h1>Operator Stitching TAT (Summary)</h1>
 
-  <div style="display: flex; flex-wrap: wrap;">
-    <% masterCards.forEach(card => { %>
+  <!-- Download Excel link -->
+  <p>
+    <a href="/stitching-tat?download=1" style="text-decoration: none; font-weight: bold;">
+      Download Excel
+    </a>
+  </p>
+
+  <!-- Cards for each Master -->
+  <div class="cards">
+    <% masterCards.forEach((card) => { %>
       <div class="card">
         <h3><%= card.username %></h3>
-        <p>Pieces Pending Approval: <%= card.pendingApproval %></p>
-        <p>In-Line Pieces: <%= card.inLinePieces %></p>
+        <p><strong>Pending Approval:</strong> <%= card.pendingApproval %></p>
+        <p><strong>In-Line Pieces:</strong> <%= card.inLinePieces %></p>
 
-        <!-- Link to the detail page for this Master -->
-        <a href="/operator/stitching-tat/<%= card.masterId %>">
-          View TAT Detail
-        </a>
+        <!-- Link to detail route for that Master -->
+        <p>
+          <a href="/stitching-tat/<%= card.masterId %>">
+            View Detail
+          </a>
+        </p>
       </div>
-    <% }) %>
+    <% }); %>
   </div>
 </body>
 </html>
