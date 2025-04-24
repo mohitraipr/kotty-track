@@ -1,44 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Operator TAT Detail for <%= masterUser.username %></title>
+  <title>Stitching TAT Detail - <%= masterUser.username %></title>
   <style>
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    .green { background-color: #c8e6c9; }
-    .red { background-color: #ffcdd2; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+    th {
+      background: #f8f8f8;
+    }
   </style>
 </head>
 <body>
-  <h1>TAT Detail – <%= masterUser.username %></h1>
-  <a href="/operator/stitching-tat">Back to All Masters</a>
+  <h1>TAT Detail: <%= masterUser.username %></h1>
+  <p>As of <%= currentDate %></p>
+
+  <!-- Links: back to summary, and Excel export -->
+  <p>
+    <a href="/stitching-tat">&larr; Back to Summary</a> |
+    <a href="/stitching-tat/<%= masterUser.id %>?download=1" style="font-weight: bold;">
+      Download Excel
+    </a>
+  </p>
 
   <table>
     <thead>
       <tr>
         <th>Lot No</th>
         <th>SKU</th>
+        <th>Status</th>
         <th>Total Pieces</th>
         <th>Cutting Remark</th>
-        <th>Stitch Assigned On</th>
-        <th>Next Dept Assigned On</th>
+        <th>Assigned On</th>
+        <th>Next Dept On</th>
         <th>TAT (Days)</th>
       </tr>
     </thead>
     <tbody>
-      <% detailRows.forEach(row => {
-           const colorClass = row.tatDays > 3 ? 'red' : 'green';
-      %>
-        <tr class="<%= colorClass %>">
+      <% detailRows.forEach((row) => { %>
+        <tr>
           <td><%= row.lotNo %></td>
           <td><%= row.sku %></td>
+          <td><%= row.status %></td>
           <td><%= row.totalPieces %></td>
           <td><%= row.cuttingRemark %></td>
-          <td><%= row.assignedOn ? row.assignedOn.toLocaleString() : '' %></td>
-          <td><%= row.nextDeptAssignedOn ? row.nextDeptAssignedOn.toLocaleString() : 'Not Assigned' %></td>
+          <td><%= row.assignedOnStr %></td>
+          <td><%= row.nextDeptAssignedOnStr %></td>
           <td><%= row.tatDays %></td>
         </tr>
-      <% }) %>
+      <% }); %>
     </tbody>
   </table>
 </body>
