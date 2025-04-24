@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Operator TAT Detail for <%= masterUser.username %></title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    .green { background-color: #c8e6c9; }
+    .red { background-color: #ffcdd2; }
+  </style>
+</head>
+<body>
+  <h1>TAT Detail – <%= masterUser.username %></h1>
+  <a href="/operator/stitching-tat">Back to All Masters</a>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Lot No</th>
+        <th>SKU</th>
+        <th>Total Pieces</th>
+        <th>Cutting Remark</th>
+        <th>Stitch Assigned On</th>
+        <th>Next Dept Assigned On</th>
+        <th>TAT (Days)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% detailRows.forEach(row => {
+           const colorClass = row.tatDays > 3 ? 'red' : 'green';
+      %>
+        <tr class="<%= colorClass %>">
+          <td><%= row.lotNo %></td>
+          <td><%= row.sku %></td>
+          <td><%= row.totalPieces %></td>
+          <td><%= row.cuttingRemark %></td>
+          <td><%= row.assignedOn ? row.assignedOn.toLocaleString() : '' %></td>
+          <td><%= row.nextDeptAssignedOn ? row.nextDeptAssignedOn.toLocaleString() : 'Not Assigned' %></td>
+          <td><%= row.tatDays %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</body>
+</html>
