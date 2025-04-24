@@ -3,32 +3,62 @@
 <head>
   <title>Stitching TAT Detail - <%= masterUser.username %></title>
   <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { margin: 0; }
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .actions a {
+      padding: 6px 12px;
+      background: #007bff;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      transition: background 0.3s;
+    }
+    .actions a:hover {
+      background: #0056b3;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
-      margin-top: 10px;
+      margin-top: 20px;
     }
     th, td {
       border: 1px solid #ccc;
-      padding: 6px;
+      padding: 8px;
       text-align: left;
+      font-size: 14px;
     }
     th {
       background: #f8f8f8;
     }
+    tr:nth-child(even) td {
+      background: #fcfcfc;
+    }
   </style>
 </head>
 <body>
-  <h1>TAT Detail: <%= masterUser.username %></h1>
-  <p>As of <%= currentDate %></p>
+  <div class="header">
+    <h1>Stitching TAT Detail: <%= masterUser.username %></h1>
+    <p>As of <%= currentDate %></p>
+  </div>
 
-  <!-- Links: back to summary, and Excel export -->
-  <p>
-    <a href="/stitching-tat">&larr; Back to Summary</a> |
-    <a href="/stitching-tat/<%= masterUser.id %>?download=1" style="font-weight: bold;">
-      Download Excel
-    </a>
-  </p>
+  <div class="actions">
+    <a href="/stitching-tat">&larr; Back to Summary</a>
+    <!-- Download the Excel for this Master -->
+    <a href="/stitching-tat/<%= masterUser.id %>?download=1">Download Excel</a>
+  </div>
 
   <table>
     <thead>
