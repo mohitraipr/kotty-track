@@ -3,55 +3,123 @@
 <head>
   <title>Operator Stitching TAT (Summary)</title>
   <style>
-    .cards {
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      margin: 0;
+    }
+
+    .download-all-btn {
+      padding: 8px 14px;
+      background: #007bff;
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+      border-radius: 5px;
+      transition: background 0.3s ease;
+    }
+    .download-all-btn:hover {
+      background: #0056b3;
+    }
+
+    .cards-container {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 20px;
+      margin-top: 20px;
     }
 
     .card {
       border: 1px solid #ccc;
-      padding: 10px;
-      width: 200px;
-      box-sizing: border-box;
+      border-radius: 6px;
+      padding: 15px;
+      width: 250px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: box-shadow 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .card:hover {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
 
     .card h3 {
-      margin: 0 0 10px;
-      font-size: 16px;
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 18px;
+      color: #333;
     }
+
     .card p {
-      margin: 3px 0;
+      margin: 5px 0;
       font-size: 14px;
+    }
+
+    .card-buttons {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 6px 10px;
+      font-size: 13px;
+      text-decoration: none;
+      color: #fff;
+      background: #28a745;
+      border-radius: 4px;
+      transition: background 0.3s ease;
+    }
+    .btn:hover {
+      background: #218838;
+    }
+    .btn-download {
+      background: #17a2b8;
+    }
+    .btn-download:hover {
+      background: #138496;
     }
   </style>
 </head>
 <body>
-  <h1>Operator Stitching TAT (Summary)</h1>
-
-  <!-- Download Excel link -->
-  <p>
-    <a href="/stitching-tat?download=1" style="text-decoration: none; font-weight: bold;">
-      Download Excel
+  <div class="header">
+    <h1>Operator Stitching TAT (Summary)</h1>
+    <!-- Download ALL masters in a single summary Excel -->
+    <a href="/stitching-tat?download=1" class="download-all-btn">
+      Download ALL (Excel)
     </a>
-  </p>
+  </div>
 
-  <!-- Cards for each Master -->
-  <div class="cards">
-    <% masterCards.forEach((card) => { %>
+  <div class="cards-container">
+    <% masterCards.forEach((mc) => { %>
       <div class="card">
-        <h3><%= card.username %></h3>
-        <p><strong>Pending Approval:</strong> <%= card.pendingApproval %></p>
-        <p><strong>In-Line Pieces:</strong> <%= card.inLinePieces %></p>
+        <h3><%= mc.username %></h3>
+        <p><strong>Pending Approval:</strong> <%= mc.pendingApproval %></p>
+        <p><strong>In-Line Pieces:</strong> <%= mc.inLinePieces %></p>
 
-        <!-- Link to detail route for that Master -->
-        <p>
-          <a href="/stitching-tat/<%= card.masterId %>">
-            View Detail
+        <div class="card-buttons">
+          <!-- Link to the detail page -->
+          <a href="/stitching-tat/<%= mc.masterId %>" class="btn">
+            View TAT
           </a>
-        </p>
+          <!-- Link to direct Excel download for this Master -->
+          <a href="/stitching-tat/<%= mc.masterId %>?download=1" class="btn btn-download">
+            Download TAT
+          </a>
+        </div>
       </div>
-    <% }); %>
+    <% }) %>
   </div>
 </body>
 </html>
