@@ -1367,106 +1367,110 @@ const { isStitchingMaster } = require("../middlewares/auth");
  * Stitching TAT Dashboard
  **************************************************/
 /**************************************************
- * 1) Operator Stitching TAT Dashboard (Summary)
- *    - Shows each "stitching master" with:
- *      pendingApproval count & inLinePieces count
- *    - Excludes completed/denied lots
- *    - If ?download=1 => return Excel
+ * 1) OPERATOR STITCHING TAT (SUMMARY)
+ *    => GET /stitching-tat
+ * 
+ *    - Lists all Stitching Masters who have at least
+ *      one "pending" or "in-line" lot
+ *    - Each card shows:
+ *        masterName
+ *        # pending approval
+ *        # in line
+ *        [Download TAT Excel] button
+ *        [View TAT Details] link
+ *    - If ?download=1, returns an Excel summary
  **************************************************/
 router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
   try {
     const { download = "0" } = req.query;
 
-    // Gather all users who actually have *pending or in-line* stitching assignments
-    // i.e. isApproved IS NULL (pending) OR isApproved=1 but next step not assigned (in line)
+    // 1) Identify all users (Stitching Masters) who have
+    //    either "pending" or "in-line" stitching assignments
+    //    => "pending" = sa.isApproved IS NULL
+    //    => "in-line" = sa.isApproved=1 BUT next step is not assigned
     const [masters] = await pool.query(`
       SELECT DISTINCT u.id, u.username
         FROM users u
         JOIN stitching_assignments sa ON sa.user_id = u.id
-        JOIN cutting_lots cl         ON sa.cutting_lot_id = cl.id
+        JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
        WHERE (
               sa.isApproved IS NULL
-            OR (
-                 sa.isApproved = 1
-                 AND (
-                      -- denim not assigned to assembly
-                      (
-                        (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                        AND NOT EXISTS (
-                          SELECT 1
-                            FROM jeans_assembly_assignments ja
-                            JOIN stitching_data sd
-                              ON ja.stitching_assignment_id = sd.id
-                           WHERE sd.lot_no = cl.lot_no
-                             AND ja.is_approved IS NOT NULL
-                        )
-                      )
-                      OR
-                      -- non-denim not assigned to finishing
-                      (
-                        (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                        AND NOT EXISTS (
-                          SELECT 1
-                            FROM finishing_assignments fa
-                            JOIN stitching_data sd
-                              ON fa.stitching_assignment_id = sd.id
-                           WHERE sd.lot_no = cl.lot_no
-                             AND fa.is_approved IS NOT NULL
-                        )
-                      )
-                 )
-               )
+              OR 
+              (
+                sa.isApproved = 1
+                AND (
+                  -- DENIM => next step is Assembly
+                  (
+                    (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                    AND NOT EXISTS (
+                      SELECT 1
+                        FROM jeans_assembly_assignments ja
+                        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                       WHERE sd.lot_no = cl.lot_no
+                         AND ja.is_approved IS NOT NULL
+                    )
+                  )
+                  -- NON-DENIM => next step is Finishing
+                  OR
+                  (
+                    (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                    AND NOT EXISTS (
+                      SELECT 1
+                        FROM finishing_assignments fa
+                        JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                       WHERE sd.lot_no = cl.lot_no
+                         AND fa.is_approved IS NOT NULL
+                    )
+                  )
+                )
+              )
             )
     `);
 
-    // For each master, compute two sums:
-    //   1) pendingApproval
-    //   2) inLinePieces
-    // Excluding completed or denied lots
+    // 2) For each master, count how many are pending vs in line
     const masterCards = [];
-
     for (const m of masters) {
       const masterId = m.id;
 
-      // pendingApproval = isApproved IS NULL
-      const [pendingRows] = await pool.query(`
-        SELECT COALESCE(SUM(cl.total_pieces), 0) AS pendingPieces
+      // pending = isApproved IS NULL
+      const [pendRows] = await pool.query(`
+        SELECT COALESCE(SUM(cl.total_pieces),0) AS pendingSum
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
          WHERE sa.user_id = ?
            AND sa.isApproved IS NULL
       `, [masterId]);
-      const pendingApproval = parseFloat(pendingRows[0].pendingPieces) || 0;
+      const pendingApproval = parseFloat(pendRows[0].pendingSum) || 0;
 
-      // inLine = isApproved=1 but next step not assigned
+      // in line = isApproved=1, next step not assigned
       const [inLineRows] = await pool.query(`
-        SELECT COALESCE(SUM(cl.total_pieces), 0) AS inLineSum
+        SELECT COALESCE(SUM(cl.total_pieces),0) AS inLineSum
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
          WHERE sa.user_id = ?
            AND sa.isApproved = 1
            AND (
-                (
-                  (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                  AND NOT EXISTS (
-                    SELECT 1
-                      FROM jeans_assembly_assignments ja
-                      JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                     WHERE sd.lot_no = cl.lot_no
-                       AND ja.is_approved IS NOT NULL
-                  )
-                )
-                OR
-                (
-                  (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                  AND NOT EXISTS (
-                    SELECT 1
-                      FROM finishing_assignments fa
-                      JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                     WHERE sd.lot_no = cl.lot_no
-                       AND fa.is_approved IS NOT NULL
-                  )
-                )
+             (
+               (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+               AND NOT EXISTS (
+                 SELECT 1
+                   FROM jeans_assembly_assignments ja
+                   JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no = cl.lot_no
+                    AND ja.is_approved IS NOT NULL
+               )
+             )
+             OR
+             (
+               (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+               AND NOT EXISTS (
+                 SELECT 1
+                   FROM finishing_assignments fa
+                   JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no = cl.lot_no
+                    AND fa.is_approved IS NOT NULL
+               )
+             )
            )
       `, [masterId]);
       const inLinePieces = parseFloat(inLineRows[0].inLineSum) || 0;
@@ -1479,39 +1483,34 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
       });
     }
 
-    // If download=1 => return an Excel
+    // 3) If ?download=1 => produce Excel summary
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("StitchingTAT-Summary");
 
-      // Define columns
       sheet.columns = [
-        { header: "Master ID",       key: "masterId",       width: 12 },
-        { header: "Master Username", key: "username",        width: 25 },
-        { header: "Pending Pieces",  key: "pendingApproval", width: 18 },
-        { header: "In-Line Pieces",  key: "inLinePieces",    width: 18 }
+        { header: "Master ID",        key: "masterId",       width: 12 },
+        { header: "Master Username",  key: "username",        width: 25 },
+        { header: "Pending Pieces",   key: "pendingApproval", width: 18 },
+        { header: "In-Line Pieces",   key: "inLinePieces",    width: 18 }
       ];
 
-      // Add rows
-      masterCards.forEach((m) => {
+      masterCards.forEach((mc) => {
         sheet.addRow({
-          masterId: m.masterId,
-          username: m.username,
-          pendingApproval: m.pendingApproval,
-          inLinePieces: m.inLinePieces
+          masterId: mc.masterId,
+          username: mc.username,
+          pendingApproval: mc.pendingApproval,
+          inLinePieces: mc.inLinePieces
         });
       });
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats");
-      res.setHeader(
-        "Content-Disposition",
-        'attachment; filename="StitchingTAT-Summary.xlsx"'
-      );
+      res.setHeader("Content-Disposition", 'attachment; filename="StitchingTAT-Summary.xlsx"');
       await workbook.xlsx.write(res);
       return res.end();
     }
 
-    // Otherwise render HTML
+    // 4) Otherwise render the summary page in HTML
     return res.render("operatorStitchingTat", { masterCards });
   } catch (err) {
     console.error("Error in /stitching-tat:", err);
@@ -1520,9 +1519,14 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
 });
 
 /**************************************************
- * 2) Operator TAT Detail for One Master
- *    - Shows only "pending approval" or "in line" lots
- *    - If ?download=1 => return Excel
+ * 2) OPERATOR TAT DETAIL for a MASTER
+ *    => GET /stitching-tat/:masterId
+ * 
+ *    - Shows only lots that are pending or in line
+ *    - If ?download=1 => Excel
+ *    - Otherwise => HTML table
+ *    - TAT in days = (nextAssignedOn - assignedOn) or (today - assignedOn)
+ *    - Date fields in DD/MM/YYYY
  **************************************************/
 router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, res) => {
   try {
@@ -1532,7 +1536,7 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
     }
     const { download = "0" } = req.query;
 
-    // 1) Get user info (no role check, just ID):
+    // 1) Master info
     const [[masterUser]] = await pool.query(
       `SELECT id, username FROM users WHERE id = ?`,
       [masterId]
@@ -1541,61 +1545,56 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
       return res.status(404).send("Stitching Master not found");
     }
 
-    // 2) Fetch only "pending approval" or "in line" stitching assignments
-    //    i.e. isApproved IS NULL, OR isApproved=1 but next step not assigned
-    //    Also gather assigned_on for TAT
+    // 2) Fetch stitching_assignments that are pending or in line
     const [assignments] = await pool.query(`
-      SELECT sa.id                 AS stitching_assignment_id,
-             sa.isApproved         AS stitchIsApproved,
-             sa.assigned_on        AS stitchAssignedOn,
+      SELECT sa.id           AS stitching_assignment_id,
+             sa.isApproved   AS stitchIsApproved,
+             sa.assigned_on  AS stitchAssignedOn,
              cl.lot_no,
              cl.sku,
              cl.total_pieces,
-             cl.remark             AS cutting_remark
+             cl.remark       AS cutting_remark
         FROM stitching_assignments sa
         JOIN cutting_lots cl
           ON sa.cutting_lot_id = cl.id
        WHERE sa.user_id = ?
          AND (
               sa.isApproved IS NULL
-            OR (
-                 sa.isApproved = 1
-                 AND (
-                      ((UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                        AND NOT EXISTS (
-                          SELECT 1
-                            FROM jeans_assembly_assignments ja
-                            JOIN stitching_data sd
-                              ON ja.stitching_assignment_id = sd.id
-                           WHERE sd.lot_no = cl.lot_no
-                             AND ja.is_approved IS NOT NULL
-                        )
-                      )
-                      OR
-                      ((UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                        AND NOT EXISTS (
-                          SELECT 1
-                            FROM finishing_assignments fa
-                            JOIN stitching_data sd
-                              ON fa.stitching_assignment_id = sd.id
-                           WHERE sd.lot_no = cl.lot_no
-                             AND fa.is_approved IS NOT NULL
-                        )
-                      )
+              OR (
+                   sa.isApproved = 1
+                   AND (
+                     -- Denim => next step is Assembly
+                     (
+                       (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                       AND NOT EXISTS (
+                         SELECT 1
+                           FROM jeans_assembly_assignments ja
+                           JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                          WHERE sd.lot_no = cl.lot_no
+                            AND ja.is_approved IS NOT NULL
+                       )
+                     )
+                     OR
+                     -- Non-denim => next step is Finishing
+                     (
+                       (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                       AND NOT EXISTS (
+                         SELECT 1
+                           FROM finishing_assignments fa
+                           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                          WHERE sd.lot_no = cl.lot_no
+                            AND fa.is_approved IS NOT NULL
+                       )
+                     )
+                   )
                  )
-               )
             )
        ORDER BY sa.assigned_on DESC
     `, [masterId]);
 
-    const currentDate = new Date();
+    // 3) Build detailRows
     const detailRows = [];
-
-    // Helper: isDenim
-    function isDenimLot(lotNo) {
-      const up = lotNo.toUpperCase();
-      return up.startsWith("AK") || up.startsWith("UM");
-    }
+    const currentDate = new Date();
 
     for (const a of assignments) {
       const {
@@ -1606,23 +1605,17 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
         stitchAssignedOn,
         stitchIsApproved
       } = a;
-
-      const denim = isDenimLot(lot_no);
       let nextAssignedOn = null;
+      const isDenim = isDenimLot(lot_no);
 
-      // If isApproved=1 => "in line"
-      //   compute TAT as (today - assignedOn) or (nextAssignedOn - assignedOn) if next assigned
-      // If isApproved IS NULL => "pending approval" => TAT can be similarly computed or we can do 0
-      // We'll do it anyway, same logic.
-
+      // If isApproved=1 => check next assignment
       if (stitchIsApproved === 1) {
-        // check next assignment
-        if (denim) {
+        if (isDenim) {
+          // Next step => assembly
           const [asmRows] = await pool.query(`
             SELECT ja.assigned_on
               FROM jeans_assembly_assignments ja
-              JOIN stitching_data sd
-                ON ja.stitching_assignment_id = sd.id
+              JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
              WHERE sd.lot_no = ?
                AND ja.is_approved IS NOT NULL
              ORDER BY ja.assigned_on ASC
@@ -1632,12 +1625,11 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
             nextAssignedOn = asmRows[0].assigned_on;
           }
         } else {
-          // non-denim => finishing
+          // Next step => finishing
           const [finRows] = await pool.query(`
             SELECT fa.assigned_on
               FROM finishing_assignments fa
-              JOIN stitching_data sd
-                ON fa.stitching_assignment_id = sd.id
+              JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
              WHERE sd.lot_no = ?
                AND fa.is_approved IS NOT NULL
              ORDER BY fa.assigned_on ASC
@@ -1649,17 +1641,14 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
         }
       }
 
-      // Calculate TAT in days:
-      // If nextAssignedOn not found => TAT = (today - stitchAssignedOn)
-      // If isApproved IS NULL => we do the same or define TAT=?
+      // Calculate TAT (days)
       let tatDays = 0;
       if (stitchAssignedOn) {
-        const start = new Date(stitchAssignedOn).getTime();
-        const end = nextAssignedOn
+        const startMs = new Date(stitchAssignedOn).getTime();
+        const endMs = nextAssignedOn
           ? new Date(nextAssignedOn).getTime()
           : currentDate.getTime();
-        const diffMs = end - start;
-        tatDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        tatDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
       }
 
       detailRows.push({
@@ -1670,26 +1659,25 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
         assignedOn: stitchAssignedOn,
         nextDeptAssignedOn: nextAssignedOn,
         tatDays,
-        // isApproved: (null => pending, 1 => in line)
-        status: stitchIsApproved === null ? "Pending Approval" : "In Line"
+        status: (stitchIsApproved === null) ? "Pending Approval" : "In Line"
       });
     }
 
-    // If download=1 => produce Excel
+    // 4) If ?download=1 => produce Excel
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("StitchingTAT-Detail");
 
       sheet.columns = [
-        { header: "Stitching Master", key: "masterName",      width: 20 },
-        { header: "Lot No",          key: "lotNo",           width: 15 },
-        { header: "SKU",             key: "sku",             width: 15 },
-        { header: "Status",          key: "status",          width: 18 },
-        { header: "Total Pieces",    key: "totalPieces",     width: 15 },
-        { header: "Cutting Remark",  key: "cuttingRemark",   width: 25 },
-        { header: "Assigned On",     key: "assignedOn",      width: 15 },
-        { header: "Next Dept On",    key: "nextDeptAssignedOn", width: 15 },
-        { header: "TAT (days)",      key: "tatDays",         width: 12 }
+        { header: "Stitching Master", key: "masterName",        width: 20 },
+        { header: "Lot No",          key: "lotNo",             width: 15 },
+        { header: "SKU",             key: "sku",               width: 15 },
+        { header: "Status",          key: "status",            width: 18 },
+        { header: "Total Pieces",    key: "totalPieces",       width: 15 },
+        { header: "Cutting Remark",  key: "cuttingRemark",     width: 25 },
+        { header: "Assigned On",     key: "assignedOn",        width: 15 },
+        { header: "Next Dept On",    key: "nextDeptAssignedOn",width: 15 },
+        { header: "TAT (days)",      key: "tatDays",           width: 12 }
       ];
 
       detailRows.forEach((row) => {
@@ -1717,20 +1705,17 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
       return res.end();
     }
 
-    // Otherwise render the page in HTML
-    // Format assignedOn & nextDeptAssignedOn in dd/mm/yyyy for the template
+    // 5) Otherwise render HTML with formatted dates
     const renderedRows = detailRows.map((r) => ({
       ...r,
       assignedOnStr: r.assignedOn ? formatDateDDMMYYYY(r.assignedOn) : "",
-      nextDeptAssignedOnStr: r.nextDeptAssignedOn
-        ? formatDateDDMMYYYY(r.nextDeptAssignedOn)
-        : ""
+      nextDeptAssignedOnStr: r.nextDeptAssignedOn ? formatDateDDMMYYYY(r.nextDeptAssignedOn) : ""
     }));
 
     return res.render("operatorStitchingTatDetail", {
       masterUser,
       detailRows: renderedRows,
-      currentDate: formatDateDDMMYYYY(currentDate)
+      currentDate: formatDateDDMMYYYY(new Date())
     });
   } catch (err) {
     console.error("Error in /stitching-tat/:masterId:", err);
