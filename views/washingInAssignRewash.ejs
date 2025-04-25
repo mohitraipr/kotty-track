@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>KOTTY | Assign Rewash</title>
+  <title>KOTTY | Assign Rewash</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -19,7 +19,7 @@
 
 <body class="bg-light">
 
-  <!-- Navbar (reuse your styling as needed) -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid px-3">
       <a class="navbar-brand fw-semibold" href="#"><i class="fas fa-retweet me-1"></i> KOTTY</a>
@@ -41,11 +41,17 @@
 
     <div class="card shadow-sm">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-sync-alt me-1"></i>Create Rewash Request</h5>
+        <h5 class="mb-0"><i class="fas fa-sync-alt me-1"></i>Create Rewash Request</h5>
       </div>
       <div class="card-body">
 
         <form id="rewashForm" action="/washingin/assign-rewash" method="POST" class="needs-validation" novalidate>
+          <!-- Search Lot -->
+          <div class="mb-2">
+            <label class="form-label fw-semibold" for="lotSearch">Search lot</label>
+            <input type="text" id="lotSearch" class="form-control" placeholder="Search by lot, SKU, or balance">
+          </div>
+
           <!-- LOT SELECT -->
           <div class="mb-4">
             <label class="form-label fw-semibold" for="lotSelect">Select approved lot</label>
@@ -53,14 +59,14 @@
               <option value>-- choose a lot --</option>
               <% lots.forEach(l => { %>
               <option value="<%= l.washing_data_id %>">
-                <%= l.lot_no %> | SKU <%= l.sku %> | Bal <%= l.total_pieces %>
+                <%= l.lot_no %> | SKU <%= l.sku %> | Bal <%= l.total_pieces %>
               </option>
               <% }) %>
             </select>
             <div class="invalid-feedback">Please pick a lot.</div>
           </div>
 
-          <!-- SIZE SECTION (hidden until lot picked) -->
+          <!-- SIZE SECTION -->
           <section id="sizeSection" style="display:none;">
             <h6 class="fw-semibold mb-3">Sizes &amp; quantities</h6>
             <div class="table-responsive">
@@ -84,7 +90,7 @@
           </section>
 
           <button id="submitBtn" class="btn btn-success mt-3" disabled>
-            <i class="fas fa-paper-plane me-1"></i>Submit rewash
+            <i class="fas fa-paper-plane me-1"></i>Submit rewash
           </button>
         </form>
       </div>
@@ -95,13 +101,29 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const lotSelect = document.getElementById('lotSelect');
+    const lotSearch = document.getElementById('lotSearch');
     const sizeSection = document.getElementById('sizeSection');
     const sizeBody = document.getElementById('sizeBody');
     const totalRequested = document.getElementById('totalRequested');
     const submitBtn = document.getElementById('submitBtn');
 
+    // Search filter
+    lotSearch.addEventListener('input', () => {
+      const filter = lotSearch.value.toLowerCase();
+      const options = lotSelect.querySelectorAll('option');
+
+      options.forEach(option => {
+        const text = option.textContent.toLowerCase();
+        if (option.value && text.includes(filter)) {
+          option.style.display = '';
+        } else if (option.value) {
+          option.style.display = 'none';
+        }
+      });
+    });
+
+    // Load size data on lot change
     lotSelect.addEventListener('change', async () => {
-      // reset
       sizeBody.innerHTML = '';
       totalRequested.textContent = '0';
       submitBtn.disabled = true;
@@ -115,7 +137,6 @@
         const res = await fetch(`/washingin/assign-rewash/data/${lotSelect.value}`);
         const sizes = await res.json();
 
-        // Build rows (key by size_label for alpha / alnum flexibility)
         sizeBody.innerHTML = sizes.map(s => `
           <tr>
             <td class="fw-medium">${s.size_label}</td>
@@ -133,7 +154,6 @@
             </td>
           </tr>`).join('');
 
-        // attach events
         sizeBody.querySelectorAll('input').forEach(inp => {
           inp.addEventListener('input', handleQtyChange);
         });
@@ -154,16 +174,15 @@
       if (val > max) val = max;
       inp.value = val;
 
-      inp.classList.toggle('is-invalid', val > max); // red border if somehow exceeded
+      inp.classList.toggle('is-invalid', val > max);
 
-      // recalc total
       let total = 0;
       sizeBody.querySelectorAll('input').forEach(i => total += parseInt(i.value || 0, 10));
       totalRequested.textContent = total;
       submitBtn.disabled = total === 0;
     }
 
-    // Allow Enter key to trigger submit when form is valid
+    // Allow Enter key to trigger submit
     document.getElementById('rewashForm').addEventListener('keypress', e => {
       if (e.key === 'Enter' && !submitBtn.disabled) submitBtn.click();
     });
