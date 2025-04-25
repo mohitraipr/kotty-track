@@ -12,6 +12,10 @@
   <!-- Select2 -->
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <style>
+    body {
+      background-color: #f8f9fa;
+    }
+
     input.is-invalid {
       border-color: #dc3545 !important;
     }
@@ -26,13 +30,38 @@
     .select2-container--bootstrap5 .select2-selection--single .select2-selection__rendered {
       line-height: 1.5;
     }
+
+    #sizeSection {
+      transition: all 0.3s ease-in-out;
+    }
+
+    .table td,
+    .table th {
+      vertical-align: middle;
+    }
+
+    .card {
+      border-radius: 12px;
+    }
+
+    .card-header {
+      border-radius: 12px 12px 0 0;
+    }
+
+    .table thead th {
+      background-color: #f1f1f1;
+    }
+
+    #submitBtn:disabled {
+      cursor: not-allowed;
+    }
   </style>
 </head>
 
-<body class="bg-light">
+<body>
 
   <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container-fluid px-3">
       <a class="navbar-brand fw-semibold" href="#"><i class="fas fa-retweet me-1"></i> KOTTY</a>
       <ul class="navbar-nav ms-auto">
@@ -41,7 +70,7 @@
     </div>
   </nav>
 
-  <main class="container my-5">
+  <main class="container mt-5" style="max-width: 800px;">
 
     <!-- Flash messages -->
     <% if (error && error.length) { %>
@@ -51,54 +80,57 @@
       <div class="alert alert-success shadow-sm"><%= success.join('<br>') %></div>
     <% } %>
 
-    <div class="card shadow-sm">
+    <div class="card shadow">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="fas fa-sync-alt me-1"></i>Create Rewash Request</h5>
+        <h5 class="mb-0"><i class="fas fa-sync-alt me-1"></i> Create Rewash Request</h5>
       </div>
-      <div class="card-body">
+      <div class="card-body p-4">
 
         <form id="rewashForm" action="/washingin/assign-rewash" method="POST" class="needs-validation" novalidate>
 
-          <!-- LOT SELECT with Select2 -->
+          <!-- LOT SELECT -->
           <div class="mb-4">
-            <label class="form-label fw-semibold" for="lotSelect">Select approved lot</label>
+            <label class="form-label fw-semibold" for="lotSelect">Select Approved Lot</label>
             <select id="lotSelect" name="selectedWashingDataId" class="form-select" required>
-              <option value="">-- choose a lot --</option>
+              <option value="">-- Choose a lot --</option>
               <% lots.forEach(l => { %>
               <option value="<%= l.washing_data_id %>">
-                <%= l.lot_no %> | SKU <%= l.sku %> | Bal <%= l.total_pieces %>
+                <%= l.lot_no %> | SKU: <%= l.sku %> | Bal: <%= l.total_pieces %>
               </option>
               <% }) %>
             </select>
             <div class="invalid-feedback">Please pick a lot.</div>
           </div>
 
-          <!-- SIZE SECTION -->
+          <!-- SIZE TABLE -->
           <section id="sizeSection" style="display:none;">
-            <h6 class="fw-semibold mb-3">Sizes &amp; quantities</h6>
+            <h6 class="fw-semibold mb-3">Size Breakdown</h6>
             <div class="table-responsive">
-              <table class="table table-sm table-striped align-middle">
-                <thead class="table-light">
+              <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light text-center">
                   <tr>
                     <th>Size</th>
-                    <th class="text-center">Remaining</th>
-                    <th style="width:140px;">Request&nbsp;Qty</th>
+                    <th>Remaining</th>
+                    <th>Request Qty</th>
                   </tr>
                 </thead>
                 <tbody id="sizeBody"></tbody>
-                <tfoot>
-                  <tr class="table-light">
-                    <th colspan="2" class="text-end">Total requested:</th>
-                    <th id="totalRequested" class="fw-semibold">0</th>
+                <tfoot class="table-light">
+                  <tr>
+                    <td colspan="2" class="text-end fw-semibold">Total Requested:</td>
+                    <td id="totalRequested" class="fw-bold text-success text-center">0</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
           </section>
 
-          <button id="submitBtn" class="btn btn-success mt-3" disabled>
-            <i class="fas fa-paper-plane me-1"></i>Submit rewash
-          </button>
+          <!-- SUBMIT -->
+          <div class="d-grid mt-4">
+            <button id="submitBtn" class="btn btn-success btn-lg" disabled>
+              <i class="fas fa-paper-plane me-1"></i> Submit Rewash Request
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -118,10 +150,9 @@
     $(document).ready(() => {
       const $lotSelect = $('#lotSelect').select2({
         theme: 'bootstrap5',
-        placeholder: "-- choose a lot --"
+        placeholder: "-- Choose a lot --"
       });
 
-      // Attach change event using jQuery for Select2
       $lotSelect.on('change', async function () {
         const selectedVal = $(this).val();
 
@@ -145,11 +176,11 @@
               <td>
                 <input
                   type="number"
-                  name="sizes[${s.size_label}]"
+                  name="sizes[${s.id}]"
                   min="0"
                   max="${s.available}"
                   value="0"
-                  class="form-control form-control-sm text-end"
+                  class="form-control form-control-sm text-center"
                   data-available="${s.available}"
                 >
               </td>
