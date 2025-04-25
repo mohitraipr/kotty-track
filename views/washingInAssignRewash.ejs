@@ -9,17 +9,28 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <!-- Icons -->
   <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+  <!-- Select2 -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <style>
-    /* subtle highlight when qty > max */
     input.is-invalid {
       border-color: #dc3545 !important;
+    }
+
+    .select2-container--bootstrap5 .select2-selection {
+      height: calc(2.25rem + 2px);
+      padding: 0.375rem 0.75rem;
+      font-size: 1rem;
+      border-radius: 0.375rem;
+    }
+
+    .select2-container--bootstrap5 .select2-selection--single .select2-selection__rendered {
+      line-height: 1.5;
     }
   </style>
 </head>
 
 <body class="bg-light">
 
-  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid px-3">
       <a class="navbar-brand fw-semibold" href="#"><i class="fas fa-retweet me-1"></i> KOTTY</a>
@@ -30,8 +41,6 @@
   </nav>
 
   <main class="container my-5">
-
-    <!-- Flash messages -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger shadow-sm"><%= error.join('<br>') %></div>
     <% } %>
@@ -46,17 +55,12 @@
       <div class="card-body">
 
         <form id="rewashForm" action="/washingin/assign-rewash" method="POST" class="needs-validation" novalidate>
-          <!-- Search Lot -->
-          <div class="mb-2">
-            <label class="form-label fw-semibold" for="lotSearch">Search lot</label>
-            <input type="text" id="lotSearch" class="form-control" placeholder="Search by lot, SKU, or balance">
-          </div>
 
-          <!-- LOT SELECT -->
+          <!-- LOT SELECT with Select2 -->
           <div class="mb-4">
             <label class="form-label fw-semibold" for="lotSelect">Select approved lot</label>
             <select id="lotSelect" name="selectedWashingDataId" class="form-select" required>
-              <option value>-- choose a lot --</option>
+              <option value="">-- choose a lot --</option>
               <% lots.forEach(l => { %>
               <option value="<%= l.washing_data_id %>">
                 <%= l.lot_no %> | SKU <%= l.sku %> | Bal <%= l.total_pieces %>
@@ -99,30 +103,25 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
   <script>
-    const lotSelect = document.getElementById('lotSelect');
-    const lotSearch = document.getElementById('lotSearch');
     const sizeSection = document.getElementById('sizeSection');
     const sizeBody = document.getElementById('sizeBody');
     const totalRequested = document.getElementById('totalRequested');
     const submitBtn = document.getElementById('submitBtn');
+    const lotSelect = document.getElementById('lotSelect');
 
-    // Search filter
-    lotSearch.addEventListener('input', () => {
-      const filter = lotSearch.value.toLowerCase();
-      const options = lotSelect.querySelectorAll('option');
-
-      options.forEach(option => {
-        const text = option.textContent.toLowerCase();
-        if (option.value && text.includes(filter)) {
-          option.style.display = '';
-        } else if (option.value) {
-          option.style.display = 'none';
-        }
+    // Init Select2
+    $(document).ready(() => {
+      $('#lotSelect').select2({
+        theme: 'bootstrap5',
+        placeholder: "-- choose a lot --"
       });
     });
 
-    // Load size data on lot change
+    // Handle change
     lotSelect.addEventListener('change', async () => {
       sizeBody.innerHTML = '';
       totalRequested.textContent = '0';
@@ -182,7 +181,6 @@
       submitBtn.disabled = total === 0;
     }
 
-    // Allow Enter key to trigger submit
     document.getElementById('rewashForm').addEventListener('keypress', e => {
       if (e.key === 'Enter' && !submitBtn.disabled) submitBtn.click();
     });
