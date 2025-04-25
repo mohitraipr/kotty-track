@@ -31,6 +31,7 @@
 
 <body class="bg-light">
 
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid px-3">
       <a class="navbar-brand fw-semibold" href="#"><i class="fas fa-retweet me-1"></i> KOTTY</a>
@@ -41,6 +42,8 @@
   </nav>
 
   <main class="container my-5">
+
+    <!-- Flash messages -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger shadow-sm"><%= error.join('<br>') %></div>
     <% } %>
@@ -111,57 +114,57 @@
     const sizeBody = document.getElementById('sizeBody');
     const totalRequested = document.getElementById('totalRequested');
     const submitBtn = document.getElementById('submitBtn');
-    const lotSelect = document.getElementById('lotSelect');
 
-    // Init Select2
     $(document).ready(() => {
-      $('#lotSelect').select2({
+      const $lotSelect = $('#lotSelect').select2({
         theme: 'bootstrap5',
         placeholder: "-- choose a lot --"
       });
-    });
 
-    // Handle change
-    lotSelect.addEventListener('change', async () => {
-      sizeBody.innerHTML = '';
-      totalRequested.textContent = '0';
-      submitBtn.disabled = true;
+      // Attach change event using jQuery for Select2
+      $lotSelect.on('change', async function () {
+        const selectedVal = $(this).val();
 
-      if (!lotSelect.value) {
-        sizeSection.style.display = 'none';
-        return;
-      }
+        sizeBody.innerHTML = '';
+        totalRequested.textContent = '0';
+        submitBtn.disabled = true;
 
-      try {
-        const res = await fetch(`/washingin/assign-rewash/data/${lotSelect.value}`);
-        const sizes = await res.json();
+        if (!selectedVal) {
+          sizeSection.style.display = 'none';
+          return;
+        }
 
-        sizeBody.innerHTML = sizes.map(s => `
-          <tr>
-            <td class="fw-medium">${s.size_label}</td>
-            <td class="text-center">${s.available}</td>
-            <td>
-              <input
-                type="number"
-                name="sizes[${s.size_label}]"
-                min="0"
-                max="${s.available}"
-                value="0"
-                class="form-control form-control-sm text-end"
-                data-available="${s.available}"
-              >
-            </td>
-          </tr>`).join('');
+        try {
+          const res = await fetch(`/washingin/assign-rewash/data/${selectedVal}`);
+          const sizes = await res.json();
 
-        sizeBody.querySelectorAll('input').forEach(inp => {
-          inp.addEventListener('input', handleQtyChange);
-        });
+          sizeBody.innerHTML = sizes.map(s => `
+            <tr>
+              <td class="fw-medium">${s.size_label}</td>
+              <td class="text-center">${s.available}</td>
+              <td>
+                <input
+                  type="number"
+                  name="sizes[${s.size_label}]"
+                  min="0"
+                  max="${s.available}"
+                  value="0"
+                  class="form-control form-control-sm text-end"
+                  data-available="${s.available}"
+                >
+              </td>
+            </tr>`).join('');
 
-        sizeSection.style.display = '';
-      } catch (err) {
-        console.error('Failed to load sizes:', err);
-        alert('Could not load size data. Please retry.');
-      }
+          sizeBody.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('input', handleQtyChange);
+          });
+
+          sizeSection.style.display = '';
+        } catch (err) {
+          console.error('Failed to load sizes:', err);
+          alert('Could not load size data. Please retry.');
+        }
+      });
     });
 
     function handleQtyChange(e) {
