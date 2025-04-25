@@ -1722,4 +1722,105 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
     return res.status(500).send("Server error in /stitching-tat/:masterId");
   }
 });
+
+// GET /operator/sku-management
+// Renders an EJS page with optional ?sku= query param
+router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { sku } = req.query; // We can still read message/error if you want from req.query
+
+    // If no sku specified, just render the page with empty results
+    if (!sku) {
+      return res.render("skuManagement", {
+        sku: "",
+        results: [],
+        message: "",
+        error: ""
+      });
+    }
+
+    // We do have a SKU -> search all tables that contain `sku` columns
+    const tables = [
+      { tableName: "cutting_lots", label: "Cutting Lots" },
+      { tableName: "stitching_data", label: "Stitching Data" },
+      { tableName: "jeans_assembly_data", label: "Jeans Assembly Data" },
+      { tableName: "washing_data", label: "Washing Data" },
+      { tableName: "washing_in_data", label: "Washing In Data" },
+      { tableName: "finishing_data", label: "Finishing Data" },
+      { tableName: "rewash_requests", label: "Rewash Requests" }
+    ];
+
+    const results = [];
+
+    // Fetch rows from each table that has the given SKU
+    for (const t of tables) {
+      const [rows] = await pool.query(
+        `SELECT lot_no, sku FROM ${t.tableName} WHERE sku = ?`,
+        [sku.trim()]
+      );
+      if (rows.length > 0) {
+        results.push({
+          label: t.label,       // For display (e.g. "Cutting Lots")
+          tableName: t.tableName,
+          rows
+        });
+      }
+    }
+
+    // Render the EJS template with the found results
+    return res.render("skuManagement", {
+      sku,
+      results,
+      message: "",
+      error: ""
+    });
+  } catch (err) {
+    console.error("Error in GET /operator/sku-management:", err);
+    return res.status(500).send("Server Error");
+  }
+});
+
+// POST /operator/sku-management/update (AJAX endpoint)
+router.post("/sku-management/update", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { oldSku, newSku } = req.body;
+
+    // Basic validations
+    if (!oldSku || !newSku) {
+      return res.status(400).json({ error: "Both oldSku and newSku are required." });
+    }
+    if (oldSku.trim() === newSku.trim()) {
+      return res.status(400).json({ error: "Old and New SKU cannot be the same." });
+    }
+
+    // List all tables that have `sku` columns
+    const tablesWithSku = [
+      "cutting_lots",
+      "stitching_data",
+      "jeans_assembly_data",
+      "washing_data",
+      "washing_in_data",
+      "finishing_data",
+      "rewash_requests"
+    ];
+
+    let totalUpdated = 0;
+    for (const table of tablesWithSku) {
+      const [result] = await pool.query(
+        `UPDATE ${table} SET sku = ? WHERE sku = ?`,
+        [newSku.trim(), oldSku.trim()]
+      );
+      // result.affectedRows => how many rows got updated in that table
+      totalUpdated += result.affectedRows;
+    }
+
+    // Return JSON success message instead of a redirect
+    return res.json({
+      message: `SKU updated from "${oldSku}" to "${newSku}" (total ${totalUpdated} row(s) changed).`
+    });
+  } catch (err) {
+    console.error("Error in POST /operator/sku-management/update:", err);
+    return res.status(500).json({ error: "Server Error" });
+  }
+});
 module.exports = router;
