@@ -583,20 +583,26 @@ async function getLastWashingAssignment(lotNo) {
 }
 
 async function getLastWashingInAssignment(lotNo) {
-  // only if denim in your new chain? Or not used for non-denim
+  // Only relevant if denim
   const [rows] = await pool.query(`
     SELECT wia.id, wia.is_approved, wia.assigned_on, wia.approved_on, wia.user_id
       FROM washing_in_assignments wia
-      JOIN washing_in_data wid ON wia.washing_data_id= wid.id
-     WHERE wid.lot_no= ?
+      JOIN washing_data wd
+        ON wia.washing_data_id = wd.id
+     WHERE wd.lot_no = ?
      ORDER BY wia.assigned_on DESC
      LIMIT 1
   `, [lotNo]);
+  
   if (!rows.length) return null;
-  const assign= rows[0];
+  
+  const assign = rows[0];
   if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
+    const [[u]] = await pool.query(
+      "SELECT username FROM users WHERE id = ?",
+      [assign.user_id]
+    );
+    assign.opName = u ? u.username : "Unknown";
   }
   return assign;
 }
@@ -1037,79 +1043,89 @@ function filterByDept({
 }
 
 /** The final PIC Report route */
+/*******************************************************************
+ * PIC‑Report Route – with updated date‑filter for department "washing_in"
+ *******************************************************************/
 router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
     const {
-      lotType="all", department="all", status="all",
-      dateFilter="createdAt", startDate="", endDate="", download=""
+      lotType = "all",
+      department = "all",
+      status = "all",
+      dateFilter = "createdAt",
+      startDate = "",
+      endDate = "",
+      download = ""
     } = req.query;
 
-    // build dateWhere / lotTypeClause
-    let dateWhere= "";
-    let dateParams= [];
+    // Build filters
+    let dateWhere = "";
+    let dateParams = [];
+
     if (startDate && endDate) {
-      if (dateFilter==="createdAt") {
-        dateWhere= " AND DATE(cl.created_at) BETWEEN ? AND ? ";
+      if (dateFilter === "createdAt") {
+        dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
-      } else if (dateFilter==="assignedOn") {
-        // handle each dept
-        // (same logic as your code)
-        if (department==="stitching") {
-          dateWhere= `
+      } else if (dateFilter === "assignedOn") {
+        if (department === "stitching") {
+          dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM stitching_assignments sa
-                JOIN cutting_lots c2 ON sa.cutting_lot_id= c2.id
-               WHERE c2.lot_no= cl.lot_no
+                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
+               WHERE c2.lot_no = cl.lot_no
                  AND DATE(sa.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
-        } else if (department==="assembly") {
-          dateWhere= `
+        } else if (department === "assembly") {
+          dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM jeans_assembly_assignments ja
-                JOIN stitching_data sd ON ja.stitching_assignment_id= sd.id
-                JOIN cutting_lots c2 ON sd.lot_no= c2.lot_no
-               WHERE c2.lot_no= cl.lot_no
+                JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
                  AND DATE(ja.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
-        } else if (department==="washing") {
-          dateWhere= `
+        } else if (department === "washing") {
+          dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM washing_assignments wa
-                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id= jd.id
-                JOIN cutting_lots c2 ON jd.lot_no= c2.lot_no
-               WHERE c2.lot_no= cl.lot_no
+                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
                  AND DATE(wa.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
-        } else if (department==="washing_in") {
-          dateWhere= `
+        } else if (department === "washing_in") {
+          // <-- Updated to join washing_data instead of washing_in_data
+          dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM washing_in_assignments wia
-                JOIN washing_in_data wid ON wia.washing_data_id= wid.id
-                JOIN cutting_lots c2 ON wid.lot_no= c2.lot_no
-               WHERE c2.lot_no= cl.lot_no
+                JOIN washing_data wd
+                  ON wia.washing_data_id = wd.id
+                JOIN cutting_lots c2
+                  ON wd.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
                  AND DATE(wia.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
-        } else if (department==="finishing") {
-          dateWhere= `
+        } else if (department === "finishing") {
+          dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM finishing_assignments fa
-                LEFT JOIN washing_data wd ON fa.washing_assignment_id= wd.id
-                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id= sd.id
-                JOIN cutting_lots c2 ON (wd.lot_no= c2.lot_no OR sd.lot_no= c2.lot_no)
-               WHERE c2.lot_no= cl.lot_no
+                LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
+               WHERE c2.lot_no = cl.lot_no
                  AND DATE(fa.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1118,16 +1134,16 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       }
     }
 
-    let lotTypeClause= "";
-    if (lotType==="denim") {
-      lotTypeClause= `
+    let lotTypeClause = "";
+    if (lotType === "denim") {
+      lotTypeClause = `
         AND (
           UPPER(cl.lot_no) LIKE 'AK%'
           OR UPPER(cl.lot_no) LIKE 'UM%'
         )
       `;
-    } else if (lotType==="hosiery") {
-      lotTypeClause= `
+    } else if (lotType === "hosiery") {
+      lotTypeClause = `
         AND (
           UPPER(cl.lot_no) NOT LIKE 'AK%'
           AND UPPER(cl.lot_no) NOT LIKE 'UM%'
@@ -1135,70 +1151,79 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       `;
     }
 
-    // query cutting_lots
-    const baseQuery= `
+    // Base query
+    const baseQuery = `
       SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark,
              u.username AS created_by
         FROM cutting_lots cl
-        JOIN users u ON cl.user_id= u.id
+        JOIN users u ON cl.user_id = u.id
        WHERE 1=1
          ${lotTypeClause}
          ${dateWhere}
        ORDER BY cl.created_at DESC
     `;
-    const [lots]= await pool.query(baseQuery, dateParams);
+    const [lots] = await pool.query(baseQuery, dateParams);
 
-    // build final data
-    const finalData= [];
+    // Build final data
+    const finalData = [];
     for (const lot of lots) {
-      const lotNo= lot.lot_no;
-      const totalCut= parseFloat(lot.total_pieces)|| 0;
-      const denim= isDenimLot(lotNo); // true => has assembly, washing, washing_in
+      const lotNo = lot.lot_no;
+      const totalCut = parseFloat(lot.total_pieces) || 0;
+      const denim = isDenimLot(lotNo);
 
-      // gather qty
-      const stitchedQty= await getStitchedQty(lotNo);
-      const assembledQty= denim? await getAssembledQty(lotNo): 0;
-      const washedQty= denim? await getWashedQty(lotNo): 0;
-      // for non-denim, washing=0 always
-      const washingInQty= denim? await getWashingInQty(lotNo): 0;
-      // for non-denim, washing_in=0 always
-      const finishedQty= await getFinishedQty(lotNo);
+      // Gather qty from data tables
+      const stitchedQty   = await getStitchedQty(lotNo);
+      const assembledQty  = denim ? await getAssembledQty(lotNo)  : 0;
+      const washedQty     = denim ? await getWashedQty(lotNo)     : 0;
+      const washingInQty  = denim ? await getWashingInQty(lotNo)  : 0;
+      const finishedQty   = await getFinishedQty(lotNo);
 
-      // gather assignments
-      const stAssign= await getLastStitchingAssignment(lotNo);
-      const asmAssign= denim? await getLastAssemblyAssignment(lotNo): null;
-      const washAssign= denim? await getLastWashingAssignment(lotNo): null;
-      const wInAssign= denim? await getLastWashingInAssignment(lotNo): null;
-      const finAssign= await getLastFinishingAssignment(lotNo, denim);
+      // Gather last assignment records
+      const stAssign  = await getLastStitchingAssignment(lotNo);
+      const asmAssign = denim ? await getLastAssemblyAssignment(lotNo) : null;
+      const washAssign= denim ? await getLastWashingAssignment(lotNo)  : null;
+      // <-- now uses the updated version that joins washing_data
+      const wInAssign = denim ? await getLastWashingInAssignment(lotNo): null;
+      const finAssign = await getLastFinishingAssignment(lotNo, denim);
 
-      // chain statuses
-      const statuses= getDepartmentStatuses({
+      // Calculate statuses
+      const statuses = getDepartmentStatuses({
         isDenim: denim,
-        totalCut, stitchedQty, assembledQty, washedQty, washingInQty, finishedQty,
-        stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign
+        totalCut,
+        stitchedQty,
+        assembledQty,
+        washedQty,
+        washingInQty,
+        finishedQty,
+        stAssign,
+        asmAssign,
+        washAssign,
+        washInAssign: wInAssign,
+        finAssign
       });
 
-      // figure out if we show the row
-      const deptResult= filterByDept({
+      // Check if we show row based on department filter
+      const deptResult = filterByDept({
         department,
         isDenim: denim,
-        stitchingStatus: statuses.stitchingStatus,
-        assemblyStatus: statuses.assemblyStatus,
-        washingStatus: statuses.washingStatus,
-        washingInStatus: statuses.washingInStatus,
-        finishingStatus: statuses.finishingStatus
+        stitchingStatus:   statuses.stitchingStatus,
+        assemblyStatus:    statuses.assemblyStatus,
+        washingStatus:     statuses.washingStatus,
+        washingInStatus:   statuses.washingInStatus,
+        finishingStatus:   statuses.finishingStatus
       });
       if (!deptResult.showRow) continue;
 
-      // check status filter
-      let actualStatus= deptResult.actualStatus.toLowerCase();
-      if (status!=="all") {
-        if (status==="not_assigned") {
-          // means "In <some dept>" presumably
+      // Check overall status filter
+      const actualStatus = deptResult.actualStatus.toLowerCase();
+      if (status !== "all") {
+        if (status === "not_assigned") {
+          // means "In <some dept>"
           if (!actualStatus.startsWith("in ")) continue;
         } else {
-          const want= status.toLowerCase();
-          if (want==="inline" && actualStatus.includes("in-line")) {
+          const want = status.toLowerCase();
+          // "inline" => status includes "in-line"
+          if (want === "inline" && actualStatus.includes("in-line")) {
             // pass
           } else if (!actualStatus.includes(want)) {
             continue;
@@ -1209,147 +1234,158 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       finalData.push({
         lotNo,
         sku: lot.sku,
-        lotType: denim? "Denim": "Hosiery",
+        lotType: denim ? "Denim" : "Hosiery",
         totalCut,
         createdAt: lot.created_at
           ? new Date(lot.created_at).toLocaleDateString()
           : "",
-        remark: lot.remark|| "",
+        remark: lot.remark || "",
 
-        // stitching
-        stitchAssignedOn: statuses.stitchingAssignedOn,
-        stitchApprovedOn: statuses.stitchingApprovedOn,
-        stitchOp: statuses.stitchingOp,
-        stitchStatus: statuses.stitchingStatus,
+        // Stitching
+        stitchAssignedOn:   statuses.stitchingAssignedOn,
+        stitchApprovedOn:   statuses.stitchingApprovedOn,
+        stitchOp:           statuses.stitchingOp,
+        stitchStatus:       statuses.stitchingStatus,
         stitchedQty,
 
-        // assembly (denim) or "—" for non-denim
+        // Assembly
         assemblyAssignedOn: statuses.assemblyAssignedOn,
         assemblyApprovedOn: statuses.assemblyApprovedOn,
-        assemblyOp: statuses.assemblyOp,
-        assemblyStatus: statuses.assemblyStatus,
+        assemblyOp:         statuses.assemblyOp,
+        assemblyStatus:     statuses.assemblyStatus,
         assembledQty,
 
-        // washing (denim) or "—" for non-denim
-        washingAssignedOn: statuses.washingAssignedOn,
-        washingApprovedOn: statuses.washingApprovedOn,
-        washingOp: statuses.washingOp,
-        washingStatus: statuses.washingStatus,
+        // Washing
+        washingAssignedOn:  statuses.washingAssignedOn,
+        washingApprovedOn:  statuses.washingApprovedOn,
+        washingOp:          statuses.washingOp,
+        washingStatus:      statuses.washingStatus,
         washedQty,
 
-        // washing_in (denim) or "—" for non-denim
+        // Washing‑In
         washingInAssignedOn: statuses.washingInAssignedOn,
         washingInApprovedOn: statuses.washingInApprovedOn,
-        washingInOp: statuses.washingInOp,
-        washingInStatus: statuses.washingInStatus,
+        washingInOp:         statuses.washingInOp,
+        washingInStatus:     statuses.washingInStatus,
         washingInQty,
 
-        // finishing
+        // Finishing
         finishingAssignedOn: statuses.finishingAssignedOn,
         finishingApprovedOn: statuses.finishingApprovedOn,
-        finishingOp: statuses.finishingOp,
-        finishingStatus: statuses.finishingStatus,
+        finishingOp:         statuses.finishingOp,
+        finishingStatus:     statuses.finishingStatus,
         finishedQty
       });
     }
 
-    // if download => Excel
-    if (download==="1") {
-      const workbook= new ExcelJS.Workbook();
-      workbook.creator= "PIC Report – No WashingIn for NonDenim";
-      const sheet= workbook.addWorksheet("PIC-Report");
+    // If download => Excel
+    if (download === "1") {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "PIC Report – Denim Chain with WashingIn";
 
-      sheet.columns= [
-        { header: "Lot No", key: "lotNo", width:15 },
-        { header: "SKU", key: "sku", width:12 },
-        { header: "Lot Type", key: "lotType", width:10 },
-        { header: "Total Cut", key: "totalCut", width:10 },
-        { header: "Created At", key: "createdAt", width:15 },
-        { header: "Remark", key: "remark", width:20 },
+      const sheet = workbook.addWorksheet("PIC-Report");
+      sheet.columns = [
+        { header: "Lot No",               key: "lotNo",                width: 15 },
+        { header: "SKU",                  key: "sku",                  width: 12 },
+        { header: "Lot Type",             key: "lotType",              width: 10 },
+        { header: "Total Cut",            key: "totalCut",             width: 10 },
+        { header: "Created At",           key: "createdAt",            width: 15 },
+        { header: "Remark",               key: "remark",               width: 20 },
 
-        // stitching
-        { header: "Stitch Assigned On", key: "stitchAssignedOn", width:20 },
-        { header: "Stitch Approved On", key: "stitchApprovedOn", width:20 },
-        { header: "Stitch Operator", key: "stitchOp", width:15 },
-        { header: "Stitch Status", key: "stitchStatus", width:25 },
-        { header: "Stitched Qty", key: "stitchedQty", width:15 },
+        // Stitching
+        { header: "Stitch Assigned On",   key: "stitchAssignedOn",     width: 20 },
+        { header: "Stitch Approved On",   key: "stitchApprovedOn",     width: 20 },
+        { header: "Stitch Operator",      key: "stitchOp",             width: 15 },
+        { header: "Stitch Status",        key: "stitchStatus",         width: 25 },
+        { header: "Stitched Qty",         key: "stitchedQty",          width: 15 },
 
-        // assembly
-        { header: "Assembly Assigned On", key: "assemblyAssignedOn", width:20 },
-        { header: "Assembly Approved On", key: "assemblyApprovedOn", width:20 },
-        { header: "Assembly Operator", key: "assemblyOp", width:15 },
-        { header: "Assembly Status", key: "assemblyStatus", width:25 },
-        { header: "Assembled Qty", key: "assembledQty", width:15 },
+        // Assembly
+        { header: "Assembly Assigned On", key: "assemblyAssignedOn",   width: 20 },
+        { header: "Assembly Approved On", key: "assemblyApprovedOn",   width: 20 },
+        { header: "Assembly Operator",    key: "assemblyOp",           width: 15 },
+        { header: "Assembly Status",      key: "assemblyStatus",       width: 25 },
+        { header: "Assembled Qty",        key: "assembledQty",         width: 15 },
 
-        // washing
-        { header: "Washing Assigned On", key: "washingAssignedOn", width:20 },
-        { header: "Washing Approved On", key: "washingApprovedOn", width:20 },
-        { header: "Washing Operator", key: "washingOp", width:15 },
-        { header: "Washing Status", key: "washingStatus", width:25 },
-        { header: "Washed Qty", key: "washedQty", width:15 },
+        // Washing
+        { header: "Washing Assigned On",  key: "washingAssignedOn",    width: 20 },
+        { header: "Washing Approved On",  key: "washingApprovedOn",    width: 20 },
+        { header: "Washing Operator",     key: "washingOp",            width: 15 },
+        { header: "Washing Status",       key: "washingStatus",        width: 25 },
+        { header: "Washed Qty",           key: "washedQty",            width: 15 },
 
-        // washing_in
-        { header: "WashIn Assigned On", key: "washingInAssignedOn", width:20 },
-        { header: "WashIn Approved On", key: "washingInApprovedOn", width:20 },
-        { header: "WashIn Operator", key: "washingInOp", width:15 },
-        { header: "WashIn Status", key: "washingInStatus", width:25 },
-        { header: "WashIn Qty", key: "washingInQty", width:15 },
+        // Washing‑In
+        { header: "WashIn Assigned On",   key: "washingInAssignedOn",  width: 20 },
+        { header: "WashIn Approved On",   key: "washingInApprovedOn",  width: 20 },
+        { header: "WashIn Operator",      key: "washingInOp",          width: 15 },
+        { header: "WashIn Status",        key: "washingInStatus",      width: 25 },
+        { header: "WashIn Qty",           key: "washingInQty",         width: 15 },
 
-        // finishing
-        { header: "Finishing Assigned On", key: "finishingAssignedOn", width:20 },
-        { header: "Finishing Approved On", key: "finishingApprovedOn", width:20 },
-        { header: "Finishing Operator", key: "finishingOp", width:15 },
-        { header: "Finishing Status", key: "finishingStatus", width:25 },
-        { header: "Finished Qty", key: "finishedQty", width:15 }
+        // Finishing
+        { header: "Finishing Assigned On",key: "finishingAssignedOn",  width: 20 },
+        { header: "Finishing Approved On",key: "finishingApprovedOn",  width: 20 },
+        { header: "Finishing Operator",   key: "finishingOp",          width: 15 },
+        { header: "Finishing Status",     key: "finishingStatus",      width: 25 },
+        { header: "Finished Qty",         key: "finishedQty",          width: 15 }
       ];
 
       finalData.forEach(r => {
         sheet.addRow({
-          lotNo: r.lotNo,
-          sku: r.sku,
-          lotType: r.lotType,
-          totalCut: r.totalCut,
-          createdAt: r.createdAt,
-          remark: r.remark,
+          lotNo:               r.lotNo,
+          sku:                 r.sku,
+          lotType:             r.lotType,
+          totalCut:            r.totalCut,
+          createdAt:           r.createdAt,
+          remark:              r.remark,
 
-          stitchAssignedOn: r.stitchAssignedOn,
-          stitchApprovedOn: r.stitchApprovedOn,
-          stitchOp: r.stitchOp,
-          stitchStatus: r.stitchStatus,
-          stitchedQty: r.stitchedQty,
+          // Stitching
+          stitchAssignedOn:    r.stitchAssignedOn,
+          stitchApprovedOn:    r.stitchApprovedOn,
+          stitchOp:            r.stitchOp,
+          stitchStatus:        r.stitchStatus,
+          stitchedQty:         r.stitchedQty,
 
-          assemblyAssignedOn: r.assemblyAssignedOn,
-          assemblyApprovedOn: r.assemblyApprovedOn,
-          assemblyOp: r.assemblyOp,
-          assemblyStatus: r.assemblyStatus,
-          assembledQty: r.assembledQty,
+          // Assembly
+          assemblyAssignedOn:  r.assemblyAssignedOn,
+          assemblyApprovedOn:  r.assemblyApprovedOn,
+          assemblyOp:          r.assemblyOp,
+          assemblyStatus:      r.assemblyStatus,
+          assembledQty:        r.assembledQty,
 
-          washingAssignedOn: r.washingAssignedOn,
-          washingApprovedOn: r.washingApprovedOn,
-          washingOp: r.washingOp,
-          washingStatus: r.washingStatus,
-          washedQty: r.washedQty,
+          // Washing
+          washingAssignedOn:   r.washingAssignedOn,
+          washingApprovedOn:   r.washingApprovedOn,
+          washingOp:           r.washingOp,
+          washingStatus:       r.washingStatus,
+          washedQty:           r.washedQty,
 
+          // WashingIn
           washingInAssignedOn: r.washingInAssignedOn,
           washingInApprovedOn: r.washingInApprovedOn,
-          washingInOp: r.washingInOp,
-          washingInStatus: r.washingInStatus,
-          washingInQty: r.washingInQty,
+          washingInOp:         r.washingInOp,
+          washingInStatus:     r.washingInStatus,
+          washingInQty:        r.washingInQty,
 
+          // Finishing
           finishingAssignedOn: r.finishingAssignedOn,
           finishingApprovedOn: r.finishingApprovedOn,
-          finishingOp: r.finishingOp,
-          finishingStatus: r.finishingStatus,
-          finishedQty: r.finishedQty
+          finishingOp:         r.finishingOp,
+          finishingStatus:     r.finishingStatus,
+          finishedQty:         r.finishedQty
         });
       });
 
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", 'attachment; filename="PICReport-FixedChain.xlsx"');
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="PICReport-FixedChain.xlsx"'
+      );
       await workbook.xlsx.write(res);
       res.end();
     } else {
-      // render HTML
+      // Render HTML
       return res.render("operatorPICReport", {
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
