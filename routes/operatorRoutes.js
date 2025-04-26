@@ -1163,11 +1163,11 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     const [qtyRows] = await pool.query(`
       SELECT
         lot_no,
-        SUM(total_pieces) FILTER (WHERE tbl='stitch')   AS stitchedQty,
-        SUM(total_pieces) FILTER (WHERE tbl='assembly') AS assembledQty,
-        SUM(total_pieces) FILTER (WHERE tbl='wash')     AS washedQty,
-        SUM(total_pieces) FILTER (WHERE tbl='washi')    AS washingInQty,
-        SUM(total_pieces) FILTER (WHERE tbl='finish')   AS finishedQty
+        SUM(CASE WHEN tbl='stitch'   THEN total_pieces ELSE 0 END) AS stitchedQty,
+        SUM(CASE WHEN tbl='assembly' THEN total_pieces ELSE 0 END) AS assembledQty,
+        SUM(CASE WHEN tbl='wash'     THEN total_pieces ELSE 0 END) AS washedQty,
+        SUM(CASE WHEN tbl='washi'    THEN total_pieces ELSE 0 END) AS washingInQty,
+        SUM(CASE WHEN tbl='finish'   THEN total_pieces ELSE 0 END) AS finishedQty
       FROM (
         SELECT lot_no, total_pieces, 'stitch'   AS tbl FROM stitching_data
         UNION ALL
@@ -1178,7 +1178,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         SELECT lot_no, total_pieces, 'washi'    AS tbl FROM washing_in_data
         UNION ALL
         SELECT lot_no, total_pieces, 'finish'   AS tbl FROM finishing_data
-      ) t
+      ) AS t
       GROUP BY lot_no
     `);
     const qtyMap = new Map(qtyRows.map(r => [r.lot_no, r]));
