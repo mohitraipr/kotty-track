@@ -1,10 +1,10 @@
 /**************************************************************************
  * operatorRoutes.js  –  Kotty-Track (April 2025)
  *
- *  • Denim chain  : Cut → Stitching → Assembly → Washing → Washing-In → Finishing
- *  • Hosiery      : Cut → Stitching → Finishing
- *  • PIC Report   : download-only, 10-query bulk strategy (slashes DB load)
- *  • All other dashboards/reports kept intact
+ *  • Denim chain : Cut → Stitching → Assembly → Washing → Washing-In → Finishing
+ *  • Hosiery     : Cut → Stitching → Finishing
+ *  • PIC Report  : download-only, 10-query bulk strategy
+ *  • All legacy dashboards/reports retained
  **************************************************************************/
 
 const express  = require("express");
@@ -28,44 +28,48 @@ function formatDateDDMMYYYY(dt) {
 const isDenimLot = (lot = "") => /^ak|^um/i.test(lot);
 
 /* =======================================================================
- * SECTION 1 ·  BULK HELPERS (qty + latest-assignment maps, 10 queries)
+ * SECTION 1 · BULK HELPERS (qty + latest-assignment maps, 10 queries)
  * =====================================================================*/
-const toMap = rows => {
+const toQtyMap = (rows) => {
   const m = Object.create(null);
   for (const r of rows) m[r.lot_no] = +r.qty || 0;
   return m;
 };
-
 async function fetchQtyMaps(lotNos) {
-  const q = async (table) =>
-    (await pool.query(
-      `SELECT lot_no, SUM(total_pieces) qty FROM ${table}
-        WHERE lot_no IN (?) GROUP BY lot_no`, [lotNos]))[0];
+  const q = async (table) => (
+    await pool.query(
+      `SELECT lot_no, SUM(total_pieces) qty
+         FROM ${table}
+        WHERE lot_no IN (?)
+        GROUP BY lot_no`, [lotNos]))[0];
 
   return {
-    stitched : toMap(await q("stitching_data")),
-    assembled: toMap(await q("jeans_assembly_data")),
-    washed   : toMap(await q("washing_data")),
-    washIn   : toMap(await q("washing_in_data")),
-    finished : toMap(await q("finishing_data"))
+    stitched : toQtyMap(await q("stitching_data")),
+    assembled: toQtyMap(await q("jeans_assembly_data")),
+    washed   : toQtyMap(await q("washing_data")),
+    washIn   : toQtyMap(await q("washing_in_data")),
+    finished : toQtyMap(await q("finishing_data"))
   };
 }
 
-const rowsToObj = arr => {
+const rowsToObj = (arr) => {
   const o = Object.create(null);
   for (const r of arr) o[r.lot_no] = r;
   return o;
 };
-
 async function fetchAssignmentMaps(lotNos) {
-  /* helper to build MAX(assigned_on) sub-query snippets */
-  const latest = (join, where) => `
-    JOIN ( SELECT ${where}, MAX(x.assigned_on) last_on
-             FROM ${join} x
-             WHERE ${where} IN (?)
-             GROUP BY ${where} ) latest
-      ON latest.${where === "lot_no" ? "lot_no" : "lot_no"} = ${where}
-     AND latest.last_on = a.assigned_on`;
+  /* helper for MAX(assigned_on) */
+  const latest = (alias, field) => `
+      JOIN ( SELECT ${field} lot_no, MAX(a2.assigned_on) last_on
+               FROM ${alias} a2
+               ${alias.includes("finishing") ? `
+                 LEFT JOIN washing_data wd2   ON a2.washing_assignment_id = wd2.id
+                 LEFT JOIN stitching_data sd2 ON a2.stitching_assignment_id = sd2.id` : ""}
+               ${alias.includes("stitching")  ? "JOIN cutting_lots  c2 ON a2.cutting_lot_id = c2.id" : ""}
+              WHERE ${field} IN (?)
+              GROUP BY ${field} ) latest
+        ON latest.lot_no = ${field}
+       AND latest.last_on = a.assigned_on`;
 
   /* stitching */
   const [st] = await pool.query(`
@@ -103,7 +107,7 @@ async function fetchAssignmentMaps(lotNos) {
       JOIN users u ON u.id = a.user_id
       ${latest("washing_in_assignments", "wd.lot_no")};`, [lotNos]);
 
-  /* finishing (dual join) */
+  /* finishing */
   const [fi] = await pool.query(`
     SELECT COALESCE(wd.lot_no, sd.lot_no) lot_no, a.is_approved,
            a.assigned_on, a.approved_on, u.username opName
@@ -111,15 +115,7 @@ async function fetchAssignmentMaps(lotNos) {
       LEFT JOIN washing_data wd   ON a.washing_assignment_id   = wd.id
       LEFT JOIN stitching_data sd ON a.stitching_assignment_id = sd.id
       JOIN users u ON u.id = a.user_id
-      JOIN ( SELECT COALESCE(wd2.lot_no, sd2.lot_no) lot_no,
-                    MAX(a2.assigned_on) last_on
-               FROM finishing_assignments a2
-               LEFT JOIN washing_data wd2   ON a2.washing_assignment_id   = wd2.id
-               LEFT JOIN stitching_data sd2 ON a2.stitching_assignment_id = sd2.id
-               WHERE COALESCE(wd2.lot_no, sd2.lot_no) IN (?)
-               GROUP BY COALESCE(wd2.lot_no, sd2.lot_no) ) latest
-             ON latest.lot_no = COALESCE(wd.lot_no, sd.lot_no)
-            AND latest.last_on = a.assigned_on;`, [lotNos]);
+      ${latest("finishing_assignments", "COALESCE(wd.lot_no, sd.lot_no)")};`, [lotNos]);
 
   return {
     stitching : rowsToObj(st),
@@ -131,7 +127,7 @@ async function fetchAssignmentMaps(lotNos) {
 }
 
 /* =======================================================================
- * SECTION 2 · DATE filter builder for ?dateFilter=assignedOn
+ * SECTION 2 · DATE-filter builder for ?dateFilter=assignedOn
  * =====================================================================*/
 function buildAssignedOnFilter(dept) {
   switch (dept) {
@@ -176,29 +172,27 @@ function buildAssignedOnFilter(dept) {
 }
 
 /* =======================================================================
- * SECTION 3 ·  getDepartmentStatuses() + filterByDept()
+ * SECTION 3 · getDepartmentStatuses() + filterByDept()
  * =====================================================================*/
-function getDepartmentStatuses(cfg) {
+function getDepartmentStatuses(o) {
   const {
     isDenim, totalCut,
-    stitchedQty, assembledQty,
-    washedQty, washingInQty, finishedQty,
+    stitchedQty, assembledQty, washedQty, washingInQty, finishedQty,
 
     stIsApproved, stOpName,
     asmIsApproved, asmOpName,
     waIsApproved,  waOpName,
     wiIsApproved,  wiOpName,
     finIsApproved, finOpName
-  } = cfg;
+  } = o;
 
-  /* defaults */
   let stitchingStatus = "N/A",
       assemblyStatus  = isDenim ? "N/A" : "—",
       washingStatus   = isDenim ? "N/A" : "—",
       washingInStatus = isDenim ? "N/A" : "—",
       finishingStatus = "N/A";
 
-  /* ─────── Stitching ─────── */
+  /* ───── Stitching ───── */
   if (stIsApproved === undefined) {
     stitchingStatus = "In Cutting";
     if (isDenim) assemblyStatus = washingStatus = washingInStatus = finishingStatus = "In Cutting";
@@ -212,104 +206,118 @@ function getDepartmentStatuses(cfg) {
     if (isDenim) assemblyStatus = washingStatus = washingInStatus = finishingStatus = "In Stitching";
     else         finishingStatus = "In Stitching";
   } else {
-    if (stitchedQty === 0)                  stitchingStatus = "In-Line";
-    else if (stitchedQty >= totalCut)       stitchingStatus = "Completed";
-    else                                    stitchingStatus = `${totalCut - stitchedQty} Pending`;
+    stitchingStatus = stitchedQty === 0
+      ? "In-Line"
+      : stitchedQty >= totalCut
+        ? "Completed"
+        : `${totalCut - stitchedQty} Pending`;
   }
 
-  /* ─────── Hosiery branch  ─────── */
+  /* ───── Hosiery branch ───── */
   if (!isDenim) {
-    if (finIsApproved === undefined)        finishingStatus = "In Stitching";
-    else if (finIsApproved === null)        finishingStatus = `Pending Approval by ${finOpName || "???"}`;
-    else if (finIsApproved === 0)           finishingStatus = `Denied by ${finOpName || "???"}`;
-    else {
-      if (finishedQty === 0)                       finishingStatus = "In-Line";
-      else if (finishedQty >= stitchedQty)         finishingStatus = "Completed";
-      else                                         finishingStatus = `${stitchedQty - finishedQty} Pending`;
+    if (finIsApproved === undefined) {
+      finishingStatus = "In Stitching";
+    } else if (finIsApproved === null) {
+      finishingStatus = `Pending Approval by ${finOpName || "???"}`;
+    } else if (finIsApproved === 0) {
+      finishingStatus = `Denied by ${finOpName || "???"}`;
+    } else {
+      finishingStatus = finishedQty === 0
+        ? "In-Line"
+        : finishedQty >= stitchedQty
+          ? "Completed"
+          : `${stitchedQty - finishedQty} Pending`;
     }
     return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
 
-  /* ─────── Denim branch  ─────── */
+  /* ───── Denim branch ───── */
   /* Assembly */
   if (asmIsApproved === undefined) {
     assemblyStatus = washingStatus = washingInStatus = finishingStatus = "In Stitching";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (asmIsApproved === null) {
     assemblyStatus = `Pending Approval by ${asmOpName || "???"}`;
     washingStatus = washingInStatus = finishingStatus = "In Assembly";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (asmIsApproved === 0) {
     assemblyStatus = `Denied by ${asmOpName || "???"}`;
     washingStatus = washingInStatus = finishingStatus = "In Assembly";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
-  if (assembledQty === 0)                   assemblyStatus = "In-Line";
-  else if (assembledQty >= stitchedQty)     assemblyStatus = "Completed";
-  else                                      assemblyStatus = `${stitchedQty - assembledQty} Pending`;
+  assemblyStatus = assembledQty === 0
+    ? "In-Line"
+    : assembledQty >= stitchedQty
+      ? "Completed"
+      : `${stitchedQty - assembledQty} Pending`;
 
   /* Washing */
   if (waIsApproved === undefined) {
     washingStatus = washingInStatus = finishingStatus = "In Assembly";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (waIsApproved === null) {
     washingStatus = `Pending Approval by ${waOpName || "???"}`;
     washingInStatus = finishingStatus = "In Washing";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (waIsApproved === 0) {
     washingStatus = `Denied by ${waOpName || "???"}`;
     washingInStatus = finishingStatus = "In Washing";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
-  if (washedQty === 0)                      washingStatus = "In-Line";
-  else if (washedQty >= assembledQty)       washingStatus = "Completed";
-  else                                      washingStatus = `${assembledQty - washedQty} Pending`;
+  washingStatus = washedQty === 0
+    ? "In-Line"
+    : washedQty >= assembledQty
+      ? "Completed"
+      : `${assembledQty - washedQty} Pending`;
 
   /* Washing-In */
   if (wiIsApproved === undefined) {
     washingInStatus = finishingStatus = "In Washing";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (wiIsApproved === null) {
     washingInStatus = `Pending Approval by ${wiOpName || "???"}`;
     finishingStatus = "In WashingIn";
-    return pack();
+    return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
   if (wiIsApproved === 0) {
     washingInStatus = `Denied by ${wiOpName || "???"}`;
     finishingStatus = "In WashingIn";
-    return pack();
-  }
-  if (washingInQty === 0)                   washingInStatus = "In-Line";
-  else if (washingInQty >= washedQty)       washingInStatus = "Completed";
-  else                                      washingInStatus = `${washedQty - washingInQty} Pending`;
-
-  /* Finishing */
-  if (finIsApproved === undefined)          finishingStatus = "In WashingIn";
-  else if (finIsApproved === null)          finishingStatus = `Pending Approval by ${finOpName || "???"}`;
-  else if (finIsApproved === 0)             finishingStatus = `Denied by ${finOpName || "???"}`;
-  else {
-    if (finishedQty === 0)                       finishingStatus = "In-Line";
-    else if (finishedQty >= washingInQty)        finishingStatus = "Completed";
-    else                                         finishingStatus = `${washingInQty - finishedQty} Pending`;
-  }
-
-  return pack();
-
-  function pack() {
     return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
   }
+  washingInStatus = washingInQty === 0
+    ? "In-Line"
+    : washingInQty >= washedQty
+      ? "Completed"
+      : `${washedQty - washingInQty} Pending`;
+
+  /* Finishing */
+  if (finIsApproved === undefined) {
+    finishingStatus = "In WashingIn";
+  } else if (finIsApproved === null) {
+    finishingStatus = `Pending Approval by ${finOpName || "???"}`;
+  } else if (finIsApproved === 0) {
+    finishingStatus = `Denied by ${finOpName || "???"}`;
+  } else {
+    finishingStatus = finishedQty === 0
+      ? "In-Line"
+      : finishedQty >= washingInQty
+        ? "Completed"
+        : `${washingInQty - finishedQty} Pending`;
+  }
+
+  return { stitchingStatus, assemblyStatus, washingStatus, washingInStatus, finishingStatus };
 }
 
-function filterByDept(args) {
-  const { department, isDenim,
-          stitchingStatus, assemblyStatus, washingStatus,
-          washingInStatus, finishingStatus } = args;
-
+function filterByDept({
+  department, isDenim,
+  stitchingStatus, assemblyStatus, washingStatus,
+  washingInStatus, finishingStatus
+}) {
   if (department === "all") {
     const actual = isDenim
       ? (!finishingStatus.startsWith("N/A") ? finishingStatus
@@ -321,23 +329,22 @@ function filterByDept(args) {
     return { showRow: true, actualStatus: actual };
   }
 
-  const depts = {
-    cutting   : { show: true,  status: "Completed" },
-    stitching : { show: true,  status: stitchingStatus },
-    assembly  : { show: isDenim, status: assemblyStatus },
-    washing   : { show: isDenim, status: washingStatus },
-    washing_in: { show: isDenim, status: washingInStatus },
-    finishing : { show: true,  status: finishingStatus }
+  const map = {
+    cutting   : { showRow: true,         actualStatus: "Completed" },
+    stitching : { showRow: true,         actualStatus: stitchingStatus },
+    assembly  : { showRow: isDenim,      actualStatus: assemblyStatus },
+    washing   : { showRow: isDenim,      actualStatus: washingStatus },
+    washing_in: { showRow: isDenim,      actualStatus: washingInStatus },
+    finishing : { showRow: true,         actualStatus: finishingStatus }
   };
-  return depts[department] || { showRow: true, actualStatus: "N/A" };
+  return map[department] || { showRow: true, actualStatus: "N/A" };
 }
 
 /* =======================================================================
- * SECTION 4 ·  PIC-REPORT  (download-only, 10-query strategy)
+ * SECTION 4 · PIC-REPORT (download-only, 10 query strategy)
  * =====================================================================*/
 router.get("/dashboard/pic-report",
-  isAuthenticated,
-  isOperator,
+  isAuthenticated, isOperator,
   async (req, res) => {
     try {
       const {
@@ -376,7 +383,7 @@ router.get("/dashboard/pic-report",
       const qtyMap    = await fetchQtyMaps(lotNos);
       const assignMap = await fetchAssignmentMaps(lotNos);
 
-      /* rows array */
+      /* build rows */
       const rows = [];
       for (const l of lots) {
         const lotNo = l.lot_no, denim = isDenimLot(lotNo);
@@ -396,8 +403,7 @@ router.get("/dashboard/pic-report",
         const stat = getDepartmentStatuses({
           isDenim: denim,
           totalCut: +l.total_pieces,
-          stitchedQty, assembledQty, washedQty,
-          washingInQty: washInQty, finishedQty,
+          stitchedQty, assembledQty, washedQty, washingInQty: washInQty, finishedQty,
 
           stIsApproved: stA.is_approved, stOpName: stA.opName,
           asmIsApproved: asA.is_approved, asmOpName: asA.opName,
@@ -557,56 +563,135 @@ router.get("/dashboard/pic-report",
   });
 
 /* =======================================================================
- * SECTION 5 ·  EVERYTHING ELSE – untouched from your last full file
+ * SECTION 5 · REST OF ORIGINAL ROUTES (dashboard, leftovers, TAT, SKU)
  * =====================================================================*/
 
-/* --------------------  /dashboard  -------------------- */
+/* ---------- computeAdvancedAnalytics (unchanged from your code) ------ */
+async function computeAdvancedAnalytics(start, end) {
+  const analytics = {};
+
+  const [[{ totalCut }]] =
+    await pool.query(`SELECT SUM(total_pieces) totalCut FROM cutting_lots`);
+  analytics.totalCut = +totalCut || 0;
+
+  const [[{ totalStitched }]] =
+    await pool.query(`SELECT SUM(total_pieces) totalStitched FROM stitching_data`);
+  analytics.totalStitched = +totalStitched || 0;
+
+  const [[{ totalWashed }]] =
+    await pool.query(`SELECT SUM(total_pieces) totalWashed FROM washing_data`);
+  analytics.totalWashed = +totalWashed || 0;
+
+  const [[{ totalFinished }]] =
+    await pool.query(`SELECT SUM(total_pieces) totalFinished FROM finishing_data`);
+  analytics.totalFinished = +totalFinished || 0;
+
+  analytics.stitchConversion = analytics.totalCut
+    ? ((analytics.totalStitched / analytics.totalCut) * 100).toFixed(2)
+    : "0.00";
+  analytics.washConversion = analytics.totalStitched
+    ? (((analytics.totalWashed || analytics.totalFinished) / analytics.totalStitched) * 100).toFixed(2)
+    : "0.00";
+  analytics.finishConversion = analytics.totalWashed
+    ? ((analytics.totalFinished / analytics.totalWashed) * 100).toFixed(2)
+    : (analytics.totalStitched
+        ? ((analytics.totalFinished / analytics.totalStitched) * 100).toFixed(2)
+        : "0.00");
+
+  /* top/bottom SKUs */
+  const topQ = `
+    SELECT sku, SUM(total_pieces) total
+      FROM cutting_lots
+     WHERE ${start && end ? "created_at BETWEEN ? AND ?" : "created_at >= DATE_SUB(NOW(), INTERVAL 10 DAY)"}
+     GROUP BY sku ORDER BY total DESC LIMIT 10`;
+  const bottomQ = topQ.replace("DESC", "ASC");
+  analytics.top10SKUs    = (await pool.query(topQ, start && end ? [start, end] : []))[0];
+  analytics.bottom10SKUs = (await pool.query(bottomQ, start && end ? [start, end] : []))[0];
+
+  /* lot counts */
+  const [[{ totalCount }]]   = await pool.query(`SELECT COUNT(*) totalCount FROM cutting_lots`);
+  const [[{ pending }]     ] = await pool.query(`
+      SELECT COUNT(*) pending
+        FROM cutting_lots c
+        LEFT JOIN ( SELECT lot_no, SUM(total_pieces) fin FROM finishing_data GROUP BY lot_no ) f
+          ON c.lot_no = f.lot_no
+       WHERE COALESCE(f.fin,0) < c.total_pieces`);
+  analytics.totalLots   = totalCount;
+  analytics.pendingLots = pending;
+
+  /* avg turnaround */
+  const [turnRows] = await pool.query(`
+      SELECT c.created_at cut_date, MAX(f.created_at) fin_date, c.total_pieces,
+             SUM(f.total_pieces) fin_tot
+        FROM cutting_lots c
+        JOIN finishing_data f ON c.lot_no = f.lot_no
+       GROUP BY c.lot_no
+      HAVING fin_tot >= c.total_pieces`);
+  let diffSum = 0, n = 0;
+  turnRows.forEach(r => {
+    diffSum += (new Date(r.fin_date) - new Date(r.cut_date)) / (1000*60*60*24);
+    n++;
+  });
+  analytics.avgTurnaroundTime = n ? +(diffSum / n).toFixed(2) : 0;
+
+  /* approval rates */
+  const [[st]] = await pool.query(`
+      SELECT COUNT(*) tot,
+             SUM(CASE WHEN isApproved=1 THEN 1 END) ok
+        FROM stitching_assignments`);
+  analytics.stitchApprovalRate = st.tot ? ((st.ok/st.tot)*100).toFixed(2) : "0.00";
+
+  const [[wa]] = await pool.query(`
+      SELECT COUNT(*) tot,
+             SUM(CASE WHEN is_approved=1 THEN 1 END) ok
+        FROM washing_assignments`);
+  analytics.washApprovalRate   = wa.tot ? ((wa.ok/wa.tot)*100).toFixed(2) : "0.00";
+
+  return analytics;
+}
+
+/* ---------- dashboard route (includes analytics) -------------------- */
 router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { search, startDate, endDate,
-            sortField="lot_no", sortOrder="asc", category="all" } = req.query;
+    const { startDate, endDate } = req.query;
 
-    /* 1. operator performance */
+    /* mini stats */
+    const [[{ lotCount }]]     = await pool.query(`SELECT COUNT(*) lotCount FROM cutting_lots`);
+    const [[{ piecesCut }]]    = await pool.query(`SELECT SUM(total_pieces) piecesCut FROM cutting_lots`);
+    const [[{ stitched }]]     = await pool.query(`SELECT SUM(total_pieces) stitched FROM stitching_data`);
+    const [[{ washed }]]       = await pool.query(`SELECT SUM(total_pieces) washed FROM washing_data`);
+    const [[{ finished }]]     = await pool.query(`SELECT SUM(total_pieces) finished FROM finishing_data`);
+    const [[{ userCount }]]    = await pool.query(`SELECT COUNT(*) userCount FROM users`);
+
+    /* simple operator perf (stitched / washed / finished) */
     const perf = {};
-    const fill = (rows, key) => rows.forEach(r => {
-      if (!perf[r.user_id]) perf[r.user_id] = { totalStitched:0,totalWashed:0,totalFinished:0 };
-      perf[r.user_id][key] = +r.sum || 0;
-    });
-
-    fill((await pool.query(`
-      SELECT user_id, SUM(total_pieces) sum FROM stitching_data GROUP BY user_id`))[0],"totalStitched");
-    fill((await pool.query(`
-      SELECT user_id, SUM(total_pieces) sum FROM washing_data GROUP BY user_id`))[0],"totalWashed");
-    fill((await pool.query(`
-      SELECT user_id, SUM(total_pieces) sum FROM finishing_data GROUP BY user_id`))[0],"totalFinished");
-
+    const perfFill = async (tbl, key) => {
+      const [rows] = await pool.query(`SELECT user_id, SUM(total_pieces) qty FROM ${tbl} GROUP BY user_id`);
+      rows.forEach(r => {
+        if (!perf[r.user_id]) perf[r.user_id] = { totalStitched:0,totalWashed:0,totalFinished:0 };
+        perf[r.user_id][key] = +r.qty || 0;
+      });
+    };
+    await perfFill("stitching_data", "totalStitched");
+    await perfFill("washing_data",   "totalWashed");
+    await perfFill("finishing_data", "totalFinished");
     if (Object.keys(perf).length) {
       const [users] = await pool.query(`SELECT id, username FROM users WHERE id IN (?)`, [Object.keys(perf)]);
       users.forEach(u => perf[u.id].username = u.username);
     }
 
-    /* 2. quick stats */
-    const [[{lotCount}]] = await pool.query(`SELECT COUNT(*) lotCount FROM cutting_lots`);
-    const [[{piecesCut}]]=
-      await pool.query(`SELECT COALESCE(SUM(total_pieces),0) piecesCut FROM cutting_lots`);
-    const [[{stitched}]] =
-      await pool.query(`SELECT COALESCE(SUM(total_pieces),0) stitched FROM stitching_data`);
-    const [[{washed}]]   =
-      await pool.query(`SELECT COALESCE(SUM(total_pieces),0) washed FROM washing_data`);
-    const [[{finished}]] =
-      await pool.query(`SELECT COALESCE(SUM(total_pieces),0) finished FROM finishing_data`);
-    const [[{userCount}]]=
-      await pool.query(`SELECT COUNT(*) userCount FROM users`);
-
-    /* advancedAnalytics unchanged – omitted to save space; keep your original function */
-    const advancedAnalytics = {}; /* call your original computeAdvancedAnalytics if needed */
+    const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
 
     res.render("operatorDashboard", {
-      lotCount, totalPiecesCut: piecesCut,
-      totalStitched: stitched, totalWashed: washed, totalFinished: finished,
-      userCount, advancedAnalytics,
+      lotCount,
+      totalPiecesCut: +piecesCut || 0,
+      totalStitched:  +stitched  || 0,
+      totalWashed:    +washed    || 0,
+      totalFinished:  +finished  || 0,
+      userCount,
+      advancedAnalytics,
       operatorPerformance: perf,
-      query: { search, startDate, endDate, sortField, sortOrder, category },
+      query: req.query,
       lotDetails: {}
     });
   } catch (err) {
@@ -615,470 +700,302 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
-/* --------------------  /dashboard/api/leftovers  -------------------- */
-/* keep your original leftover handler – unchanged */
+/* ---------- leftovers API ------------------------------------------- */
+router.get("/dashboard/api/leftovers", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { lot_no } = req.query;
+    if (!lot_no) return res.status(400).json({ error: "lot_no required" });
 
-// At top of your routes file, ensure you import isStitchingMaster:
+    const denim = isDenimLot(lot_no);
+    const adv   = await computeAdvancedLeftoversForLot(lot_no, denim);
+    const jeansLeft = await computeJeansLeftover(
+      lot_no,
+      (await pool.query(`SELECT SUM(total_pieces) s FROM stitching_data WHERE lot_no=?`, [lot_no]))[0][0].s || 0,
+      denim
+    );
 
+    res.json({ lot_no, ...adv, jeansLeft });
+  } catch (err) {
+    console.error("Error in /dashboard/api/leftovers:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-/**************************************************
- * Stitching TAT Dashboard
- **************************************************/
-/**************************************************
- * 1) OPERATOR STITCHING TAT (SUMMARY)
- *    => GET /stitching-tat
- * 
- *    - Lists all Stitching Masters who have at least
- *      one "pending" or "in-line" lot
- *    - Each card shows:
- *        masterName
- *        # pending approval
- *        # in line
- *        [Download TAT Excel] button
- *        [View TAT Details] link
- *    - If ?download=1, returns an Excel summary
- **************************************************/
+/* ---------- Stitching TAT  (summary) -------------------------------- */
 router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
   try {
     const { download = "0" } = req.query;
 
-    // 1) Identify all users (Stitching Masters) who have
-    //    either "pending" or "in-line" stitching assignments
-    //    => "pending" = sa.isApproved IS NULL
-    //    => "in-line" = sa.isApproved=1 BUT next step is not assigned
     const [masters] = await pool.query(`
       SELECT DISTINCT u.id, u.username
         FROM users u
         JOIN stitching_assignments sa ON sa.user_id = u.id
         JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-       WHERE (
-              sa.isApproved IS NULL
-              OR 
+       WHERE sa.isApproved IS NULL
+          OR (
+            sa.isApproved = 1
+            AND (
               (
-                sa.isApproved = 1
-                AND (
-                  -- DENIM => next step is Assembly
-                  (
-                    (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                    AND NOT EXISTS (
-                      SELECT 1
-                        FROM jeans_assembly_assignments ja
-                        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                       WHERE sd.lot_no = cl.lot_no
-                         AND ja.is_approved IS NOT NULL
-                    )
-                  )
-                  -- NON-DENIM => next step is Finishing
-                  OR
-                  (
-                    (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                    AND NOT EXISTS (
-                      SELECT 1
-                        FROM finishing_assignments fa
-                        JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                       WHERE sd.lot_no = cl.lot_no
-                         AND fa.is_approved IS NOT NULL
-                    )
-                  )
-                )
+                (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                AND NOT EXISTS (
+                   SELECT 1 FROM jeans_assembly_assignments ja
+                   JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no = cl.lot_no AND ja.is_approved IS NOT NULL)
+              )
+              OR (
+                (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                AND NOT EXISTS (
+                   SELECT 1 FROM finishing_assignments fa
+                   JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no = cl.lot_no AND fa.is_approved IS NOT NULL)
               )
             )
-    `);
+          )`);
 
-    // 2) For each master, count how many are pending vs in line
-    const masterCards = [];
+    const cards = [];
     for (const m of masters) {
-      const masterId = m.id;
-
-      // pending = isApproved IS NULL
-      const [pendRows] = await pool.query(`
-        SELECT COALESCE(SUM(cl.total_pieces),0) AS pendingSum
+      const [[{ pend }]] = await pool.query(`
+        SELECT SUM(cl.total_pieces) pend
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-         WHERE sa.user_id = ?
-           AND sa.isApproved IS NULL
-      `, [masterId]);
-      const pendingApproval = parseFloat(pendRows[0].pendingSum) || 0;
-
-      // in line = isApproved=1, next step not assigned
-      const [inLineRows] = await pool.query(`
-        SELECT COALESCE(SUM(cl.total_pieces),0) AS inLineSum
+         WHERE sa.user_id=? AND sa.isApproved IS NULL`, [m.id]);
+      const [[{ inline }]] = await pool.query(`
+        SELECT SUM(cl.total_pieces) inlineQty
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-         WHERE sa.user_id = ?
-           AND sa.isApproved = 1
+         WHERE sa.user_id=? AND sa.isApproved=1
            AND (
              (
                (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
                AND NOT EXISTS (
-                 SELECT 1
-                   FROM jeans_assembly_assignments ja
-                   JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                  WHERE sd.lot_no = cl.lot_no
-                    AND ja.is_approved IS NOT NULL
-               )
+                 SELECT 1 FROM jeans_assembly_assignments ja
+                 JOIN stitching_data sd ON ja.stitching_assignment_id=sd.id
+                WHERE sd.lot_no=cl.lot_no AND ja.is_approved IS NOT NULL)
              )
              OR
              (
                (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
                AND NOT EXISTS (
-                 SELECT 1
-                   FROM finishing_assignments fa
-                   JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                  WHERE sd.lot_no = cl.lot_no
-                    AND fa.is_approved IS NOT NULL
-               )
+                 SELECT 1 FROM finishing_assignments fa
+                 JOIN stitching_data sd ON fa.stitching_assignment_id=sd.id
+                WHERE sd.lot_no=cl.lot_no AND fa.is_approved IS NOT NULL)
              )
-           )
-      `, [masterId]);
-      const inLinePieces = parseFloat(inLineRows[0].inLineSum) || 0;
+           )`, [m.id]);
 
-      masterCards.push({
-        masterId,
+      cards.push({
+        masterId: m.id,
         username: m.username,
-        pendingApproval,
-        inLinePieces
+        pendingApproval: +pend || 0,
+        inLinePieces: +inline || 0
       });
     }
 
-    // 3) If ?download=1 => produce Excel summary
     if (download === "1") {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("StitchingTAT-Summary");
-
-      sheet.columns = [
-        { header: "Master ID",        key: "masterId",       width: 12 },
-        { header: "Master Username",  key: "username",        width: 25 },
-        { header: "Pending Pieces",   key: "pendingApproval", width: 18 },
-        { header: "In-Line Pieces",   key: "inLinePieces",    width: 18 }
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("StitchingTAT-Summary");
+      ws.columns = [
+        { header: "Master ID",       key: "masterId",       width: 12 },
+        { header: "Username",        key: "username",       width: 22 },
+        { header: "Pending Pieces",  key: "pending",        width: 18 },
+        { header: "In-Line Pieces",  key: "inline",         width: 18 }
       ];
-
-      masterCards.forEach((mc) => {
-        sheet.addRow({
-          masterId: mc.masterId,
-          username: mc.username,
-          pendingApproval: mc.pendingApproval,
-          inLinePieces: mc.inLinePieces
-        });
-      });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats");
-      res.setHeader("Content-Disposition", 'attachment; filename="StitchingTAT-Summary.xlsx"');
-      await workbook.xlsx.write(res);
+      cards.forEach(c => ws.addRow({
+        masterId: c.masterId,
+        username: c.username,
+        pending : c.pendingApproval,
+        inline  : c.inLinePieces
+      }));
+      res.setHeader("Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition",
+        `attachment; filename="StitchingTAT-Summary.xlsx"`);
+      await wb.xlsx.write(res);
       return res.end();
     }
 
-    // 4) Otherwise render the summary page in HTML
-    return res.render("operatorStitchingTat", { masterCards });
+    res.render("operatorStitchingTat", { masterCards: cards });
   } catch (err) {
     console.error("Error in /stitching-tat:", err);
-    return res.status(500).send("Server error in /stitching-tat");
+    res.status(500).send("Server error");
   }
 });
 
-/**************************************************
- * 2) OPERATOR TAT DETAIL for a MASTER
- *    => GET /stitching-tat/:masterId
- * 
- *    - Shows only lots that are pending or in line
- *    - If ?download=1 => Excel
- *    - Otherwise => HTML table
- *    - TAT in days = (nextAssignedOn - assignedOn) or (today - assignedOn)
- *    - Date fields in DD/MM/YYYY
- **************************************************/
+/* ---------- Stitching TAT (detail) ---------------------------------- */
 router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const masterId = parseInt(req.params.masterId, 10);
-    if (isNaN(masterId)) {
-      return res.status(400).send("Invalid Master ID");
-    }
-    const { download = "0" } = req.query;
+    const masterId = +req.params.masterId;
+    if (!masterId) return res.status(400).send("Invalid masterId");
+    const { download="0" } = req.query;
 
-    // 1) Master info
-    const [[masterUser]] = await pool.query(
-      `SELECT id, username FROM users WHERE id = ?`,
-      [masterId]
-    );
-    if (!masterUser) {
-      return res.status(404).send("Stitching Master not found");
-    }
+    const [[master]] = await pool.query(`SELECT id, username FROM users WHERE id=?`, [masterId]);
+    if (!master) return res.status(404).send("Stitching master not found");
 
-    // 2) Fetch stitching_assignments that are pending or in line
     const [assignments] = await pool.query(`
-      SELECT sa.id           AS stitching_assignment_id,
-             sa.isApproved   AS stitchIsApproved,
-             sa.assigned_on  AS stitchAssignedOn,
-             cl.lot_no,
-             cl.sku,
-             cl.total_pieces,
-             cl.remark       AS cutting_remark
+      SELECT sa.isApproved, sa.assigned_on,
+             cl.lot_no, cl.sku, cl.total_pieces, cl.remark
         FROM stitching_assignments sa
-        JOIN cutting_lots cl
-          ON sa.cutting_lot_id = cl.id
-       WHERE sa.user_id = ?
+        JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+       WHERE sa.user_id=?
          AND (
-              sa.isApproved IS NULL
-              OR (
-                   sa.isApproved = 1
-                   AND (
-                     -- Denim => next step is Assembly
-                     (
-                       (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                       AND NOT EXISTS (
-                         SELECT 1
-                           FROM jeans_assembly_assignments ja
-                           JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no
-                            AND ja.is_approved IS NOT NULL
-                       )
-                     )
-                     OR
-                     -- Non-denim => next step is Finishing
-                     (
-                       (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                       AND NOT EXISTS (
-                         SELECT 1
-                           FROM finishing_assignments fa
-                           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no
-                            AND fa.is_approved IS NOT NULL
-                       )
-                     )
-                   )
-                 )
-            )
-       ORDER BY sa.assigned_on DESC
-    `, [masterId]);
+           sa.isApproved IS NULL
+           OR (
+             sa.isApproved=1 AND (
+               (
+                 (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                 AND NOT EXISTS (
+                   SELECT 1 FROM jeans_assembly_assignments ja
+                   JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no=cl.lot_no AND ja.is_approved IS NOT NULL)
+               )
+               OR
+               (
+                 (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                 AND NOT EXISTS (
+                   SELECT 1 FROM finishing_assignments fa
+                   JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                  WHERE sd.lot_no=cl.lot_no AND fa.is_approved IS NOT NULL)
+               )
+             )
+           )
+         )
+       ORDER BY sa.assigned_on DESC`, [masterId]);
 
-    // 3) Build detailRows
-    const detailRows = [];
-    const currentDate = new Date();
-
+    const rows = [];
+    const today = Date.now();
     for (const a of assignments) {
-      const {
-        lot_no,
-        sku,
-        total_pieces,
-        cutting_remark,
-        stitchAssignedOn,
-        stitchIsApproved
-      } = a;
-      let nextAssignedOn = null;
-      const isDenim = isDenimLot(lot_no);
-
-      // If isApproved=1 => check next assignment
-      if (stitchIsApproved === 1) {
+      const isDenim = isDenimLot(a.lot_no);
+      let nextOn = null;
+      if (a.isApproved === 1) {
         if (isDenim) {
-          // Next step => assembly
-          const [asmRows] = await pool.query(`
-            SELECT ja.assigned_on
-              FROM jeans_assembly_assignments ja
-              JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-             WHERE sd.lot_no = ?
-               AND ja.is_approved IS NOT NULL
-             ORDER BY ja.assigned_on ASC
-             LIMIT 1
-          `, [lot_no]);
-          if (asmRows.length) {
-            nextAssignedOn = asmRows[0].assigned_on;
-          }
+          const [[n]] = await pool.query(`
+            SELECT assigned_on FROM jeans_assembly_assignments ja
+            JOIN stitching_data sd ON ja.stitching_assignment_id=sd.id
+           WHERE sd.lot_no=? AND ja.is_approved IS NOT NULL
+           ORDER BY assigned_on ASC LIMIT 1`, [a.lot_no]);
+          nextOn = n && n.assigned_on;
         } else {
-          // Next step => finishing
-          const [finRows] = await pool.query(`
-            SELECT fa.assigned_on
-              FROM finishing_assignments fa
-              JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-             WHERE sd.lot_no = ?
-               AND fa.is_approved IS NOT NULL
-             ORDER BY fa.assigned_on ASC
-             LIMIT 1
-          `, [lot_no]);
-          if (finRows.length) {
-            nextAssignedOn = finRows[0].assigned_on;
-          }
+          const [[n]] = await pool.query(`
+            SELECT assigned_on FROM finishing_assignments fa
+            JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+           WHERE sd.lot_no=? AND fa.is_approved IS NOT NULL
+           ORDER BY assigned_on ASC LIMIT 1`, [a.lot_no]);
+          nextOn = n && n.assigned_on;
         }
       }
-
-      // Calculate TAT (days)
-      let tatDays = 0;
-      if (stitchAssignedOn) {
-        const startMs = new Date(stitchAssignedOn).getTime();
-        const endMs = nextAssignedOn
-          ? new Date(nextAssignedOn).getTime()
-          : currentDate.getTime();
-        tatDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
-      }
-
-      detailRows.push({
-        lotNo: lot_no,
-        sku,
-        totalPieces: total_pieces,
-        cuttingRemark: cutting_remark || "",
-        assignedOn: stitchAssignedOn,
-        nextDeptAssignedOn: nextAssignedOn,
-        tatDays,
-        status: (stitchIsApproved === null) ? "Pending Approval" : "In Line"
+      const tat = a.assigned_on
+        ? Math.floor(((nextOn ? new Date(nextOn) : today) - new Date(a.assigned_on)) / 86400000)
+        : 0;
+      rows.push({
+        lotNo: a.lot_no,
+        sku: a.sku,
+        totalPieces: +a.total_pieces,
+        cuttingRemark: a.remark || "",
+        assignedOn: a.assigned_on,
+        nextOn,
+        status: a.isApproved === null ? "Pending Approval" : "In Line",
+        tatDays: tat
       });
     }
 
-    // 4) If ?download=1 => produce Excel
     if (download === "1") {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("StitchingTAT-Detail");
-
-      sheet.columns = [
-        { header: "Stitching Master", key: "masterName",        width: 20 },
-        { header: "Lot No",          key: "lotNo",             width: 15 },
-        { header: "SKU",             key: "sku",               width: 15 },
-        { header: "Status",          key: "status",            width: 18 },
-        { header: "Total Pieces",    key: "totalPieces",       width: 15 },
-        { header: "Cutting Remark",  key: "cuttingRemark",     width: 25 },
-        { header: "Assigned On",     key: "assignedOn",        width: 15 },
-        { header: "Next Dept On",    key: "nextDeptAssignedOn",width: 15 },
-        { header: "TAT (days)",      key: "tatDays",           width: 12 }
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("StitchingTAT-Detail");
+      ws.columns = [
+        { header: "Master",        key: "master",       width: 20 },
+        { header: "Lot No",        key: "lot",          width: 14 },
+        { header: "SKU",           key: "sku",          width: 14 },
+        { header: "Status",        key: "status",       width: 18 },
+        { header: "Pieces",        key: "pcs",          width: 10 },
+        { header: "Remark",        key: "remark",       width: 22 },
+        { header: "Assigned On",   key: "assign",       width: 15 },
+        { header: "Next Dept On",  key: "next",         width: 15 },
+        { header: "TAT (days)",    key: "tat",          width: 12 }
       ];
-
-      detailRows.forEach((row) => {
-        sheet.addRow({
-          masterName: masterUser.username,
-          lotNo: row.lotNo,
-          sku: row.sku,
-          status: row.status,
-          totalPieces: row.totalPieces,
-          cuttingRemark: row.cuttingRemark,
-          assignedOn: row.assignedOn ? formatDateDDMMYYYY(row.assignedOn) : "",
-          nextDeptAssignedOn: row.nextDeptAssignedOn
-            ? formatDateDDMMYYYY(row.nextDeptAssignedOn)
-            : "",
-          tatDays: row.tatDays
-        });
-      });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="StitchingTAT-Detail-${masterUser.username}.xlsx"`
-      );
-      await workbook.xlsx.write(res);
+      rows.forEach(r => ws.addRow({
+        master: master.username,
+        lot   : r.lotNo,
+        sku   : r.sku,
+        status: r.status,
+        pcs   : r.totalPieces,
+        remark: r.cuttingRemark,
+        assign: r.assignedOn ? formatDateDDMMYYYY(r.assignedOn) : "",
+        next  : r.nextOn     ? formatDateDDMMYYYY(r.nextOn)     : "",
+        tat   : r.tatDays
+      }));
+      res.setHeader("Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition",
+        `attachment; filename="StitchingTAT-${master.username}.xlsx"`);
+      await wb.xlsx.write(res);
       return res.end();
     }
 
-    // 5) Otherwise render HTML with formatted dates
-    const renderedRows = detailRows.map((r) => ({
-      ...r,
-      assignedOnStr: r.assignedOn ? formatDateDDMMYYYY(r.assignedOn) : "",
-      nextDeptAssignedOnStr: r.nextDeptAssignedOn ? formatDateDDMMYYYY(r.nextDeptAssignedOn) : ""
-    }));
-
-    return res.render("operatorStitchingTatDetail", {
-      masterUser,
-      detailRows: renderedRows,
+    res.render("operatorStitchingTatDetail", {
+      masterUser: master,
+      detailRows: rows.map(r => ({
+        ...r,
+        assignedOnStr: r.assignedOn ? formatDateDDMMYYYY(r.assignedOn) : "",
+        nextOnStr    : r.nextOn     ? formatDateDDMMYYYY(r.nextOn)     : ""
+      })),
       currentDate: formatDateDDMMYYYY(new Date())
     });
   } catch (err) {
     console.error("Error in /stitching-tat/:masterId:", err);
-    return res.status(500).send("Server error in /stitching-tat/:masterId");
+    res.status(500).send("Server error");
   }
-});                          
+});
 
-// GET /operator/sku-management
-// Renders an EJS page with optional ?sku= query param
+/* ---------- SKU-Management (GET) ------------------------------------ */
 router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { sku } = req.query; // We can still read message/error if you want from req.query
+    const { sku } = req.query;
+    if (!sku) return res.render("skuManagement", { sku:"", results:[], message:"", error:"" });
 
-    // If no sku specified, just render the page with empty results
-    if (!sku) {
-      return res.render("skuManagement", {
-        sku: "",
-        results: [],
-        message: "",
-        error: ""
-      });
-    }
-
-    // We do have a SKU -> search all tables that contain `sku` columns
     const tables = [
-      { tableName: "cutting_lots", label: "Cutting Lots" },
-      { tableName: "stitching_data", label: "Stitching Data" },
-      { tableName: "jeans_assembly_data", label: "Jeans Assembly Data" },
-      { tableName: "washing_data", label: "Washing Data" },
-      { tableName: "washing_in_data", label: "Washing In Data" },
-      { tableName: "finishing_data", label: "Finishing Data" },
-      { tableName: "rewash_requests", label: "Rewash Requests" }
+      { table:"cutting_lots",        label:"Cutting Lots" },
+      { table:"stitching_data",      label:"Stitching Data" },
+      { table:"jeans_assembly_data", label:"Jeans Assembly Data" },
+      { table:"washing_data",        label:"Washing Data" },
+      { table:"washing_in_data",     label:"Washing In Data" },
+      { table:"finishing_data",      label:"Finishing Data" },
+      { table:"rewash_requests",     label:"Rewash Requests" }
     ];
 
     const results = [];
-
-    // Fetch rows from each table that has the given SKU
     for (const t of tables) {
-      const [rows] = await pool.query(
-        `SELECT lot_no, sku FROM ${t.tableName} WHERE sku = ?`,
-        [sku.trim()]
-      );
-      if (rows.length > 0) {
-        results.push({
-          label: t.label,       // For display (e.g. "Cutting Lots")
-          tableName: t.tableName,
-          rows
-        });
-      }
+      const [rows] = await pool.query(`SELECT lot_no FROM ${t.table} WHERE sku=?`, [sku]);
+      if (rows.length) results.push({ label:t.label, table:t.table, rows });
     }
 
-    // Render the EJS template with the found results
-    return res.render("skuManagement", {
-      sku,
-      results,
-      message: "",
-      error: ""
-    });
+    res.render("skuManagement", { sku, results, message:"", error:"" });
   } catch (err) {
-    console.error("Error in GET /operator/sku-management:", err);
-    return res.status(500).send("Server Error");
+    console.error("GET /sku-management:", err);
+    res.status(500).send("Server error");
   }
 });
 
-// POST /operator/sku-management/update (AJAX endpoint)
+/* ---------- SKU-Management (POST) ----------------------------------- */
 router.post("/sku-management/update", isAuthenticated, isOperator, async (req, res) => {
   try {
     const { oldSku, newSku } = req.body;
+    if (!oldSku || !newSku) return res.status(400).json({ error:"Both oldSku and newSku are required." });
+    if (oldSku.trim() === newSku.trim()) return res.status(400).json({ error:"Old and new SKU cannot be same." });
 
-    // Basic validations
-    if (!oldSku || !newSku) {
-      return res.status(400).json({ error: "Both oldSku and newSku are required." });
-    }
-    if (oldSku.trim() === newSku.trim()) {
-      return res.status(400).json({ error: "Old and New SKU cannot be the same." });
-    }
-
-    // List all tables that have `sku` columns
-    const tablesWithSku = [
-      "cutting_lots",
-      "stitching_data",
-      "jeans_assembly_data",
-      "washing_data",
-      "washing_in_data",
-      "finishing_data",
-      "rewash_requests"
+    const tables = [
+      "cutting_lots","stitching_data","jeans_assembly_data",
+      "washing_data","washing_in_data","finishing_data","rewash_requests"
     ];
-
-    let totalUpdated = 0;
-    for (const table of tablesWithSku) {
-      const [result] = await pool.query(
-        `UPDATE ${table} SET sku = ? WHERE sku = ?`,
-        [newSku.trim(), oldSku.trim()]
-      );
-      // result.affectedRows => how many rows got updated in that table
-      totalUpdated += result.affectedRows;
+    let total = 0;
+    for (const t of tables) {
+      const [r] = await pool.query(`UPDATE ${t} SET sku=? WHERE sku=?`, [newSku.trim(), oldSku.trim()]);
+      total += r.affectedRows;
     }
-
-    // Return JSON success message instead of a redirect
-    return res.json({
-      message: `SKU updated from "${oldSku}" to "${newSku}" (total ${totalUpdated} row(s) changed).`
-    });
+    res.json({ message:`SKU changed from "${oldSku}" to "${newSku}" (${total} rows updated)` });
   } catch (err) {
-    console.error("Error in POST /operator/sku-management/update:", err);
-    return res.status(500).json({ error: "Server Error" });
+    console.error("POST /sku-management/update:", err);
+    res.status(500).json({ error:"Server error" });
   }
 });
+
+/* =====================================================================*/
 module.exports = router;
