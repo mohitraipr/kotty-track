@@ -1119,7 +1119,15 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     }
 
     // else render HTML
-    res.render("operatorPICReport", { rows });
+    res.render("operatorPICReport", { rows,
+                                     filters: {
+    lotType: req.query.lotType || "all",
+    department: req.query.department || "all",
+    status: req.query.status || "all",
+    dateFilter: req.query.dateFilter || "createdAt",
+    startDate: req.query.startDate || "",
+    endDate: req.query.endDate || ""
+  });
 
   } catch (err) {
     console.error("Error in enhanced PIC Report:", err);
