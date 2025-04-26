@@ -1,4 +1,4 @@
-please fix the pic report code so that my servers cost go way to low /**************************************************
+/**************************************************
  * operatorRoutes.js
  *
  * Advanced Operator Dashboard Backend
