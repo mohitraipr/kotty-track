@@ -619,7 +619,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
 /* keep your original leftover handler – unchanged */
 
 // At top of your routes file, ensure you import isStitchingMaster:
-const { isStitchingMaster } = require("../middlewares/auth");
+
 
 /**************************************************
  * Stitching TAT Dashboard
