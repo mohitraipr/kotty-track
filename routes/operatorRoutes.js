@@ -1283,9 +1283,6 @@ function filterByDept({
   return { showRow, actualStatus };
 }
 
-/*******************************************************************
- * Updated PIC‑Report Route with Single Query
- *******************************************************************/
 router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
     const {
@@ -1298,8 +1295,13 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       download = ""
     } = req.query;
 
-    // --- Bulk Preload All Data ---
-    // 1) Fetch all lots
+    // Helper to get username from user_id
+    async function getUsername(userId) {
+      const [[row]] = await pool.query(`SELECT username FROM users WHERE id = ?`, [userId]);
+      return row ? row.username : "";
+    }
+
+    // --- 1) Fetch Lots ---
     let dateWhere = "";
     let dateParams = [];
 
@@ -1335,7 +1337,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
 
     const lotNos = lots.map(l => l.lot_no);
 
-    // 2) Bulk preload quantities
+    // --- 2) Fetch quantities in bulk ---
     function bulkSumQuery(tableName) {
       return pool.query(`
         SELECT lot_no, SUM(total_pieces) AS qty
@@ -1357,7 +1359,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     const washingInMap = new Map(washingInRows.map(r => [r.lot_no, r.qty || 0]));
     const finishedMap  = new Map(finishedRows.map(r => [r.lot_no, r.qty || 0]));
 
-    // 3) Bulk preload last assignments
+    // --- 3) Fetch assignments in bulk ---
     async function lastAssignmentQuery(joinTable, joinCondition, assignmentTable, fields) {
       const [rows] = await pool.query(`
         SELECT ${fields}, c.lot_no
@@ -1380,7 +1382,8 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     const assemblyMap   = await lastAssignmentQuery("stitching_data", "a.stitching_assignment_id = jt.id", "jeans_assembly_assignments", "a.*, jt.lot_no");
     const washingMap    = await lastAssignmentQuery("jeans_assembly_data", "a.jeans_assembly_assignment_id = jt.id", "washing_assignments", "a.*, jt.lot_no");
     const washingInMap2 = await lastAssignmentQuery("washing_data", "a.washing_data_id = jt.id", "washing_in_assignments", "a.*, jt.lot_no");
-    const finishingMap  = await pool.query(`
+    
+    const [finishingRows] = await pool.query(`
       SELECT fa.*, COALESCE(wd.lot_no, sd.lot_no) AS lot_no
         FROM finishing_assignments fa
         LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
@@ -1388,17 +1391,15 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         WHERE COALESCE(wd.lot_no, sd.lot_no) IS NOT NULL
           AND COALESCE(wd.lot_no, sd.lot_no) IN (?)
         ORDER BY fa.assigned_on DESC
-    `, [lotNos]).then(([rows]) => {
-      const map = new Map();
-      for (const r of rows) {
-        if (!map.has(r.lot_no)) {
-          map.set(r.lot_no, r);
-        }
+    `, [lotNos]);
+    const finishingMap = new Map();
+    for (const r of finishingRows) {
+      if (!finishingMap.has(r.lot_no)) {
+        finishingMap.set(r.lot_no, r);
       }
-      return map;
-    });
+    }
 
-    // 4) Now build report fully in-memory
+    // --- 4) Build Final Data ---
     const finalData = [];
 
     for (const lot of lots) {
@@ -1425,11 +1426,31 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         washedQty,
         washingInQty,
         finishedQty,
-        stAssign,
-        asmAssign,
-        washAssign,
-        washInAssign: wInAssign,
-        finAssign
+
+        stIsApproved: stAssign?.isApproved,
+        stAssignedOn: stAssign?.assigned_on,
+        stApprovedOn: stAssign?.approved_on,
+        stOpName: stAssign?.user_id ? (await getUsername(stAssign.user_id)) : "",
+
+        asmIsApproved: asmAssign?.is_approved,
+        asmAssignedOn: asmAssign?.assigned_on,
+        asmApprovedOn: asmAssign?.approved_on,
+        asmOpName: asmAssign?.user_id ? (await getUsername(asmAssign.user_id)) : "",
+
+        waIsApproved: washAssign?.is_approved,
+        waAssignedOn: washAssign?.assigned_on,
+        waApprovedOn: washAssign?.approved_on,
+        waOpName: washAssign?.user_id ? (await getUsername(washAssign.user_id)) : "",
+
+        wiIsApproved: wInAssign?.is_approved,
+        wiAssignedOn: wInAssign?.assigned_on,
+        wiApprovedOn: wInAssign?.approved_on,
+        wiOpName: wInAssign?.user_id ? (await getUsername(wInAssign.user_id)) : "",
+
+        finIsApproved: finAssign?.is_approved || finAssign?.isApproved,
+        finAssignedOn: finAssign?.assigned_on,
+        finApprovedOn: finAssign?.approved_on,
+        finOpName: finAssign?.user_id ? (await getUsername(finAssign.user_id)) : ""
       });
 
       const deptResult = filterByDept({
@@ -1465,29 +1486,20 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         createdAt: lot.created_at ? new Date(lot.created_at).toLocaleDateString() : "",
         remark: lot.remark || "",
 
-        // Stitching
         stitchStatus: statuses.stitchingStatus,
         stitchedQty,
-
-        // Assembly
         assemblyStatus: statuses.assemblyStatus,
         assembledQty,
-
-        // Washing
         washingStatus: statuses.washingStatus,
         washedQty,
-
-        // Washing‑In
         washingInStatus: statuses.washingInStatus,
         washingInQty,
-
-        // Finishing
         finishingStatus: statuses.finishingStatus,
         finishedQty
       });
     }
 
-    // Excel download or HTML render
+    // --- 5) Export Excel or Render Page ---
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("PIC-Report");
