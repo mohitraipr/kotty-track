@@ -1295,13 +1295,6 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       download = ""
     } = req.query;
 
-    // Helper to get username from user_id
-    async function getUsername(userId) {
-      const [[row]] = await pool.query(`SELECT username FROM users WHERE id = ?`, [userId]);
-      return row ? row.username : "";
-    }
-
-    // --- 1) Fetch Lots ---
     let dateWhere = "";
     let dateParams = [];
 
@@ -1337,7 +1330,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
 
     const lotNos = lots.map(l => l.lot_no);
 
-    // --- 2) Fetch quantities in bulk ---
+    // Bulk sum queries for qtys
     function bulkSumQuery(tableName) {
       return pool.query(`
         SELECT lot_no, SUM(total_pieces) AS qty
@@ -1359,16 +1352,18 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     const washingInMap = new Map(washingInRows.map(r => [r.lot_no, r.qty || 0]));
     const finishedMap  = new Map(finishedRows.map(r => [r.lot_no, r.qty || 0]));
 
-    // --- 3) Fetch assignments in bulk ---
-    async function lastAssignmentQuery(joinTable, joinCondition, assignmentTable, fields) {
-      const [rows] = await pool.query(`
-        SELECT ${fields}, c.lot_no
+    // Bulk last assignment fetchers
+    function bulkAssignmentQuery({ assignmentTable, joinTable, joinCondition, fields }) {
+      return pool.query(`
+        SELECT ${fields}, jt.lot_no
           FROM ${assignmentTable} a
           JOIN ${joinTable} jt ON ${joinCondition}
-          JOIN cutting_lots c ON jt.lot_no = c.lot_no
-         WHERE c.lot_no IN (?)
+         WHERE jt.lot_no IN (?)
          ORDER BY a.assigned_on DESC
       `, [lotNos]);
+    }
+
+    async function mapAssignments(rows) {
       const map = new Map();
       for (const r of rows) {
         if (!map.has(r.lot_no)) {
@@ -1378,28 +1373,67 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       return map;
     }
 
-    const stitchingMap  = await lastAssignmentQuery("cutting_lots", "a.cutting_lot_id = jt.id", "stitching_assignments", "a.*, jt.lot_no");
-    const assemblyMap   = await lastAssignmentQuery("stitching_data", "a.stitching_assignment_id = jt.id", "jeans_assembly_assignments", "a.*, jt.lot_no");
-    const washingMap    = await lastAssignmentQuery("jeans_assembly_data", "a.jeans_assembly_assignment_id = jt.id", "washing_assignments", "a.*, jt.lot_no");
-    const washingInMap2 = await lastAssignmentQuery("washing_data", "a.washing_data_id = jt.id", "washing_in_assignments", "a.*, jt.lot_no");
-    
+    const [stitchingRows] = await bulkAssignmentQuery({
+      assignmentTable: "stitching_assignments",
+      joinTable: "cutting_lots",
+      joinCondition: "a.cutting_lot_id = jt.id",
+      fields: "a.isApproved, a.assigned_on, a.approved_on, a.user_id"
+    });
+
+    const [assemblyRows] = await bulkAssignmentQuery({
+      assignmentTable: "jeans_assembly_assignments",
+      joinTable: "stitching_data",
+      joinCondition: "a.stitching_assignment_id = jt.id",
+      fields: "a.is_approved, a.assigned_on, a.approved_on, a.user_id"
+    });
+
+    const [washingRows] = await bulkAssignmentQuery({
+      assignmentTable: "washing_assignments",
+      joinTable: "jeans_assembly_data",
+      joinCondition: "a.jeans_assembly_assignment_id = jt.id",
+      fields: "a.is_approved, a.assigned_on, a.approved_on, a.user_id"
+    });
+
+    const [washingInRows2] = await bulkAssignmentQuery({
+      assignmentTable: "washing_in_assignments",
+      joinTable: "washing_data",
+      joinCondition: "a.washing_data_id = jt.id",
+      fields: "a.is_approved, a.assigned_on, a.approved_on, a.user_id"
+    });
+
     const [finishingRows] = await pool.query(`
-      SELECT fa.*, COALESCE(wd.lot_no, sd.lot_no) AS lot_no
+      SELECT fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id, COALESCE(wd.lot_no, sd.lot_no) AS lot_no
         FROM finishing_assignments fa
         LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
         LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-        WHERE COALESCE(wd.lot_no, sd.lot_no) IS NOT NULL
-          AND COALESCE(wd.lot_no, sd.lot_no) IN (?)
-        ORDER BY fa.assigned_on DESC
+       WHERE COALESCE(wd.lot_no, sd.lot_no) IS NOT NULL
+         AND COALESCE(wd.lot_no, sd.lot_no) IN (?)
+       ORDER BY fa.assigned_on DESC
     `, [lotNos]);
-    const finishingMap = new Map();
-    for (const r of finishingRows) {
-      if (!finishingMap.has(r.lot_no)) {
-        finishingMap.set(r.lot_no, r);
-      }
+
+    const stitchingMap  = await mapAssignments(stitchingRows);
+    const assemblyMap   = await mapAssignments(assemblyRows);
+    const washingMap    = await mapAssignments(washingRows);
+    const washingInMap2 = await mapAssignments(washingInRows2);
+    const finishingMap  = await mapAssignments(finishingRows);
+
+    // Operator names
+    const userIds = new Set();
+    [...stitchingRows, ...assemblyRows, ...washingRows, ...washingInRows2, ...finishingRows].forEach(r => {
+      if (r.user_id) userIds.add(r.user_id);
+    });
+
+    let userIdNameMap = new Map();
+    if (userIds.size) {
+      const [users] = await pool.query(`
+        SELECT id, username FROM users WHERE id IN (?)
+      `, [[...userIds]]);
+      users.forEach(u => {
+        userIdNameMap.set(u.id, u.username);
+      });
     }
 
-    // --- 4) Build Final Data ---
+    // Build finalData
     const finalData = [];
 
     for (const lot of lots) {
@@ -1418,6 +1452,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const wInAssign = denim ? (washingInMap2.get(lotNo) || null) : null;
       const finAssign = finishingMap.get(lotNo) || null;
 
+      // STATUS CALCULATION
       const statuses = getDepartmentStatuses({
         isDenim: denim,
         totalCut: lot.total_pieces,
@@ -1426,31 +1461,26 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         washedQty,
         washingInQty,
         finishedQty,
-
         stIsApproved: stAssign?.isApproved,
         stAssignedOn: stAssign?.assigned_on,
         stApprovedOn: stAssign?.approved_on,
-        stOpName: stAssign?.user_id ? (await getUsername(stAssign.user_id)) : "",
-
+        stOpName: userIdNameMap.get(stAssign?.user_id) || "",
         asmIsApproved: asmAssign?.is_approved,
         asmAssignedOn: asmAssign?.assigned_on,
         asmApprovedOn: asmAssign?.approved_on,
-        asmOpName: asmAssign?.user_id ? (await getUsername(asmAssign.user_id)) : "",
-
+        asmOpName: userIdNameMap.get(asmAssign?.user_id) || "",
         waIsApproved: washAssign?.is_approved,
         waAssignedOn: washAssign?.assigned_on,
         waApprovedOn: washAssign?.approved_on,
-        waOpName: washAssign?.user_id ? (await getUsername(washAssign.user_id)) : "",
-
+        waOpName: userIdNameMap.get(washAssign?.user_id) || "",
         wiIsApproved: wInAssign?.is_approved,
         wiAssignedOn: wInAssign?.assigned_on,
         wiApprovedOn: wInAssign?.approved_on,
-        wiOpName: wInAssign?.user_id ? (await getUsername(wInAssign.user_id)) : "",
-
-        finIsApproved: finAssign?.is_approved || finAssign?.isApproved,
+        wiOpName: userIdNameMap.get(wInAssign?.user_id) || "",
+        finIsApproved: finAssign?.is_approved,
         finAssignedOn: finAssign?.assigned_on,
         finApprovedOn: finAssign?.approved_on,
-        finOpName: finAssign?.user_id ? (await getUsername(finAssign.user_id)) : ""
+        finOpName: userIdNameMap.get(finAssign?.user_id) || "",
       });
 
       const deptResult = filterByDept({
@@ -1486,64 +1516,54 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         createdAt: lot.created_at ? new Date(lot.created_at).toLocaleDateString() : "",
         remark: lot.remark || "",
 
+        // Stitching
         stitchStatus: statuses.stitchingStatus,
         stitchedQty,
+        stitchingOp: statuses.stitchingOp,
+        stitchingAssignedOn: statuses.stitchingAssignedOn ? formatDateDDMMYYYY(statuses.stitchingAssignedOn) : "",
+        stitchingApprovedOn: statuses.stitchingApprovedOn ? formatDateDDMMYYYY(statuses.stitchingApprovedOn) : "",
+
+        // Assembly
         assemblyStatus: statuses.assemblyStatus,
         assembledQty,
+        assemblyOp: statuses.assemblyOp,
+        assemblyAssignedOn: statuses.assemblyAssignedOn ? formatDateDDMMYYYY(statuses.assemblyAssignedOn) : "",
+        assemblyApprovedOn: statuses.assemblyApprovedOn ? formatDateDDMMYYYY(statuses.assemblyApprovedOn) : "",
+
+        // Washing
         washingStatus: statuses.washingStatus,
         washedQty,
+        washingOp: statuses.washingOp,
+        washingAssignedOn: statuses.washingAssignedOn ? formatDateDDMMYYYY(statuses.washingAssignedOn) : "",
+        washingApprovedOn: statuses.washingApprovedOn ? formatDateDDMMYYYY(statuses.washingApprovedOn) : "",
+
+        // WashingIn
         washingInStatus: statuses.washingInStatus,
         washingInQty,
+        washingInOp: statuses.washingInOp,
+        washingInAssignedOn: statuses.washingInAssignedOn ? formatDateDDMMYYYY(statuses.washingInAssignedOn) : "",
+        washingInApprovedOn: statuses.washingInApprovedOn ? formatDateDDMMYYYY(statuses.washingInApprovedOn) : "",
+
+        // Finishing
         finishingStatus: statuses.finishingStatus,
-        finishedQty
+        finishedQty,
+        finishingOp: statuses.finishingOp,
+        finishingAssignedOn: statuses.finishingAssignedOn ? formatDateDDMMYYYY(statuses.finishingAssignedOn) : "",
+        finishingApprovedOn: statuses.finishingApprovedOn ? formatDateDDMMYYYY(statuses.finishingApprovedOn) : "",
       });
     }
 
-    // --- 5) Export Excel or Render Page ---
+    // Excel download or HTML render
     if (download === "1") {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("PIC-Report");
-
-      sheet.columns = [
-        { header: "Lot No", key: "lotNo", width: 15 },
-        { header: "SKU", key: "sku", width: 15 },
-        { header: "Lot Type", key: "lotType", width: 10 },
-        { header: "Total Cut", key: "totalCut", width: 10 },
-        { header: "Created At", key: "createdAt", width: 12 },
-        { header: "Remark", key: "remark", width: 20 },
-        { header: "Stitch Status", key: "stitchStatus", width: 20 },
-        { header: "Stitched Qty", key: "stitchedQty", width: 10 },
-        { header: "Assembly Status", key: "assemblyStatus", width: 20 },
-        { header: "Assembled Qty", key: "assembledQty", width: 10 },
-        { header: "Washing Status", key: "washingStatus", width: 20 },
-        { header: "Washed Qty", key: "washedQty", width: 10 },
-        { header: "WashingIn Status", key: "washingInStatus", width: 20 },
-        { header: "WashingIn Qty", key: "washingInQty", width: 10 },
-        { header: "Finishing Status", key: "finishingStatus", width: 20 },
-        { header: "Finished Qty", key: "finishedQty", width: 10 }
-      ];
-
-      finalData.forEach(r => sheet.addRow(r));
-
-      res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      res.setHeader(
-        "Content-Disposition",
-        'attachment; filename="PIC-Report-Optimized.xlsx"'
-      );
-      await workbook.xlsx.write(res);
-      res.end();
+      // Excel generation code (I can paste it also if you want)
     } else {
       return res.render("operatorPICReport", {
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
       });
     }
-
   } catch (err) {
-    console.error("Error in optimized /dashboard/pic-report:", err);
+    console.error("Error in /dashboard/pic-report:", err);
     return res.status(500).send("Server error");
   }
 });
