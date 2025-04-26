@@ -1037,6 +1037,7 @@ function filterByDept({
 }
 
 /** The final PIC Report route */
+// PIC Report Route
 router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
     const {
@@ -1074,14 +1075,14 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       if (dateFilter === "createdAt") {
         dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
-      } else if (dateFilter === "assignedOn") {
+      } else {
+        // assignedOn filter per department
         if (department === "stitching") {
           dateWhere = `
             AND EXISTS (
               SELECT 1
                 FROM stitching_assignments sa
-                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
-               WHERE c2.lot_no = cl.lot_no
+               WHERE sa.cutting_lot_id = cl.id
                  AND DATE(sa.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1092,8 +1093,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
               SELECT 1
                 FROM jeans_assembly_assignments ja
                 JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
+               WHERE sd.lot_no = cl.lot_no
                  AND DATE(ja.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1104,8 +1104,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
               SELECT 1
                 FROM washing_assignments wa
                 JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
+               WHERE jd.lot_no = cl.lot_no
                  AND DATE(wa.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1116,8 +1115,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
               SELECT 1
                 FROM washing_in_assignments wia
                 JOIN washing_in_data wid ON wia.washing_data_id = wid.id
-                JOIN cutting_lots c2 ON wid.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
+               WHERE wid.lot_no = cl.lot_no
                  AND DATE(wia.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1129,8 +1127,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
                 FROM finishing_assignments fa
                 LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
                 LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
-               WHERE c2.lot_no = cl.lot_no
+               WHERE (wd.lot_no = cl.lot_no OR sd.lot_no = cl.lot_no)
                  AND DATE(fa.assigned_on) BETWEEN ? AND ?
             )
           `;
@@ -1139,7 +1136,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       }
     }
 
-    // 3) Fetch all cutting lots (with filters, limit for download)
+    // 3) Fetch cutting lots
     const limitClause = download === "1" ? "LIMIT 5000" : "";
     const [lots] = await pool.query(
       `
@@ -1183,7 +1180,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     `);
     const qtyMap = new Map(qtyRows.map(r => [r.lot_no, r]));
 
-    // 5) Bulk latest assignments for each dept
+    // 5) Bulk latest assignments
     const [stRows] = await pool.query(`
       SELECT
         c.lot_no,
@@ -1274,7 +1271,6 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
          AND m.mx = fa.assigned_on
     `);
 
-    // Turn each into a map
     const stitchMap   = new Map(stRows.map(r => [r.lot_no, r]));
     const assemblyMap = new Map(asRows.map(r => [r.lot_no, r]));
     const washMap     = new Map(wRows.map(r => [r.lot_no, r]));
@@ -1284,10 +1280,9 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     // 6) Build finalData
     const finalData = [];
     for (const lot of lots) {
-      const lotNo = lot.lot_no;
+      const lotNo    = lot.lot_no;
       const totalCut = parseFloat(lot.totalCut) || 0;
-      const isDenim = isDenimLot(lotNo);
-
+      const isDenim  = isDenimLot(lotNo);
       const {
         stitchedQty = 0,
         assembledQty = 0,
@@ -1297,23 +1292,17 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       } = qtyMap.get(lotNo) || {};
 
       const statuses = getDepartmentStatuses({
-        isDenim,
-        totalCut,
-        stitchedQty,
-        assembledQty,
-        washedQty,
-        washingInQty,
-        finishedQty,
-        stAssign:   stitchMap.get(lotNo)   || null,
-        asmAssign:  assemblyMap.get(lotNo) || null,
-        washAssign: washMap.get(lotNo)     || null,
-        washInAssign: washInMap.get(lotNo) || null,
-        finAssign:  finishMap.get(lotNo)   || null,
+        isDenim, totalCut,
+        stitchedQty, assembledQty, washedQty, washingInQty, finishedQty,
+        stAssign: stitchMap.get(lotNo),
+        asmAssign: assemblyMap.get(lotNo),
+        washAssign: washMap.get(lotNo),
+        washInAssign: washInMap.get(lotNo),
+        finAssign: finishMap.get(lotNo)
       });
 
       const { showRow, actualStatus } = filterByDept({
-        department,
-        isDenim,
+        department, isDenim,
         stitchingStatus: statuses.stitchingStatus,
         assemblyStatus:  statuses.assemblyStatus,
         washingStatus:   statuses.washingStatus,
@@ -1336,44 +1325,39 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         createdAt: formatDateDDMMYYYY(lot.created_at),
         remark: lot.remark || "",
 
-        // stitching
-        stitchAssignedOn: statuses.stitchingAssignedOn,
-        stitchApprovedOn: statuses.stitchingApprovedOn,
-        stitchOp:         statuses.stitchingOp,
-        stitchStatus:     statuses.stitchingStatus,
+        stitchAssignedOn:  statuses.stitchingAssignedOn,
+        stitchApprovedOn:  statuses.stitchingApprovedOn,
+        stitchOp:          statuses.stitchingOp,
+        stitchStatus:      statuses.stitchingStatus,
         stitchedQty,
 
-        // assembly
         assemblyAssignedOn: statuses.assemblyAssignedOn,
         assemblyApprovedOn: statuses.assemblyApprovedOn,
         assemblyOp:         statuses.assemblyOp,
         assemblyStatus:     statuses.assemblyStatus,
         assembledQty,
 
-        // washing
-        washingAssignedOn: statuses.washingAssignedOn,
-        washingApprovedOn: statuses.washingApprovedOn,
-        washingOp:         statuses.washingOp,
-        washingStatus:     statuses.washingStatus,
+        washingAssignedOn:  statuses.washingAssignedOn,
+        washingApprovedOn:  statuses.washingApprovedOn,
+        washingOp:          statuses.washingOp,
+        washingStatus:      statuses.washingStatus,
         washedQty,
 
-        // washing_in
-        washingInAssignedOn: statuses.washingInAssignedOn,
-        washingInApprovedOn: statuses.washingInApprovedOn,
-        washingInOp:         statuses.washingInOp,
-        washingInStatus:     statuses.washingInStatus,
+        washingInAssignedOn:statuses.washingInAssignedOn,
+        washingInApprovedOn:statuses.washingInApprovedOn,
+        washingInOp:        statuses.washingInOp,
+        washingInStatus:    statuses.washingInStatus,
         washingInQty,
 
-        // finishing
-        finishingAssignedOn: statuses.finishingAssignedOn,
-        finishingApprovedOn: statuses.finishingApprovedOn,
-        finishingOp:         statuses.finishingOp,
-        finishingStatus:     statuses.finishingStatus,
+        finishingAssignedOn:statuses.finishingAssignedOn,
+        finishingApprovedOn:statuses.finishingApprovedOn,
+        finishingOp:        statuses.finishingOp,
+        finishingStatus:    statuses.finishingStatus,
         finishedQty
       });
     }
 
-    // 7) Download or render
+    // 7) Download Excel or render HTML
     if (download === "1") {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("PIC Report");
@@ -1419,7 +1403,6 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       return res.end();
     }
 
-    // render HTML
     return res.render("operatorPICReport", {
       rows: finalData,
       filters: { lotType, department, status, dateFilter, startDate, endDate }
@@ -1429,6 +1412,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     return res.status(500).send("Server error");
   }
 });
+
 // At top of your routes file, ensure you import isStitchingMaster:
 const { isStitchingMaster } = require("../middlewares/auth");
 
