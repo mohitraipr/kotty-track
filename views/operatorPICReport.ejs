@@ -1,14 +1,7 @@
 <%
-/**
- * EJS helper: makeDownloadLink(filters)
- * Produces a query string (with download=1) from the existing filters.
- */
 function makeDownloadLink(f) {
-  // We’ll build a URLSearchParams from the "filters" object
   const params = new URLSearchParams(f);
-  // Force download=1
   params.set("download", "1");
-  // Return the final query string (without the leading “?”).
   return params.toString();
 }
 %>
@@ -17,7 +10,7 @@ function makeDownloadLink(f) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Pendency / In-Line / Completed</title>
+  <title>Pendency / In-Line / Completed Report</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="p-3">
@@ -26,66 +19,55 @@ function makeDownloadLink(f) {
 
   <!-- Filter Form -->
   <form method="GET" action="/operator/dashboard/pic-report" class="row g-3 mb-4">
-    <!-- Lot Type -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Lot Type</label>
       <select name="lotType" class="form-select">
-        <option value="all" <%= filters.lotType==="all" ? "selected" : "" %>>All</option>
-        <option value="denim" <%= filters.lotType==="denim" ? "selected" : "" %>>Denim (AK*, UM*)</option>
-        <option value="hosiery" <%= filters.lotType==="hosiery" ? "selected" : "" %>>Hosiery</option>
+        <option value="all" <%= filters.lotType === "all" ? "selected" : "" %>>All</option>
+        <option value="denim" <%= filters.lotType === "denim" ? "selected" : "" %>>Denim</option>
+        <option value="hosiery" <%= filters.lotType === "hosiery" ? "selected" : "" %>>Hosiery</option>
       </select>
     </div>
-
-    <!-- Department -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Department</label>
       <select name="department" class="form-select">
-        <option value="all" <%= filters.department==="all" ? "selected" : "" %>>All</option>
-        <option value="cutting" <%= filters.department==="cutting" ? "selected" : "" %>>Cutting</option>
-        <option value="stitching" <%= filters.department==="stitching" ? "selected" : "" %>>Stitching</option>
-        <option value="assembly" <%= filters.department==="assembly" ? "selected" : "" %>>Assembly</option>
-        <option value="washing" <%= filters.department==="washing" ? "selected" : "" %>>Washing</option>
-        <option value="finishing" <%= filters.department==="finishing" ? "selected" : "" %>>Finishing</option>
+        <option value="all" <%= filters.department === "all" ? "selected" : "" %>>All</option>
+        <option value="cutting" <%= filters.department === "cutting" ? "selected" : "" %>>Cutting</option>
+        <option value="stitching" <%= filters.department === "stitching" ? "selected" : "" %>>Stitching</option>
+        <option value="assembly" <%= filters.department === "assembly" ? "selected" : "" %>>Assembly</option>
+        <option value="washing" <%= filters.department === "washing" ? "selected" : "" %>>Washing</option>
+        <option value="washing_in" <%= filters.department === "washing_in" ? "selected" : "" %>>Washing In</option>
+        <option value="finishing" <%= filters.department === "finishing" ? "selected" : "" %>>Finishing</option>
       </select>
     </div>
-
-    <!-- Status -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Status</label>
       <select name="status" class="form-select">
-        <option value="all" <%= filters.status==="all" ? "selected" : "" %>>All</option>
-        <option value="pending" <%= filters.status==="pending" ? "selected" : "" %>>Pending</option>
-        <option value="inline" <%= filters.status==="inline" ? "selected" : "" %>>In-Line</option>
-        <option value="completed" <%= filters.status==="completed" ? "selected" : "" %>>Completed</option>
-        <option value="denied" <%= filters.status==="denied" ? "selected" : "" %>>Denied</option>
-        <option value="not_assigned" <%= filters.status==="not_assigned" ? "selected" : "" %>>Not Assigned</option>
+        <option value="all" <%= filters.status === "all" ? "selected" : "" %>>All</option>
+        <option value="pending" <%= filters.status === "pending" ? "selected" : "" %>>Pending</option>
+        <option value="inline" <%= filters.status === "inline" ? "selected" : "" %>>In-Line</option>
+        <option value="completed" <%= filters.status === "completed" ? "selected" : "" %>>Completed</option>
+        <option value="denied" <%= filters.status === "denied" ? "selected" : "" %>>Denied</option>
+        <option value="not_assigned" <%= filters.status === "not_assigned" ? "selected" : "" %>>Not Assigned</option>
       </select>
     </div>
-
-    <!-- Date Filter -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Date Filter</label>
       <select name="dateFilter" class="form-select">
-        <option value="createdAt" <%= filters.dateFilter==="createdAt" ? "selected" : "" %>>Created At</option>
-        <option value="assignedOn" <%= filters.dateFilter==="assignedOn" ? "selected" : "" %>>Assigned On</option>
+        <option value="createdAt" <%= filters.dateFilter === "createdAt" ? "selected" : "" %>>Created At</option>
+        <option value="assignedOn" <%= filters.dateFilter === "assignedOn" ? "selected" : "" %>>Assigned On</option>
       </select>
     </div>
-
-    <!-- Start Date -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">Start Date</label>
       <input type="date" name="startDate" class="form-control" value="<%= filters.startDate %>">
     </div>
-
-    <!-- End Date -->
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label">End Date</label>
       <input type="date" name="endDate" class="form-control" value="<%= filters.endDate %>">
     </div>
 
     <div class="col-12">
       <button type="submit" class="btn btn-primary">Search</button>
-      <!-- Download button triggers the same route but with download=1 -->
       <a href="/operator/dashboard/pic-report?<%= makeDownloadLink(filters) %>" class="btn btn-success">Download Excel</a>
     </div>
   </form>
@@ -102,32 +84,37 @@ function makeDownloadLink(f) {
           <th>Created At</th>
           <th>Remark</th>
 
-          <th>Stitch Assigned On</th>
+          <th>Stitch Assigned</th>
           <th>Stitch Operator</th>
           <th>Stitch Status</th>
           <th>Stitched Qty</th>
 
-          <th>Assembly Assigned On</th>
+          <th>Assembly Assigned</th>
           <th>Assembly Operator</th>
           <th>Assembly Status</th>
           <th>Assembled Qty</th>
 
-          <th>Washing Assigned On</th>
+          <th>Washing Assigned</th>
           <th>Washing Operator</th>
           <th>Washing Status</th>
           <th>Washed Qty</th>
 
-          <th>Finishing Assigned On</th>
+          <th>WashingIn Assigned</th>
+          <th>WashingIn Operator</th>
+          <th>WashingIn Status</th>
+          <th>WashingIn Qty</th>
+
+          <th>Finishing Assigned</th>
           <th>Finishing Operator</th>
           <th>Finishing Status</th>
           <th>Finished Qty</th>
         </tr>
       </thead>
       <tbody>
-        <% if(rows.length === 0){ %>
-          <tr><td colspan="22" class="text-center">No records found.</td></tr>
+        <% if (rows.length === 0) { %>
+          <tr><td colspan="26" class="text-center">No records found.</td></tr>
         <% } else { %>
-          <% rows.forEach(function(r){ %>
+          <% rows.forEach(function(r) { %>
             <tr>
               <td><%= r.lotNo %></td>
               <td><%= r.sku %></td>
@@ -151,6 +138,11 @@ function makeDownloadLink(f) {
               <td><%= r.washingStatus %></td>
               <td><%= r.washedQty %></td>
 
+              <td><%= r.washingInAssignedOn %></td>
+              <td><%= r.washingInOp %></td>
+              <td><%= r.washingInStatus %></td>
+              <td><%= r.washingInQty %></td>
+
               <td><%= r.finishingAssignedOn %></td>
               <td><%= r.finishingOp %></td>
               <td><%= r.finishingStatus %></td>
@@ -162,15 +154,5 @@ function makeDownloadLink(f) {
     </table>
   </div>
 
-  <script>
-    // Simple helper for the download link
-    function makeDownloadLink(filters) {
-      // Construct the query string but set download=1
-      const params = new URLSearchParams(filters);
-      params.set("download", "1");
-      return params.toString();
-    }
-  </script>
-  <!-- We can’t actually call the above function from EJS. We'll do it on the server side. -->
 </body>
 </html>
