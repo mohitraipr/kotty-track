@@ -1039,101 +1039,393 @@ function filterByDept({
 /** The final PIC Report route */
 router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { download = "", lotType = "all" } = req.query;
+    const {
+      lotType = "all",
+      department = "all",
+      status = "all",
+      dateFilter = "createdAt",
+      startDate = "",
+      endDate = "",
+      download = ""
+    } = req.query;
 
-    const [cuttingLots] = await pool.query(`
-      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark, u.username AS created_by
+    // 1) Build lotType clause
+    let lotTypeClause = "";
+    if (lotType === "denim") {
+      lotTypeClause = `
+        AND (
+          UPPER(cl.lot_no) LIKE 'AK%'
+          OR UPPER(cl.lot_no) LIKE 'UM%'
+        )
+      `;
+    } else if (lotType === "hosiery") {
+      lotTypeClause = `
+        AND (
+          UPPER(cl.lot_no) NOT LIKE 'AK%'
+          AND UPPER(cl.lot_no) NOT LIKE 'UM%'
+        )
+      `;
+    }
+
+    // 2) Build dateFilter clause
+    let dateWhere = "";
+    const dateParams = [];
+    if (startDate && endDate) {
+      if (dateFilter === "createdAt") {
+        dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
+        dateParams.push(startDate, endDate);
+      } else if (dateFilter === "assignedOn") {
+        if (department === "stitching") {
+          dateWhere = `
+            AND EXISTS (
+              SELECT 1
+                FROM stitching_assignments sa
+                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
+               WHERE c2.lot_no = cl.lot_no
+                 AND DATE(sa.assigned_on) BETWEEN ? AND ?
+            )
+          `;
+          dateParams.push(startDate, endDate);
+        } else if (department === "assembly") {
+          dateWhere = `
+            AND EXISTS (
+              SELECT 1
+                FROM jeans_assembly_assignments ja
+                JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
+                 AND DATE(ja.assigned_on) BETWEEN ? AND ?
+            )
+          `;
+          dateParams.push(startDate, endDate);
+        } else if (department === "washing") {
+          dateWhere = `
+            AND EXISTS (
+              SELECT 1
+                FROM washing_assignments wa
+                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
+                 AND DATE(wa.assigned_on) BETWEEN ? AND ?
+            )
+          `;
+          dateParams.push(startDate, endDate);
+        } else if (department === "washing_in") {
+          dateWhere = `
+            AND EXISTS (
+              SELECT 1
+                FROM washing_in_assignments wia
+                JOIN washing_in_data wid ON wia.washing_data_id = wid.id
+                JOIN cutting_lots c2 ON wid.lot_no = c2.lot_no
+               WHERE c2.lot_no = cl.lot_no
+                 AND DATE(wia.assigned_on) BETWEEN ? AND ?
+            )
+          `;
+          dateParams.push(startDate, endDate);
+        } else if (department === "finishing") {
+          dateWhere = `
+            AND EXISTS (
+              SELECT 1
+                FROM finishing_assignments fa
+                LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
+               WHERE c2.lot_no = cl.lot_no
+                 AND DATE(fa.assigned_on) BETWEEN ? AND ?
+            )
+          `;
+          dateParams.push(startDate, endDate);
+        }
+      }
+    }
+
+    // 3) Fetch all cutting lots (with filters, limit for download)
+    const limitClause = download === "1" ? "LIMIT 5000" : "";
+    const [lots] = await pool.query(
+      `
+      SELECT
+        cl.lot_no,
+        cl.sku,
+        cl.total_pieces AS totalCut,
+        cl.created_at,
+        cl.remark
       FROM cutting_lots cl
-      JOIN users u ON cl.user_id = u.id
+      WHERE 1=1
+        ${lotTypeClause}
+        ${dateWhere}
+      ORDER BY cl.created_at DESC
+      ${limitClause}
+      `,
+      dateParams
+    );
+
+    // 4) Bulk quantities
+    const [qtyRows] = await pool.query(`
+      SELECT
+        lot_no,
+        SUM(total_pieces) FILTER (WHERE tbl='stitch')   AS stitchedQty,
+        SUM(total_pieces) FILTER (WHERE tbl='assembly') AS assembledQty,
+        SUM(total_pieces) FILTER (WHERE tbl='wash')     AS washedQty,
+        SUM(total_pieces) FILTER (WHERE tbl='washi')    AS washingInQty,
+        SUM(total_pieces) FILTER (WHERE tbl='finish')   AS finishedQty
+      FROM (
+        SELECT lot_no, total_pieces, 'stitch'   AS tbl FROM stitching_data
+        UNION ALL
+        SELECT lot_no, total_pieces, 'assembly' AS tbl FROM jeans_assembly_data
+        UNION ALL
+        SELECT lot_no, total_pieces, 'wash'     AS tbl FROM washing_data
+        UNION ALL
+        SELECT lot_no, total_pieces, 'washi'    AS tbl FROM washing_in_data
+        UNION ALL
+        SELECT lot_no, total_pieces, 'finish'   AS tbl FROM finishing_data
+      ) t
+      GROUP BY lot_no
+    `);
+    const qtyMap = new Map(qtyRows.map(r => [r.lot_no, r]));
+
+    // 5) Bulk latest assignments for each dept
+    const [stRows] = await pool.query(`
+      SELECT
+        c.lot_no,
+        sa.isApproved   AS is_approved,
+        sa.assigned_on,
+        sa.approved_on,
+        u.username      AS opName
+      FROM stitching_assignments sa
+      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+      JOIN users u ON sa.user_id = u.id
+      JOIN (
+        SELECT cutting_lot_id, MAX(assigned_on) AS mx
+          FROM stitching_assignments
+        GROUP BY cutting_lot_id
+      ) m ON m.cutting_lot_id = sa.cutting_lot_id
+         AND m.mx = sa.assigned_on
+    `);
+    const [asRows] = await pool.query(`
+      SELECT
+        sd.lot_no,
+        ja.is_approved,
+        ja.assigned_on,
+        ja.approved_on,
+        u.username      AS opName
+      FROM jeans_assembly_assignments ja
+      JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+      JOIN users u ON ja.user_id = u.id
+      JOIN (
+        SELECT stitching_assignment_id, MAX(assigned_on) AS mx
+          FROM jeans_assembly_assignments
+        GROUP BY stitching_assignment_id
+      ) m ON m.stitching_assignment_id = ja.stitching_assignment_id
+         AND m.mx = ja.assigned_on
+    `);
+    const [wRows] = await pool.query(`
+      SELECT
+        jd.lot_no,
+        wa.is_approved,
+        wa.assigned_on,
+        wa.approved_on,
+        u.username      AS opName
+      FROM washing_assignments wa
+      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+      JOIN users u ON wa.user_id = u.id
+      JOIN (
+        SELECT jeans_assembly_assignment_id, MAX(assigned_on) AS mx
+          FROM washing_assignments
+        GROUP BY jeans_assembly_assignment_id
+      ) m ON m.jeans_assembly_assignment_id = wa.jeans_assembly_assignment_id
+         AND m.mx = wa.assigned_on
+    `);
+    const [wiRows] = await pool.query(`
+      SELECT
+        wid.lot_no,
+        wia.is_approved,
+        wia.assigned_on,
+        wia.approved_on,
+        u.username      AS opName
+      FROM washing_in_assignments wia
+      JOIN washing_in_data wid ON wia.washing_data_id = wid.id
+      JOIN users u ON wia.user_id = u.id
+      JOIN (
+        SELECT washing_data_id, MAX(assigned_on) AS mx
+          FROM washing_in_assignments
+        GROUP BY washing_data_id
+      ) m ON m.washing_data_id = wia.washing_data_id
+         AND m.mx = wia.assigned_on
+    `);
+    const [fRows] = await pool.query(`
+      SELECT
+        COALESCE(wd.lot_no, sd.lot_no) AS lot_no,
+        fa.is_approved,
+        fa.assigned_on,
+        fa.approved_on,
+        u.username      AS opName
+      FROM finishing_assignments fa
+      LEFT JOIN washing_data wd   ON fa.washing_assignment_id   = wd.id
+      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+      JOIN users u ON fa.user_id = u.id
+      JOIN (
+        SELECT
+          COALESCE(washing_assignment_id, stitching_assignment_id) AS assign_id,
+          MAX(assigned_on) AS mx
+        FROM finishing_assignments
+        GROUP BY assign_id
+      ) m ON (m.assign_id = fa.washing_assignment_id
+             OR m.assign_id = fa.stitching_assignment_id)
+         AND m.mx = fa.assigned_on
     `);
 
-    // preload all data into Maps
-    const [stitchingData] = await pool.query(`SELECT lot_no, SUM(total_pieces) AS stitched FROM stitching_data GROUP BY lot_no`);
-    const [assemblyData] = await pool.query(`SELECT lot_no, SUM(total_pieces) AS assembled FROM jeans_assembly_data GROUP BY lot_no`);
-    const [washingData] = await pool.query(`SELECT lot_no, SUM(total_pieces) AS washed FROM washing_data GROUP BY lot_no`);
-    const [washingInData] = await pool.query(`SELECT lot_no, SUM(total_pieces) AS washingIn FROM washing_in_data GROUP BY lot_no`);
-    const [finishingData] = await pool.query(`SELECT lot_no, SUM(total_pieces) AS finished FROM finishing_data GROUP BY lot_no`);
+    // Turn each into a map
+    const stitchMap   = new Map(stRows.map(r => [r.lot_no, r]));
+    const assemblyMap = new Map(asRows.map(r => [r.lot_no, r]));
+    const washMap     = new Map(wRows.map(r => [r.lot_no, r]));
+    const washInMap   = new Map(wiRows.map(r => [r.lot_no, r]));
+    const finishMap   = new Map(fRows.map(r => [r.lot_no, r]));
 
-    const stitchedMap = new Map(stitchingData.map(r => [r.lot_no, parseFloat(r.stitched)]));
-    const assembledMap = new Map(assemblyData.map(r => [r.lot_no, parseFloat(r.assembled)]));
-    const washedMap = new Map(washingData.map(r => [r.lot_no, parseFloat(r.washed)]));
-    const washingInMap = new Map(washingInData.map(r => [r.lot_no, parseFloat(r.washingIn)]));
-    const finishedMap = new Map(finishingData.map(r => [r.lot_no, parseFloat(r.finished)]));
-
-    const rows = [];
-
-    for (const lot of cuttingLots) {
+    // 6) Build finalData
+    const finalData = [];
+    for (const lot of lots) {
       const lotNo = lot.lot_no;
-      const denim = isDenimLot(lotNo);
+      const totalCut = parseFloat(lot.totalCut) || 0;
+      const isDenim = isDenimLot(lotNo);
 
-      if (lotType === "denim" && !denim) continue;
-      if (lotType === "hosiery" && denim) continue;
+      const {
+        stitchedQty = 0,
+        assembledQty = 0,
+        washedQty = 0,
+        washingInQty = 0,
+        finishedQty = 0
+      } = qtyMap.get(lotNo) || {};
 
-      const stitchedQty = stitchedMap.get(lotNo) || 0;
-      const assembledQty = assembledMap.get(lotNo) || 0;
-      const washedQty = washedMap.get(lotNo) || 0;
-      const washingInQty = washingInMap.get(lotNo) || 0;
-      const finishedQty = finishedMap.get(lotNo) || 0;
+      const statuses = getDepartmentStatuses({
+        isDenim,
+        totalCut,
+        stitchedQty,
+        assembledQty,
+        washedQty,
+        washingInQty,
+        finishedQty,
+        stAssign:   stitchMap.get(lotNo)   || null,
+        asmAssign:  assemblyMap.get(lotNo) || null,
+        washAssign: washMap.get(lotNo)     || null,
+        washInAssign: washInMap.get(lotNo) || null,
+        finAssign:  finishMap.get(lotNo)   || null,
+      });
 
-      rows.push({
+      const { showRow, actualStatus } = filterByDept({
+        department,
+        isDenim,
+        stitchingStatus: statuses.stitchingStatus,
+        assemblyStatus:  statuses.assemblyStatus,
+        washingStatus:   statuses.washingStatus,
+        washingInStatus: statuses.washingInStatus,
+        finishingStatus: statuses.finishingStatus
+      });
+      if (!showRow) continue;
+
+      const a = actualStatus.toLowerCase();
+      if (status !== "all") {
+        if (status === "not_assigned" && !a.startsWith("in ")) continue;
+        if (status !== "not_assigned" && !a.includes(status)) continue;
+      }
+
+      finalData.push({
         lotNo,
         sku: lot.sku,
-        lotType: denim ? "Denim" : "Hosiery",
-        totalCut: lot.total_pieces,
-        createdAt: lot.created_at,
+        lotType: isDenim ? "Denim" : "Hosiery",
+        totalCut,
+        createdAt: formatDateDDMMYYYY(lot.created_at),
         remark: lot.remark || "",
+
+        // stitching
+        stitchAssignedOn: statuses.stitchingAssignedOn,
+        stitchApprovedOn: statuses.stitchingApprovedOn,
+        stitchOp:         statuses.stitchingOp,
+        stitchStatus:     statuses.stitchingStatus,
         stitchedQty,
-        assembledQty: denim ? assembledQty : "N/A",
-        washedQty: denim ? washedQty : "N/A",
-        washingInQty: denim ? washingInQty : "N/A",
+
+        // assembly
+        assemblyAssignedOn: statuses.assemblyAssignedOn,
+        assemblyApprovedOn: statuses.assemblyApprovedOn,
+        assemblyOp:         statuses.assemblyOp,
+        assemblyStatus:     statuses.assemblyStatus,
+        assembledQty,
+
+        // washing
+        washingAssignedOn: statuses.washingAssignedOn,
+        washingApprovedOn: statuses.washingApprovedOn,
+        washingOp:         statuses.washingOp,
+        washingStatus:     statuses.washingStatus,
+        washedQty,
+
+        // washing_in
+        washingInAssignedOn: statuses.washingInAssignedOn,
+        washingInApprovedOn: statuses.washingInApprovedOn,
+        washingInOp:         statuses.washingInOp,
+        washingInStatus:     statuses.washingInStatus,
+        washingInQty,
+
+        // finishing
+        finishingAssignedOn: statuses.finishingAssignedOn,
+        finishingApprovedOn: statuses.finishingApprovedOn,
+        finishingOp:         statuses.finishingOp,
+        finishingStatus:     statuses.finishingStatus,
         finishedQty
       });
     }
 
+    // 7) Download or render
     if (download === "1") {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("PIC Report");
-
-      sheet.columns = [
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("PIC Report");
+      ws.columns = [
         { header: "Lot No", key: "lotNo" },
         { header: "SKU", key: "sku" },
         { header: "Lot Type", key: "lotType" },
         { header: "Total Cut", key: "totalCut" },
         { header: "Created At", key: "createdAt" },
         { header: "Remark", key: "remark" },
+        { header: "Stitch Assigned On", key: "stitchAssignedOn" },
+        { header: "Stitch Approved On", key: "stitchApprovedOn" },
+        { header: "Stitch Operator", key: "stitchOp" },
+        { header: "Stitch Status", key: "stitchStatus" },
         { header: "Stitched Qty", key: "stitchedQty" },
+        { header: "Assembly Assigned On", key: "assemblyAssignedOn" },
+        { header: "Assembly Approved On", key: "assemblyApprovedOn" },
+        { header: "Assembly Operator", key: "assemblyOp" },
+        { header: "Assembly Status", key: "assemblyStatus" },
         { header: "Assembled Qty", key: "assembledQty" },
+        { header: "Washing Assigned On", key: "washingAssignedOn" },
+        { header: "Washing Approved On", key: "washingApprovedOn" },
+        { header: "Washing Operator", key: "washingOp" },
+        { header: "Washing Status", key: "washingStatus" },
         { header: "Washed Qty", key: "washedQty" },
-        { header: "WashingIn Qty", key: "washingInQty" },
+        { header: "WashIn Assigned On", key: "washingInAssignedOn" },
+        { header: "WashIn Approved On", key: "washingInApprovedOn" },
+        { header: "WashIn Operator", key: "washingInOp" },
+        { header: "WashIn Status", key: "washingInStatus" },
+        { header: "WashIn Qty", key: "washingInQty" },
+        { header: "Finishing Assigned On", key: "finishingAssignedOn" },
+        { header: "Finishing Approved On", key: "finishingApprovedOn" },
+        { header: "Finishing Operator", key: "finishingOp" },
+        { header: "Finishing Status", key: "finishingStatus" },
         { header: "Finished Qty", key: "finishedQty" }
       ];
+      finalData.forEach(r => ws.addRow(r));
 
-      rows.slice(0, 5000).forEach(row => {
-        sheet.addRow(row);
-      });
-
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", "attachment; filename=PICReport.xlsx");
-      await workbook.xlsx.write(res);
+      res
+        .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .header("Content-Disposition", 'attachment; filename="PICReport.xlsx"');
+      await wb.xlsx.write(res);
       return res.end();
     }
 
-    // else render HTML
-    res.render("operatorPICReport", {
-  rows,
-  filters: {
-    lotType: req.query.lotType || "all",
-    department: req.query.department || "all",
-    status: req.query.status || "all",
-    dateFilter: req.query.dateFilter || "createdAt",
-    startDate: req.query.startDate || "",
-    endDate: req.query.endDate || ""
-  }
-});
-
-
+    // render HTML
+    return res.render("operatorPICReport", {
+      rows: finalData,
+      filters: { lotType, department, status, dateFilter, startDate, endDate }
+    });
   } catch (err) {
-    console.error("Error in enhanced PIC Report:", err);
+    console.error("Error in /dashboard/pic-report:", err);
     return res.status(500).send("Server error");
   }
 });
