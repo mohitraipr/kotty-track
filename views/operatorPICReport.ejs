@@ -137,7 +137,7 @@
         showSpinner();
 
         // 3. Fetch the route that returns the Excel as a binary
-        const url = "/dashboard/pic-report?" + params.toString();
+        const url = "/operator/dashboard/pic-report?" + params.toString();
         const response = await fetch(url, { method: "GET" });
         if (!response.ok) {
           throw new Error("Server responded with status " + response.status);
