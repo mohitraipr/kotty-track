@@ -345,9 +345,9 @@ router.post('/create', isAuthenticated, async (req, res) => {
     // Hardcoded washers -> placeOfSupply references
     const consigneeMapping = {
       49: {
-        name: "ADS WASHER",
-        gstin: "07HQOPK1686K1Z2",
-        address: "I-112, JAITPUR EXTENSION, PART-1, BADARPUR, South East Delhi, Delhi, 110044",
+        name: "SHREE SAI DYE CHEM",
+        gstin: "07ABYPC7271N1ZV",
+        address: "115/B, MAIN SINDHU FARM ROAD, MEETHAPUR EXTN. BADARPUR, NEAR DURGA BUILDER GATE, South Delhi, Delhi, 110044",
         placeOfSupply: "07-DELHI"
       },
       62: {
@@ -375,9 +375,9 @@ router.post('/create', isAuthenticated, async (req, res) => {
         placeOfSupply: "07-DELHI"
       },
       58: {
-        name: "PRITY ENTERPRISES",
+        name: "PREETI ENTERPRISES",
         gstin: "07BTMPC8553Q1ZW",
-        address: "G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044",
+        address: "E-7 KH.285, PL-407 T.NO. A0841, GALI-1, New Delhi, South East Delhi, Delhi, 110076",
         placeOfSupply: "07-DELHI"
       },
       60: {
