@@ -20,7 +20,7 @@ const WASHER_SHORT_CODES = {
   56: 'VW', // VAISHNAVI WASHING
   57: 'SB', // SHREE BALA JI WASHING
   58: 'PE', // PRITY ENTERPRISES
-  60: 'SG', // SHREE GANESH WASHING
+  60: 'SG', // SHREE GANESH DYEING
   54: 'RE', // RAJ ENTERPRISES
   64: 'AE', // ANSHIK ENTERPRISES
   61: 'HP', // H.P GARMENTS
@@ -381,19 +381,19 @@ router.post('/create', isAuthenticated, async (req, res) => {
         placeOfSupply: "07-DELHI"
       },
       60: {
-        name: "SHREE GANESH WASHING",
+        name: "SHREE GANESH DYEING",
         gstin: "06AHPPC4743G1ZE",
         address: "2/2,6-2, KITA 2, AREA 7, KILLLA NO. 1/2/2, SIDHOLA, TIGAON, Faridabad, Haryana, 121101",
         placeOfSupply: "06-HARYANA"
       },
       54: {
-        name: "RAJ ENTERPRISES WASHING",
+        name: "RAJ ENTERPRISES",
         gstin: "07KWWPS3671F1ZL",
         address: "H No-199J Gali no-6, Block - A, Numbardar Colony Meethapur, Badarpur, New Delhi, South East Delhi, Delhi, 110044",
         placeOfSupply: "07-DELHI"
       },
       64: {
-        name: "ANSHIK ENTERPRISES WASHING",
+        name: "ANSHIK ENTERPRISES",
         gstin: "09BGBPC8487K1ZX",
         address: "00, Sultanpur, Main Rasta, Near J P Hospital, Noida, Gautambuddha Nagar, Uttar Pradesh, 201304",
         placeOfSupply: "09-UTTAR PRADESH"
