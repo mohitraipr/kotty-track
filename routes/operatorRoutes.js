@@ -473,185 +473,17 @@ router.get("/dashboard/api/leftovers", isAuthenticated, isOperator, async (req, 
  * 6) PIC Report – corrected chain
  **************************************************/
 // Quick helper: isDenimLot
-function isDenimLot(lotNo="") {
-  const up= lotNo.toUpperCase();
-  return (up.startsWith("AK") || up.startsWith("UM"));
+/************************************************************
+ * isDenimLot (unchanged)
+ ************************************************************/
+function isDenimLot(lotNo = "") {
+  const up = lotNo.toUpperCase();
+  return up.startsWith("AK") || up.startsWith("UM");
 }
 
-// Summation helpers: getStitchedQty, getAssembledQty, getWashedQty, getWashingInQty, getFinishedQty
-async function getStitchedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumStitched
-      FROM stitching_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumStitched)||0;
-}
-
-async function getAssembledQty(lotNo) {
-  // only relevant if denim
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumAsm
-      FROM jeans_assembly_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumAsm)||0;
-}
-
-async function getWashedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumWash
-      FROM washing_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumWash)||0;
-}
-
-async function getWashingInQty(lotNo) {
-  // not relevant if non-denim
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumWashIn
-      FROM washing_in_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumWashIn)||0;
-}
-
-async function getFinishedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumFin
-      FROM finishing_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumFin)||0;
-}
-
-// "last assignment" fetchers:
-async function getLastStitchingAssignment(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT sa.id, sa.isApproved, sa.assigned_on, sa.approved_on, sa.user_id
-      FROM stitching_assignments sa
-      JOIN cutting_lots c ON sa.cutting_lot_id= c.id
-     WHERE c.lot_no= ?
-     ORDER BY sa.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
-  }
-  return assign;
-}
-
-async function getLastAssemblyAssignment(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT ja.id, ja.is_approved, ja.assigned_on, ja.approved_on, ja.user_id
-      FROM jeans_assembly_assignments ja
-      JOIN stitching_data sd ON ja.stitching_assignment_id= sd.id
-     WHERE sd.lot_no= ?
-     ORDER BY ja.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
-  }
-  return assign;
-}
-
-async function getLastWashingAssignment(lotNo) {
-  // only if denim
-  const [rows] = await pool.query(`
-    SELECT wa.id, wa.is_approved, wa.assigned_on, wa.approved_on, wa.user_id
-      FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id= jd.id
-     WHERE jd.lot_no= ?
-     ORDER BY wa.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
-  }
-  return assign;
-}
-
-async function getLastWashingInAssignment(lotNo) {
-  // Only relevant if denim
-  const [rows] = await pool.query(`
-    SELECT wia.id, wia.is_approved, wia.assigned_on, wia.approved_on, wia.user_id
-      FROM washing_in_assignments wia
-      JOIN washing_data wd
-        ON wia.washing_data_id = wd.id
-     WHERE wd.lot_no = ?
-     ORDER BY wia.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  
-  if (!rows.length) return null;
-  
-  const assign = rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query(
-      "SELECT username FROM users WHERE id = ?",
-      [assign.user_id]
-    );
-    assign.opName = u ? u.username : "Unknown";
-  }
-  return assign;
-}
-
-async function getLastFinishingAssignment(lotNo, isDenim) {
-  if (isDenim) {
-    // finishing for denim references washing_data
-    const [rows] = await pool.query(`
-      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id
-        FROM finishing_assignments fa
-        JOIN washing_data wd ON fa.washing_assignment_id= wd.id
-       WHERE wd.lot_no= ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lotNo]);
-    if (!rows.length) return null;
-    const assign= rows[0];
-    if (assign.user_id) {
-      const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-      assign.opName= u ? u.username : "Unknown";
-    }
-    return assign;
-  } else {
-    // finishing for non-denim references stitching_data
-    const [rows] = await pool.query(`
-      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id
-        FROM finishing_assignments fa
-        JOIN stitching_data sd ON fa.stitching_assignment_id= sd.id
-       WHERE sd.lot_no= ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lotNo]);
-    if (!rows.length) return null;
-    const assign= rows[0];
-    if (assign.user_id) {
-      const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-      assign.opName= u ? u.username : "Unknown";
-    }
-    return assign;
-  }
-}
-
-/**
- * The chain logic you want:
- * DENIM: Cut → Stitching → Assembly → Washing → WashingIn → Finishing
- * NON-DENIM: Cut → Stitching → Finishing
- * 
- * If a step is not assigned or partial, we say all subsequent steps = "In <that step>".
- */
+/************************************************************
+ * getDepartmentStatuses (unchanged)
+ ************************************************************/
 function getDepartmentStatuses({
   isDenim,
   totalCut,
@@ -660,31 +492,50 @@ function getDepartmentStatuses({
   washedQty,
   washingInQty,
   finishedQty,
-  stAssign,     // stitching_assignments
-  asmAssign,    // jeans_assembly_assignments
-  washAssign,   // washing_assignments
-  washInAssign, // washing_in_assignments
-  finAssign     // finishing_assignments
+  stAssign,
+  asmAssign,
+  washAssign,
+  washInAssign,
+  finAssign
 }) {
-  // placeholders
-  let stitchingStatus="N/A", stitchingOp="", stitchingAssignedOn="N/A", stitchingApprovedOn="N/A";
-  let assemblyStatus= isDenim? "N/A" : "—", assemblyOp="", assemblyAssignedOn="N/A", assemblyApprovedOn="N/A";
-  let washingStatus= isDenim? "N/A" : "—", washingOp="", washingAssignedOn="N/A", washingApprovedOn="N/A";
-  // for non-denim, we skip washing & assembly & washing_in entirely
-  let washingInStatus= isDenim? "N/A": "—", washingInOp="", washingInAssignedOn="N/A", washingInApprovedOn="N/A";
-  let finishingStatus="N/A", finishingOp="", finishingAssignedOn="N/A", finishingApprovedOn="N/A";
+  let stitchingStatus = "N/A",
+    stitchingOp = "",
+    stitchingAssignedOn = "N/A",
+    stitchingApprovedOn = "N/A";
 
-  // STITCHING
+  let assemblyStatus = isDenim ? "N/A" : "—",
+    assemblyOp = "",
+    assemblyAssignedOn = "N/A",
+    assemblyApprovedOn = "N/A";
+
+  let washingStatus = isDenim ? "N/A" : "—",
+    washingOp = "",
+    washingAssignedOn = "N/A",
+    washingApprovedOn = "N/A";
+
+  let washingInStatus = isDenim ? "N/A" : "—",
+    washingInOp = "",
+    washingInAssignedOn = "N/A",
+    washingInApprovedOn = "N/A";
+
+  let finishingStatus = "N/A",
+    finishingOp = "",
+    finishingAssignedOn = "N/A",
+    finishingApprovedOn = "N/A";
+
+  /****************
+   * STITCHING
+   ****************/
   if (!stAssign) {
-    stitchingStatus= "In Cutting";
-    // everything after stitching is "In Cutting"
+    // not assigned to stitching
+    stitchingStatus = "In Cutting";
     if (isDenim) {
-      assemblyStatus= "In Cutting";
-      washingStatus= "In Cutting";
-      washingInStatus= "In Cutting";
-      finishingStatus= "In Cutting";
+      assemblyStatus = "In Cutting";
+      washingStatus = "In Cutting";
+      washingInStatus = "In Cutting";
+      finishingStatus = "In Cutting";
     } else {
-      finishingStatus= "In Cutting";
+      finishingStatus = "In Cutting";
     }
     return {
       stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
@@ -694,21 +545,24 @@ function getDepartmentStatuses({
       finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
     };
   } else {
-    // we have a stitching assignment
     const { isApproved, assigned_on, approved_on, opName } = stAssign;
-    stitchingOp= opName|| "";
-    stitchingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-    stitchingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+    stitchingOp = opName || "";
+    stitchingAssignedOn = assigned_on
+      ? new Date(assigned_on).toLocaleString()
+      : "N/A";
+    stitchingApprovedOn = approved_on
+      ? new Date(approved_on).toLocaleString()
+      : "N/A";
 
-    if (isApproved=== null) {
-      stitchingStatus= `Pending Approval by ${stitchingOp}`;
+    if (isApproved === null) {
+      stitchingStatus = `Pending Approval by ${stitchingOp}`;
       if (isDenim) {
-        assemblyStatus= "In Stitching";
-        washingStatus= "In Stitching";
-        washingInStatus= "In Stitching";
-        finishingStatus= "In Stitching";
+        assemblyStatus = "In Stitching";
+        washingStatus = "In Stitching";
+        washingInStatus = "In Stitching";
+        finishingStatus = "In Stitching";
       } else {
-        finishingStatus= "In Stitching";
+        finishingStatus = "In Stitching";
       }
       return {
         stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
@@ -717,15 +571,15 @@ function getDepartmentStatuses({
         washingInStatus, washingInOp, washingInAssignedOn, washingInApprovedOn,
         finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
       };
-    } else if (isApproved==0) {
-      stitchingStatus= `Denied by ${stitchingOp}`;
+    } else if (isApproved == 0) {
+      stitchingStatus = `Denied by ${stitchingOp}`;
       if (isDenim) {
-        assemblyStatus= "In Stitching";
-        washingStatus= "In Stitching";
-        washingInStatus= "In Stitching";
-        finishingStatus= "In Stitching";
+        assemblyStatus = "In Stitching";
+        washingStatus = "In Stitching";
+        washingInStatus = "In Stitching";
+        finishingStatus = "In Stitching";
       } else {
-        finishingStatus= "In Stitching";
+        finishingStatus = "In Stitching";
       }
       return {
         stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
@@ -735,32 +589,29 @@ function getDepartmentStatuses({
         finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
       };
     } else {
-      // approved => partial or complete
-      if (stitchedQty===0) {
-        stitchingStatus= "In-Line";
-      } else if (stitchedQty>= totalCut && totalCut>0) {
-        stitchingStatus= "Completed";
+      // Approved => partial/complete
+      if (stitchedQty === 0) {
+        stitchingStatus = "In-Line";
+      } else if (stitchedQty >= totalCut && totalCut > 0) {
+        stitchingStatus = "Completed";
       } else {
-        const pend= totalCut- stitchedQty;
-        stitchingStatus= `${pend} Pending`;
+        const pend = totalCut - stitchedQty;
+        stitchingStatus = `${pend} Pending`;
       }
     }
   }
 
-  // for non-denim, the next step is finishing
-  // for denim: next step is assembly
+  /****************
+   * ASSEMBLY (Denim only)
+   ****************/
   if (!isDenim) {
-    // NON-DENIM => skip assembly, washing, washingIn
-    // finishing next
-    // if there's no finishing assignment, or partial finishing => we do that logic below
-    // keep going...
+    // skip assembly, washing, washingIn
   } else {
-    // DENIM => assembly next
     if (!asmAssign) {
-      assemblyStatus= "In Stitching";
-      washingStatus= "In Stitching";
-      washingInStatus= "In Stitching";
-      finishingStatus= "In Stitching";
+      assemblyStatus = "In Stitching";
+      washingStatus = "In Stitching";
+      washingInStatus = "In Stitching";
+      finishingStatus = "In Stitching";
       return {
         stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
         assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -769,17 +620,20 @@ function getDepartmentStatuses({
         finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
       };
     } else {
-      // we have assembly
-      const { is_approved, assigned_on, approved_on, opName }= asmAssign;
-      assemblyOp= opName|| "";
-      assemblyAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-      assemblyApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+      const { is_approved, assigned_on, approved_on, opName } = asmAssign;
+      assemblyOp = opName || "";
+      assemblyAssignedOn = assigned_on
+        ? new Date(assigned_on).toLocaleString()
+        : "N/A";
+      assemblyApprovedOn = approved_on
+        ? new Date(approved_on).toLocaleString()
+        : "N/A";
 
-      if (is_approved=== null) {
-        assemblyStatus= `Pending Approval by ${assemblyOp}`;
-        washingStatus= "In Assembly";
-        washingInStatus= "In Assembly";
-        finishingStatus= "In Assembly";
+      if (is_approved === null) {
+        assemblyStatus = `Pending Approval by ${assemblyOp}`;
+        washingStatus = "In Assembly";
+        washingInStatus = "In Assembly";
+        finishingStatus = "In Assembly";
         return {
           stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
           assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -787,11 +641,11 @@ function getDepartmentStatuses({
           washingInStatus, washingInOp, washingInAssignedOn, washingInApprovedOn,
           finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
         };
-      } else if (is_approved==0) {
-        assemblyStatus= `Denied by ${assemblyOp}`;
-        washingStatus= "In Assembly";
-        washingInStatus= "In Assembly";
-        finishingStatus= "In Assembly";
+      } else if (is_approved == 0) {
+        assemblyStatus = `Denied by ${assemblyOp}`;
+        washingStatus = "In Assembly";
+        washingInStatus = "In Assembly";
+        finishingStatus = "In Assembly";
         return {
           stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
           assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -801,21 +655,23 @@ function getDepartmentStatuses({
         };
       } else {
         // partial or complete
-        if (assembledQty===0) {
-          assemblyStatus= "In-Line";
-        } else if (assembledQty>= stitchedQty && stitchedQty>0) {
-          assemblyStatus= "Completed";
+        if (assembledQty === 0) {
+          assemblyStatus = "In-Line";
+        } else if (assembledQty >= stitchedQty && stitchedQty > 0) {
+          assemblyStatus = "Completed";
         } else {
-          const pend= stitchedQty- assembledQty;
-          assemblyStatus= `${pend} Pending`;
+          const pend = stitchedQty - assembledQty;
+          assemblyStatus = `${pend} Pending`;
         }
       }
 
-      // next => washing
+      /****************
+       * WASHING
+       ****************/
       if (!washAssign) {
-        washingStatus= "In Assembly";
-        washingInStatus= "In Assembly";
-        finishingStatus= "In Assembly";
+        washingStatus = "In Assembly";
+        washingInStatus = "In Assembly";
+        finishingStatus = "In Assembly";
         return {
           stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
           assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -824,15 +680,19 @@ function getDepartmentStatuses({
           finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
         };
       } else {
-        const { is_approved, assigned_on, approved_on, opName }= washAssign;
-        washingOp= opName|| "";
-        washingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-        washingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+        const { is_approved, assigned_on, approved_on, opName } = washAssign;
+        washingOp = opName || "";
+        washingAssignedOn = assigned_on
+          ? new Date(assigned_on).toLocaleString()
+          : "N/A";
+        washingApprovedOn = approved_on
+          ? new Date(approved_on).toLocaleString()
+          : "N/A";
 
-        if (is_approved=== null) {
-          washingStatus= `Pending Approval by ${washingOp}`;
-          washingInStatus= "In Washing";
-          finishingStatus= "In Washing";
+        if (is_approved === null) {
+          washingStatus = `Pending Approval by ${washingOp}`;
+          washingInStatus = "In Washing";
+          finishingStatus = "In Washing";
           return {
             stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
             assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -840,10 +700,10 @@ function getDepartmentStatuses({
             washingInStatus, washingInOp, washingInAssignedOn, washingInApprovedOn,
             finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
           };
-        } else if (is_approved==0) {
-          washingStatus= `Denied by ${washingOp}`;
-          washingInStatus= "In Washing";
-          finishingStatus= "In Washing";
+        } else if (is_approved == 0) {
+          washingStatus = `Denied by ${washingOp}`;
+          washingInStatus = "In Washing";
+          finishingStatus = "In Washing";
           return {
             stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
             assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -852,21 +712,22 @@ function getDepartmentStatuses({
             finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
           };
         } else {
-          // partial or complete
-          if (washedQty===0) {
-            washingStatus= "In-Line";
-          } else if (washedQty>= assembledQty && assembledQty>0) {
-            washingStatus= "Completed";
+          if (washedQty === 0) {
+            washingStatus = "In-Line";
+          } else if (washedQty >= assembledQty && assembledQty > 0) {
+            washingStatus = "Completed";
           } else {
-            const pend= assembledQty- washedQty;
-            washingStatus= `${pend} Pending`;
+            const pend = assembledQty - washedQty;
+            washingStatus = `${pend} Pending`;
           }
         }
 
-        // next => washingIn
+        /****************
+         * WASHING IN
+         ****************/
         if (!washInAssign) {
-          washingInStatus= "In Washing";
-          finishingStatus= "In Washing";
+          washingInStatus = "In Washing";
+          finishingStatus = "In Washing";
           return {
             stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
             assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -875,14 +736,18 @@ function getDepartmentStatuses({
             finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
           };
         } else {
-          const { is_approved, assigned_on, approved_on, opName }= washInAssign;
-          washingInOp= opName|| "";
-          washingInAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-          washingInApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+          const { is_approved, assigned_on, approved_on, opName } = washInAssign;
+          washingInOp = opName || "";
+          washingInAssignedOn = assigned_on
+            ? new Date(assigned_on).toLocaleString()
+            : "N/A";
+          washingInApprovedOn = approved_on
+            ? new Date(approved_on).toLocaleString()
+            : "N/A";
 
-          if (is_approved===null) {
-            washingInStatus= `Pending Approval by ${washingInOp}`;
-            finishingStatus= "In WashingIn";
+          if (is_approved === null) {
+            washingInStatus = `Pending Approval by ${washingInOp}`;
+            finishingStatus = "In WashingIn";
             return {
               stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
               assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -890,9 +755,9 @@ function getDepartmentStatuses({
               washingInStatus, washingInOp, washingInAssignedOn, washingInApprovedOn,
               finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
             };
-          } else if (is_approved==0) {
-            washingInStatus= `Denied by ${washingInOp}`;
-            finishingStatus= "In WashingIn";
+          } else if (is_approved == 0) {
+            washingInStatus = `Denied by ${washingInOp}`;
+            finishingStatus = "In WashingIn";
             return {
               stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
               assemblyStatus, assemblyOp, assemblyAssignedOn, assemblyApprovedOn,
@@ -901,14 +766,13 @@ function getDepartmentStatuses({
               finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
             };
           } else {
-            // partial or complete
-            if (washingInQty===0) {
-              washingInStatus= "In-Line";
-            } else if (washingInQty>= washedQty && washedQty>0) {
-              washingInStatus= "Completed";
+            if (washingInQty === 0) {
+              washingInStatus = "In-Line";
+            } else if (washingInQty >= washedQty && washedQty > 0) {
+              washingInStatus = "Completed";
             } else {
-              const pend= washedQty- washingInQty;
-              washingInStatus= `${pend} Pending`;
+              const pend = washedQty - washingInQty;
+              washingInStatus = `${pend} Pending`;
             }
           }
         }
@@ -916,13 +780,15 @@ function getDepartmentStatuses({
     }
   }
 
-  // for non-denim, we skip assembly/washing/washingIn entirely
-  // next => finishing
+  /****************
+   * FINISHING (both Denim & Non-denim)
+   ****************/
   if (!finAssign) {
+    // Not assigned finishing
     if (isDenim) {
-      finishingStatus= "In WashingIn";   // if no finishing assignment
+      finishingStatus = "In WashingIn";
     } else {
-      finishingStatus= "In Stitching";   // for non-denim
+      finishingStatus = "In Stitching";
     }
     return {
       stitchingStatus, stitchingOp, stitchingAssignedOn, stitchingApprovedOn,
@@ -932,37 +798,38 @@ function getDepartmentStatuses({
       finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
     };
   } else {
-    const { is_approved, assigned_on, approved_on, opName }= finAssign;
-    finishingOp= opName|| "";
-    finishingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-    finishingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+    const { is_approved, assigned_on, approved_on, opName } = finAssign;
+    finishingOp = opName || "";
+    finishingAssignedOn = assigned_on
+      ? new Date(assigned_on).toLocaleString()
+      : "N/A";
+    finishingApprovedOn = approved_on
+      ? new Date(approved_on).toLocaleString()
+      : "N/A";
 
-    if (is_approved===null) {
-      finishingStatus= `Pending Approval by ${finishingOp}`;
-    } else if (is_approved==0) {
-      finishingStatus= `Denied by ${finishingOp}`;
+    if (is_approved === null) {
+      finishingStatus = `Pending Approval by ${finishingOp}`;
+    } else if (is_approved == 0) {
+      finishingStatus = `Denied by ${finishingOp}`;
     } else {
       // partial or complete
-      // for denim => finishing leftover vs washingIn
-      // for non-denim => finishing leftover vs stitched
       if (isDenim) {
-        if (finishedQty===0) {
-          finishingStatus= "In-Line";
-        } else if (finishedQty>= washingInQty && washingInQty>0) {
-          finishingStatus= "Completed";
+        if (finishedQty === 0) {
+          finishingStatus = "In-Line";
+        } else if (finishedQty >= washingInQty && washingInQty > 0) {
+          finishingStatus = "Completed";
         } else {
-          const pend= washingInQty- finishedQty;
-          finishingStatus= `${pend} Pending`;
+          const pend = washingInQty - finishedQty;
+          finishingStatus = `${pend} Pending`;
         }
       } else {
-        // non-denim => finishing leftover vs. stitched
-        if (finishedQty===0) {
-          finishingStatus= "In-Line";
-        } else if (finishedQty>= stitchedQty && stitchedQty>0) {
-          finishingStatus= "Completed";
+        if (finishedQty === 0) {
+          finishingStatus = "In-Line";
+        } else if (finishedQty >= stitchedQty && stitchedQty > 0) {
+          finishingStatus = "Completed";
         } else {
-          const pend= stitchedQty- finishedQty;
-          finishingStatus= `${pend} Pending`;
+          const pend = stitchedQty - finishedQty;
+          finishingStatus = `${pend} Pending`;
         }
       }
     }
@@ -977,7 +844,9 @@ function getDepartmentStatuses({
   };
 }
 
-/** filterByDept */
+/************************************************************
+ * filterByDept (unchanged)
+ ************************************************************/
 function filterByDept({
   department, isDenim,
   stitchingStatus,
@@ -986,65 +855,67 @@ function filterByDept({
   washingInStatus,
   finishingStatus
 }) {
-  let showRow= true;
-  let actualStatus= "N/A";
+  let showRow = true;
+  let actualStatus = "N/A";
 
-  if (department==="all") {
+  if (department === "all") {
     if (isDenim) {
       // finishing if not N/A, else washingIn, else washing, else assembly, else stitching
-      if (!finishingStatus.startsWith("N/A")) actualStatus= finishingStatus;
-      else if (!washingInStatus.startsWith("N/A")) actualStatus= washingInStatus;
-      else if (!washingStatus.startsWith("N/A")) actualStatus= washingStatus;
-      else if (!assemblyStatus.startsWith("N/A")) actualStatus= assemblyStatus;
-      else actualStatus= stitchingStatus;
+      if (!finishingStatus.startsWith("N/A")) actualStatus = finishingStatus;
+      else if (!washingInStatus.startsWith("N/A")) actualStatus = washingInStatus;
+      else if (!washingStatus.startsWith("N/A")) actualStatus = washingStatus;
+      else if (!assemblyStatus.startsWith("N/A")) actualStatus = assemblyStatus;
+      else actualStatus = stitchingStatus;
     } else {
       // non-denim => finishing, else stitching
-      if (!finishingStatus.startsWith("N/A")) actualStatus= finishingStatus;
-      else actualStatus= stitchingStatus;
+      if (!finishingStatus.startsWith("N/A")) actualStatus = finishingStatus;
+      else actualStatus = stitchingStatus;
     }
     return { showRow, actualStatus };
   }
 
-  if (department==="cutting") {
-    // always show "Completed"
-    actualStatus= "Completed";
+  if (department === "cutting") {
+    // always show "Completed" for cutting
+    actualStatus = "Completed";
     return { showRow, actualStatus };
   }
 
-  if (department==="stitching") {
-    actualStatus= stitchingStatus;
+  if (department === "stitching") {
+    actualStatus = stitchingStatus;
     return { showRow, actualStatus };
   }
 
-  if (department==="assembly") {
+  if (department === "assembly") {
     if (!isDenim) return { showRow: false, actualStatus: "N/A" };
-    actualStatus= assemblyStatus;
+    actualStatus = assemblyStatus;
     return { showRow, actualStatus };
   }
 
-  if (department==="washing") {
+  if (department === "washing") {
     if (!isDenim) return { showRow: false, actualStatus: "N/A" };
-    actualStatus= washingStatus;
+    actualStatus = washingStatus;
     return { showRow, actualStatus };
   }
 
-  if (department==="washing_in") {
+  if (department === "washing_in") {
     if (!isDenim) return { showRow: false, actualStatus: "N/A" };
-    actualStatus= washingInStatus;
+    actualStatus = washingInStatus;
     return { showRow, actualStatus };
   }
 
-  if (department==="finishing") {
-    actualStatus= finishingStatus;
+  if (department === "finishing") {
+    actualStatus = finishingStatus;
     return { showRow, actualStatus };
   }
 
   return { showRow, actualStatus };
 }
 
-/** The final PIC Report route */
 /*******************************************************************
- * PIC‑Report Route – with updated date‑filter for department "washing_in"
+ * PIC‑Report Route – Optimized
+ * - Bulk fetch sums for each step
+ * - Bulk fetch "last assignments" for each step
+ * - Bulk fetch user info
  *******************************************************************/
 router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res) => {
   try {
@@ -1058,23 +929,25 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       download = ""
     } = req.query;
 
-    // Build filters
+    /***********************************************************
+     * 1. Build the WHERE clauses for cutting_lots
+     ***********************************************************/
     let dateWhere = "";
     let dateParams = [];
-
     if (startDate && endDate) {
       if (dateFilter === "createdAt") {
         dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
       } else if (dateFilter === "assignedOn") {
+        // Department-based subqueries
         if (department === "stitching") {
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM stitching_assignments sa
-                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(sa.assigned_on) BETWEEN ? AND ?
+              FROM stitching_assignments sa
+              JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
+              WHERE c2.lot_no = cl.lot_no
+                AND DATE(sa.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -1082,11 +955,11 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM jeans_assembly_assignments ja
-                JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(ja.assigned_on) BETWEEN ? AND ?
+              FROM jeans_assembly_assignments ja
+              JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+              JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
+              WHERE c2.lot_no = cl.lot_no
+                AND DATE(ja.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -1094,26 +967,23 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM washing_assignments wa
-                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wa.assigned_on) BETWEEN ? AND ?
+              FROM washing_assignments wa
+              JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+              JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
+              WHERE c2.lot_no = cl.lot_no
+                AND DATE(wa.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
         } else if (department === "washing_in") {
-          // <-- Updated to join washing_data instead of washing_in_data
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM washing_in_assignments wia
-                JOIN washing_data wd
-                  ON wia.washing_data_id = wd.id
-                JOIN cutting_lots c2
-                  ON wd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wia.assigned_on) BETWEEN ? AND ?
+              FROM washing_in_assignments wia
+              JOIN washing_data wd ON wia.washing_data_id = wd.id
+              JOIN cutting_lots c2 ON wd.lot_no = c2.lot_no
+              WHERE c2.lot_no = cl.lot_no
+                AND DATE(wia.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -1121,12 +991,12 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM finishing_assignments fa
-                LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
-                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(fa.assigned_on) BETWEEN ? AND ?
+              FROM finishing_assignments fa
+              LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+              LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+              JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
+              WHERE c2.lot_no = cl.lot_no
+                AND DATE(fa.assigned_on) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -1151,40 +1021,358 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       `;
     }
 
-    // Base query
+    /***********************************************************
+     * 2. Fetch the cutting_lots we care about (bulk)
+     ***********************************************************/
     const baseQuery = `
       SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark,
              u.username AS created_by
-        FROM cutting_lots cl
-        JOIN users u ON cl.user_id = u.id
-       WHERE 1=1
-         ${lotTypeClause}
-         ${dateWhere}
-       ORDER BY cl.created_at DESC
+      FROM cutting_lots cl
+      JOIN users u ON cl.user_id = u.id
+      WHERE 1=1
+        ${lotTypeClause}
+        ${dateWhere}
+      ORDER BY cl.created_at DESC
     `;
     const [lots] = await pool.query(baseQuery, dateParams);
 
-    // Build final data
+    if (!lots.length) {
+      // Nothing found, just return or render empty
+      if (download === "1") {
+        // Return an empty Excel
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("PIC-Report");
+        sheet.addRow(["No data found"]);
+        res.setHeader(
+          "Content-Type",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        res.setHeader(
+          "Content-Disposition",
+          'attachment; filename="PICReport-FixedChain.xlsx"'
+        );
+        await workbook.xlsx.write(res);
+        return res.end();
+      } else {
+        return res.render("operatorPICReport", {
+          filters: { lotType, department, status, dateFilter, startDate, endDate },
+          rows: []
+        });
+      }
+    }
+
+    // Extract the lotNos
+    const lotNos = lots.map((l) => l.lot_no);
+
+    /***********************************************************
+     * 3. Bulk Summations for each stage
+     ***********************************************************/
+    // 3a. stitching_data
+    const [stitchRows] = await pool.query(
+      `
+       SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumStitched
+         FROM stitching_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const stitchedMap = {};
+    stitchRows.forEach((r) => {
+      stitchedMap[r.lot_no] = r.sumStitched;
+    });
+
+    // 3b. jeans_assembly_data
+    const [asmRows] = await pool.query(
+      `
+       SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumAsm
+         FROM jeans_assembly_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const asmMap = {};
+    asmRows.forEach((r) => {
+      asmMap[r.lot_no] = r.sumAsm;
+    });
+
+    // 3c. washing_data
+    const [washRows] = await pool.query(
+      `
+       SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumWash
+         FROM washing_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const washMap = {};
+    washRows.forEach((r) => {
+      washMap[r.lot_no] = r.sumWash;
+    });
+
+    // 3d. washing_in_data
+    const [washInRows] = await pool.query(
+      `
+       SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumWashIn
+         FROM washing_in_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const washInMap = {};
+    washInRows.forEach((r) => {
+      washInMap[r.lot_no] = r.sumWashIn;
+    });
+
+    // 3e. finishing_data
+    const [finRows] = await pool.query(
+      `
+       SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumFin
+         FROM finishing_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const finMap = {};
+    finRows.forEach((r) => {
+      finMap[r.lot_no] = r.sumFin;
+    });
+
+    /***********************************************************
+     * 4. Bulk "last assignment" lookups
+     *    We'll do 5 queries total (one per stage).
+     *    Use correlated subqueries to pick the row with MAX(...).
+     ***********************************************************/
+
+    // 4a. Last Stitching Assignment
+    const [lastStitchRows] = await pool.query(
+      `
+      SELECT 
+        c.lot_no,
+        sa.id,
+        sa.isApproved AS isApproved,
+        sa.assigned_on,
+        sa.approved_on,
+        sa.user_id
+      FROM stitching_assignments sa
+      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+      WHERE c.lot_no IN (?)
+        AND sa.assigned_on = (
+          SELECT MAX(sa2.assigned_on)
+          FROM stitching_assignments sa2
+          JOIN cutting_lots c2 ON sa2.cutting_lot_id = c2.id
+          WHERE c2.lot_no = c.lot_no
+        )
+      `,
+      [lotNos]
+    );
+    const lastStitchMap = {};
+    lastStitchRows.forEach((row) => {
+      lastStitchMap[row.lot_no] = row;
+    });
+
+    // 4b. Last Assembly Assignment
+    const [lastAsmRows] = await pool.query(
+      `
+      SELECT
+        jd.lot_no,
+        ja.id,
+        ja.is_approved,
+        ja.assigned_on,
+        ja.approved_on,
+        ja.user_id
+      FROM jeans_assembly_assignments ja
+      JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+      JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
+      JOIN jeans_assembly_data jd ON jd.lot_no = c2.lot_no
+      WHERE jd.lot_no IN (?)
+        AND ja.assigned_on = (
+          SELECT MAX(ja2.assigned_on)
+          FROM jeans_assembly_assignments ja2
+          JOIN stitching_data sd2 ON ja2.stitching_assignment_id = sd2.id
+          JOIN cutting_lots c3 ON sd2.lot_no = c3.lot_no
+          WHERE c3.lot_no = c2.lot_no
+        )
+      GROUP BY jd.lot_no
+      `,
+      [lotNos]
+    );
+    const lastAsmMap = {};
+    lastAsmRows.forEach((row) => {
+      lastAsmMap[row.lot_no] = row;
+    });
+
+    // 4c. Last Washing Assignment
+    const [lastWashRows] = await pool.query(
+      `
+      SELECT
+        jd.lot_no,
+        wa.id,
+        wa.is_approved,
+        wa.assigned_on,
+        wa.approved_on,
+        wa.user_id
+      FROM washing_assignments wa
+      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+      JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
+      WHERE jd.lot_no IN (?)
+        AND wa.assigned_on = (
+          SELECT MAX(wa2.assigned_on)
+          FROM washing_assignments wa2
+          JOIN jeans_assembly_data jd2 ON wa2.jeans_assembly_assignment_id = jd2.id
+          JOIN cutting_lots c3 ON jd2.lot_no = c3.lot_no
+          WHERE c3.lot_no = c2.lot_no
+        )
+      GROUP BY jd.lot_no
+      `,
+      [lotNos]
+    );
+    const lastWashMap = {};
+    lastWashRows.forEach((row) => {
+      lastWashMap[row.lot_no] = row;
+    });
+
+    // 4d. Last WashingIn Assignment
+    const [lastWInRows] = await pool.query(
+      `
+      SELECT
+        wd.lot_no,
+        wia.id,
+        wia.is_approved,
+        wia.assigned_on,
+        wia.approved_on,
+        wia.user_id
+      FROM washing_in_assignments wia
+      JOIN washing_data wd ON wia.washing_data_id = wd.id
+      JOIN cutting_lots c2 ON wd.lot_no = c2.lot_no
+      WHERE wd.lot_no IN (?)
+        AND wia.assigned_on = (
+          SELECT MAX(wia2.assigned_on)
+          FROM washing_in_assignments wia2
+          JOIN washing_data wd2 ON wia2.washing_data_id = wd2.id
+          JOIN cutting_lots c3 ON wd2.lot_no = c3.lot_no
+          WHERE c3.lot_no = c2.lot_no
+        )
+      GROUP BY wd.lot_no
+      `,
+      [lotNos]
+    );
+    const lastWInMap = {};
+    lastWInRows.forEach((row) => {
+      lastWInMap[row.lot_no] = row;
+    });
+
+    // 4e. Last Finishing Assignment
+    const [lastFinRows] = await pool.query(
+      `
+      SELECT
+        COALESCE(wd.lot_no, sd.lot_no) AS lot_no,
+        fa.id,
+        fa.is_approved,
+        fa.assigned_on,
+        fa.approved_on,
+        fa.user_id
+      FROM finishing_assignments fa
+      LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+      JOIN cutting_lots c2 ON (
+        (wd.lot_no = c2.lot_no) OR
+        (sd.lot_no = c2.lot_no)
+      )
+      WHERE c2.lot_no IN (?)
+        AND fa.assigned_on = (
+          SELECT MAX(fa2.assigned_on)
+          FROM finishing_assignments fa2
+          LEFT JOIN washing_data wd2 ON fa2.washing_assignment_id = wd2.id
+          LEFT JOIN stitching_data sd2 ON fa2.stitching_assignment_id = sd2.id
+          JOIN cutting_lots c3 ON (
+            (wd2.lot_no = c3.lot_no) OR
+            (sd2.lot_no = c3.lot_no)
+          )
+          WHERE c3.lot_no = c2.lot_no
+        )
+      GROUP BY lot_no
+      `,
+      [lotNos]
+    );
+    const lastFinMap = {};
+    lastFinRows.forEach((row) => {
+      lastFinMap[row.lot_no] = row;
+    });
+
+    /***********************************************************
+     * 5. Collect all user_ids from these assignment rows
+     *    so we can do ONE user lookup for opName
+     ***********************************************************/
+    const userIdSet = new Set();
+    [...lastStitchRows, ...lastAsmRows, ...lastWashRows, ...lastWInRows, ...lastFinRows].forEach(
+      (row) => {
+        if (row.user_id) userIdSet.add(row.user_id);
+      }
+    );
+    let userMap = {};
+    if (userIdSet.size > 0) {
+      const userIds = Array.from(userIdSet);
+      const [users] = await pool.query(
+        `SELECT id, username FROM users WHERE id IN (?)`,
+        [userIds]
+      );
+      userMap = users.reduce((acc, u) => {
+        acc[u.id] = u.username;
+        return acc;
+      }, {});
+    }
+
+    // Now attach opName in each "last" row
+    function attachOpName(row) {
+      if (!row) return null;
+      return {
+        ...row,
+        opName: row.user_id ? (userMap[row.user_id] || "Unknown") : ""
+      };
+    }
+    Object.keys(lastStitchMap).forEach((k) => {
+      lastStitchMap[k] = attachOpName(lastStitchMap[k]);
+    });
+    Object.keys(lastAsmMap).forEach((k) => {
+      lastAsmMap[k] = attachOpName(lastAsmMap[k]);
+    });
+    Object.keys(lastWashMap).forEach((k) => {
+      lastWashMap[k] = attachOpName(lastWashMap[k]);
+    });
+    Object.keys(lastWInMap).forEach((k) => {
+      lastWInMap[k] = attachOpName(lastWInMap[k]);
+    });
+    Object.keys(lastFinMap).forEach((k) => {
+      lastFinMap[k] = attachOpName(lastFinMap[k]);
+    });
+
+    /***********************************************************
+     * 6. Build finalData array
+     ***********************************************************/
     const finalData = [];
     for (const lot of lots) {
       const lotNo = lot.lot_no;
       const totalCut = parseFloat(lot.total_pieces) || 0;
       const denim = isDenimLot(lotNo);
 
-      // Gather qty from data tables
-      const stitchedQty   = await getStitchedQty(lotNo);
-      const assembledQty  = denim ? await getAssembledQty(lotNo)  : 0;
-      const washedQty     = denim ? await getWashedQty(lotNo)     : 0;
-      const washingInQty  = denim ? await getWashingInQty(lotNo)  : 0;
-      const finishedQty   = await getFinishedQty(lotNo);
+      // Summations
+      const stitchedQty = stitchedMap[lotNo] || 0;
+      const assembledQty = denim ? (asmMap[lotNo] || 0) : 0;
+      const washedQty = denim ? (washMap[lotNo] || 0) : 0;
+      const washingInQty = denim ? (washInMap[lotNo] || 0) : 0;
+      const finishedQty = finMap[lotNo] || 0;
 
-      // Gather last assignment records
-      const stAssign  = await getLastStitchingAssignment(lotNo);
-      const asmAssign = denim ? await getLastAssemblyAssignment(lotNo) : null;
-      const washAssign= denim ? await getLastWashingAssignment(lotNo)  : null;
-      // <-- now uses the updated version that joins washing_data
-      const wInAssign = denim ? await getLastWashingInAssignment(lotNo): null;
-      const finAssign = await getLastFinishingAssignment(lotNo, denim);
+      // Last assignments
+      const stAssign = lastStitchMap[lotNo] || null;
+      const asmAssign = denim ? (lastAsmMap[lotNo] || null) : null;
+      const washAssign = denim ? (lastWashMap[lotNo] || null) : null;
+      const washInAssign = denim ? (lastWInMap[lotNo] || null) : null;
+      const finAssign = lastFinMap[lotNo] || null;
 
       // Calculate statuses
       const statuses = getDepartmentStatuses({
@@ -1198,7 +1386,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         stAssign,
         asmAssign,
         washAssign,
-        washInAssign: wInAssign,
+        washInAssign,
         finAssign
       });
 
@@ -1206,11 +1394,11 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const deptResult = filterByDept({
         department,
         isDenim: denim,
-        stitchingStatus:   statuses.stitchingStatus,
-        assemblyStatus:    statuses.assemblyStatus,
-        washingStatus:     statuses.washingStatus,
-        washingInStatus:   statuses.washingInStatus,
-        finishingStatus:   statuses.finishingStatus
+        stitchingStatus: statuses.stitchingStatus,
+        assemblyStatus: statuses.assemblyStatus,
+        washingStatus: statuses.washingStatus,
+        washingInStatus: statuses.washingInStatus,
+        finishingStatus: statuses.finishingStatus
       });
       if (!deptResult.showRow) continue;
 
@@ -1242,93 +1430,95 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         remark: lot.remark || "",
 
         // Stitching
-        stitchAssignedOn:   statuses.stitchingAssignedOn,
-        stitchApprovedOn:   statuses.stitchingApprovedOn,
-        stitchOp:           statuses.stitchingOp,
-        stitchStatus:       statuses.stitchingStatus,
+        stitchAssignedOn: statuses.stitchingAssignedOn,
+        stitchApprovedOn: statuses.stitchingApprovedOn,
+        stitchOp: statuses.stitchingOp,
+        stitchStatus: statuses.stitchingStatus,
         stitchedQty,
 
         // Assembly
         assemblyAssignedOn: statuses.assemblyAssignedOn,
         assemblyApprovedOn: statuses.assemblyApprovedOn,
-        assemblyOp:         statuses.assemblyOp,
-        assemblyStatus:     statuses.assemblyStatus,
+        assemblyOp: statuses.assemblyOp,
+        assemblyStatus: statuses.assemblyStatus,
         assembledQty,
 
         // Washing
-        washingAssignedOn:  statuses.washingAssignedOn,
-        washingApprovedOn:  statuses.washingApprovedOn,
-        washingOp:          statuses.washingOp,
-        washingStatus:      statuses.washingStatus,
+        washingAssignedOn: statuses.washingAssignedOn,
+        washingApprovedOn: statuses.washingApprovedOn,
+        washingOp: statuses.washingOp,
+        washingStatus: statuses.washingStatus,
         washedQty,
 
         // Washing‑In
         washingInAssignedOn: statuses.washingInAssignedOn,
         washingInApprovedOn: statuses.washingInApprovedOn,
-        washingInOp:         statuses.washingInOp,
-        washingInStatus:     statuses.washingInStatus,
+        washingInOp: statuses.washingInOp,
+        washingInStatus: statuses.washingInStatus,
         washingInQty,
 
         // Finishing
         finishingAssignedOn: statuses.finishingAssignedOn,
         finishingApprovedOn: statuses.finishingApprovedOn,
-        finishingOp:         statuses.finishingOp,
-        finishingStatus:     statuses.finishingStatus,
+        finishingOp: statuses.finishingOp,
+        finishingStatus: statuses.finishingStatus,
         finishedQty
       });
     }
 
-    // If download => Excel
+    /***********************************************************
+     * 7. Output: either Download Excel or Render HTML
+     ***********************************************************/
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "PIC Report – Denim Chain with WashingIn";
 
       const sheet = workbook.addWorksheet("PIC-Report");
       sheet.columns = [
-        { header: "Lot No",               key: "lotNo",                width: 15 },
-        { header: "SKU",                  key: "sku",                  width: 12 },
-        { header: "Lot Type",             key: "lotType",              width: 10 },
-        { header: "Total Cut",            key: "totalCut",             width: 10 },
-        { header: "Created At",           key: "createdAt",            width: 15 },
-        { header: "Remark",               key: "remark",               width: 20 },
+        { header: "Lot No",                key: "lotNo",                 width: 15 },
+        { header: "SKU",                   key: "sku",                   width: 12 },
+        { header: "Lot Type",              key: "lotType",               width: 10 },
+        { header: "Total Cut",             key: "totalCut",              width: 10 },
+        { header: "Created At",            key: "createdAt",             width: 15 },
+        { header: "Remark",                key: "remark",                width: 20 },
 
         // Stitching
-        { header: "Stitch Assigned On",   key: "stitchAssignedOn",     width: 20 },
-        { header: "Stitch Approved On",   key: "stitchApprovedOn",     width: 20 },
-        { header: "Stitch Operator",      key: "stitchOp",             width: 15 },
-        { header: "Stitch Status",        key: "stitchStatus",         width: 25 },
-        { header: "Stitched Qty",         key: "stitchedQty",          width: 15 },
+        { header: "Stitch Assigned On",    key: "stitchAssignedOn",      width: 20 },
+        { header: "Stitch Approved On",    key: "stitchApprovedOn",      width: 20 },
+        { header: "Stitch Operator",       key: "stitchOp",              width: 15 },
+        { header: "Stitch Status",         key: "stitchStatus",          width: 25 },
+        { header: "Stitched Qty",          key: "stitchedQty",           width: 15 },
 
         // Assembly
-        { header: "Assembly Assigned On", key: "assemblyAssignedOn",   width: 20 },
-        { header: "Assembly Approved On", key: "assemblyApprovedOn",   width: 20 },
-        { header: "Assembly Operator",    key: "assemblyOp",           width: 15 },
-        { header: "Assembly Status",      key: "assemblyStatus",       width: 25 },
-        { header: "Assembled Qty",        key: "assembledQty",         width: 15 },
+        { header: "Assembly Assigned On",  key: "assemblyAssignedOn",    width: 20 },
+        { header: "Assembly Approved On",  key: "assemblyApprovedOn",    width: 20 },
+        { header: "Assembly Operator",     key: "assemblyOp",            width: 15 },
+        { header: "Assembly Status",       key: "assemblyStatus",        width: 25 },
+        { header: "Assembled Qty",         key: "assembledQty",          width: 15 },
 
         // Washing
-        { header: "Washing Assigned On",  key: "washingAssignedOn",    width: 20 },
-        { header: "Washing Approved On",  key: "washingApprovedOn",    width: 20 },
-        { header: "Washing Operator",     key: "washingOp",            width: 15 },
-        { header: "Washing Status",       key: "washingStatus",        width: 25 },
-        { header: "Washed Qty",           key: "washedQty",            width: 15 },
+        { header: "Washing Assigned On",   key: "washingAssignedOn",     width: 20 },
+        { header: "Washing Approved On",   key: "washingApprovedOn",     width: 20 },
+        { header: "Washing Operator",      key: "washingOp",             width: 15 },
+        { header: "Washing Status",        key: "washingStatus",         width: 25 },
+        { header: "Washed Qty",            key: "washedQty",             width: 15 },
 
         // Washing‑In
-        { header: "WashIn Assigned On",   key: "washingInAssignedOn",  width: 20 },
-        { header: "WashIn Approved On",   key: "washingInApprovedOn",  width: 20 },
-        { header: "WashIn Operator",      key: "washingInOp",          width: 15 },
-        { header: "WashIn Status",        key: "washingInStatus",      width: 25 },
-        { header: "WashIn Qty",           key: "washingInQty",         width: 15 },
+        { header: "WashIn Assigned On",    key: "washingInAssignedOn",   width: 20 },
+        { header: "WashIn Approved On",    key: "washingInApprovedOn",   width: 20 },
+        { header: "WashIn Operator",       key: "washingInOp",           width: 15 },
+        { header: "WashIn Status",         key: "washingInStatus",       width: 25 },
+        { header: "WashIn Qty",            key: "washingInQty",          width: 15 },
 
         // Finishing
-        { header: "Finishing Assigned On",key: "finishingAssignedOn",  width: 20 },
-        { header: "Finishing Approved On",key: "finishingApprovedOn",  width: 20 },
-        { header: "Finishing Operator",   key: "finishingOp",          width: 15 },
-        { header: "Finishing Status",     key: "finishingStatus",      width: 25 },
-        { header: "Finished Qty",         key: "finishedQty",          width: 15 }
+        { header: "Finishing Assigned On", key: "finishingAssignedOn",   width: 20 },
+        { header: "Finishing Approved On", key: "finishingApprovedOn",   width: 20 },
+        { header: "Finishing Operator",    key: "finishingOp",           width: 15 },
+        { header: "Finishing Status",      key: "finishingStatus",       width: 25 },
+        { header: "Finished Qty",          key: "finishedQty",           width: 15 }
       ];
 
-      finalData.forEach(r => {
+      finalData.forEach((r) => {
         sheet.addRow({
           lotNo:               r.lotNo,
           sku:                 r.sku,
@@ -1383,19 +1573,20 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         'attachment; filename="PICReport-FixedChain.xlsx"'
       );
       await workbook.xlsx.write(res);
-      res.end();
-    } else {
-      // Render HTML
-      return res.render("operatorPICReport", {
-        filters: { lotType, department, status, dateFilter, startDate, endDate },
-        rows: finalData
-      });
+      return res.end();
     }
+
+    // Otherwise, render HTML:
+    return res.render("operatorPICReport", {
+      filters: { lotType, department, status, dateFilter, startDate, endDate },
+      rows: finalData
+    });
   } catch (err) {
     console.error("Error in /dashboard/pic-report:", err);
     return res.status(500).send("Server error");
   }
 });
+
 // At top of your routes file, ensure you import isStitchingMaster:
 const { isStitchingMaster } = require("../middlewares/auth");
 
