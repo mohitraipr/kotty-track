@@ -2070,78 +2070,6 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
 });
 
 // ====================== Single Route: /urgent-tat ======================
-const twilio = require("twilio");
-
-// Note: We do NOT call require('dotenv').config() here
-// because we are using global.env.* from secure-env (loaded in app.js).
-
-// Create Twilio Client using secure-env credentials
-const TWILIO_CLIENT = twilio(
-  global.env.TWILIO_ACCOUNT_SID,
-  global.env.TWILIO_AUTH_TOKEN
-);
-
-// Hard-coded user → phone map
-const USER_PHONE_MAP = {
-  6:  "+919058893850",
-  35: "+918368357980",
-  8:  "+919582782336"
-};
-
-/** Tiny helper: chunk text if >1600 chars. Splits by lines. */
-function chunkMessage(text, limit=1600) {
-  if (text.length <= limit) return [text];
-  const lines = text.split("\n");
-  const chunks = [];
-  let current = "";
-  for (const ln of lines) {
-    if ((current + ln + "\n").length > limit) {
-      chunks.push(current.trimEnd());
-      current = "";
-    }
-    current += ln + "\n";
-  }
-  if (current) chunks.push(current.trimEnd());
-  return chunks;
-}
-
-/** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
-async function sendChunk(phone, body) {
-  try {
-    // Attempt WhatsApp
-    await TWILIO_CLIENT.messages.create({
-      from: global.env.TWILIO_WHATSAPP_FROM, // secure-env usage
-      to:   "whatsapp:" + phone,
-      body
-    });
-    return { ok: true, via: "WhatsApp", error: null };
-  } catch (waErr) {
-    // fallback to SMS
-    try {
-      await TWILIO_CLIENT.messages.create({
-        from: global.env.TWILIO_SMS_FROM, // secure-env usage
-        to:   phone,
-        body
-      });
-      return { ok: true, via: "SMS", error: null };
-    } catch (smsErr) {
-      return { ok: false, via: null, error: smsErr.message };
-    }
-  }
-}
-
-/** Returns how many days since the dateValue. */
-function daysSince(dateValue) {
-  if (!dateValue) return 0;
-  const msDiff = Date.now() - new Date(dateValue).getTime();
-  return Math.floor(msDiff / (1000 * 60 * 60 * 24));
-}
-
-/**
- * GET  /urgent-tat   => Show a page with previews + single "Send" button
- * POST /urgent-tat   => Actually send
- */
-// ====================== Single Route: /urgent-tat ======================
 // ====================== Single Route: /urgent-tat ======================
 const twilio = require("twilio");
 
@@ -2437,3 +2365,6 @@ router.route("/urgent-tat")
       return res.status(500).send("Server Error in /urgent-tat");
     }
   });
+
+
+module.exports = router;
