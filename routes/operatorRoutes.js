@@ -2075,7 +2075,7 @@ const twilio = require("twilio");
 
 // 1) Hard-coded Twilio Credentials
 const TWILIO_ACCOUNT_SID    = "AC255689e642be728f80630c179ad7b70d";
-const TWILIO_AUTH_TOKEN     = "9347a031e09884015137eafb7ff0e991";
+const TWILIO_AUTH_TOKEN     = "86b13a472d5d64404d16ffcc444ef471";
 const TWILIO_WHATSAPP_FROM  = "whatsapp:+14155238886";
 const TWILIO_SMS_FROM       = "+19284272221";
 
