@@ -2068,4 +2068,230 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
     return res.status(500).json({ error: "Server Error" });
   }
 });
+
+// ====================== Single Route: /urgent-tat ======================
+const twilio = require("twilio");
+require("dotenv").config();
+
+// Twilio Client
+const TWILIO_CLIENT = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// Hard-coded user → phone map
+const USER_PHONE_MAP = {
+  6:  "+919058893850",
+  35: "+918368357980",
+  8:  "+919582782336"
+};
+
+/** Tiny helper: chunk text if >1600 chars. Splits by lines. */
+function chunkMessage(text, limit=1600) {
+  if (text.length <= limit) return [text];
+  const lines = text.split("\n");
+  const chunks = [];
+  let current = "";
+  for (const ln of lines) {
+    if ((current + ln + "\n").length > limit) {
+      chunks.push(current.trimEnd());
+      current = "";
+    }
+    current += ln + "\n";
+  }
+  if (current) chunks.push(current.trimEnd());
+  return chunks;
+}
+
+/** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
+async function sendChunk(phone, body) {
+  try {
+    await TWILIO_CLIENT.messages.create({
+      from: process.env.TWILIO_WHATSAPP_FROM,
+      to:   "whatsapp:" + phone,
+      body
+    });
+    return { ok: true, via: "WhatsApp", error: null };
+  } catch (waErr) {
+    // fallback
+    try {
+      await TWILIO_CLIENT.messages.create({
+        from: process.env.TWILIO_SMS_FROM,
+        to:   phone,
+        body
+      });
+      return { ok: true, via: "SMS", error: null };
+    } catch (smsErr) {
+      return { ok: false, via: null, error: smsErr.message };
+    }
+  }
+}
+
+/** Returns how many days since the dateValue. */
+function daysSince(dateValue) {
+  if (!dateValue) return 0;
+  const msDiff = Date.now() - new Date(dateValue).getTime();
+  return Math.floor(msDiff / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * GET  /urgent-tat   => Show a page with previews + single "Send" button
+ * POST /urgent-tat   => Actually send
+ */
+router.route("/urgent-tat")
+  .all(isAuthenticated, isOperator, async (req, res) => {
+    // We'll do the same DB lookup on GET & POST
+    // 1) Find all stitching_assignments older than 20 days
+    //    grouped by user_id
+    try {
+      const [rows] = await pool.query(`
+        SELECT sa.user_id, u.username,
+               cl.lot_no, cl.remark,
+               sa.assigned_on
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+          JOIN users u         ON sa.user_id = u.id
+         WHERE sa.assigned_on IS NOT NULL
+           AND DATEDIFF(NOW(), sa.assigned_on) > 20
+         ORDER BY sa.user_id, sa.assigned_on
+      `);
+
+      // 2) Group them by user_id => { userId: { username, lines: [] } }
+      const overdueMap = {};
+      for (const r of rows) {
+        const userId = r.user_id;
+        if (!overdueMap[userId]) {
+          overdueMap[userId] = {
+            username: r.username,
+            lines: []
+          };
+        }
+        // e.g. "Lot 2594 sort no 618"
+        const line = `Lot ${r.lot_no}${r.remark ? " " + r.remark.trim() : ""}`;
+        overdueMap[userId].lines.push(line);
+      }
+
+      // If no results => show a "nothing to send" preview
+      if (!Object.keys(overdueMap).length) {
+        const emptyHtml = `
+<!DOCTYPE html>
+<html><head><title>Urgent TAT</title></head>
+<body style="font-family:sans-serif;">
+  <h2>Urgent TAT (Over 20 days) - No Data Found</h2>
+  <p>No lots are older than 20 days. Nothing to send.</p>
+</body></html>`;
+        return res.end(emptyHtml);
+      }
+
+      // 3) Build a big text area preview:
+      //    We'll show each master block (username, lines) separated by blank lines
+      let previewText = "";
+      for (const [uid, val] of Object.entries(overdueMap)) {
+        const header = `Master #${uid} - ${val.username}`;
+        const body   = val.lines.join("\n");
+        previewText += header + "\n" + body + "\n\n";
+      }
+      previewText = previewText.trimEnd();
+
+      // 4) If it's a POST => attempt to send
+      let statusMessage = "";
+      let errorMessage  = "";
+      if (req.method === "POST") {
+        // For each master, send their lines in 1 or more chunks
+        const sendResults = [];
+        for (const [uid, val] of Object.entries(overdueMap)) {
+          const phone = USER_PHONE_MAP[uid];
+          if (!phone) {
+            sendResults.push({
+              userId: uid,
+              username: val.username,
+              error: `No phone mapped for user_id=${uid}`
+            });
+            continue;
+          }
+          // create full text
+          const fullText = val.lines.join("\n");
+          const chunks   = chunkMessage(fullText);
+          // send each chunk
+          const outcomes = [];
+          for (const c of chunks) {
+            /* eslint-disable no-await-in-loop */
+            const result = await sendChunk(phone, c);
+            outcomes.push(result);
+            if (!result.ok) break; // if 1 chunk fails, no point sending more
+          }
+          // analyze
+          if (outcomes.every(o => o.ok)) {
+            sendResults.push({
+              userId: uid,
+              username: val.username,
+              success: `Sent ${outcomes.length} chunk(s) to ${phone} via ${outcomes.map(o => o.via).join(", ")}`
+            });
+          } else {
+            const errChunk = outcomes.find(o => !o.ok);
+            sendResults.push({
+              userId: uid,
+              username: val.username,
+              error: `Failed chunk => ${errChunk?.error || "Unknown"}`
+            });
+          }
+        }
+
+        // build final status
+        const successes = sendResults.filter(r => r.success);
+        const fails     = sendResults.filter(r => r.error);
+
+        if (successes.length) {
+          statusMessage = "✅ Sent to: <br/>" + 
+            successes.map(s => `• [${s.userId}] ${s.username}: ${s.success}`).join("<br/>");
+        }
+        if (fails.length) {
+          errorMessage = "❌ Errors: <br/>" +
+            fails.map(f => `• [${f.userId}] ${f.username}: ${f.error}`).join("<br/>");
+        }
+      }
+
+      // 5) Render minimal HTML with text area + single button
+      const htmlPage = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Urgent TAT - All Masters</title>
+  <style>
+    body { font-family:sans-serif; max-width:700px; margin:2rem auto; }
+    textarea { width:100%; height:300px; font-family:monospace; }
+    .ok { color:green; }
+    .err { color:red; }
+  </style>
+</head>
+<body>
+  <h2>Urgent TAT (Over 20 days) - All Masters</h2>
+  <form method="POST">
+    <textarea readonly>${previewText}</textarea><br/><br/>
+    <button type="submit" style="padding:8px 20px;">Send TAT to All</button>
+  </form>
+  ${
+    statusMessage
+      ? `<p class="ok" style="margin-top:1rem;">${statusMessage}</p>`
+      : ""
+  }
+  ${
+    errorMessage
+      ? `<p class="err" style="margin-top:1rem;">${errorMessage}</p>`
+      : ""
+  }
+</body>
+</html>`;
+      res.setHeader("Content-Type", "text/html");
+      return res.end(htmlPage);
+
+    } catch (err) {
+      console.error("Error in /urgent-tat route:", err);
+      return res.status(500).send("Server Error in /urgent-tat");
+    }
+  });
+
+
+
 module.exports = router;
