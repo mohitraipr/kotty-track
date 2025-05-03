@@ -2071,12 +2071,14 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
 
 // ====================== Single Route: /urgent-tat ======================
 const twilio = require("twilio");
-require("dotenv").config();
 
-// Twilio Client
+// Note: We do NOT call require('dotenv').config() here
+// because we are using global.env.* from secure-env (loaded in app.js).
+
+// Create Twilio Client using secure-env credentials
 const TWILIO_CLIENT = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
+  global.env.TWILIO_ACCOUNT_SID,
+  global.env.TWILIO_AUTH_TOKEN
 );
 
 // Hard-coded user → phone map
@@ -2106,17 +2108,91 @@ function chunkMessage(text, limit=1600) {
 /** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
 async function sendChunk(phone, body) {
   try {
+    // Attempt WhatsApp
     await TWILIO_CLIENT.messages.create({
-      from: process.env.TWILIO_WHATSAPP_FROM,
+      from: global.env.TWILIO_WHATSAPP_FROM, // secure-env usage
       to:   "whatsapp:" + phone,
       body
     });
     return { ok: true, via: "WhatsApp", error: null };
   } catch (waErr) {
-    // fallback
+    // fallback to SMS
     try {
       await TWILIO_CLIENT.messages.create({
-        from: process.env.TWILIO_SMS_FROM,
+        from: global.env.TWILIO_SMS_FROM, // secure-env usage
+        to:   phone,
+        body
+      });
+      return { ok: true, via: "SMS", error: null };
+    } catch (smsErr) {
+      return { ok: false, via: null, error: smsErr.message };
+    }
+  }
+}
+
+/** Returns how many days since the dateValue. */
+function daysSince(dateValue) {
+  if (!dateValue) return 0;
+  const msDiff = Date.now() - new Date(dateValue).getTime();
+  return Math.floor(msDiff / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * GET  /urgent-tat   => Show a page with previews + single "Send" button
+ * POST /urgent-tat   => Actually send
+ */
+// ====================== Single Route: /urgent-tat ======================
+// ====================== Single Route: /urgent-tat ======================
+const twilio = require("twilio");
+
+// 1) Hard-coded Twilio Credentials
+const TWILIO_ACCOUNT_SID    = "AC255689e642be728f80630c179ad7b70d";
+const TWILIO_AUTH_TOKEN     = "9347a031e09884015137eafb7ff0e991";
+const TWILIO_WHATSAPP_FROM  = "whatsapp:+14155238886";
+const TWILIO_SMS_FROM       = "+19284272221";
+
+// 2) Create Twilio Client
+const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+// Hard-coded user → phone map
+const USER_PHONE_MAP = {
+  6:  "+919058893850",
+  35: "+918368357980",
+  8:  "+919582782336"
+};
+
+// Tiny helper: chunk text if >1600 chars. Splits by lines
+function chunkMessage(text, limit=1600) {
+  if (text.length <= limit) return [text];
+  const lines = text.split("\n");
+  const chunks = [];
+  let current = "";
+  for (const ln of lines) {
+    if ((current + ln + "\n").length > limit) {
+      chunks.push(current.trimEnd());
+      current = "";
+    }
+    current += ln + "\n";
+  }
+  if (current) chunks.push(current.trimEnd());
+  return chunks;
+}
+
+/** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
+async function sendChunk(phone, body) {
+  try {
+    // Attempt WhatsApp
+    await TWILIO_CLIENT.messages.create({
+      from: TWILIO_WHATSAPP_FROM,
+      to:   "whatsapp:" + phone,
+      body
+    });
+    return { ok: true, via: "WhatsApp", error: null };
+  } catch (waErr) {
+    // fallback to SMS
+    try {
+      await TWILIO_CLIENT.messages.create({
+        from: TWILIO_SMS_FROM,
         to:   phone,
         body
       });
@@ -2140,10 +2216,26 @@ function daysSince(dateValue) {
  */
 router.route("/urgent-tat")
   .all(isAuthenticated, isOperator, async (req, res) => {
-    // We'll do the same DB lookup on GET & POST
-    // 1) Find all stitching_assignments older than 20 days
-    //    grouped by user_id
     try {
+      // 1) Find all stitching_assignments older than 20 days
+      //    but only for users that are in USER_PHONE_MAP
+      const userIds = Object.keys(USER_PHONE_MAP).map(Number); // e.g. [6,35,8]
+      if (!userIds.length) {
+        // If we have no phone mappings, there's no reason to proceed
+        const noMapHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Urgent TAT</title>
+</head>
+<body style="font-family:sans-serif; margin:40px;">
+  <h2>No user phone mappings found.</h2>
+</body>
+</html>`;
+        return res.end(noMapHtml);
+      }
+
       const [rows] = await pool.query(`
         SELECT sa.user_id, u.username,
                cl.lot_no, cl.remark,
@@ -2153,8 +2245,9 @@ router.route("/urgent-tat")
           JOIN users u         ON sa.user_id = u.id
          WHERE sa.assigned_on IS NOT NULL
            AND DATEDIFF(NOW(), sa.assigned_on) > 20
+           AND sa.user_id IN (?)
          ORDER BY sa.user_id, sa.assigned_on
-      `);
+      `, [userIds]);
 
       // 2) Group them by user_id => { userId: { username, lines: [] } }
       const overdueMap = {};
@@ -2176,15 +2269,14 @@ router.route("/urgent-tat")
         const emptyHtml = `
 <!DOCTYPE html>
 <html><head><title>Urgent TAT</title></head>
-<body style="font-family:sans-serif;">
-  <h2>Urgent TAT (Over 20 days) - No Data Found</h2>
-  <p>No lots are older than 20 days. Nothing to send.</p>
+<body style="font-family:sans-serif; margin: 40px;">
+  <h2>Urgent TAT (Over 20 days)</h2>
+  <p>No lots are older than 20 days <strong>for mapped users</strong>. Nothing to send.</p>
 </body></html>`;
         return res.end(emptyHtml);
       }
 
-      // 3) Build a big text area preview:
-      //    We'll show each master block (username, lines) separated by blank lines
+      // 3) Build a big text area preview
       let previewText = "";
       for (const [uid, val] of Object.entries(overdueMap)) {
         const header = `Master #${uid} - ${val.username}`;
@@ -2193,39 +2285,33 @@ router.route("/urgent-tat")
       }
       previewText = previewText.trimEnd();
 
-      // 4) If it's a POST => attempt to send
+      // 4) If POST => attempt to send
       let statusMessage = "";
       let errorMessage  = "";
       if (req.method === "POST") {
-        // For each master, send their lines in 1 or more chunks
         const sendResults = [];
         for (const [uid, val] of Object.entries(overdueMap)) {
           const phone = USER_PHONE_MAP[uid];
-          if (!phone) {
-            sendResults.push({
-              userId: uid,
-              username: val.username,
-              error: `No phone mapped for user_id=${uid}`
-            });
-            continue;
-          }
           // create full text
           const fullText = val.lines.join("\n");
           const chunks   = chunkMessage(fullText);
+
           // send each chunk
           const outcomes = [];
           for (const c of chunks) {
             /* eslint-disable no-await-in-loop */
             const result = await sendChunk(phone, c);
             outcomes.push(result);
-            if (!result.ok) break; // if 1 chunk fails, no point sending more
+            if (!result.ok) break; // if 1 chunk fails, skip the rest
           }
+
           // analyze
           if (outcomes.every(o => o.ok)) {
             sendResults.push({
               userId: uid,
               username: val.username,
-              success: `Sent ${outcomes.length} chunk(s) to ${phone} via ${outcomes.map(o => o.via).join(", ")}`
+              success: `Sent ${outcomes.length} chunk(s) to ${phone} via ` +
+                       outcomes.map(o => o.via).join(", ")
             });
           } else {
             const errChunk = outcomes.find(o => !o.ok);
@@ -2242,16 +2328,16 @@ router.route("/urgent-tat")
         const fails     = sendResults.filter(r => r.error);
 
         if (successes.length) {
-          statusMessage = "✅ Sent to: <br/>" + 
+          statusMessage = "Successfully sent to:<br/>" + 
             successes.map(s => `• [${s.userId}] ${s.username}: ${s.success}`).join("<br/>");
         }
         if (fails.length) {
-          errorMessage = "❌ Errors: <br/>" +
+          errorMessage = "Some errors occurred:<br/>" +
             fails.map(f => `• [${f.userId}] ${f.username}: ${f.error}`).join("<br/>");
         }
       }
 
-      // 5) Render minimal HTML with text area + single button
+      // 5) Render a more professional HTML
       const htmlPage = `
 <!DOCTYPE html>
 <html>
@@ -2259,26 +2345,86 @@ router.route("/urgent-tat")
   <meta charset="utf-8" />
   <title>Urgent TAT - All Masters</title>
   <style>
-    body { font-family:sans-serif; max-width:700px; margin:2rem auto; }
-    textarea { width:100%; height:300px; font-family:monospace; }
-    .ok { color:green; }
-    .err { color:red; }
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 6px;
+      color: #333;
+    }
+    h1, h2 {
+      margin-bottom: 0.5em;
+      line-height: 1.2;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 1em;
+    }
+    textarea {
+      width: 100%;
+      height: 220px;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #fff;
+    }
+    .btn-submit {
+      padding: 10px 24px;
+      font-size: 15px;
+      cursor: pointer;
+      color: #fff;
+      background: #007BFF;
+      border: none;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+    .btn-submit:hover {
+      background: #0056b3;
+    }
+    .alert {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .alert.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .alert.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .alert p {
+      margin: 0;
+      white-space: pre-line;
+    }
   </style>
 </head>
 <body>
-  <h2>Urgent TAT (Over 20 days) - All Masters</h2>
+  <h1>Urgent TAT (Over 20 days)</h1>
+  <div class="subtitle">Only sending to mapped Masters in USER_PHONE_MAP</div>
+
   <form method="POST">
-    <textarea readonly>${previewText}</textarea><br/><br/>
-    <button type="submit" style="padding:8px 20px;">Send TAT to All</button>
+    <textarea readonly>${previewText}</textarea>
+    <br/>
+    <button type="submit" class="btn-submit">Send TAT to All</button>
   </form>
+  
   ${
     statusMessage
-      ? `<p class="ok" style="margin-top:1rem;">${statusMessage}</p>`
+      ? `<div class="alert success"><p>${statusMessage}</p></div>`
       : ""
   }
   ${
     errorMessage
-      ? `<p class="err" style="margin-top:1rem;">${errorMessage}</p>`
+      ? `<div class="alert error"><p>${errorMessage}</p></div>`
       : ""
   }
 </body>
@@ -2291,7 +2437,3 @@ router.route("/urgent-tat")
       return res.status(500).send("Server Error in /urgent-tat");
     }
   });
-
-
-
-module.exports = router;
