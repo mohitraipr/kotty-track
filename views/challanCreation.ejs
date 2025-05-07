@@ -293,6 +293,7 @@
         <tr>
           <td class="col-label text-left" style="width:50%;">Consignee Name</td>
           <td class="col-label text-left" style="width:50%;">Consignee Address</td>
+          
         </tr>
         <tr>
           <td class="text-left" style="vertical-align: top;">
@@ -305,6 +306,8 @@
             <%= addrLines.join(' ') %><br>
             India<br>
             <%= challan.consignee.gstin %>
+            <br>
+            <b>vehicleNumber: </b><%= challan.vehicleNumber %>
           </td>
         </tr>
       </table>
@@ -335,7 +338,7 @@
         <% challan.items.forEach((item, index) => { %>
           <tr>
             <td class="text-left">
-              <%= index + 1 %>. lot no-<%= item.cutting_remark %>, sku-<%= item.sku %>
+              <%= index + 1 %>. lot no-<%= item.lot_no %>, sku-<%= item.sku %>
             </td>
             <td class="text-center">62034200</td>
             <td class="text-right">
