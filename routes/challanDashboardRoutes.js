@@ -591,7 +591,7 @@ router.get('/challanlist', isAuthenticated, async (req, res) => {
       params.push(like, search);
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT 200';
+    sql += ' ORDER BY created_at DESC';
     const [rows] = await pool.query(sql, params);
 
     res.render('challanList', {
