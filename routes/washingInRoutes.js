@@ -150,9 +150,10 @@ router.get('/', isAuthenticated, isWashingInMaster, async (req, res) => {
     //   That means we select from `washing_data` joined to `washing_in_assignments`
     //   which has is_approved = 1, and no existing washing_in_data record for that lot_no & user.
     const [lots] = await pool.query(`
-      SELECT wd.id, wd.lot_no, wd.sku, wd.total_pieces
+      SELECT wd.id, wd.lot_no, wd.sku, wd.total_pieces,c.remark AS cutting_remark
       FROM washing_data wd
       JOIN washing_in_assignments wia ON wia.washing_data_id = wd.id
+      LEFT JOIN cutting_lots c ON c.lot_no = wd.lot_no 
       WHERE wia.user_id = ?
         AND wia.is_approved = 1
         AND wd.lot_no NOT IN (
