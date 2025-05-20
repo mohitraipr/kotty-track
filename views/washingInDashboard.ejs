@@ -624,48 +624,7 @@
       loadMoreEntries();
 
 
-      // ------------------------------------------------------------
-      // 3) UPDATE MODAL
-      // ------------------------------------------------------------
-      /* ---------- UPDATE MODAL ---------- */
-  const $updateModal      = $('#updateModal');
-  const $updateForm       = $('#updateForm');
-  const $sizesTBody       = $('#updateSizesTableBody');   // NEW selector
-  const $updatingEntryId  = $('#updatingEntryId');
-
-  // ---- open modal & fetch data --------------------------------
-  $updateModal.on('show.bs.modal', async function (e) {
-    const entryId = $(e.relatedTarget).data('entry-id');
-
-    // set form action + header text
-    $updateForm.attr('action', `/washingin/update/${entryId}`);
-    $updatingEntryId.text(entryId);
-
-    $sizesTBody.empty();            // clear previous rows
-
-    const res = await fetch(`/washingin/update/${entryId}/json`);
-    if (!res.ok) return alert('Failed to fetch sizes.');
-    const { sizes = [] } = await res.json();
-
-    sizes.forEach(sz => {
-      const tr = $(`
-        <tr>
-          <td>${sz.size_label}</td>
-          <td>${sz.pieces}</td>
-          <td>${sz.remain}</td>
-          <td>
-            <input type="number"
-                   class="form-control"
-                   min="0"
-                   max="${sz.remain}"
-                   data-size-label="${sz.size_label}">
-          </td>
-        </tr>
-      `);
-      $sizesTBody.append(tr);
-    });
-  });
-
+      
   // ---- build hidden fields on submit --------------------------
 <!-- ---------- UPDATE MODAL ---------- -->
 
