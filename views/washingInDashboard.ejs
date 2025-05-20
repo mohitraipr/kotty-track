@@ -333,7 +333,7 @@
                     <th>New Pieces (Increment)</th>
                   </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody id="updateSizesTableBody"></tbody>
               </table>
             </div>
             <p class="small text-muted">Leave blank or zero if no increment.</p>
@@ -627,85 +627,76 @@
       // ------------------------------------------------------------
       // 3) UPDATE MODAL
       // ------------------------------------------------------------
-      const $updateModal       = $('#updateModal');
-      const $updateForm        = $('#updateForm');
-      const $updateSizesTable  = $('#updateSizesTable tbody');
-      const $updatingEntryId   = $('#updatingEntryId');
+      /* ---------- UPDATE MODAL ---------- */
+  const $updateModal      = $('#updateModal');
+  const $updateForm       = $('#updateForm');
+  const $sizesTBody       = $('#updateSizesTableBody');   // NEW selector
+  const $updatingEntryId  = $('#updatingEntryId');
 
-      $updateModal.on('show.bs.modal', async function(e) {
-        // "e.relatedTarget" is the button that triggered the modal
-        const button = e.relatedTarget;
-        const entryId = $(button).data('entry-id');
+  // ---- open modal & fetch data --------------------------------
+  $updateModal.on('show.bs.modal', async function (e) {
+    const entryId = $(e.relatedTarget).data('entry-id');
 
-        // Set action & ID text
-        $updateForm.attr('action', `/washingin/update/${entryId}`);
-        $updatingEntryId.text(entryId);
+    // set form action + header text
+    $updateForm.attr('action', `/washingin/update/${entryId}`);
+    $updatingEntryId.text(entryId);
 
-        // Clear old rows
-        $updateSizesTable.empty();
+    $sizesTBody.empty();            // clear previous rows
 
-        // Fetch existing sizes info
-        try {
-          const res = await fetch(`/washingin/update/${entryId}/json`);
-          if (!res.ok) {
-            console.error('Error fetching existing sizes. Status:', res.status);
-            return;
-          }
-          const data = await res.json();
-          if (!data.sizes) return;
+    const res = await fetch(`/washingin/update/${entryId}/json`);
+    if (!res.ok) return alert('Failed to fetch sizes.');
+    const { sizes = [] } = await res.json();
 
-          data.sizes.forEach(sz => {
-            const $tr = $(`
-              <tr>
-                <td>${sz.size_label}</td>
-                <td>${sz.pieces}</td>
-                <td>${sz.remain}</td>
-                <td>
-                  <input type="number" class="form-control" min="0" data-size-label="${sz.size_label}" />
-                </td>
-              </tr>
-            `);
-            $updateSizesTable.append($tr);
-          });
-        } catch (err) {
-          console.error(err);
-        }
-      });
+    sizes.forEach(sz => {
+      const tr = $(`
+        <tr>
+          <td>${sz.size_label}</td>
+          <td>${sz.pieces}</td>
+          <td>${sz.remain}</td>
+          <td>
+            <input type="number"
+                   class="form-control"
+                   min="0"
+                   max="${sz.remain}"
+                   data-size-label="${sz.size_label}">
+          </td>
+        </tr>
+      `);
+      $sizesTBody.append(tr);
+    });
+  });
 
-      // After the modal closes => refresh the list
-      $updateModal.on('hidden.bs.modal', function() {
-        existingOffset = 0;
-        hasMore = true;
-        $existingContainer.empty();
-        loadMoreEntries();
-      });
+  // ---- build hidden fields on submit --------------------------
+  $updateForm.on('submit', function (e) {
+    $('.dynamicUpdField').remove();          // remove previous
 
-      // On submit => build hidden fields for updates
-      $updateForm.on('submit', function(e) {
-        $('.updateSizeMappingField').remove();
+    let ok = true;
 
-        $updateSizesTable.find('tr').each(function() {
-          const $row   = $(this);
-          const label  = $row.find('td:nth-child(1)').text();
-          const remain = parseInt($row.find('td:nth-child(3)').text(), 10);
-          let val      = parseInt($row.find('input[type="number"]').val() || '0', 10);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > remain) {
-            alert(`Cannot add ${val} to size [${label}]; only ${remain} remain.`);
-            e.preventDefault();
-            return false; // break out
-          }
-          if (val > 0) {
-            const hidden = $('<input>', {
-              type:  'hidden',
-              name:  `updateSizes[${label}]`,
-              value: val,
-              class: 'updateSizeMappingField'
-            });
-            $updateForm.append(hidden);
-          }
-        });
-      });
+    $sizesTBody.find('tr').each(function () {
+      const $row   = $(this);
+      const remain = parseInt($row.children('td').eq(2).text(), 10);
+      const $inp   = $row.find('input[type="number"]');
+      const inc    = parseInt($inp.val() || '0', 10);
+      const label  = $inp.data('sizeLabel');   // <-- ALWAYS PRESENT NOW
+
+      if (inc > remain) {                     // extra guard
+        alert(`Cannot add ${inc} to size [${label}] – only ${remain} left.`);
+        ok = false;
+        return false;                         // break each()
+      }
+      if (inc > 0) {
+        $('<input>', {
+          type : 'hidden',
+          name : `updateSizes[${label}]`,
+          value: inc,
+          class: 'dynamicUpdField'
+        }).appendTo($updateForm);
+      }
+    });
+
+    if (!ok) e.preventDefault();
+  });
+
     });
   </script>
 </body>
