@@ -1,17 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Jeans Assembly Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 5 CSS & FontAwesome -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap 5 & FontAwesome -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- jQuery (required by Select2) + Select2 5.x -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <link  href="https://cdn.jsdelivr.net/npm/select2@5.0.5/dist/css/select2.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@5.0.5/dist/js/select2.min.js"></script>
+
   <style>
     body { background-color: #f8f9fa; }
     .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .nav-tabs .nav-link { font-weight: 500; }
-    /* Hide or remove any leftover autocomplete classes if present (not used now) */
+
+    /* Make Select2 look like Bootstrap inputs */
+    .select2-container .select2-selection--single {
+      height: calc(2.5rem + 2px);
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #ced4da;
+      border-radius: 0.375rem;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+      height: 2.5rem;
+      right: 0.75rem;
+    }
+
+    /* Hide any legacy autocomplete remnants */
     .autocomplete-items { display: none !important; }
   </style>
 </head>
@@ -27,7 +47,7 @@
           <i class="fas fa-check-circle"></i> Approvals
         </a>
         <a href="/challandashboard" class="btn btn-outline-info btn-sm me-2">
-          <i class="fas fa-check-circle"></i> Challan
+          <i class="fas fa-file-signature"></i> Challan
         </a>
         <a href="/logout" class="btn btn-outline-danger btn-sm">
           <i class="fas fa-sign-out-alt"></i> Logout
@@ -37,10 +57,9 @@
   </nav>
 
   <div class="container my-4">
-    <!-- Flash Messages -->
     <%- include('partials/flashMessages') %>
 
-    <!-- Tab Navigation -->
+    <!-- Tabs -->
     <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
       <li class="nav-item">
         <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab">
@@ -62,9 +81,8 @@
             <i class="fas fa-plus-circle"></i> Create New Jeans Assembly Entry
           </div>
           <div class="card-body">
-            <!-- This form will also have a "washer_id" to assign directly to washing -->
             <form id="createForm" enctype="multipart/form-data">
-              <!-- LOT Dropdown -->
+              <!-- LOT selector (now searchable) -->
               <div class="mb-3">
                 <label for="selectedLotId" class="form-label">Select Lot</label>
                 <select name="selectedLotId" id="selectedLotId" class="form-select" required>
@@ -87,7 +105,7 @@
                 <input type="file" name="image_file" class="form-control" accept="image/*" />
               </div>
 
-              <!-- Immediately Assign to Washing -->
+              <!-- Assign to washer -->
               <div class="mb-3">
                 <label class="form-label">Assign to Washer</label>
                 <select name="washer_id" class="form-select">
@@ -97,20 +115,16 @@
                   <% }) %>
                 </select>
                 <p class="text-muted small mb-0">
-                  If you select a washer here, the total pieces created will be assigned automatically.
+                  If you select a washer here, all created pieces will be assigned automatically.
                 </p>
               </div>
 
-              <!-- Sizes for lot -->
+              <!-- Sizes table -->
               <div id="lotSizesContainer" style="display: none;">
                 <h5 class="mt-4">Sizes for This Lot</h5>
                 <table class="table table-bordered" id="sizesTable">
                   <thead class="table-light">
-                    <tr>
-                      <th>Size Label</th>
-                      <th>Max Available</th>
-                      <th>Enter Pieces</th>
-                    </tr>
+                    <tr><th>Size Label</th><th>Max Available</th><th>Enter Pieces</th></tr>
                   </thead>
                   <tbody></tbody>
                 </table>
@@ -137,21 +151,18 @@
           </a>
         </div>
 
-        <!-- Search -->
         <div class="input-group mb-3">
           <span class="input-group-text"><i class="fas fa-search"></i></span>
           <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU..." />
         </div>
 
-        <!-- Container for existing entries -->
         <div id="existingEntriesContainer" class="accordion"></div>
-
         <div id="loadMoreSentinel" style="height: 60px;"></div>
       </div>
     </div>
   </div>
 
-  <!-- Update Modal -->
+  <!-- UPDATE MODAL -->
   <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
@@ -166,12 +177,7 @@
             <p><strong>Updating Entry ID:</strong> <span id="updatingEntryId"></span></p>
             <table class="table table-bordered" id="updateSizesTable">
               <thead class="table-light">
-                <tr>
-                  <th>Size Label</th>
-                  <th>Already Used</th>
-                  <th>Max Remain</th>
-                  <th>New Pieces (Increment)</th>
-                </tr>
+                <tr><th>Size Label</th><th>Already Used</th><th>Max Remain</th><th>New Pieces (Increment)</th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -190,13 +196,24 @@
     </div>
   </div>
 
-  <!-- Bootstrap Bundle JS -->
+  <!-- Bootstrap Bundle (Popper included) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <script>
-    // 1) When user changes the LOT dropdown, fetch sizes
-    const selectedLotId = document.getElementById('selectedLotId');
+    /***************** 1. Enhance the LOT selector with Select2 *****************/
+    $(function () {
+      $('#selectedLotId').select2({
+        placeholder: '-- Choose a Lot --',
+        allowClear: true,
+        width: '100%',
+        minimumResultsForSearch: 0
+      });
+    });
+
+    /***************** 2. Original vanilla-JS logic (unchanged) *****************/
+    const selectedLotId     = document.getElementById('selectedLotId');
     const lotSizesContainer = document.getElementById('lotSizesContainer');
-    const sizesTableBody = document.querySelector('#sizesTable tbody');
+    const sizesTableBody    = document.querySelector('#sizesTable tbody');
     const createTotalPieces = document.getElementById('createTotalPieces');
 
     selectedLotId.addEventListener('change', async () => {
@@ -248,13 +265,12 @@
     }
     sizesTableBody.addEventListener('input', updateTotal);
 
-    // 2) Submit Create Form
+    /* ---------- Create form submission ---------- */
     const createForm = document.getElementById('createForm');
     createForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(createForm);
 
-      // gather size data
       const rows = sizesTableBody.querySelectorAll('tr');
       if (!rows.length) {
         alert('No sizes loaded. Please select a lot.');
@@ -290,13 +306,13 @@
       }
     });
 
-    // 3) Lazy Load Existing Entries
-    let offset = 0;
-    let loading = false;
-    let hasMore = true;
+    /***************** 3. Lazy-load existing entries *****************/
+    let offset   = 0;
+    let loading  = false;
+    let hasMore  = true;
     const existingContainer = document.getElementById('existingEntriesContainer');
-    const sentinel = document.getElementById('loadMoreSentinel');
-    const searchExisting = document.getElementById('searchExisting');
+    const sentinel          = document.getElementById('loadMoreSentinel');
+    const searchExisting    = document.getElementById('searchExisting');
 
     async function loadMoreData() {
       if (loading || !hasMore) return;
@@ -311,7 +327,7 @@
         list.forEach(item => {
           const card = document.createElement('div');
           card.classList.add('accordion-item');
-          const headerId = `heading-${item.id}`;
+          const headerId   = `heading-${item.id}`;
           const collapseId = `collapse-${item.id}`;
           card.innerHTML = `
             <h2 class="accordion-header" id="${headerId}">
@@ -341,15 +357,13 @@
                     : ''
                 }
                 <table class="table table-sm">
-                  <thead>
-                    <tr><th>Size Label</th><th>Pieces</th></tr>
-                  </thead>
+                  <thead><tr><th>Size Label</th><th>Pieces</th></tr></thead>
                   <tbody>
-                  ${
-                    item.sizes && item.sizes.length
-                      ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
-                      : '<tr><td colspan="2">No sizes found</td></tr>'
-                  }
+                    ${
+                      item.sizes && item.sizes.length
+                        ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
+                        : '<tr><td colspan="2">No sizes found</td></tr>'
+                    }
                   </tbody>
                 </table>
               </div>
@@ -366,9 +380,7 @@
     }
 
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        loadMoreData();
-      }
+      if (entries[0].isIntersecting) loadMoreData();
     }, { threshold: 0.1 });
     observer.observe(sentinel);
 
@@ -378,20 +390,20 @@
       existingContainer.innerHTML = '';
       loadMoreData();
     });
-    loadMoreData(); // initial load
+    loadMoreData();   // initial fetch
 
-    // 4) Update Modal Logic
-    const updateModal = document.getElementById('updateModal');
-    const updateForm = document.getElementById('updateForm');
-    const updateSizesTable = document.getElementById('updateSizesTable');
-    const updatingEntryId = document.getElementById('updatingEntryId');
+    /***************** 4. Update modal logic *****************/
+    const updateModal       = document.getElementById('updateModal');
+    const updateForm        = document.getElementById('updateForm');
+    const updateSizesTable  = document.getElementById('updateSizesTable');
+    const updatingEntryIdEl = document.getElementById('updatingEntryId');
 
     if (updateModal) {
       updateModal.addEventListener('show.bs.modal', async (event) => {
-        const button = event.relatedTarget;
+        const button  = event.relatedTarget;
         const entryId = button.getAttribute('data-entry-id');
-        updatingEntryId.textContent = entryId;
-        updateForm.action = '/jeansassemblydashboard/update/' + entryId;
+        updatingEntryIdEl.textContent = entryId;
+        updateForm.action = `/jeansassemblydashboard/update/${entryId}`;
         updateSizesTable.querySelector('tbody').innerHTML = '';
 
         try {
@@ -419,14 +431,14 @@
 
       updateForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // remove old hidden fields
+
         document.querySelectorAll('.updateSizeMappingField').forEach(el => el.remove());
-        const rows = updateSizesTable.querySelector('tbody').querySelectorAll('tr');
+        const rows = updateSizesTable.querySelectorAll('tbody tr');
         for (const row of rows) {
-          const label = row.children[0].textContent;
+          const label  = row.children[0].textContent;
           const remain = parseInt(row.children[2].textContent, 10);
-          const input = row.children[3].querySelector('input');
-          let val = parseInt(input.value.trim() || '0', 10);
+          const input  = row.children[3].querySelector('input');
+          let val      = parseInt((input.value || '0').trim(), 10);
           if (isNaN(val) || val < 0) val = 0;
           if (val > remain) {
             alert(`Cannot add ${val} to size [${label}], only ${remain} remain`);
@@ -434,22 +446,18 @@
           }
           if (val > 0) {
             const hidden = document.createElement('input');
-            hidden.type = 'hidden';
+            hidden.type  = 'hidden';
             hidden.classList.add('updateSizeMappingField');
-            hidden.name = `updateSizes[${label}]`;
+            hidden.name  = `updateSizes[${label}]`;
             hidden.value = val;
             updateForm.appendChild(hidden);
           }
         }
+
         try {
           const formData = new FormData(updateForm);
-          const res = await fetch(updateForm.action, {
-            method: 'POST',
-            body: formData
-          });
-          if (res.redirected) {
-            window.location.href = res.url;
-          }
+          const res = await fetch(updateForm.action, { method: 'POST', body: formData });
+          if (res.redirected) window.location.href = res.url;
         } catch (err) {
           console.error('Error updating jeans assembly data:', err);
         }
