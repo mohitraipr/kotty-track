@@ -692,7 +692,7 @@ $updateForm.on('submit', function (e) {
     if (inc > 0) {
       $('<input>', {
         type : 'hidden',
-        name : `updateSizes[${label}]`,
+       name : `updateSizes[${encodeURIComponent(label)}]`,
         value: inc,
         class: 'dynamicUpdField'
       }).appendTo($updateForm);
