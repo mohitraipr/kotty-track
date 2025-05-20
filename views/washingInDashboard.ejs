@@ -623,89 +623,33 @@
       // Initial load
       loadMoreEntries();
 
-
-      // ------------------------------------------------------------
-      // 3) UPDATE MODAL
-      // ------------------------------------------------------------
-      const $updateModal       = $('#updateModal');
-      const $updateForm        = $('#updateForm');
-      const $updateSizesTable  = $('#updateSizesTable tbody');
-      const $updatingEntryId   = $('#updatingEntryId');
-
-      $updateModal.on('show.bs.modal', async function(e) {
-        // "e.relatedTarget" is the button that triggered the modal
-        const button = e.relatedTarget;
-        const entryId = $(button).data('entry-id');
-
-        // Set action & ID text
-        $updateForm.attr('action', `/washingin/update/${entryId}`);
-        $updatingEntryId.text(entryId);
-
-        // Clear old rows
-        $updateSizesTable.empty();
-
-        // Fetch existing sizes info
-        try {
-          const res = await fetch(`/washingin/update/${entryId}/json`);
-          if (!res.ok) {
-            console.error('Error fetching existing sizes. Status:', res.status);
-            return;
-          }
-          const data = await res.json();
-          if (!data.sizes) return;
-
-          data.sizes.forEach(sz => {
-            const $tr = $(`
-              <tr>
-                <td>${sz.size_label}</td>
-                <td>${sz.pieces}</td>
-                <td>${sz.remain}</td>
-                <td>
-                  <input type="number" class="form-control" min="0" data-size-label="${sz.size_label}" />
-                </td>
-              </tr>
-            `);
-            $updateSizesTable.append($tr);
-          });
-        } catch (err) {
-          console.error(err);
-        }
+    /* ========== 3. UPDATE MODAL (single, clean) =========================== */
+    const $updateModal=$("#updateModal"),$updateForm=$("#updateForm"),
+          $sizesBody=$("#updateSizesTable tbody"),$upId=$("#updatingEntryId");
+    $updateModal.on('show.bs.modal',async e=>{
+      const id=$(e.relatedTarget).data('entry-id');
+      $updateForm.attr('action',`/washingin/update/${id}`);$upId.text(id);$sizesBody.empty();
+      const res=await fetch(`/washingin/update/${id}/json`);if(!res.ok){alert('Fetch error');return;}
+      (await res.json()).sizes.forEach(s=>{
+        $sizesBody.append(`
+          <tr>
+            <td>${s.size_label}</td><td>${s.pieces}</td><td>${s.remain}</td>
+            <td><input type="number" class="form-control" min="0" data-size-label="${s.size_label}"></td>
+          </tr>`);
       });
-
-      // After the modal closes => refresh the list
-      $updateModal.on('hidden.bs.modal', function() {
-        existingOffset = 0;
-        hasMore = true;
-        $existingContainer.empty();
-        loadMoreEntries();
+    });
+    $updateModal.on('hidden.bs.modal',()=>{$container.empty();offset=0;hasMore=true;loadMore();});
+    $updateForm.on('submit',function(e){
+      $('.updField').remove();let ok=true;
+      $sizesBody.find('tr').each((_,tr)=>{
+        const $r=$(tr),remain=parseInt($r.children('td').eq(2).text(),10),
+              $inp=$r.find('input'),inc=parseInt($inp.val()||'0',10),
+              lbl=$inp.attr('data-size-label');
+        if(inc>remain){alert(`Cannot add ${inc}; only ${remain} remain for ${lbl}`);ok=false;return false;}
+        if(inc>0)$('<input>',{type:'hidden',name:`updateSizes[${lbl}]`,value:inc,class:'updField'}).appendTo($updateForm);
       });
-
-      // On submit => build hidden fields for updates
-      $updateForm.on('submit', function(e) {
-        $('.updateSizeMappingField').remove();
-
-        $updateSizesTable.find('tr').each(function() {
-          const $row   = $(this);
-          const label  = $row.find('td:nth-child(1)').text();
-          const remain = parseInt($row.find('td:nth-child(3)').text(), 10);
-          let val      = parseInt($row.find('input[type="number"]').val() || '0', 10);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > remain) {
-            alert(`Cannot add ${val} to size [${label}]; only ${remain} remain.`);
-            e.preventDefault();
-            return false; // break out
-          }
-          if (val > 0) {
-            const hidden = $('<input>', {
-              type:  'hidden',
-              name:  `updateSizes[${label}]`,
-              value: val,
-              class: 'updateSizeMappingField'
-            });
-            $updateForm.append(hidden);
-          }
-        });
-      });
+      if(!ok)e.preventDefault();
+    });
     });
   </script>
 </body>
