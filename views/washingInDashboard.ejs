@@ -677,13 +677,19 @@
       const remain = parseFloat($row.children('td').eq(2).text(), 10);
       const $inp   = $row.find('input[type="number"]');
       const inc    = parseFloat($inp.val() || '0', 10);
-      const label  = $inp.data('sizeLabel');   // <-- ALWAYS PRESENT NOW
+      const label  = $inp.attr('data-size-label');   // <-- ALWAYS PRESENT NOW
 
       if (inc > remain) {                     // extra guard
         alert(`Cannot add ${inc} to size [${label}] – only ${remain} left.`);
         ok = false;
         return false;                         // break each()
       }
+
+if (!label) {                                  // sanity guard
+   alert('Size label missing on one of the rows – aborting.');
+   ok = false;
+   return false;
+ }
       if (inc > 0) {
         $('<input>', {
           type : 'hidden',
