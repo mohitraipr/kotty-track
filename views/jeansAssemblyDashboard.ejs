@@ -6,42 +6,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Bootstrap 5 & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
-  <!-- jQuery (required by Select2) + Select2 5.x -->
+  <!-- jQuery FIRST (the only copy on the page) -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <link  href="https://cdn.jsdelivr.net/npm/select2@5.0.5/dist/css/select2.min.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/select2@5.0.5/dist/js/select2.min.js"></script>
+
+  <!-- Select2 4.1.0-rc.0 -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
   <style>
-    body { background-color: #f8f9fa; }
-    .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .nav-tabs .nav-link { font-weight: 500; }
+    body { background-color:#f8f9fa; }
+    .navbar { box-shadow:0 2px 4px rgba(0,0,0,.1); }
+    .nav-tabs .nav-link { font-weight:500; }
 
-    /* Make Select2 look like Bootstrap inputs */
-    .select2-container .select2-selection--single {
-      height: calc(2.5rem + 2px);
-      padding: 0.5rem 0.75rem;
-      border: 1px solid #ced4da;
-      border-radius: 0.375rem;
+    /* Make Select2 look like Bootstrap form-controls */
+    .select2-container .select2-selection--single{
+      height:calc(2.5rem + 2px);
+      padding:.5rem .75rem;
+      border:1px solid #ced4da;
+      border-radius:.375rem;
     }
-    .select2-container--default .select2-selection--single .select2-selection__arrow {
-      height: 2.5rem;
-      right: 0.75rem;
+    .select2-container--default .select2-selection--single .select2-selection__arrow{
+      height:2.5rem;
+      right:.75rem;
     }
 
-    /* Hide any legacy autocomplete remnants */
-    .autocomplete-items { display: none !important; }
+    /* Hide any stray autocomplete remnants */
+    .autocomplete-items{display:none!important;}
   </style>
 </head>
+
 <body>
-  <!-- Navbar -->
+  <!-- NAVBAR -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-people-carry"></i> Jeans Assembly Dashboard
-      </a>
+      <a class="navbar-brand" href="#"><i class="fas fa-people-carry"></i> Jeans Assembly Dashboard</a>
       <div class="ms-auto">
         <a href="/jeansassemblydashboard/approve" class="btn btn-outline-info btn-sm me-2">
           <i class="fas fa-check-circle"></i> Approvals
@@ -59,7 +60,7 @@
   <div class="container my-4">
     <%- include('partials/flashMessages') %>
 
-    <!-- Tabs -->
+    <!-- TABS -->
     <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
       <li class="nav-item">
         <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab">
@@ -82,55 +83,47 @@
           </div>
           <div class="card-body">
             <form id="createForm" enctype="multipart/form-data">
-              <!-- LOT selector (now searchable) -->
+              <!-- LOT SELECT (searchable) -->
               <div class="mb-3">
                 <label for="selectedLotId" class="form-label">Select Lot</label>
-                <select name="selectedLotId" id="selectedLotId" class="form-select" required>
+                <select id="selectedLotId" name="selectedLotId" class="form-select" required>
                   <option value="">-- Choose a Lot --</option>
-                  <% lots.forEach(function(l) { %>
-                    <option value="<%= l.id %>">
-                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>)
-                    </option>
+                  <% lots.forEach(l => { %>
+                    <option value="<%= l.id %>">Lot <%= l.lot_no %> (SKU: <%= l.sku %>)</option>
                   <% }) %>
                 </select>
               </div>
 
               <div class="mb-3">
                 <label class="form-label">Remark (optional)</label>
-                <input type="text" name="remark" class="form-control" placeholder="Enter remark..." />
+                <input type="text" name="remark" class="form-control" placeholder="Enter remark…">
               </div>
 
               <div class="mb-3">
                 <label class="form-label">Image (optional)</label>
-                <input type="file" name="image_file" class="form-control" accept="image/*" />
+                <input type="file" name="image_file" class="form-control" accept="image/*">
               </div>
 
-              <!-- Assign to washer -->
               <div class="mb-3">
                 <label class="form-label">Assign to Washer</label>
                 <select name="washer_id" class="form-select">
                   <option value="">-- Do not assign to washing --</option>
-                  <% washers.forEach(function(w) { %>
+                  <% washers.forEach(w => { %>
                     <option value="<%= w.id %>"><%= w.username %></option>
                   <% }) %>
                 </select>
-                <p class="text-muted small mb-0">
-                  If you select a washer here, all created pieces will be assigned automatically.
-                </p>
+                <p class="text-muted small mb-0">If selected, all created pieces will be assigned automatically.</p>
               </div>
 
-              <!-- Sizes table -->
-              <div id="lotSizesContainer" style="display: none;">
+              <!-- SIZES TABLE -->
+              <div id="lotSizesContainer" style="display:none;">
                 <h5 class="mt-4">Sizes for This Lot</h5>
                 <table class="table table-bordered" id="sizesTable">
-                  <thead class="table-light">
-                    <tr><th>Size Label</th><th>Max Available</th><th>Enter Pieces</th></tr>
-                  </thead>
+                  <thead class="table-light"><tr><th>Size Label</th><th>Max Available</th><th>Enter Pieces</th></tr></thead>
                   <tbody></tbody>
                 </table>
                 <div class="mt-2">
-                  <strong>Total Pieces Selected:</strong>
-                  <span id="createTotalPieces">0</span>
+                  <strong>Total Pieces Selected:</strong> <span id="createTotalPieces">0</span>
                 </div>
               </div>
 
@@ -153,11 +146,11 @@
 
         <div class="input-group mb-3">
           <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU..." />
+          <input id="searchExisting" type="text" class="form-control" placeholder="Search by lot or SKU…">
         </div>
 
         <div id="existingEntriesContainer" class="accordion"></div>
-        <div id="loadMoreSentinel" style="height: 60px;"></div>
+        <div id="loadMoreSentinel" style="height:60px;"></div>
       </div>
     </div>
   </div>
@@ -168,39 +161,31 @@
       <div class="modal-content">
         <form id="updateForm">
           <div class="modal-header">
-            <h5 class="modal-title" id="updateModalLabel">
-              <i class="fas fa-edit"></i> Update Jeans Assembly Data
-            </h5>
+            <h5 class="modal-title" id="updateModalLabel"><i class="fas fa-edit"></i> Update Jeans Assembly Data</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
             <p><strong>Updating Entry ID:</strong> <span id="updatingEntryId"></span></p>
             <table class="table table-bordered" id="updateSizesTable">
-              <thead class="table-light">
-                <tr><th>Size Label</th><th>Already Used</th><th>Max Remain</th><th>New Pieces (Increment)</th></tr>
-              </thead>
+              <thead class="table-light"><tr><th>Size Label</th><th>Already Used</th><th>Max Remain</th><th>New Pieces (Increment)</th></tr></thead>
               <tbody></tbody>
             </table>
-            <p class="small text-muted">Leave blank or zero for no increment.</p>
+            <p class="small text-muted">Leave blank or zero to skip a size.</p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i> Save Updates
-            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Updates</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Bootstrap Bundle (Popper included) -->
+  <!-- Bootstrap Bundle (includes Popper) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    /***************** 1. Enhance the LOT selector with Select2 *****************/
+    /* ---------- 1. Initialise Select2 when DOM ready ---------- */
     $(function () {
       $('#selectedLotId').select2({
         placeholder: '-- Choose a Lot --',
@@ -210,259 +195,196 @@
       });
     });
 
-    /***************** 2. Original vanilla-JS logic (unchanged) *****************/
+    /* ---------- 2. Original vanilla-JS logic ---------- */
     const selectedLotId     = document.getElementById('selectedLotId');
     const lotSizesContainer = document.getElementById('lotSizesContainer');
     const sizesTableBody    = document.querySelector('#sizesTable tbody');
     const createTotalPieces = document.getElementById('createTotalPieces');
 
     selectedLotId.addEventListener('change', async () => {
-      const lotValue = selectedLotId.value;
-      if (!lotValue) {
-        sizesTableBody.innerHTML = '';
-        lotSizesContainer.style.display = 'none';
-        return;
+      const lotId = selectedLotId.value;
+      if (!lotId){
+        sizesTableBody.innerHTML=''; lotSizesContainer.style.display='none'; return;
       }
-      try {
-        const res = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotValue}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        renderSizes(data);
-      } catch (err) {
-        console.error('Error fetching lot sizes:', err);
-        sizesTableBody.innerHTML = '';
-        lotSizesContainer.style.display = 'none';
+      try{
+        const r = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotId}`);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        renderSizes(await r.json());
+      }catch(e){
+        console.error('Error fetching lot sizes:',e);
+        sizesTableBody.innerHTML=''; lotSizesContainer.style.display='none';
       }
     });
 
-    function renderSizes(sizesArr) {
-      sizesTableBody.innerHTML = '';
-      lotSizesContainer.style.display = 'block';
-      sizesArr.forEach(sz => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${sz.size_label}</td>
-          <td>${sz.remain}</td>
-          <td>
-            <input type="number" required min="1" max="${sz.remain}" class="form-control"
-                   value="${sz.remain}"
-                   data-size-id="${sz.id}">
-          </td>
-        `;
-        sizesTableBody.appendChild(tr);
+    function renderSizes(arr){
+      sizesTableBody.innerHTML='';
+      lotSizesContainer.style.display='block';
+      arr.forEach(sz=>{
+        sizesTableBody.insertAdjacentHTML('beforeend',`
+          <tr>
+            <td>${sz.size_label}</td>
+            <td>${sz.remain}</td>
+            <td><input type="number" class="form-control" min="1" max="${sz.remain}"
+                       value="${sz.remain}" data-size-id="${sz.id}" required></td>
+          </tr>`);
       });
-      createTotalPieces.textContent = '0';
+      createTotalPieces.textContent='0';
     }
 
-    function updateTotal() {
-      let sum = 0;
-      const inputs = sizesTableBody.querySelectorAll('input');
-      inputs.forEach(inp => {
-        const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) sum += val;
+    sizesTableBody.addEventListener('input',()=>{
+      let total=0;
+      sizesTableBody.querySelectorAll('input').forEach(inp=>{
+        const n=parseInt(inp.value,10);
+        if(!isNaN(n)&&n>0) total+=n;
       });
-      createTotalPieces.textContent = sum;
-    }
-    sizesTableBody.addEventListener('input', updateTotal);
+      createTotalPieces.textContent=total;
+    });
 
-    /* ---------- Create form submission ---------- */
-    const createForm = document.getElementById('createForm');
-    createForm.addEventListener('submit', async (e) => {
+    /* ---------- 3. Create form ---------- */
+    const createForm=document.getElementById('createForm');
+    createForm.addEventListener('submit',async e=>{
       e.preventDefault();
-      const formData = new FormData(createForm);
+      const fd=new FormData(createForm);
 
-      const rows = sizesTableBody.querySelectorAll('tr');
-      if (!rows.length) {
-        alert('No sizes loaded. Please select a lot.');
-        return;
-      }
-      rows.forEach(row => {
-        const input = row.querySelector('input');
-        let val = parseInt(input.value, 10);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 0) {
-          formData.append(`sizes[${input.dataset.sizeId}]`, val);
-        }
+      const rows=sizesTableBody.querySelectorAll('tr');
+      if(!rows.length){alert('Please select a lot first.');return;}
+
+      rows.forEach(row=>{
+        const inp=row.querySelector('input');
+        const val=parseInt(inp.value,10)||0;
+        if(val>0) fd.append(`sizes[${inp.dataset.sizeId}]`, val);
       });
 
-      try {
-        const res = await fetch('/jeansassemblydashboard/create', {
-          method: 'POST',
-          body: formData
-        });
-        if (res.redirected) {
-          window.location.href = res.url;
-        } else {
-          const result = await res.json().catch(() => ({}));
-          if (result.error) {
-            alert(result.error);
-          } else {
-            window.location.reload();
-          }
-        }
-      } catch (err) {
-        console.error('Error creating jeans assembly entry:', err);
-        alert('Error creating jeans assembly entry.');
+      try{
+        const r=await fetch('/jeansassemblydashboard/create',{method:'POST',body:fd});
+        if(r.redirected){window.location=r.url;return;}
+        const j=await r.json().catch(()=>({}));
+        if(j.error){alert(j.error);}else{window.location.reload();}
+      }catch(err){
+        console.error('Create error:',err); alert('Error creating entry.');
       }
     });
 
-    /***************** 3. Lazy-load existing entries *****************/
-    let offset   = 0;
-    let loading  = false;
-    let hasMore  = true;
-    const existingContainer = document.getElementById('existingEntriesContainer');
-    const sentinel          = document.getElementById('loadMoreSentinel');
-    const searchExisting    = document.getElementById('searchExisting');
+    /* ---------- 4. Lazy-load existing entries ---------- */
+    let offset=0, loading=false, hasMore=true;
+    const existingContainer=document.getElementById('existingEntriesContainer');
+    const sentinel=document.getElementById('loadMoreSentinel');
+    const searchExisting=document.getElementById('searchExisting');
 
-    async function loadMoreData() {
-      if (loading || !hasMore) return;
-      loading = true;
-      const term = searchExisting.value.trim();
-      try {
-        const res = await fetch(`/jeansassemblydashboard/list-entries?offset=${offset}&search=${encodeURIComponent(term)}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const list = data.data || [];
-        hasMore = data.hasMore;
-        list.forEach(item => {
-          const card = document.createElement('div');
-          card.classList.add('accordion-item');
-          const headerId   = `heading-${item.id}`;
-          const collapseId = `collapse-${item.id}`;
-          card.innerHTML = `
-            <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                      data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
-                <i class="fas fa-box-open me-1"></i>
-                Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
-              </button>
-            </h2>
-            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}"
-                 data-bs-parent="#existingEntriesContainer">
-              <div class="accordion-body">
-                <div class="d-flex justify-content-end mb-3">
-                  <a href="/jeansassemblydashboard/challan/${item.id}" target="_blank" class="btn btn-sm btn-info me-2">
-                    <i class="fas fa-file-alt"></i> Challan
-                  </a>
-                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
-                          data-bs-target="#updateModal" data-entry-id="${item.id}">
-                    <i class="fas fa-edit"></i> Update
-                  </button>
-                </div>
-                <p><strong>ID:</strong> ${item.id}</p>
-                <p><strong>Remark:</strong> ${item.remark || 'N/A'}</p>
-                ${
-                  item.image_url
-                    ? `<p><img src="${item.image_url}" style="max-width:200px;" /></p>`
-                    : ''
-                }
-                <table class="table table-sm">
-                  <thead><tr><th>Size Label</th><th>Pieces</th></tr></thead>
-                  <tbody>
-                    ${
-                      item.sizes && item.sizes.length
-                        ? item.sizes.map(sz => `<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
-                        : '<tr><td colspan="2">No sizes found</td></tr>'
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `;
-          existingContainer.appendChild(card);
-        });
-        offset += list.length;
-      } catch (err) {
-        console.error('Error loading existing entries:', err);
-      } finally {
-        loading = false;
-      }
+    async function loadMore(){
+      if(loading||!hasMore) return;
+      loading=true;
+      try{
+        const q=encodeURIComponent(searchExisting.value.trim());
+        const r=await fetch(`/jeansassemblydashboard/list-entries?offset=${offset}&search=${q}`);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const data=await r.json();
+        data.data.forEach(renderCard);
+        hasMore=data.hasMore; offset+=data.data.length;
+      }catch(e){console.error('Load error:',e);}finally{loading=false;}
     }
 
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) loadMoreData();
-    }, { threshold: 0.1 });
-    observer.observe(sentinel);
+    function renderCard(item){
+      const headerId=`hdr-${item.id}`, collId=`col-${item.id}`;
+      existingContainer.insertAdjacentHTML('beforeend',`
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="${headerId}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#${collId}" aria-expanded="false" aria-controls="${collId}">
+              <i class="fas fa-box-open me-1"></i>
+              Lot ${item.lot_no} (SKU: ${item.sku}) – Total: ${item.total_pieces}
+            </button>
+          </h2>
+          <div id="${collId}" class="accordion-collapse collapse" aria-labelledby="${headerId}"
+               data-bs-parent="#existingEntriesContainer">
+            <div class="accordion-body">
+              <div class="d-flex justify-content-end mb-3">
+                <a href="/jeansassemblydashboard/challan/${item.id}" target="_blank" class="btn btn-info btn-sm me-2">
+                  <i class="fas fa-file-alt"></i> Challan
+                </a>
+                <button class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#updateModal" data-entry-id="${item.id}">
+                  <i class="fas fa-edit"></i> Update
+                </button>
+              </div>
+              <p><strong>ID:</strong> ${item.id}</p>
+              <p><strong>Remark:</strong> ${item.remark||'N/A'}</p>
+              ${item.image_url?`<p><img src="${item.image_url}" style="max-width:200px;"></p>`:''}
+              <table class="table table-sm">
+                <thead><tr><th>Size Label</th><th>Pieces</th></tr></thead>
+                <tbody>
+                  ${
+                    item.sizes?.length
+                      ? item.sizes.map(sz=>`<tr><td>${sz.size_label}</td><td>${sz.pieces}</td></tr>`).join('')
+                      : `<tr><td colspan="2">No sizes found</td></tr>`
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>`);
+    }
 
-    searchExisting.addEventListener('input', () => {
-      offset = 0;
-      hasMore = true;
-      existingContainer.innerHTML = '';
-      loadMoreData();
+    const obs=new IntersectionObserver(e=>{ if(e[0].isIntersecting) loadMore(); },{threshold:0.1});
+    obs.observe(sentinel);
+
+    searchExisting.addEventListener('input',()=>{
+      existingContainer.innerHTML=''; offset=0; hasMore=true; loadMore();
     });
-    loadMoreData();   // initial fetch
+    loadMore(); // initial load
 
-    /***************** 4. Update modal logic *****************/
-    const updateModal       = document.getElementById('updateModal');
-    const updateForm        = document.getElementById('updateForm');
-    const updateSizesTable  = document.getElementById('updateSizesTable');
-    const updatingEntryIdEl = document.getElementById('updatingEntryId');
+    /* ---------- 5. Update modal ---------- */
+    const updateModal=document.getElementById('updateModal');
+    const updateForm=document.getElementById('updateForm');
+    const updateSizesTable=document.getElementById('updateSizesTable');
+    const updatingEntryId=document.getElementById('updatingEntryId');
 
-    if (updateModal) {
-      updateModal.addEventListener('show.bs.modal', async (event) => {
-        const button  = event.relatedTarget;
-        const entryId = button.getAttribute('data-entry-id');
-        updatingEntryIdEl.textContent = entryId;
-        updateForm.action = `/jeansassemblydashboard/update/${entryId}`;
-        updateSizesTable.querySelector('tbody').innerHTML = '';
+    updateModal.addEventListener('show.bs.modal',async ev=>{
+      const entryId=ev.relatedTarget.getAttribute('data-entry-id');
+      updatingEntryId.textContent=entryId;
+      updateForm.action=`/jeansassemblydashboard/update/${entryId}`;
+      updateSizesTable.querySelector('tbody').innerHTML='';
 
-        try {
-          const res = await fetch(`/jeansassemblydashboard/update/${entryId}/json`);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          if (!data.sizes) return;
-          data.sizes.forEach(sz => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
+      try{
+        const r=await fetch(`/jeansassemblydashboard/update/${entryId}/json`);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const {sizes}=await r.json();
+        sizes.forEach(sz=>{
+          updateSizesTable.querySelector('tbody').insertAdjacentHTML('beforeend',`
+            <tr>
               <td>${sz.size_label}</td>
               <td>${sz.pieces}</td>
-              <td>${sz.remain != null ? sz.remain : 999999}</td>
-              <td>
-                <input type="number" class="form-control" min="0" placeholder="0"
-                       data-size-label="${sz.size_label}">
-              </td>
-            `;
-            updateSizesTable.querySelector('tbody').appendChild(tr);
-          });
-        } catch (err) {
-          console.error('Error fetching update sizes:', err);
-        }
-      });
+              <td>${sz.remain??999999}</td>
+              <td><input type="number" class="form-control" min="0" placeholder="0"
+                         data-size-label="${sz.size_label}"></td>
+            </tr>`);
+        });
+      }catch(e){console.error('Fetch update sizes error:',e);}
+    });
 
-      updateForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    updateForm.addEventListener('submit',async e=>{
+      e.preventDefault();
+      document.querySelectorAll('.updateSizeMappingField').forEach(el=>el.remove());
 
-        document.querySelectorAll('.updateSizeMappingField').forEach(el => el.remove());
-        const rows = updateSizesTable.querySelectorAll('tbody tr');
-        for (const row of rows) {
-          const label  = row.children[0].textContent;
-          const remain = parseInt(row.children[2].textContent, 10);
-          const input  = row.children[3].querySelector('input');
-          let val      = parseInt((input.value || '0').trim(), 10);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > remain) {
-            alert(`Cannot add ${val} to size [${label}], only ${remain} remain`);
-            return;
-          }
-          if (val > 0) {
-            const hidden = document.createElement('input');
-            hidden.type  = 'hidden';
-            hidden.classList.add('updateSizeMappingField');
-            hidden.name  = `updateSizes[${label}]`;
-            hidden.value = val;
-            updateForm.appendChild(hidden);
-          }
+      for(const row of updateSizesTable.querySelectorAll('tbody tr')){
+        const label=row.children[0].textContent;
+        const remain=parseInt(row.children[2].textContent,10);
+        const val=parseInt(row.children[3].querySelector('input').value||'0',10);
+        if(val>remain){alert(`Cannot add ${val} to size ${label} (only ${remain} left)`);return;}
+        if(val>0){
+          const hidden=document.createElement('input');
+          hidden.type='hidden'; hidden.className='updateSizeMappingField';
+          hidden.name=`updateSizes[${label}]`; hidden.value=val;
+          updateForm.appendChild(hidden);
         }
+      }
 
-        try {
-          const formData = new FormData(updateForm);
-          const res = await fetch(updateForm.action, { method: 'POST', body: formData });
-          if (res.redirected) window.location.href = res.url;
-        } catch (err) {
-          console.error('Error updating jeans assembly data:', err);
-        }
-      });
-    }
+      try{
+        const fd=new FormData(updateForm);
+        const r=await fetch(updateForm.action,{method:'POST',body:fd});
+        if(r.redirected) window.location=r.url;
+      }catch(err){console.error('Update error:',err);}
+    });
   </script>
 </body>
 </html>
