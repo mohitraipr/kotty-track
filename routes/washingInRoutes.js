@@ -557,6 +557,8 @@ router.get('/update/:id/json', isAuthenticated, isWashingInMaster, async (req, r
     console.error('[ERROR] GET /washingin/update/:id/json =>', err);
     return res.status(500).json({ error: err.message });
   }
+  console.log('updateSizes received →', req.body.updateSizes);
+
 });
 
 // POST /washingin/update/:id => handle incremental piece additions
