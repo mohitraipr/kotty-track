@@ -677,7 +677,7 @@ $updateForm.on('submit', function (e) {
     const remain = parseInt($row.children('td').eq(2).text(), 10);
     const $inp   = $row.find('input[type="number"]');
     const inc    = parseInt($inp.val() || '0', 10);
-    const label  = $inp.attr('data-size-label');   // <-- fixed
+    const label  = $inp.attr('size_label');   // <-- fixed
 
     if (inc > remain) {
       alert(`Cannot add ${inc} to size [${label}] – only ${remain} left.`);
