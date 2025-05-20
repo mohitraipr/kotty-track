@@ -31,7 +31,7 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
       SELECT fa.*,
              CASE
                WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
-               WHEN fa.washing_assignment_id IS NOT NULL THEN 'Washing'
+               WHEN fa.washing_in_assignment_id IS NOT NULL THEN 'Washing'
              END AS department
       FROM finishing_assignments fa
       WHERE fa.user_id = ? AND fa.is_approved = 1
@@ -46,8 +46,8 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
         if (!sd) continue;
         lotNo = sd.lot_no;
         sku = sd.sku;
-      } else if (fa.washing_assignment_id) {
-        const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
+      } else if (fa.washing_in_assignment_id) {
+        const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_in_assignment_id]);
         if (!wd) continue;
         lotNo = wd.lot_no;
         sku = wd.sku;
@@ -165,8 +165,8 @@ router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMa
       const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
       if (!sd) return res.json([]);
       lotNo = sd.lot_no; tableSizes = 'stitching_data_sizes'; dataIdField = 'stitching_data_id'; dataIdValue = sd.id;
-    } else if (fa.washing_assignment_id) {
-      const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
+    } else if (fa.washing_in_assignment_id) {
+      const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_in_assignment_id]);
       if (!wd) return res.json([]);
       lotNo = wd.lot_no; tableSizes = 'washing_data_sizes'; dataIdField = 'washing_data_id'; dataIdValue = wd.id;
     } else return res.json([]);
@@ -235,8 +235,8 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       }
       lotNo = sd.lot_no; sku = sd.sku;
       tableSizes = 'stitching_data_sizes'; dataIdField = 'stitching_data_id'; dataIdValue = sd.id;
-    } else if (fa.washing_assignment_id) {
-      const [[wd]] = await conn.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_assignment_id]);
+    } else if (fa.washing_in_assignment_id) {
+      const [[wd]] = await conn.query(`SELECT * FROM washing_data WHERE id = ?`, [fa.washing_in_assignment_id]);
       if (!wd) {
         req.flash('error', 'Washing data not found.');
         await conn.rollback(); conn.release();
@@ -325,7 +325,7 @@ router.get('/approve', isAuthenticated, isFinishingMaster, async (req, res) => {
       SELECT fa.*,
              CASE
                WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
-               WHEN fa.washing_assignment_id IS NOT NULL THEN 'Washing'
+               WHEN fa.washing_in_assignment_id IS NOT NULL THEN 'Washing'
              END AS department
       FROM finishing_assignments fa
       WHERE fa.user_id = ? AND (fa.is_approved = 0 OR fa.is_approved IS NULL)
@@ -341,8 +341,8 @@ router.get('/approve', isAuthenticated, isFinishingMaster, async (req, res) => {
           const [sizeRows] = await pool.query(`SELECT size_label, pieces FROM stitching_data_sizes WHERE stitching_data_id = ?`, [sd.id]);
           sizes = sizeRows;
         }
-      } else if (row.washing_assignment_id) {
-        const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [row.washing_assignment_id]);
+      } else if (row.washing_in_assignment_id) {
+        const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [row.washing_in_assignment_id]);
         if (wd) {
           lotNo = wd.lot_no; 
           totalPieces = wd.total_pieces;
