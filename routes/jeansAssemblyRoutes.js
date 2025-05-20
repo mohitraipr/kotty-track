@@ -31,16 +31,17 @@ router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
 
     // 1) Fetch un-used lots (approved for the user but not used in jeans_assembly_data)
     const [lots] = await pool.query(`
-      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces, sd.created_at
+      SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces, sd.created_at,c.remark AS cutting_remark
       FROM jeans_assembly_assignments ja
       JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+      LEFT JOIN cutting_lots c ON c.lot_no = sd.lot_no 
       WHERE ja.user_id = ?
         AND ja.is_approved = 1
         AND sd.lot_no NOT IN (
           SELECT lot_no FROM jeans_assembly_data
         )
       ORDER BY sd.created_at DESC
-      LIMIT 100
+      
     `, [userId]);
 
     // 2) Fetch washers (active users with role "washing")
