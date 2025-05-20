@@ -204,6 +204,9 @@
                     <option value="">-- Choose --</option>
                     <% lots.forEach(function(l) { %>
                       <option value="<%= l.id %>">
+                        <% if (l.cutting_remark) { %>
+                          - <%= l.cutting_remark %>
+                        <% } %>
                         <%= l.lot_no %> (SKU: <%= l.sku %>) - total: <%= l.total_pieces %>
                       </option>
                     <% }) %>
