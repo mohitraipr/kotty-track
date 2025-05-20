@@ -667,40 +667,71 @@
   });
 
   // ---- build hidden fields on submit --------------------------
-/* ---- build hidden fields on submit -------------------------- */
-$updateForm.on('submit', function (e) {
-  $('.dynamicUpdField').remove();          // clean previous run
-  let ok = true;
+<!-- ---------- UPDATE MODAL ---------- -->
+<script>
+(() => {
+  const $updateModal      = $('#updateModal');
+  const $updateForm       = $('#updateForm');
+  const $sizesTBody       = $('#updateSizesTableBody');
+  const $updatingEntryId  = $('#updatingEntryId');
 
-  $sizesTBody.find('tr').each(function () {
-    const $row   = $(this);
-    const remain = parseInt($row.children('td').eq(2).text(), 10);
-    const $inp   = $row.find('input[type="number"]');
-    const inc    = parseInt($inp.val() || '0', 10);
-    const label  = $inp.data('size-label');   // <-- fixed
-    if (!label) {
-  alert('Missing size label. Please try again.');
-  ok = false;
-  return false;
-}
+  /* OPEN modal & fetch row sizes */
+  $updateModal.on('show.bs.modal', async e => {
+    const entryId = $(e.relatedTarget).data('entry-id');
+    $updateForm.attr('action', `/washingin/update/${entryId}`);
+    $updatingEntryId.text(entryId);
+    $sizesTBody.empty();
 
-    if (inc > remain) {
-      alert(`Cannot add ${inc} to size [${label}] – only ${remain} left.`);
-      ok = false;
-      return false;                                 // break .each()
-    }
-    if (inc > 0) {
-      $('<input>', {
-        type : 'hidden',
-       name : `updateSizes[${encodeURIComponent(label)}]`,
-        value: inc,
-        class: 'dynamicUpdField'
-      }).appendTo($updateForm);
-    }
+    const res = await fetch(`/washingin/update/${entryId}/json`);
+    if (!res.ok) { alert('Failed to fetch sizes'); return; }
+
+    const { sizes = [] } = await res.json();
+    sizes.forEach(sz => {
+      $sizesTBody.append(`
+        <tr>
+          <td>${sz.size_label}</td>
+          <td>${sz.pieces}</td>
+          <td>${sz.remain}</td>
+          <td>
+            <input type="number"
+                   class="form-control"
+                   min="0"
+                   max="${sz.remain}"
+                   data-size-label="${sz.size_label}">
+          </td>
+        </tr>
+      `);
+    });
   });
 
-  if (!ok) e.preventDefault();
-});
+  /* BUILD hidden inputs on submit */
+  $updateForm.on('submit', e => {
+    $('.dynamicUpdField').remove();            // clean previous run
+    let ok = true;
+
+    $sizesTBody.find('tr').each((_, tr) => {
+      const $row   = $(tr);
+      const remain = parseInt($row.children('td').eq(2).text(), 10);
+      const $inp   = $row.find('input[type="number"]');
+      const inc    = parseInt($inp.val() || '0', 10);
+      const label  = $inp.attr('data-size-label');           // <— RELIABLE!
+
+      if (!label) { alert('Size label missing, reload the page.'); ok = false; return false; }
+      if (inc > remain) { alert(`Cannot add ${inc} to size [${label}] — only ${remain} left.`); ok = false; return false; }
+      if (inc > 0) {
+        $('<input>', {
+          type : 'hidden',
+          name : `updateSizes[${label}]`,      // no encodeURIComponent
+          value: inc,
+          class: 'dynamicUpdField'
+        }).appendTo($updateForm);
+      }
+    });
+
+    if (!ok) e.preventDefault();
+  });
+})();
+</script>
 
 
     });
