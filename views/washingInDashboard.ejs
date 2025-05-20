@@ -674,9 +674,9 @@
 
     $sizesTBody.find('tr').each(function () {
       const $row   = $(this);
-      const remain = parseInt($row.children('td').eq(2).text(), 10);
+      const remain = parseFloat($row.children('td').eq(2).text(), 10);
       const $inp   = $row.find('input[type="number"]');
-      const inc    = parseInt($inp.val() || '0', 10);
+      const inc    = parseFloat($inp.val() || '0', 10);
       const label  = $inp.data('sizeLabel');   // <-- ALWAYS PRESENT NOW
 
       if (inc > remain) {                     // extra guard
