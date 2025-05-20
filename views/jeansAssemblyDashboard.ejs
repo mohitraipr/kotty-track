@@ -323,7 +323,7 @@
         const term=encodeURIComponent(searchExisting.value.trim());
         const r = await fetch(`/jeansassemblydashboard/list-entries?offset=${offset}&search=${term}`);
         if(!r.ok) throw new Error(r.status);
-        const {data=list=[],hasMore:more} = await r.json();
+        const { data: list = [], hasMore: more } = await r.json();
         hasMore = more;
         list.forEach(addEntryCard);
         offset += list.length;
