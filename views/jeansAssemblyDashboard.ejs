@@ -87,7 +87,10 @@
                   <option value="">-- Choose a Lot --</option>
                   <% lots.forEach(l => { %>
                     <option value="<%= l.id %>">
-                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>) (SKU: <%= l.cutting.cutting_remark %>)
+                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>) 
+<% if (l.cutting_remark) { %>
+                          - <%= l.cutting_remark %>
+                        <% } %>
                     </option>
                   <% }) %>
                 </select>
