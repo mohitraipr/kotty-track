@@ -563,6 +563,7 @@ router.get('/update/:id/json', isAuthenticated, isWashingInMaster, async (req, r
 
 // POST /washingin/update/:id => handle incremental piece additions
 // POST /washingin/update/:id
+// Fixed backend route for POST /washingin/update/:id
 router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) => {
   let conn;
   try {
@@ -616,7 +617,7 @@ router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) 
       const remain = pieces - used;
 
       if (increment > remain) {
-        throw new Error(`Cannot add ${increment} to size [${size_label}]. Only ${remain} remain.`);
+        throw new Error(`Cannot add ${increment} to size [${size_label}]. Only ${remain < 0 ? 0 : remain} remain.`);
       }
 
       const [[existingRow]] = await conn.query(`
