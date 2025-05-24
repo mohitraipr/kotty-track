@@ -562,7 +562,8 @@ router.get('/update/:id/json', isAuthenticated, isWashingInMaster, async (req, r
 });
 
 // POST /washingin/update/:id => handle incremental piece additions
-router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) => {
+// POST /washingin/update/:id
+router.post('/update/:id', isAuthenticated, isWashingIn, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -570,91 +571,86 @@ router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) 
 
     const entryId = req.params.id;
     const userId = req.session.user.id;
-    const updateSizes = req.body.updateSizes || {}; // e.g. updateSizes[size_L] = incrementVal
+    const updateSizes = req.body.updateSizes || {};
 
-    // verify user
     const [[entry]] = await conn.query(`
-      SELECT *
-      FROM washing_in_data
+      SELECT * FROM washing_data
       WHERE id = ?
-        AND user_id = ?
-    `, [entryId, userId]);
+    `, [entryId]);
+
     if (!entry) {
-      req.flash('error', 'Record not found or no permission.');
+      req.flash('error', 'Washing data entry not found.');
       await conn.rollback();
       conn.release();
-      return res.redirect('/washingin');
+      return res.redirect('/washingin/dashboard');
     }
 
     let updatedTotal = entry.total_pieces;
 
-    for (const lbl of Object.keys(updateSizes)) {
-      let increment = parseInt(updateSizes[lbl], 10);
-      if (isNaN(increment) || increment < 0) increment = 0;
-      if (increment === 0) continue;
+    for (const sizeId of Object.keys(updateSizes)) {
+      const increment = parseInt(updateSizes[sizeId], 10);
+      if (isNaN(increment) || increment <= 0) continue;
 
-      // 1) fetch totalAllowed from washing_data_sizes
-      const [[wdsRow]] = await conn.query(`
-        SELECT wds.pieces
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wd.lot_no = ?
-          AND wds.size_label = ?
+      // Get size data using ID
+      const [[sizeRow]] = await conn.query(`
+        SELECT jas.size_label, jas.pieces, jd.lot_no
+        FROM jeans_assembly_data_sizes jas
+        JOIN jeans_assembly_data jd ON jd.id = jas.jeans_assembly_data_id
+        WHERE jas.id = ?
         LIMIT 1
-      `, [entry.lot_no, lbl]);
-      const totalAllowed = wdsRow ? wdsRow.pieces : 0;
+      `, [sizeId]);
 
-      // 2) how many used so far
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
-        FROM washing_in_data_sizes wids
-        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
-        WHERE wid.lot_no = ?
-          AND wids.size_label = ?
-      `, [entry.lot_no, lbl]);
-      const used = usedRow.usedCount || 0;
-      const remain = totalAllowed - used;
-      if (increment > remain) {
-        throw new Error(`Cannot add ${increment} to size [${lbl}]. Only ${remain} remain.`);
+      if (!sizeRow) {
+        throw new Error(`Invalid size ID: ${sizeId}`);
       }
 
-      // 3) either update or insert
+      const { size_label, pieces, lot_no } = sizeRow;
+
+      // Calculate used count
+      const [[usedRow]] = await conn.query(`
+        SELECT COALESCE(SUM(wds.pieces), 0) AS usedCount
+        FROM washing_data_sizes wds
+        JOIN washing_data wd ON wd.id = wds.washing_data_id
+        WHERE wd.lot_no = ? AND wds.size_label = ?
+      `, [lot_no, size_label]);
+
+      const used = usedRow.usedCount || 0;
+      const remain = pieces - used;
+
+      if (increment > remain) {
+        throw new Error(`Cannot add ${increment} to size [${size_label}]. Only ${remain} remain.`);
+      }
+
+      // Insert or update
       const [[existingRow]] = await conn.query(`
-        SELECT *
-        FROM washing_in_data_sizes
-        WHERE washing_in_data_id = ?
-          AND size_label = ?
-      `, [entryId, lbl]);
+        SELECT * FROM washing_data_sizes
+        WHERE washing_data_id = ? AND size_label = ?
+      `, [entryId, size_label]);
 
       if (!existingRow) {
         await conn.query(`
-          INSERT INTO washing_in_data_sizes
-            (washing_in_data_id, size_label, pieces, created_at)
+          INSERT INTO washing_data_sizes (washing_data_id, size_label, pieces, created_at)
           VALUES (?, ?, ?, NOW())
-        `, [entryId, lbl, increment]);
+        `, [entryId, size_label, increment]);
       } else {
-        const newCount = existingRow.pieces + increment;
         await conn.query(`
-          UPDATE washing_in_data_sizes
-          SET pieces = ?
+          UPDATE washing_data_sizes
+          SET pieces = pieces + ?
           WHERE id = ?
-        `, [newCount, existingRow.id]);
+        `, [increment, existingRow.id]);
       }
 
-      // 4) update total
-      updatedTotal += increment;
-
-      // 5) record the update in washing_in_data_updates
       await conn.query(`
-        INSERT INTO washing_in_data_updates
-          (washing_in_data_id, size_label, pieces, updated_at)
+        INSERT INTO washing_data_updates (washing_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
-      `, [entryId, lbl, increment]);
+      `, [entryId, size_label, increment]);
+
+      updatedTotal += increment;
     }
 
-    // finally update the main row
+    // Update total_pieces
     await conn.query(`
-      UPDATE washing_in_data
+      UPDATE washing_data
       SET total_pieces = ?
       WHERE id = ?
     `, [updatedTotal, entryId]);
@@ -663,15 +659,16 @@ router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) 
     conn.release();
 
     req.flash('success', 'WashingIn data updated successfully!');
-    return res.redirect('/washingin');
+    return res.redirect('/washingin/dashboard');
+
   } catch (err) {
     console.error('[ERROR] POST /washingin/update/:id =>', err);
     if (conn) {
       await conn.rollback();
       conn.release();
     }
-    req.flash('error', 'Error updating washingIn data: ' + err.message);
-    return res.redirect('/washingin');
+    req.flash('error', 'Error updating WashingIn data: ' + err.message);
+    return res.redirect('/washingin/dashboard');
   }
 });
 
