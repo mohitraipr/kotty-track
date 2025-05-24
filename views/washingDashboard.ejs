@@ -664,12 +664,14 @@
             return false; // break
           }
           if (val > 0) {
-            $('<input>', {
-              type:  'hidden',
-              name:  `updateSizes[${label}]`,
-              value: val,
-              class: 'updateSizeMappingField'
-            }).appendTo($updateForm);
+            const sizeId = $inp.data('sizeId');
+$('<input>', {
+  type:  'hidden',
+  name:  `updateSizes[${sizeId}]`,
+  value: val,
+  class: 'updateSizeMappingField'
+}).appendTo($updateForm);
+
           }
         });
 
