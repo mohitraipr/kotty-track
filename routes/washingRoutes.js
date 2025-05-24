@@ -307,7 +307,6 @@ router.get('/update/:id/json', isAuthenticated, isWashingMaster, async (req, res
 });
 
 // POST /washingdashboard/update/:id
-// POST /washingin/update/:id => handle incremental piece additions (FIXED: uses sizeId)
 router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) => {
   let conn;
   try {
@@ -316,11 +315,11 @@ router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) =>
 
     const entryId = req.params.id;
     const userId = req.session.user.id;
-    const updateSizes = req.body.updateSizes || {}; // e.g. updateSizes[sizeId] = incrementVal
+    const updateSizes = req.body.updateSizes || {};
 
     const [[entry]] = await conn.query(`
       SELECT *
-      FROM washing_in_data
+      FROM washing_data
       WHERE id = ?
         AND user_id = ?
     `, [entryId, userId]);
@@ -328,94 +327,94 @@ router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) =>
       req.flash('error', 'Record not found or no permission.');
       await conn.rollback();
       conn.release();
-      return res.redirect('/washingin');
+      return res.redirect('/washingdashboard');
     }
 
     let updatedTotal = entry.total_pieces;
 
-    for (const sizeId of Object.keys(updateSizes)) {
-      let increment = parseInt(updateSizes[sizeId], 10);
+    for (const lbl of Object.keys(updateSizes)) {
+      let increment = parseInt(updateSizes[lbl], 10);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
 
-      // Fetch size info using ID
-      const [[wdsRow]] = await conn.query(`
-        SELECT wds.*, wd.lot_no
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wds.id = ?
-      `, [sizeId]);
-      if (!wdsRow) {
-        throw new Error(`Invalid size ID ${sizeId}`);
-      }
-
-      const sizeLabel = wdsRow.size_label;
-      const lotNo = wdsRow.lot_no;
-      const totalAllowed = wdsRow.pieces;
+      // check remain
+      const [[latest]] = await conn.query(`
+        SELECT pieces
+        FROM jeans_assembly_data_sizes
+        WHERE jeans_assembly_data_id = (
+          SELECT id FROM jeans_assembly_data
+          WHERE lot_no = ?
+          LIMIT 1
+        )
+        AND size_label = ?
+        LIMIT 1
+      `, [entry.lot_no, lbl]);
+      const totalAllowed = latest ? latest.pieces : 0;
 
       const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(wids.pieces),0) AS usedCount
-        FROM washing_in_data_sizes wids
-        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
-        WHERE wid.lot_no = ?
-          AND wids.size_label = ?
-      `, [lotNo, sizeLabel]);
-
+        SELECT COALESCE(SUM(wds.pieces),0) AS usedCount
+        FROM washing_data_sizes wds
+        JOIN washing_data wd ON wds.washing_data_id = wd.id
+        WHERE wd.lot_no = ?
+          AND wds.size_label = ?
+      `, [entry.lot_no, lbl]);
       const used = usedRow.usedCount || 0;
       const remain = totalAllowed - used;
-
       if (increment > remain) {
-        throw new Error(`Cannot add ${increment} for size [${sizeLabel}]; only ${remain} remain.`);
+        throw new Error(`Cannot add ${increment} for [${lbl}]; only ${remain} remain.`);
       }
 
+      // check if row exists
       const [[existingRow]] = await conn.query(`
         SELECT *
-        FROM washing_in_data_sizes
-        WHERE washing_in_data_id = ?
+        FROM washing_data_sizes
+        WHERE washing_data_id = ?
           AND size_label = ?
-      `, [entryId, sizeLabel]);
+      `, [entryId, lbl]);
 
       if (!existingRow) {
         await conn.query(`
-          INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
+          INSERT INTO washing_data_sizes
+            (washing_data_id, size_label, pieces, created_at)
           VALUES (?, ?, ?, NOW())
-        `, [entryId, sizeLabel, increment]);
+        `, [entryId, lbl, increment]);
+        updatedTotal += increment;
       } else {
         const newCount = existingRow.pieces + increment;
         await conn.query(`
-          UPDATE washing_in_data_sizes
+          UPDATE washing_data_sizes
           SET pieces = ?
           WHERE id = ?
         `, [newCount, existingRow.id]);
+        updatedTotal += increment;
       }
 
-      updatedTotal += increment;
-
       await conn.query(`
-        INSERT INTO washing_in_data_updates (washing_in_data_id, size_label, pieces, updated_at)
+        INSERT INTO washing_data_updates
+          (washing_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
-      `, [entryId, sizeLabel, increment]);
+      `, [entryId, lbl, increment]);
     }
 
+    // update total
     await conn.query(`
-      UPDATE washing_in_data
+      UPDATE washing_data
       SET total_pieces = ?
       WHERE id = ?
     `, [updatedTotal, entryId]);
 
     await conn.commit();
     conn.release();
-
-    req.flash('success', 'WashingIn data updated successfully!');
-    return res.redirect('/washingin');
+    req.flash('success', 'Washing data updated successfully!');
+    return res.redirect('/washingdashboard');
   } catch (err) {
+    console.error('[ERROR] POST /washingdashboard/update/:id =>', err);
     if (conn) {
       await conn.rollback();
       conn.release();
     }
-    console.error('[ERROR] POST /washingin/update/:id =>', err);
-    req.flash('error', 'Error updating washingIn data: ' + err.message);
-    return res.redirect('/washingin');
+    req.flash('error', 'Error updating washing data: ' + err.message);
+    return res.redirect('/washingdashboard');
   }
 });
 
