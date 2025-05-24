@@ -563,7 +563,7 @@ router.get('/update/:id/json', isAuthenticated, isWashingInMaster, async (req, r
 
 // POST /washingin/update/:id => handle incremental piece additions
 // POST /washingin/update/:id
-router.post('/update/:id', isAuthenticated, isWashingIn, async (req, res) => {
+router.post('/update/:id', isAuthenticated, isWashingInMaster, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
