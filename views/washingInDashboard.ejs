@@ -344,7 +344,8 @@
       });
     });
 
-    $updateModal.on('hidden.bs.modal', ()=>{ $existingContainer.empty(); existingOffset=0; hasMore=true; loadMoreEntries(); });
+    $updateModal.on('hidden.bs.modal', ()=>{$sizesBody.empty(); $upId.text('-');
+ $existingContainer.empty(); existingOffset=0; hasMore=true; loadMoreEntries(); });
 
     $updateForm.on('submit', function (e) {
       const $form = $(this); $form.find('.updField').remove();
