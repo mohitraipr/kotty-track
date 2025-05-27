@@ -274,7 +274,7 @@ router.get('/get-lot-sizes/:wdId', isAuthenticated, isWashingInMaster, async (re
           AND wids.size_label = ?
       `, [wd.lot_no, s.size_label]);
       const used = usedRow.usedCount || 0;
-      const remain = Math.max(pieces - used, 0);
+      const remain = Math.max(s.pieces - used, 0);
       output.push({
         id: s.id,
         size_label: s.size_label,
