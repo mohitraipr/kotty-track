@@ -430,8 +430,8 @@
         try {
           // Fetch sizes and (once) finishing-users in parallel
           const [sizeRes, userRes] = await Promise.all([
-            fetch(`/washingin/get-lot-sizes/${lotId}`),
-            finishingUsers.length ? null : fetch('/washingin/create/assignable-users')
+            fetch(`/get-lot-sizes/${lotId}`),
+            finishingUsers.length ? null : fetch('/create/assignable-users')
           ]);
           if (!sizeRes.ok) throw new Error('Size fetch failed');
           const sizes = await sizeRes.json();
