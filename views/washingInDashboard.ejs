@@ -206,7 +206,7 @@
 
       try {
         const [sizeRes, userRes] = await Promise.all([
-          fetch(`/get-lot-sizes/${lotId}`),
+          fetch(`/washingin/get-lot-sizes/${lotId}`),
           finishingUsers.length ? null : fetch('/washingin/create/assignable-users')
         ]);
         if (!sizeRes.ok) throw new Error('Size fetch failed');
