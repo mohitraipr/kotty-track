@@ -547,7 +547,7 @@ router.get('/download-all', isAuthenticated, isWashingMaster, async (req, res) =
 /*
   GET /washingdashboard/list-entries
   Used by front-end for pagination & searching existing washing_data
-*/
+*/// GET /washingdashboard/list-entries
 router.get('/list-entries', isAuthenticated, isWashingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -556,14 +556,19 @@ router.get('/list-entries', isAuthenticated, isWashingMaster, async (req, res) =
     const limit = 10;
 
     const [rows] = await pool.query(`
-      SELECT wd.*,
-             (SELECT JSON_ARRAYAGG(
-                JSON_OBJECT('size_label', wds.size_label, 'pieces', wds.pieces)
-              )
-              FROM washing_data_sizes wds
-              WHERE wds.washing_data_id = wd.id
-             ) AS sizes
+      SELECT 
+        wd.*,
+        cl.remark AS cutting_remark,
+        (
+          SELECT JSON_ARRAYAGG(
+            JSON_OBJECT('size_label', wds.size_label, 'pieces', wds.pieces)
+          )
+          FROM washing_data_sizes wds
+          WHERE wds.washing_data_id = wd.id
+        ) AS sizes
       FROM washing_data wd
+      LEFT JOIN cutting_lots cl
+        ON cl.lot_no = wd.lot_no
       WHERE wd.user_id = ?
         AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
       ORDER BY wd.created_at DESC
