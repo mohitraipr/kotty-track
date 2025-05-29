@@ -58,7 +58,9 @@ function isStitchingMaster(req, res, next) {
 function isFinishingMaster(req, res, next) {
     return hasRole('finishing')(req, res, next);
 }
-
+function isCatalogUpload(req, res, next) {
+    return hasRole('catalogUpload')(req, res, next);
+}
 function isWashingMaster(req, res, next) {
     if (req.session && req.session.user &&
         (req.session.user.roleName === 'washing' || req.session.user.roleName === 'washing_master')) {
