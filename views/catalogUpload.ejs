@@ -3,74 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <title>File Upload & Search</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+
   <style>
     body {
-      background-color: #f8f9fa;
+      background: #f4f6f9;
       font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    .wrapper {
+      max-width: 850px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
     }
 
     .card {
       border: none;
       border-radius: 1rem;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.05);
+      animation: fadeIn 0.5s ease;
     }
 
     .section-title {
       font-size: 1.5rem;
       font-weight: 600;
+      margin-bottom: 1rem;
       display: flex;
       align-items: center;
-      gap: 10px;
-    }
-
-    .btn-primary, .btn-success {
-      padding: 0.6rem 2rem;
-      font-size: 1rem;
+      gap: 0.5rem;
     }
 
     .form-control:focus, .form-select:focus {
-      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.2);
     }
 
-    .list-group-item {
-      border: none;
-      border-bottom: 1px solid #eee;
+    .btn {
+      padding: 0.6rem 1.5rem;
     }
 
     .tooltip-icon {
-      cursor: pointer;
       color: #6c757d;
+      cursor: pointer;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
-<body class="py-5">
+<body>
+  <div class="wrapper">
 
-  <div class="container">
+    <!-- Page Title -->
     <div class="text-center mb-5">
-      <h1 class="fw-bold display-6">📁 Upload & Search Portal</h1>
-      <p class="text-muted fs-5">Manage your files across marketplaces easily and efficiently</p>
+      <h1 class="display-6 fw-bold">📁 Upload & Search Catalog</h1>
+      <p class="text-muted fs-5">Effortlessly manage your marketplace files</p>
     </div>
 
-    <% if (success) { %>
-      <div class="alert alert-success"><%= success %></div>
+    <!-- Feedback -->
+    <% if (typeof success !== 'undefined' && success) { %>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= success %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
     <% } %>
-    <% if (error) { %>
-      <div class="alert alert-danger"><%= error %></div>
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <%= error %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
     <% } %>
 
-    <!-- Upload Card -->
-    <div class="card mb-5 p-4">
-      <div class="section-title text-primary mb-3">
+    <!-- Upload Section -->
+    <div class="card p-4 mb-5">
+      <div class="section-title text-primary">
         <i class="bi bi-upload"></i> Upload File
       </div>
-      <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+      <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data">
         <div class="row g-4">
           <div class="col-md-6">
             <label for="marketplace" class="form-label">
-              Marketplace <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Choose where this file belongs"></i>
+              Marketplace <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Choose where the file should be uploaded"></i>
             </label>
             <select name="marketplace" id="marketplace" class="form-select" required>
               <option value="">Select marketplace</option>
@@ -81,53 +97,59 @@
           </div>
           <div class="col-md-6">
             <label for="csvfile" class="form-label">
-              Select File <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Upload CSV, XLS or XLSX format only"></i>
+              File <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Accepted: .csv, .xls, .xlsx"></i>
             </label>
             <input type="file" class="form-control" id="csvfile" name="csvfile" accept=".csv,.xls,.xlsx" required>
           </div>
         </div>
-        <div class="mt-4">
-          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-cloud-arrow-up me-2"></i> Upload File</button>
+        <div class="mt-4 text-end">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Upload
+          </button>
         </div>
       </form>
     </div>
 
-    <!-- Search Card -->
-    <div class="card mb-5 p-4">
-      <div class="section-title text-success mb-3">
+    <!-- Search Section -->
+    <div class="card p-4 mb-5">
+      <div class="section-title text-success">
         <i class="bi bi-search"></i> Search Files
       </div>
       <form action="/catalogUpload/search" method="GET">
         <div class="row g-4">
           <div class="col-md-4">
             <label for="marketplaceSearch" class="form-label">
-              Marketplace <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Filter search by specific marketplace"></i>
+              Marketplace <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Filter by marketplace"></i>
             </label>
             <select name="marketplace" id="marketplaceSearch" class="form-select" required>
               <option value="">Select marketplace</option>
               <% markets.forEach(m => { %>
-                <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
+                <option value="<%= m.id %>" <%= selectedMarketplace==m.id ? 'selected' : '' %>>
+                  <%= m.name %>
+                </option>
               <% }) %>
             </select>
           </div>
           <div class="col-md-8">
             <label for="search" class="form-label">
-              Search Term <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Search by product name, SKU, etc."></i>
+              Search Term <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" title="Enter keyword, product name, etc."></i>
             </label>
-            <input type="text" class="form-control" id="search" name="q" placeholder="e.g. Apple Watch Series 8" required value="<%= q %>">
+            <input type="text" class="form-control" id="search" name="q" placeholder="e.g. Galaxy Watch 5" value="<%= q %>" required>
           </div>
         </div>
-        <div class="mt-4">
-          <button type="submit" class="btn btn-success w-100"><i class="bi bi-search me-2"></i> Find Files</button>
+        <div class="mt-4 text-end">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-search me-1"></i> Search
+          </button>
         </div>
       </form>
     </div>
 
-    <!-- Results -->
+    <!-- Search Results -->
     <% if (files && files.length) { %>
       <div class="card p-4">
-        <div class="section-title text-info mb-3">
-          <i class="bi bi-folder2-open"></i> Matching Files
+        <div class="section-title text-info">
+          <i class="bi bi-folder2-open"></i> Search Results
         </div>
         <ul class="list-group list-group-flush">
           <% files.forEach(f => { %>
@@ -141,8 +163,12 @@
         </ul>
       </div>
     <% } %>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+  </script>
 </body>
 </html>
