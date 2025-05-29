@@ -1,3 +1,4 @@
+<!-- views/catalogUpload.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,13 +19,11 @@
       background: #f4f6f9;
       font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
-
     .wrapper {
       max-width: 900px;
       margin: 2rem auto;
       padding: 0 1rem;
     }
-
     .card {
       border: none;
       border-radius: 1rem;
@@ -42,12 +41,6 @@
     .card-body {
       padding: 1.5rem;
     }
-
-    .section-title i {
-      font-size: 1.25rem;
-      vertical-align: middle;
-    }
-
     .btn {
       padding: 0.6rem 1.5rem;
       transition: transform 0.1s ease, box-shadow 0.2s ease;
@@ -56,12 +49,10 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
-
     .alert {
       border-radius: 0.5rem;
       font-size: 0.95rem;
     }
-
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
@@ -79,7 +70,6 @@
 
     <!-- Feedback Messages -->
     <% 
-      // normalize success to array
       const successMsgs = Array.isArray(success)
         ? success
         : (typeof success === 'string' && success.trim() ? [success] : []);
@@ -87,26 +77,20 @@
         ? error
         : (typeof error === 'string'  && error.trim()  ? [error]   : []);
     %>
-
-    <% if (successMsgs.length) { %>
-      <% successMsgs.forEach(msg => { %>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
-          <i class="bi bi-check-circle-fill fs-4 me-2"></i>
-          <div><%= msg %></div>
-          <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
-
-    <% if (errorMsgs.length) { %>
-      <% errorMsgs.forEach(msg => { %>
-        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
-          <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
-          <div><%= msg %></div>
-          <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
+    <% successMsgs.forEach(msg => { %>
+      <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
+        <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+        <div><%= msg %></div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      </div>
+    <% }) %>
+    <% errorMsgs.forEach(msg => { %>
+      <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+        <div><%= msg %></div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      </div>
+    <% }) %>
 
     <!-- Upload Section -->
     <div class="card">
@@ -124,7 +108,7 @@
               <select name="marketplace" id="marketplace" class="form-select" required>
                 <option value="">Select marketplace</option>
                 <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>"><%= m.name %></option>
+                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
                 <% }) %>
               </select>
             </div>
@@ -161,9 +145,7 @@
               <select name="marketplace" id="marketplaceSearch" class="form-select" required>
                 <option value="">Select marketplace</option>
                 <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id ? 'selected' : '' %>>
-                    <%= m.name %>
-                  </option>
+                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
                 <% }) %>
               </select>
             </div>
@@ -190,6 +172,25 @@
         </form>
       </div>
     </div>
+
+    <!-- Date-wise Upload Summary -->
+    <% if (selectedMarketplace && summary && summary.length) { %>
+      <div class="card">
+        <div class="card-header text-secondary">
+          <i class="bi bi-calendar-check me-1"></i> Upload Summary
+        </div>
+        <div class="card-body">
+          <ul class="list-group">
+            <% summary.forEach(s => { %>
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <%= new Date(s.date).toLocaleDateString() %>
+                <span class="badge bg-primary rounded-pill"><%= s.count %></span>
+              </li>
+            <% }) %>
+          </ul>
+        </div>
+      </div>
+    <% } %>
 
     <!-- Search Results -->
     <% if (files && files.length) { %>
