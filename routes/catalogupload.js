@@ -1,0 +1,212 @@
+// routes/catalogUploadRoutes.js
+const express = require('express');
+const router  = express.Router();
+const multer  = require('multer');
+const multerS3 = require('multer-s3');
+const AWS     = require('aws-sdk');
+const path    = require('path');
+const XLSX    = require('xlsx');
+const { pool } = require('../config/db');
+const {
+  isAuthenticated,
+  isCatalogUpload,
+  isAdmin
+} = require('../middlewares/auth');
+
+// configure AWS SDK to use the EC2 instance role
+AWS.config.update({ region: "ap-south-1"});
+const s3 = new AWS.S3();
+const BUCKET = "my-app-uploads-kotty";
+
+// Multer-S3 setup: accept .csv, .xls, .xlsx up to 10 MB
+const upload = multer({
+  storage: multerS3({
+    s3,
+    bucket: BUCKET,
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+    key: (req, file, cb) => {
+      const userId    = req.session.user.id;
+      const mktId     = req.body.marketplace;
+      const timestamp = Date.now();
+      const ext       = path.extname(file.originalname);
+      const base      = path.basename(file.originalname, ext);
+      const key       = `user_${userId}/mkt_${mktId}/${timestamp}-${base}${ext}`;
+      cb(null, key);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.csv','.xls','.xlsx'].includes(ext)) cb(null, true);
+    else cb(new Error('Only .csv, .xls & .xlsx allowed'));
+  },
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
+
+// GET /catalogUpload — render upload/search page
+router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
+  const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+  res.render('catalogUpload', {
+    files: [],
+    markets,
+    selectedMarketplace: null,
+    q: ''
+  });
+});
+
+// POST /catalogUpload/upload — upload file to S3
+router.post(
+  '/upload',
+  isAuthenticated,
+  isCatalogUpload,
+  upload.single('csvfile'),
+  async (req, res) => {
+    try {
+      const userId       = req.session.user.id;
+      const marketplaceId = parseInt(req.body.marketplace, 10);
+      if (!marketplaceId) throw new Error('Marketplace required');
+
+      // Determine original_filename + handle duplicates per-day
+      let originalName = req.file.originalname;
+      const today      = new Date().toISOString().slice(0,10);
+      const [[{ cnt }]] = await pool.query(`
+        SELECT COUNT(*) AS cnt 
+          FROM uploaded_files 
+         WHERE user_id=? 
+           AND marketplace_id=? 
+           AND original_filename=? 
+           AND DATE(uploaded_at)=?
+      `, [userId, marketplaceId, originalName, today]);
+
+      if (cnt > 0) {
+        const ext  = path.extname(originalName);
+        const base = path.basename(originalName, ext);
+        originalName = `${base}_${today}${ext}`;
+      }
+
+      // Save metadata: filename = S3 key, original_filename = user file name
+      await pool.query(`
+        INSERT INTO uploaded_files 
+          (user_id, marketplace_id, filename, original_filename)
+        VALUES (?,?,?,?)
+      `, [userId, marketplaceId, req.file.key, originalName]);
+
+      req.flash('success', 'File uploaded to S3 successfully.');
+    } catch (err) {
+      console.error(err);
+      req.flash('error', err.message || 'Upload failed.');
+    }
+    res.redirect('/catalogUpload');
+  }
+);
+
+// GET /catalogUpload/search — search S3-stored files
+router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
+  const userId        = req.session.user.id;
+  const marketplaceId = parseInt(req.query.marketplace, 10);
+  const term          = (req.query.q||'').trim().toLowerCase();
+  if (!marketplaceId || !term) {
+    req.flash('error','Marketplace + search term required');
+    return res.redirect('/catalogUpload');
+  }
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT id, filename, original_filename
+        FROM uploaded_files
+       WHERE user_id=? AND marketplace_id=?
+       ORDER BY uploaded_at DESC
+    `, [userId, marketplaceId]);
+
+    const matches = [];
+    for (const r of rows) {
+      // fetch object from S3
+      const obj = await s3.getObject({ Bucket: BUCKET, Key: r.filename }).promise();
+      const ext = path.extname(r.filename).toLowerCase();
+
+      let found = false;
+      if (ext === '.csv') {
+        const text = obj.Body.toString('utf8');
+        if (text.toLowerCase().includes(term)) found = true;
+      } else {
+        // .xls or .xlsx
+        const wb = XLSX.read(obj.Body, { type: 'buffer' });
+        for (const sheet of wb.SheetNames) {
+          const data = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { raw: false });
+          if (JSON.stringify(data).toLowerCase().includes(term)) {
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (found) matches.push(r);
+    }
+
+    if (!matches.length) {
+      req.flash('error','No matching files found.');
+      return res.redirect('/catalogUpload');
+    }
+
+    const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+    res.render('catalogUpload', {
+      files: matches,
+      markets,
+      selectedMarketplace: marketplaceId,
+      q: term
+    });
+  } catch (err) {
+    console.error(err);
+    req.flash('error','Search failed.');
+    res.redirect('/catalogUpload');
+  }
+});
+
+// GET /catalogUpload/download/:id — stream file back from S3
+router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
+  const userId = req.session.user.id;
+  const fileId = parseInt(req.params.id, 10);
+
+  const [rows] = await pool.query(`
+    SELECT filename, original_filename
+      FROM uploaded_files
+     WHERE id=? AND user_id=?
+  `, [fileId, userId]);
+
+  if (!rows.length) {
+    req.flash('error','File not found.');
+    return res.redirect('/catalogUpload');
+  }
+
+  const { filename, original_filename } = rows[0];
+  res.attachment(original_filename);
+
+  // stream from S3
+  s3.getObject({ Bucket: BUCKET, Key: filename })
+    .createReadStream()
+    .on('error', err => {
+      console.error(err);
+      res.status(500).end('Download error');
+    })
+    .pipe(res);
+});
+
+// Admin: list all uploads
+router.get('/admin', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const [all] = await pool.query(`
+      SELECT uf.id, u.username, m.name AS marketplace,
+             uf.original_filename, uf.uploaded_at
+        FROM uploaded_files uf
+        JOIN users u ON uf.user_id=u.id
+        JOIN marketplaces m ON uf.marketplace_id=m.id
+       ORDER BY uf.uploaded_at DESC
+    `);
+    res.render('catalogUploadAdmin', { files: all });
+  } catch (err) {
+    console.error(err);
+    req.flash('error','Cannot load admin view.');
+    res.redirect('/');
+  }
+});
+
+module.exports = router;
