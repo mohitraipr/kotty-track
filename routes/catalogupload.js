@@ -248,30 +248,49 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
     res.redirect('/catalogUpload');
   }
 });
+// Admin: list all uploads + aggregate counts for chart
+router.get(
+  '/admin',
+  isAuthenticated,
+  isCatalogUpload,
+  async (req, res) => {
+    try {
+      // 1) Detailed rows for listing
+      const [files] = await pool.query(`
+        SELECT uf.id,
+               u.username,
+               m.name   AS marketplace,
+               uf.original_filename,
+               uf.uploaded_at
+          FROM uploaded_files uf
+          JOIN users u ON uf.user_id = u.id
+          JOIN marketplaces m ON uf.marketplace_id = m.id
+         ORDER BY uf.uploaded_at DESC
+      `);
 
-// Admin: list all uploads
-// Admin: list all uploads
-router.get('/admin', isAuthenticated, isAdmin, async (req, res) => {
-  try {
-    // fetch every upload, with username & marketplace
-    const [files] = await pool.query(`
-      SELECT uf.id,
-             u.username,
-             m.name   AS marketplace,
-             uf.original_filename,
-             uf.uploaded_at
-        FROM uploaded_files uf
-        JOIN users u ON uf.user_id=u.id
-        JOIN marketplaces m ON uf.marketplace_id=m.id
-       ORDER BY uf.uploaded_at DESC
-    `);
+      // 2) Aggregated counts per user & marketplace
+      const [aggData] = await pool.query(`
+        SELECT u.username,
+               m.name   AS marketplace,
+               COUNT(*) AS count
+          FROM uploaded_files uf
+          JOIN users u ON uf.user_id = u.id
+          JOIN marketplaces m ON uf.marketplace_id = m.id
+         GROUP BY u.username, m.name
+         ORDER BY u.username, m.name
+      `);
 
-    // render the new admin template
-    res.render('catalogUploadAdmin', { files, error: req.flash('error') });
-  } catch (err) {
-    console.error(err);
-    req.flash('error','Cannot load admin view.');
-    res.redirect('/');
+      res.render('catalogUploadAdmin', {
+        files,
+        aggData,
+        error: req.flash('error')
+      });
+    } catch (err) {
+      console.error(err);
+      req.flash('error', 'Cannot load admin view.');
+      res.redirect('/');
+    }
   }
-});
+);
+
 module.exports = router;
