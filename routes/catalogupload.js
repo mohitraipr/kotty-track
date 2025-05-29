@@ -251,7 +251,7 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
 
 // Admin: list all uploads
 // Admin: list all uploads
-router.get('/admin', isAuthenticated, isCatalogUpload, async (req, res) => {
+router.get('/admin', isAuthenticated, isAdmin, async (req, res) => {
   try {
     // fetch every upload, with username & marketplace
     const [files] = await pool.query(`
