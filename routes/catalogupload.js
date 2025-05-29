@@ -1,4 +1,5 @@
 // routes/catalogUploadRoutes.js
+
 const express = require('express');
 const router  = express.Router();
 const multer  = require('multer');
@@ -18,10 +19,10 @@ const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const s3 = new S3Client({ region: 'ap-south-1' });
 const BUCKET = "my-app-uploads-kotty";
 
-// Multer-S3 storage (now driving the v3 SDK)
+// Multer-S3 storage
 const upload = multer({
   storage: multerS3({
-    s3,                                  // <-- v3 client with .send()
+    s3,
     bucket: BUCKET,
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: (req, file, cb) => {
@@ -40,15 +41,44 @@ const upload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 }
 });
-// GET /catalogUpload — render upload/search page
+
+// Helper: fetch upload summary by date for a user+marketplace
+async function fetchUploadSummary(userId, marketplaceId) {
+  const [rows] = await pool.query(`
+    SELECT DATE(uploaded_at) AS date, COUNT(*) AS count
+      FROM uploaded_files
+     WHERE user_id=? AND marketplace_id=?
+     GROUP BY DATE(uploaded_at)
+     ORDER BY DATE(uploaded_at) DESC
+  `, [userId, marketplaceId]);
+  return rows;
+}
+
+// GET /catalogUpload — render upload/search page (with optional summary)
 router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
-  const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
-  res.render('catalogUpload', {
-    files: [],
-    markets,
-    selectedMarketplace: null,
-    q: ''
-  });
+  const userId         = req.session.user.id;
+  const marketplaceId  = parseInt(req.query.marketplace, 10) || null;
+
+  try {
+    const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+
+    let summary = [];
+    if (marketplaceId) {
+      summary = await fetchUploadSummary(userId, marketplaceId);
+    }
+
+    res.render('catalogUpload', {
+      files: [],
+      markets,
+      selectedMarketplace: marketplaceId,
+      q: '',
+      summary
+    });
+  } catch (err) {
+    console.error(err);
+    req.flash('error','Cannot load upload page.');
+    res.redirect('/');
+  }
 });
 
 // POST /catalogUpload/upload — upload file to S3
@@ -59,11 +89,11 @@ router.post(
   upload.single('csvfile'),
   async (req, res) => {
     try {
-      const userId       = req.session.user.id;
+      const userId        = req.session.user.id;
       const marketplaceId = parseInt(req.body.marketplace, 10);
       if (!marketplaceId) throw new Error('Marketplace required');
 
-      // Determine original_filename + handle duplicates per-day
+      // handle original_filename duplicates
       let originalName = req.file.originalname;
       const today      = new Date().toISOString().slice(0,10);
       const [[{ cnt }]] = await pool.query(`
@@ -81,7 +111,6 @@ router.post(
         originalName = `${base}_${today}${ext}`;
       }
 
-      // Save metadata: filename = S3 key, original_filename = user file name
       await pool.query(`
         INSERT INTO uploaded_files 
           (user_id, marketplace_id, filename, original_filename)
@@ -93,15 +122,16 @@ router.post(
       console.error(err);
       req.flash('error', err.message || 'Upload failed.');
     }
-    res.redirect('/catalogUpload');
+    res.redirect(`/catalogUpload?marketplace=${req.body.marketplace}`);
   }
 );
 
-// GET /catalogUpload/search — search S3-stored files
+// GET /catalogUpload/search — search S3-stored files + show summary
 router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10);
   const term          = (req.query.q||'').trim().toLowerCase();
+
   if (!marketplaceId || !term) {
     req.flash('error','Marketplace + search term required');
     return res.redirect('/catalogUpload');
@@ -117,28 +147,16 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
 
     const matches = [];
     for (const r of rows) {
-      // 1) send a GetObjectCommand to the v3 client
-      const getCmd = new GetObjectCommand({
-        Bucket: BUCKET,
-        Key: r.filename
-      });
+      const getCmd = new GetObjectCommand({ Bucket: BUCKET, Key: r.filename });
       const data   = await s3.send(getCmd);
-
-      // 2) read the Body stream into a Buffer
       const chunks = [];
-      for await (const chunk of data.Body) {
-        chunks.push(chunk);
-      }
+      for await (const chunk of data.Body) chunks.push(chunk);
       const buffer = Buffer.concat(chunks);
 
-      const ext = path.extname(r.filename).toLowerCase();
       let found = false;
-
-      if (ext === '.csv') {
-        const text = buffer.toString('utf8');
-        if (text.toLowerCase().includes(term)) found = true;
+      if (r.filename.toLowerCase().endsWith('.csv')) {
+        if (buffer.toString('utf8').toLowerCase().includes(term)) found = true;
       } else {
-        // .xls or .xlsx
         const wb = XLSX.read(buffer, { type: 'buffer' });
         for (const sheet of wb.SheetNames) {
           const json = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { raw: false });
@@ -154,23 +172,27 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
 
     if (!matches.length) {
       req.flash('error','No matching files found.');
-      return res.redirect('/catalogUpload');
+      return res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
     }
 
     const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+    const summary   = await fetchUploadSummary(userId, marketplaceId);
+
     res.render('catalogUpload', {
       files: matches,
       markets,
       selectedMarketplace: marketplaceId,
-      q: term
+      q: term,
+      summary
     });
   } catch (err) {
     console.error(err);
     req.flash('error','Search failed.');
-    res.redirect('/catalogUpload');
+    res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
   }
 });
-// GET /catalogUpload/download/:id — stream file back from S3
+
+// GET /catalogUpload/download/:id — stream back from S3
 router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -188,17 +210,11 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
     }
 
     const { filename, original_filename } = rows[0];
-    // Tell the browser to download with the original name:
     res.attachment(original_filename);
 
-    // Fetch the object via v3:
-    const getCmd = new GetObjectCommand({
-      Bucket: BUCKET,
-      Key: filename
-    });
-    const data = await s3.send(getCmd);
+    const getCmd = new GetObjectCommand({ Bucket: BUCKET, Key: filename });
+    const data   = await s3.send(getCmd);
 
-    // data.Body is a Readable stream — pipe it straight to the client
     data.Body
       .on('error', err => {
         console.error('Stream error:', err);
@@ -212,6 +228,7 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
     res.redirect('/catalogUpload');
   }
 });
+
 // Admin: list all uploads
 router.get('/admin', isAuthenticated, isAdmin, async (req, res) => {
   try {
