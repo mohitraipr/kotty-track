@@ -2,94 +2,200 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>File Upload & Search</title>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    /* Custom styles */
+    .dropzone {
+      border: 2px dashed #ced4da;
+      border-radius: .25rem;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background-color .2s ease;
+    }
+    .dropzone.dragover {
+      background-color: #e9ecef;
+    }
+  </style>
 </head>
-<body class="container py-5">
-
-  <h1 class="mb-4">Upload & Search Your Files</h1>
-  <% if (success) { %>
-    <div class="alert alert-success"><%= success %></div>
-  <% } %>
-  <% if (error) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
-
-  <!-- Upload Form -->
-  <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data" class="mb-5">
-    <div class="row">
-      <div class="col-md-6 mb-3">
-        <label for="marketplace" class="form-label">Marketplace</label>
-        <select name="marketplace" id="marketplace" class="form-select" required>
-          <option value="">Select marketplace</option>
-          <% markets.forEach(m => { %>
-            <option value="<%= m.id %>"><%= m.name %></option>
-          <% }) %>
-        </select>
-      </div>
-      <div class="col-md-6 mb-3">
-        <label for="csvfile" class="form-label">Select File</label>
-        <input
-          type="file"
-          class="form-control"
-          id="csvfile"
-          name="csvfile"
-          accept=".csv,.xls,.xlsx"
-          required>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/">
+        <i class="fas fa-cloud-upload-alt text-primary"></i> File Manager
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link active" href="/">Home</a>
+          </li>
+          <!-- add other nav items if needed -->
+        </ul>
       </div>
     </div>
-    <button type="submit" class="btn btn-primary">Upload</button>
-  </form>
+  </nav>
 
-  <hr/>
+  <!-- Main Container -->
+  <div class="container py-5">
+    <h1 class="mb-4 text-center">Upload & Search Your Files</h1>
 
-  <!-- Search Form -->
-  <form action="/catalogUpload/search" method="GET" class="mb-4">
-    <div class="row">
-      <div class="col-md-4 mb-3">
-        <label for="marketplaceSearch" class="form-label">Marketplace</label>
-        <select name="marketplace" id="marketplaceSearch" class="form-select" required>
-          <option value="">Select marketplace</option>
-          <% markets.forEach(m => { %>
-            <option
-              value="<%= m.id %>"
-              <%= selectedMarketplace==m.id?'selected':'' %>>
-              <%= m.name %>
-            </option>
-          <% }) %>
-        </select>
+    <% if (success) { %>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="fas fa-check-circle"></i> <%= success %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
-      <div class="col-md-8 mb-3">
-        <label for="search" class="form-label">Search Term</label>
-        <input
-          type="text"
-          class="form-control"
-          id="search"
-          name="q"
-          placeholder="Enter search term"
-          required
-          value="<%= q %>">
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="fas fa-exclamation-triangle"></i> <%= error %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+
+    <!-- Upload Card -->
+    <div class="card mb-5 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Upload Files</h5>
+        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Upload your CSV, XLS, or XLSX files here"></i>
+      </div>
+      <div class="card-body">
+        <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="marketplace" class="form-label">Marketplace 
+                <i class="fas fa-info-circle text-muted" data-bs-toggle="tooltip" title="Select the marketplace for this file"></i>
+              </label>
+              <select name="marketplace" id="marketplace" class="form-select" required>
+                <option value="">Select marketplace</option>
+                <% markets.forEach(m => { %>
+                  <option value="<%= m.id %>"><%= m.name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="csvfile" class="form-label">Select File 
+                <i class="fas fa-upload text-muted" data-bs-toggle="tooltip" title="Allowed formats: .csv, .xls, .xlsx"></i>
+              </label>
+              <div id="file-dropzone" class="dropzone">
+                <p class="mb-1">Drag & drop a file here, or click to select</p>
+                <input type="file" id="csvfile" name="csvfile" accept=".csv,.xls,.xlsx" required class="form-control form-control-file p-0" style="opacity:0; position:absolute; width:100%; height:100%; top:0; left:0; cursor:pointer;">
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-end">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="fas fa-upload"></i> Upload
+            </button>
+          </div>
+        </form>
       </div>
     </div>
-    <button type="submit" class="btn btn-success">Search</button>
-  </form>
 
-  <!-- Results -->
-  <% if (files && files.length) { %>
-    <h2 class="mt-4">Matching Files</h2>
-    <ul class="list-group">
-      <% files.forEach(f => { %>
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <%= f.original_filename %>
-          <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-sm btn-outline-secondary">
-            Download
-          </a>
-        </li>
-      <% }) %>
-    </ul>
-  <% } %>
+    <!-- Search Card -->
+    <div class="card mb-5 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Search Files</h5>
+        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" title="Search through your uploaded files"></i>
+      </div>
+      <div class="card-body">
+        <form action="/catalogUpload/search" method="GET">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label for="marketplaceSearch" class="form-label">Marketplace</label>
+              <select name="marketplace" id="marketplaceSearch" class="form-select" required>
+                <option value="">Select marketplace</option>
+                <% markets.forEach(m => { %>
+                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label for="search" class="form-label">Search Term</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="text" id="search" name="q" class="form-control" placeholder="Enter search term" required value="<%= q %>">
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 text-end">
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="fas fa-search"></i> Search
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
+    <!-- Results Card -->
+    <% if (files && files.length) { %>
+      <div class="card mb-5 shadow-sm">
+        <div class="card-header bg-white">
+          <h5 class="card-title mb-0">Search Results (<%= files.length %>)</h5>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Filename</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% files.forEach(f => { %>
+                <tr>
+                  <td><i class="far fa-file-alt text-primary"></i> <%= f.original_filename %></td>
+                  <td class="text-end">
+                    <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-sm btn-outline-secondary" data-bs-toggle="tooltip" title="Download this file">
+                      <i class="fas fa-download"></i>
+                    </a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-light text-center py-3 mt-auto">
+    <p class="mb-0">&copy; <%= new Date().getFullYear() %> Your Company. All rights reserved.</p>
+  </footer>
+
+  <!-- Bootstrap JS & Init -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.querySelectorAll('.dropzone').forEach(zone => {
+      const input = zone.querySelector('input[type="file"]');
+      zone.addEventListener('click', () => input.click());
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) input.files = files;
+      });
+    });
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+  </script>
 </body>
 </html>
