@@ -70,6 +70,9 @@ router.post('/login', async (req, res) => {
       case 'washing':
           res.redirect('/washingdashboard');
           break;
+        case 'catalogUpload':
+            res.redirect('/catalogUpload');
+            break;
       case 'jeans_assembly':
           res.redirect('/jeansassemblydashboard');
           break;
