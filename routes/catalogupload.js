@@ -13,15 +13,14 @@ const {
   isAdmin
 } = require('../middlewares/auth');
 
-// configure AWS SDK to use the EC2 instance role
-AWS.config.update({ region: "ap-south-1"});
-const s3 = new AWS.S3();
+// instantiate a v3 S3 client
+const s3 = new S3Client({ region: 'ap-south-1' });
 const BUCKET = "my-app-uploads-kotty";
 
-// Multer-S3 setup: accept .csv, .xls, .xlsx up to 10 MB
+// Multer-S3 storage (now driving the v3 SDK)
 const upload = multer({
   storage: multerS3({
-    s3,
+    s3,                                  // <-- v3 client with .send()
     bucket: BUCKET,
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: (req, file, cb) => {
@@ -30,18 +29,16 @@ const upload = multer({
       const timestamp = Date.now();
       const ext       = path.extname(file.originalname);
       const base      = path.basename(file.originalname, ext);
-      const key       = `user_${userId}/mkt_${mktId}/${timestamp}-${base}${ext}`;
-      cb(null, key);
+      cb(null, `user_${userId}/mkt_${mktId}/${timestamp}-${base}${ext}`);
     }
   }),
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (['.csv','.xls','.xlsx'].includes(ext)) cb(null, true);
+    if (['.csv', '.xls', '.xlsx'].includes(ext)) cb(null, true);
     else cb(new Error('Only .csv, .xls & .xlsx allowed'));
   },
   limits: { fileSize: 10 * 1024 * 1024 }
 });
-
 // GET /catalogUpload — render upload/search page
 router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
   const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
