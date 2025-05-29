@@ -1,4 +1,5 @@
 <!-- views/catalogUploadAdmin.ejs -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +8,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
-  <!-- Bootstrap + Icons -->
+  <!-- Bootstrap & Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
   <!-- Chart.js -->
@@ -31,10 +32,10 @@
       padding: 0 1rem;
     }
     .page-header {
-      margin-bottom: 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 1.5rem;
     }
     .page-header h1 {
       font-weight: 600;
@@ -64,16 +65,14 @@
     .card-body {
       padding: 1.5rem;
     }
-    /* Chart container */
-    #overviewCard { padding-bottom: 1rem; }
-    /* File grid */
-    .date-group {
-      margin-bottom: 2rem;
-    }
+    /* Chart */
+    #overviewCard { margin-bottom: 2rem; }
+    /* Upload grid */
+    .date-group { margin-bottom: 2rem; }
     .date-title {
       font-size: 1.1rem;
       font-weight: 600;
-      margin-bottom: .5rem;
+      margin-bottom: .75rem;
     }
     .mkt-card {
       border-radius: .5rem;
@@ -100,24 +99,28 @@
       border-bottom: 1px solid #e9ecef;
     }
     .file-item:last-child { border-bottom: none; }
-    .file-name { overflow-wrap: anywhere; }
+    .file-name { overflow-wrap: anywhere; font-weight: 500; }
+    .uploader { font-size: .85rem; color: #666; margin-right: .5rem; }
   </style>
 </head>
 <body>
   <div class="wrapper">
 
     <div class="page-header">
-      <h1><i class="bi bi-speedometer2 me-2 text-primary"></i>Catalog Uploads Admin</h1>
+      <h1>
+        <i class="bi bi-pie-chart-fill me-2 text-primary"></i>
+        Catalog Uploads Admin
+      </h1>
       <% if (error && error.length) { %>
         <div class="alert alert-danger py-1 px-3 mb-0"><%= error %></div>
       <% } %>
     </div>
 
     <!-- Tabs -->
-    <ul class="nav nav-tabs mb-4" role="tablist">
+    <ul class="nav nav-tabs mb-4">
       <li class="nav-item">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overviewTab">
-          <i class="bi bi-bar-chart-fill me-1"></i>Overview
+          <i class="bi bi-pie-chart-fill me-1"></i>Overview
         </button>
       </li>
       <li class="nav-item">
@@ -129,12 +132,12 @@
 
     <div class="tab-content">
 
-      <!-- OVERVIEW -->
+      <!-- OVERVIEW: Pie Chart by User -->
       <div class="tab-pane fade show active" id="overviewTab">
         <div class="card" id="overviewCard">
-          <div class="card-header">Uploads by User & Marketplace</div>
+          <div class="card-header">Uploads by User</div>
           <div class="card-body">
-            <canvas id="uploadsChart" height="120"></canvas>
+            <canvas id="uploadsPieChart" height="120"></canvas>
           </div>
         </div>
       </div>
@@ -155,7 +158,9 @@
         %>
           <div class="date-group">
             <div class="date-title">
-              <%= new Date(date).toLocaleDateString(undefined,{ year:'numeric', month:'long', day:'numeric' }) %>
+              <%= new Date(date).toLocaleDateString(undefined,{
+                    year:'numeric', month:'long', day:'numeric'
+                  }) %>
               <span class="badge bg-primary ms-2"><%= dayFiles.length %> files</span>
             </div>
             <div class="row g-3">
@@ -176,8 +181,12 @@
                     <div class="mkt-body">
                       <% items.forEach(f => { %>
                         <div class="file-item">
-                          <div class="file-name"><%= f.original_filename %></div>
-                          <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-outline-primary btn-sm">
+                          <div>
+                            <span class="uploader"><%= f.username %>:</span>
+                            <span class="file-name"><%= f.original_filename %></span>
+                          </div>
+                          <a href="/catalogUpload/download/<%= f.id %>"
+                             class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-download"></i>
                           </a>
                         </div>
@@ -194,52 +203,36 @@
     </div>
   </div>
 
-  <!-- Chart.js Script -->
   <script>
-    const raw = <%- JSON.stringify(aggData) %>;
-    const users = [...new Set(raw.map(r=>r.username))];
-    const mkts  = [...new Set(raw.map(r=>r.marketplace))];
+    // Pie chart: uploads per user
+    const rawAgg = <%- JSON.stringify(aggData) %>;
+    const userCounts = rawAgg.reduce((a,r)=>{
+      a[r.username] = (a[r.username]||0) + r.count;
+      return a;
+    }, {});
+    const labels = Object.keys(userCounts);
+    const data   = labels.map(u=>userCounts[u]);
 
-    // pastel palette
-    const palette = [
-      'rgba(78, 115, 223, 0.7)',
-      'rgba(28, 200, 138, 0.7)',
-      'rgba(54, 185, 204, 0.7)',
-      'rgba(246, 194, 62, 0.7)',
-      'rgba(231, 74, 59, 0.7)',
-      'rgba(133, 135, 150, 0.7)'
+    const bgColors = [
+      '#4e73df', '#1cc88a', '#36b9cc',
+      '#f6c23e', '#e74a3b', '#858796'
     ];
 
-    const datasets = mkts.map((m,i)=>({
-      label: m,
-      data: users.map(u=>{
-        const rec = raw.find(r=>r.username===u&&r.marketplace===m);
-        return rec? rec.count: 0;
-      }),
-      backgroundColor: palette[i % palette.length],
-      stack: 'stack1'
-    }));
-
     new Chart(
-      document.getElementById('uploadsChart').getContext('2d'),
+      document.getElementById('uploadsPieChart'),
       {
-        type: 'bar',
-        data: { labels: users, datasets },
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: bgColors.slice(0, labels.length)
+          }]
+        },
         options: {
           responsive: true,
-          interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { position: 'bottom' },
-            tooltip: { boxPadding: 6 }
-          },
-          scales: {
-            x: { stacked: true, grid: { display: false } },
-            y: {
-              stacked: true,
-              beginAtZero: true,
-              title: { display: true, text: 'Files' },
-              grid: { color: 'rgba(0,0,0,0.05)' }
-            }
+            legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } }
           }
         }
       }
