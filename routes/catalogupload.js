@@ -117,20 +117,32 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
 
     const matches = [];
     for (const r of rows) {
-      // fetch object from S3
-      const obj = await s3.getObject({ Bucket: BUCKET, Key: r.filename }).promise();
-      const ext = path.extname(r.filename).toLowerCase();
+      // 1) send a GetObjectCommand to the v3 client
+      const getCmd = new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: r.filename
+      });
+      const data   = await s3.send(getCmd);
 
+      // 2) read the Body stream into a Buffer
+      const chunks = [];
+      for await (const chunk of data.Body) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+
+      const ext = path.extname(r.filename).toLowerCase();
       let found = false;
+
       if (ext === '.csv') {
-        const text = obj.Body.toString('utf8');
+        const text = buffer.toString('utf8');
         if (text.toLowerCase().includes(term)) found = true;
       } else {
         // .xls or .xlsx
-        const wb = XLSX.read(obj.Body, { type: 'buffer' });
+        const wb = XLSX.read(buffer, { type: 'buffer' });
         for (const sheet of wb.SheetNames) {
-          const data = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { raw: false });
-          if (JSON.stringify(data).toLowerCase().includes(term)) {
+          const json = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { raw: false });
+          if (JSON.stringify(json).toLowerCase().includes(term)) {
             found = true;
             break;
           }
@@ -158,7 +170,6 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
     res.redirect('/catalogUpload');
   }
 });
-
 // GET /catalogUpload/download/:id — stream file back from S3
 router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId = req.session.user.id;
