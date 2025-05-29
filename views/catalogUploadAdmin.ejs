@@ -1,126 +1,222 @@
 <!-- views/catalogUploadAdmin.ejs -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>Admin: All Uploads</title>
+  <title>Admin Dashboard: Catalog Uploads</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"/>
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <!-- Bootstrap + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
-    body { background:#f8f9fa; }
-    .wrapper { max-width:1100px; margin:2rem auto; }
-    .date-card { margin-bottom:1.5rem; }
-    .date-card .card-header { background:#e9ecef; font-weight:600; }
-    .mkt-section { margin-top:1rem; }
-    .file-table th, .file-table td {
-      vertical-align:middle;
-      font-size:.9rem;
+    :root {
+      --bs-primary: #4e73df;
+      --bs-secondary: #1cc88a;
+      --bs-light: #f8f9fa;
+      --bs-dark: #2e2e2e;
     }
-    #chartContainer { margin-bottom:2rem; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bs-light);
+      color: var(--bs-dark);
+    }
+    .wrapper {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .page-header {
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .page-header h1 {
+      font-weight: 600;
+      font-size: 1.75rem;
+    }
+    .nav-tabs .nav-link {
+      font-weight: 600;
+      color: var(--bs-dark);
+    }
+    .nav-tabs .nav-link.active {
+      color: #fff;
+      background: var(--bs-primary);
+    }
+    .card {
+      border: none;
+      border-radius: .75rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      margin-bottom: 1.5rem;
+    }
+    .card-header {
+      background: var(--bs-light);
+      border-bottom: none;
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 1rem 1.5rem;
+    }
+    .card-body {
+      padding: 1.5rem;
+    }
+    /* Chart container */
+    #overviewCard { padding-bottom: 1rem; }
+    /* File grid */
+    .date-group {
+      margin-bottom: 2rem;
+    }
+    .date-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: .5rem;
+    }
+    .mkt-card {
+      border-radius: .5rem;
+      overflow: hidden;
+    }
+    .mkt-header {
+      background: var(--bs-secondary);
+      color: #fff;
+      padding: .5rem 1rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mkt-body {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .5rem 1rem;
+      border-bottom: 1px solid #e9ecef;
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-name { overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
   <div class="wrapper">
-    <h1 class="mb-4">Admin: All Uploads</h1>
 
-    <% if (error && error.length) { %>
-      <div class="alert alert-danger"><%= error %></div>
-    <% } %>
-
-    <!-- Chart -->
-    <div id="chartContainer" class="card">
-      <div class="card-header">Uploads by User & Marketplace</div>
-      <div class="card-body">
-        <canvas id="uploadsChart" height="150"></canvas>
-      </div>
+    <div class="page-header">
+      <h1><i class="bi bi-speedometer2 me-2 text-primary"></i>Catalog Uploads Admin</h1>
+      <% if (error && error.length) { %>
+        <div class="alert alert-danger py-1 px-3 mb-0"><%= error %></div>
+      <% } %>
     </div>
 
-    <% 
-      // Group detailed rows by date
-      const groupedByDate = files.reduce((acc, f) => {
-        const d = new Date(f.uploaded_at).toISOString().slice(0,10);
-        acc[d] = acc[d] || [];
-        acc[d].push(f);
-        return acc;
-      }, {});
-      const dates = Object.keys(groupedByDate);
-    %>
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overviewTab">
+          <i class="bi bi-bar-chart-fill me-1"></i>Overview
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#uploadsTab">
+          <i class="bi bi-folder2-open me-1"></i>Uploads
+        </button>
+      </li>
+    </ul>
 
-    <% dates.forEach(date => {
-         const dayFiles    = groupedByDate[date];
-         const totalForDay = dayFiles.length;
-         // Then group that day's files by marketplace
-         const byMarketplace = dayFiles.reduce((acc, f) => {
-           acc[f.marketplace] = acc[f.marketplace] || [];
-           acc[f.marketplace].push(f);
-           return acc;
-         }, {});
-    %>
-      <div class="card date-card">
-        <div class="card-header">
-          <%= new Date(date).toLocaleDateString() %>
-          <span class="badge bg-primary ms-2"><%= totalForDay %></span>
-        </div>
-        <div class="card-body">
-          <% Object.entries(byMarketplace).forEach(([mktName, mktFiles]) => { %>
-            <div class="mkt-section">
-              <h5>
-                <%= mktName %>
-                <span class="badge bg-secondary ms-1"><%= mktFiles.length %></span>
-              </h5>
-              <table class="table table-sm table-bordered file-table">
-                <thead class="table-light">
-                  <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Filename</th>
-                    <th>Time</th>
-                    <th>Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% mktFiles.forEach(f => { %>
-                    <tr>
-                      <td><%= f.id %></td>
-                      <td><%= f.username %></td>
-                      <td><%= f.original_filename %></td>
-                      <td><%= new Date(f.uploaded_at).toLocaleTimeString() %></td>
-                      <td>
-                        <a href="/catalogUpload/download/<%= f.id %>"
-                           class="btn btn-outline-primary btn-sm">
-                          <i class="bi bi-download"></i>
-                        </a>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          <% }) %>
+    <div class="tab-content">
+
+      <!-- OVERVIEW -->
+      <div class="tab-pane fade show active" id="overviewTab">
+        <div class="card" id="overviewCard">
+          <div class="card-header">Uploads by User & Marketplace</div>
+          <div class="card-body">
+            <canvas id="uploadsChart" height="120"></canvas>
+          </div>
         </div>
       </div>
-    <% }) %>
+
+      <!-- UPLOADS DETAIL -->
+      <div class="tab-pane fade" id="uploadsTab">
+        <% 
+          // group by date
+          const grouped = files.reduce((a,f)=>{
+            const d = new Date(f.uploaded_at).toISOString().slice(0,10);
+            (a[d]||(a[d]=[])).push(f);
+            return a;
+          }, {});
+          const dates = Object.keys(grouped);
+        %>
+        <% dates.forEach(date => { 
+             const dayFiles = grouped[date];
+        %>
+          <div class="date-group">
+            <div class="date-title">
+              <%= new Date(date).toLocaleDateString(undefined,{ year:'numeric', month:'long', day:'numeric' }) %>
+              <span class="badge bg-primary ms-2"><%= dayFiles.length %> files</span>
+            </div>
+            <div class="row g-3">
+              <% 
+                // group by marketplace
+                const byMkt = dayFiles.reduce((a,f)=>{
+                  (a[f.marketplace]||(a[f.marketplace]=[])).push(f);
+                  return a;
+                }, {});
+                Object.entries(byMkt).forEach(([mkt, items])=> {
+              %>
+                <div class="col-md-6">
+                  <div class="card mkt-card">
+                    <div class="mkt-header">
+                      <span><%= mkt %></span>
+                      <span class="badge bg-light text-dark"><%= items.length %></span>
+                    </div>
+                    <div class="mkt-body">
+                      <% items.forEach(f => { %>
+                        <div class="file-item">
+                          <div class="file-name"><%= f.original_filename %></div>
+                          <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-download"></i>
+                          </a>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+    </div>
   </div>
 
+  <!-- Chart.js Script -->
   <script>
-    // Prepare chart data
     const raw = <%- JSON.stringify(aggData) %>;
-    const users = [...new Set(raw.map(r => r.username))];
-    const mkts  = [...new Set(raw.map(r => r.marketplace))];
+    const users = [...new Set(raw.map(r=>r.username))];
+    const mkts  = [...new Set(raw.map(r=>r.marketplace))];
 
-    // Build datasets per marketplace
-    const datasets = mkts.map(m => ({
+    // pastel palette
+    const palette = [
+      'rgba(78, 115, 223, 0.7)',
+      'rgba(28, 200, 138, 0.7)',
+      'rgba(54, 185, 204, 0.7)',
+      'rgba(246, 194, 62, 0.7)',
+      'rgba(231, 74, 59, 0.7)',
+      'rgba(133, 135, 150, 0.7)'
+    ];
+
+    const datasets = mkts.map((m,i)=>({
       label: m,
-      data: users.map(u => {
-        const rec = raw.find(r => r.username===u && r.marketplace===m);
-        return rec ? rec.count : 0;
+      data: users.map(u=>{
+        const rec = raw.find(r=>r.username===u&&r.marketplace===m);
+        return rec? rec.count: 0;
       }),
-      // let Chart.js pick colors
-      // we’re using stacked bars
+      backgroundColor: palette[i % palette.length],
       stack: 'stack1'
     }));
 
@@ -128,23 +224,22 @@
       document.getElementById('uploadsChart').getContext('2d'),
       {
         type: 'bar',
-        data: {
-          labels: users,
-          datasets
-        },
+        data: { labels: users, datasets },
         options: {
           responsive: true,
+          interaction: { mode: 'index', intersect: false },
           plugins: {
-            title: {
-              display: false
-            },
-            legend: {
-              position: 'top'
-            }
+            legend: { position: 'bottom' },
+            tooltip: { boxPadding: 6 }
           },
           scales: {
-            x: { stacked: true },
-            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Files Uploaded' } }
+            x: { stacked: true, grid: { display: false } },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              title: { display: true, text: 'Files' },
+              grid: { color: 'rgba(0,0,0,0.05)' }
+            }
           }
         }
       }
