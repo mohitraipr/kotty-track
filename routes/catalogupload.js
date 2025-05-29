@@ -252,7 +252,7 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
 router.get(
   '/admin',
   isAuthenticated,
-  isCatalogUpload,
+  isAdmin,
   async (req, res) => {
     try {
       // 1) Detailed rows for listing
