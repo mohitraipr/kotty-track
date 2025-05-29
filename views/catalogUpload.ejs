@@ -65,19 +65,20 @@
 
     <!-- Feedback -->
  
- <% if (success && success.trim().length > 0) { %>
+ <% if (typeof success === 'string' && success.trim().length > 0) { %>
   <div class="alert alert-success alert-dismissible fade show" role="alert">
     <%= success %>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
 <% } %>
 
-<% if (error && error.trim().length > 0) { %>
+<% if (typeof error === 'string' && error.trim().length > 0) { %>
   <div class="alert alert-danger alert-dismissible fade show" role="alert">
     <%= error %>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
 <% } %>
+
 
 
     <!-- Upload Section -->
