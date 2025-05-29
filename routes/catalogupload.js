@@ -14,6 +14,7 @@ const {
 } = require('../middlewares/auth');
 
 // instantiate a v3 S3 client
+const { S3Client } = require('@aws-sdk/client-s3');
 const s3 = new S3Client({ region: 'ap-south-1' });
 const BUCKET = "my-app-uploads-kotty";
 
