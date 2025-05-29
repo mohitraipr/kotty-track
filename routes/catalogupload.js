@@ -172,33 +172,46 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
 });
 // GET /catalogUpload/download/:id — stream file back from S3
 router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
-  const userId = req.session.user.id;
-  const fileId = parseInt(req.params.id, 10);
+  try {
+    const userId = req.session.user.id;
+    const fileId = parseInt(req.params.id, 10);
 
-  const [rows] = await pool.query(`
-    SELECT filename, original_filename
-      FROM uploaded_files
-     WHERE id=? AND user_id=?
-  `, [fileId, userId]);
+    const [rows] = await pool.query(`
+      SELECT filename, original_filename
+        FROM uploaded_files
+       WHERE id=? AND user_id=?
+    `, [fileId, userId]);
 
-  if (!rows.length) {
-    req.flash('error','File not found.');
-    return res.redirect('/catalogUpload');
+    if (!rows.length) {
+      req.flash('error', 'File not found.');
+      return res.redirect('/catalogUpload');
+    }
+
+    const { filename, original_filename } = rows[0];
+    // Tell the browser to download with the original name:
+    res.attachment(original_filename);
+
+    // Fetch the object via v3:
+    const getCmd = new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: filename
+    });
+    const data = await s3.send(getCmd);
+
+    // data.Body is a Readable stream — pipe it straight to the client
+    data.Body
+      .on('error', err => {
+        console.error('Stream error:', err);
+        res.status(500).end('Download error');
+      })
+      .pipe(res);
+
+  } catch (err) {
+    console.error('Download failed:', err);
+    req.flash('error', 'Download failed.');
+    res.redirect('/catalogUpload');
   }
-
-  const { filename, original_filename } = rows[0];
-  res.attachment(original_filename);
-
-  // stream from S3
-  s3.getObject({ Bucket: BUCKET, Key: filename })
-    .createReadStream()
-    .on('error', err => {
-      console.error(err);
-      res.status(500).end('Download error');
-    })
-    .pipe(res);
 });
-
 // Admin: list all uploads
 router.get('/admin', isAuthenticated, isAdmin, async (req, res) => {
   try {
