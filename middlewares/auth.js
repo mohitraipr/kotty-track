@@ -123,5 +123,6 @@ module.exports = {
     isDepartmentUser,
     isAccountsAdmin,
     isPaymentAuthoriser,
-    isWashingInMaster 
+    isWashingInMaster,
+    isCatalogUpload
 };
