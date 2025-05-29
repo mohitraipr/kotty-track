@@ -2,126 +2,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <title>File Upload & Search</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-  <!-- Bootstrap & Icons -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"/>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-    rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
 
   <style>
-    body {
-      background: #f4f6f9;
-      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    .wrapper {
-      max-width: 900px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-    }
-    .card {
-      border: none;
-      border-radius: 1rem;
-      box-shadow: 0 0 24px rgba(0, 0, 0, 0.05);
-      overflow: hidden;
-      margin-bottom: 2rem;
-      animation: fadeIn 0.4s ease-out;
-    }
-    .card-header {
-      background: #fff;
-      border-bottom: 1px solid #e3e6f0;
-      padding: 1rem 1.5rem;
-      font-weight: 600;
-    }
-    .card-body {
-      padding: 1.5rem;
-    }
-    .btn {
-      padding: 0.6rem 1.5rem;
-      transition: transform 0.1s ease, box-shadow 0.2s ease;
-    }
-    .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    .alert {
-      border-radius: 0.5rem;
-      font-size: 0.95rem;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    body { background:#f4f6f9; font-family:"Segoe UI", Roboto, Arial; }
+    .wrapper { max-width:900px; margin:2rem auto; padding:0 1rem; }
+    .card { border:none; border-radius:1rem; box-shadow:0 0 24px rgba(0,0,0,.05); margin-bottom:2rem; }
+    .card-header { background:#fff; border-bottom:1px solid #e3e6f0; padding:1rem 1.5rem; font-weight:600; }
+    .card-body { padding:1.5rem; }
+    .btn { padding:.6rem 1.5rem; transition:.1s, .2s; }
+    .btn:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
+    @keyframes fadeIn { from {opacity:0;transform:translateY(10px)} to {opacity:1;transform:translateY(0)} }
   </style>
 </head>
 <body>
   <div class="wrapper">
 
-    <!-- Page Title -->
+    <!-- Title -->
     <div class="text-center mb-5">
       <h1 class="display-6 fw-bold">📁 Upload & Search Catalog</h1>
-      <p class="text-muted fs-5">Effortlessly manage your marketplace files</p>
+      <p class="text-muted fs-5">Your files, at a glance</p>
     </div>
 
-    <!-- Feedback Messages -->
-    <% 
-      const successMsgs = Array.isArray(success)
-        ? success
-        : (typeof success === 'string' && success.trim() ? [success] : []);
-      const errorMsgs   = Array.isArray(error)
-        ? error
-        : (typeof error === 'string'  && error.trim()  ? [error]   : []);
+    <!-- Flash Messages -->
+    <% const msgs = (arr, type) => arr.map(m=>`
+      <div class="alert alert-${type} alert-dismissible d-flex align-items-center" role="alert">
+        <i class="bi bi-${type==='success'?'check-circle-fill':'exclamation-triangle-fill'} fs-4 me-2"></i>
+        <div>${m}</div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      </div>
+    `).join('');
+       const sarr = Array.isArray(success)? success : (success? [success]:[]);
+       const earr = Array.isArray(error  )? error   : (error  ? [error]  :[]);
     %>
-    <% successMsgs.forEach(msg => { %>
-      <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-check-circle-fill fs-4 me-2"></i>
-        <div><%= msg %></div>
-        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-      </div>
-    <% }) %>
-    <% errorMsgs.forEach(msg => { %>
-      <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
-        <div><%= msg %></div>
-        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-      </div>
-    <% }) %>
+    <%- msgs(sarr,'success') %>
+    <%- msgs(earr,'danger')  %>
 
-    <!-- Upload Section -->
-    <div class="card">
-      <div class="card-header text-primary">
-        <i class="bi bi-upload me-1"></i> Upload File
-      </div>
+    <!-- Upload Card -->
+    <div class="card" style="animation:fadeIn .4s">
+      <div class="card-header text-primary"><i class="bi bi-upload me-1"></i> Upload File</div>
       <div class="card-body">
         <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data">
           <div class="row g-4">
             <div class="col-md-6">
-              <label for="marketplace" class="form-label">
-                Marketplace
-                <i class="bi bi-info-circle text-secondary" data-bs-toggle="tooltip" title="Choose where the file should be uploaded"></i>
-              </label>
-              <select name="marketplace" id="marketplace" class="form-select" required>
-                <option value="">Select marketplace</option>
-                <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
+              <label class="form-label">Marketplace</label>
+              <select name="marketplace" class="form-select" required>
+                <option value="">Select…</option>
+                <% markets.forEach(m=>{ %>
+                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>>
+                    <%= m.name %>
+                  </option>
                 <% }) %>
               </select>
             </div>
             <div class="col-md-6">
-              <label for="csvfile" class="form-label">
-                File
-                <i class="bi bi-info-circle text-secondary" data-bs-toggle="tooltip" title="Accepted: .csv, .xls, .xlsx"></i>
-              </label>
-              <input type="file" class="form-control" id="csvfile" name="csvfile" accept=".csv,.xls,.xlsx" required>
+              <label class="form-label">File</label>
+              <input type="file" name="csvfile" class="form-control" accept=".csv,.xls,.xlsx" required>
             </div>
           </div>
-          <div class="mt-4 text-end">
-            <button type="submit" class="btn btn-primary">
+          <div class="text-end mt-4">
+            <button class="btn btn-primary">
               <i class="bi bi-cloud-arrow-up me-1"></i> Upload
             </button>
           </div>
@@ -129,43 +74,30 @@
       </div>
     </div>
 
-    <!-- Search Section -->
-    <div class="card">
-      <div class="card-header text-success">
-        <i class="bi bi-search me-1"></i> Search Files
-      </div>
+    <!-- Search Card -->
+    <div class="card" style="animation:fadeIn .4s">
+      <div class="card-header text-success"><i class="bi bi-search me-1"></i> Search Files</div>
       <div class="card-body">
         <form action="/catalogUpload/search" method="GET">
           <div class="row g-4">
             <div class="col-md-4">
-              <label for="marketplaceSearch" class="form-label">
-                Marketplace
-                <i class="bi bi-info-circle text-secondary" data-bs-toggle="tooltip" title="Filter by marketplace"></i>
-              </label>
-              <select name="marketplace" id="marketplaceSearch" class="form-select" required>
-                <option value="">Select marketplace</option>
-                <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>><%= m.name %></option>
+              <label class="form-label">Marketplace</label>
+              <select name="marketplace" class="form-select" required>
+                <option value="">Select…</option>
+                <% markets.forEach(m=>{ %>
+                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>>
+                    <%= m.name %>
+                  </option>
                 <% }) %>
               </select>
             </div>
             <div class="col-md-8">
-              <label for="search" class="form-label">
-                Search Term
-                <i class="bi bi-info-circle text-secondary" data-bs-toggle="tooltip" title="Enter keyword, product name, etc."></i>
-              </label>
-              <input
-                type="text"
-                class="form-control"
-                id="search"
-                name="q"
-                placeholder="e.g. Galaxy Watch 5"
-                value="<%= q %>"
-                required>
+              <label class="form-label">Term</label>
+              <input type="text" name="q" class="form-control" placeholder="Keyword…" value="<%= q %>" required>
             </div>
           </div>
-          <div class="mt-4 text-end">
-            <button type="submit" class="btn btn-success">
+          <div class="text-end mt-4">
+            <button class="btn btn-success">
               <i class="bi bi-search me-1"></i> Search
             </button>
           </div>
@@ -173,56 +105,88 @@
       </div>
     </div>
 
-    <!-- Date-wise Upload Summary -->
-    <% if (selectedMarketplace && summary && summary.length) { %>
-      <div class="card">
-        <div class="card-header text-secondary">
-          <i class="bi bi-calendar-check me-1"></i> Upload Summary
-        </div>
-        <div class="card-body">
-          <ul class="list-group">
-            <% summary.forEach(s => { %>
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <%= new Date(s.date).toLocaleDateString() %>
-                <span class="badge bg-primary rounded-pill"><%= s.count %></span>
-              </li>
-            <% }) %>
-          </ul>
-        </div>
+    <!-- All Files Card -->
+    <div class="card" style="animation:fadeIn .4s">
+      <div class="card-header text-dark"><i class="bi bi-list-ul me-1"></i> All Uploads</div>
+      <div class="card-body">
+        <ul class="list-group" id="file-list">
+          <% let lastDate = null; %>
+          <% files.forEach(f => {
+               const ds = new Date(f.uploaded_at).toLocaleDateString();
+               if (ds !== lastDate) { %>
+            <li class="list-group-item list-group-item-secondary">
+              <strong><%= ds %></strong>
+            </li>
+          <%   lastDate = ds;
+               } %>
+          <li class="list-group-item d-flex justify-content-between">
+            <%= f.original_filename %>
+            <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-download"></i>
+            </a>
+          </li>
+          <% }) %>
+        </ul>
+        <div id="files-sentinel" class="text-center my-3 text-muted">Loading more…</div>
       </div>
-    <% } %>
-
-    <!-- Search Results -->
-    <% if (files && files.length) { %>
-      <div class="card">
-        <div class="card-header text-info">
-          <i class="bi bi-folder2-open me-1"></i> Search Results
-        </div>
-        <div class="card-body">
-          <ul class="list-group list-group-flush">
-            <% files.forEach(f => { %>
-              <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <i class="bi bi-file-earmark-text me-2 text-muted"></i>
-                  <%= f.original_filename %>
-                </div>
-                <a href="/catalogUpload/download/<%= f.id %>" class="btn btn-outline-secondary btn-sm">
-                  <i class="bi bi-download me-1"></i> Download
-                </a>
-              </li>
-            <% }) %>
-          </ul>
-        </div>
-      </div>
-    <% } %>
+    </div>
 
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el =>
-      new bootstrap.Tooltip(el)
-    );
+    // Lazy-load next batches
+    (function(){
+      let offset = <%= initialLimit %>;
+      const limit = <%= initialLimit %>;
+      const market = '<%= selectedMarketplace||'' %>';
+      let loading = false;
+
+      const listEl   = document.getElementById('file-list');
+      const sentinel = document.getElementById('files-sentinel');
+
+      const append = files => {
+        files.forEach(f => {
+          const d  = new Date(f.uploaded_at).toLocaleDateString();
+          const lastHeader = listEl.lastElementChild?.dataset?.date;
+          if (d !== lastHeader) {
+            const hdr = document.createElement('li');
+            hdr.className = 'list-group-item list-group-item-secondary';
+            hdr.innerHTML = '<strong>' + d + '</strong>';
+            hdr.dataset.date = d;
+            listEl.appendChild(hdr);
+          }
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between';
+          li.innerHTML = `
+            ${f.original_filename}
+            <a href="/catalogUpload/download/${f.id}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-download"></i>
+            </a>
+          `;
+          listEl.appendChild(li);
+        });
+      };
+
+      const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting && !loading) {
+          loading = true;
+          fetch(`/catalogUpload/files?offset=${offset}&limit=${limit}&marketplace=${market}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.files.length) {
+                append(data.files);
+                offset += data.files.length;
+                loading = data.files.length === limit;
+              }
+              if (!loading) obs.disconnect();
+            })
+            .catch(()=> obs.disconnect());
+        }
+      }, { rootMargin: '200px' });
+
+      obs.observe(sentinel);
+    })();
   </script>
 </body>
 </html>
