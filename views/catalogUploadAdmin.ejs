@@ -50,7 +50,7 @@
       z-index: 1;
     }
     #tableSearch { max-width: 200px; }
-    #marketplaceSelect { max-width: 100%; }
+    #userSelect { max-width: 100%; }
   </style>
 </head>
 <body>
@@ -66,13 +66,13 @@
     </div>
 
     <div class="row g-4">
-      <!-- PIE CHART: per-user for selected marketplace -->
+      <!-- PIE CHART: per-marketplace for selected user -->
       <div class="col-lg-4">
         <div class="card">
           <div class="card-header d-flex align-items-center justify-content-between">
-            <span>By User (Marketplace)</span>
-            <select id="marketplaceSelect" class="form-select form-select-sm">
-              <!-- Fill via JS -->
+            <span>By Marketplace (User)</span>
+            <select id="userSelect" class="form-select form-select-sm">
+              <!-- Filled by JS -->
             </select>
           </div>
           <div class="card-body p-3">
@@ -138,23 +138,24 @@
       });
     });
 
-    // Prepare aggregation data
+    // Prepare aggregation data: list of { marketplace, username, count }
     const rawAgg = <%- JSON.stringify(aggData) %>;
-    // Build a mapping: marketplace => [{ username, count }, ...]
-    const byMkt = rawAgg.reduce((map, r) => {
-      if (!map[r.marketplace]) map[r.marketplace] = [];
-      map[r.marketplace].push({ user: r.username, count: r.count });
+
+    // Build mapping: user -> [ { marketplace, count } ]
+    const byUser = rawAgg.reduce((map, r) => {
+      if (!map[r.username]) map[r.username] = [];
+      map[r.username].push({ marketplace: r.marketplace, count: r.count });
       return map;
     }, {});
 
-    const mktNames = Object.keys(byMkt);
+    const userNames = Object.keys(byUser);
 
-    // Populate marketplace dropdown
-    const sel = document.getElementById('marketplaceSelect');
-    mktNames.forEach(m => {
+    // Populate user dropdown
+    const sel = document.getElementById('userSelect');
+    userNames.forEach(u => {
       const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = m;
+      opt.value = u;
+      opt.textContent = u;
       sel.appendChild(opt);
     });
 
@@ -162,9 +163,9 @@
     const ctx     = document.getElementById('uploadsPieChart').getContext('2d');
     let pieChart  = null;
 
-    function updateChart(marketplace) {
-      const data = byMkt[marketplace] || [];
-      const labels = data.map(d => d.user);
+    function updateChart(username) {
+      const data = byUser[username] || [];
+      const labels = data.map(d => d.marketplace);
       const counts = data.map(d => d.count);
       const colors = [
         '#4e73df','#1cc88a','#36b9cc',
@@ -190,13 +191,13 @@
       }
     }
 
-    // Initialize on first marketplace
-    if (mktNames.length) {
-      sel.value = mktNames[0];
-      updateChart(mktNames[0]);
+    // Initialize
+    if (userNames.length) {
+      sel.value = userNames[0];
+      updateChart(userNames[0]);
     }
 
-    // Update on change
+    // On change
     sel.addEventListener('change', () => updateChart(sel.value));
   </script>
 
