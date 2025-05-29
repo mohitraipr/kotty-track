@@ -1,13 +1,13 @@
 // routes/catalogUploadRoutes.js
 
-const express = require('express');
-const router  = express.Router();
-const multer  = require('multer');
-const multerS3 = require('multer-s3');
+const express       = require('express');
+const router        = express.Router();
+const multer        = require('multer');
+const multerS3      = require('multer-s3');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const path    = require('path');
-const XLSX    = require('xlsx');
-const { pool } = require('../config/db');
+const path          = require('path');
+const XLSX          = require('xlsx');
+const { pool }      = require('../config/db');
 const {
   isAuthenticated,
   isCatalogUpload,
@@ -17,7 +17,7 @@ const {
 const s3     = new S3Client({ region: 'ap-south-1' });
 const BUCKET = 'my-app-uploads-kotty';
 
-// Multer-S3
+// Multer-S3 storage setup
 const upload = multer({
   storage: multerS3({
     s3,
@@ -26,10 +26,9 @@ const upload = multer({
     key: (req, file, cb) => {
       const uid       = req.session.user.id;
       const mkt       = req.body.marketplace;
-      const timestamp = Date.now();
       const ext       = path.extname(file.originalname);
       const base      = path.basename(file.originalname, ext);
-      cb(null, `user_${uid}/mkt_${mkt}/${timestamp}-${base}${ext}`);
+      cb(null, `user_${uid}/mkt_${mkt}/${Date.now()}-${base}${ext}`);
     }
   }),
   fileFilter: (req, file, cb) => {
@@ -40,36 +39,45 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// Utility to build the base SQL & params for listing
+// Build base SQL + params
 function listSql(userId, marketplaceId) {
-  let sql    = 'SELECT id, original_filename, uploaded_at FROM uploaded_files WHERE user_id=?';
+  let sql = `
+    SELECT
+      uf.id,
+      uf.filename,
+      uf.original_filename,
+      uf.uploaded_at,
+      m.name AS marketplace_name
+    FROM uploaded_files uf
+    JOIN marketplaces m
+      ON uf.marketplace_id = m.id
+    WHERE uf.user_id = ?
+  `;
   const args = [userId];
   if (marketplaceId) {
-    sql += ' AND marketplace_id=?';
+    sql += ` AND uf.marketplace_id = ?`;
     args.push(marketplaceId);
   }
-  sql += ' ORDER BY uploaded_at DESC';
+  sql += ` ORDER BY uf.uploaded_at DESC`;
   return { sql, args };
 }
 
-// GET /catalogUpload — main page, with upload & search forms + initial file batch
+// GET /catalogUpload
 router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10) || null;
   const limit         = 20;
-  try {
-    // 1) marketplaces for the dropdown
-    const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
 
-    // 2) initial batch of files
+  try {
+    const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
     const { sql, args } = listSql(userId, marketplaceId);
-    const [files] = await pool.query(sql + ' LIMIT ?', [...args, limit]);
+    const [files]       = await pool.query(sql + ' LIMIT ?', [...args, limit]);
 
     res.render('catalogUpload', {
       markets,
       selectedMarketplace: marketplaceId,
       files,
-      initialLimit: limit,
+      initialLimit: files.length,
       q: ''
     });
   } catch (err) {
@@ -79,7 +87,7 @@ router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
   }
 });
 
-// GET /catalogUpload/files — JSON endpoint for lazy-loading more files
+// GET /catalogUpload/files — lazy-load JSON
 router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10) || null;
@@ -88,7 +96,7 @@ router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
 
   try {
     const { sql, args } = listSql(userId, marketplaceId);
-    const [rows] = await pool.query(sql + ' LIMIT ?,?', [...args, offset, limit]);
+    const [rows]        = await pool.query(sql + ' LIMIT ?,?', [...args, offset, limit]);
     res.json({ files: rows });
   } catch (err) {
     console.error(err);
@@ -96,7 +104,7 @@ router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
   }
 });
 
-// POST /catalogUpload/upload — exactly as before
+// POST /catalogUpload/upload
 router.post(
   '/upload',
   isAuthenticated,
@@ -108,15 +116,15 @@ router.post(
       const marketplaceId = parseInt(req.body.marketplace, 10);
       if (!marketplaceId) throw new Error('Marketplace required');
 
-      // handle duplicate original_filename per day
+      // prevent same-name dupes per day
       let originalName = req.file.originalname;
       const today      = new Date().toISOString().slice(0,10);
       const [[{ cnt }]] = await pool.query(`
-        SELECT COUNT(*) AS cnt 
-          FROM uploaded_files 
-         WHERE user_id=? 
-           AND marketplace_id=? 
-           AND original_filename=? 
+        SELECT COUNT(*) AS cnt
+          FROM uploaded_files
+         WHERE user_id=?
+           AND marketplace_id=?
+           AND original_filename=?
            AND DATE(uploaded_at)=?
       `, [userId, marketplaceId, originalName, today]);
 
@@ -127,7 +135,7 @@ router.post(
       }
 
       await pool.query(`
-        INSERT INTO uploaded_files 
+        INSERT INTO uploaded_files
           (user_id, marketplace_id, filename, original_filename)
         VALUES (?,?,?,?)
       `, [userId, marketplaceId, req.file.key, originalName]);
@@ -137,12 +145,11 @@ router.post(
       console.error(err);
       req.flash('error',err.message || 'Upload failed.');
     }
-    // keep the same marketplace filter on redirect
     res.redirect(`/catalogUpload?marketplace=${req.body.marketplace}`);
   }
 );
 
-// GET /catalogUpload/search — unchanged
+// GET /catalogUpload/search
 router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10);
@@ -153,26 +160,36 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
   }
 
   try {
+    // join for marketplace_name
     const [rows] = await pool.query(`
-      SELECT id, filename, original_filename
-        FROM uploaded_files
-       WHERE user_id=? AND marketplace_id=?
-       ORDER BY uploaded_at DESC
+      SELECT uf.id,
+             uf.filename,
+             uf.original_filename,
+             uf.uploaded_at,
+             m.name AS marketplace_name
+        FROM uploaded_files uf
+        JOIN marketplaces m ON uf.marketplace_id=m.id
+       WHERE uf.user_id=? AND uf.marketplace_id=?
+       ORDER BY uf.uploaded_at DESC
     `, [userId, marketplaceId]);
 
     const matches = [];
     for (const r of rows) {
-      const data = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: r.filename }));
-      const chunks = []; for await (const c of data.Body) chunks.push(c);
-      const buf    = Buffer.concat(chunks);
-      let found    = false;
+      const data   = await s3.send(new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: r.filename
+      }));
+      const chunks = [];
+      for await (const c of data.Body) chunks.push(c);
+      const buf = Buffer.concat(chunks);
 
+      let found = false;
       if (r.filename.toLowerCase().endsWith('.csv')) {
         if (buf.toString('utf8').toLowerCase().includes(term)) found = true;
       } else {
         const wb = XLSX.read(buf, { type:'buffer' });
         for (const sn of wb.SheetNames) {
-          const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
+          const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw:false });
           if (JSON.stringify(j).toLowerCase().includes(term)) {
             found = true;
             break;
@@ -200,7 +217,8 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
     req.flash('error','Search failed.');
     res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
   }
-});// GET /catalogUpload/download/:id — stream back from S3
+});
+// GET /catalogUpload/download/:id — stream back from S3
 router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
   try {
     const userId = req.session.user.id;
