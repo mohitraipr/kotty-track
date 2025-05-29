@@ -73,6 +73,7 @@ const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const jeansAssemblyRoutes = require('./routes/jeansAssemblyRoutes.js');
 const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
 const washingIN = require('./routes/washingInRoutes');
+const catalogR = require('./routes/catalogupload');
 // Use Routes
 app.use('/', authRoutes);
 app.use('/admin', adminRoutes);
@@ -90,6 +91,7 @@ app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
 app.use("/operator", editCuttingLotRoutes);
 app.use('/', bulkUploadRoutes);
 app.use('/washingin', washingIN);
+app.use('/catalogupload', catalogR);
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
