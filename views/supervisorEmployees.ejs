@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Employees</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<!-- ===== NAVBAR ===== -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3 shadow-sm">
+  <div class="container-fluid">
+
+    <a class="navbar-brand" href="/">Dashboard</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav"
+            aria-controls="topNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="topNav">
+      <!-- right-aligned items -->
+      <form class="d-flex ms-auto me-3" role="search">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+          <input id="searchInput" type="search" class="form-control border-start-0"
+                 placeholder="Search employees…" aria-label="Search employees">
+        </div>
+      </form>
+
+      <span class="navbar-text text-white me-2">
+        Logged in as <%= user.username %>
+      </span>
+      <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== PAGE BODY ===== -->
+<div class="container">
+  <% if (error && error.length) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+    <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <h3 class="mb-3">Create Employee</h3>
+  <form action="/supervisor/employees" method="POST" class="row g-2 mb-4">
+    <!-- form unchanged -->
+  </form>
+
+  <!-- Card-wrapped table -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="employeesTable">
+          <thead class="table-light">
+            <tr>
+              <th>ID</th>
+              <th>Punching&nbsp;ID</th>
+              <th>Name</th>
+              <th>Salary Type</th>
+              <th>Amount</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% employees.forEach(emp => { %>
+              <tr>
+                <td><%= emp.id %></td>
+                <td><%= emp.punching_id %></td>
+                <td><%= emp.name %></td>
+                <td class="text-capitalize"><%= emp.salary_type %></td>
+                <td><%= emp.salary_amount %></td>
+                <td><%= emp.phone || '' %></td>
+                <td><span class="badge bg-<%= emp.is_active?'success':'secondary' %>">
+                      <%= emp.is_active ? 'Active' : 'Inactive' %>
+                    </span>
+                </td>
+                <td><%= new Date(emp.created_at).toLocaleDateString() %></td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm">
+                    <!-- Activate / Deactivate -->
+                    <form action="/supervisor/employees/<%= emp.id %>/toggle" method="POST">
+                      <input type="hidden" name="action" value="<%= emp.is_active ? 'deactivate' : 'activate' %>">
+                      <button class="btn <%= emp.is_active?'btn-danger':'btn-success' %>">
+                        <%= emp.is_active ? 'Deactivate' : 'Activate' %>
+                      </button>
+                    </form>
+                    <!-- View -->
+                    <a href="/supervisor/employees/<%= emp.id %>" class="btn btn-secondary">
+                      View
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LIVE SEARCH SCRIPT ===== -->
+<script>
+  const searchInput = document.getElementById('searchInput');
+  const rows = document.querySelectorAll('#employeesTable tbody tr');
+
+  searchInput.addEventListener('input', () => {
+    const term = searchInput.value.trim().toLowerCase();
+    rows.forEach(r => {
+      r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+</script>
+
+<!-- Bootstrap JS for toggler -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
