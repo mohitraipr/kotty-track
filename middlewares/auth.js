@@ -122,6 +122,7 @@ module.exports = {
     isWashingMaster,
     isJeansAssemblyMaster,
     isOperator,
+    isSupervisor,
     isDepartmentUser,
     isAccountsAdmin,
     isPaymentAuthoriser,
