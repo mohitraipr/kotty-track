@@ -54,7 +54,9 @@ function isCuttingManager(req, res, next) {
 function isStitchingMaster(req, res, next) {
     return hasRole('stitching_master')(req, res, next);
 }
-
+function isSupervisor(req, res, next) {
+    return hasRole('supervisor')(req, res, next);
+}
 function isFinishingMaster(req, res, next) {
     return hasRole('finishing')(req, res, next);
 }
