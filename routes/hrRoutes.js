@@ -11,7 +11,14 @@ const { isAuthenticated, isSupervisor, isOperator } = require('../middlewares/au
 router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, res) => {
   try {
     const [employees] = await pool.query(
-      `SELECT e.*, (SELECT status FROM employee_status_history WHERE employee_id=e.id ORDER BY changed_at DESC LIMIT 1) AS current_status FROM employees e ORDER BY e.created_at DESC`
+      `SELECT e.*,
+              (SELECT status FROM employee_status_history
+                 WHERE employee_id = e.id
+                 ORDER BY changed_at DESC LIMIT 1) AS current_status
+         FROM employees e
+        WHERE e.created_by = ?
+        ORDER BY e.created_at DESC`,
+      [req.session.user.id]
     );
     res.render('supervisorEmployees', {
       user: req.session.user,
@@ -37,8 +44,26 @@ router.post('/supervisor/employees', isAuthenticated, isSupervisor, async (req, 
   try {
     await conn.beginTransaction();
     const [result] = await conn.query(
-      `INSERT INTO employees (punching_id, name, salary_type, salary_amount, working_hours, phone, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, NOW())`,
-      [punching_id, name, salary_type, salary_amount, working_hours, phone || null]
+      `INSERT INTO employees (
+          punching_id,
+          name,
+          salary_type,
+          salary_amount,
+          working_hours,
+          phone,
+          is_active,
+          created_at,
+          created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), ?)`,
+      [
+        punching_id,
+        name,
+        salary_type,
+        salary_amount,
+        working_hours,
+        phone || null,
+        req.session.user.id
+      ]
     );
     await conn.query(
       `INSERT INTO employee_status_history (employee_id, status, changed_at) VALUES (?, 1, NOW())`,
@@ -81,17 +106,22 @@ router.post('/supervisor/employees/:id/toggle', isAuthenticated, isSupervisor, a
 // GET /supervisor/employee-hours - monthly hours summary
 router.get('/supervisor/employee-hours', isAuthenticated, isSupervisor, async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT e.id, e.punching_id, e.name, e.working_hours,
-             IFNULL(SUM(h.hours_worked), 0) AS hours_worked,
-             IFNULL(SUM(h.hours_worked), 0) - e.working_hours AS overtime
-      FROM employees e
-      LEFT JOIN employee_daily_hours h ON h.employee_id = e.id
-        AND MONTH(h.work_date) = MONTH(CURRENT_DATE())
-        AND YEAR(h.work_date) = YEAR(CURRENT_DATE())
-      GROUP BY e.id
-      ORDER BY e.name
-    `);
+    const [rows] = await pool.query(
+      `SELECT e.id,
+              e.punching_id,
+              e.name,
+              e.working_hours,
+              IFNULL(SUM(h.hours_worked), 0) AS hours_worked,
+              IFNULL(SUM(h.hours_worked), 0) - e.working_hours AS overtime
+         FROM employees e
+         LEFT JOIN employee_daily_hours h ON h.employee_id = e.id
+           AND MONTH(h.work_date) = MONTH(CURRENT_DATE())
+           AND YEAR(h.work_date) = YEAR(CURRENT_DATE())
+        WHERE e.created_by = ?
+         GROUP BY e.id
+         ORDER BY e.name`,
+      [req.session.user.id]
+    );
     res.render('supervisorEmployeeHours', {
       user: req.session.user,
       data: rows,
@@ -122,10 +152,17 @@ router.get('/operator/departments', isAuthenticated, isOperator, async (req, res
     const [supervisors] = await pool.query(
       `SELECT id, username FROM users WHERE role_id IN (SELECT id FROM roles WHERE name='supervisor') AND is_active=1`
     );
+    const [employees] = await pool.query(
+      `SELECT e.id, e.punching_id, e.name, u.username AS supervisor_name
+         FROM employees e
+         LEFT JOIN users u ON e.created_by = u.id
+        ORDER BY e.created_at DESC`
+    );
     res.render('operatorDepartments', {
       user: req.session.user,
       departments,
       supervisors,
+      employees,
       error: req.flash('error'),
       success: req.flash('success')
     });

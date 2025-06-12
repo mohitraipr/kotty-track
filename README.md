@@ -18,3 +18,13 @@ CREATE TABLE IF NOT EXISTS employee_daily_hours (
 ```
 
 `employee_daily_hours` records how many hours an employee worked on a given day. Later you can calculate under time or overtime by comparing `hours_worked` with the employee's `working_hours`.
+
+To track which supervisor created each employee, add a `created_by` column:
+
+```sql
+ALTER TABLE employees
+  ADD COLUMN created_by INT NOT NULL,
+  ADD CONSTRAINT fk_employee_creator FOREIGN KEY (created_by) REFERENCES users(id);
+```
+
+This column stores the user ID of the supervisor who created the employee.
