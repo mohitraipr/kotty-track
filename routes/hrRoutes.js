@@ -259,22 +259,5 @@ router.post('/operator/supervisor/:id/toggle', isAuthenticated, isOperator, asyn
   res.redirect('/operator/departments');
 });
 
-// POST /operator/employees/:id/change-supervisor - reassign employee creator
-router.post('/operator/employees/:id/change-supervisor', isAuthenticated, isOperator, async (req, res) => {
-  const employeeId = req.params.id;
-  const { supervisor_id } = req.body;
-  if (!supervisor_id) {
-    req.flash('error', 'Missing supervisor.');
-    return res.redirect('/operator/departments');
-  }
-  try {
-    await pool.query('UPDATE employees SET created_by=? WHERE id=?', [supervisor_id, employeeId]);
-    req.flash('success', 'Employee supervisor updated.');
-  } catch (err) {
-    console.error('Error updating employee supervisor:', err);
-    req.flash('error', 'Failed to update employee supervisor.');
-  }
-  res.redirect('/operator/departments');
-});
 
 module.exports = router;
