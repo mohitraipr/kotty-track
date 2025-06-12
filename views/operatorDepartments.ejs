@@ -104,6 +104,30 @@
       </tbody>
     </table>
   </div>
+
+  <h3 class="mt-4">Employees</h3>
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped">
+      <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Punching ID</th>
+          <th>Name</th>
+          <th>Created By</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% employees.forEach(function(emp){ %>
+          <tr>
+            <td><%= emp.id %></td>
+            <td><%= emp.punching_id %></td>
+            <td><%= emp.name %></td>
+            <td><%= emp.supervisor_name || '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
 </div>
 </body>
 </html>
