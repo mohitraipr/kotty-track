@@ -142,6 +142,7 @@ router.get('/supervisor/employee-hours', isAuthenticated, isSupervisor, async (r
 // GET /operator/departments - list departments and supervisors
 router.get('/operator/departments', isAuthenticated, isOperator, async (req, res) => {
   try {
+    const selectedSupervisor = req.query.supervisor_id || '';
     const [departments] = await pool.query(
       `SELECT d.*, u.username AS supervisor_name
        FROM departments d
@@ -165,13 +166,16 @@ router.get('/operator/departments', isAuthenticated, isOperator, async (req, res
       `SELECT e.id, e.punching_id, e.name, u.username AS supervisor_name
          FROM employees e
          LEFT JOIN users u ON e.created_by = u.id
-        ORDER BY e.created_at DESC`
+        ${selectedSupervisor ? 'WHERE e.created_by = ?' : ''}
+        ORDER BY e.created_at DESC`,
+      selectedSupervisor ? [selectedSupervisor] : []
     );
     res.render('operatorDepartments', {
       user: req.session.user,
       departments,
       supervisors,
       employees,
+      selectedSupervisor,
       error: req.flash('error'),
       success: req.flash('success')
     });
