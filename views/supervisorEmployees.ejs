@@ -67,6 +67,7 @@
           <th>Salary Type</th>
           <th>Amount</th>
           <th>Phone</th>
+          <th>Created By</th>
           <th>Status</th>
           <th>Created</th>
           <th>Action</th>
@@ -82,6 +83,7 @@
             <td class="text-capitalize"><%= emp.salary_type %></td>
             <td><%= emp.salary_amount %></td>
             <td><%= emp.phone || '' %></td>
+            <td><%= emp.creator_name || '' %></td>
             <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
             <td><%= new Date(emp.created_at).toLocaleDateString() %></td>
             <td>

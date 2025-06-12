@@ -12,10 +12,12 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
   try {
     const [employees] = await pool.query(
       `SELECT e.*,
+              u.username AS creator_name,
               (SELECT status FROM employee_status_history
                  WHERE employee_id = e.id
                  ORDER BY changed_at DESC LIMIT 1) AS current_status
          FROM employees e
+         LEFT JOIN users u ON e.created_by = u.id
         WHERE e.created_by = ?
         ORDER BY e.created_at DESC`,
       [req.session.user.id]
@@ -89,8 +91,17 @@ router.post('/supervisor/employees/:id/toggle', isAuthenticated, isSupervisor, a
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.query(`UPDATE employees SET is_active=? WHERE id=?`, [newStatus, employeeId]);
-    await conn.query(`INSERT INTO employee_status_history (employee_id, status, changed_at) VALUES (?, ?, NOW())`, [employeeId, newStatus]);
+    const [result] = await conn.query(
+      `UPDATE employees SET is_active=? WHERE id=? AND created_by=?`,
+      [newStatus, employeeId, req.session.user.id]
+    );
+    if (result.affectedRows === 0) {
+      throw new Error('Unauthorized employee update');
+    }
+    await conn.query(
+      `INSERT INTO employee_status_history (employee_id, status, changed_at) VALUES (?, ?, NOW())`,
+      [employeeId, newStatus]
+    );
     await conn.commit();
     req.flash('success', 'Status updated.');
   } catch (err) {
