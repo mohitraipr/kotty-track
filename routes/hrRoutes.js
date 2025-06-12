@@ -28,8 +28,8 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
 
 // POST /supervisor/employees - create employee
 router.post('/supervisor/employees', isAuthenticated, isSupervisor, async (req, res) => {
-  const { punching_id, name, salary_type, salary_amount, phone } = req.body;
-  if (!punching_id || !name || !salary_type || !salary_amount) {
+  const { punching_id, name, salary_type, salary_amount, phone, working_hours } = req.body;
+  if (!punching_id || !name || !salary_type || !salary_amount || !working_hours) {
     req.flash('error', 'Missing required fields.');
     return res.redirect('/supervisor/employees');
   }
@@ -37,8 +37,8 @@ router.post('/supervisor/employees', isAuthenticated, isSupervisor, async (req, 
   try {
     await conn.beginTransaction();
     const [result] = await conn.query(
-      `INSERT INTO employees (punching_id, name, salary_type, salary_amount, phone, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())`,
-      [punching_id, name, salary_type, salary_amount, phone || null]
+      `INSERT INTO employees (punching_id, name, salary_type, salary_amount, working_hours, phone, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, NOW())`,
+      [punching_id, name, salary_type, salary_amount, working_hours, phone || null]
     );
     await conn.query(
       `INSERT INTO employee_status_history (employee_id, status, changed_at) VALUES (?, 1, NOW())`,
@@ -76,6 +76,33 @@ router.post('/supervisor/employees/:id/toggle', isAuthenticated, isSupervisor, a
     conn.release();
   }
   res.redirect('/supervisor/employees');
+});
+
+// GET /supervisor/employee-hours - monthly hours summary
+router.get('/supervisor/employee-hours', isAuthenticated, isSupervisor, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT e.id, e.punching_id, e.name, e.working_hours,
+             IFNULL(SUM(h.hours_worked), 0) AS hours_worked,
+             IFNULL(SUM(h.hours_worked), 0) - e.working_hours AS overtime
+      FROM employees e
+      LEFT JOIN employee_daily_hours h ON h.employee_id = e.id
+        AND MONTH(h.work_date) = MONTH(CURRENT_DATE())
+        AND YEAR(h.work_date) = YEAR(CURRENT_DATE())
+      GROUP BY e.id
+      ORDER BY e.name
+    `);
+    res.render('supervisorEmployeeHours', {
+      user: req.session.user,
+      data: rows,
+      error: req.flash('error'),
+      success: req.flash('success')
+    });
+  } catch (err) {
+    console.error('Error loading employee hours:', err);
+    req.flash('error', 'Failed to load employee hours.');
+    res.redirect('/supervisor/employees');
+  }
 });
 
 /*******************************************************************
