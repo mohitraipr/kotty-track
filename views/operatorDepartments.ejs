@@ -5,6 +5,26 @@
   <title>Departments</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f5f7fa;
+    }
+    .card {
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+    .card-header {
+      background: linear-gradient(90deg, #0d6efd, #6610f2);
+      color: #fff;
+      font-weight: 500;
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+  </style>
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-3">
@@ -22,111 +42,123 @@
     <div class="alert alert-success"><%= success %></div>
   <% } %>
 
-  <h3>Create Department</h3>
-  <form action="/operator/departments/create" method="POST" class="row g-2 mb-4">
-    <div class="col-sm-4">
-      <input type="text" name="name" class="form-control" placeholder="Department name" required>
+  <div class="card">
+    <div class="card-header">Create Department</div>
+    <div class="card-body">
+      <form action="/operator/departments/create" method="POST" class="row g-2">
+        <div class="col-sm-4">
+          <input type="text" name="name" class="form-control" placeholder="Department name" required>
+        </div>
+        <div class="col-sm-4">
+          <select name="supervisor_id" class="form-select">
+            <option value="">-- Assign Supervisor --</option>
+            <% supervisors.forEach(function(s){ %>
+              <option value="<%= s.id %>"><%= s.username %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-primary w-100">Create</button>
+        </div>
+      </form>
     </div>
-    <div class="col-sm-4">
-      <select name="supervisor_id" class="form-select">
-        <option value="">-- Assign Supervisor --</option>
-        <% supervisors.forEach(function(s){ %>
-          <option value="<%= s.id %>"><%= s.username %></option>
-        <% }) %>
-      </select>
-    </div>
-    <div class="col-sm-2">
-      <button type="submit" class="btn btn-primary w-100">Create</button>
-    </div>
-  </form>
-
-  <h3>Departments</h3>
-  <div class="table-responsive">
-    <table class="table table-bordered table-striped">
-      <thead class="table-light">
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Supervisor</th>
-          <th>Change Supervisor</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% departments.forEach(function(d){ %>
-          <tr>
-            <td><%= d.id %></td>
-            <td><%= d.name %></td>
-            <td><%= d.supervisor_name || 'Unassigned' %></td>
-            <td>
-              <form action="/operator/departments/change-supervisor" method="POST" class="row g-2">
-                <input type="hidden" name="department_id" value="<%= d.id %>">
-                <div class="col-8">
-                  <select name="supervisor_id" class="form-select form-select-sm" required>
-                    <% supervisors.forEach(function(s){ %>
-                      <option value="<%= s.id %>" <%= d.supervisor_name===s.username ? 'selected' : '' %>><%= s.username %></option>
-                    <% }) %>
-                  </select>
-                </div>
-                <div class="col-4">
-                  <button type="submit" class="btn btn-sm btn-secondary w-100">Update</button>
-                </div>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
   </div>
 
-  <h3 class="mt-4">Supervisors</h3>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead class="table-light">
-        <tr>
-          <th>ID</th>
-          <th>Username</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% supervisors.forEach(function(s){ %>
+  <div class="card">
+    <div class="card-header">Departments</div>
+    <div class="card-body table-responsive">
+      <table class="table table-bordered table-striped mb-0">
+        <thead class="table-light">
           <tr>
-            <td><%= s.id %></td>
-            <td><%= s.username %></td>
-            <td>
-              <form action="/operator/supervisor/<%= s.id %>/toggle" method="POST" class="d-inline">
-                <input type="hidden" name="action" value="deactivate">
-                <button type="submit" class="btn btn-sm btn-danger">Deactivate</button>
-              </form>
-            </td>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Supervisor</th>
+            <th>Change Supervisor</th>
           </tr>
-        <% }) %>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <% departments.forEach(function(d){ %>
+            <tr>
+              <td><%= d.id %></td>
+              <td><%= d.name %></td>
+              <td><%= d.supervisor_name || 'Unassigned' %></td>
+              <td>
+                <form action="/operator/departments/change-supervisor" method="POST" class="row g-2">
+                  <input type="hidden" name="department_id" value="<%= d.id %>">
+                  <div class="col-8">
+                    <select name="supervisor_id" class="form-select form-select-sm" required>
+                      <% supervisors.forEach(function(s){ %>
+                        <option value="<%= s.id %>" <%= d.supervisor_name===s.username ? 'selected' : '' %>><%= s.username %></option>
+                      <% }) %>
+                    </select>
+                  </div>
+                  <div class="col-4">
+                    <button type="submit" class="btn btn-sm btn-secondary w-100">Update</button>
+                  </div>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <h3 class="mt-4">Employees</h3>
-  <div class="table-responsive">
-    <table class="table table-bordered table-striped">
-      <thead class="table-light">
-        <tr>
-          <th>ID</th>
-          <th>Punching ID</th>
-          <th>Name</th>
-          <th>Created By</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% employees.forEach(function(emp){ %>
+  <div class="card mt-4">
+    <div class="card-header">Supervisors</div>
+    <div class="card-body table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead class="table-light">
           <tr>
-            <td><%= emp.id %></td>
-            <td><%= emp.punching_id %></td>
-            <td><%= emp.name %></td>
-            <td><%= emp.supervisor_name || '' %></td>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Total Salary</th>
+            <th>Action</th>
           </tr>
-        <% }) %>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <% supervisors.forEach(function(s){ %>
+            <tr>
+              <td><%= s.id %></td>
+              <td><%= s.username %></td>
+              <td>₹<%= Number(s.total_salary).toLocaleString() %></td>
+              <td>
+                <form action="/operator/supervisor/<%= s.id %>/toggle" method="POST" class="d-inline">
+                  <input type="hidden" name="action" value="deactivate">
+                  <button type="submit" class="btn btn-sm btn-danger">Deactivate</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-header">Employees</div>
+    <div class="card-body table-responsive">
+      <table class="table table-bordered table-striped mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th>
+            <th>Punching ID</th>
+            <th>Name</th>
+            <th>Created By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% employees.forEach(function(emp){ %>
+            <tr>
+              <td><%= emp.id %></td>
+              <td><%= emp.punching_id %></td>
+              <td><%= emp.name %></td>
+              <td><%= emp.supervisor_name || '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 </body>

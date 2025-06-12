@@ -150,7 +150,15 @@ router.get('/operator/departments', isAuthenticated, isOperator, async (req, res
        ORDER BY d.created_at DESC`
     );
     const [supervisors] = await pool.query(
-      `SELECT id, username FROM users WHERE role_id IN (SELECT id FROM roles WHERE name='supervisor') AND is_active=1`
+      `SELECT u.id,
+              u.username,
+              IFNULL(SUM(e.salary_amount), 0) AS total_salary
+         FROM users u
+         LEFT JOIN employees e ON e.created_by = u.id AND e.is_active = 1
+        WHERE u.role_id IN (SELECT id FROM roles WHERE name='supervisor')
+          AND u.is_active = 1
+        GROUP BY u.id
+        ORDER BY u.username`
     );
     const [employees] = await pool.query(
       `SELECT e.id, e.punching_id, e.name, u.username AS supervisor_name
