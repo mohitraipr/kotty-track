@@ -152,7 +152,8 @@ router.get('/operator/departments', isAuthenticated, isOperator, async (req, res
     const [supervisors] = await pool.query(
       `SELECT u.id,
               u.username,
-              IFNULL(SUM(e.salary_amount), 0) AS total_salary
+              IFNULL(SUM(e.salary_amount), 0) AS total_salary,
+              COUNT(e.id) AS employee_count
          FROM users u
          LEFT JOIN employees e ON e.created_by = u.id AND e.is_active = 1
         WHERE u.role_id IN (SELECT id FROM roles WHERE name='supervisor')
@@ -250,6 +251,24 @@ router.post('/operator/supervisor/:id/toggle', isAuthenticated, isOperator, asyn
   } catch (err) {
     console.error('Error toggling supervisor:', err);
     req.flash('error', 'Failed to update supervisor status.');
+  }
+  res.redirect('/operator/departments');
+});
+
+// POST /operator/employees/:id/change-supervisor - reassign employee creator
+router.post('/operator/employees/:id/change-supervisor', isAuthenticated, isOperator, async (req, res) => {
+  const employeeId = req.params.id;
+  const { supervisor_id } = req.body;
+  if (!supervisor_id) {
+    req.flash('error', 'Missing supervisor.');
+    return res.redirect('/operator/departments');
+  }
+  try {
+    await pool.query('UPDATE employees SET created_by=? WHERE id=?', [supervisor_id, employeeId]);
+    req.flash('success', 'Employee supervisor updated.');
+  } catch (err) {
+    console.error('Error updating employee supervisor:', err);
+    req.flash('error', 'Failed to update employee supervisor.');
   }
   res.redirect('/operator/departments');
 });
