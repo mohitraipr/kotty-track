@@ -22,9 +22,7 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
     );
     res.render('supervisorEmployees', {
       user: req.session.user,
-      employees,
-      error: req.flash('error'),
-      success: req.flash('success')
+      employees
     });
   } catch (err) {
     console.error('Error loading employees:', err);
@@ -38,6 +36,21 @@ router.post('/supervisor/employees', isAuthenticated, isSupervisor, async (req, 
   const { punching_id, name, salary_type, salary_amount, phone, working_hours } = req.body;
   if (!punching_id || !name || !salary_type || !salary_amount || !working_hours) {
     req.flash('error', 'Missing required fields.');
+    return res.redirect('/supervisor/employees');
+  }
+
+  try {
+    const [dup] = await pool.query(
+      'SELECT id FROM employees WHERE punching_id = ? AND created_by = ?',
+      [punching_id, req.session.user.id]
+    );
+    if (dup.length > 0) {
+      req.flash('error', 'Punching ID already exists for this supervisor.');
+      return res.redirect('/supervisor/employees');
+    }
+  } catch (err) {
+    console.error('Error checking duplicate punching ID:', err);
+    req.flash('error', 'Failed to create employee.');
     return res.redirect('/supervisor/employees');
   }
   const conn = await pool.getConnection();
@@ -74,7 +87,11 @@ router.post('/supervisor/employees', isAuthenticated, isSupervisor, async (req, 
   } catch (err) {
     await conn.rollback();
     console.error('Error creating employee:', err);
-    req.flash('error', 'Failed to create employee.');
+    if (err.code === 'ER_DUP_ENTRY') {
+      req.flash('error', 'Punching ID already exists.');
+    } else {
+      req.flash('error', 'Failed to create employee.');
+    }
   } finally {
     conn.release();
   }
@@ -124,9 +141,7 @@ router.get('/supervisor/employee-hours', isAuthenticated, isSupervisor, async (r
     );
     res.render('supervisorEmployeeHours', {
       user: req.session.user,
-      data: rows,
-      error: req.flash('error'),
-      success: req.flash('success')
+      data: rows
     });
   } catch (err) {
     console.error('Error loading employee hours:', err);
@@ -175,9 +190,7 @@ router.get('/operator/departments', isAuthenticated, isOperator, async (req, res
       departments,
       supervisors,
       employees,
-      selectedSupervisor,
-      error: req.flash('error'),
-      success: req.flash('success')
+      selectedSupervisor
     });
   } catch (err) {
     console.error('Error loading departments:', err);

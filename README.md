@@ -28,3 +28,21 @@ ALTER TABLE employees
 ```
 
 This column stores the user ID of the supervisor who created the employee.
+
+### Allow same punching IDs for different supervisors
+
+Originally the `employees` table enforced a global unique constraint on
+`punching_id`. When multiple supervisors manage their own employees this
+restriction causes conflicts because the same punching ID can legitimately
+exist in different supervisor groups. The application now checks uniqueness per
+supervisor, so update the database accordingly:
+
+```sql
+ALTER TABLE employees
+  DROP INDEX punching_id,
+  ADD UNIQUE KEY uniq_supervisor_punch (punching_id, created_by);
+```
+
+The index name `punching_id` comes from the original schema. After dropping it
+we create a composite unique index on `(punching_id, created_by)` so each
+supervisor can reuse punching IDs without clashes.
