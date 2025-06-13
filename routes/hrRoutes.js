@@ -59,6 +59,83 @@ async function getLastAttendancePeriod(employeeId, salaryType) {
   return { start, end, days: diffDays, daysInMonth };
 }
 
+async function getAttendanceHistory(employee) {
+  if (!employee) return [];
+  if (employee.salary_type === 'monthly') {
+    const [periods] = await pool.query(
+      `SELECT YEAR(work_date) AS yr, MONTH(work_date) AS mon
+         FROM employee_daily_hours
+        WHERE employee_id=?
+        GROUP BY yr, mon
+        ORDER BY yr DESC, mon DESC`,
+      [employee.id]
+    );
+    const result = [];
+    for (const p of periods) {
+      const year = p.yr;
+      const month = p.mon;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month - 1, daysInMonth);
+      const [att] = await pool.query(
+        'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+        [employee.id, format(start), format(end)]
+      );
+      const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
+      const hourly = employee.salary_amount / (employee.working_hours * daysInMonth);
+      const salary = hourly * totalHours;
+      const expected = employee.working_hours * daysInMonth;
+      result.push({
+        startDate: format(start),
+        endDate: format(end),
+        attendance: att,
+        totalHours,
+        salary,
+        diff: totalHours - expected
+      });
+    }
+    return result;
+  }
+
+  const [periods] = await pool.query(
+    `SELECT YEAR(work_date) AS yr, MONTH(work_date) AS mon,
+            CASE WHEN DAY(work_date)<=15 THEN 1 ELSE 16 END AS start_day
+       FROM employee_daily_hours
+      WHERE employee_id=?
+      GROUP BY yr, mon, start_day
+      ORDER BY yr DESC, mon DESC, start_day DESC`,
+    [employee.id]
+  );
+  const result = [];
+  for (const p of periods) {
+    const year = p.yr;
+    const month = p.mon;
+    const startDay = p.start_day;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const endDay = startDay === 1 ? 15 : daysInMonth;
+    const start = new Date(year, month - 1, startDay);
+    const end = new Date(year, month - 1, endDay);
+    const [att] = await pool.query(
+      'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+      [employee.id, format(start), format(end)]
+    );
+    const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
+    const hourly = employee.salary_amount / employee.working_hours;
+    const salary = hourly * totalHours;
+    const days = endDay - startDay + 1;
+    const expected = employee.working_hours * days;
+    result.push({
+      startDate: format(start),
+      endDate: format(end),
+      attendance: att,
+      totalHours,
+      salary,
+      diff: totalHours - expected
+    });
+  }
+  return result;
+}
+
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
 /*******************************************************************
@@ -78,6 +155,18 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
         ORDER BY e.created_at DESC`,
       [req.session.user.id]
     );
+    for (const emp of employees) {
+      const period = await getLastAttendancePeriod(emp.id, emp.salary_type);
+      const [hrs] = await pool.query(
+        'SELECT SUM(hours_worked) AS total FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
+        [emp.id, format(period.start), format(period.end)]
+      );
+      const total = hrs[0].total ? Number(hrs[0].total) : 0;
+      const hourly = emp.salary_type === 'dihadi'
+        ? emp.salary_amount / emp.working_hours
+        : emp.salary_amount / (emp.working_hours * period.daysInMonth);
+      emp.lastSalary = hourly * total;
+    }
     res.render('supervisorEmployees', {
       user: req.session.user,
       employees
@@ -479,6 +568,23 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     totalHours,
     hourlyRate,
     salary
+  });
+});
+
+// GET supervisor view of all attendance periods
+router.get('/supervisor/employees/:id/history', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const periods = await getAttendanceHistory(employee);
+  res.render('employeeHistory', {
+    user: req.session.user,
+    employee,
+    periods
   });
 });
 

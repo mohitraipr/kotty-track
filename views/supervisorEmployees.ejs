@@ -69,6 +69,7 @@
           <th>Phone</th>
           <th>Status</th>
           <th>Created</th>
+          <th>Last Salary</th>
           <th>Action</th>
         </tr>
       </thead>
@@ -84,6 +85,7 @@
             <td><%= emp.phone || '' %></td>
             <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
             <td><%= new Date(emp.created_at).toLocaleDateString() %></td>
+            <td>₹<%= (emp.lastSalary || 0).toFixed(2) %></td>
             <td>
               <form action="/supervisor/employees/<%= emp.id %>/toggle" method="POST" class="d-inline me-1">
                 <input type="hidden" name="action" value="<%= emp.is_active ? 'deactivate' : 'activate' %>" />
@@ -92,7 +94,7 @@
                 </button>
               </form>
               <a href="/supervisor/employees/<%= emp.id %>/salary" class="btn btn-sm btn-secondary me-1">Salary</a>
-              <a href="/supervisor/employees/<%= emp.id %>/attendance" class="btn btn-sm btn-info">View</a>
+              <a href="/supervisor/employees/<%= emp.id %>/history" class="btn btn-sm btn-info">View</a>
             </td>
           </tr>
         <% }) %>
