@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isSupervisor, isOperator } = require('../middlewares/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { parseAttendance } = require('../helpers/attendanceParser');
+
+const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
 /*******************************************************************
  * Supervisor Employee Management
@@ -269,6 +275,79 @@ router.post('/operator/supervisor/:id/toggle', isAuthenticated, isOperator, asyn
     console.error('Error toggling supervisor:', err);
     req.flash('error', 'Failed to update supervisor status.');
   }
+  res.redirect('/operator/departments');
+});
+
+// POST /operator/upload-attendance - upload attendance sheet for a supervisor
+router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.single('attendanceFile'), async (req, res) => {
+  if (!req.file) {
+    req.flash('error', 'Attendance file required.');
+    return res.redirect('/operator/departments');
+  }
+
+  const base = path.parse(req.file.originalname).name;
+  const parts = base.split(/[^a-zA-Z0-9]+/);
+  if (parts.length < 3) {
+    fs.unlink(req.file.path, () => {});
+    req.flash('error', 'Filename must be department_username_userid.xlsx');
+    return res.redirect('/operator/departments');
+  }
+
+  const deptName = parts[0];
+  const supervisorUsername = parts[1];
+  const supervisorId = parseInt(parts[2], 10);
+
+  if (Number.isNaN(supervisorId)) {
+    fs.unlink(req.file.path, () => {});
+    req.flash('error', 'Invalid supervisor ID in file name.');
+    return res.redirect('/operator/departments');
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    const [sup] = await conn.query(
+      `SELECT u.id, d.id AS dept_id
+         FROM users u
+         JOIN department_supervisors ds ON ds.supervisor_user_id=u.id AND ds.is_active=1
+         JOIN departments d ON ds.department_id=d.id
+        WHERE u.id=? AND u.username=? AND d.name=?`,
+      [supervisorId, supervisorUsername, deptName]
+    );
+
+    if (!sup.length) {
+      req.flash('error', 'Supervisor or department not found.');
+      return res.redirect('/operator/departments');
+    }
+
+    const { employees, month, year } = parseAttendance(req.file.path);
+
+    for (const emp of employees) {
+      const [empRows] = await conn.query(
+        'SELECT id FROM employees WHERE punching_id=? AND name=? AND created_by=?',
+        [emp.punchingId, emp.name, supervisorId]
+      );
+      if (!empRows.length) continue;
+      const employeeId = empRows[0].id;
+      for (const day of emp.days) {
+        if (!day.date) continue;
+        await conn.query(
+          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)`,
+          [employeeId, day.date, day.netHours]
+        );
+      }
+    }
+
+    req.flash('success', 'Attendance uploaded successfully.');
+  } catch (err) {
+    console.error('Error processing attendance:', err);
+    req.flash('error', 'Failed to process attendance.');
+  } finally {
+    conn.release();
+    fs.unlink(req.file.path, () => {});
+  }
+
   res.redirect('/operator/departments');
 });
 
