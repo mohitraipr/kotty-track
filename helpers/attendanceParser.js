@@ -94,10 +94,22 @@ function parseAttendance(filePath) {
       const empName = getNextNonEmpty(headerRow, headerRow.indexOf('Name:') + 1);
       let dayHeaderRow = data[i + 1] || [];
       let logRow = (i + 2 < data.length && !data[i + 2].some(cell => typeof cell === 'string' && cell.includes('UserID:'))) ? data[i + 2] : null;
+      if (logRow) {
+        if (dayHeaderRow.length !== logRow.length) {
+          const diff = Math.abs(dayHeaderRow.length - logRow.length);
+          if (dayHeaderRow.length > logRow.length) {
+            dayHeaderRow = dayHeaderRow.slice(diff);
+          } else {
+            logRow = logRow.slice(diff);
+          }
+        } else if ((logRow[0] == null || String(logRow[0]).trim() === '') && !isNaN(parseInt(dayHeaderRow[0])) && !isNaN(parseInt(dayHeaderRow[1])) && parseInt(dayHeaderRow[1]) === parseInt(dayHeaderRow[0]) + 1) {
+          logRow.shift();
+        }
+      }
       i += logRow ? 3 : 2;
       if (dayHeaderRow.length > 0) {
         const firstCell = dayHeaderRow[0];
-        if (!firstCell || parseFloat(firstCell) === 0) {
+        if (!firstCell || parseFloat(firstCell) === 0 || isNaN(parseInt(firstCell))) {
           dayHeaderRow.shift();
           if (logRow) logRow.shift();
         }
@@ -145,9 +157,21 @@ function parseAttendance(filePath) {
       const row = data[i];
       if (row.some(cell => typeof cell === 'string' && cell.replace(/\s/g, '').toLowerCase().startsWith('no:'))) {
         if (i - 1 < 0 || i + 1 >= data.length) continue;
-        const dayHeaderRow = data[i - 1];
+        let dayHeaderRow = data[i - 1];
         const employeeRow = row;
-        const logRow = data[i + 1];
+        let logRow = data[i + 1];
+        if (logRow) {
+          if (dayHeaderRow.length !== logRow.length) {
+            const diff = Math.abs(dayHeaderRow.length - logRow.length);
+            if (dayHeaderRow.length > logRow.length) {
+              dayHeaderRow = dayHeaderRow.slice(diff);
+            } else {
+              logRow = logRow.slice(diff);
+            }
+          } else if ((logRow[0] == null || String(logRow[0]).trim() === '') && !isNaN(parseInt(dayHeaderRow[0])) && !isNaN(parseInt(dayHeaderRow[1])) && parseInt(dayHeaderRow[1]) === parseInt(dayHeaderRow[0]) + 1) {
+            logRow.shift();
+          }
+        }
         let empNo = '', empName = '';
         for (let j = 0; j < employeeRow.length; j++) {
           if (typeof employeeRow[j] === 'string') {
