@@ -39,6 +39,7 @@ async function getLastAttendancePeriod(employeeId, salaryType) {
   return { start, end, days: diffDays, daysInMonth };
 }
 
+
 async function getAttendanceHistory(employee) {
   if (!employee) return [];
   if (employee.salary_type === 'monthly') {
@@ -58,7 +59,11 @@ async function getAttendanceHistory(employee) {
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month - 1, daysInMonth);
       const [att] = await pool.query(
+
         'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
+        'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
         [employee.id, format(start), format(end)]
       );
       const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
@@ -96,7 +101,11 @@ async function getAttendanceHistory(employee) {
     const start = new Date(year, month - 1, startDay);
     const end = new Date(year, month - 1, endDay);
     const [att] = await pool.query(
+
       'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
+      'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
       [employee.id, format(start), format(end)]
     );
     const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
@@ -450,10 +459,17 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       for (const day of emp.days) {
         if (!day.date) continue;
         await conn.query(
+
           `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out)
            VALUES (?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)`,
           [employeeId, day.date, day.netHours, day.checkIn, day.checkOut]
+
+          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)`,
+          [employeeId, day.date, day.netHours]
+
         );
       }
     }
@@ -480,7 +496,11 @@ router.get('/supervisor/employees/:id/attendance', isAuthenticated, isSupervisor
   const employee = rows[0];
   const period = await getLastAttendancePeriod(empId, employee.salary_type);
   const [attendance] = await pool.query(
+
     'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
+    'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
@@ -513,8 +533,10 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+
   const expected = employee.working_hours * period.days;
   const diff = totalHours - expected;
+
   const hourlyRate = employee.salary_type === 'dihadi'
     ? employee.salary_amount / employee.working_hours
     : employee.salary_amount / (employee.working_hours * period.daysInMonth);
@@ -525,8 +547,10 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     startDate: format(period.start),
     endDate: format(period.end),
     totalHours,
+
     expected,
     diff,
+
     hourlyRate,
     salary
   });
@@ -560,7 +584,11 @@ router.get('/operator/employees/:id/attendance', isAuthenticated, isOperator, as
   const employee = rows[0];
   const period = await getLastAttendancePeriod(empId, employee.salary_type);
   const [attendance] = await pool.query(
+
     'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
+    'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
@@ -588,8 +616,13 @@ router.post('/operator/employees/:id/attendance', isAuthenticated, isOperator, a
   }
   try {
     await pool.query(
+
       'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)',
       [empId, date, hours, req.body.punch_in || null, req.body.punch_out || null]
+
+      'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)',
+      [empId, date, hours]
+
     );
     req.flash('success', 'Attendance updated');
   } catch (err) {
