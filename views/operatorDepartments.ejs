@@ -165,6 +165,7 @@
             <th>Punching ID</th>
             <th>Name</th>
             <th>Supervisor</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -174,10 +175,28 @@
               <td><%= emp.punching_id %></td>
               <td><%= emp.name %></td>
               <td><%= emp.supervisor_name || 'Unassigned' %></td>
+              <td>
+                <a href="/operator/employees/<%= emp.id %>/attendance" class="btn btn-sm btn-primary">View/Edit</a>
+              </td>
             </tr>
           <% }) %>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-header">Upload Attendance Sheet</div>
+    <div class="card-body">
+      <form action="/operator/upload-attendance" method="POST" enctype="multipart/form-data" class="row g-2">
+        <div class="col-sm-8">
+          <input type="file" name="attendanceFile" accept=".xlsx" class="form-control" required>
+        </div>
+        <div class="col-sm-4">
+          <button type="submit" class="btn btn-primary w-100">Upload</button>
+        </div>
+      </form>
+      <small class="text-muted">Filename should be department_username_userid.xlsx</small>
     </div>
   </div>
 </div>
