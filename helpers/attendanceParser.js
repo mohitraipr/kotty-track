@@ -108,12 +108,14 @@ function parseAttendance(filePath) {
         const dayNum = parseInt(dayCell);
         const dateStr = dayNum ? formatDate(year, month, dayNum) : null;
         let logCell = logRow && typeof logRow[k] === 'string' ? logRow[k] : '';
+        let checkIn = null;
+        let checkOut = null;
         let netMinutes = 0;
         if (logCell && logCell.includes(':')) {
           const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
           if (times.length >= 2) {
-            const checkIn = times[0];
-            const checkOut = times[times.length - 1];
+            checkIn = times[0];
+            checkOut = times[times.length - 1];
             const inMins = timeToMinutes(checkIn);
             const outMins = timeToMinutes(checkOut);
             let effectiveIn = inMins;
@@ -129,7 +131,12 @@ function parseAttendance(filePath) {
             netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
           }
         }
-        days.push({ date: dateStr, netHours: parseFloat((netMinutes / 60).toFixed(2)) });
+        days.push({
+          date: dateStr,
+          checkIn,
+          checkOut,
+          netHours: parseFloat((netMinutes / 60).toFixed(2))
+        });
       }
       employees.push({ punchingId: empNo, name: empName, days });
     }
@@ -155,12 +162,14 @@ function parseAttendance(filePath) {
           const dayNum = parseInt(day);
           const dateStr = dayNum ? formatDate(year, month, dayNum) : null;
           const logCell = logRow[k];
+          let checkIn = null;
+          let checkOut = null;
           let netMinutes = 0;
           if (logCell && typeof logCell === 'string') {
             const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
             if (times.length >= 2) {
-              const checkIn = times[0];
-              const checkOut = times[times.length - 1];
+              checkIn = times[0];
+              checkOut = times[times.length - 1];
               const inMins = timeToMinutes(checkIn);
               const outMins = timeToMinutes(checkOut);
               let effectiveIn = inMins;
@@ -176,7 +185,12 @@ function parseAttendance(filePath) {
               netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
             }
           }
-          days.push({ date: dateStr, netHours: parseFloat((netMinutes / 60).toFixed(2)) });
+          days.push({
+            date: dateStr,
+            checkIn,
+            checkOut,
+            netHours: parseFloat((netMinutes / 60).toFixed(2))
+          });
         }
         employees.push({ punchingId: empNo, name: empName, days });
         i++; // skip logRow next iteration
