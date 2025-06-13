@@ -9,6 +9,36 @@ const { parseAttendance } = require('../helpers/attendanceParser');
 
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
+function format(date) {
+  return date.toISOString().split('T')[0];
+}
+
+async function getLastAttendancePeriod(employeeId, salaryType) {
+  const [rows] = await pool.query(
+    'SELECT MAX(work_date) AS last_date FROM employee_daily_hours WHERE employee_id=?',
+    [employeeId]
+  );
+  let last = rows[0].last_date ? new Date(rows[0].last_date) : new Date();
+  const year = last.getFullYear();
+  const month = last.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let start, end;
+  if (salaryType === 'dihadi') {
+    if (last.getDate() <= 15) {
+      start = new Date(year, month, 1);
+      end = new Date(year, month, 15);
+    } else {
+      start = new Date(year, month, 16);
+      end = new Date(year, month, daysInMonth);
+    }
+  } else {
+    start = new Date(year, month, 1);
+    end = new Date(year, month, daysInMonth);
+  }
+  const diffDays = Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  return { start, end, days: diffDays, daysInMonth };
+}
+
 /*******************************************************************
  * Supervisor Employee Management
  *******************************************************************/
@@ -340,6 +370,17 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       );
       if (!empRows.length) continue;
       const employeeId = empRows[0].id;
+      for (const day of emp.days) {
+        if (!day.date) continue;
+        await conn.query(
+          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)`,
+          [employeeId, day.date, day.netHours]
+        );
+      }
+    }
+    req.flash('success', 'Attendance uploaded successfully.');
   } catch (err) {
     console.error('Error processing attendance:', err);
     req.flash('error', 'Failed to process attendance.');
