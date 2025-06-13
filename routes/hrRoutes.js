@@ -26,6 +26,18 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
         ORDER BY e.created_at DESC`,
       [req.session.user.id]
     );
+    for (const emp of employees) {
+      const period = await getLastAttendancePeriod(emp.id, emp.salary_type);
+      const [hrs] = await pool.query(
+        'SELECT SUM(hours_worked) AS total FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
+        [emp.id, format(period.start), format(period.end)]
+      );
+      const total = hrs[0].total ? Number(hrs[0].total) : 0;
+      const hourly = emp.salary_type === 'dihadi'
+        ? emp.salary_amount / emp.working_hours
+        : emp.salary_amount / (emp.working_hours * period.daysInMonth);
+      emp.lastSalary = hourly * total;
+    }
     res.render('supervisorEmployees', {
       user: req.session.user,
       employees
@@ -328,18 +340,6 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       );
       if (!empRows.length) continue;
       const employeeId = empRows[0].id;
-      for (const day of emp.days) {
-        if (!day.date) continue;
-        await conn.query(
-          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked)
-           VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)`,
-          [employeeId, day.date, day.netHours]
-        );
-      }
-    }
-
-    req.flash('success', 'Attendance uploaded successfully.');
   } catch (err) {
     console.error('Error processing attendance:', err);
     req.flash('error', 'Failed to process attendance.');
