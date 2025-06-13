@@ -7,6 +7,32 @@ const path = require('path');
 const fs = require('fs');
 const { parseAttendance } = require('../helpers/attendanceParser');
 
+function format(d) {
+  return d.toISOString().split('T')[0];
+}
+
+function getPeriod(salaryType) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let start, end;
+  if (salaryType === 'dihadi') {
+    if (now.getDate() <= 15) {
+      start = new Date(year, month, 1);
+      end = new Date(year, month, 15);
+    } else {
+      start = new Date(year, month, 16);
+      end = new Date(year, month, daysInMonth);
+    }
+  } else {
+    start = new Date(year, month, 1);
+    end = new Date(year, month, daysInMonth);
+  }
+  const diffDays = Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  return { start, end, days: diffDays, daysInMonth };
+}
+
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
 /*******************************************************************
@@ -321,6 +347,8 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
 
     const { employees, month, year } = parseAttendance(req.file.path);
 
+    const duplicateMsgs = [];
+
     for (const emp of employees) {
       const [empRows] = await conn.query(
         'SELECT id FROM employees WHERE punching_id=? AND name=? AND created_by=?',
@@ -328,18 +356,36 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       );
       if (!empRows.length) continue;
       const employeeId = empRows[0].id;
+
+      const skippedDates = [];
       for (const day of emp.days) {
         if (!day.date) continue;
+        const [existing] = await conn.query(
+          'SELECT id FROM employee_daily_hours WHERE employee_id=? AND work_date=?',
+          [employeeId, day.date]
+        );
+        if (existing.length) {
+          skippedDates.push(day.date);
+          continue;
+        }
         await conn.query(
-          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked)
-           VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)`,
+          'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked) VALUES (?, ?, ?)',
           [employeeId, day.date, day.netHours]
+        );
+      }
+      if (skippedDates.length) {
+        duplicateMsgs.push(
+          `${emp.name} (${emp.punchingId}) already has data for: ${skippedDates.join(', ')}`
         );
       }
     }
 
-    req.flash('success', 'Attendance uploaded successfully.');
+    if (duplicateMsgs.length) {
+      req.flash('error', duplicateMsgs.join(' '));
+      req.flash('success', 'Attendance uploaded with some skipped dates.');
+    } else {
+      req.flash('success', 'Attendance uploaded successfully.');
+    }
   } catch (err) {
     console.error('Error processing attendance:', err);
     req.flash('error', 'Failed to process attendance.');
@@ -349,6 +395,115 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
   }
 
   res.redirect('/operator/departments');
+});
+
+// GET supervisor view of employee attendance
+router.get('/supervisor/employees/:id/attendance', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const period = getPeriod(employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const expected = employee.working_hours * period.days;
+  const diff = totalHours - expected;
+  res.render('employeeAttendance', {
+    user: req.session.user,
+    employee,
+    attendance,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    diff,
+    canEdit: false
+  });
+});
+
+// GET supervisor salary according to attendance
+router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const period = getPeriod(employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const hourlyRate = employee.salary_type === 'dihadi'
+    ? employee.salary_amount / employee.working_hours
+    : employee.salary_amount / (employee.working_hours * period.daysInMonth);
+  const salary = hourlyRate * totalHours;
+  res.render('employeeSalary', {
+    user: req.session.user,
+    employee,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    hourlyRate,
+    salary
+  });
+});
+
+// GET operator view/edit attendance
+router.get('/operator/employees/:id/attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=?', [empId]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/operator/departments');
+  }
+  const employee = rows[0];
+  const period = getPeriod(employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT work_date, hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const expected = employee.working_hours * period.days;
+  const diff = totalHours - expected;
+  res.render('employeeAttendance', {
+    user: req.session.user,
+    employee,
+    attendance,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    diff,
+    canEdit: true
+  });
+});
+
+// POST operator add/update attendance
+router.post('/operator/employees/:id/attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const { date, hours } = req.body;
+  if (!date || !hours) {
+    req.flash('error', 'Date and hours required');
+    return res.redirect(`/operator/employees/${empId}/attendance`);
+  }
+  try {
+    await pool.query(
+      'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked)',
+      [empId, date, hours]
+    );
+    req.flash('success', 'Attendance updated');
+  } catch (err) {
+    console.error('Error saving attendance:', err);
+    req.flash('error', 'Failed to save attendance');
+  }
+  res.redirect(`/operator/employees/${empId}/attendance`);
 });
 
 
