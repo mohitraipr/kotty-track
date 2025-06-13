@@ -14,11 +14,18 @@
   </div>
 </nav>
 <div class="container">
-  <h4><%= employee.name %> | Punching ID: <%= employee.punching_id %></h4>
-  <p>Period: <%= startDate %> to <%= endDate %></p>
-  <p>Total Hours Worked: <%= totalHours.toFixed(2) %></p>
-  <p>Hourly Rate: ₹<%= hourlyRate.toFixed(2) %></p>
-  <h5>Salary According to Attendance: ₹<%= salary.toFixed(2) %></h5>
+  <div class="card">
+    <div class="card-header">Salary Summary</div>
+    <div class="card-body">
+      <h5 class="card-title"><%= employee.name %> | Punching ID: <%= employee.punching_id %></h5>
+      <p class="mb-1">Period: <%= startDate %> to <%= endDate %></p>
+      <p class="mb-1">Total Hours Worked: <%= totalHours.toFixed(2) %></p>
+      <p class="mb-1">Expected Hours: <%= expected.toFixed(2) %></p>
+      <p class="mb-1">Difference: <%= diff.toFixed(2) %> hrs</p>
+      <p class="mb-1">Hourly Rate: ₹<%= hourlyRate.toFixed(2) %></p>
+      <h5 class="mt-3">Payable Salary: ₹<%= salary.toFixed(2) %></h5>
+    </div>
+  </div>
 </div>
 </body>
 </html>

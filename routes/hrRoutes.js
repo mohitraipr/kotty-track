@@ -9,6 +9,113 @@ const { parseAttendance } = require('../helpers/attendanceParser');
 
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
+function format(date) {
+  return date.toISOString().split('T')[0];
+}
+
+async function getLastAttendancePeriod(employeeId, salaryType) {
+  const [rows] = await pool.query(
+    'SELECT MAX(work_date) AS last_date FROM employee_daily_hours WHERE employee_id=?',
+    [employeeId]
+  );
+  let last = rows[0].last_date ? new Date(rows[0].last_date) : new Date();
+  const year = last.getFullYear();
+  const month = last.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let start, end;
+  if (salaryType === 'dihadi') {
+    if (last.getDate() <= 15) {
+      start = new Date(year, month, 1);
+      end = new Date(year, month, 15);
+    } else {
+      start = new Date(year, month, 16);
+      end = new Date(year, month, daysInMonth);
+    }
+  } else {
+    start = new Date(year, month, 1);
+    end = new Date(year, month, daysInMonth);
+  }
+  const diffDays = Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  return { start, end, days: diffDays, daysInMonth };
+}
+
+async function getAttendanceHistory(employee) {
+  if (!employee) return [];
+  if (employee.salary_type === 'monthly') {
+    const [periods] = await pool.query(
+      `SELECT YEAR(work_date) AS yr, MONTH(work_date) AS mon
+         FROM employee_daily_hours
+        WHERE employee_id=?
+        GROUP BY yr, mon
+        ORDER BY yr DESC, mon DESC`,
+      [employee.id]
+    );
+    const result = [];
+    for (const p of periods) {
+      const year = p.yr;
+      const month = p.mon;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month - 1, daysInMonth);
+      const [att] = await pool.query(
+        'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+        [employee.id, format(start), format(end)]
+      );
+      const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
+      const hourly = employee.salary_amount / (employee.working_hours * daysInMonth);
+      const salary = hourly * totalHours;
+      const expected = employee.working_hours * daysInMonth;
+      result.push({
+        startDate: format(start),
+        endDate: format(end),
+        attendance: att,
+        totalHours,
+        salary,
+        diff: totalHours - expected
+      });
+    }
+    return result;
+  }
+
+  const [periods] = await pool.query(
+    `SELECT YEAR(work_date) AS yr, MONTH(work_date) AS mon,
+            CASE WHEN DAY(work_date)<=15 THEN 1 ELSE 16 END AS start_day
+       FROM employee_daily_hours
+      WHERE employee_id=?
+      GROUP BY yr, mon, start_day
+      ORDER BY yr DESC, mon DESC, start_day DESC`,
+    [employee.id]
+  );
+  const result = [];
+  for (const p of periods) {
+    const year = p.yr;
+    const month = p.mon;
+    const startDay = p.start_day;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const endDay = startDay === 1 ? 15 : daysInMonth;
+    const start = new Date(year, month - 1, startDay);
+    const end = new Date(year, month - 1, endDay);
+    const [att] = await pool.query(
+      'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+      [employee.id, format(start), format(end)]
+    );
+    const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
+    const hourly = employee.salary_amount / employee.working_hours;
+    const salary = hourly * totalHours;
+    const days = endDay - startDay + 1;
+    const expected = employee.working_hours * days;
+    result.push({
+      startDate: format(start),
+      endDate: format(end),
+      attendance: att,
+      totalHours,
+      salary,
+      diff: totalHours - expected
+    });
+  }
+  return result;
+}
+
 /*******************************************************************
  * Supervisor Employee Management
  *******************************************************************/
@@ -340,6 +447,17 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       );
       if (!empRows.length) continue;
       const employeeId = empRows[0].id;
+      for (const day of emp.days) {
+        if (!day.date) continue;
+        await conn.query(
+          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)`,
+          [employeeId, day.date, day.netHours, day.checkIn, day.checkOut]
+        );
+      }
+    }
+    req.flash('success', 'Attendance uploaded successfully.');
   } catch (err) {
     console.error('Error processing attendance:', err);
     req.flash('error', 'Failed to process attendance.');
@@ -349,6 +467,136 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
   }
 
   res.redirect('/operator/departments');
+});
+
+// GET supervisor view of employee attendance
+router.get('/supervisor/employees/:id/attendance', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const period = await getLastAttendancePeriod(empId, employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const expected = employee.working_hours * period.days;
+  const diff = totalHours - expected;
+  res.render('employeeAttendance', {
+    user: req.session.user,
+    employee,
+    attendance,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    diff,
+    canEdit: false
+  });
+});
+
+// GET supervisor salary according to attendance
+router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const period = await getLastAttendancePeriod(empId, employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT hours_worked FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const expected = employee.working_hours * period.days;
+  const diff = totalHours - expected;
+  const hourlyRate = employee.salary_type === 'dihadi'
+    ? employee.salary_amount / employee.working_hours
+    : employee.salary_amount / (employee.working_hours * period.daysInMonth);
+  const salary = hourlyRate * totalHours;
+  res.render('employeeSalary', {
+    user: req.session.user,
+    employee,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    expected,
+    diff,
+    hourlyRate,
+    salary
+  });
+});
+
+// GET supervisor view of all attendance periods
+router.get('/supervisor/employees/:id/history', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  const employee = rows[0];
+  const periods = await getAttendanceHistory(employee);
+  res.render('employeeHistory', {
+    user: req.session.user,
+    employee,
+    periods
+  });
+});
+
+// GET operator view/edit attendance
+router.get('/operator/employees/:id/attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=?', [empId]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/operator/departments');
+  }
+  const employee = rows[0];
+  const period = await getLastAttendancePeriod(empId, employee.salary_type);
+  const [attendance] = await pool.query(
+    'SELECT work_date, hours_worked, punch_in, punch_out FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ? ORDER BY work_date',
+    [empId, format(period.start), format(period.end)]
+  );
+  const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const expected = employee.working_hours * period.days;
+  const diff = totalHours - expected;
+  res.render('employeeAttendance', {
+    user: req.session.user,
+    employee,
+    attendance,
+    startDate: format(period.start),
+    endDate: format(period.end),
+    totalHours,
+    diff,
+    canEdit: true
+  });
+});
+
+// POST operator add/update attendance
+router.post('/operator/employees/:id/attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const { date, hours } = req.body;
+  if (!date || !hours) {
+    req.flash('error', 'Date and hours required');
+    return res.redirect(`/operator/employees/${empId}/attendance`);
+  }
+  try {
+    await pool.query(
+      'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)',
+      [empId, date, hours, req.body.punch_in || null, req.body.punch_out || null]
+    );
+    req.flash('success', 'Attendance updated');
+  } catch (err) {
+    console.error('Error saving attendance:', err);
+    req.flash('error', 'Failed to save attendance');
+  }
+  res.redirect(`/operator/employees/${empId}/attendance`);
 });
 
 

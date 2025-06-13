@@ -13,11 +13,13 @@ CREATE TABLE IF NOT EXISTS employee_daily_hours (
   employee_id INT NOT NULL,
   work_date DATE NOT NULL,
   hours_worked DECIMAL(5,2) NOT NULL,
+  punch_in TIME NULL,
+  punch_out TIME NULL,
   UNIQUE KEY uniq_emp_day (employee_id, work_date)
 );
 ```
 
-`employee_daily_hours` records how many hours an employee worked on a given day. Later you can calculate under time or overtime by comparing `hours_worked` with the employee's `working_hours`.
+`employee_daily_hours` records how many hours an employee worked on a given day along with the first punch in time and last punch out time. Later you can calculate under time or overtime by comparing `hours_worked` with the employee's `working_hours`.
 
 To track which supervisor created each employee, add a `created_by` column:
 

@@ -26,14 +26,20 @@
         <thead class="table-light">
           <tr>
             <th>Date</th>
+            <th>Punch In</th>
+            <th>Punch Out</th>
             <th>Hours Worked</th>
+            <th>Diff (hrs)</th>
           </tr>
         </thead>
         <tbody>
           <% p.attendance.forEach(function(a){ %>
             <tr>
               <td><%= a.work_date.toISOString().split('T')[0] %></td>
+              <td><%= a.punch_in || '-' %></td>
+              <td><%= a.punch_out || '-' %></td>
               <td><%= a.hours_worked %></td>
+              <td><%= (a.hours_worked - employee.working_hours).toFixed(2) %></td>
             </tr>
           <% }) %>
         </tbody>
