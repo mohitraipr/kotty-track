@@ -15,12 +15,16 @@
 </nav>
 <div class="container">
   <h4><%= employee.name %> | Punching ID: <%= employee.punching_id %></h4>
+  <p>Status: <%= employee.is_active ? 'Active' : 'Inactive' %></p>
   <% if (periods.length === 0) { %>
     <p>No attendance data available.</p>
   <% } %>
   <% periods.forEach(function(p){ %>
     <div class="mb-4">
-      <h5><%= p.startDate %> to <%= p.endDate %> - Salary: ₹<%= p.salary.toFixed(2) %></h5>
+      <h5><%= p.startDate %> to <%= p.endDate %> - Gross Salary: ₹<%= p.salary.toFixed(2) %></h5>
+      <p>Night Allowance: ₹<%= p.nightAllowance.toFixed(2) %></p>
+      <p>Advance Deduction: ₹<%= employee.advance_balance.toFixed(2) %> | Debit Deduction: ₹<%= employee.debit_balance.toFixed(2) %></p>
+      <p>Net Salary: ₹<%= p.netSalary.toFixed(2) %></p>
       <p>Total Worked: <%= p.totalHours.toFixed(2) %> hrs (<%= p.diff >= 0 ? 'Overtime' : 'Undertime' %> by <%= Math.abs(p.diff).toFixed(2) %> hrs)</p>
       <table class="table table-bordered">
         <thead class="table-light">
