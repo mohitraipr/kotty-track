@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const xlsx = require('xlsx');
+const { parseAttendance } = require('../helpers/attendanceParser');
 const { isAuthenticated } = require('../middlewares/auth');
 
 // Configure multer for uploads
@@ -56,208 +57,74 @@ router.post(
 
     try {
       const attendanceFilePath = req.files.attendanceFile[0].path;
-      const workbookAtt = xlsx.readFile(attendanceFilePath);
-      const attendanceSheetName = workbookAtt.SheetNames[0];
-      const attendanceWorksheet = workbookAtt.Sheets[attendanceSheetName];
-      let attendanceData = xlsx.utils.sheet_to_json(attendanceWorksheet, { header: 1 });
-      attendanceData = attendanceData.filter(row => row && row.length > 0);
+      const { employees } = parseAttendance(attendanceFilePath);
 
       const logs = [];
-      const altFormat = attendanceData[0].some(cell => cell && cell.toString().includes('Employee Attendance Record'));
       const TARGET_MINUTES = 11 * 60;
 
-      if (altFormat) {
-        let i = 0;
-        while (i < attendanceData.length && !attendanceData[i].some(cell => typeof cell === 'string' && cell.includes('UserID:'))) {
-          i++;
+      for (const emp of employees) {
+        const days = [];
+        let totalNetMinutes = 0;
+        let absentDays = 0;
+        let lateDeductionTotal = 0;
+
+        emp.days.forEach((rec, idx) => {
+          const day = rec.date ? new Date(rec.date).getDate() : idx + 1;
+          const checkIn = rec.checkIn || '';
+          const checkOut = rec.checkOut || '';
+          if (!checkIn || !checkOut) {
+            days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
+            absentDays++;
+          } else {
+            const inMins = timeToMinutes(checkIn);
+            const outMins = timeToMinutes(checkOut);
+            let effectiveIn = inMins;
+            let effectiveOut = outMins;
+            if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
+              effectiveIn = 540;
+              effectiveOut = 1260;
+            }
+            const rawMinutes = Math.round(effectiveOut - effectiveIn);
+            const lunchDeduction = getLunchDeduction(rawMinutes);
+            let latenessDeduction = 0;
+            let isLateCheckIn = false;
+            if (inMins >= 555) {
+              latenessDeduction = 30;
+              isLateCheckIn = true;
+            } else if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
+              latenessDeduction = 0;
+            }
+            const netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
+            totalNetMinutes += netMinutes;
+            const dailyDiffMinutes = netMinutes - TARGET_MINUTES;
+            if (isLateCheckIn) lateDeductionTotal += 30;
+            days.push({ day, checkIn, checkOut, rawWorkedMinutes: rawMinutes, netWorkedMinutes: netMinutes, dailyDiffMinutes, isAbsent: false, lateCheckIn: isLateCheckIn });
+          }
+        });
+
+        let deductionReason = '';
+        if (lateDeductionTotal > 0) {
+          deductionReason += `Late Check-in Deduction: ${lateDeductionTotal} mins.`;
         }
-        while (i < attendanceData.length) {
-          const headerRow = attendanceData[i];
-          if (!headerRow.some(cell => typeof cell === 'string' && cell.includes('UserID:'))) {
-            i++;
-            continue;
-          }
-          const empNo = getNextNonEmpty(headerRow, headerRow.indexOf('UserID:') + 1);
-          const empName = getNextNonEmpty(headerRow, headerRow.indexOf('Name:') + 1);
-          let empDept = '';
-          if (headerRow.indexOf('Dept.:') !== -1) {
-            empDept = getNextNonEmpty(headerRow, headerRow.indexOf('Dept.:') + 1);
-          } else if (headerRow.indexOf('Dept:') !== -1) {
-            empDept = getNextNonEmpty(headerRow, headerRow.indexOf('Dept:') + 1);
-          }
-          let dayHeaderRow = attendanceData[i + 1] || [];
-          let employeeLogRow = i + 2 < attendanceData.length && !attendanceData[i + 2].some(cell => typeof cell === 'string' && cell.includes('UserID:')) ? attendanceData[i + 2] : null;
-          i += employeeLogRow ? 3 : 2;
-          if (dayHeaderRow.length > 0) {
-            const firstCell = dayHeaderRow[0];
-            if (!firstCell || parseFloat(firstCell) === 0) {
-              dayHeaderRow.shift();
-              if (employeeLogRow) employeeLogRow.shift();
-            }
-          }
 
-          const days = [];
-          let totalNetMinutes = 0;
-          let absentDays = 0;
-          let lateDeductionTotal = 0;
+        let runningBalanceMinutes = 0;
+        days.forEach(d => {
+          runningBalanceMinutes += d.dailyDiffMinutes;
+          d.runningBalance = runningBalanceMinutes / 60;
+          d.finalStatus = d.isAbsent ? 'Absent' : runningBalanceMinutes < 0 ? `Overall Undertime by ${(Math.abs(runningBalanceMinutes) / 60).toFixed(2)} hrs` : 'Met target';
+        });
 
-          for (let k = 0; k < dayHeaderRow.length; k++) {
-            const day = dayHeaderRow[k];
-            let logCell = employeeLogRow && typeof employeeLogRow[k] === 'string' ? employeeLogRow[k] : '';
-            if (!logCell || !logCell.includes(':')) {
-              days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
-              absentDays++;
-            } else {
-              const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
-              if (times.length < 2) {
-                days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
-                absentDays++;
-              } else {
-                const checkIn = times[0];
-                const checkOut = times[times.length - 1];
-                const inMins = timeToMinutes(checkIn);
-                const outMins = timeToMinutes(checkOut);
-                let effectiveIn = inMins;
-                let effectiveOut = outMins;
-                if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-                  effectiveIn = 540;
-                  effectiveOut = 1260;
-                }
-                const rawMinutes = Math.round(effectiveOut - effectiveIn);
-                const lunchDeduction = getLunchDeduction(rawMinutes);
-                let latenessDeduction = 0;
-                let isLateCheckIn = false;
-                if (inMins >= 555) {
-                  latenessDeduction = 30;
-                  isLateCheckIn = true;
-                } else if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-                  latenessDeduction = 0;
-                }
-                const netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
-                totalNetMinutes += netMinutes;
-                const dailyDiffMinutes = netMinutes - TARGET_MINUTES;
-                if (isLateCheckIn) lateDeductionTotal += 30;
-                days.push({ day, checkIn, checkOut, rawWorkedMinutes: rawMinutes, netWorkedMinutes: netMinutes, dailyDiffMinutes, isAbsent: false, lateCheckIn: isLateCheckIn });
-              }
-            }
-          }
-
-          let deductionReason = '';
-          if (lateDeductionTotal > 0) {
-            deductionReason += `Late Check-in Deduction: ${lateDeductionTotal} mins.`;
-          }
-
-          let runningBalanceMinutes = 0;
-          days.forEach(d => {
-            runningBalanceMinutes += d.dailyDiffMinutes;
-            d.runningBalance = runningBalanceMinutes / 60;
-            d.finalStatus = d.isAbsent ? 'Absent' : runningBalanceMinutes < 0 ? `Overall Undertime by ${(Math.abs(runningBalanceMinutes) / 60).toFixed(2)} hrs` : 'Met target';
-          });
-
-          logs.push({
-            no: empNo,
-            name: empName,
-            dept: empDept,
-            days,
-            totalNetHours: totalNetMinutes / 60,
-            overallAdjustment: days.length > 0 ? days[days.length - 1].runningBalance : 0,
-            overallStatus: days.length > 0 && (days[days.length - 1].runningBalance < 0 ? `Overall Undertime by ${Math.abs(days[days.length - 1].runningBalance).toFixed(2)} hrs` : 'Met target overall'),
-            absentDays,
-            deductionReason
-          });
-        }
-      } else {
-        for (let i = 0; i < attendanceData.length; i++) {
-          const row = attendanceData[i];
-          if (row.some(cell => typeof cell === 'string' && cell.replace(/\s/g, '').toLowerCase().startsWith('no:'))) {
-            if (i - 1 < 0 || i + 1 >= attendanceData.length) continue;
-            const dayHeaderRow = attendanceData[i - 1];
-            const employeeRow = row;
-            const logRow = attendanceData[i + 1];
-            let empNo = '', empName = '', empDept = '';
-            for (let j = 0; j < employeeRow.length; j++) {
-              if (typeof employeeRow[j] === 'string') {
-                const normalized = employeeRow[j].replace(/\s/g, '').toLowerCase();
-                if (normalized.startsWith('no:')) {
-                  empNo = getNextNonEmpty(employeeRow, j + 1);
-                }
-                if (normalized.startsWith('name:')) {
-                  empName = getNextNonEmpty(employeeRow, j + 1);
-                }
-                if (normalized.startsWith('dept:')) {
-                  empDept = getNextNonEmpty(employeeRow, j + 1);
-                }
-              }
-            }
-            const days = [];
-            let totalNetMinutes = 0;
-            let absentDays = 0;
-            let lateDeductionTotal = 0;
-            for (let k = 0; k < dayHeaderRow.length; k++) {
-              const day = dayHeaderRow[k];
-              const logCell = logRow[k];
-              if (logCell && typeof logCell === 'string') {
-                const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
-                if (times.length >= 2) {
-                  const checkIn = times[0];
-                  const checkOut = times[times.length - 1];
-                  const inMins = timeToMinutes(checkIn);
-                  const outMins = timeToMinutes(checkOut);
-                  let effectiveIn = inMins;
-                  let effectiveOut = outMins;
-                  if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-                    effectiveIn = 540;
-                    effectiveOut = 1260;
-                  }
-                  const rawMinutes = Math.round(effectiveOut - effectiveIn);
-                  const lunchDeduction = getLunchDeduction(rawMinutes);
-                  let latenessDeduction = 0;
-                  let isLateCheckIn = false;
-                  if (inMins >= 555) {
-                    latenessDeduction = 30;
-                    isLateCheckIn = true;
-                  } else if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-                    latenessDeduction = 0;
-                  }
-                  const netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
-                  totalNetMinutes += netMinutes;
-                  const dailyDiffMinutes = netMinutes - TARGET_MINUTES;
-                  if (isLateCheckIn) lateDeductionTotal += 30;
-                  days.push({ day, checkIn, checkOut, rawWorkedMinutes: rawMinutes, netWorkedMinutes: netMinutes, dailyDiffMinutes, isAbsent: false, lateCheckIn: isLateCheckIn });
-                } else {
-                  days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
-                  absentDays++;
-                }
-              } else {
-                days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
-                absentDays++;
-              }
-            }
-            let runningBalanceMinutes = 0;
-            days.forEach(d => {
-              runningBalanceMinutes += d.dailyDiffMinutes;
-              d.runningBalance = runningBalanceMinutes / 60;
-              d.finalStatus = d.isAbsent ? 'Absent' : runningBalanceMinutes < 0 ? `Overall Undertime by ${(Math.abs(runningBalanceMinutes) / 60).toFixed(2)} hrs` : 'Met target';
-            });
-            let deductionReason = '';
-            if (lateDeductionTotal > 0) {
-              deductionReason += `Late Check-in Deduction: ${lateDeductionTotal} mins.`;
-            }
-            logs.push({
-              no: empNo,
-              name: empName,
-              dept: empDept,
-              days,
-              totalNetMinutes,
-              totalNetHours: totalNetMinutes / 60,
-              overallAdjustment: days.length > 0 ? days[days.length - 1].runningBalance : 0,
-              overallStatus: days.length > 0 && (days[days.length - 1].runningBalance < 0 ? `Overall Undertime by ${Math.abs(days[days.length - 1].runningBalance).toFixed(2)} hrs` : 'Met target overall'),
-              absentDays,
-              deductionReason
-            });
-            i++;
-          }
-        }
+        logs.push({
+          no: emp.punchingId,
+          name: emp.name,
+          dept: emp.dept || '',
+          days,
+          totalNetHours: totalNetMinutes / 60,
+          overallAdjustment: days.length > 0 ? days[days.length - 1].runningBalance : 0,
+          overallStatus: days.length > 0 && (days[days.length - 1].runningBalance < 0 ? `Overall Undertime by ${Math.abs(days[days.length - 1].runningBalance).toFixed(2)} hrs` : 'Met target overall'),
+          absentDays,
+          deductionReason
+        });
       }
 
       const salaryFilePath = req.files.salaryFile[0].path;
