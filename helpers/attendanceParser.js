@@ -1,5 +1,6 @@
 const xlsx = require('xlsx');
 const path = require('path');
+const fs = require('fs');
 
 function timeToMinutes(timeStr) {
   const [h, m] = timeStr.split(':').map(Number);
@@ -65,7 +66,81 @@ function formatDate(year, month, day) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function parseJsonAttendance(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  let data = JSON.parse(raw);
+  if (!Array.isArray(data)) data = [data];
+
+  let firstDate = null;
+  for (const emp of data) {
+    if (Array.isArray(emp.attendance)) {
+      const rec = emp.attendance.find(r => r.date);
+      if (rec) {
+        firstDate = rec.date;
+        break;
+      }
+    }
+  }
+  let year, month;
+  if (firstDate) {
+    const d = new Date(firstDate);
+    if (!Number.isNaN(d.getTime())) {
+      year = d.getFullYear();
+      month = d.getMonth() + 1;
+    }
+  }
+  if (!year || !month) {
+    const now = new Date();
+    year = now.getFullYear();
+    month = now.getMonth() + 1;
+  }
+
+  const employees = [];
+  for (const emp of data) {
+    const days = [];
+    if (Array.isArray(emp.attendance)) {
+      for (const rec of emp.attendance) {
+        const dateStr = rec.date || null;
+        const checkIn = rec.punchIn || null;
+        const checkOut = rec.punchOut || null;
+        let netMinutes = 0;
+        if (checkIn && checkOut) {
+          const inMins = timeToMinutes(checkIn);
+          const outMins = timeToMinutes(checkOut);
+          let effectiveIn = inMins;
+          let effectiveOut = outMins;
+          if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
+            effectiveIn = 540;
+            effectiveOut = 1260;
+          }
+          const rawMinutes = effectiveOut - effectiveIn;
+          const lunchDeduction = getLunchDeduction(rawMinutes);
+          let latenessDeduction = 0;
+          if (inMins >= 555) latenessDeduction = 30;
+          netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
+        }
+        const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
+        days.push({
+          date: dateStr,
+          checkIn,
+          checkOut,
+          netHours: parseFloat((netMinutes / 60).toFixed(2)),
+          isSunday
+        });
+      }
+    }
+    employees.push({ punchingId: String(emp.punchingId), name: emp.name, days });
+  }
+
+  return { month, year, employees };
+}
+
 function parseAttendance(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.json') {
+    return parseJsonAttendance(filePath);
+  }
+
   const workbook = xlsx.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
@@ -152,11 +227,13 @@ function parseAttendance(filePath) {
             netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
           }
         }
+        const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
         days.push({
           date: dateStr,
           checkIn,
           checkOut,
-          netHours: parseFloat((netMinutes / 60).toFixed(2))
+          netHours: parseFloat((netMinutes / 60).toFixed(2)),
+          isSunday
         });
       }
       employees.push({ punchingId: empNo, name: empName, days });
@@ -227,11 +304,13 @@ function parseAttendance(filePath) {
               netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
             }
           }
+          const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
           days.push({
             date: dateStr,
             checkIn,
             checkOut,
-            netHours: parseFloat((netMinutes / 60).toFixed(2))
+            netHours: parseFloat((netMinutes / 60).toFixed(2)),
+            isSunday
           });
         }
         employees.push({ punchingId: empNo, name: empName, days });
