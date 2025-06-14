@@ -80,3 +80,7 @@ ALTER TABLE employees
 
 `advance_balance` and `debit_balance` store outstanding amounts that will be deducted from salary.
 `nights_worked` counts how many night shifts were performed in the current period and can be edited by supervisors.
+
+### Night allowance
+
+Each night shift pays an additional allowance calculated as the employee's monthly salary divided by the number of days in that month. For example, an employee earning ₹12,000 in a 30-day month receives ₹400 for every night worked.

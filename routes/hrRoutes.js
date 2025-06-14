@@ -9,7 +9,10 @@ const { parseAttendance } = require('../helpers/attendanceParser');
 
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
-const NIGHT_ALLOWANCE = 100; // amount paid per night shift
+function calcNightAllowance(emp, daysInMonth) {
+  const perNight = emp.salary_amount / daysInMonth;
+  return (emp.nights_worked || 0) * perNight;
+}
 
 function format(date) {
   return date.toISOString().split('T')[0];
@@ -69,7 +72,7 @@ async function getAttendanceHistory(employee) {
       const hourly = employee.salary_amount / (employee.working_hours * daysRecorded);
       const salary = hourly * totalHours;
       const expected = employee.working_hours * daysRecorded;
-      const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+      const nightAllowance = calcNightAllowance(employee, daysInMonth);
       const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
       result.push({
         startDate: format(start),
@@ -112,7 +115,7 @@ async function getAttendanceHistory(employee) {
     const hourly = employee.salary_amount / employee.working_hours;
     const salary = hourly * totalHours;
     const expected = employee.working_hours * daysRecorded;
-    const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+    const nightAllowance = calcNightAllowance(employee, daysInMonth);
     const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
     result.push({
       startDate: format(start),
@@ -565,7 +568,7 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     ? employee.salary_amount / employee.working_hours
     : employee.salary_amount / (employee.working_hours * daysRecorded);
   const salary = hourlyRate * totalHours;
-  const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+  const nightAllowance = calcNightAllowance(employee, period.daysInMonth);
   const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
   res.render('employeeSalary', {
     user: req.session.user,
