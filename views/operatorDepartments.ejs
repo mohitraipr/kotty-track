@@ -37,12 +37,7 @@
   </div>
 </nav>
 <div class="container">
-  <% if (error && error.length) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
-  <% if (success && success.length) { %>
-    <div class="alert alert-success"><%= success %></div>
-  <% } %>
+  <%- include('partials/flashMessages') %>
 
   <div class="card">
     <div class="card-header">Create Department</div>
@@ -190,13 +185,13 @@
     <div class="card-body">
       <form action="/operator/upload-attendance" method="POST" enctype="multipart/form-data" class="row g-2">
         <div class="col-sm-8">
-          <input type="file" name="attendanceFile" accept=".xlsx,.json" class="form-control" required>
+          <input type="file" name="attendanceFile" accept=".json" class="form-control" required>
         </div>
         <div class="col-sm-4">
           <button type="submit" class="btn btn-primary w-100">Upload</button>
         </div>
       </form>
-      <small class="text-muted">Filename should be department_username_userid.xlsx</small>
+      <small class="text-muted">Filename should be department_username_userid.json</small>
     </div>
   </div>
 </div>

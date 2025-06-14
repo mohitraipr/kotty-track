@@ -69,7 +69,7 @@ async function getAttendanceHistory(employee) {
       );
       const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
       const daysRecorded = new Set(att.map(r => r.work_date)).size;
-      const hourly = employee.salary_amount / (employee.working_hours * daysRecorded);
+      const hourly = employee.salary_amount / (employee.working_hours * (daysRecorded || daysInMonth));
       const salary = hourly * totalHours;
       const expected = employee.working_hours * daysRecorded;
       const nightAllowance = calcNightAllowance(employee, daysInMonth);
@@ -453,7 +453,7 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
   const parts = base.split(/[^a-zA-Z0-9]+/);
   if (parts.length < 3) {
     fs.unlink(req.file.path, () => {});
-    req.flash('error', 'Filename must be department_username_userid.xlsx');
+    req.flash('error', 'Filename must be department_username_userid.json');
     return res.redirect('/operator/departments');
   }
 
@@ -566,7 +566,7 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
 
   const hourlyRate = employee.salary_type === 'dihadi'
     ? employee.salary_amount / employee.working_hours
-    : employee.salary_amount / (employee.working_hours * daysRecorded);
+    : employee.salary_amount / (employee.working_hours * (daysRecorded || period.days));
   const salary = hourlyRate * totalHours;
   const nightAllowance = calcNightAllowance(employee, period.daysInMonth);
   const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
