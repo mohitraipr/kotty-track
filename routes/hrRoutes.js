@@ -9,6 +9,8 @@ const { parseAttendance } = require('../helpers/attendanceParser');
 
 const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
+const NIGHT_ALLOWANCE = 100; // amount paid per night shift
+
 function format(date) {
   return date.toISOString().split('T')[0];
 }
@@ -63,15 +65,20 @@ async function getAttendanceHistory(employee) {
         [employee.id, format(start), format(end)]
       );
       const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
-      const hourly = employee.salary_amount / (employee.working_hours * daysInMonth);
+      const daysRecorded = new Set(att.map(r => r.work_date)).size;
+      const hourly = employee.salary_amount / (employee.working_hours * daysRecorded);
       const salary = hourly * totalHours;
-      const expected = employee.working_hours * daysInMonth;
+      const expected = employee.working_hours * daysRecorded;
+      const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+      const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
       result.push({
         startDate: format(start),
         endDate: format(end),
         attendance: att,
         totalHours,
         salary,
+        nightAllowance,
+        netSalary,
         diff: totalHours - expected
       });
     }
@@ -101,16 +108,20 @@ async function getAttendanceHistory(employee) {
       [employee.id, format(start), format(end)]
     );
     const totalHours = att.reduce((s, r) => s + Number(r.hours_worked), 0);
+    const daysRecorded = new Set(att.map(r => r.work_date)).size;
     const hourly = employee.salary_amount / employee.working_hours;
     const salary = hourly * totalHours;
-    const days = endDay - startDay + 1;
-    const expected = employee.working_hours * days;
+    const expected = employee.working_hours * daysRecorded;
+    const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+    const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
     result.push({
       startDate: format(start),
       endDate: format(end),
       attendance: att,
       totalHours,
       salary,
+      nightAllowance,
+      netSalary,
       diff: totalHours - expected
     });
   }
@@ -137,13 +148,14 @@ router.get('/supervisor/employees', isAuthenticated, isSupervisor, async (req, r
     for (const emp of employees) {
       const period = await getLastAttendancePeriod(emp.id, emp.salary_type);
       const [hrs] = await pool.query(
-        'SELECT SUM(hours_worked) AS total FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
+        'SELECT SUM(hours_worked) AS total, COUNT(work_date) AS days FROM employee_daily_hours WHERE employee_id=? AND work_date BETWEEN ? AND ?',
         [emp.id, format(period.start), format(period.end)]
       );
       const total = hrs[0].total ? Number(hrs[0].total) : 0;
+      const daysRecorded = hrs[0].days ? Number(hrs[0].days) : 0;
       const hourly = emp.salary_type === 'dihadi'
         ? emp.salary_amount / emp.working_hours
-        : emp.salary_amount / (emp.working_hours * period.daysInMonth);
+        : emp.salary_amount / (emp.working_hours * daysRecorded || 1);
       emp.lastSalary = hourly * total;
     }
     res.render('supervisorEmployees', {
@@ -514,7 +526,8 @@ router.get('/supervisor/employees/:id/attendance', isAuthenticated, isSupervisor
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
-  const expected = employee.working_hours * period.days;
+  const daysRecorded = attendance.length;
+  const expected = employee.working_hours * daysRecorded;
   const diff = totalHours - expected;
   res.render('employeeAttendance', {
     user: req.session.user,
@@ -543,14 +556,17 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
+  const daysRecorded = attendance.length;
 
-  const expected = employee.working_hours * period.days;
+  const expected = employee.working_hours * daysRecorded;
   const diff = totalHours - expected;
 
   const hourlyRate = employee.salary_type === 'dihadi'
     ? employee.salary_amount / employee.working_hours
-    : employee.salary_amount / (employee.working_hours * period.daysInMonth);
+    : employee.salary_amount / (employee.working_hours * daysRecorded);
   const salary = hourlyRate * totalHours;
+  const nightAllowance = employee.nights_worked * NIGHT_ALLOWANCE;
+  const netSalary = salary + nightAllowance - employee.advance_balance - employee.debit_balance;
   res.render('employeeSalary', {
     user: req.session.user,
     employee,
@@ -562,7 +578,9 @@ router.get('/supervisor/employees/:id/salary', isAuthenticated, isSupervisor, as
     diff,
 
     hourlyRate,
-    salary
+    salary,
+    nightAllowance,
+    netSalary
   });
 });
 
@@ -598,7 +616,8 @@ router.get('/operator/employees/:id/attendance', isAuthenticated, isOperator, as
     [empId, format(period.start), format(period.end)]
   );
   const totalHours = attendance.reduce((sum, r) => sum + Number(r.hours_worked), 0);
-  const expected = employee.working_hours * period.days;
+  const daysRecorded = attendance.length;
+  const expected = employee.working_hours * daysRecorded;
   const diff = totalHours - expected;
   res.render('employeeAttendance', {
     user: req.session.user,
