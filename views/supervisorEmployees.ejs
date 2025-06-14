@@ -67,6 +67,10 @@
           <th>Salary Type</th>
           <th>Amount</th>
           <th>Phone</th>
+          <th>Pays Sun</th>
+          <th>Advance</th>
+          <th>Debit</th>
+          <th>Nights</th>
           <th>Status</th>
           <th>Created</th>
           <th>Last Salary</th>
@@ -83,6 +87,10 @@
             <td class="text-capitalize"><%= emp.salary_type %></td>
             <td><%= emp.salary_amount %></td>
             <td><%= emp.phone || '' %></td>
+            <td><%= emp.pays_sunday ? 'Yes' : 'No' %></td>
+            <td><%= emp.advance_balance || 0 %></td>
+            <td><%= emp.debit_balance || 0 %></td>
+            <td><%= emp.nights_worked || 0 %></td>
             <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
             <td><%= new Date(emp.created_at).toLocaleDateString() %></td>
             <td>₹<%= (emp.lastSalary || 0).toFixed(2) %></td>
@@ -94,8 +102,9 @@
                 </button>
               </form>
               <a href="/supervisor/employees/<%= emp.id %>/salary" class="btn btn-sm btn-secondary me-1">Salary</a>
-              <a href="/supervisor/employees/<%= emp.id %>/history" class="btn btn-sm btn-info">View</a>
-            </td>
+              <a href="/supervisor/employees/<%= emp.id %>/history" class="btn btn-sm btn-info me-1">View</a>
+              <a href="/supervisor/employees/<%= emp.id %>/edit" class="btn btn-sm btn-warning">Edit</a>
+              </td>
           </tr>
         <% }) %>
       </tbody>

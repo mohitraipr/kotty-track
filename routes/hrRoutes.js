@@ -246,6 +246,35 @@ router.post('/supervisor/employees/:id/toggle', isAuthenticated, isSupervisor, a
   res.redirect('/supervisor/employees');
 });
 
+// GET form to edit financial details for an employee
+router.get('/supervisor/employees/:id/edit', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const [rows] = await pool.query('SELECT * FROM employees WHERE id=? AND created_by=?', [empId, req.session.user.id]);
+  if (!rows.length) {
+    req.flash('error', 'Employee not found');
+    return res.redirect('/supervisor/employees');
+  }
+  res.render('employeeEdit', { user: req.session.user, employee: rows[0] });
+});
+
+// POST update of financial details
+router.post('/supervisor/employees/:id/edit', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const { pays_sunday, advance_balance, debit_balance, nights_worked, paid_leave_balance } = req.body;
+  try {
+    await pool.query(
+      `UPDATE employees SET pays_sunday=?, advance_balance=?, debit_balance=?, nights_worked=?, paid_leave_balance=?
+       WHERE id=? AND created_by=?`,
+      [pays_sunday ? 1 : 0, advance_balance || 0, debit_balance || 0, nights_worked || 0, paid_leave_balance || 0, empId, req.session.user.id]
+    );
+    req.flash('success', 'Details updated.');
+  } catch (err) {
+    console.error('Error updating details:', err);
+    req.flash('error', 'Failed to update details.');
+  }
+  res.redirect('/supervisor/employees');
+});
+
 // GET /supervisor/employee-hours - monthly hours summary
 router.get('/supervisor/employee-hours', isAuthenticated, isSupervisor, async (req, res) => {
   try {
@@ -451,13 +480,10 @@ router.post('/operator/upload-attendance', isAuthenticated, isOperator, upload.s
       for (const day of emp.days) {
         if (!day.date) continue;
         await conn.query(
-
-          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out)
-           VALUES (?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)`,
-          [employeeId, day.date, day.netHours, day.checkIn, day.checkOut]
-
-
+          `INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out, is_sunday)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out), is_sunday=VALUES(is_sunday)`,
+          [employeeId, day.date, day.netHours, day.checkIn, day.checkOut, day.isSunday ? 1 : 0]
         );
       }
     }
@@ -595,12 +621,10 @@ router.post('/operator/employees/:id/attendance', isAuthenticated, isOperator, a
     return res.redirect(`/operator/employees/${empId}/attendance`);
   }
   try {
+    const isSunday = new Date(date).getDay() === 0 ? 1 : 0;
     await pool.query(
-
-      'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out)',
-      [empId, date, hours, req.body.punch_in || null, req.body.punch_out || null]
-
-
+      'INSERT INTO employee_daily_hours (employee_id, work_date, hours_worked, punch_in, punch_out, is_sunday) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hours_worked=VALUES(hours_worked), punch_in=VALUES(punch_in), punch_out=VALUES(punch_out), is_sunday=VALUES(is_sunday)',
+      [empId, date, hours, req.body.punch_in || null, req.body.punch_out || null, isSunday]
     );
     req.flash('success', 'Attendance updated');
   } catch (err) {

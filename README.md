@@ -48,3 +48,35 @@ ALTER TABLE employees
 The index name `punching_id` comes from the original schema. After dropping it
 we create a composite unique index on `(punching_id, created_by)` so each
 supervisor can reuse punching IDs without clashes.
+
+### Sunday tracking and paid leave
+
+To support rules around Sunday work and paid leave balances, add these columns:
+
+```sql
+ALTER TABLE employees
+  ADD COLUMN pays_sunday TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN paid_leave_balance DECIMAL(5,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE employee_daily_hours
+  ADD COLUMN is_sunday TINYINT(1) NOT NULL DEFAULT 0;
+```
+
+`pays_sunday` indicates whether an employee receives regular salary for Sundays.
+Each record in `employee_daily_hours` now stores whether the date was a Sunday
+via the `is_sunday` column, enabling future salary rules like the sandwich rule
+and Sunday deductions.
+
+### Financial tracking
+
+Employees now track advances, debits, and night shifts. Add these columns:
+
+```sql
+ALTER TABLE employees
+  ADD COLUMN advance_balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ADD COLUMN debit_balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ADD COLUMN nights_worked INT NOT NULL DEFAULT 0;
+```
+
+`advance_balance` and `debit_balance` store outstanding amounts that will be deducted from salary.
+`nights_worked` counts how many night shifts were performed in the current period and can be edited by supervisors.
