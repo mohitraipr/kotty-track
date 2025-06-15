@@ -1,6 +1,13 @@
-const xlsx = require('xlsx');
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const xlsx = require('xlsx');
+const { parseAttendance } = require('../helpers/attendanceParser');
+const { isAuthenticated } = require('../middlewares/auth');
+
+// Configure multer for uploads
+const upload = multer({ dest: path.join(__dirname, '../uploads') });
 
 function timeToMinutes(timeStr) {
   const [h, m] = timeStr.split(':').map(Number);
@@ -8,10 +15,18 @@ function timeToMinutes(timeStr) {
 }
 
 function getLunchDeduction(rawMinutes) {
-  const hrs = rawMinutes / 60;
-  if (hrs <= 4) return 0;
-  if (hrs <= 8) return 30;
+  const rawHours = rawMinutes / 60;
+  if (rawHours <= 4) return 0;
+  if (rawHours <= 8) return 30;
   return 60;
+}
+
+function formatTimeFromMinutes(totalMinutes) {
+  const isNegative = totalMinutes < 0;
+  totalMinutes = Math.abs(totalMinutes);
+  const hrs = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  return (isNegative ? '-' : '') + hrs + ':' + (mins < 10 ? '0' : '') + mins;
 }
 
 function getNextNonEmpty(row, startIndex) {
@@ -23,195 +38,44 @@ function getNextNonEmpty(row, startIndex) {
   return '';
 }
 
-function monthIndex(name) {
-  const months = [
-    'january','february','march','april','may','june',
-    'july','august','september','october','november','december'
-  ];
-  const idx = months.indexOf(name.toLowerCase());
-  return idx === -1 ? null : idx + 1;
-}
+router.get('/', isAuthenticated, (req, res) => {
+  res.render('attendance', { logs: [], error: null });
+});
 
-function detectMonthYear(data) {
-  const regexes = [
-    /(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{4})/i,
-    /(\d{4})[\/-](\d{1,2})/,
-    /(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/
-  ];
-  for (let r = 0; r < Math.min(data.length, 5); r++) {
-    for (const cell of data[r]) {
-      if (!cell) continue;
-      const str = cell.toString();
-      for (const reg of regexes) {
-        const m = str.match(reg);
-        if (m) {
-          if (reg === regexes[0]) {
-            return { month: monthIndex(m[1]), year: parseInt(m[2], 10) };
-          }
-          if (reg === regexes[1]) {
-            return { year: parseInt(m[1], 10), month: parseInt(m[2], 10) };
-          }
-          if (reg === regexes[2]) {
-            return { year: parseInt(m[3], 10), month: parseInt(m[2], 10) };
-          }
-        }
-      }
+router.post(
+  '/upload',
+  isAuthenticated,
+  upload.fields([
+    { name: 'attendanceFile', maxCount: 1 },
+    { name: 'salaryFile', maxCount: 1 }
+  ]),
+  (req, res) => {
+    if (!req.files || !req.files.attendanceFile || !req.files.salaryFile) {
+      req.flash('error', 'Both attendance and salary files are required.');
+      return res.redirect('/attendance');
     }
-  }
-  const now = new Date();
-  return { month: now.getMonth() + 1, year: now.getFullYear() };
-}
 
-function formatDate(year, month, day) {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
+    try {
+      const attendanceFilePath = req.files.attendanceFile[0].path;
+      const { employees } = parseAttendance(attendanceFilePath);
 
-function parseJsonAttendance(filePath) {
-  const raw = fs.readFileSync(filePath, 'utf8');
-  let data = JSON.parse(raw);
-  if (!Array.isArray(data)) data = [data];
+      const logs = [];
+      const TARGET_MINUTES = 11 * 60;
 
-  let firstDate = null;
-  for (const emp of data) {
-    if (Array.isArray(emp.attendance)) {
-      const rec = emp.attendance.find(r => r.date);
-      if (rec) {
-        firstDate = rec.date;
-        break;
-      }
-    }
-  }
-  let year, month;
-  if (firstDate) {
-    const d = new Date(firstDate);
-    if (!Number.isNaN(d.getTime())) {
-      year = d.getFullYear();
-      month = d.getMonth() + 1;
-    }
-  }
-  if (!year || !month) {
-    const now = new Date();
-    year = now.getFullYear();
-    month = now.getMonth() + 1;
-  }
+      for (const emp of employees) {
+        const days = [];
+        let totalNetMinutes = 0;
+        let absentDays = 0;
+        let lateDeductionTotal = 0;
 
-  const employees = [];
-  for (const emp of data) {
-    const days = [];
-    if (Array.isArray(emp.attendance)) {
-      for (const rec of emp.attendance) {
-        const dateStr = rec.date || null;
-        const checkIn = rec.punchIn || null;
-        const checkOut = rec.punchOut || null;
-        let netMinutes = 0;
-        if (checkIn && checkOut) {
-          const inMins = timeToMinutes(checkIn);
-          const outMins = timeToMinutes(checkOut);
-          let effectiveIn = inMins;
-          let effectiveOut = outMins;
-          if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-            effectiveIn = 540;
-            effectiveOut = 1260;
-          }
-          const rawMinutes = effectiveOut - effectiveIn;
-          const lunchDeduction = getLunchDeduction(rawMinutes);
-          let latenessDeduction = 0;
-          if (inMins >= 555) latenessDeduction = 30;
-          netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
-        }
-        const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
-        days.push({
-          date: dateStr,
-          checkIn,
-          checkOut,
-          netHours: parseFloat((netMinutes / 60).toFixed(2)),
-          isSunday
-        });
-      }
-    }
-    employees.push({ punchingId: String(emp.punchingId), name: emp.name, days });
-  }
-
-  return { month, year, employees };
-}
-
-function parseAttendance(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.json') {
-    return parseJsonAttendance(filePath);
-  }
-
-  const workbook = xlsx.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  let data = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
-  data = data.filter(row => row && row.length > 0);
-
-  const { month, year } = detectMonthYear(data);
-
-  const employees = [];
-  const altFormat = data[0].some(cell => cell && cell.toString().includes('Employee Attendance Record'));
-
-  const TARGET_MINUTES = 11 * 60;
-
-  if (altFormat) {
-    let i = 0;
-    while (i < data.length && !data[i].some(cell => typeof cell === 'string' && cell.includes('UserID:'))) {
-      i++;
-    }
-    while (i < data.length) {
-      const headerRow = data[i];
-      if (!headerRow.some(cell => typeof cell === 'string' && cell.includes('UserID:'))) {
-        i++;
-        continue;
-      }
-      const empNo = getNextNonEmpty(headerRow, headerRow.indexOf('UserID:') + 1);
-      const empName = getNextNonEmpty(headerRow, headerRow.indexOf('Name:') + 1);
-      let dayHeaderRow = data[i + 1] || [];
-      let logRow = (i + 2 < data.length && !data[i + 2].some(cell => typeof cell === 'string' && cell.includes('UserID:'))) ? data[i + 2] : null;
-
-      if (logRow) {
-        if (dayHeaderRow.length !== logRow.length) {
-          const diff = Math.abs(dayHeaderRow.length - logRow.length);
-          if (dayHeaderRow.length > logRow.length) {
-            dayHeaderRow = dayHeaderRow.slice(diff);
+        emp.days.forEach((rec, idx) => {
+          const day = rec.date ? new Date(rec.date).getDate() : idx + 1;
+          const checkIn = rec.checkIn || '';
+          const checkOut = rec.checkOut || '';
+          if (!checkIn || !checkOut) {
+            days.push({ day, checkIn: '', checkOut: '', rawWorkedMinutes: 0, netWorkedMinutes: 0, dailyDiffMinutes: -TARGET_MINUTES, isAbsent: true });
+            absentDays++;
           } else {
-            logRow = logRow.slice(diff);
-          }
-        } else if ((logRow[0] == null || String(logRow[0]).trim() === '') && !isNaN(parseInt(dayHeaderRow[0])) && !isNaN(parseInt(dayHeaderRow[1])) && parseInt(dayHeaderRow[1]) === parseInt(dayHeaderRow[0]) + 1) {
-          logRow.shift();
-
-      if (logRow && dayHeaderRow.length !== logRow.length) {
-        const diff = Math.abs(dayHeaderRow.length - logRow.length);
-        if (dayHeaderRow.length > logRow.length) {
-          dayHeaderRow = dayHeaderRow.slice(diff);
-        } else {
-          logRow = logRow.slice(diff);
-
-        }
-      }
-      i += logRow ? 3 : 2;
-      if (dayHeaderRow.length > 0) {
-        const firstCell = dayHeaderRow[0];
-        if (!firstCell || parseFloat(firstCell) === 0 || isNaN(parseInt(firstCell))) {
-          dayHeaderRow.shift();
-          if (logRow) logRow.shift();
-        }
-      }
-      const days = [];
-      for (let k = 0; k < dayHeaderRow.length; k++) {
-        const dayCell = dayHeaderRow[k];
-        const dayNum = parseInt(dayCell);
-        const dateStr = dayNum ? formatDate(year, month, dayNum) : null;
-        let logCell = logRow && typeof logRow[k] === 'string' ? logRow[k] : '';
-        let checkIn = null;
-        let checkOut = null;
-        let netMinutes = 0;
-        if (logCell && logCell.includes(':')) {
-          const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
-          if (times.length >= 2) {
-            checkIn = times[0];
-            checkOut = times[times.length - 1];
             const inMins = timeToMinutes(checkIn);
             const outMins = timeToMinutes(checkOut);
             let effectiveIn = inMins;
@@ -220,106 +84,225 @@ function parseAttendance(filePath) {
               effectiveIn = 540;
               effectiveOut = 1260;
             }
-            const rawMinutes = effectiveOut - effectiveIn;
+            const rawMinutes = Math.round(effectiveOut - effectiveIn);
             const lunchDeduction = getLunchDeduction(rawMinutes);
             let latenessDeduction = 0;
-            if (inMins >= 555) latenessDeduction = 30;
-            netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
+            let isLateCheckIn = false;
+            if (inMins >= 555) {
+              latenessDeduction = 30;
+              isLateCheckIn = true;
+            } else if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
+              latenessDeduction = 0;
+            }
+            const netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
+            totalNetMinutes += netMinutes;
+            const dailyDiffMinutes = netMinutes - TARGET_MINUTES;
+            if (isLateCheckIn) lateDeductionTotal += 30;
+            days.push({ day, checkIn, checkOut, rawWorkedMinutes: rawMinutes, netWorkedMinutes: netMinutes, dailyDiffMinutes, isAbsent: false, lateCheckIn: isLateCheckIn });
           }
+        });
+
+        let deductionReason = '';
+        if (lateDeductionTotal > 0) {
+          deductionReason += `Late Check-in Deduction: ${lateDeductionTotal} mins.`;
         }
-        const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
-        days.push({
-          date: dateStr,
-          checkIn,
-          checkOut,
-          netHours: parseFloat((netMinutes / 60).toFixed(2)),
-          isSunday
+
+        let runningBalanceMinutes = 0;
+        days.forEach(d => {
+          runningBalanceMinutes += d.dailyDiffMinutes;
+          d.runningBalance = runningBalanceMinutes / 60;
+          d.finalStatus = d.isAbsent ? 'Absent' : runningBalanceMinutes < 0 ? `Overall Undertime by ${(Math.abs(runningBalanceMinutes) / 60).toFixed(2)} hrs` : 'Met target';
+        });
+
+        logs.push({
+          no: emp.punchingId,
+          name: emp.name,
+          dept: emp.dept || '',
+          days,
+          totalNetHours: totalNetMinutes / 60,
+          overallAdjustment: days.length > 0 ? days[days.length - 1].runningBalance : 0,
+          overallStatus: days.length > 0 && (days[days.length - 1].runningBalance < 0 ? `Overall Undertime by ${Math.abs(days[days.length - 1].runningBalance).toFixed(2)} hrs` : 'Met target overall'),
+          absentDays,
+          deductionReason
         });
       }
-      employees.push({ punchingId: empNo, name: empName, days });
-    }
-  } else {
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      if (row.some(cell => typeof cell === 'string' && cell.replace(/\s/g, '').toLowerCase().startsWith('no:'))) {
-        if (i - 1 < 0 || i + 1 >= data.length) continue;
-        let dayHeaderRow = data[i - 1];
-        const employeeRow = row;
-        let logRow = data[i + 1];
 
-        if (logRow) {
-          if (dayHeaderRow.length !== logRow.length) {
-            const diff = Math.abs(dayHeaderRow.length - logRow.length);
-            if (dayHeaderRow.length > logRow.length) {
-              dayHeaderRow = dayHeaderRow.slice(diff);
-            } else {
-              logRow = logRow.slice(diff);
-            }
-          } else if ((logRow[0] == null || String(logRow[0]).trim() === '') && !isNaN(parseInt(dayHeaderRow[0])) && !isNaN(parseInt(dayHeaderRow[1])) && parseInt(dayHeaderRow[1]) === parseInt(dayHeaderRow[0]) + 1) {
-            logRow.shift();
+      const salaryFilePath = req.files.salaryFile[0].path;
+      const workbookSal = xlsx.readFile(salaryFilePath);
+      const salarySheetName = workbookSal.SheetNames[0];
+      const salaryWorksheet = workbookSal.Sheets[salarySheetName];
+      let salaryData = xlsx.utils.sheet_to_json(salaryWorksheet, { header: 1 });
+      salaryData = salaryData.filter(row => row && row.length > 0);
 
-        if (logRow && dayHeaderRow.length !== logRow.length) {
-          const diff = Math.abs(dayHeaderRow.length - logRow.length);
-          if (dayHeaderRow.length > logRow.length) {
-            dayHeaderRow = dayHeaderRow.slice(diff);
-          } else {
-            logRow = logRow.slice(diff);
+      let salaryHeader = salaryData[0];
+      const deptIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('dept'));
+      const idIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('punching'));
+      const nameIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('name'));
+      const dailySalaryIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('daily'));
+      const hoursIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('hour'));
+      const advanceIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('advance'));
+      const debitIdx = salaryHeader.findIndex(h => h.toString().toLowerCase().includes('debit'));
 
-          }
+      const salaryMap = {};
+      for (let j = 1; j < salaryData.length; j++) {
+        const row = salaryData[j];
+        const punchingId = row[idIdx] ? row[idIdx].toString().trim() : '';
+        const name = row[nameIdx] ? row[nameIdx].toString().trim() : '';
+        const dept = row[deptIdx] ? row[deptIdx].toString().trim() : '';
+        if (punchingId && name && dept) {
+          const key = `${punchingId}_${name.toLowerCase()}_${dept.toLowerCase()}`;
+          salaryMap[key] = {
+            dept,
+            name,
+            dailySalary: row[dailySalaryIdx] ? Number(row[dailySalaryIdx]) : 0,
+            definedHours: row[hoursIdx] ? Number(row[hoursIdx]) : 12,
+            advance: row[advanceIdx] ? Number(row[advanceIdx]) : 0,
+            debit: row[debitIdx] ? Number(row[debitIdx]) : 0
+          };
         }
-        let empNo = '', empName = '';
-        for (let j = 0; j < employeeRow.length; j++) {
-          if (typeof employeeRow[j] === 'string') {
-            const norm = employeeRow[j].replace(/\s/g, '').toLowerCase();
-            if (norm.startsWith('no:')) empNo = getNextNonEmpty(employeeRow, j + 1);
-            if (norm.startsWith('name:')) empName = getNextNonEmpty(employeeRow, j + 1);
-          }
-        }
-        const days = [];
-        for (let k = 0; k < dayHeaderRow.length; k++) {
-          const day = dayHeaderRow[k];
-          const dayNum = parseInt(day);
-          const dateStr = dayNum ? formatDate(year, month, dayNum) : null;
-          const logCell = logRow[k];
-          let checkIn = null;
-          let checkOut = null;
-          let netMinutes = 0;
-          if (logCell && typeof logCell === 'string') {
-            const times = logCell.split(/\r?\n/).map(t => t.trim()).filter(t => t);
-            if (times.length >= 2) {
-              checkIn = times[0];
-              checkOut = times[times.length - 1];
-              const inMins = timeToMinutes(checkIn);
-              const outMins = timeToMinutes(checkOut);
-              let effectiveIn = inMins;
-              let effectiveOut = outMins;
-              if (inMins >= 540 && inMins <= 550 && outMins >= 1260 && outMins <= 1270) {
-                effectiveIn = 540;
-                effectiveOut = 1260;
-              }
-              const rawMinutes = effectiveOut - effectiveIn;
-              const lunchDeduction = getLunchDeduction(rawMinutes);
-              let latenessDeduction = 0;
-              if (inMins >= 555) latenessDeduction = 30;
-              netMinutes = rawMinutes - lunchDeduction - latenessDeduction;
-            }
-          }
-          const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
-          days.push({
-            date: dateStr,
-            checkIn,
-            checkOut,
-            netHours: parseFloat((netMinutes / 60).toFixed(2)),
-            isSunday
-          });
-        }
-        employees.push({ punchingId: empNo, name: empName, days });
-        i++; // skip logRow next iteration
       }
+
+      const merged = logs.map(emp => {
+        const key = `${emp.no}_${emp.name.trim().toLowerCase()}_${emp.dept.trim().toLowerCase()}`;
+        const salRec = salaryMap[key];
+        if (salRec) {
+          const hourlySalary = salRec.definedHours > 0 ? salRec.dailySalary / salRec.definedHours : 0;
+          const grossSalary = hourlySalary * emp.totalNetHours;
+          let netSalary = grossSalary - salRec.advance - salRec.debit;
+          if (netSalary < 0) netSalary = 0;
+          return {
+            ...emp,
+            hourlySalary,
+            dailySalary: salRec.dailySalary,
+            grossSalary,
+            netSalary,
+            totalSalaryMade: netSalary,
+            advance: salRec.advance,
+            debit: salRec.debit,
+            definedHours: salRec.definedHours
+          };
+        }
+        return emp;
+      });
+
+      req.session.attendanceLogs = merged;
+      res.render('attendance', { logs: merged, error: null });
+    } catch (err) {
+      console.error('Error processing files:', err);
+      req.flash('error', 'Failed to process files. Please check the file formats and try again.');
+      res.redirect('/attendance');
     }
   }
+);
 
-  return { month, year, employees };
-}
+router.get('/download', isAuthenticated, (req, res) => {
+  const logs = req.session.attendanceLogs;
+  if (!logs) {
+    req.flash('error', 'No data available for download.');
+    return res.redirect('/attendance');
+  }
 
-module.exports = { parseAttendance };
+  const attendanceData = [];
+  attendanceData.push(['Employee Name', 'Punching ID', 'Dept', 'Day', 'Check In', 'Check Out', 'Raw Worked', 'Lunch Deduction', 'Net Worked', 'Daily Diff', 'Running Balance', 'Final Status']);
+  logs.forEach(emp => {
+    emp.days.forEach(day => {
+      attendanceData.push([
+        emp.name,
+        emp.no,
+        emp.dept,
+        day.day,
+        day.checkIn,
+        day.checkOut,
+        formatTimeFromMinutes(day.rawWorkedMinutes),
+        formatTimeFromMinutes(day.rawWorkedMinutes - day.netWorkedMinutes),
+        formatTimeFromMinutes(day.netWorkedMinutes),
+        formatTimeFromMinutes(day.dailyDiffMinutes),
+        formatTimeFromMinutes(Math.round(day.runningBalance * 60)),
+        day.finalStatus
+      ]);
+    });
+    attendanceData.push([
+      emp.name,
+      emp.no,
+      emp.dept,
+      'Overall',
+      '',
+      '',
+      '',
+      '',
+      formatTimeFromMinutes(Math.round(emp.totalNetHours * 60)),
+      formatTimeFromMinutes(Math.round(emp.overallAdjustment * 60)),
+      emp.overallStatus,
+      ''
+    ]);
+    attendanceData.push([]);
+  });
+
+  const salaryData = [];
+  salaryData.push(['Employee Name', 'Punching ID', 'Per Hour Salary', 'Daily Salary', 'Gross Salary', 'Advance Deduction', 'Debit Deduction', 'Net Salary Made', 'Total Hours Worked', 'Absent Days']);
+  logs.forEach(emp => {
+    if (emp.hourlySalary !== undefined) {
+      salaryData.push([
+        emp.name,
+        emp.no,
+        emp.hourlySalary.toFixed(2),
+        emp.dailySalary.toFixed(2),
+        emp.grossSalary.toFixed(2),
+        emp.advance ? emp.advance.toFixed(2) : '0.00',
+        emp.debit ? emp.debit.toFixed(2) : '0.00',
+        emp.netSalary.toFixed(2),
+        formatTimeFromMinutes(Math.round(emp.totalNetHours * 60)),
+        emp.absentDays !== undefined ? emp.absentDays : 0
+      ]);
+    }
+  });
+
+  const wb = xlsx.utils.book_new();
+  const wsAttendance = xlsx.utils.aoa_to_sheet(attendanceData);
+  const wsSalary = xlsx.utils.aoa_to_sheet(salaryData);
+  xlsx.utils.book_append_sheet(wb, wsAttendance, 'Attendance');
+  xlsx.utils.book_append_sheet(wb, wsSalary, 'Salary');
+  const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  res.setHeader('Content-Disposition', 'attachment; filename=attendance_salary.xlsx');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buf);
+});
+
+router.get('/downloadSalary', isAuthenticated, (req, res) => {
+  const logs = req.session.attendanceLogs;
+  if (!logs) {
+    req.flash('error', 'No data available for download.');
+    return res.redirect('/attendance');
+  }
+
+  const salaryData = [];
+  salaryData.push(['Employee Name', 'Punching ID', 'Per Hour Salary', 'Daily Salary', 'Gross Salary', 'Advance Deduction', 'Debit Deduction', 'Net Salary Made', 'Total Hours Worked', 'Absent Days']);
+  logs.forEach(emp => {
+    if (emp.hourlySalary !== undefined) {
+      salaryData.push([
+        emp.name,
+        emp.no,
+        emp.hourlySalary.toFixed(2),
+        emp.dailySalary.toFixed(2),
+        emp.grossSalary.toFixed(2),
+        emp.advance ? emp.advance.toFixed(2) : '0.00',
+        emp.debit ? emp.debit.toFixed(2) : '0.00',
+        emp.netSalary.toFixed(2),
+        formatTimeFromMinutes(Math.round(emp.totalNetHours * 60)),
+        emp.absentDays !== undefined ? emp.absentDays : 0
+      ]);
+    }
+  });
+
+  const wb = xlsx.utils.book_new();
+  const wsSalary = xlsx.utils.aoa_to_sheet(salaryData);
+  xlsx.utils.book_append_sheet(wb, wsSalary, 'Salary');
+  const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  res.setHeader('Content-Disposition', 'attachment; filename=salary.xlsx');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buf);
+});
+
+module.exports = router;
