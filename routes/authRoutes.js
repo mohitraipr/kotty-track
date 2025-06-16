@@ -82,6 +82,9 @@ router.post('/login', async (req, res) => {
         case 'washing_in':            // New case for washing in
           res.redirect('/washingin');
           break;
+      case 'store_employee':
+        res.redirect('/inventory/dashboard');
+        break;
       case 'checking':
       case 'quality_assurance':
         res.redirect('/department/dashboard');
