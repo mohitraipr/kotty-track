@@ -293,9 +293,9 @@ router.post('/create', isAuthenticated, async (req,res)=>{
     };
 
     const consigneeMapping = {
-      49:{name:'ADS WASHER',
-          gstin:'07HQOPK1686K1Z2',
-          address:'I-112, JAITPUR EXTENSION, PART-1, BADARPUR, South East Delhi, Delhi, 110044',
+      49:{name:'SHREE SAI DYE CHEM',
+          gstin:'07ABYPC7271N1ZV',
+          address:' 185-B MAIN SINDHU FARM ROAD MOTHAPUR BADARPUR, Delhi, 110044',
           placeOfSupply:'07-DELHI'},
       62:{name:'MEENA TRADING WASHER',
           gstin:'09DERPG5827R1ZF',
