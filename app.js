@@ -74,7 +74,6 @@ const jeansAssemblyRoutes = require('./routes/jeansAssemblyRoutes.js');
 const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
 const washingIN = require('./routes/washingInRoutes');
 const catalogR = require('./routes/catalogupload');
-const hrRoutes = require('./routes/hrRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 
 // Use Routes
@@ -97,7 +96,6 @@ app.use('/washingin', washingIN);
 app.use('/catalogupload', catalogR);
 app.use('/inventory', inventoryRoutes);
 
-app.use('/', hrRoutes);
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
