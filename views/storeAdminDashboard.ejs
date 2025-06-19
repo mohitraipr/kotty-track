@@ -91,8 +91,12 @@
   </datalist>
 
   <h4 class="mt-4">Current Inventory</h4>
+  <div class="input-group mb-3">
+    <span class="input-group-text"><i class="fas fa-search"></i></span>
+    <input type="text" id="inventorySearch" class="form-control" placeholder="Search inventory..." />
+  </div>
   <div class="table-responsive">
-    <table class="table table-bordered">
+    <table class="table table-bordered" id="inventoryTable">
       <thead>
         <tr>
           <th>Description</th>
@@ -155,6 +159,16 @@
   }
   bindDatalist('addItem', 'addGoodsId');
   bindDatalist('dispatchItem', 'dispatchGoodsId');
+
+  const inventorySearch = document.getElementById('inventorySearch');
+  const inventoryTable = document.getElementById('inventoryTable');
+  inventorySearch.addEventListener('input', () => {
+    const filter = inventorySearch.value.toLowerCase();
+    inventoryTable.querySelectorAll('tbody tr').forEach(tr => {
+      const text = tr.textContent.toLowerCase();
+      tr.style.display = text.includes(filter) ? '' : 'none';
+    });
+  });
 </script>
 </body>
 </html>
