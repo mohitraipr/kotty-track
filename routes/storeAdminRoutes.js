@@ -98,4 +98,24 @@ router.post('/dispatch', isAuthenticated, isStoreAdmin, async (req, res) => {
   res.redirect('/store-admin/dashboard');
 });
 
+// Update existing goods item
+router.post('/update-item', isAuthenticated, isStoreAdmin, async (req, res) => {
+  const { goods_id, description, size, unit } = req.body;
+  if (!goods_id || !description || !size || !unit) {
+    req.flash('error', 'All fields are required');
+    return res.redirect('/store-admin/dashboard');
+  }
+  try {
+    await pool.query(
+      'UPDATE goods_inventory SET description_of_goods = ?, size = ?, unit = ? WHERE id = ?',
+      [description, size, unit, goods_id]
+    );
+    req.flash('success', 'Item updated');
+  } catch (err) {
+    console.error('Error updating item:', err);
+    req.flash('error', 'Could not update item');
+  }
+  res.redirect('/store-admin/dashboard');
+});
+
 module.exports = router;
