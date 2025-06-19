@@ -75,6 +75,7 @@ const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
 const washingIN = require('./routes/washingInRoutes');
 const catalogR = require('./routes/catalogupload');
 const inventoryRoutes = require('./routes/inventoryRoutes');
+const storeAdminRoutes = require('./routes/storeAdminRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -95,6 +96,7 @@ app.use('/', bulkUploadRoutes);
 app.use('/washingin', washingIN);
 app.use('/catalogupload', catalogR);
 app.use('/inventory', inventoryRoutes);
+app.use('/store-admin', storeAdminRoutes);
 
 // Home Route
 app.get('/', (req, res) => {

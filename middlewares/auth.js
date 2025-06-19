@@ -109,6 +109,10 @@ function isDepartmentUser(req, res, next) {
     res.redirect('/');
 }
 
+function isStoreAdmin(req, res, next) {
+    return hasRole('store_admin')(req, res, next);
+}
+
 function isStoreEmployee(req, res, next) {
     return hasRole('store_employee')(req, res, next);
 }
@@ -128,5 +132,6 @@ module.exports = {
     isPaymentAuthoriser,
     isWashingInMaster,
     isCatalogUpload,
+    isStoreAdmin,
     isStoreEmployee
 };
