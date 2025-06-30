@@ -207,8 +207,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         const isSun = moment(a.date).day() === 0;
         const isSandwich = sandwichDates.includes(dateStr);
         if (isSun) {
-          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
-          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
+          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
           const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
                             (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {

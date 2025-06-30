@@ -6,6 +6,7 @@ const moment = require('moment');
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isSupervisor } = require('../middlewares/auth');
 const { calculateSalaryForMonth, effectiveHours, lunchDeduction } = require('../helpers/salaryCalculator');
+const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
 
 function formatHours(h) {
   let hours = Math.floor(h);
@@ -229,13 +230,32 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
   const empId = req.params.id;
   const month = req.query.month || moment().format('YYYY-MM');
   try {
-    const [[emp]] = await pool.query('SELECT * FROM employees WHERE id = ? AND supervisor_id = ?', [empId, req.session.user.id]);
+    const [[emp]] = await pool.query(
+      `SELECT e.*, d.name AS department
+         FROM employees e
+         LEFT JOIN (
+               SELECT user_id, MIN(department_id) AS department_id
+                 FROM department_supervisors
+                GROUP BY user_id
+         ) ds ON ds.user_id = e.supervisor_id
+         LEFT JOIN departments d ON ds.department_id = d.id
+        WHERE e.id = ? AND e.supervisor_id = ?`,
+      [empId, req.session.user.id]
+    );
     if (!emp) {
       req.flash('error', 'Employee not found');
       return res.redirect('/supervisor/employees');
     }
+    const specialDept = SPECIAL_DEPARTMENTS.includes(
+      (emp.department || '').toLowerCase()
+    );
     const startDate = moment(month + '-01').format('YYYY-MM-DD');
-    const endDate = moment(month + '-15').format('YYYY-MM-DD');
+    let endDate;
+    if (emp.salary_type === 'dihadi') {
+      endDate = moment(month + '-15').format('YYYY-MM-DD');
+    } else {
+      endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
+    }
     const [attendance] = await pool.query('SELECT * FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ? ORDER BY date', [empId, startDate, endDate]);
     const daysInMonth = moment(month + '-01').daysInMonth();
     const dailyRate = parseFloat(emp.salary) / daysInMonth;
@@ -249,9 +269,9 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     let paidUsed = 0;
     attendance.forEach(a => {
       if (a.punch_in && a.punch_out) {
-        const hrsDec = effectiveHours(a.punch_in, a.punch_out);
+        const hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
         a.hours = formatHours(hrsDec);
-        a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out);
+        a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'dihadi') {
           totalHours += hrsDec;
         }
@@ -262,7 +282,9 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       const isSun = moment(a.date).day() === 0;
       if (isSun) {
         if (a.status === 'present') {
-          if (parseFloat(emp.salary) < 13500) {
+          if (specialDept) {
+            a.deduction_reason = 'Leave credited';
+          } else if (parseFloat(emp.salary) < 13500) {
             a.deduction_reason = 'Paid Sunday';
           } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
             a.deduction_reason = 'Paid Sunday (override)';

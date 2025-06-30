@@ -1,6 +1,8 @@
 const moment = require('moment');
+const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
 
-function lunchDeduction(punchIn, punchOut) {
+function lunchDeduction(punchIn, punchOut, salaryType = 'dihadi') {
+  if (salaryType !== 'dihadi') return 0;
   const out = moment(punchOut, 'HH:mm:ss');
   const firstCut = moment('13:10:00', 'HH:mm:ss');
   const secondCut = moment('18:10:00', 'HH:mm:ss');
@@ -10,11 +12,11 @@ function lunchDeduction(punchIn, punchOut) {
 }
 exports.lunchDeduction = lunchDeduction;
 
-function effectiveHours(punchIn, punchOut) {
+function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   const start = moment(punchIn, 'HH:mm:ss');
   const end = moment(punchOut, 'HH:mm:ss');
   let mins = end.diff(start, 'minutes');
-  mins -= lunchDeduction(punchIn, punchOut);
+  mins -= lunchDeduction(punchIn, punchOut, salaryType);
   if (mins > 11 * 60) mins = 11 * 60;
   if (mins < 0) mins = 0;
   return mins / 60;
@@ -25,10 +27,23 @@ exports.effectiveHours = effectiveHours;
 
 async function calculateSalaryForMonth(conn, employeeId, month) {
   const [[emp]] = await conn.query(
-    'SELECT salary, salary_type, paid_sunday_allowance, allotted_hours FROM employees WHERE id = ?',
+    `SELECT e.salary, e.salary_type, e.paid_sunday_allowance, e.allotted_hours,
+            e.date_of_joining,
+            d.name AS department
+       FROM employees e
+       LEFT JOIN (
+             SELECT user_id, MIN(department_id) AS department_id
+               FROM department_supervisors
+              GROUP BY user_id
+       ) ds ON ds.user_id = e.supervisor_id
+       LEFT JOIN departments d ON ds.department_id = d.id
+      WHERE e.id = ?`,
     [employeeId]
   );
   if (!emp) return;
+  const specialDept = SPECIAL_DEPARTMENTS.includes(
+    (emp.department || '').toLowerCase()
+  );
   if (emp.salary_type === 'dihadi') {
     await calculateDihadiMonthly(conn, employeeId, month, emp);
     return;
@@ -52,6 +67,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   let absent = 0;
   let extraPay = 0;
   let paidUsed = 0;
+  const creditLeaves = [];
 
   attendance.forEach(a => {
     const dateStr = moment(a.date).format('YYYY-MM-DD');
@@ -60,11 +76,13 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     const isSandwich = sandwichDates.includes(dateStr);
 
     if (isSun) {
-      const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
-      const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
-      const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
-                        (monStatus === 'absent' || monStatus === 'one punch only');
-      if (adjAbsent) {
+      const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+      const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+      const satStatus = attMap[satKey];
+      const monStatus = attMap[monKey];
+      const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
+      const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
+      if ((satStatus && missedSat) || (monStatus && missedMon)) {
         absent++;
         return;
       }
@@ -83,17 +101,34 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
 
     if (isSun) {
       if (status === 'present') {
-        if (parseFloat(emp.salary) < 13500) {
+        if (specialDept) {
+          creditLeaves.push(dateStr);
+        } else if (parseFloat(emp.salary) < 13500) {
           extraPay += dailyRate;
         } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
           extraPay += dailyRate;
           paidUsed++;
+        } else {
+          creditLeaves.push(dateStr);
         }
       }
     } else {
       if (status === 'absent' || status === 'one punch only') absent++;
     }
   });
+
+  for (const d of creditLeaves) {
+    const [rows] = await conn.query(
+      'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ?',
+      [employeeId, d]
+    );
+    if (!rows.length) {
+      await conn.query(
+        'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
+        [employeeId, d, 'Sunday Credit']
+      );
+    }
+  }
 
   const [nightRows] = await conn.query(
     'SELECT COALESCE(SUM(nights),0) AS total_nights FROM employee_nights WHERE employee_id = ? AND month = ?',
