@@ -109,7 +109,7 @@
               <td><%= ch.challan_no %></td>
               <td>
                 <% if (ch.challan_date) { %>
-                  <%= ch.challan_date.toISOString().split('T')[0] %>
+                  <%= ch.challan_date.toLocaleDateString('en-CA') %>
                 <% } else { %>
                   --
                 <% } %>

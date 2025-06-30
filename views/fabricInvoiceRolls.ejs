@@ -51,8 +51,8 @@
             <div class="row mb-3">
                 <div class="col-md-6">
                     <p><strong>Vendor Name:</strong> <%= invoice.vendor_name %></p>
-                    <p><strong>Date Invoice:</strong> <%= invoice.date_invoice.toISOString().split('T')[0] %></p>
-                    <p><strong>Date Received:</strong> <%= invoice.date_received.toISOString().split('T')[0] %></p>
+                    <p><strong>Date Invoice:</strong> <%= invoice.date_invoice.toLocaleDateString('en-CA') %></p>
+                    <p><strong>Date Received:</strong> <%= invoice.date_received.toLocaleDateString('en-CA') %></p>
                 </div>
                 <div class="col-md-6">
                     <p><strong>Total Roll Quantity:</strong> <%= invoice.total_roll_quantity %></p>

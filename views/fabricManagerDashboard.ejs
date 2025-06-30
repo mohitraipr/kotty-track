@@ -197,8 +197,8 @@
                                         <td><%= invoice.id %></td>
                                         <td><%= invoice.invoice_no %></td>
                                         <td><%= invoice.vendor_name %></td>
-                                        <td><%= invoice.date_invoice.toISOString().split('T')[0] %></td>
-                                        <td><%= invoice.date_received.toISOString().split('T')[0] %></td>
+                                        <td><%= invoice.date_invoice.toLocaleDateString('en-CA') %></td>
+                                        <td><%= invoice.date_received.toLocaleDateString('en-CA') %></td>
                                         <td><%= invoice.total_roll_quantity %></td>
                                         <td><%= invoice.fabric_type || 'N/A' %></td>
                                         <td><%= invoice.invoice_weight || 'N/A' %></td>

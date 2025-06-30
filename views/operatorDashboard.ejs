@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Kotty Operator Dashboard – Enhanced Overview</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0d6efd">
@@ -17,632 +17,421 @@
   <style>
     body {
       font-family: 'Poppins', sans-serif;
-      margin: 0;
+      background-color: #f4f6f9;
+      color: #212529;
       padding-top: 70px;
-      background-color: #f8f9fa;
-      color: #343a40;
+      transition: background-color 0.3s, color 0.3s;
     }
     .dark-mode {
-      background-color: #1c1f22;
-      color: #e9ecef;
+      background-color: #121417;
+      color: #f8f9fa;
     }
     .top-nav {
-      background: linear-gradient(90deg, #212529 0%, #2b2d30 100%);
-      border-bottom: 3px solid #141618;
       position: fixed;
       top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1050;
-      padding: 0.5rem 1rem;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      width: 100%;
+      background: linear-gradient(90deg, #212529, #343a40);
+      padding: 0.75rem 1.25rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      z-index: 1040;
     }
     .nav-brand {
-      font-size: 1.7rem;
-      font-weight: 600;
-      color: #f8f9fa !important;
-    }
-    /* Sidebar styles */
-    #sidebar, .offcanvas-body {
-      background-color: #343a40;
-      padding: 1rem;
-    }
-    #sidebar a, .offcanvas-body a {
+      font-size: 1.5rem;
       color: #fff;
+      font-weight: 600;
       text-decoration: none;
-      display: block;
-      padding: 0.5rem 1rem;
-      margin-bottom: 0.5rem;
-      border-radius: 4px;
     }
-    #sidebar a:hover, .offcanvas-body a:hover,
-    #sidebar a.active, .offcanvas-body a.active {
-      background-color: #0d6efd;
+    .btn-outline-light i {
+      font-size: 1.2rem;
     }
-    /* Persistent sidebar for md and up */
-    @media (min-width: 768px) {
-      #sidebar {
-        position: fixed;
-        top: 70px;
-        left: 0;
-        bottom: 0;
-        width: 250px;
-        overflow-y: auto;
-      }
-      #mainContent {
-        margin-left: 260px;
-      }
+    .nav-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
     }
-    /* Stat boxes and panels */
-    .stat-box {
-      background: #ffffff;
-      border-radius: 8px;
-      text-align: center;
+    .nav-card {
+      background: #fff;
+      border-radius: 0.75rem;
       padding: 1rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      margin-bottom: 1rem;
+      flex: 1 1 160px;
+      text-align: center;
+      color: #212529;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-decoration: none;
+      transition: 0.3s;
+    }
+    .nav-card:hover {
+      background-color: #0d6efd;
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .nav-card i {
+      font-size: 1.8rem;
+      margin-bottom: 0.25rem;
+    }
+    .portal-header h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+    }
+    .portal-header p {
+      font-size: 0.95rem;
+    }
+    .stat-box {
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
     .stat-title {
-      font-size: 1rem;
       color: #6c757d;
+      font-size: 0.95rem;
     }
     .stat-value {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: 600;
       color: #0d6efd;
     }
     .data-panel {
-      background: #ffffff;
-      border: 1px solid #ddd;
-      border-radius: 8px;
+      background: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       margin-bottom: 2rem;
     }
     .panel-header {
-      padding: 0.75rem 1rem;
       background: #f8f9fa;
-      border-bottom: 1px solid #ddd;
-      font-weight: 500;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      border-bottom: 1px solid #dee2e6;
     }
     .panel-body {
       padding: 1rem;
     }
-    .leftover-value {
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-      margin-right: 5px;
-    }
-    .leftover-zero {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
-    .leftover-nonzero {
-      background-color: #cce5ff;
-      color: #004085;
-    }
-    .leftover-unassigned {
-      color: #dc3545;
-      font-weight: 700;
-    }
-    /* Responsive table adjustments */
     .table-responsive {
       overflow-x: auto;
+    }
+    .modal-content {
+      border-radius: 0.75rem;
+    }
+    /* Pendency table styling */
+    .tabulator .tabulator-header {
+      background-color: #0d6efd;
+      color: #fff;
+    }
+    .tabulator .tabulator-row:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    .dark-mode .tabulator .tabulator-row:nth-child(even) {
+      background-color: #2b2d30;
     }
   </style>
 </head>
 <body>
   <!-- Top Navigation Bar -->
-  <nav class="navbar top-nav">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
-      <div class="d-flex align-items-center">
-        <!-- Mobile Sidebar Toggle Button -->
-        <button class="btn btn-outline-light d-md-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSidebar">
-          <i class="bi bi-list"></i>
-        </button>
-        <a class="navbar-brand nav-brand" href="#">Kotty</a>
-      </div>
-      <div class="d-flex align-items-center">
-        <button id="toggleDarkMode" class="btn btn-outline-light me-2"><i class="bi bi-sun"></i></button>
-        <a class="btn btn-outline-light" href="/logout"><i class="bi bi-box-arrow-left"></i> Logout</a>
-      </div>
-    </div>
-  </nav>
+  <header class="top-nav d-flex justify-content-between align-items-center" role="banner">
+    <div class="nav-brand">Kotty Dashboard</div>
+    <button id="toggleDarkMode" class="btn btn-sm btn-outline-light" aria-label="Toggle dark mode">
+      <i class="bi bi-sun" aria-hidden="true"></i>
+      <span class="visually-hidden">Toggle dark mode</span>
+    </button>
+  </header>
 
-  <!-- Offcanvas Sidebar for Mobile -->
-  <div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="offcanvasSidebar">
-    <div class="offcanvas-header">
-      <h5 class="offcanvas-title">Navigation</h5>
-      <button type="button" class="btn btn-close text-reset" data-bs-dismiss="offcanvas"></button>
-    </div>
-    <div class="offcanvas-body">
-      <a href="/operator/dashboard" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
-      <a href="/operator/editcuttinglots"><i class="bi bi-pencil-square"></i> Edit Lots</a>
-      <a href="/operator/dashboard/download-all-lots"><i class="bi bi-cloud-arrow-down"></i> Export All</a>
-      <a href="/operator/dashboard/leftovers/download"><i class="bi bi-file-earmark-arrow-down"></i> Leftover CSV</a>
-      <a href="/search-dashboard"><i class="bi bi-search"></i> Search</a>
-      <a href="#" onclick="window.print()"><i class="bi bi-printer"></i> Print</a>
-      <a href="/assign-to-washing"><i class="bi bi-arrow-right-circle"></i> Washing</a>
-      <a href="/operator/dashboard/pic-report"><i class="bi bi-file-earmark-check"></i>Per Piece Report</a>
-      <div class="mt-3">
-        <h6>Pendency Reports</h6>
-        <a href="/operator/pendency-report/stitching"><i class="bi bi-journal-arrow-down"></i> Stitching</a>
-        <a href="/operator/pendency-report/assembly"><i class="bi bi-journal-arrow-down"></i> Assembly</a>
-        <a href="/operator/pendency-report/washing"><i class="bi bi-journal-arrow-down"></i> Washing</a>
-        <a href="/operator/pendency-report/finishing"><i class="bi bi-journal-arrow-down"></i> Finishing</a>
-      </div>
-    </div>
-  </div>
 
-  <!-- Persistent Sidebar for Desktop -->
-  <div id="sidebar" class="d-none d-md-block">
-    <h5 class="mb-3 text-white">Navigation</h5>
-    <a href="/operator/dashboard" class="active"><i class="bi bi-speedometer2"></i> Dashboard</a>
-    <a href="/operator/editcuttinglots"><i class="bi bi-pencil-square"></i> Edit Lots</a>
-    <a href="/operator/dashboard/download-all-lots"><i class="bi bi-cloud-arrow-down"></i> Export All</a>
-    <a href="/operator/dashboard/leftovers/download"><i class="bi bi-file-earmark-arrow-down"></i> Leftover CSV</a>
-    <a href="/search-dashboard"><i class="bi bi-search"></i> Search</a>
-    <a href="#" onclick="window.print()"><i class="bi bi-printer"></i> Print</a>
-    <a href="/assign-to-washing"><i class="bi bi-arrow-right-circle"></i> Washing</a>
-    <a href="/operator/dashboard/pic-report"><i class="bi bi-file-earmark-check"></i>Per Piece Report</a>
-    <div class="mt-3">
-      <h6 class="text-white">Pendency Reports</h6>
-      <a href="/operator/pendency-report/stitching"><i class="bi bi-journal-arrow-down"></i> Stitching</a>
-      <a href="/operator/pendency-report/assembly"><i class="bi bi-journal-arrow-down"></i> Assembly</a>
-      <a href="/operator/pendency-report/washing"><i class="bi bi-journal-arrow-down"></i> Washing</a>
-      <a href="/operator/pendency-report/finishing"><i class="bi bi-journal-arrow-down"></i> Finishing</a>
-    </div>
-  </div>
+
 
   <!-- Main Content Area -->
-  <div id="mainContent" class="container-fluid">
+  <main id="mainContent" class="container-fluid">
     <div class="portal-header my-3">
       <h1>Kotty Operator Dashboard</h1>
-      <p class="text-muted">Enhanced Production &amp; Leftover Overview</p>
-    </div>
+      <p class="text-muted">Enhanced Production Overview</p>
+  </div>
 
-    <!-- Stat Cards -->
-    <div class="container mb-4">
-      <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3 justify-content-center">
-        <div class="col">
-          <div class="stat-box">
-            <div class="stat-title">Total Kits</div>
-            <div class="stat-value"><%= lotCount %></div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="stat-box">
-            <div class="stat-title">Cut Pieces</div>
-            <div class="stat-value"><%= totalPiecesCut %></div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="stat-box">
-            <div class="stat-title">Finished</div>
-            <div class="stat-value"><%= totalFinished %></div>
-          </div>
-        </div>
-        <div class="col">
-          <div class="stat-box">
-            <div class="stat-title">Users</div>
-            <div class="stat-value"><%= userCount %></div>
-          </div>
-        </div>
-      </div>
+  <!-- Navigation Cards -->
+  <div class="nav-cards">
+    <a href="/operator/dashboard" class="nav-card" aria-current="page">
+      <i class="bi bi-speedometer2 fs-3" aria-hidden="true"></i>
+      <div>Dashboard</div>
+    </a>
+    <a href="/operator/editcuttinglots" class="nav-card">
+      <i class="bi bi-pencil-square fs-3" aria-hidden="true"></i>
+      <div>Edit Lots</div>
+    </a>
+    <a href="/operator/dashboard/download-all-lots" class="nav-card">
+      <i class="bi bi-cloud-arrow-down fs-3" aria-hidden="true"></i>
+      <div>Export All</div>
+    </a>
+    <a href="/search-dashboard" class="nav-card">
+      <i class="bi bi-search fs-3" aria-hidden="true"></i>
+      <div>Search</div>
+    </a>
+    <a href="/assign-to-washing" class="nav-card">
+      <i class="bi bi-arrow-right-circle fs-3" aria-hidden="true"></i>
+      <div>Washing</div>
+    </a>
+    <a href="/operator/dashboard/pic-report" class="nav-card">
+      <i class="bi bi-file-earmark-check fs-3" aria-hidden="true"></i>
+      <div>PIC Report</div>
+    </a>
+    <a href="/operator/departments" class="nav-card">
+      <i class="bi bi-wallet2 fs-3" aria-hidden="true"></i>
+      <div>Salaries</div>
+    </a>
+  </div>
+
+  <!-- Stat Cards -->
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3 mb-4">
+      <div class="col"><div class="stat-box"><div class="stat-title">Total Kits</div><div class="stat-value"><%= lotCount %></div></div></div>
+      <div class="col"><div class="stat-box"><div class="stat-title">Cut Pieces</div><div class="stat-value"><%= totalPiecesCut %></div></div></div>
+      <div class="col"><div class="stat-box"><div class="stat-title">Finished</div><div class="stat-value"><%= totalFinished %></div></div></div>
+      <div class="col"><div class="stat-box"><div class="stat-title">Users</div><div class="stat-value"><%= userCount %></div></div></div>
     </div>
 
     <!-- SKU Insights Panel -->
-    <div class="container">
-      <div class="data-panel mb-4">
-        <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-center">
-          <div>
-            <i class="bi bi-bar-chart-line"></i>
-            <span class="h5">SKU Insights</span>
+    <div class="data-panel mb-4">
+      <div class="panel-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-bar-chart-line"></i> SKU Insights</span>
+        <form method="GET" action="/operator/dashboard" class="row g-2 align-items-center">
+          <div class="col-auto">
+            <input type="date" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>">
           </div>
-          <form method="GET" action="/operator/dashboard" class="row g-2 align-items-center">
-            <div class="col-auto">
-              <label for="startDate" class="form-label mb-0">Start</label>
-              <input type="date" id="startDate" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>">
-            </div>
-            <div class="col-auto">
-              <label for="endDate" class="form-label mb-0">End</label>
-              <input type="date" id="endDate" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>">
-            </div>
-            <div class="col-auto">
-              <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-            </div>
-          </form>
-        </div>
-        <div class="panel-body">
-          <div class="row">
-            <div class="col-md-6">
-              <h6><i class="bi bi-arrow-up-square"></i> Top 10 SKUs</h6>
-              <div class="table-responsive">
-                <table class="table table-striped table-bordered table-sm">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Pieces</th>
-                      <th>% Cut Share</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% advancedAnalytics.top10SKUs.forEach(function(item){ 
-                         var pct = advancedAnalytics.totalCut > 0 ? ((item.total/advancedAnalytics.totalCut)*100).toFixed(2) : "0.00";
-                    %>
-                    <tr>
-                      <td><%= item.sku %></td>
-                      <td><%= item.total %></td>
-                      <td><%= pct %>%</td>
-                    </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <h6><i class="bi bi-arrow-down-square"></i> Bottom 10 SKUs</h6>
-              <div class="table-responsive">
-                <table class="table table-striped table-bordered table-sm">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Pieces</th>
-                      <th>% Cut Share</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% advancedAnalytics.bottom10SKUs.forEach(function(item){ 
-                         var pct = advancedAnalytics.totalCut > 0 ? ((item.total/advancedAnalytics.totalCut)*100).toFixed(2) : "0.00";
-                    %>
-                    <tr>
-                      <td><%= item.sku %></td>
-                      <td><%= item.total %></td>
-                      <td><%= pct %>%</td>
-                    </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <div class="col-auto">
+            <input type="date" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>">
           </div>
-        </div>
-      </div>
-
-      <!-- Tabs for Leftovers and Notes -->
-      <ul class="nav nav-tabs" id="inventoryTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="leftover-tab" data-bs-toggle="tab" data-bs-target="#leftoverPanel" type="button" role="tab">
-            <i class="bi bi-box-seam"></i> Leftovers
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notesPanel" type="button" role="tab">
-            <i class="bi bi-chat-left-text"></i> Notes
-          </button>
-        </li>
-      </ul>
-      <div class="tab-content">
-        <!-- Leftovers Tab -->
-        <div class="tab-pane fade show active" id="leftoverPanel" role="tabpanel">
-          <div class="data-panel mt-3">
-            <div class="panel-header">
-              <i class="bi bi-box2"></i> Leftovers (Lazy Loaded)
-            </div>
-            <div class="panel-body">
-              <div class="mb-3">
-                <label class="form-check-label me-2">Show:</label>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="lotType" id="allLots" value="all" checked>
-                  <label class="form-check-label" for="allLots">All</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="lotType" id="akshayLots" value="akshay">
-                  <label class="form-check-label" for="akshayLots">Akshay</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="lotType" id="nonAkshayLots" value="non-akshay">
-                  <label class="form-check-label" for="nonAkshayLots">Non-Akshay</label>
-                </div>
-              </div>
-              <div class="mb-3 d-flex justify-content-between align-items-center">
-                <input id="leftoverSearchInput" type="text" class="form-control me-2" placeholder="Global search in Leftovers...">
-                <button id="columnChooser" class="btn btn-outline-secondary">Columns</button>
-              </div>
-              <div id="leftoverTable" style="height:500px;"></div>
-              <button id="loadMoreLeftovers" class="btn btn-primary mt-2">Load More</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Notes Tab -->
-        <div class="tab-pane fade" id="notesPanel" role="tabpanel">
-          <div class="data-panel mt-3">
-            <div class="panel-header">
-              <i class="bi bi-chat-left-text"></i> Dashboard Notes
-            </div>
-            <div class="panel-body">
-              <ul>
-                <li><strong>Hidden Columns:</strong> Assembly and Wash columns are hidden for non-Akshay lots.</li>
-                <li><strong>Total Leftover:</strong> cutting_lots.total_pieces – sum(finishing_dispatches.quantity)</li>
-                <li><strong>Dispatch Leftover:</strong> sum(finishing_data.total_pieces) – sum(finishing_dispatches.quantity)</li>
-                <li><strong>Dark Mode:</strong> Toggled with localStorage.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Advanced Analytics Panel -->
-      <div class="data-panel mt-4">
-        <div class="panel-header">
-          <i class="bi bi-graph-up-arrow"></i> Advanced Stats
-        </div>
-        <div class="panel-body">
-          <div class="row">
-            <div class="col-md-3"><p><strong>Stitch Conversion:</strong> <%= advancedAnalytics.stitchConversion %>%</p></div>
-            <div class="col-md-3"><p><strong>Wash Conversion:</strong> <%= advancedAnalytics.washConversion %>%</p></div>
-            <div class="col-md-3"><p><strong>Finish Conversion:</strong> <%= advancedAnalytics.finishConversion %>%</p></div>
-            <div class="col-md-3"><p><strong>Avg Turnaround:</strong> <%= advancedAnalytics.avgTurnaroundTime %> days</p></div>
-          </div>
-          <div class="row mt-2">
-            <div class="col-md-3"><p><strong>Pending Kits:</strong> <%= advancedAnalytics.pendingLots %></p></div>
-            <div class="col-md-3"><p><strong>Total Kits:</strong> <%= advancedAnalytics.totalLots %></p></div>
-            <div class="col-md-3"><p><strong>Stitch Approval:</strong> <%= advancedAnalytics.stitchApprovalRate %>%</p></div>
-            <div class="col-md-3"><p><strong>Wash Approval:</strong> <%= advancedAnalytics.washApprovalRate %>%</p></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Operator Performance Panel -->
-      <div class="data-panel mt-4">
-        <div class="panel-header">
-          <i class="bi bi-people"></i> Operator Tracking
-        </div>
-        <div class="panel-body table-responsive">
-          <table class="table table-striped table-bordered table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>ID</th>
-                <th>User</th>
-                <th>Stitched</th>
-                <th>Washed</th>
-                <th>Finished</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% Object.keys(operatorPerformance).forEach(function(uid){ 
-                   var opObj = operatorPerformance[uid];
-              %>
-              <tr>
-                <td><%= uid %></td>
-                <td><%= opObj.username %></td>
-                <td><%= opObj.totalStitched %></td>
-                <td><%= opObj.totalWashed %></td>
-                <td><%= opObj.totalFinished %></td>
-              </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edit Kit Modals -->
-    <% Object.keys(lotDetails).forEach(function(kitNumber){ 
-         var kitData = lotDetails[kitNumber];
-         var cLot = kitData.cuttingLot;
-         if(!cLot) return;
-         var totalPieces = cLot.total_pieces || 0;
-         var existingRemark = cLot.remark || '';
-    %>
-    <div class="modal fade" id="editModal-<%= kitNumber %>" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog">
-        <form method="POST" action="/operator/dashboard/edit-lot">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Update Kit <%= kitNumber %></h5>
-              <button type="button" class="btn btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <input type="hidden" name="lot_no" value="<%= kitNumber %>">
-              <div class="mb-3">
-                <label class="form-label">Pieces Count</label>
-                <input type="number" class="form-control" name="total_pieces" value="<%= totalPieces %>" required>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Remarks</label>
-                <textarea class="form-control" name="remark" rows="3"><%= existingRemark %></textarea>
-              </div>
-              <small class="text-muted">Override the piece count or adjust remarks.</small>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle"></i> Cancel</button>
-              <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Save</button>
-            </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-primary">Apply</button>
           </div>
         </form>
       </div>
+      <div class="panel-body row">
+        <div class="col-md-6 mb-3">
+          <h6><i class="bi bi-arrow-up-square"></i> Top 10 SKUs</h6>
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered table-sm mb-0">
+              <thead><tr><th>SKU</th><th>Pieces</th><th>% Cut Share</th></tr></thead>
+              <tbody>
+                <% advancedAnalytics.top10SKUs.forEach(item => { 
+                     const pct = advancedAnalytics.totalCut > 0
+                       ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                       : "0.00";
+                %>
+                <tr>
+                  <td><%= item.sku %></td>
+                  <td><%= item.total %></td>
+                  <td><%= pct %>%</td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <h6><i class="bi bi-arrow-down-square"></i> Bottom 10 SKUs</h6>
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered table-sm mb-0">
+              <thead><tr><th>SKU</th><th>Pieces</th><th>% Cut Share</th></tr></thead>
+              <tbody>
+                <% advancedAnalytics.bottom10SKUs.forEach(item => { 
+                     const pct = advancedAnalytics.totalCut > 0
+                       ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                       : "0.00";
+                %>
+                <tr>
+                  <td><%= item.sku %></td>
+                  <td><%= item.total %></td>
+                  <td><%= pct %>%</td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    <% }); %>
 
-    <!-- Column Chooser Modal -->
-    <div class="modal fade" id="columnChooserModal" tabindex="-1" aria-labelledby="columnChooserModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="columnChooserModalLabel">Select Columns</h5>
-            <button type="button" class="btn btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <div id="columnChooserContent"></div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Done</button>
-          </div>
+    <!-- Advanced Analytics Panel -->
+    <div class="data-panel mb-4">
+      <div class="panel-header"><i class="bi bi-graph-up-arrow"></i> Advanced Stats</div>
+      <div class="panel-body row text-center">
+        <div class="col-md-3"><strong>Stitch Conversion:</strong><br><%= advancedAnalytics.stitchConversion %>%</div>
+        <div class="col-md-3"><strong>Wash Conversion:</strong><br><%= advancedAnalytics.washConversion %>%</div>
+        <div class="col-md-3"><strong>Finish Conversion:</strong><br><%= advancedAnalytics.finishConversion %>%</div>
+        <div class="col-md-3"><strong>Avg Turnaround:</strong><br><%= advancedAnalytics.avgTurnaroundTime %> days</div>
+        <div class="col-md-3 mt-3"><strong>Pending Kits:</strong><br><%= advancedAnalytics.pendingLots %></div>
+        <div class="col-md-3 mt-3"><strong>Total Kits:</strong><br><%= advancedAnalytics.totalLots %></div>
+        <div class="col-md-3 mt-3"><strong>Stitch Approval:</strong><br><%= advancedAnalytics.stitchApprovalRate %>%</div>
+        <div class="col-md-3 mt-3"><strong>Wash Approval:</strong><br><%= advancedAnalytics.washApprovalRate %>%</div>
+      </div>
+    </div>
+
+    <!-- Operator Performance Panel -->
+    <div class="data-panel mb-4">
+      <div class="panel-header"><i class="bi bi-people"></i> Operator Tracking</div>
+      <div class="panel-body table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+          <thead class="table-light">
+            <tr><th>ID</th><th>User</th><th>Stitched</th><th>Washed</th><th>Finished</th></tr>
+          </thead>
+          <tbody>
+            <% Object.entries(operatorPerformance).forEach(([uid, op]) => { %>
+            <tr>
+              <td><%= uid %></td>
+              <td><%= op.username %></td>
+              <td><%= op.totalStitched %></td>
+              <td><%= op.totalWashed %></td>
+              <td><%= op.totalFinished %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pendency Panel -->
+    <div class="data-panel mb-4">
+      <div class="panel-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-hourglass-split"></i> Pendency</span>
+        <div>
+          <a href="/operator/dashboard/pendency/download?dept=stitching" class="me-2"><i class="bi bi-download"></i> Stitch</a>
+          <a href="/operator/dashboard/pendency/download?dept=assembly" class="me-2"><i class="bi bi-download"></i> Assembly</a>
+          <a href="/operator/dashboard/pendency/download?dept=washing"><i class="bi bi-download"></i> Washing</a>
+        </div>
+      </div>
+      <div class="panel-body">
+        <input id="pendencySearchInput" type="text" class="form-control mb-2" placeholder="Search pendency..." aria-label="Search pendency">
+        <div id="pendencyTable" style="height:400px;"></div>
+        <button id="loadMorePendency" class="btn btn-primary mt-2" aria-label="Load more pendency results">Load More</button>
+      </div>
+  </div>
+  </main>
+
+  <!-- Lot Details Modal -->
+  <div class="modal fade" id="lotDetailsModal" tabindex="-1" aria-hidden="true" aria-labelledby="lotDetailsTitle">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="lotDetailsTitle" class="modal-title">Lot Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="lotDetailsBody" aria-live="polite">
+          Loading...
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+  <!-- Back to Top Button -->
+  <button id="backToTop" class="btn btn-primary position-fixed" style="bottom:20px; right:20px; display:none;" aria-label="Back to top">&uarr; Top</button>
+
+  <!-- Bootstrap & Tabulator JS -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js" defer></script>
   <script>
-    // Dark Mode Toggle
-    const body = document.body;
-    const toggleDarkModeBtn = document.getElementById('toggleDarkMode');
-    if(localStorage.getItem('kottyDarkMode') === 'true'){
-      body.classList.add('dark-mode');
-      toggleDarkModeBtn.innerHTML = '<i class="bi bi-moon"></i>';
-    } else {
-      toggleDarkModeBtn.innerHTML = '<i class="bi bi-sun"></i>';
-    }
-    toggleDarkModeBtn.addEventListener('click', function(){
-      body.classList.toggle('dark-mode');
-      localStorage.setItem('kottyDarkMode', body.classList.contains('dark-mode'));
-      toggleDarkModeBtn.innerHTML = body.classList.contains('dark-mode') ? '<i class="bi bi-moon"></i>' : '<i class="bi bi-sun"></i>';
-    });
-
-    /*************************************************
-     * Tabulator for Leftovers – Lazy Loading with Column Filters
-     *************************************************/
-    let leftoverPage = 1;
-    const leftoverSize = 100;
-    let leftoverSearch = '';
-    let leftoverData = [];
-
-    const leftoverColumns = [
-      { title: "Kit #", field: "kitNumber", headerFilter:"input", width: 100 },
-      { title: "SKU", field: "sku", headerFilter:"input", width: 150 },
-      { title: "Total Pieces", field: "totalPieces", headerFilter:"input", width: 120 },
-      { title: "Stitch Leftover", field: "leftoverStitch", headerFilter:"input", width: 140,
-        formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "stitchingOperator" } },
-      { title: "Assembly Leftover", field: "leftoverAssembly", headerFilter:"input", width: 140,
-        formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "assemblyOperator" } },
-      { title: "Wash Leftover", field: "leftoverWash", headerFilter:"input", width: 140,
-        formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "washOperator" } },
-      { title: "Finish Leftover", field: "leftoverFinish", headerFilter:"input", width: 140,
-        formatter: formatLeftoverWithOperator, formatterParams: { operatorField: "finishOperator" } },
-      { title: "Remarks", field: "remark", headerFilter:"input", width: 150 },
-      { title: "Total Leftover", field: "totalPiecesLeft", headerFilter:"input", width: 140, formatter: formatLeftover },
-      { title: "Dispatch Leftover", field: "dispatchLeftover", headerFilter:"input", width: 140, formatter: formatLeftover }
-    ];
-
-    function formatLeftoverWithOperator(cell, formatterParams){
-      const value = cell.getValue();
-      const row = cell.getRow().getData();
-      const operatorField = formatterParams.operatorField;
-      const operator = row[operatorField] || 'N/A';
-      if(typeof value === "number"){
-        const cls = value === 0 ? "leftover-zero" : "leftover-nonzero";
-        let html = `<span class="leftover-value ${cls}">${value}</span>`;
-        if(operatorField && operator.toLowerCase() !== "n/a"){
-          html += ` <small class="text-muted">(User: ${operator})</small>`;
-        } else if(operatorField){
-          html += ` <small class="leftover-unassigned">(Unassigned)</small>`;
+    document.addEventListener('DOMContentLoaded', () => {
+      // Dark Mode Toggle
+      const body = document.body;
+      const toggleBtn = document.getElementById('toggleDarkMode');
+      if (toggleBtn) {
+        if (localStorage.getItem('kottyDarkMode') === 'true') {
+          body.classList.add('dark-mode');
+          toggleBtn.innerHTML = '<i class="bi bi-moon"></i>';
         }
-        return html;
+        toggleBtn.addEventListener('click', () => {
+          body.classList.toggle('dark-mode');
+          localStorage.setItem('kottyDarkMode', body.classList.contains('dark-mode'));
+          toggleBtn.innerHTML = body.classList.contains('dark-mode')
+            ? '<i class="bi bi-moon"></i>'
+            : '<i class="bi bi-sun"></i>';
+        });
       }
-      return value;
-    }
-    function formatLeftover(cell){
-      const value = cell.getValue();
-      if(typeof value === "number"){
-        const cls = value === 0 ? "leftover-zero" : "leftover-nonzero";
-        return `<span class="leftover-value ${cls}">${value}</span>`;
-      }
-      return value;
-    }
 
-    const leftoverTable = new Tabulator("#leftoverTable", {
-      layout: "fitColumns",
-      movableColumns: true,
-      pagination: "local",
-      paginationSize: leftoverSize,
-      columns: leftoverColumns,
-      placeholder: "No Data Loaded"
-    });
+      // Pendency Table Setup
+      let pendencyPage = 1;
+      let pendencySearch = '';
+      let pendencyData = [];
+      const columns = [
+        { title: "Lot", field: "lot_no", formatter: cell => `<a href="#" class="lot-link">${cell.getValue()}</a>`, width: 120 },
+        { title: "Operator", field: "username", width: 150 },
+        { title: "Assigned", field: "assigned", width: 100 },
+        { title: "Completed", field: "completed", width: 100 },
+        { title: "Pending", field: "pending", width: 100 }
+      ];
+      const table = new Tabulator("#pendencyTable", {
+        layout: "fitColumns",
+        movableColumns: true,
+        pagination: "local",
+        paginationSize: 50,
+        columns,
+        placeholder: "No Data"
+      });
 
-    async function loadLeftoverPage(pageNum) {
-      try {
-        const response = await fetch(`/operator/dashboard/api/leftovers?page=${pageNum}&size=${leftoverSize}&search=${encodeURIComponent(leftoverSearch)}`);
-        if (!response.ok) throw new Error(response.statusText);
-        const json = await response.json();
-        if(pageNum === 1){
-          leftoverData = json.data;
-          leftoverTable.setData(leftoverData);
-        } else {
-          leftoverData = leftoverData.concat(json.data);
-          leftoverTable.replaceData(leftoverData);
+      async function loadPendency(page) {
+        try {
+          const res = await fetch(`/operator/dashboard/api/pendency?page=${page}&search=${encodeURIComponent(pendencySearch)}`);
+          if (!res.ok) throw new Error(res.statusText);
+          const json = await res.json();
+          if (page === 1) {
+            pendencyData = json.data;
+            table.setData(pendencyData);
+          } else {
+            pendencyData = pendencyData.concat(json.data);
+            table.replaceData(pendencyData);
+          }
+        } catch (e) {
+          console.error('Error loading pendency:', e);
         }
-      } catch (err) {
-        console.error("Error loading leftovers:", err);
       }
-    }
-    loadLeftoverPage(1);
-    document.getElementById("loadMoreLeftovers").addEventListener("click", function(){
-      leftoverPage++;
-      loadLeftoverPage(leftoverPage);
-    });
-    document.getElementById("leftoverSearchInput").addEventListener("keyup", function(){
-      leftoverSearch = this.value;
-      leftoverPage = 1;
-      loadLeftoverPage(1);
-    });
-    function updateLeftoverFilter(){
-      const mode = document.querySelector('input[name="lotType"]:checked')?.value || "all";
-      if(mode === "all"){
-        leftoverTable.clearFilter("lotType");
-        leftoverTable.getColumn("leftoverAssembly")?.show();
-        leftoverTable.getColumn("leftoverWash")?.show();
-      } else if(mode === "akshay"){
-        leftoverTable.setFilter("lotType", "=", "akshay");
-        leftoverTable.getColumn("leftoverAssembly")?.show();
-        leftoverTable.getColumn("leftoverWash")?.show();
-      } else {
-        leftoverTable.setFilter(data => data.lotType !== "akshay");
-        leftoverTable.getColumn("leftoverAssembly")?.hide();
-        leftoverTable.getColumn("leftoverWash")?.hide();
-      }
-      leftoverTable.redraw();
-    }
-    document.querySelectorAll('input[name="lotType"]').forEach(radio => {
-      radio.addEventListener("change", updateLeftoverFilter);
-    });
-    document.getElementById("columnChooser").addEventListener("click", function() {
-      const columns = leftoverTable.getColumns();
-      const container = document.getElementById("columnChooserContent");
-      container.innerHTML = "";
-      columns.forEach(function(col){
-        const field = col.getField();
-        if(field){
-          const title = col.getDefinition().title;
-          const isVisible = col.isVisible();
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = isVisible;
-          checkbox.setAttribute("data-field", field);
-          checkbox.classList.add("form-check-input", "me-2");
-          const label = document.createElement("label");
-          label.classList.add("form-check-label");
-          label.textContent = title;
-          const div = document.createElement("div");
-          div.classList.add("form-check", "mb-2");
-          div.appendChild(checkbox);
-          div.appendChild(label);
-          container.appendChild(div);
-          checkbox.addEventListener("change", function(){
-            if(this.checked){
-              leftoverTable.getColumn(field).show();
-            } else {
-              leftoverTable.getColumn(field).hide();
-            }
-          });
+
+      loadPendency(1);
+
+      document.getElementById('loadMorePendency').addEventListener('click', () => {
+        pendencyPage++;
+        loadPendency(pendencyPage);
+      });
+
+      document.getElementById('pendencySearchInput').addEventListener('input', (e) => {
+        pendencySearch = e.target.value;
+        pendencyPage = 1;
+        loadPendency(1);
+      });
+
+      // Lot details click handler
+      document.querySelector('#pendencyTable').addEventListener('click', async (e) => {
+        if (e.target.matches('.lot-link')) {
+          e.preventDefault();
+          const lot = e.target.textContent;
+          const res = await fetch(`/operator/dashboard/api/lot?lotNo=${encodeURIComponent(lot)}`);
+          if (res.ok) {
+            const json = await res.json();
+            document.getElementById('lotDetailsBody').innerHTML = `
+              <p><strong>Lot:</strong> ${json.lot.lot_no}</p>
+              <p><strong>SKU:</strong> ${json.lot.sku}</p>
+              <p><strong>Fabric:</strong> ${json.lot.fabric_type}</p>
+              <p><strong>Total Pieces:</strong> ${json.lot.total_pieces}</p>
+            `;
+            new bootstrap.Modal(document.getElementById('lotDetailsModal')).show();
+          }
         }
       });
-      const modal = new bootstrap.Modal(document.getElementById("columnChooserModal"));
-      modal.show();
+
+      // Enable Bootstrap tooltips
+      const tooltipList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipList.forEach(el => new bootstrap.Tooltip(el));
+
+      // Back to top button
+      const backToTop = document.getElementById('backToTop');
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 200) {
+          backToTop.style.display = 'block';
+        } else {
+          backToTop.style.display = 'none';
+        }
+      });
+      backToTop.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     });
   </script>
 </body>

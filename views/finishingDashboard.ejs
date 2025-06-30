@@ -516,7 +516,8 @@
         const json = await resp.json();
         const rows = json.data || [];
         rows.forEach(entry => {
-          const dispatchBtnClass = entry.fullyDispatched ? 'btn-secondary' : 'btn-success';
+        const dispatchBtnClass = entry.fullyDispatched ? 'btn-secondary' : 'btn-success';
+        const disabled = entry.fullyDispatched ? 'disabled' : '';
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${entry.id}</td>
@@ -528,7 +529,7 @@
             <td>
               <a href="/finishingdashboard/challan/${entry.id}" target="_blank" class="btn btn-sm btn-info mb-1">Challan</a>
               <button class="btn btn-sm btn-warning mb-1" data-bs-toggle="modal" data-bs-target="#updateModal" data-entry-id="${entry.id}">Update</button>
-              <button class="btn btn-sm ${dispatchBtnClass} mb-1" data-bs-toggle="modal" data-bs-target="#dispatchModal" data-entry-id="${entry.id}">Dispatch</button>
+              <button class="btn btn-sm ${dispatchBtnClass} mb-1" ${disabled} data-bs-toggle="modal" data-bs-target="#dispatchModal" data-entry-id="${entry.id}">Dispatch</button>
             </td>
           `;
           finishingTableBody.appendChild(tr);
@@ -641,6 +642,7 @@
       document.getElementById('dispatchAlertContainer').innerHTML = '';
       destinationSelect.value = '';
       otherDestinationInput.value = '';
+      otherDestinationInput.classList.add('d-none');
       dispatchSubmitBtn.disabled = false;
       dispatchSubmitBtn.classList.remove('btn-secondary');
       dispatchSubmitBtn.classList.add('btn-primary');

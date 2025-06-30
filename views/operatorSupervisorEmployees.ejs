@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Employees</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Employees - <%= supervisor.username %></span>
+    <div class="ms-auto">
+      <a href="/operator/supervisors" class="btn btn-outline-light btn-sm me-2">Back</a>
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container my-4">
+  <%- include('partials/flashMessages') %>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Punch ID</th>
+        <th>Name</th>
+        <th>Designation</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% employees.forEach(function(emp){ %>
+      <tr>
+        <td><%= emp.punching_id %></td>
+        <td><%= emp.name %></td>
+        <td><%= emp.designation || '' %></td>
+        <td>
+          <form action="/operator/employees/<%= emp.id %>/edit" method="GET" class="d-flex">
+            <input type="date" name="date" class="form-control form-control-sm me-2" required>
+            <button class="btn btn-sm btn-secondary">Edit Punch</button>
+          </form>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
