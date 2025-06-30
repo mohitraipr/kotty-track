@@ -679,7 +679,7 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
   }
 });
 
-router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
+  router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
   let conn;
   try {
     const userId = req.session.user.id;
@@ -760,6 +760,19 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
       if (isNaN(qty) || qty <= 0) {
         if (!isNaN(qty)) console.log(`Skipping size ${size} with invalid qty`, qty);
         continue;
+
+        console.log(`Skipping size ${size} with invalid qty`, qty);
+        continue;
+      }
+      const [[sizeData]] = await conn.query(`
+        SELECT pieces FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
+      `, [entryId, size]);
+      if (!sizeData) {
+        console.log(`Size data not found for size ${size} and entry ${entryId}`);
+        req.flash('error', `Size ${size} not found.`);
+        await conn.rollback(); conn.release();
+        return res.redirect('/finishingdashboard');
+
       }
       const [[dispatchedRow]] = await conn.query(`
         SELECT COALESCE(SUM(quantity),0) as dispatched
