@@ -32,161 +32,6 @@ function formatDateDDMMYYYY(dt) {
 }
 
 /**************************************************
- * 1) leftover logic (unchanged from your code)
- **************************************************/
-async function computeAdvancedLeftoversForLot(lot_no, isAkshay) {
-  // same leftover logic you had before
-  // fetch totalCut, totalStitched, totalWashed, totalFinished
-  const [clRows] = await pool.query(
-    "SELECT total_pieces FROM cutting_lots WHERE lot_no = ? LIMIT 1",
-    [lot_no]
-  );
-  const totalCut = clRows.length ? parseFloat(clRows[0].total_pieces) || 0 : 0;
-
-  let [rows] = await pool.query(
-    "SELECT COALESCE(SUM(total_pieces),0) AS sumStitched FROM stitching_data WHERE lot_no = ?",
-    [lot_no]
-  );
-  const totalStitched = parseFloat(rows[0].sumStitched) || 0;
-
-  [rows] = await pool.query(
-    "SELECT COALESCE(SUM(total_pieces),0) AS sumWashed FROM washing_data WHERE lot_no = ?",
-    [lot_no]
-  );
-  const totalWashed = parseFloat(rows[0].sumWashed) || 0;
-
-  [rows] = await pool.query(
-    "SELECT COALESCE(SUM(total_pieces),0) AS sumFinished FROM finishing_data WHERE lot_no = ?",
-    [lot_no]
-  );
-  const totalFinished = parseFloat(rows[0].sumFinished) || 0;
-
-  // check last stitching assignment
-  const [stAssignmentRows] = await pool.query(`
-    SELECT isApproved
-      FROM stitching_assignments sa
-      JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-     WHERE c.lot_no = ?
-     ORDER BY sa.assigned_on DESC
-     LIMIT 1
-  `, [lot_no]);
-  let leftoverStitch;
-  if (stAssignmentRows.length) {
-    const stAssn = stAssignmentRows[0];
-    if (stAssn.isApproved === null) {
-      leftoverStitch = "Waiting for approval";
-    } else if (stAssn.isApproved == 0) {
-      leftoverStitch = "Denied";
-    } else {
-      leftoverStitch = totalCut - totalStitched;
-    }
-  } else {
-    leftoverStitch = "Not Assigned";
-  }
-
-  let leftoverWash, leftoverFinish;
-  if (isAkshay) {
-    // denim leftover
-    const [jaRows] = await pool.query(
-      "SELECT COALESCE(SUM(total_pieces),0) AS sumJeans FROM jeans_assembly_data WHERE lot_no = ?",
-      [lot_no]
-    );
-    const totalJeans = parseFloat(jaRows[0].sumJeans) || 0;
-
-    const [waAssignmentRows] = await pool.query(`
-      SELECT is_approved
-        FROM washing_assignments wa
-        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-       WHERE jd.lot_no = ?
-       ORDER BY wa.assigned_on DESC
-       LIMIT 1
-    `, [lot_no]);
-    if (waAssignmentRows.length) {
-      const waAssn = waAssignmentRows[0];
-      if (waAssn.is_approved === null) {
-        leftoverWash = "Waiting for approval";
-      } else if (waAssn.is_approved == 0) {
-        leftoverWash = "Denied";
-      } else {
-        leftoverWash = totalJeans - totalWashed;
-      }
-    } else {
-      leftoverWash = "Not Assigned";
-    }
-
-    const [faAssignmentRows] = await pool.query(`
-      SELECT is_approved
-        FROM finishing_assignments fa
-        JOIN washing_data wd ON fa.washing_assignment_id = wd.id
-       WHERE wd.lot_no = ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lot_no]);
-    if (faAssignmentRows.length) {
-      const faAssn = faAssignmentRows[0];
-      if (faAssn.is_approved === null) {
-        leftoverFinish = "Waiting for approval";
-      } else if (faAssn.is_approved == 0) {
-        leftoverFinish = "Denied";
-      } else {
-        leftoverFinish = totalWashed - totalFinished;
-      }
-    } else {
-      leftoverFinish = "Not Assigned";
-    }
-  } else {
-    // non-denim leftover
-    leftoverWash = "N/A";
-    const [faAssignmentRows] = await pool.query(`
-      SELECT isApproved
-        FROM finishing_assignments fa
-        JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-       WHERE sd.lot_no = ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lot_no]);
-    if (faAssignmentRows.length) {
-      const faAssn = faAssignmentRows[0];
-      if (faAssn.isApproved === null) {
-        leftoverFinish = "Waiting for approval";
-      } else if (faAssn.isApproved == 0) {
-        leftoverFinish = "Denied";
-      } else {
-        leftoverFinish = totalStitched - totalFinished;
-      }
-    } else {
-      leftoverFinish = "Not Assigned";
-    }
-  }
-
-  return { leftoverStitch, leftoverWash, leftoverFinish };
-}
-
-async function computeJeansLeftover(lot_no, totalStitchedLocal, isAkshay) {
-  if (!isAkshay) return "N/A";
-  const [jaAssignRows] = await pool.query(`
-    SELECT is_approved
-      FROM jeans_assembly_assignments ja
-      JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-     WHERE sd.lot_no = ?
-     ORDER BY ja.assigned_on DESC
-     LIMIT 1
-  `, [lot_no]);
-  if (!jaAssignRows.length) return "Not Assigned";
-  const jaAssn = jaAssignRows[0];
-  if (jaAssn.is_approved === null) return "Waiting for approval";
-  if (jaAssn.is_approved == 0) return "Denied";
-
-  const [jaRows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumJeans
-      FROM jeans_assembly_data
-     WHERE lot_no = ?
-  `, [lot_no]);
-  const totalJeans = parseFloat(jaRows[0].sumJeans) || 0;
-  return totalStitchedLocal - totalJeans;
-}
-
-/**************************************************
  * 2) Operator Performance & Analytics
  **************************************************/
 async function computeOperatorPerformance() {
@@ -386,8 +231,8 @@ async function computeAdvancedAnalytics(startDate, endDate) {
  **************************************************/
 router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const { search, startDate, endDate,
-      sortField="lot_no", sortOrder="asc", category="all" } = req.query;
+  const { search, startDate, endDate,
+      sortField="lot_no", sortOrder="asc", category="all", view } = req.query;
 
     // 1) operatorPerformance
     const operatorPerformance = await computeOperatorPerformance();
@@ -430,6 +275,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
     // 6) advanced analytics
     const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
 
+
     // 7) render
     return res.render("operatorDashboard", {
       lotCount,
@@ -449,12 +295,119 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
-router.get("/dashboard/api/leftovers", isAuthenticated, isOperator, async (req, res) => {
+
+async function fetchPendencyRows(dept, searchLike, offset, limit) {
+  let query = "";
+  const params = [searchLike, offset, limit];
+  if (dept === "assembly") {
+    query = `
+      SELECT ja.id AS assignment_id, sd.lot_no, u.username,
+             ja.assigned_pieces AS assigned,
+             COALESCE(SUM(jd.total_pieces),0) AS completed,
+             ja.assigned_pieces - COALESCE(SUM(jd.total_pieces),0) AS pending
+        FROM jeans_assembly_assignments ja
+        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+        JOIN users u ON ja.user_id = u.id
+        LEFT JOIN jeans_assembly_data jd ON jd.assignment_id = ja.id
+       WHERE sd.lot_no LIKE ?
+
+       GROUP BY ja.id, sd.lot_no, u.username, ja.assigned_pieces
+
+       ORDER BY ja.assigned_on DESC
+       LIMIT ?, ?`;
+  } else if (dept === "washing") {
+    query = `
+      SELECT wa.id AS assignment_id, jd.lot_no, u.username,
+             wa.assigned_pieces AS assigned,
+             COALESCE(SUM(wd.total_pieces),0) AS completed,
+             wa.assigned_pieces - COALESCE(SUM(wd.total_pieces),0) AS pending
+        FROM washing_assignments wa
+        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+        JOIN users u ON wa.user_id = u.id
+        LEFT JOIN washing_data wd ON wd.washing_assignment_id = wa.id
+       WHERE jd.lot_no LIKE ?
+
+       GROUP BY wa.id, jd.lot_no, u.username, wa.assigned_pieces
+
+       ORDER BY wa.assigned_on DESC
+       LIMIT ?, ?`;
+  } else {
+    query = `
+      SELECT sa.id AS assignment_id, c.lot_no, u.username,
+             c.total_pieces AS assigned,
+             COALESCE(SUM(sd.total_pieces),0) AS completed,
+             c.total_pieces - COALESCE(SUM(sd.total_pieces),0) AS pending
+        FROM stitching_assignments sa
+        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+        JOIN users u ON sa.user_id = u.id
+        LEFT JOIN stitching_data sd
+               ON sd.user_id = sa.user_id
+              AND sd.lot_no = c.lot_no
+       WHERE c.lot_no LIKE ?
+
+       GROUP BY sa.id, c.lot_no, u.username, c.total_pieces
+
+       ORDER BY sa.assigned_on DESC
+       LIMIT ?, ?`;
+  } 
+
+  const [rows] = await pool.query(query, params);
+  return rows;
+}
+
+router.get("/dashboard/api/pendency", isAuthenticated, isOperator, async (req, res) => {
   try {
-    // same leftover code as before
-    // ...
+    const { dept = "stitching", page = 1, size = 50, search = "" } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(size);
+    const rows = await fetchPendencyRows(dept, `%${search}%`, offset, parseInt(size));
+    return res.json({ data: rows });
   } catch (err) {
-    console.error("Error in /dashboard/api/leftovers:", err);
+    console.error("Error in /dashboard/api/pendency:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get("/dashboard/pendency/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { dept = "stitching", search = "" } = req.query;
+    const rows = await fetchPendencyRows(dept, `%${search}%`, 0, 10000);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Pendency");
+    sheet.columns = [
+      { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "Operator", key: "username", width: 20 },
+      { header: "Assigned", key: "assigned", width: 12 },
+      { header: "Completed", key: "completed", width: 12 },
+      { header: "Pending", key: "pending", width: 12 }
+    ];
+    rows.forEach(r => sheet.addRow(r));
+    res.setHeader("Content-Disposition", `attachment; filename="${dept}_pendency.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error in /dashboard/pendency/download:", err);
+    return res.status(500).send("Server error");
+  }
+});
+
+router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { lotNo } = req.query;
+    if (!lotNo) return res.status(400).json({ error: "lotNo required" });
+    const [[lot]] = await pool.query(
+      `SELECT id, lot_no, sku, fabric_type, total_pieces FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
+      [lotNo]
+    );
+    if (!lot) return res.status(404).json({ error: "Lot not found" });
+    const [sizes] = await pool.query(
+      `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      [lot.id]
+    );
+    return res.json({ lot, sizes });
+  } catch (err) {
+    console.error("Error in /dashboard/api/lot:", err);
     return res.status(500).json({ error: "Server error" });
   }
 });

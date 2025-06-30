@@ -79,6 +79,9 @@ function isJeansAssemblyMaster(req, res, next) {
 function isOperator(req, res, next) {
     return hasRole('operator')(req, res, next);
 }
+function isSupervisor(req, res, next) {
+    return hasRole('supervisor')(req, res, next);
+}
 function isPaymentAuthoriser(req, res, next) {
     return hasRole('operator')(req, res, next);
 }
@@ -109,12 +112,12 @@ function isDepartmentUser(req, res, next) {
     res.redirect('/');
 }
 
-function isStoreAdmin(req, res, next) {
-    return hasRole('store_admin')(req, res, next);
-}
-
 function isStoreEmployee(req, res, next) {
     return hasRole('store_employee')(req, res, next);
+}
+
+function isStoreAdmin(req, res, next) {
+    return hasRole('store_admin')(req, res, next);
 }
 
 module.exports = {
@@ -127,11 +130,12 @@ module.exports = {
     isWashingMaster,
     isJeansAssemblyMaster,
     isOperator,
+    isSupervisor,
     isDepartmentUser,
     isAccountsAdmin,
     isPaymentAuthoriser,
     isWashingInMaster,
     isCatalogUpload,
-    isStoreAdmin,
-    isStoreEmployee
+    isStoreEmployee,
+    isStoreAdmin
 };

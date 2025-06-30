@@ -693,6 +693,14 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
       }
     }
     const dispatchSizes = req.body.dispatchSizes || {};
+    const hasQty = Object.values(dispatchSizes).some(v => {
+      const n = parseInt(v, 10);
+      return !isNaN(n) && n > 0;
+    });
+    if (!hasQty) {
+      req.flash('error', 'No dispatch quantities provided.');
+      return res.redirect('/finishingdashboard');
+    }
     conn = await pool.getConnection();
     await conn.beginTransaction();
     const [[entry]] = await conn.query(`

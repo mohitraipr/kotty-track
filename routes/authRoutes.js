@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
         res.redirect('/operator/dashboard');
         break;
       case 'supervisor':
-        res.redirect('/supervisor/employees');
+        res.redirect('/dashboard');
         break;
       case 'finishing':
         res.redirect('/finishingDashboard');
