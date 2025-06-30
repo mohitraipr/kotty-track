@@ -696,28 +696,71 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
         return res.redirect('/finishingdashboard');
       }
     }
-    const dispatchSizes = req.body.dispatchSizes || {};
-    const hasQty = Object.values(dispatchSizes).some(v => {
+
+    let rawDispatch = req.body.dispatchSizes || {};
+    const hasQtyRaw = (Array.isArray(rawDispatch) ? rawDispatch : Object.values(rawDispatch))
+      .some(v => {
+        const n = parseInt(v, 10);
+        return !isNaN(n) && n > 0;
+      });
+    if (!hasQtyRaw) {
+      req.flash('error', 'No dispatch quantities provided.');
+      return res.redirect('/finishingdashboard');
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [[entry]] = await conn.query(
+      'SELECT * FROM finishing_data WHERE id = ? AND user_id = ?',
+      [entryId, userId]
+    );
+    if (!entry) {
+      req.flash('error', 'Record not found or no permission.');
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/finishingdashboard');
+    }
+    const [sizeRows] = await conn.query(
+      'SELECT id, size_label, pieces FROM finishing_data_sizes WHERE finishing_data_id = ? ORDER BY id',
+      [entryId]
+    );
+
+    // Normalize dispatch sizes so that we always work with an object keyed by label
+    const dispatchSizes = {};
+    if (Array.isArray(rawDispatch)) {
+      console.log('Dispatch sizes received as array', rawDispatch);
+      rawDispatch.forEach((val, idx) => {
+        if (sizeRows[idx]) dispatchSizes[sizeRows[idx].size_label] = val;
+      });
+    } else if (rawDispatch && typeof rawDispatch === 'object') {
+      Object.assign(dispatchSizes, rawDispatch);
+    } else {
+      for (const key of Object.keys(req.body)) {
+        const match = /^dispatchSizes\[(.+)\]$/.exec(key);
+        if (match) dispatchSizes[match[1]] = req.body[key];
+      }
+    }
+
+    console.log('Normalized dispatch sizes', dispatchSizes);
+
+    const hasQty = Object.values(dispatchSizes).some((v) => {
       const n = parseInt(v, 10);
       return !isNaN(n) && n > 0;
     });
     if (!hasQty) {
       req.flash('error', 'No dispatch quantities provided.');
+      await conn.rollback();
+      conn.release();
       return res.redirect('/finishingdashboard');
     }
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-    const [[entry]] = await conn.query(`
-      SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
-    `, [entryId, userId]);
-    if (!entry) {
-      req.flash('error', 'Record not found or no permission.');
-      await conn.rollback(); conn.release();
-      return res.redirect('/finishingdashboard');
-    }
-    for (const size in dispatchSizes) {
+    for (const sz of sizeRows) {
+      const size = sz.size_label;
+      const produced = sz.pieces;
       const qty = parseInt(dispatchSizes[size], 10);
       if (isNaN(qty) || qty <= 0) {
+        if (!isNaN(qty)) console.log(`Skipping size ${size} with invalid qty`, qty);
+        continue;
+
         console.log(`Skipping size ${size} with invalid qty`, qty);
         continue;
       }
@@ -729,8 +772,8 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
         req.flash('error', `Size ${size} not found.`);
         await conn.rollback(); conn.release();
         return res.redirect('/finishingdashboard');
+
       }
-      const produced = sizeData.pieces;
       const [[dispatchedRow]] = await conn.query(`
         SELECT COALESCE(SUM(quantity),0) as dispatched
         FROM finishing_dispatches
