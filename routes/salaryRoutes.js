@@ -210,7 +210,7 @@ router.get('/salary/night-template', isAuthenticated, isOperator, async (req, re
 router.get('/salaries', isAuthenticated, isOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT u.name AS supervisor_name, u.id AS supervisor_id,
+      SELECT u.username AS supervisor_name, u.id AS supervisor_id,
              COUNT(e.id) AS employee_count,
              SUM(CASE WHEN e.is_active = 1 THEN e.salary ELSE 0 END) AS total_salary
         FROM users u
