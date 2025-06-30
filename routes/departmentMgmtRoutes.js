@@ -37,7 +37,7 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
     let salarySummary = [];
     if (showSalary) {
       const [rows] = await pool.query(`
-        SELECT u.name AS supervisor_name, u.id AS supervisor_id,
+        SELECT u.username AS supervisor_name, u.id AS supervisor_id,
                COUNT(e.id) AS employee_count,
                SUM(CASE WHEN e.is_active = 1 THEN e.salary ELSE 0 END) AS total_salary
           FROM users u
@@ -177,7 +177,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
              e.paid_sunday_allowance,
-             u.name AS supervisor_name, d.name AS department_name
+             u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
         JOIN users u ON e.supervisor_id = u.id
@@ -188,7 +188,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
        WHERE es.month = ? AND e.is_active = 0 AND e.salary_type = 'monthly'
-       ORDER BY u.name, e.name
+       ORDER BY u.username, e.name
     `, [month]);
 
     for (const r of rows) {
@@ -285,7 +285,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
   try {
     const [employees] = await pool.query(`
       SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
-             u.name AS supervisor_name, d.name AS department_name
+             u.username AS supervisor_name, d.name AS department_name
         FROM employees e
         JOIN users u ON e.supervisor_id = u.id
         LEFT JOIN (
@@ -295,7 +295,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
        WHERE e.salary_type = 'dihadi' AND e.is_active = 0
-       ORDER BY u.name, e.name`);
+       ORDER BY u.username, e.name`);
     const rows = [];
     for (const emp of employees) {
       const [att] = await pool.query(
