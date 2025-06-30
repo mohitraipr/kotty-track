@@ -658,7 +658,7 @@
             <td>${sz.dispatched}</td>
             <td>${sz.available}</td>
             <td>
-              <input type="number" min="0" max="${sz.available}" value="0" class="form-control" data-size-label="${sz.size_label}" ${sz.available === 0 ? 'readonly' : ''} />
+              <input type="number" min="0" max="${sz.available}" value="0" class="form-control" data-size-label="${sz.size_label}" name="dispatchSizes[${sz.size_label}]" ${sz.available === 0 ? 'readonly' : ''} />
             </td>
           `;
           dispatchSizesTableBody.appendChild(tr);
@@ -687,7 +687,7 @@
           evt.preventDefault();
           return;
         }
-        if (val > 0) {
+        if (val > 0 && !inp.name) {
           const hidden = document.createElement('input');
           hidden.type = 'hidden';
           hidden.name = `dispatchSizes[${sizeLabel}]`;

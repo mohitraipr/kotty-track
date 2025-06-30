@@ -679,11 +679,15 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
   }
 });
 
-router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
+  router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
   let conn;
   try {
     const userId = req.session.user.id;
     const entryId = req.params.id;
+    console.log('Dispatch request received', {
+      entryId,
+      body: req.body,
+    });
     let destination = req.body.destination;
     if (destination === 'other') {
       destination = req.body.customDestination;
@@ -713,11 +717,15 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
     }
     for (const size in dispatchSizes) {
       const qty = parseInt(dispatchSizes[size], 10);
-      if (isNaN(qty) || qty <= 0) continue;
+      if (isNaN(qty) || qty <= 0) {
+        console.log(`Skipping size ${size} with invalid qty`, qty);
+        continue;
+      }
       const [[sizeData]] = await conn.query(`
         SELECT pieces FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
       `, [entryId, size]);
       if (!sizeData) {
+        console.log(`Size data not found for size ${size} and entry ${entryId}`);
         req.flash('error', `Size ${size} not found.`);
         await conn.rollback(); conn.release();
         return res.redirect('/finishingdashboard');
@@ -730,7 +738,14 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
       `, [entryId, size]);
       const alreadyDispatched = dispatchedRow.dispatched || 0;
       const available = produced - alreadyDispatched;
+      console.log(`Size ${size} summary`, {
+        produced,
+        alreadyDispatched,
+        available,
+        requested: qty,
+      });
       if (qty > available) {
+        console.log(`Requested qty exceeds available for size ${size}`);
         req.flash('error', `Cannot dispatch ${qty} for size ${size}; only ${available} available.`);
         await conn.rollback(); conn.release();
         return res.redirect('/finishingdashboard');
@@ -746,9 +761,17 @@ router.post('/dispatch/:id', isAuthenticated, isFinishingMaster, async (req, res
         INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [entryId, entry.lot_no, destination, size, qty, newTotalSent]);
+      console.log(`Inserted dispatch row`, {
+        entryId,
+        size,
+        qty,
+        destination,
+        newTotalSent,
+      });
     }
     await conn.commit();
     conn.release();
+    console.log('Dispatch processed successfully for entry', entryId);
     req.flash('success', 'Dispatch recorded successfully.');
     return res.redirect('/finishingdashboard');
   } catch (err) {
