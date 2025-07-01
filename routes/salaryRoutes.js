@@ -333,12 +333,61 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       totalHoursFormatted = formatHours(totalHours);
     }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
-    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half });
+    const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
+    const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
+    const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
+    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half, outstanding });
   } catch (err) {
     console.error('Error loading salary view:', err);
     req.flash('error', 'Failed to load salary');
     res.redirect('/supervisor/employees');
   }
+});
+
+router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const { month, amount } = req.body;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[latest]] = await conn.query('SELECT month, id, gross, deduction FROM employee_salaries WHERE employee_id = ? ORDER BY month DESC LIMIT 1', [empId]);
+    if (!latest || latest.month !== month) {
+      req.flash('error', 'Can only deduct from the latest salary record');
+      await conn.rollback();
+      conn.release();
+      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+    }
+    const [[exists]] = await conn.query('SELECT id FROM advance_deductions WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
+    if (exists) {
+      req.flash('error', 'Advance already deducted for this salary');
+      await conn.rollback();
+      conn.release();
+      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+    }
+    const [[adv]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
+    const [[ded]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
+    const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
+    const amt = parseFloat(amount);
+    if (amt <= 0 || amt > outstanding) {
+      req.flash('error', 'Invalid deduction amount');
+      await conn.rollback();
+      conn.release();
+      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+    }
+    const newDed = parseFloat(latest.deduction) + amt;
+    const net = parseFloat(latest.gross) - newDed;
+    await conn.query('UPDATE employee_salaries SET deduction = ?, net = ? WHERE id = ?', [newDed, net, latest.id]);
+    await conn.query('INSERT INTO advance_deductions (employee_id, month, amount) VALUES (?, ?, ?)', [empId, month, amt]);
+    await conn.commit();
+    req.flash('success', 'Advance deducted');
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error deducting advance:', err);
+    req.flash('error', 'Failed to deduct advance');
+  } finally {
+    conn.release();
+  }
+  res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
 });
 
 module.exports = router;
