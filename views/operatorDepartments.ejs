@@ -2,170 +2,218 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Department Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Departments & Salaries</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f4f6f9;
+    }
+    header.navbar {
+      background: linear-gradient(90deg, #0d6efd, #6610f2);
+    }
+    .card-header {
+      background-color: #f8f9fa;
+      font-weight: 600;
+    }
+    .summary-card {
+      text-align: center;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .summary-card .icon {
+      font-size: 1.8rem;
+      color: #0d6efd;
+    }
+  </style>
 </head>
 <body>
-<nav class="navbar navbar-dark bg-dark">
+<nav class="navbar navbar-dark navbar-expand-lg">
   <div class="container-fluid">
-    <span class="navbar-brand">Department Management</span>
-    <div class="ms-auto">
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    <span class="navbar-brand">Kotty Departments</span>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="topNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a href="/operator/dashboard" class="nav-link">Dashboard</a></li>
+        <li class="nav-item"><a href="/logout" class="nav-link">Logout</a></li>
+      </ul>
     </div>
   </div>
 </nav>
-<div class="container my-4">
+
+<main class="container py-4">
   <%- include('partials/flashMessages') %>
-  <h4>Create Department</h4>
-  <form action="/operator/departments" method="POST" class="row g-3 mb-4">
-    <div class="col-md-6">
-      <input type="text" name="name" class="form-control" placeholder="Department name" required>
+  <div class="row g-3">
+    <div class="col-12 col-md-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header">Create Department</div>
+        <div class="card-body">
+          <form action="/operator/departments" method="POST" class="row g-2">
+            <div class="col-12">
+              <input type="text" name="name" class="form-control" placeholder="Department name" required>
+            </div>
+            <div class="col-12 text-end">
+              <button type="submit" class="btn btn-primary w-100">Create</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-primary">Create</button>
+
+    <div class="col-12 col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-header">Existing Departments</div>
+        <div class="table-responsive">
+          <table class="table table-striped table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Supervisors</th>
+                <th>Assign</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% departments.forEach(function(d) { %>
+              <tr>
+                <td><%= d.name %></td>
+                <td><%= d.supervisors || '' %></td>
+                <td>
+                  <form action="/operator/departments/<%= d.id %>/assign" method="POST" class="d-flex">
+                    <select name="user_id" class="form-select form-select-sm me-2" required>
+                      <% supervisors.forEach(function(u){ %>
+                        <option value="<%= u.id %>"><%= u.username %></option>
+                      <% }) %>
+                    </select>
+                    <button class="btn btn-sm btn-secondary">Assign</button>
+                  </form>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </form>
-  <h4>Existing Departments</h4>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Supervisors</th>
-        <th>Assign Supervisor</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% departments.forEach(function(d) { %>
-        <tr>
-          <td><%= d.name %></td>
-          <td><%= d.supervisors || '' %></td>
-          <td>
-            <form action="/operator/departments/<%= d.id %>/assign" method="POST" class="d-flex">
-              <select name="user_id" class="form-select form-select-sm me-2" required>
-                <% supervisors.forEach(function(u){ %>
-                  <option value="<%= u.id %>"><%= u.username %></option>
-                <% }) %>
-              </select>
-              <button class="btn btn-sm btn-secondary">Assign</button>
-            </form>
-          </td>
-        </tr>
-      <% }) %>
-  </tbody>
-  </table>
+  </div>
+
   <% if (showSalarySection) { %>
-  <div class="mt-5">
-    <h4>Salary Management</h4>
-    <form action="/operator/departments/salary/upload" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
-      <div class="col-md-6">
-        <input type="file" name="attFile" accept="application/json" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary">Upload</button>
-      </div>
-    </form>
-    <form action="/salary/upload-nights" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
-      <div class="col-md-6">
-        <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary">Upload Nights</button>
-      </div>
-    </form>
+  <div class="mt-4">
+    <div class="card shadow-sm">
+      <div class="card-header">Salary Management</div>
+      <div class="card-body">
+        <form action="/operator/departments/salary/upload" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+          <div class="col-md-6">
+            <input type="file" name="attFile" accept="application/json" class="form-control" required>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Upload</button>
+          </div>
+        </form>
+        <form action="/salary/upload-nights" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+          <div class="col-md-6">
+            <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Upload Nights</button>
+          </div>
+        </form>
 
-    <div class="mb-3">
-      <a href="/salary/night-template" class="btn btn-success">Download Night Template</a>
-    </div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="/salary/night-template" class="btn btn-outline-success d-flex align-items-center">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>
+            Night Template
+          </a>
+          <form action="/operator/departments/salary/download" method="GET" class="d-flex align-items-end gap-2">
+            <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
+            <button type="submit" class="btn btn-outline-success d-flex align-items-center">
+              <i class="bi bi-download me-1"></i>
+              Salary Excel
+            </button>
+          </form>
+          <form action="/operator/departments/dihadi/download" method="GET" class="d-flex align-items-end gap-2">
+            <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
+            <select name="half" class="form-select" required>
+              <option value="1">1-15</option>
+              <option value="2">16-end</option>
+            </select>
+            <button type="submit" class="btn btn-outline-success d-flex align-items-center">
+              <i class="bi bi-download me-1"></i>
+              Dihadi Excel
+            </button>
+          </form>
+        </div>
 
-    <form action="/operator/departments/salary/download" method="GET" class="row g-3 mb-3">
-      <div class="col-auto">
-        <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-success">Download Salary Excel</button>
-      </div>
-    </form>
-
-    <form action="/operator/departments/dihadi/download" method="GET" class="row g-3 mb-3">
-      <div class="col-auto">
-        <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
-      </div>
-      <div class="col-auto">
-        <select name="half" class="form-select" required>
-          <option value="1">1-15</option>
-          <option value="2">16-end</option>
-        </select>
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-success">Download Dihadi Excel</button>
-      </div>
-    </form>
-
-    <% if (overview) { %>
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 mb-4">
-      <div class="col">
-        <div class="card h-100 text-center border-0 shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-cash-stack fs-2 text-primary"></i>
-            <h6 class="mt-2 text-muted">Total Salary</h6>
-            <div class="fs-5 fw-semibold"><%= overview.totalSalaryAll %></div>
+        <% if (overview) { %>
+        <div class="row row-cols-2 row-cols-md-4 g-3 mb-3">
+          <div class="col">
+            <div class="card summary-card">
+              <div class="card-body">
+                <div class="icon"><i class="bi bi-cash-stack"></i></div>
+                <div class="fw-semibold">Total Salary</div>
+                <div><%= overview.totalSalaryAll %></div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="card summary-card">
+              <div class="card-body">
+                <div class="icon"><i class="bi bi-people-fill"></i></div>
+                <div class="fw-semibold">Total Supervisors</div>
+                <div><%= overview.totalSupervisors %></div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="card summary-card">
+              <div class="card-body">
+                <div class="icon"><i class="bi bi-person-workspace"></i></div>
+                <div class="fw-semibold">Most Employees</div>
+                <div class="small"><%= overview.topEmployeeSupervisor %> (<%= overview.topEmployeeCount %>)</div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="card summary-card">
+              <div class="card-body">
+                <div class="icon"><i class="bi bi-graph-up-arrow"></i></div>
+                <div class="fw-semibold">Highest Salary</div>
+                <div class="small"><%= overview.topSalarySupervisor %> (<%= overview.topSalaryAmount %>)</div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="col">
-        <div class="card h-100 text-center border-0 shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-people-fill fs-2 text-primary"></i>
-            <h6 class="mt-2 text-muted">Total Supervisors</h6>
-            <div class="fs-5 fw-semibold"><%= overview.totalSupervisors %></div>
-          </div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card h-100 text-center border-0 shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-person-workspace fs-2 text-primary"></i>
-            <h6 class="mt-2 text-muted">Most Employees</h6>
-            <div class="fs-6 fw-semibold"><%= overview.topEmployeeSupervisor %> (<%= overview.topEmployeeCount %>)</div>
-          </div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card h-100 text-center border-0 shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-graph-up-arrow fs-2 text-primary"></i>
-            <h6 class="mt-2 text-muted">Highest Salary</h6>
-            <div class="fs-6 fw-semibold"><%= overview.topSalarySupervisor %> (<%= overview.topSalaryAmount %>)</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <% } %>
+        <% } %>
 
-
-    <div class="table-responsive">
-      <table class="table table-bordered">
-        <thead>
-          <tr>
-            <th>Supervisor</th>
-            <th>Active Employees</th>
-            <th>Total Salary</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% salarySummary.forEach(function(s){ %>
-          <tr>
-            <td><%= s.supervisor_name %></td>
-            <td><%= s.employee_count %></td>
-            <td><%= s.total_salary %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm">
+            <thead>
+              <tr>
+                <th>Supervisor</th>
+                <th>Active Employees</th>
+                <th>Total Salary</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% salarySummary.forEach(function(s){ %>
+              <tr>
+                <td><%= s.supervisor_name %></td>
+                <td><%= s.employee_count %></td>
+                <td><%= s.total_salary %></td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
   <% } %>
-</div>
+</main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
