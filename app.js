@@ -72,12 +72,16 @@ const assigntowashingRoutes = require('./routes/assigntowashingRoutes');
 const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const jeansAssemblyRoutes = require('./routes/jeansAssemblyRoutes.js');
 const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
-const editWashingAssignmentsRoutes = require('./routes/editWashingAssignments');
 const washingIN = require('./routes/washingInRoutes');
 const catalogR = require('./routes/catalogupload');
-const inventoryRoutes = require('./routes/inventoryRoutes');
 const storeAdminRoutes = require('./routes/storeAdminRoutes');
+const hrRoutes = require('./routes/hrRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
 const departmentMgmtRoutes = require('./routes/departmentMgmtRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
+const salaryRoutes = require('./routes/salaryRoutes');
+const operatorEmployeeRoutes = require('./routes/operatorEmployeeRoutes');
+const flipkartReturnRoutes = require('./routes/flipkartReturnRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -94,21 +98,18 @@ app.use('/', searchRoutes);
 app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
 app.use("/operator", editCuttingLotRoutes);
-app.use('/operator', editWashingAssignmentsRoutes);
+app.use('/operator', departmentMgmtRoutes);
+app.use('/operator', operatorEmployeeRoutes);
 app.use('/', bulkUploadRoutes);
 app.use('/washingin', washingIN);
 app.use('/catalogupload', catalogR);
 app.use('/inventory', inventoryRoutes);
 app.use('/store-admin', storeAdminRoutes);
-app.use('/operator', departmentMgmtRoutes);
-const employeeRoutes = require('./routes/employeeRoutes');
 app.use('/supervisor', employeeRoutes);
-const salaryRoutes = require('./routes/salaryRoutes');
 app.use('/', salaryRoutes);
+app.use('/flipkart', flipkartReturnRoutes);
 
-const operatorEmployeeRoutes = require('./routes/operatorEmployeeRoutes');
-app.use('/operator', operatorEmployeeRoutes);
-
+app.use('/', hrRoutes);
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
