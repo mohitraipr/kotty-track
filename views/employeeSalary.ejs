@@ -79,6 +79,18 @@
   <% } %>
   <% if (salary) { %>
     <h6>Gross: <%= salary.gross %> | Deduction: <%= salary.deduction %> | Net: <%= salary.net %></h6>
+    <h6>Outstanding Advance: <%= outstanding.toFixed(2) %></h6>
+    <% if (outstanding > 0) { %>
+      <form action="/supervisor/employees/<%= employee.id %>/salary/deduct-advance" method="POST" class="row g-2 mb-2">
+        <input type="hidden" name="month" value="<%= salary.month %>">
+        <div class="col-auto">
+          <input type="number" step="0.01" name="amount" class="form-control" max="<%= outstanding %>" placeholder="Deduction amount" required>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-warning">Deduct Advance</button>
+        </div>
+      </form>
+    <% } %>
   <% } else { %>
     <p>No salary record for this month.</p>
   <% } %>
