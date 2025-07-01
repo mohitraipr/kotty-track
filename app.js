@@ -75,7 +75,7 @@ const editCuttingLotRoutes = require("./routes/editcuttinglots.js");
 const washingIN = require('./routes/washingInRoutes');
 const catalogR = require('./routes/catalogupload');
 const storeAdminRoutes = require('./routes/storeAdminRoutes');
-const hrRoutes = require('./routes/hrRoutes');
+
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const departmentMgmtRoutes = require('./routes/departmentMgmtRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
@@ -109,7 +109,7 @@ app.use('/supervisor', employeeRoutes);
 app.use('/', salaryRoutes);
 app.use('/flipkart', flipkartReturnRoutes);
 
-app.use('/', hrRoutes);
+
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
