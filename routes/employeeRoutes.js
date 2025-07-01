@@ -100,8 +100,20 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
 
     const monthsWorked = moment().diff(moment(employee.date_of_joining), 'months');
     const earned = monthsWorked >= 3 ? (monthsWorked - 2) * 1.5 : 0;
-    const leavesTaken = leaves.reduce((sum, l) => sum + parseFloat(l.days), 0);
-    const leaveBalance = (earned - leavesTaken).toFixed(2);
+    // Separate Sunday credit days so they increase the balance instead of
+    // reducing it. Credits are inserted with remark "Sunday Credit" during
+    // salary processing.
+    let creditDays = 0;
+    let leaveDays = 0;
+    leaves.forEach(l => {
+      const days = parseFloat(l.days);
+      if ((l.remark || '').toLowerCase() === 'sunday credit') {
+        creditDays += days;
+      } else {
+        leaveDays += days;
+      }
+    });
+    const leaveBalance = (earned + creditDays - leaveDays).toFixed(2);
 
     res.render('employeeDetails', {
       user: req.session.user,

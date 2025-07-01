@@ -56,6 +56,7 @@ router.post('/salary/upload', isAuthenticated, isOperator, upload.single('attFil
   try {
     await conn.beginTransaction();
     let uploadedCount = 0;
+    const recalc = new Map();
     for (const emp of data) {
       const [empRows] = await conn.query(
         'SELECT id, salary, salary_type FROM employees WHERE punching_id = ? AND name = ? AND supervisor_id = ? LIMIT 1',
@@ -81,8 +82,11 @@ router.post('/salary/upload', isAuthenticated, isOperator, upload.single('attFil
       }
 
       const month = moment(emp.attendance[0].date).format('YYYY-MM');
-      await calculateSalaryForMonth(conn, employee.id, month);
+      recalc.set(`${employee.id}_${month}`, { id: employee.id, month });
       uploadedCount++;
+    }
+    for (const { id, month } of recalc.values()) {
+      await calculateSalaryForMonth(conn, id, month);
     }
     await conn.commit();
     req.flash('success', `Attendance uploaded for ${uploadedCount} employees`);
@@ -124,6 +128,7 @@ router.post('/salary/upload-nights', isAuthenticated, isOperator, upload.single(
   try {
     await conn.beginTransaction();
     let uploadedCount = 0;
+    const recalc = new Map();
     for (const r of rows) {
       const month = String(r.month || r.Month || '').trim();
       if (!month) continue;
@@ -172,9 +177,12 @@ router.post('/salary/upload-nights', isAuthenticated, isOperator, upload.single(
           month
         ]
       );
-      await calculateSalaryForMonth(conn, empId, month);
+      recalc.set(`${empId}_${month}`, { id: empId, month });
 
       uploadedCount++;
+    }
+    for (const { id, month } of recalc.values()) {
+      await calculateSalaryForMonth(conn, id, month);
     }
     await conn.commit();
     req.flash('success', `Night data uploaded for ${uploadedCount} employees`);
