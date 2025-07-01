@@ -177,6 +177,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
              e.paid_sunday_allowance,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS advance_deduction,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
@@ -248,6 +249,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Month', key: 'month', width: 10 },
       { header: 'Gross', key: 'gross', width: 10 },
       { header: 'Deduction', key: 'deduction', width: 12 },
+      { header: 'Advance Deducted', key: 'advance', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
       { header: 'Deduction Reason', key: 'reason', width: 30 }
     ];
@@ -260,6 +262,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         month: r.month,
         gross: r.gross,
         deduction: r.deduction,
+        advance: r.advance_deduction,
         net: r.net,
         reason: r.deduction_reason
       });

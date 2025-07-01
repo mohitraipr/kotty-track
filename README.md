@@ -193,8 +193,18 @@ CREATE TABLE employee_advances (
   added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
+
+CREATE TABLE advance_deductions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  employee_id INT NOT NULL,
+  month CHAR(7) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (employee_id) REFERENCES employees(id)
+);
 ```
 Debits represent losses caused by the employee, while advances are company funds lent to them.
+Any deduction of an advance from a salary is logged in the `advance_deductions` table with the month it was applied.
 
 ### Attendance & Salary
 
