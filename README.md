@@ -212,6 +212,9 @@ Advance deductions always apply to the latest salary entry for an employee. If s
 Advance deductions always apply to the latest salary entry for an employee. If salaries are uploaded for half-month periods (e.g. only the first or second 15 days), the deduction is still linked to that month and can be recorded only once per entry.
 
 
+Advance deductions always apply to the latest salary entry for an employee. If salaries are uploaded for half-month periods (e.g. only the first or second 15 days), the deduction is still linked to that month and can be recorded only once per entry.
+
+
 
 ### Attendance & Salary
 
