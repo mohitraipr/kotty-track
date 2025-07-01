@@ -17,6 +17,18 @@ const {
 const s3     = new S3Client({ region: 'ap-south-1' });
 const BUCKET = 'my-app-uploads-kotty';
 
+// Simple in-memory cache for marketplaces to avoid hitting DB on every request
+let marketCache = { data: null, ts: 0 };
+const MARKET_TTL = 5 * 60 * 1000; // 5 minutes
+async function getMarketplaces() {
+  const now = Date.now();
+  if (!marketCache.data || (now - marketCache.ts) > MARKET_TTL) {
+    const [rows] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+    marketCache = { data: rows, ts: now };
+  }
+  return marketCache.data;
+}
+
 // Multer-S3 setup
 const upload = multer({
   storage: multerS3({
@@ -41,7 +53,7 @@ const upload = multer({
 });
 
 // Build SQL + params for listing (joins marketplaces)
-function listSql(userId, marketplaceId) {
+function listSql(userId, marketplaceId, lastId) {
   let sql = `
     SELECT
       uf.id,
@@ -58,6 +70,10 @@ function listSql(userId, marketplaceId) {
     sql += ' AND uf.marketplace_id = ?';
     args.push(marketplaceId);
   }
+  if (lastId) {
+    sql += ' AND uf.id < ?';
+    args.push(lastId);
+  }
 
   sql += ' ORDER BY uf.uploaded_at DESC';
   return { sql, args };
@@ -70,11 +86,9 @@ router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
   const limit         = 20;
 
   try {
-    const [markets] = await pool.query(
-      'SELECT id,name FROM marketplaces ORDER BY name'
-    );
+    const markets = await getMarketplaces();
 
-    const { sql, args } = listSql(userId, marketplaceId);
+    const { sql, args } = listSql(userId, marketplaceId, null);
     const [files]       = await pool.query(sql + ' LIMIT ?', [...args, limit]);
 
     res.render('catalogUpload', {
@@ -95,12 +109,12 @@ router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
 router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10) || null;
-  const offset        = parseInt(req.query.offset, 10) || 0;
   const limit         = parseInt(req.query.limit, 10) || 20;
+  const lastId        = parseInt(req.query.lastId, 10) || null;
 
   try {
-    const { sql, args } = listSql(userId, marketplaceId);
-    const [rows]        = await pool.query(sql + ' LIMIT ?,?', [...args, offset, limit]);
+    const { sql, args } = listSql(userId, marketplaceId, lastId);
+    const [rows]        = await pool.query(sql + ' LIMIT ?', [...args, limit]);
     res.json({ files: rows });
   } catch (err) {
     console.error(err);
@@ -171,28 +185,28 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
     `, [userId, marketplaceId]);
 
     const matches = [];
-    for (const r of rows) {
-      const data = await s3.send(
-        new GetObjectCommand({ Bucket: BUCKET, Key: r.filename })
-      );
-      const chunks = [];
-      for await (const c of data.Body) chunks.push(c);
-      const buf = Buffer.concat(chunks);
-
-      let found = false;
-      if (r.filename.toLowerCase().endsWith('.csv')) {
-        if (buf.toString('utf8').toLowerCase().includes(term)) found = true;
-      } else {
-        const wb = XLSX.read(buf, { type:'buffer' });
+    const batch = 5; // limit concurrent S3 fetches
+    for (let i = 0; i < rows.length; i += batch) {
+      const slice = rows.slice(i, i + batch);
+      const results = await Promise.all(slice.map(async r => {
+        const data = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: r.filename }));
+        if (r.filename.toLowerCase().endsWith('.csv')) {
+          for await (const chunk of data.Body) {
+            if (chunk.toString('utf8').toLowerCase().includes(term)) return r;
+          }
+          return null;
+        }
+        const chunks = [];
+        for await (const c of data.Body) chunks.push(c);
+        const buf = Buffer.concat(chunks);
+        const wb = XLSX.read(buf, { type: 'buffer' });
         for (const sn of wb.SheetNames) {
           const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
-          if (JSON.stringify(j).toLowerCase().includes(term)) {
-            found = true;
-            break;
-          }
+          if (JSON.stringify(j).toLowerCase().includes(term)) return r;
         }
-      }
-      if (found) matches.push(r);
+        return null;
+      }));
+      results.forEach(r => { if (r) matches.push(r); });
     }
 
     if (!matches.length) {
@@ -200,7 +214,7 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
       return res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
     }
 
-    const [markets] = await pool.query('SELECT id,name FROM marketplaces ORDER BY name');
+    const markets = await getMarketplaces();
     res.render('catalogUpload', {
       markets,
       selectedMarketplace: marketplaceId,
