@@ -238,6 +238,7 @@ router.get('/salaries', isAuthenticated, isOperator, async (req, res) => {
 router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, res) => {
   const empId = req.params.id;
   const month = req.query.month || moment().format('YYYY-MM');
+  const half = parseInt(req.query.half, 10) === 2 ? 2 : 1;
   try {
     const [[emp]] = await pool.query(
       `SELECT e.*, d.name AS department
@@ -258,10 +259,15 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const specialDept = SPECIAL_DEPARTMENTS.includes(
       (emp.department || '').toLowerCase()
     );
-    const startDate = moment(month + '-01').format('YYYY-MM-DD');
+    let startDate = moment(month + '-01').format('YYYY-MM-DD');
     let endDate;
     if (emp.salary_type === 'dihadi') {
-      endDate = moment(month + '-15').format('YYYY-MM-DD');
+      if (half === 2) {
+        startDate = moment(month + '-16').format('YYYY-MM-DD');
+        endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
+      } else {
+        endDate = moment(month + '-15').format('YYYY-MM-DD');
+      }
     } else {
       endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
     }
@@ -319,7 +325,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       totalHoursFormatted = formatHours(totalHours);
     }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
-    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate });
+    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half });
   } catch (err) {
     console.error('Error loading salary view:', err);
     req.flash('error', 'Failed to load salary');

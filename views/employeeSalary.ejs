@@ -26,11 +26,24 @@
     <div class="col-auto">
       <input type="month" name="month" class="form-control" value="<%= month %>" required>
     </div>
+    <% if (employee.salary_type === 'dihadi') { %>
+      <div class="col-auto">
+        <select name="half" class="form-select">
+          <option value="1" <%= half === 1 ? 'selected' : '' %>>1-15</option>
+          <option value="2" <%= half === 2 ? 'selected' : '' %>>16-end</option>
+        </select>
+      </div>
+    <% } %>
     <div class="col-auto">
       <button type="submit" class="btn btn-primary">Go</button>
     </div>
   </form>
-  <h5>Month: <%= month %></h5>
+  <h5>
+    Month: <%= month %>
+    <% if (employee.salary_type === 'dihadi') { %>
+      - <%= half === 1 ? '1-15' : '16-end' %>
+    <% } %>
+  </h5>
   <table class="table table-bordered">
     <thead>
       <tr>
