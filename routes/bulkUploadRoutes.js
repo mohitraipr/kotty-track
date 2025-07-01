@@ -239,14 +239,11 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
 
       // Calculate total pieces for this lot:
       //   total_pieces = (sum of pattern_count from sizes) * (sum of layers from rolls)
-      const [sizeRows] = await conn.query(
-        `SELECT pattern_count FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      const [[patternSumRow]] = await conn.query(
+        `SELECT SUM(pattern_count) AS total_patterns FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
         [cuttingLotId]
       );
-      let sumPatterns = 0;
-      for (const row of sizeRows) {
-        sumPatterns += parseInt(row.pattern_count, 10);
-      }
+      const sumPatterns = parseInt(patternSumRow.total_patterns, 10) || 0;
       const [rollRowsSum] = await conn.query(
         `SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?`,
         [cuttingLotId]

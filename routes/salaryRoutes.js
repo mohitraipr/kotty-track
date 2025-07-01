@@ -63,15 +63,27 @@ router.post('/salary/upload', isAuthenticated, isOperator, upload.single('attFil
       );
       if (!empRows.length) continue;
       const employee = empRows[0];
-      for (const att of emp.attendance) {
+
+      if (!Array.isArray(emp.attendance) || !emp.attendance.length) {
+        continue;
+      }
+      const attendanceValues = emp.attendance.map(att => [
+        employee.id,
+        att.date,
+        att.punchIn || null,
+        att.punchOut || null,
+        att.status || 'present'
+      ]);
+      if (attendanceValues.length) {
         await conn.query(
           `INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status)
-           VALUES (?, ?, ?, ?, ?)
+           VALUES ?
            ON DUPLICATE KEY UPDATE punch_in = VALUES(punch_in), punch_out = VALUES(punch_out), status = VALUES(status)`,
-          [employee.id, att.date, att.punchIn || null, att.punchOut || null, att.status || 'present']
+          [attendanceValues]
         );
       }
-      const month = moment(data[0].attendance[0].date).format('YYYY-MM');
+
+      const month = moment(emp.attendance[0].date).format('YYYY-MM');
       await calculateSalaryForMonth(conn, employee.id, month);
       uploadedCount++;
     }
