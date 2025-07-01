@@ -209,6 +209,10 @@ Any deduction of an advance from a salary is logged in the `advance_deductions` 
 Advance deductions always apply to the latest salary entry for an employee. If salaries are uploaded for half-month periods (e.g. only the first or second 15 days), the deduction is still linked to that month and can be recorded only once per entry.
 
 
+Advance deductions always apply to the latest salary entry for an employee. If salaries are uploaded for half-month periods (e.g. only the first or second 15 days), the deduction is still linked to that month and can be recorded only once per entry.
+
+
+
 ### Attendance & Salary
 
 Add tables to track daily attendance and calculate monthly salaries:
