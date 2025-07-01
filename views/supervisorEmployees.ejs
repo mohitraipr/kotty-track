@@ -67,7 +67,15 @@
       <button type="submit" class="btn btn-success"><i class="fas fa-plus me-1"></i> Create</button>
     </div>
   </form>
-  <h4>My Employees</h4>
+  <h4 class="mb-3">My Employees</h4>
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <div class="input-group">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees">
+      </div>
+    </div>
+  </div>
   <div class="table-responsive">
     <table class="table table-bordered">
       <thead>
@@ -117,6 +125,15 @@
 <script>
   const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
   tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
+
+  const searchInput = document.getElementById('employeeSearch');
+  const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase();
+    rows.forEach(r => {
+      r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
 </script>
 </body>
 </html>
