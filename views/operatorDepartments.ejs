@@ -101,6 +101,18 @@
       </div>
     </form>
 
+    <% if (overview) { %>
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">Salary Overview</h5>
+        <p class="mb-1">Total Salary of Active Employees: <strong><%= overview.totalSalaryAll %></strong></p>
+        <p class="mb-1">Total Supervisors: <strong><%= overview.totalSupervisors %></strong></p>
+        <p class="mb-1">Supervisor with Most Employees: <strong><%= overview.topEmployeeSupervisor %></strong> (<%= overview.topEmployeeCount %>)</p>
+        <p class="mb-0">Supervisor with Highest Salary: <strong><%= overview.topSalarySupervisor %></strong> (<%= overview.topSalaryAmount %>)</p>
+      </div>
+    </div>
+    <% } %>
+
 
     <div class="table-responsive">
       <table class="table table-bordered">
