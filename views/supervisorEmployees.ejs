@@ -68,6 +68,9 @@
     </div>
   </form>
   <h4>My Employees</h4>
+  <div class="mb-3 col-md-4 px-0">
+    <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees">
+  </div>
   <div class="table-responsive">
     <table class="table table-bordered">
       <thead>
@@ -117,6 +120,15 @@
 <script>
   const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
   tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
+
+  const searchInput = document.getElementById('employeeSearch');
+  const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase();
+    rows.forEach(r => {
+      r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
 </script>
 </body>
 </html>

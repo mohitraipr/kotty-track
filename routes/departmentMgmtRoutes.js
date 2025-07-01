@@ -35,6 +35,7 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
     );
 
     let salarySummary = [];
+    let overview = null;
     if (showSalary) {
       const [rows] = await pool.query(`
         SELECT u.username AS supervisor_name, u.id AS supervisor_id,
@@ -42,8 +43,28 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
                SUM(CASE WHEN e.is_active = 1 THEN e.salary ELSE 0 END) AS total_salary
           FROM users u
           JOIN employees e ON e.supervisor_id = u.id
-         GROUP BY u.id`);
+         GROUP BY u.id
+         ORDER BY total_salary DESC`);
       salarySummary = rows;
+
+      const totalSalaryAll = rows.reduce((s, r) => s + Number(r.total_salary || 0), 0);
+      const totalSupervisors = rows.length;
+      let topEmp = null;
+      let topSalary = rows[0] || null;
+      rows.forEach(r => {
+        if (!topEmp || r.employee_count > topEmp.employee_count) topEmp = r;
+      });
+      if (topSalary && (!topEmp || topSalary.total_salary >= topEmp.total_salary)) {
+        // topSalary already assigned
+      }
+      overview = {
+        totalSalaryAll,
+        totalSupervisors,
+        topEmployeeSupervisor: topEmp ? topEmp.supervisor_name : '',
+        topEmployeeCount: topEmp ? topEmp.employee_count : 0,
+        topSalarySupervisor: topSalary ? topSalary.supervisor_name : '',
+        topSalaryAmount: topSalary ? topSalary.total_salary : 0
+      };
     }
 
     res.render('operatorDepartments', {
@@ -52,6 +73,7 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       supervisors,
       showSalarySection: showSalary,
       salarySummary,
+      overview,
       currentMonth
     });
   } catch (err) {
