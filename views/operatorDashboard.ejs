@@ -253,15 +253,65 @@
     <!-- Advanced Analytics Panel -->
     <div class="data-panel mb-4">
       <div class="panel-header"><i class="bi bi-graph-up-arrow"></i> Advanced Stats</div>
-      <div class="panel-body row text-center">
-        <div class="col-md-3"><strong>Stitch Conversion:</strong><br><%= advancedAnalytics.stitchConversion %>%</div>
-        <div class="col-md-3"><strong>Wash Conversion:</strong><br><%= advancedAnalytics.washConversion %>%</div>
-        <div class="col-md-3"><strong>Finish Conversion:</strong><br><%= advancedAnalytics.finishConversion %>%</div>
-        <div class="col-md-3"><strong>Avg Turnaround:</strong><br><%= advancedAnalytics.avgTurnaroundTime %> days</div>
-        <div class="col-md-3 mt-3"><strong>Pending Kits:</strong><br><%= advancedAnalytics.pendingLots %></div>
-        <div class="col-md-3 mt-3"><strong>Total Kits:</strong><br><%= advancedAnalytics.totalLots %></div>
-        <div class="col-md-3 mt-3"><strong>Stitch Approval:</strong><br><%= advancedAnalytics.stitchApprovalRate %>%</div>
-        <div class="col-md-3 mt-3"><strong>Wash Approval:</strong><br><%= advancedAnalytics.washApprovalRate %>%</div>
+      <div class="panel-body">
+        <div class="row row-cols-2 row-cols-md-4 g-3 text-center">
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-speedometer text-primary fs-3"></i>
+              <div class="stat-title">Stitch Conversion</div>
+              <div class="stat-value"><%= advancedAnalytics.stitchConversion %>%</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-droplet-half text-primary fs-3"></i>
+              <div class="stat-title">Wash Conversion</div>
+              <div class="stat-value"><%= advancedAnalytics.washConversion %>%</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-check2-square text-primary fs-3"></i>
+              <div class="stat-title">Finish Conversion</div>
+              <div class="stat-value"><%= advancedAnalytics.finishConversion %>%</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-clock-history text-primary fs-3"></i>
+              <div class="stat-title">Avg Turnaround</div>
+              <div class="stat-value"><%= advancedAnalytics.avgTurnaroundTime %> days</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-hourglass-split text-primary fs-3"></i>
+              <div class="stat-title">Pending Kits</div>
+              <div class="stat-value"><%= advancedAnalytics.pendingLots %></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-collection text-primary fs-3"></i>
+              <div class="stat-title">Total Kits</div>
+              <div class="stat-value"><%= advancedAnalytics.totalLots %></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-file-check text-primary fs-3"></i>
+              <div class="stat-title">Stitch Approval</div>
+              <div class="stat-value"><%= advancedAnalytics.stitchApprovalRate %>%</div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stat-box py-3 h-100">
+              <i class="bi bi-file-check-fill text-primary fs-3"></i>
+              <div class="stat-title">Wash Approval</div>
+              <div class="stat-value"><%= advancedAnalytics.washApprovalRate %>%</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

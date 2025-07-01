@@ -102,13 +102,42 @@
     </form>
 
     <% if (overview) { %>
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">Salary Overview</h5>
-        <p class="mb-1">Total Salary of Active Employees: <strong><%= overview.totalSalaryAll %></strong></p>
-        <p class="mb-1">Total Supervisors: <strong><%= overview.totalSupervisors %></strong></p>
-        <p class="mb-1">Supervisor with Most Employees: <strong><%= overview.topEmployeeSupervisor %></strong> (<%= overview.topEmployeeCount %>)</p>
-        <p class="mb-0">Supervisor with Highest Salary: <strong><%= overview.topSalarySupervisor %></strong> (<%= overview.topSalaryAmount %>)</p>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 mb-4">
+      <div class="col">
+        <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="card-body">
+            <i class="bi bi-cash-stack fs-2 text-primary"></i>
+            <h6 class="mt-2 text-muted">Total Salary</h6>
+            <div class="fs-5 fw-semibold"><%= overview.totalSalaryAll %></div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="card-body">
+            <i class="bi bi-people-fill fs-2 text-primary"></i>
+            <h6 class="mt-2 text-muted">Total Supervisors</h6>
+            <div class="fs-5 fw-semibold"><%= overview.totalSupervisors %></div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="card-body">
+            <i class="bi bi-person-workspace fs-2 text-primary"></i>
+            <h6 class="mt-2 text-muted">Most Employees</h6>
+            <div class="fs-6 fw-semibold"><%= overview.topEmployeeSupervisor %> (<%= overview.topEmployeeCount %>)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card h-100 text-center border-0 shadow-sm">
+          <div class="card-body">
+            <i class="bi bi-graph-up-arrow fs-2 text-primary"></i>
+            <h6 class="mt-2 text-muted">Highest Salary</h6>
+            <div class="fs-6 fw-semibold"><%= overview.topSalarySupervisor %> (<%= overview.topSalaryAmount %>)</div>
+          </div>
+        </div>
       </div>
     </div>
     <% } %>

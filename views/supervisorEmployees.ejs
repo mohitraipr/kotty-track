@@ -68,8 +68,11 @@
     </div>
   </form>
   <h4>My Employees</h4>
-  <div class="mb-3 col-md-4 px-0">
-    <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees">
+  <div class="mb-3 col-md-5 col-lg-4 px-0">
+    <div class="input-group">
+      <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees">
+      <button id="searchBtn" class="btn btn-outline-secondary" type="button"><i class="fas fa-search"></i></button>
+    </div>
   </div>
   <div class="table-responsive">
     <table class="table table-bordered">
@@ -122,13 +125,16 @@
   tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
 
   const searchInput = document.getElementById('employeeSearch');
+  const searchBtn = document.getElementById('searchBtn');
   const rows = Array.from(document.querySelectorAll('table tbody tr'));
-  searchInput.addEventListener('input', () => {
+  const filterEmployees = () => {
     const q = searchInput.value.toLowerCase();
     rows.forEach(r => {
       r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
-  });
+  };
+  searchInput.addEventListener('input', filterEmployees);
+  searchBtn.addEventListener('click', filterEmployees);
 </script>
 </body>
 </html>
