@@ -377,4 +377,34 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
   }
 });
 
+// Return employees for a supervisor as JSON
+router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM employees WHERE supervisor_id = ? ORDER BY name',
+      [req.params.supId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching employees:', err);
+    res.status(500).json({ error: 'Failed to load employees' });
+  }
+});
+
+// Update an employee record
+router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, date_of_joining, is_active } = req.body;
+  try {
+    await pool.query(
+      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, date_of_joining=?, is_active=? WHERE id=?`,
+      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, date_of_joining, is_active ? 1 : 0, empId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error updating employee:', err);
+    res.status(500).json({ error: 'Failed to update employee' });
+  }
+});
+
 module.exports = router;

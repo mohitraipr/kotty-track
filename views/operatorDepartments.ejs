@@ -188,8 +188,9 @@
               </div>
             </div>
           </div>
-        </div>
-        <% } %>
+    </div>
+    <% } %>
+
 
         <div class="table-responsive">
           <table class="table table-bordered table-sm">
@@ -215,7 +216,90 @@
     </div>
   </div>
   <% } %>
+
+  <div class="mt-4">
+    <div class="card shadow-sm">
+      <div class="card-header">Edit Employees</div>
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Supervisor</label>
+            <select id="empSupervisorSelect" class="form-select">
+              <option value="">Choose...</option>
+              <% supervisors.forEach(function(s){ %>
+                <option value="<%= s.id %>"><%= s.username %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+        <div id="employeesTableContainer" class="table-responsive mt-3"></div>
+      </div>
+    </div>
+  </div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const supervisorSelect = document.getElementById('empSupervisorSelect');
+  const tableContainer = document.getElementById('employeesTableContainer');
+  if (supervisorSelect) {
+    supervisorSelect.addEventListener('change', () => {
+      const id = supervisorSelect.value;
+      tableContainer.innerHTML = '';
+      if (!id) return;
+      fetch(`/operator/departments/${id}/employees-json`)
+        .then(r => r.json())
+        .then(data => {
+          const table = document.createElement('table');
+          table.className = 'table table-bordered table-sm';
+          table.innerHTML = `<thead><tr>
+            <th>Punch ID</th><th>Name</th><th>Designation</th><th>Phone</th>
+            <th>Salary</th><th>Type</th><th>Hours</th><th>Paid Sun</th>
+            <th>Join Date</th><th>Active</th><th>Save</th></tr></thead>`;
+          const tbody = document.createElement('tbody');
+          data.forEach(emp => {
+            const joinDate = new Date(emp.date_of_joining).toISOString().split('T')[0];
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td><input type="text" class="form-control form-control-sm" name="punching_id" value="${emp.punching_id}"></td>
+              <td><input type="text" class="form-control form-control-sm" name="name" value="${emp.name}" required></td>
+              <td><input type="text" class="form-control form-control-sm" name="designation" value="${emp.designation || ''}"></td>
+              <td><input type="text" class="form-control form-control-sm" name="phone_number" value="${emp.phone_number || ''}" pattern="\\d*"></td>
+              <td><input type="number" step="0.01" class="form-control form-control-sm" name="salary" value="${emp.salary}" required></td>
+              <td><select class="form-select form-select-sm" name="salary_type">
+                    <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>
+                    <option value="monthly" ${emp.salary_type==='monthly'?'selected':''}>Monthly</option>
+                  </select></td>
+              <td><input type="number" step="0.1" class="form-control form-control-sm" name="allotted_hours" value="${emp.allotted_hours}" required></td>
+              <td><input type="number" class="form-control form-control-sm" name="paid_sunday_allowance" value="${emp.paid_sunday_allowance}" min="0"></td>
+              <td><input type="date" class="form-control form-control-sm" name="date_of_joining" value="${joinDate}" required></td>
+              <td><select class="form-select form-select-sm" name="is_active">
+                    <option value="1" ${emp.is_active? 'selected':''}>Active</option>
+                    <option value="0" ${!emp.is_active? 'selected':''}>Inactive</option>
+                  </select></td>
+              <td><button type="button" class="btn btn-sm btn-primary">Save</button></td>`;
+            const btn = row.querySelector('button');
+            btn.addEventListener('click', () => {
+              const inputs = row.querySelectorAll('input,select');
+              const payload = {};
+              inputs.forEach(i => payload[i.name] = i.type==='checkbox'? i.checked : i.value);
+              fetch(`/operator/departments/employees/${emp.id}/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              })
+              .then(r => r.json())
+              .then(res => {
+                if (!res.success) alert(res.error || 'Error');
+              })
+              .catch(() => alert('Error'));
+            });
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+          tableContainer.appendChild(table);
+        });
+    });
+  }
+</script>
 </body>
 </html>
