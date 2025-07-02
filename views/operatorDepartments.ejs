@@ -93,6 +93,7 @@
                 <td><%= d.name %></td>
                 <td><%= d.supervisors || '' %></td>
                 <td>
+                  <% if (!d.supervisors) { %>
                   <form action="/operator/departments/<%= d.id %>/assign" method="POST" class="d-flex">
                     <select name="user_id" class="form-select form-select-sm me-2" required>
                       <% supervisors.forEach(function(u){ %>
@@ -101,6 +102,9 @@
                     </select>
                     <button class="btn btn-sm btn-secondary">Assign</button>
                   </form>
+                  <% } else { %>
+                    <span class="text-muted">Assigned</span>
+                  <% } %>
                 </td>
               </tr>
               <% }) %>
