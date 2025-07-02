@@ -1,39 +1,42 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// GET /returns - proxy Flipkart Returns API
 router.get('/returns', async (req, res) => {
-  // Query params from request forwarded to Flipkart
-  const params = {
-    source: req.query.source,
-    modifiedAfter: req.query.modifiedAfter,
-    modifiedBefore: req.query.modifiedBefore,
-    createdAfter: req.query.createdAfter,
-    createdBefore: req.query.createdBefore,
-    locationId: req.query.locationId,
-    returnIds: req.query.returnIds,
-    trackingIds: req.query.trackingIds
-  };
+  // 1. Always use courier_return as source
+  const source = 'courier_return';
 
-  // Remove undefined values
-  Object.keys(params).forEach(key => {
-    if (!params[key]) delete params[key];
-  });
+  // 2. Build the rest of your params
+  const { modifiedAfter, modifiedBefore, createdAfter, createdBefore, locationId } = req.query;
+  const params = { source, modifiedAfter, modifiedBefore, createdAfter, createdBefore, locationId };
+
+  // 3. Normalize returnIds/trackingIds
+  if (req.query.returnIds) {
+    params.returnIds = Array.isArray(req.query.returnIds)
+      ? req.query.returnIds.join(',')
+      : req.query.returnIds;
+  }
+  if (req.query.trackingIds) {
+    params.trackingIds = Array.isArray(req.query.trackingIds)
+      ? req.query.trackingIds.join(',')
+      : req.query.trackingIds;
+  }
 
   try {
     const url = 'https://api.flipkart.net/sellers/v2/returns';
     const headers = {
-      // Authentication headers from environment variables
-      Authorization: `Bearer ${global.env.FLIPKART_API_TOKEN}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${process.env.FLIPKART_API_TOKEN}`,
+      Accept: 'application/json',
     };
 
-    const response = await axios.get(url, { params, headers });
-    res.json(response.data);
+    const { data } = await axios.get(url, { params, headers });
+    res.json(data);
   } catch (err) {
-    console.error('Flipkart API error:', err.response ? err.response.data : err.message);
-    res.status(500).json({ error: 'Failed to fetch returns' });
+    console.error('Flipkart API error:', err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: err.response?.data || 'Failed to fetch returns'
+    });
   }
 });
 
