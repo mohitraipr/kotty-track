@@ -1,6 +1,6 @@
 const express = require('express');
 const axios   = require('axios');
-const { getAccessToken } = require('./flipkartAuth');
+const { getAccessToken } = require('../flipkartAuth');
 
 const router = express.Router();
 const SOURCE = 'courier_return';
