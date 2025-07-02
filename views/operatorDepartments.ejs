@@ -39,6 +39,10 @@
       white-space: nowrap;
     }
     .toggle-salary { cursor: pointer; }
+    #employeesTableContainer {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -97,6 +101,19 @@
               <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Dihadi Excel</button>
             </form>
           </div>
+        </div>
+      </div>
+      <div class="card shadow-sm mt-3">
+        <div class="card-header">Create Department</div>
+        <div class="card-body">
+          <form action="/operator/departments" method="POST" class="row g-2">
+            <div class="col-12">
+              <input type="text" name="name" class="form-control" placeholder="Department name" required>
+            </div>
+            <div class="col-12 text-end">
+              <button type="submit" class="btn btn-primary w-100">Create</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
