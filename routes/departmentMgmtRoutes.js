@@ -40,7 +40,11 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       const [rows] = await pool.query(`
         SELECT u.username AS supervisor_name, u.id AS supervisor_id,
                COUNT(e.id) AS employee_count,
-               SUM(CASE WHEN e.is_active = 1 THEN e.salary ELSE 0 END) AS total_salary
+               SUM(CASE WHEN e.is_active = 1 THEN e.salary ELSE 0 END) AS total_salary,
+               SUM(CASE WHEN e.is_active = 1 AND e.salary_type='monthly' THEN e.salary ELSE 0 END) AS monthly_salary,
+               SUM(CASE WHEN e.is_active = 1 AND e.salary_type='dihadi' THEN e.salary ELSE 0 END) AS dihadi_salary,
+               AVG(CASE WHEN e.is_active = 1 AND e.salary_type='monthly' THEN e.salary ELSE NULL END) AS avg_monthly,
+               AVG(CASE WHEN e.is_active = 1 AND e.salary_type='dihadi' THEN e.salary ELSE NULL END) AS avg_dihadi
           FROM users u
           JOIN employees e ON e.supervisor_id = u.id
          GROUP BY u.id
@@ -51,19 +55,29 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       const totalSupervisors = rows.length;
       let topEmp = null;
       let topSalary = rows[0] || null;
+      let highestMonthly = null;
+      let highestDihadi = null;
       rows.forEach(r => {
         if (!topEmp || r.employee_count > topEmp.employee_count) topEmp = r;
+        if (r.avg_monthly != null && (!highestMonthly || r.avg_monthly > highestMonthly.avg_monthly)) highestMonthly = r;
+        if (r.avg_dihadi != null && (!highestDihadi || r.avg_dihadi > highestDihadi.avg_dihadi)) highestDihadi = r;
       });
-      if (topSalary && (!topEmp || topSalary.total_salary >= topEmp.total_salary)) {
-        // topSalary already assigned
-      }
+      const [[advTotal]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances');
+      const [[advDed]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions');
+      const totalAdvances = parseFloat(advTotal.total) - parseFloat(advDed.total);
+
       overview = {
         totalSalaryAll,
         totalSupervisors,
         topEmployeeSupervisor: topEmp ? topEmp.supervisor_name : '',
         topEmployeeCount: topEmp ? topEmp.employee_count : 0,
         topSalarySupervisor: topSalary ? topSalary.supervisor_name : '',
-        topSalaryAmount: topSalary ? topSalary.total_salary : 0
+        topSalaryAmount: topSalary ? topSalary.total_salary : 0,
+        highestMonthlySupervisor: highestMonthly ? highestMonthly.supervisor_name : '',
+        highestMonthlyAverage: highestMonthly ? highestMonthly.avg_monthly : 0,
+        highestDihadiSupervisor: highestDihadi ? highestDihadi.supervisor_name : '',
+        highestDihadiAverage: highestDihadi ? highestDihadi.avg_dihadi : 0,
+        totalAdvances
       };
     }
 
