@@ -58,9 +58,25 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       let highestMonthly = null;
       let highestDihadi = null;
       rows.forEach(r => {
-        if (!topEmp || r.employee_count > topEmp.employee_count) topEmp = r;
-        if (r.avg_monthly != null && (!highestMonthly || r.avg_monthly > highestMonthly.avg_monthly)) highestMonthly = r;
-        if (r.avg_dihadi != null && (!highestDihadi || r.avg_dihadi > highestDihadi.avg_dihadi)) highestDihadi = r;
+        const empCount = Number(r.employee_count);
+        const avgMonthly = r.avg_monthly != null ? parseFloat(r.avg_monthly) : null;
+        const avgDihadi = r.avg_dihadi != null ? parseFloat(r.avg_dihadi) : null;
+
+        if (!topEmp || empCount > Number(topEmp.employee_count)) topEmp = { ...r, employee_count: empCount };
+
+        if (avgMonthly !== null) {
+          const currentHighest = highestMonthly ? parseFloat(highestMonthly.avg_monthly) : null;
+          if (currentHighest === null || avgMonthly > currentHighest) {
+            highestMonthly = { ...r, avg_monthly: avgMonthly };
+          }
+        }
+
+        if (avgDihadi !== null) {
+          const currentHighest = highestDihadi ? parseFloat(highestDihadi.avg_dihadi) : null;
+          if (currentHighest === null || avgDihadi > currentHighest) {
+            highestDihadi = { ...r, avg_dihadi: avgDihadi };
+          }
+        }
       });
       const [[advTotal]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances');
       const [[advDed]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions');
