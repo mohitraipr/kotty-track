@@ -120,7 +120,10 @@
 
     <div class="col-12 col-md-8">
       <div class="card shadow-sm">
-        <div class="card-header">Existing Departments</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Existing Departments</span>
+          <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createDeptModal">Add Department</button>
+        </div>
         <div class="table-responsive">
           <table class="table table-striped table-sm mb-0">
             <thead>
@@ -283,6 +286,25 @@
           </div>
         </div>
         <div id="employeesTableContainer" class="table-responsive mt-3"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Create Department Modal -->
+  <div class="modal fade" id="createDeptModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="/operator/departments" method="POST">
+          <div class="modal-header">
+            <h5 class="modal-title">Create Department</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="text" name="name" class="form-control" placeholder="Department name" required>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Create</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
