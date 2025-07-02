@@ -6,6 +6,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isFabricManager } = require('../middlewares/auth');
 const multer = require('multer');
 const xlsx = require('xlsx');
+const ExcelJS = require('exceljs');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const path = require('path');
@@ -751,6 +752,39 @@ router.get('/bulk-upload/rolls', isAuthenticated, isFabricManager, async (req, r
         console.error('Error loading bulk upload rolls page:', err);
         req.flash('error', 'Error loading bulk upload rolls page.');
         res.redirect('/fabric-manager/dashboard');
+    }
+});
+
+// Download Excel template for fabric invoice rolls bulk upload
+router.get('/bulk-upload/rolls/template', isAuthenticated, isFabricManager, async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('RollsTemplate');
+        sheet.columns = [
+            { header: 'invoice_no', key: 'invoice_no', width: 15 },
+            { header: 'roll_no', key: 'roll_no', width: 15 },
+            { header: 'per_roll_weight', key: 'per_roll_weight', width: 18 },
+            { header: 'color', key: 'color', width: 15 },
+            { header: 'gr_no_by_vendor', key: 'gr_no_by_vendor', width: 20 },
+            { header: 'unit', key: 'unit', width: 10 }
+        ];
+        sheet.addRow({
+            invoice_no: 'INV001',
+            roll_no: 'ROLL001',
+            per_roll_weight: 10,
+            color: 'Blue',
+            gr_no_by_vendor: 'GR001',
+            unit: 'METER'
+        });
+
+        res.setHeader('Content-Disposition', 'attachment; filename="fabric_invoice_rolls_template.xlsx"');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        console.error('Error generating fabric invoice rolls template:', err);
+        req.flash('error', 'Failed to generate Excel template.');
+        res.redirect('/fabric-manager/bulk-upload/rolls');
     }
 });
 
