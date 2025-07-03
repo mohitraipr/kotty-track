@@ -312,26 +312,55 @@
     <div class="card shadow-sm">
       <div class="card-header">Salary Rules</div>
       <div class="card-body">
-        <div class="alert alert-info">Use SQL like conditions on attendance fields. Example: punch_in > '09:15:00'.</div>
-        <form action="/operator/departments/salary/download-rule" method="GET" class="row g-2">
+        <div class="alert alert-info">Use SQL like conditions on attendance fields. Example: punch_in &gt; '09:15:00'.</div>
+        <h6>Dihadi Employees</h6>
+        <form action="/operator/departments/dihadi/download-rule" method="GET" class="row g-2 align-items-end mb-3">
           <div class="col-md-3">
             <label class="form-label">Month</label>
             <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
           </div>
-          <div class="col-md-4">
-            <label class="form-label">Preset Rule</label>
-            <select name="rule" class="form-select" id="ruleSelect">
-              <option value="">Custom</option>
-              <option value="dihadi_late">Dihadi: punch after 9:15 deduct 1hr</option>
-              <option value="monthly_short">Monthly: 3 short days deduct 1 day</option>
+          <div class="col-md-2">
+            <label class="form-label">Half</label>
+            <select name="half" class="form-select">
+              <option value="1">1-15</option>
+              <option value="2">16-end</option>
             </select>
           </div>
-          <div class="col-md-5">
+          <div class="col-md-3">
+            <label class="form-label">Preset Rule</label>
+            <select name="rule" class="form-select">
+              <option value="">Custom</option>
+              <option value="dihadi_late">Punch after 9:15 deduct 1hr</option>
+            </select>
+          </div>
+          <div class="col-md-4">
             <label class="form-label">Custom Query</label>
-            <input type="text" name="query" class="form-control" placeholder="e.g. punch_in > '09:15:00'">
+            <input type="text" name="query" class="form-control" placeholder="punch_in &gt; '09:15:00'">
           </div>
           <div class="col-12 text-end">
-            <button type="submit" class="btn btn-primary">Download With Rule</button>
+            <button type="submit" class="btn btn-primary">Download Dihadi</button>
+          </div>
+        </form>
+
+        <h6>Monthly Employees</h6>
+        <form action="/operator/departments/salary/download-rule" method="GET" class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Month</label>
+            <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Preset Rule</label>
+            <select name="rule" class="form-select">
+              <option value="">Custom</option>
+              <option value="monthly_short">3 short days deduct 1 day</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Custom Query</label>
+            <input type="text" name="query" class="form-control" placeholder="punch_in &gt; '09:15:00'">
+          </div>
+          <div class="col-12 text-end">
+            <button type="submit" class="btn btn-primary">Download Monthly</button>
           </div>
         </form>
       </div>

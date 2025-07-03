@@ -354,11 +354,226 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
   }
 });
 
-// Download salary applying a custom rule - placeholder implementation
+// Download monthly salary applying a rule
 router.get('/departments/salary/download-rule', isAuthenticated, isOperator, async (req, res) => {
   const month = req.query.month || moment().format('YYYY-MM');
-  // TODO: apply rule from req.query.rule or req.query.query
-  res.redirect(`/operator/departments/salary/download?month=${month}`);
+  const rule = req.query.rule || '';
+  try {
+    const [sandwichRows] = await pool.query(
+      'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
+      [month]
+    );
+    const sandwichDates = sandwichRows.map(r => moment(r.date).format('YYYY-MM-DD'));
+
+    const [rows] = await pool.query(`
+      SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
+             e.punching_id, e.name AS employee_name, e.salary AS base_salary,
+             e.paid_sunday_allowance, e.allotted_hours,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS advance_deduction,
+             u.username AS supervisor_name, d.name AS department_name
+        FROM employee_salaries es
+        JOIN employees e ON es.employee_id = e.id
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE es.month = ? AND e.is_active = 0 AND e.salary_type = 'monthly'
+       ORDER BY u.username, e.name`,
+      [month]
+    );
+
+    for (const r of rows) {
+      const [attRows] = await pool.query(
+        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+        [r.employee_id, month]
+      );
+      const attMap = {};
+      attRows.forEach(a => {
+        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
+      });
+      let absent = 0, onePunch = 0, sundayAbs = 0;
+      let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
+      let shortDays = 0;
+      attRows.forEach(a => {
+        const dateStr = moment(a.date).format('YYYY-MM-DD');
+        const status = a.status;
+        const isSun = moment(a.date).day() === 0;
+        const isSandwich = sandwichDates.includes(dateStr);
+        if (isSun) {
+          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
+                            (monStatus === 'absent' || monStatus === 'one punch only');
+          if (adjAbsent) {
+            sundayAbs++;
+            return;
+          }
+        }
+        if (isSandwich) {
+          const prevStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
+          const nextStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
+          const adjAbsent = (prevStatus === 'absent' || prevStatus === 'one punch only') ||
+                            (nextStatus === 'absent' || nextStatus === 'one punch only');
+          if (adjAbsent) {
+            absent++;
+            return;
+          }
+        }
+        if (!isSun) {
+          if (status === 'absent') absent++;
+          else if (status === 'one punch only') onePunch++;
+        }
+        if (a.punch_in && a.punch_out) {
+          const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          const diff = hrs - parseFloat(r.allotted_hours || 0);
+          if (diff > 0) { otHours += diff; otDays++; }
+          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+          if (rule === 'monthly_short' && hrs < parseFloat(r.allotted_hours || 0)) shortDays++;
+        }
+      });
+      const notes = [];
+      if (absent) notes.push(`${absent} Absent`);
+      if (onePunch) notes.push(`${onePunch} One Punch`);
+      if (sundayAbs) notes.push(`${sundayAbs} Sun Absent`);
+      r.deduction_reason = notes.join(', ');
+      r.overtime_hours = otHours.toFixed(2);
+      r.overtime_days = otDays;
+      r.undertime_hours = utHours.toFixed(2);
+      r.undertime_days = utDays;
+      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+
+      if (rule === 'monthly_short' && shortDays >= 3) {
+        const daysInMonth = moment(month + '-01').daysInMonth();
+        const dailyRate = parseFloat(r.base_salary) / daysInMonth;
+        r.deduction = parseFloat(r.deduction) + dailyRate;
+        r.net = parseFloat(r.net) - dailyRate;
+        r.deduction_reason += (r.deduction_reason ? ', ' : '') + 'Rule Deduction';
+      }
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Salary');
+    sheet.columns = [
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Month', key: 'month', width: 10 },
+      { header: 'Gross', key: 'gross', width: 10 },
+      { header: 'Deduction', key: 'deduction', width: 12 },
+      { header: 'Advance Deducted', key: 'advance', width: 12 },
+      { header: 'Net', key: 'net', width: 10 },
+      { header: 'OT Hours', key: 'ot_hours', width: 12 },
+      { header: 'OT Days', key: 'ot_days', width: 10 },
+      { header: 'UT Hours', key: 'ut_hours', width: 12 },
+      { header: 'UT Days', key: 'ut_days', width: 10 },
+      { header: 'Status', key: 'time_status', width: 12 },
+      { header: 'Deduction Reason', key: 'reason', width: 30 }
+    ];
+    rows.forEach(r => {
+      sheet.addRow({
+        supervisor: r.supervisor_name,
+        department: r.department_name || '',
+        punching_id: r.punching_id,
+        employee: r.employee_name,
+        month: r.month,
+        gross: r.gross,
+        deduction: r.deduction,
+        advance: r.advance_deduction,
+        net: r.net,
+        ot_hours: r.overtime_hours,
+        ot_days: r.overtime_days,
+        ut_hours: r.undertime_hours,
+        ut_days: r.undertime_days,
+        time_status: r.time_status,
+        reason: r.deduction_reason
+      });
+    });
+    res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary with rule:', err);
+    req.flash('error', 'Could not download salary');
+    res.redirect('/operator/departments');
+  }
+});
+
+// Download dihadi salary with a rule
+router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const half = parseInt(req.query.half, 10) === 2 ? 2 : 1;
+  const rule = req.query.rule || '';
+  let start = moment(month + '-01');
+  let end = half === 1 ? moment(month + '-15') : moment(month + '-01').endOf('month');
+  if (half === 2) start = moment(month + '-16');
+  try {
+    const [employees] = await pool.query(`
+      SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
+             u.username AS supervisor_name, d.name AS department_name
+        FROM employees e
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE e.salary_type = 'dihadi' AND e.is_active = 0
+       ORDER BY u.username, e.name`);
+    const rows = [];
+    for (const emp of employees) {
+      const [att] = await pool.query(
+        'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?',
+        [emp.id, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
+      );
+      let totalHours = 0;
+      for (const a of att) {
+        if (!a.punch_in || !a.punch_out) continue;
+        let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+        if (rule === 'dihadi_late' && a.punch_in > '09:15:00') {
+          hrs -= 1;
+        }
+        if (hrs < 0) hrs = 0;
+        totalHours += hrs;
+      }
+      const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
+      const amount = parseFloat((totalHours * rate).toFixed(2));
+      rows.push({
+        supervisor: emp.supervisor_name,
+        department: emp.department_name || '',
+        punching_id: emp.punching_id,
+        employee: emp.name,
+        period: half === 1 ? '1-15' : '16-end',
+        hours: totalHours.toFixed(2),
+        amount
+      });
+    }
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Dihadi');
+    sheet.columns = [
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Period', key: 'period', width: 12 },
+      { header: 'Hours', key: 'hours', width: 10 },
+      { header: 'Amount', key: 'amount', width: 10 }
+    ];
+    rows.forEach(r => sheet.addRow(r));
+    res.setHeader('Content-Disposition', 'attachment; filename="DihadiSalary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading dihadi salary with rule:', err);
+    req.flash('error', 'Could not download dihadi salary');
+    res.redirect('/operator/departments');
+  }
 });
 
 // GET dihadi salary download
