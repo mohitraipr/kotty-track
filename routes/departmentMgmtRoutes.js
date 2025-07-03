@@ -242,7 +242,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
-       WHERE es.month = ? AND e.is_active = 0 AND e.salary_type = 'monthly'
+       WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly'
        ORDER BY u.username, e.name
     `, [month]);
 
@@ -380,7 +380,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
-       WHERE es.month = ? AND e.is_active = 0 AND e.salary_type = 'monthly'
+       WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly'
        ORDER BY u.username, e.name`,
       [month]
     );
@@ -523,7 +523,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
-       WHERE e.salary_type = 'dihadi' AND e.is_active = 0
+       WHERE e.salary_type = 'dihadi' AND e.is_active = 1
        ORDER BY u.username, e.name`);
     const rows = [];
     for (const emp of employees) {
@@ -595,7 +595,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
-       WHERE e.salary_type = 'dihadi' AND e.is_active = 0
+       WHERE e.salary_type = 'dihadi' AND e.is_active = 1
        ORDER BY u.username, e.name`);
     const rows = [];
     for (const emp of employees) {
