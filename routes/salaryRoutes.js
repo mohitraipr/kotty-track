@@ -324,7 +324,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         }
       }
       const isSun = moment(a.date).day() === 0;
-      if (isSun) {
+      if (isSun && emp.salary_type !== 'dihadi') {
         if (a.status === 'present') {
           if (specialDept) {
             a.deduction_reason = 'Leave credited';
