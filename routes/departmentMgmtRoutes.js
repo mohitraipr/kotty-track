@@ -6,7 +6,10 @@ const multer = require('multer');
 const path = require('path');
 const moment = require('moment');
 const ExcelJS = require('exceljs');
-const { calculateSalaryForMonth } = require('../helpers/salaryCalculator');
+const {
+  calculateSalaryForMonth,
+  effectiveHours,
+} = require('../helpers/salaryCalculator');
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
 
 const upload = multer({ storage: multer.memoryStorage() });
