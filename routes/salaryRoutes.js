@@ -347,6 +347,16 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         } else {
           a.deduction_reason = '';
         }
+        if (
+          emp.salary_type === 'monthly' &&
+          a.punch_in &&
+          a.punch_out &&
+          emp.allotted_hours &&
+          effectiveHours(a.punch_in, a.punch_out, 'monthly') <
+            parseFloat(emp.allotted_hours) * 0.55
+        ) {
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Half Day';
+        }
       }
     });
     let totalHoursFormatted = null;

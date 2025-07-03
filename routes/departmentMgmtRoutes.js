@@ -400,6 +400,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       let shortDays = 0;
+      let halfDays = 0;
       attRows.forEach(a => {
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
@@ -434,6 +435,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
           const diff = hrs - parseFloat(r.allotted_hours || 0);
           if (diff > 0) { otHours += diff; otDays++; }
           else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+          if (hrs < parseFloat(r.allotted_hours || 0) * 0.55) halfDays++;
           if (rule === 'monthly_short' && hrs < parseFloat(r.allotted_hours || 0)) shortDays++;
         }
       });
@@ -441,6 +443,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       if (absent) notes.push(`${absent} Absent`);
       if (onePunch) notes.push(`${onePunch} One Punch`);
       if (sundayAbs) notes.push(`${sundayAbs} Sun Absent`);
+      if (halfDays) notes.push(`${halfDays} Half`);
       r.deduction_reason = notes.join(', ');
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
@@ -531,21 +534,33 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
     const rows = [];
     for (const emp of employees) {
       const [att] = await pool.query(
-        'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?',
+        'SELECT punch_in, punch_out, status FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?',
         [emp.id, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
       );
       let totalHours = 0;
+      let absent = 0,
+        onePunch = 0,
+        late = 0;
       for (const a of att) {
-        if (!a.punch_in || !a.punch_out) continue;
+        if (!a.punch_in || !a.punch_out) {
+          if (a.status === 'absent') absent++;
+          else if (a.status === 'one punch only') onePunch++;
+          continue;
+        }
         let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
         if (rule === 'dihadi_late' && a.punch_in > '09:15:00') {
           hrs -= 1;
+          late++;
         }
         if (hrs < 0) hrs = 0;
         totalHours += hrs;
       }
       const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
       const amount = parseFloat((totalHours * rate).toFixed(2));
+      const notes = [];
+      if (absent) notes.push(`${absent} Absent`);
+      if (onePunch) notes.push(`${onePunch} One Punch`);
+      if (late) notes.push(`${late} Late`);
       rows.push({
         supervisor: emp.supervisor_name,
         department: emp.department_name || '',
@@ -553,7 +568,8 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
         employee: emp.name,
         period: half === 1 ? '1-15' : '16-end',
         hours: totalHours.toFixed(2),
-        amount
+        amount,
+        reason: notes.join(', ')
       });
     }
     const workbook = new ExcelJS.Workbook();
@@ -565,7 +581,8 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Period', key: 'period', width: 12 },
       { header: 'Hours', key: 'hours', width: 10 },
-      { header: 'Amount', key: 'amount', width: 10 }
+      { header: 'Amount', key: 'amount', width: 10 },
+      { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
     rows.forEach(r => sheet.addRow(r));
     res.setHeader('Content-Disposition', 'attachment; filename="DihadiSalary.xlsx"');
