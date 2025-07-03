@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
+const { calculateSalaryForMonth } = require('../helpers/salaryCalculator');
 
 // Show employee dashboard for a supervisor
 router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
@@ -134,17 +135,25 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
 router.post('/employees/:id/leaves', isAuthenticated, isSupervisor, async (req, res) => {
   const empId = req.params.id;
   const { leave_date, days, remark } = req.body;
+  const conn = await pool.getConnection();
   try {
-    await pool.query(
+    await conn.beginTransaction();
+    await conn.query(
       'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, ?, ?)',
       [empId, leave_date, days, remark]
     );
+    const month = moment(leave_date).format('YYYY-MM');
+    await calculateSalaryForMonth(conn, empId, month);
+    await conn.commit();
     req.flash('success', 'Leave recorded');
     res.redirect(`/supervisor/employees/${empId}/details`);
   } catch (err) {
+    await conn.rollback();
     console.error('Error recording leave:', err);
     req.flash('error', 'Failed to record leave');
     res.redirect(`/supervisor/employees/${empId}/details`);
+  } finally {
+    conn.release();
   }
 });
 
