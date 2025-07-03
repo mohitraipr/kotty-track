@@ -24,40 +24,44 @@
 <div class="container-fluid my-4">
   <%- include('partials/flashMessages') %>
 
-  <h5>Leave Balance: <%= leaveBalance %> days</h5>
-  <form action="/supervisor/employees/<%= employee.id %>/leaves" method="POST" class="row g-2 mb-4">
-    <div class="col-md-3">
-      <input type="date" name="leave_date" class="form-control" required>
-    </div>
-    <div class="col-md-2">
-      <input type="number" step="0.5" name="days" class="form-control" placeholder="Days" required>
-    </div>
-    <div class="col-md-5">
-      <input type="text" name="remark" class="form-control" placeholder="Remark">
-    </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-primary">Add Leave</button>
-    </div>
-  </form>
+  <% if (employee.salary_type !== 'dihadi') { %>
+    <h5>Leave Balance: <%= leaveBalance %> days</h5>
+    <form action="/supervisor/employees/<%= employee.id %>/leaves" method="POST" class="row g-2 mb-4">
+      <div class="col-md-3">
+        <input type="date" name="leave_date" class="form-control" required>
+      </div>
+      <div class="col-md-2">
+        <input type="number" step="0.5" name="days" class="form-control" placeholder="Days" required>
+      </div>
+      <div class="col-md-5">
+        <input type="text" name="remark" class="form-control" placeholder="Remark">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary">Add Leave</button>
+      </div>
+    </form>
 
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Days</th>
-        <th>Remark</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% leaves.forEach(l => { %>
+    <table class="table table-bordered">
+      <thead>
         <tr>
-          <td><%= l.leave_date.toLocaleDateString('en-CA') %></td>
-          <td><%= l.days %></td>
-          <td><%= l.remark || '' %></td>
+          <th>Date</th>
+          <th>Days</th>
+          <th>Remark</th>
         </tr>
-      <% }) %>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <% leaves.forEach(l => { %>
+          <tr>
+            <td><%= l.leave_date.toLocaleDateString('en-CA') %></td>
+            <td><%= l.days %></td>
+            <td><%= l.remark || '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } else { %>
+    <h5>Leave tracking not available for dihadi employees.</h5>
+  <% } %>
 
   <hr>
   <h6>Add Debit</h6>

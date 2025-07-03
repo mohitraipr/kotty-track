@@ -86,10 +86,14 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
     }
     const employee = empRows[0];
 
-    const [leaves] = await pool.query(
-      'SELECT * FROM employee_leaves WHERE employee_id = ? ORDER BY leave_date DESC',
-      [empId]
-    );
+    let leaves = [];
+    if (employee.salary_type !== 'dihadi') {
+      const [leaveRows] = await pool.query(
+        'SELECT * FROM employee_leaves WHERE employee_id = ? ORDER BY leave_date DESC',
+        [empId]
+      );
+      leaves = leaveRows;
+    }
     const [debits] = await pool.query(
       'SELECT * FROM employee_debits WHERE employee_id = ? ORDER BY added_at DESC',
       [empId]
@@ -99,22 +103,25 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
       [empId]
     );
 
-    const monthsWorked = moment().diff(moment(employee.date_of_joining), 'months');
-    const earned = monthsWorked >= 3 ? (monthsWorked - 2) * 1.5 : 0;
-    // Separate Sunday credit days so they increase the balance instead of
-    // reducing it. Credits are inserted with remark "Sunday Credit" during
-    // salary processing.
-    let creditDays = 0;
-    let leaveDays = 0;
-    leaves.forEach(l => {
-      const days = parseFloat(l.days);
-      if ((l.remark || '').toLowerCase() === 'sunday credit') {
-        creditDays += days;
-      } else {
-        leaveDays += days;
-      }
-    });
-    const leaveBalance = (earned + creditDays - leaveDays).toFixed(2);
+    let leaveBalance = 'N/A';
+    if (employee.salary_type !== 'dihadi') {
+      const monthsWorked = moment().diff(moment(employee.date_of_joining), 'months');
+      const earned = monthsWorked >= 3 ? (monthsWorked - 2) * 1.5 : 0;
+      // Separate Sunday credit days so they increase the balance instead of
+      // reducing it. Credits are inserted with remark "Sunday Credit" during
+      // salary processing.
+      let creditDays = 0;
+      let leaveDays = 0;
+      leaves.forEach(l => {
+        const days = parseFloat(l.days);
+        if ((l.remark || '').toLowerCase() === 'sunday credit') {
+          creditDays += days;
+        } else {
+          leaveDays += days;
+        }
+      });
+      leaveBalance = (earned + creditDays - leaveDays).toFixed(2);
+    }
 
     res.render('employeeDetails', {
       user: req.session.user,
@@ -138,6 +145,20 @@ router.post('/employees/:id/leaves', isAuthenticated, isSupervisor, async (req, 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    const [rows] = await conn.query(
+      'SELECT salary_type FROM employees WHERE id = ? AND supervisor_id = ?',
+      [empId, req.session.user.id]
+    );
+    if (!rows.length) {
+      await conn.rollback();
+      req.flash('error', 'Employee not found');
+      return res.redirect('/supervisor/employees');
+    }
+    if (rows[0].salary_type === 'dihadi') {
+      await conn.rollback();
+      req.flash('error', 'Dihadi employees cannot record leaves');
+      return res.redirect(`/supervisor/employees/${empId}/details`);
+    }
     await conn.query(
       'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, ?, ?)',
       [empId, leave_date, days, remark]
