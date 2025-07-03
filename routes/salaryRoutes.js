@@ -284,6 +284,8 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const dailyRate = parseFloat(emp.salary) / daysInMonth;
     let totalHours = 0;
     let hourlyRate = 0;
+    let overtimeTotal = 0;
+    let undertimeTotal = 0;
     if (emp.salary_type === 'dihadi') {
       hourlyRate = emp.allotted_hours
         ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
@@ -295,12 +297,31 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         const hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
         a.hours = formatHours(hrsDec);
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
+        if (emp.salary_type === 'monthly') {
+          const diff = hrsDec - parseFloat(emp.allotted_hours || 0);
+          if (diff > 0) {
+            a.overtime = formatHours(diff);
+            a.undertime = '00:00';
+            overtimeTotal += diff;
+          } else if (diff < 0) {
+            a.overtime = '00:00';
+            a.undertime = formatHours(Math.abs(diff));
+            undertimeTotal += Math.abs(diff);
+          } else {
+            a.overtime = '00:00';
+            a.undertime = '00:00';
+          }
+        }
         if (emp.salary_type === 'dihadi') {
           totalHours += hrsDec;
         }
       } else {
         a.hours = '00:00';
         a.lunch_deduction = 0;
+        if (emp.salary_type === 'monthly') {
+          a.overtime = '00:00';
+          a.undertime = '00:00';
+        }
       }
       const isSun = moment(a.date).day() === 0;
       if (isSun) {
@@ -332,11 +353,17 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     if (emp.salary_type === 'dihadi') {
       totalHoursFormatted = formatHours(totalHours);
     }
+    let overtimeFormatted = null;
+    let undertimeFormatted = null;
+    if (emp.salary_type === 'monthly') {
+      overtimeFormatted = formatHours(overtimeTotal);
+      undertimeFormatted = formatHours(undertimeTotal);
+    }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
     const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
-    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half, outstanding });
+    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half, outstanding, overtimeFormatted, undertimeFormatted });
   } catch (err) {
     console.error('Error loading salary view:', err);
     req.flash('error', 'Failed to load salary');

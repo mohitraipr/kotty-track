@@ -81,6 +81,7 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       const [[advTotal]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances');
       const [[advDed]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions');
       const totalAdvances = parseFloat(advTotal.total) - parseFloat(advDed.total);
+      const totalActiveEmployees = rows.reduce((s, r) => s + Number(r.employee_count || 0), 0);
 
       overview = {
         totalSalaryAll,
@@ -93,7 +94,8 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
         highestMonthlyAverage: highestMonthly ? highestMonthly.avg_monthly : 0,
         highestDihadiSupervisor: highestDihadi ? highestDihadi.supervisor_name : '',
         highestDihadiAverage: highestDihadi ? highestDihadi.avg_dihadi : 0,
-        totalAdvances
+        totalAdvances,
+        totalActiveEmployees
       };
     }
 
@@ -228,7 +230,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
-             e.paid_sunday_allowance,
+             e.paid_sunday_allowance, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS advance_deduction,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
@@ -246,7 +248,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
 
     for (const r of rows) {
       const [attRows] = await pool.query(
-        'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
         [r.employee_id, month]
       );
       const attMap = {};
@@ -254,6 +256,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
       let absent = 0, onePunch = 0, sundayAbs = 0;
+      let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       attRows.forEach(a => {
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
@@ -283,12 +286,23 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
           if (status === 'absent') absent++;
           else if (status === 'one punch only') onePunch++;
         }
+        if (a.punch_in && a.punch_out) {
+          const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          const diff = hrs - parseFloat(r.allotted_hours || 0);
+          if (diff > 0) { otHours += diff; otDays++; }
+          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+        }
       });
       const notes = [];
       if (absent) notes.push(`${absent} Absent`);
       if (onePunch) notes.push(`${onePunch} One Punch`);
       if (sundayAbs) notes.push(`${sundayAbs} Sun Absent`);
       r.deduction_reason = notes.join(', ');
+      r.overtime_hours = otHours.toFixed(2);
+      r.overtime_days = otDays;
+      r.undertime_hours = utHours.toFixed(2);
+      r.undertime_days = utDays;
+      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -303,6 +317,11 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Deduction', key: 'deduction', width: 12 },
       { header: 'Advance Deducted', key: 'advance', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
+      { header: 'OT Hours', key: 'ot_hours', width: 12 },
+      { header: 'OT Days', key: 'ot_days', width: 10 },
+      { header: 'UT Hours', key: 'ut_hours', width: 12 },
+      { header: 'UT Days', key: 'ut_days', width: 10 },
+      { header: 'Status', key: 'time_status', width: 12 },
       { header: 'Deduction Reason', key: 'reason', width: 30 }
     ];
     rows.forEach(r => {
@@ -316,6 +335,11 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         deduction: r.deduction,
         advance: r.advance_deduction,
         net: r.net,
+        ot_hours: r.overtime_hours,
+        ot_days: r.overtime_days,
+        ut_hours: r.undertime_hours,
+        ut_days: r.undertime_days,
+        time_status: r.time_status,
         reason: r.deduction_reason
       });
     });
@@ -328,6 +352,13 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
     req.flash('error', 'Could not download salary');
     res.redirect('/operator/departments');
   }
+});
+
+// Download salary applying a custom rule - placeholder implementation
+router.get('/departments/salary/download-rule', isAuthenticated, isOperator, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  // TODO: apply rule from req.query.rule or req.query.query
+  res.redirect(`/operator/departments/salary/download?month=${month}`);
 });
 
 // GET dihadi salary download

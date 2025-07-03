@@ -53,6 +53,10 @@
         <th>Punch In</th>
         <th>Punch Out</th>
         <th>Hours</th>
+        <% if (employee.salary_type === 'monthly') { %>
+          <th>OT Hours</th>
+          <th>UT Hours</th>
+        <% } %>
         <% if (employee.salary_type === 'dihadi') { %>
           <th>Lunch Deduction (mins)</th>
         <% } %>
@@ -67,6 +71,10 @@
           <td><%= a.punch_in || '' %></td>
           <td><%= a.punch_out || '' %></td>
           <td><%= a.hours %></td>
+          <% if (employee.salary_type === 'monthly') { %>
+            <td><%= a.overtime %></td>
+            <td><%= a.undertime %></td>
+          <% } %>
           <% if (employee.salary_type === 'dihadi') { %>
             <td><%= a.lunch_deduction %></td>
           <% } %>
@@ -75,6 +83,9 @@
       <% }) %>
     </tbody>
   </table>
+  <% if (employee.salary_type === 'monthly') { %>
+    <h6>OT: <%= overtimeFormatted || '00:00' %> | UT: <%= undertimeFormatted || '00:00' %></h6>
+  <% } %>
   <% if (employee.salary_type === 'dihadi') { %>
     <h6>Total Hours: <%= totalHours || '00:00' %> | Hourly Pay: <%= hourlyRate.toFixed(2) %></h6>
   <% } %>
