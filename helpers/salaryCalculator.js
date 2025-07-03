@@ -49,7 +49,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     return;
   }
   const [attendance] = await conn.query(
-    'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
     [employeeId, month]
   );
   const [sandwichRows] = await conn.query(
@@ -65,6 +65,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   });
 
   let absent = 0;
+  let halfDeduct = 0;
   let extraPay = 0;
   let paidUsed = 0;
   const creditLeaves = [];
@@ -113,7 +114,14 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
         }
       }
     } else {
-      if (status === 'absent' || status === 'one punch only') absent++;
+      if (status === 'absent' || status === 'one punch only') {
+        absent++;
+      } else if (a.punch_in && a.punch_out && emp.allotted_hours) {
+        const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+        if (hrsWorked < parseFloat(emp.allotted_hours) * 0.55) {
+          halfDeduct += 0.5;
+        }
+      }
     }
   });
 
@@ -148,7 +156,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   const nightPay = (parseFloat(nightRows[0].total_nights) || 0) * dailyRate;
   extraPay += nightPay;
   const gross = parseFloat(emp.salary) + extraPay;
-  const deduction = absent * dailyRate;
+  const deduction = (absent + halfDeduct) * dailyRate;
   const net = gross - deduction;
   await conn.query(
     `INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at)
