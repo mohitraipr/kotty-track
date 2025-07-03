@@ -250,6 +250,8 @@ ALTER TABLE employees ADD COLUMN allotted_hours DECIMAL(4,2) NOT NULL DEFAULT 0;
 
 Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi` (daily wage) basis. Monthly salary employees keep their full punch duration.
 
+`dihadi` workers do not receive any special treatment for Sundays. Their pay is purely based on hours worked.
+
 ### Sunday Attendance Rules
 
 - **Salary below 13,500** – each Sunday worked grants an extra day's pay unless the employee belongs to a special department.

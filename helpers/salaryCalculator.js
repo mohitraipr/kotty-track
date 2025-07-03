@@ -158,12 +158,12 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   );
 }
 
+// Dihadi workers are paid purely on hours worked. Grab all attendance
+// for the month and multiply the total hours by the hourly rate.
 async function calculateDihadiMonthly(conn, employeeId, month, emp) {
-  const startDate = moment(month + '-01').format('YYYY-MM-DD');
-  const endDate = moment(month + '-15').format('YYYY-MM-DD');
   const [attendance] = await conn.query(
-    "SELECT date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?",
-    [employeeId, startDate, endDate]
+    'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+    [employeeId, month]
   );
   const hourlyRate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
   let totalHours = 0;
