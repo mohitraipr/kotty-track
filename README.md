@@ -171,6 +171,7 @@ CREATE TABLE employee_leaves (
 );
 ```
 Employees earn 1.5 days of leave after completing three months of service and accrue 1.5 days each month thereafter.
+Daily wage (`dihadi`) workers are paid only for hours worked and do not accumulate leaves.
 
 ### Employee Debits & Advances
 
