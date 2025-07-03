@@ -382,14 +382,14 @@ router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSuperviso
       req.flash('error', 'Can only deduct from the latest salary record');
       await conn.rollback();
       conn.release();
-      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+      return res.redirect(`/employees/${empId}/salary?month=${month}`);
     }
     const [[exists]] = await conn.query('SELECT id FROM advance_deductions WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
     if (exists) {
       req.flash('error', 'Advance already deducted for this salary');
       await conn.rollback();
       conn.release();
-      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+      return res.redirect(`/employees/${empId}/salary?month=${month}`);
     }
     const [[adv]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
     const [[ded]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
@@ -399,7 +399,7 @@ router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSuperviso
       req.flash('error', 'Invalid deduction amount');
       await conn.rollback();
       conn.release();
-      return res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+      return res.redirect(`/employees/${empId}/salary?month=${month}`);
     }
     const newDed = parseFloat(latest.deduction) + amt;
     const net = parseFloat(latest.gross) - newDed;
@@ -414,7 +414,7 @@ router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSuperviso
   } finally {
     conn.release();
   }
-  res.redirect(`/supervisor/employees/${empId}/salary?month=${month}`);
+  res.redirect(`/employees/${empId}/salary?month=${month}`);
 });
 
 module.exports = router;
