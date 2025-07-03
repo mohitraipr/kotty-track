@@ -130,6 +130,17 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
   }
 
+  const [leaveRows] = await conn.query(
+    `SELECT COALESCE(SUM(days),0) AS used
+       FROM employee_leaves
+      WHERE employee_id = ?
+        AND DATE_FORMAT(leave_date, "%Y-%m") = ?
+        AND (remark IS NULL OR LOWER(remark) <> 'sunday credit')`,
+    [employeeId, month]
+  );
+  const leavesUsed = parseFloat(leaveRows[0].used) || 0;
+  absent = Math.max(0, absent - leavesUsed);
+
   const [nightRows] = await conn.query(
     'SELECT COALESCE(SUM(nights),0) AS total_nights FROM employee_nights WHERE employee_id = ? AND month = ?',
     [employeeId, month]
