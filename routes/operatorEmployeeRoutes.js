@@ -9,7 +9,7 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 router.get('/supervisors', isAuthenticated, isOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT u.id, u.name, u.username
+      SELECT u.id, u.username, u.username
         FROM users u
         JOIN roles r ON u.role_id = r.id
        WHERE r.name = 'supervisor'
