@@ -567,6 +567,9 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       if (absent) notes.push(`${absent} day(s) absent`);
       if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
       if (late) notes.push(`${late} late arrival(s)`);
+      const net = parseFloat(
+        (amount - parseFloat(emp.advance_deducted)).toFixed(2)
+      );
       rows.push({
         supervisor: emp.supervisor_name,
         department: emp.department_name || '',
@@ -577,6 +580,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
         amount,
         advance_taken: emp.advance_taken,
         advance_deducted: emp.advance_deducted,
+        net,
         reason: notes.join(', ')
       });
     }
@@ -592,6 +596,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       { header: 'Amount', key: 'amount', width: 10 },
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
+      { header: 'Net', key: 'net', width: 10 },
       { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
     rows.forEach(r => sheet.addRow(r));
@@ -657,6 +662,9 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
       if (absent) notes.push(`${absent} day(s) absent`);
       if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
       if (late) notes.push(`${late} late arrival(s)`);
+      const net = parseFloat(
+        (amount - parseFloat(emp.advance_deducted)).toFixed(2)
+      );
       rows.push({
         supervisor: emp.supervisor_name,
         department: emp.department_name || '',
@@ -667,6 +675,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
         amount,
         advance_taken: emp.advance_taken,
         advance_deducted: emp.advance_deducted,
+        net,
         reason: notes.join(', ')
       });
     }
@@ -682,6 +691,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
       { header: 'Amount', key: 'amount', width: 10 },
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
+      { header: 'Net', key: 'net', width: 10 },
       { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
     rows.forEach(r => sheet.addRow(r));
