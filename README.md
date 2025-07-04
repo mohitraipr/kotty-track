@@ -261,7 +261,7 @@ Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi
 - **Paid Sunday allowance** – specifies how many Sundays in a month are paid regardless of salary. Extra Sundays become leave credits.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
-If an employee misses Saturday or Monday **and** also skips the Sunday, the weekend becomes a "sandwich" and all three days are deducted from salary. When the employee works on that Sunday, the sandwich rule is ignored and any adjacent absence is paid.
+If an employee misses Saturday or Monday **and** also skips the Sunday, the weekend becomes a "sandwich" and all three days are deducted from salary. When the employee works on that Sunday, only the days actually missed are deducted. The Sunday itself is still treated as a normal working day and either paid or credited according to the rules above.
 
 ### Attendance Edit Logs
 
