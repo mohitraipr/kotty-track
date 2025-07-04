@@ -240,11 +240,13 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
         (SELECT COALESCE(SUM(total_pieces),0) FROM stitching_data)           AS totalStitched,
         (SELECT COALESCE(SUM(total_pieces),0) FROM washing_data)             AS totalWashed,
         (SELECT COALESCE(SUM(total_pieces),0) FROM finishing_data)           AS totalFinished,
-        (SELECT COUNT(*) FROM users)                                        AS userCount
+        (SELECT COUNT(*) FROM users)                                        AS userCount,
+        (SELECT COUNT(*) FROM employees WHERE is_active = 1)                AS activeEmployeeCount
     `);
 
     const lotCount = totals.lotCount;
     const totalPiecesCut = parseFloat(totals.totalPieces) || 0;
+    const activeEmployeeCount = totals.activeEmployeeCount;
 
     // 6) advanced analytics
     const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
@@ -258,6 +260,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
       totalWashed: totals.totalWashed,
       totalFinished: totals.totalFinished,
       userCount: totals.userCount,
+      activeEmployeeCount,
       advancedAnalytics,
       operatorPerformance,
       query: { search, startDate, endDate, sortField, sortOrder, category },
