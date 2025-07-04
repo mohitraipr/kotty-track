@@ -344,16 +344,10 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.punch_in &&
           moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late arrival';
         }
       } else {
-        if (a.status === 'absent') {
-          a.deduction_reason = 'Absent';
-        } else if (a.status === 'one punch only') {
-          a.deduction_reason = 'One punch only';
-        } else {
-          a.deduction_reason = '';
-        }
+        a.deduction_reason = '';
         if (
           emp.salary_type === 'monthly' &&
           a.punch_in &&
@@ -362,14 +356,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           effectiveHours(a.punch_in, a.punch_out, 'monthly') <
             parseFloat(emp.allotted_hours) * 0.55
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Half Day';
+          a.deduction_reason += 'Half day';
         }
 
         if (
           a.punch_in &&
           moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late arrival';
         }
       }
     });

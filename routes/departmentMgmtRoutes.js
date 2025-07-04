@@ -297,9 +297,9 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         }
       });
       const notes = [];
-      if (absent) notes.push(`${absent} Absent`);
-      if (onePunch) notes.push(`${onePunch} One Punch`);
-      if (sundayAbs) notes.push(`${sundayAbs} Sun Absent`);
+      if (absent) notes.push(`${absent} day${absent === 1 ? '' : 's'} absent`);
+      if (onePunch) notes.push(`${onePunch} day${onePunch === 1 ? '' : 's'} with one punch only`);
+      if (sundayAbs) notes.push(`${sundayAbs} Sunday${sundayAbs === 1 ? '' : 's'} counted absent`);
       r.deduction_reason = notes.join(', ');
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
@@ -440,10 +440,10 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         }
       });
       const notes = [];
-      if (absent) notes.push(`${absent} Absent`);
-      if (onePunch) notes.push(`${onePunch} One Punch`);
-      if (sundayAbs) notes.push(`${sundayAbs} Sun Absent`);
-      if (halfDays) notes.push(`${halfDays} Half`);
+      if (absent) notes.push(`${absent} day${absent === 1 ? '' : 's'} absent`);
+      if (onePunch) notes.push(`${onePunch} day${onePunch === 1 ? '' : 's'} with one punch only`);
+      if (sundayAbs) notes.push(`${sundayAbs} Sunday${sundayAbs === 1 ? '' : 's'} counted absent`);
+      if (halfDays) notes.push(`${halfDays} half day${halfDays === 1 ? '' : 's'}`);
       r.deduction_reason = notes.join(', ');
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
@@ -556,9 +556,9 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
       const amount = parseFloat((totalHours * rate).toFixed(2));
       const notes = [];
-      if (absent) notes.push(`${absent} Absent`);
-      if (onePunch) notes.push(`${onePunch} One Punch`);
-      if (late) notes.push(`${late} Late`);
+      if (absent) notes.push(`${absent} day${absent === 1 ? '' : 's'} absent`);
+      if (onePunch) notes.push(`${onePunch} day${onePunch === 1 ? '' : 's'} with one punch only`);
+      if (late) notes.push(`${late} late arrival${late === 1 ? '' : 's'}`);
       rows.push({
         supervisor: emp.supervisor_name,
         department: emp.department_name || '',
@@ -640,9 +640,9 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
       const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
       const amount = parseFloat((totalHours * rate).toFixed(2));
       const notes = [];
-      if (absent) notes.push(`${absent} Absent`);
-      if (onePunch) notes.push(`${onePunch} One Punch`);
-      if (late) notes.push(`${late} Late`);
+      if (absent) notes.push(`${absent} day${absent === 1 ? '' : 's'} absent`);
+      if (onePunch) notes.push(`${onePunch} day${onePunch === 1 ? '' : 's'} with one punch only`);
+      if (late) notes.push(`${late} late arrival${late === 1 ? '' : 's'}`);
       rows.push({
         supervisor: emp.supervisor_name,
         department: emp.department_name || '',
