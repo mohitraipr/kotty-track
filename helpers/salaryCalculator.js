@@ -19,7 +19,11 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   mins -= lunchDeduction(punchIn, punchOut, salaryType);
 
   // Deduct an additional hour for late arrivals after 09:15
-  if (start.isAfter(moment('09:15:00', 'HH:mm:ss'))) {
+  // Late deduction only applies to daily wage (dihadi) employees
+  if (
+    salaryType === 'dihadi' &&
+    start.isAfter(moment('09:15:00', 'HH:mm:ss'))
+  ) {
     mins -= 60;
   }
 
