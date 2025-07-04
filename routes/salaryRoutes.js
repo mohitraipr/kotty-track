@@ -341,16 +341,18 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         }
 
         if (
+          emp.salary_type === 'dihadi' &&
           a.punch_in &&
           moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
+          a.deduction_reason +=
+            (a.deduction_reason ? '; ' : '') + 'Late arrival after 09:15';
         }
       } else {
         if (a.status === 'absent') {
-          a.deduction_reason = 'Absent';
+          a.deduction_reason = 'Absent from work';
         } else if (a.status === 'one punch only') {
-          a.deduction_reason = 'One punch only';
+          a.deduction_reason = 'Missing punch in/out';
         } else {
           a.deduction_reason = '';
         }
@@ -362,14 +364,17 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           effectiveHours(a.punch_in, a.punch_out, 'monthly') <
             parseFloat(emp.allotted_hours) * 0.55
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Half Day';
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') +
+            'Worked less than half day';
         }
 
         if (
+          emp.salary_type === 'dihadi' &&
           a.punch_in &&
           moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') +
+            'Late arrival after 09:15';
         }
       }
     });
