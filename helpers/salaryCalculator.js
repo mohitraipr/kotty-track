@@ -64,6 +64,24 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
   });
 
+  // If an employee works on Sunday but misses Saturday or Monday,
+  // the adjacent absence should be paid. Collect those dates here
+  const skipAbsent = new Set();
+  attendance.forEach(a => {
+    if (moment(a.date).day() !== 0) return;
+    if (a.status !== 'present') return;
+    const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+    const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+    const satStatus = attMap[satKey];
+    const monStatus = attMap[monKey];
+    if (satStatus && (satStatus === 'absent' || satStatus === 'one punch only')) {
+      skipAbsent.add(satKey);
+    }
+    if (monStatus && (monStatus === 'absent' || monStatus === 'one punch only')) {
+      skipAbsent.add(monKey);
+    }
+  });
+
   let absent = 0;
   let halfDeduct = 0;
   let extraPay = 0;
@@ -72,6 +90,9 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
 
   attendance.forEach(a => {
     const dateStr = moment(a.date).format('YYYY-MM-DD');
+    if (skipAbsent.has(dateStr)) {
+      return;
+    }
     const status = a.status;
     const isSun = moment(a.date).day() === 0;
     const isSandwich = sandwichDates.includes(dateStr);
@@ -83,7 +104,10 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       const monStatus = attMap[monKey];
       const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
       const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
-      if ((satStatus && missedSat) || (monStatus && missedMon)) {
+      if (status === 'present') {
+        if (satStatus && missedSat) skipAbsent.add(satKey);
+        if (monStatus && missedMon) skipAbsent.add(monKey);
+      } else if ((satStatus && missedSat) || (monStatus && missedMon)) {
         absent++;
         return;
       }
