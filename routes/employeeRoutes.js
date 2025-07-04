@@ -30,6 +30,20 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
         ).toFixed(2)
       : 0;
 
+
+    const selectedMonth = req.query.month || moment().format('YYYY-MM');
+    const monthStart = moment(selectedMonth + '-01');
+    const months = [];
+    for (let i = 0; i < 6; i++) {
+      const m = moment().subtract(i, 'months');
+      months.push({ value: m.format('YYYY-MM'), label: m.format('MMM YYYY') });
+    }
+
+    let topEmployees = [];
+    if (totalEmployees && monthStart.isValid()) {
+      const startDate = monthStart.format('YYYY-MM-DD');
+      const endDate = monthStart.endOf('month').format('YYYY-MM-DD');
+
     let topEmployees = [];
     if (totalEmployees) {
       const month = moment().format('YYYY-MM');
@@ -74,7 +88,12 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       employees,
       totalEmployees,
       avgSalary,
+      topEmployees,
+      months,
+      selectedMonth
+
       topEmployees
+
     });
   } catch (err) {
     console.error('Error loading employees:', err);
