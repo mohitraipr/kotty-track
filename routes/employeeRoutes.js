@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
-const { calculateSalaryForMonth } = require('../helpers/salaryCalculator');
+const { calculateSalaryForMonth, effectiveHours } = require('../helpers/salaryCalculator');
 
 // Show employee dashboard for a supervisor
 router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
@@ -22,10 +22,59 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       [userId]
     );
 
+    const totalEmployees = employees.length;
+    const avgSalary = totalEmployees
+      ? (
+          employees.reduce((s, e) => s + parseFloat(e.salary || 0), 0) /
+          totalEmployees
+        ).toFixed(2)
+      : 0;
+
+    let topEmployees = [];
+    if (totalEmployees) {
+      const month = moment().format('YYYY-MM');
+      const startDate = moment(month + '-01').format('YYYY-MM-DD');
+      const endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
+      const ids = employees.map(e => e.id);
+      const [att] = await pool.query(
+        `SELECT employee_id, punch_in, punch_out
+           FROM employee_attendance
+          WHERE employee_id IN (?) AND date BETWEEN ? AND ?`,
+        [ids, startDate, endDate]
+      );
+      const map = new Map();
+      employees.forEach(e => {
+        map.set(e.id, { name: e.name, diff: 0, emp: e });
+      });
+      att.forEach(a => {
+        const item = map.get(a.employee_id);
+        if (!item) return;
+        const emp = item.emp;
+        if (
+          emp.salary_type !== 'monthly' ||
+          !a.punch_in ||
+          !a.punch_out ||
+          !emp.allotted_hours
+        )
+          return;
+        const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+        const diff = hrs - parseFloat(emp.allotted_hours || 0);
+        item.diff += diff;
+      });
+      topEmployees = Array.from(map.values())
+        .filter(i => i.diff > 0)
+        .sort((a, b) => b.diff - a.diff)
+        .slice(0, 3)
+        .map(i => i.name);
+    }
+
     res.render('supervisorEmployees', {
       user: req.session.user,
       department,
-      employees
+      employees,
+      totalEmployees,
+      avgSalary,
+      topEmployees
     });
   } catch (err) {
     console.error('Error loading employees:', err);
