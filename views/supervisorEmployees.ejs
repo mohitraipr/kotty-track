@@ -47,9 +47,18 @@
     <div class="col">
       <div class="card summary-card">
         <div class="card-body">
-          <div class="icon"><i class="fas fa-clock"></i></div>
-          <div class="fw-semibold">Top OT Employees</div>
-          <div class="small"><%= topEmployees.join(', ') %></div>
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <div>
+              <div class="icon"><i class="fas fa-clock"></i></div>
+              <div class="fw-semibold">Top OT Employees</div>
+            </div>
+            <select id="otMonth" class="form-select form-select-sm" style="width:auto;">
+              <% months.forEach(m => { %>
+                <option value="<%= m.value %>" <%= m.value === selectedMonth ? 'selected' : '' %>><%= m.label %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="small" id="otList"><%= topEmployees.join(', ') %></div>
         </div>
       </div>
     </div>
@@ -172,6 +181,15 @@
   };
   searchInput.addEventListener('input', filterEmployees);
   searchBtn.addEventListener('click', filterEmployees);
+
+  const monthSelect = document.getElementById('otMonth');
+  if (monthSelect) {
+    monthSelect.addEventListener('change', () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('month', monthSelect.value);
+      window.location.href = url.toString();
+    });
+  }
 </script>
 <script src="/public/js/salaryToggle.js"></script>
 </body>
