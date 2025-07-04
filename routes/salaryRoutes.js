@@ -388,11 +388,29 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       overtimeFormatted = formatHours(overtimeTotal);
       undertimeFormatted = formatHours(undertimeTotal);
     }
+    let partialAmount = null;
+    if (emp.salary_type === 'dihadi') {
+      partialAmount = parseFloat((totalHours * hourlyRate).toFixed(2));
+    }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
     const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
-    res.render('employeeSalary', { user: req.session.user, employee: emp, attendance, salary, month, dailyRate, totalHours: totalHoursFormatted, hourlyRate, half, outstanding, overtimeFormatted, undertimeFormatted });
+    res.render('employeeSalary', {
+      user: req.session.user,
+      employee: emp,
+      attendance,
+      salary,
+      month,
+      dailyRate,
+      totalHours: totalHoursFormatted,
+      hourlyRate,
+      half,
+      outstanding,
+      overtimeFormatted,
+      undertimeFormatted,
+      partialAmount
+    });
   } catch (err) {
     console.error('Error loading salary view:', err);
     req.flash('error', 'Failed to load salary');
