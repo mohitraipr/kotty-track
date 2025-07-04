@@ -17,6 +17,12 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   const end = moment(punchOut, 'HH:mm:ss');
   let mins = end.diff(start, 'minutes');
   mins -= lunchDeduction(punchIn, punchOut, salaryType);
+
+  // Deduct an additional hour for late arrivals after 09:15
+  if (start.isAfter(moment('09:15:00', 'HH:mm:ss'))) {
+    mins -= 60;
+  }
+
   if (mins > 11 * 60) mins = 11 * 60;
   if (mins < 0) mins = 0;
   return mins / 60;

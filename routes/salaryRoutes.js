@@ -339,6 +339,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         } else {
           a.deduction_reason = '';
         }
+
+        if (
+          a.punch_in &&
+          moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
+        ) {
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
+        }
       } else {
         if (a.status === 'absent') {
           a.deduction_reason = 'Absent';
@@ -356,6 +363,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
             parseFloat(emp.allotted_hours) * 0.55
         ) {
           a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Half Day';
+        }
+
+        if (
+          a.punch_in &&
+          moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
+        ) {
+          a.deduction_reason += (a.deduction_reason ? '; ' : '') + 'Late';
         }
       }
     });

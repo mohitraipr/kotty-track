@@ -253,6 +253,8 @@ Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi
 
 `dihadi` workers do not receive any special treatment for Sundays. Their pay is purely based on hours worked.
 
+Punching in after **09:15** results in an additional one-hour deduction from the day's counted hours for all employees.
+
 ### Sunday Attendance Rules
 
 - **Salary below 13,500** – each Sunday worked grants an extra day's pay unless the employee belongs to a special department.
