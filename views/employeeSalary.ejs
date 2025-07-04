@@ -87,7 +87,7 @@
     <h6>OT: <%= overtimeFormatted || '00:00' %> | UT: <%= undertimeFormatted || '00:00' %></h6>
   <% } %>
   <% if (employee.salary_type === 'dihadi') { %>
-    <h6>Total Hours: <%= totalHours || '00:00' %> | Hourly Pay: <%= hourlyRate.toFixed(2) %></h6>
+    <h6>Total Hours: <%= totalHours || '00:00' %> | Hourly Pay: <%= hourlyRate.toFixed(2) %> | Amount: <%= partialAmount ? partialAmount.toFixed(2) : '0.00' %></h6>
   <% } %>
   <% if (salary) { %>
     <h6 class="salary-container">
