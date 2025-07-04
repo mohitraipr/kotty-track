@@ -43,12 +43,6 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
     if (totalEmployees && monthStart.isValid()) {
       const startDate = monthStart.format('YYYY-MM-DD');
       const endDate = monthStart.endOf('month').format('YYYY-MM-DD');
-
-    let topEmployees = [];
-    if (totalEmployees) {
-      const month = moment().format('YYYY-MM');
-      const startDate = moment(month + '-01').format('YYYY-MM-DD');
-      const endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
       const ids = employees.map(e => e.id);
       const [att] = await pool.query(
         `SELECT employee_id, punch_in, punch_out
@@ -91,9 +85,6 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       topEmployees,
       months,
       selectedMonth
-
-      topEmployees
-
     });
   } catch (err) {
     console.error('Error loading employees:', err);
