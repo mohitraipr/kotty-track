@@ -1,1 +1,1 @@
-module.exports.SPECIAL_DEPARTMENTS = ['catalog', 'account', 'merchant'];
+module.exports.SPECIAL_DEPARTMENTS = ['catalog', 'accounts', 'merchant'];
