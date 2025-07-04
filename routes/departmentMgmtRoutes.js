@@ -234,7 +234,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
              e.paid_sunday_allowance, e.allotted_hours,
-             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS advance_deduction,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
@@ -318,7 +319,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Month', key: 'month', width: 10 },
       { header: 'Gross', key: 'gross', width: 10 },
       { header: 'Deduction', key: 'deduction', width: 12 },
-      { header: 'Advance Deducted', key: 'advance', width: 12 },
+      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
+      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
       { header: 'OT Hours', key: 'ot_hours', width: 12 },
       { header: 'OT Days', key: 'ot_days', width: 10 },
@@ -336,7 +338,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         month: r.month,
         gross: r.gross,
         deduction: r.deduction,
-        advance: r.advance_deduction,
+        advance_taken: r.advance_taken,
+        advance_deducted: r.advance_deducted,
         net: r.net,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
@@ -372,7 +375,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
              e.paid_sunday_allowance, e.allotted_hours,
-             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS advance_deduction,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
@@ -470,7 +474,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       { header: 'Month', key: 'month', width: 10 },
       { header: 'Gross', key: 'gross', width: 10 },
       { header: 'Deduction', key: 'deduction', width: 12 },
-      { header: 'Advance Deducted', key: 'advance', width: 12 },
+      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
+      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
       { header: 'OT Hours', key: 'ot_hours', width: 12 },
       { header: 'OT Days', key: 'ot_days', width: 10 },
@@ -488,7 +493,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         month: r.month,
         gross: r.gross,
         deduction: r.deduction,
-        advance: r.advance_deduction,
+        advance_taken: r.advance_taken,
+        advance_deducted: r.advance_deducted,
         net: r.net,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
@@ -520,7 +526,9 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
   try {
     const [employees] = await pool.query(`
       SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
-             u.username AS supervisor_name, d.name AS department_name
+             u.username AS supervisor_name, d.name AS department_name,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS advance_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS advance_deducted
         FROM employees e
         JOIN users u ON e.supervisor_id = u.id
         LEFT JOIN (
@@ -567,6 +575,8 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
         period: half === 1 ? '1-15' : '16-end',
         hours: totalHours.toFixed(2),
         amount,
+        advance_taken: emp.advance_taken,
+        advance_deducted: emp.advance_deducted,
         reason: notes.join(', ')
       });
     }
@@ -580,6 +590,8 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       { header: 'Period', key: 'period', width: 12 },
       { header: 'Hours', key: 'hours', width: 10 },
       { header: 'Amount', key: 'amount', width: 10 },
+      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
+      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
     rows.forEach(r => sheet.addRow(r));
@@ -604,7 +616,9 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
   try {
     const [employees] = await pool.query(`
       SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
-             u.username AS supervisor_name, d.name AS department_name
+             u.username AS supervisor_name, d.name AS department_name,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS advance_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS advance_deducted
         FROM employees e
         JOIN users u ON e.supervisor_id = u.id
         LEFT JOIN (
@@ -651,6 +665,8 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
         period: half === 1 ? '1-15' : '16-end',
         hours: totalHours.toFixed(2),
         amount,
+        advance_taken: emp.advance_taken,
+        advance_deducted: emp.advance_deducted,
         reason: notes.join(', ')
       });
     }
@@ -664,6 +680,8 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
       { header: 'Period', key: 'period', width: 12 },
       { header: 'Hours', key: 'hours', width: 10 },
       { header: 'Amount', key: 'amount', width: 10 },
+      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
+      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
     rows.forEach(r => sheet.addRow(r));
