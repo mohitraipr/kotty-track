@@ -678,6 +678,61 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
   }
 });
 
+// Download advance summary for all employees
+router.get('/departments/advances/download', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT e.id, e.punching_id, e.name, e.salary_type,
+             u.username AS supervisor_name, d.name AS department_name,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_deducted
+        FROM employees e
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE e.is_active = 1
+       ORDER BY u.username, e.name`
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Advances');
+    sheet.columns = [
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Salary Type', key: 'salary_type', width: 12 },
+      { header: 'Total Advance Taken', key: 'taken', width: 18 },
+      { header: 'Total Advance Deducted', key: 'deducted', width: 20 }
+    ];
+
+    rows.forEach(r => {
+      sheet.addRow({
+        supervisor: r.supervisor_name,
+        department: r.department_name || '',
+        punching_id: r.punching_id,
+        employee: r.name,
+        salary_type: r.salary_type,
+        taken: parseFloat(r.total_taken),
+        deducted: parseFloat(r.total_deducted)
+      });
+    });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="AdvanceSummary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading advance summary:', err);
+    req.flash('error', 'Could not download advances');
+    res.redirect('/operator/departments');
+  }
+});
+
 // Return employees for a supervisor as JSON
 router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, async (req, res) => {
   try {
