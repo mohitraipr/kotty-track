@@ -107,7 +107,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       if (status === 'present') {
         if (satStatus && missedSat) skipAbsent.add(satKey);
         if (monStatus && missedMon) skipAbsent.add(monKey);
-      } else if ((satStatus && missedSat) || (monStatus && missedMon)) {
+      } else if (status !== 'present' && ((satStatus && missedSat) || (monStatus && missedMon))) {
         absent++;
         return;
       }
