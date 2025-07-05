@@ -7,6 +7,10 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isSupervisor } = require('../middlewares/auth');
 const { calculateSalaryForMonth, effectiveHours, lunchDeduction } = require('../helpers/salaryCalculator');
 const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
+const {
+  SPECIAL_SUNDAY_SUPERVISORS,
+  FULL_SALARY_EMPLOYEE_IDS
+} = require('../utils/supervisors');
 
 function formatHours(h) {
   let hours = Math.floor(h);
@@ -637,6 +641,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       attRows.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
+      const specialSup =
+        SPECIAL_SUNDAY_SUPERVISORS.map(s => s.toLowerCase()).includes(
+          (r.supervisor_name || '').toLowerCase()
+        ) && !FULL_SALARY_EMPLOYEE_IDS.includes(r.employee_id);
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       let workingDays = 0;
@@ -647,25 +655,40 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
         const isSun = moment(a.date).day() === 0;
-        const isSandwich = sandwichDates.includes(dateStr);
+        const isSandwich = !specialSup && sandwichDates.includes(dateStr);
         let recordedAbsent = false;
         if (status === 'present' && a.punch_in && a.punch_out) {
           workingDays++;
           if (isSun) sundaysWorked++;
         } else if (status === 'one punch only') {
-          missPunchDates.push(dateStr);
+          if (!(specialSup && isSun)) missPunchDates.push(dateStr);
         } else if (status === 'absent') {
-          absentDates.push(dateStr);
-          recordedAbsent = true;
+          if (!(specialSup && isSun)) {
+            absentDates.push(dateStr);
+            recordedAbsent = true;
+          }
         }
-        if (isSun) {
+        if (!specialSup && isSun) {
           const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
           const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
-          const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
-                            (monStatus === 'absent' || monStatus === 'one punch only');
+          const adjAbsent =
+            (satStatus === 'absent' || satStatus === 'one punch only') &&
+            (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {
             sundayAbs++;
             if (!recordedAbsent) absentDates.push(dateStr);
+            return;
+          }
+        } else if (specialSup && isSun) {
+          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const adjAbsent =
+            (satStatus === 'absent' || satStatus === 'one punch only') &&
+            (monStatus === 'absent' || monStatus === 'one punch only');
+          if (adjAbsent) {
+            sundayAbs++;
+            if (!recordedAbsent) absentDates.push(dateStr);
+            absent++; // deduct the Sunday as well
             return;
           }
         }
@@ -704,7 +727,11 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.working_days = workingDays;
       r.sunday_worked = sundaysWorked;
       r.absents = absent;
-      r.week_off = Math.max(0, totalSundays - (r.paid_sunday_allowance || 0));
+      if (specialSup) {
+        r.week_off = Math.max(0, totalSundays - sundaysWorked);
+      } else {
+        r.week_off = Math.max(0, totalSundays - (r.paid_sunday_allowance || 0));
+      }
       r.miss_punch_dates = missPunchDates; // retained for potential debugging
     }
 
@@ -756,6 +783,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       attRows.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a;
       });
+      const specialSup =
+        SPECIAL_SUNDAY_SUPERVISORS.map(s => s.toLowerCase()).includes(
+          (r.supervisor_name || '').toLowerCase()
+        ) && !FULL_SALARY_EMPLOYEE_IDS.includes(r.employee_id);
       const rowData = {
         punching_id: r.punching_id,
         employee: r.employee_name,
@@ -774,8 +805,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
           if (hrs >= allot * 0.4 && hrs < allot * 0.85) char = 'H';
           else char = 'P';
           if (date.day() === 0) char = 'ED';
+        } else if (date.day() === 0) {
+          char = 'WO';
         }
-        if (date.day() === 0 && sundayCounter > (r.paid_sunday_allowance || 0)) {
+        if (!specialSup && date.day() === 0 && sundayCounter > (r.paid_sunday_allowance || 0)) {
           char = 'WO';
         }
         rowData[key] = char;
