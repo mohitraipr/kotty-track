@@ -632,6 +632,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       let workingDays = 0;
+      let sundaysWorked = 0;
       const missPunchDates = [];
       const absentDates = [];
       attRows.forEach(a => {
@@ -642,6 +643,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         let recordedAbsent = false;
         if (status === 'present' && a.punch_in && a.punch_out) {
           workingDays++;
+          if (isSun) sundaysWorked++;
         } else if (status === 'one punch only') {
           missPunchDates.push(dateStr);
         } else if (status === 'absent') {
@@ -692,9 +694,8 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.undertime_days = utDays;
       r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
       r.working_days = workingDays;
-      r.miss_punch_dates = missPunchDates;
-      r.absent_dates = absentDates;
-      r.absent_days = absentDates.length;
+      r.sunday_worked = sundaysWorked;
+      r.miss_punch_dates = missPunchDates; // retained for potential debugging
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -705,18 +706,14 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       { header: 'Punching ID', key: 'punching_id', width: 15 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary', key: 'salary', width: 10 },
-      { header: 'Month', key: 'month', width: 10 },
-      { header: 'Gross', key: 'gross', width: 10 },
       { header: 'Deduction', key: 'deduction', width: 12 },
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
-      { header: 'Working Days', key: 'working_days', width: 12 },
-      { header: 'Absent Days', key: 'absent_days', width: 12 },
-      { header: 'Miss Punch Dates', key: 'miss_punch_dates', width: 25 },
-      { header: 'Absent Dates', key: 'absent_dates', width: 25 }
+      { header: 'Deduction Reason', key: 'deduction_reason', width: 30 },
+      { header: 'Worked Days', key: 'working_days', width: 12 },
+      { header: 'Sundays', key: 'sunday_worked', width: 10 }
     ];
-    sheet.getColumn('absent_dates').alignment = { wrapText: true };
     rows.forEach(r => {
       sheet.addRow({
         supervisor: r.supervisor_name,
@@ -724,16 +721,13 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         punching_id: r.punching_id,
         employee: r.employee_name,
         salary: r.base_salary,
-        month: r.month,
-        gross: r.gross,
         deduction: r.deduction,
         advance_taken: r.advance_taken,
         advance_deducted: r.advance_deducted,
         net: r.net,
+        deduction_reason: r.deduction_reason,
         working_days: r.working_days,
-        absent_days: r.absent_days,
-        miss_punch_dates: r.miss_punch_dates.join(', '),
-        absent_dates: r.absent_dates.join('\n')
+        sunday_worked: r.sunday_worked
       });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
