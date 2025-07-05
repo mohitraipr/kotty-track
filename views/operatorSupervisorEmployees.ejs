@@ -17,6 +17,9 @@
 </nav>
 <div class="container my-4">
   <%- include('partials/flashMessages') %>
+  <div class="mb-3">
+    <a href="/operator/supervisors/<%= supervisor.id %>/bulk-attendance" class="btn btn-sm btn-primary">Bulk Edit Attendance</a>
+  </div>
   <table class="table table-bordered">
     <thead>
       <tr>
