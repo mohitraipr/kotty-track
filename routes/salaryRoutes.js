@@ -421,6 +421,147 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
   }
 });
 
+// Supervisor download of employee salary sheet
+router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const supervisorId = req.session.user.id;
+  try {
+    const [sandwichRows] = await pool.query(
+      'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
+      [month]
+    );
+    const sandwichDates = sandwichRows.map(r => moment(r.date).format('YYYY-MM-DD'));
+
+    const [rows] = await pool.query(`
+      SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
+             e.punching_id, e.name AS employee_name, e.salary AS base_salary,
+             e.paid_sunday_allowance, e.allotted_hours,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
+             u.username AS supervisor_name, d.name AS department_name
+        FROM employee_salaries es
+        JOIN employees e ON es.employee_id = e.id
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly' AND e.supervisor_id = ?
+       ORDER BY e.name
+    `, [month, supervisorId]);
+
+    for (const r of rows) {
+      const [attRows] = await pool.query(
+        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+        [r.employee_id, month]
+      );
+      const attMap = {};
+      attRows.forEach(a => {
+        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
+      });
+      let absent = 0, onePunch = 0, sundayAbs = 0;
+      let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
+      attRows.forEach(a => {
+        const dateStr = moment(a.date).format('YYYY-MM-DD');
+        const status = a.status;
+        const isSun = moment(a.date).day() === 0;
+        const isSandwich = sandwichDates.includes(dateStr);
+        if (isSun) {
+          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
+                            (monStatus === 'absent' || monStatus === 'one punch only');
+          if (adjAbsent) {
+            sundayAbs++;
+            return;
+          }
+        }
+        if (isSandwich) {
+          const prevStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
+          const nextStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
+          const adjAbsent = (prevStatus === 'absent' || prevStatus === 'one punch only') ||
+                            (nextStatus === 'absent' || nextStatus === 'one punch only');
+          if (adjAbsent) {
+            absent++;
+            return;
+          }
+        }
+        if (!isSun) {
+          if (status === 'absent') absent++;
+          else if (status === 'one punch only') onePunch++;
+        }
+        if (a.punch_in && a.punch_out) {
+          const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          const diff = hrs - parseFloat(r.allotted_hours || 0);
+          if (diff > 0) { otHours += diff; otDays++; }
+          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+        }
+      });
+      const notes = [];
+      if (absent) notes.push(`${absent} day(s) absent`);
+      if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
+      if (sundayAbs) notes.push(`${sundayAbs} Sunday absence(s)`);
+      r.deduction_reason = notes.join(', ');
+      r.overtime_hours = otHours.toFixed(2);
+      r.overtime_days = otDays;
+      r.undertime_hours = utHours.toFixed(2);
+      r.undertime_days = utDays;
+      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Salary');
+    sheet.columns = [
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Month', key: 'month', width: 10 },
+      { header: 'Gross', key: 'gross', width: 10 },
+      { header: 'Deduction', key: 'deduction', width: 12 },
+      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
+      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
+      { header: 'Net', key: 'net', width: 10 },
+      { header: 'OT Hours', key: 'ot_hours', width: 12 },
+      { header: 'OT Days', key: 'ot_days', width: 10 },
+      { header: 'UT Hours', key: 'ut_hours', width: 12 },
+      { header: 'UT Days', key: 'ut_days', width: 10 },
+      { header: 'Status', key: 'time_status', width: 12 },
+      { header: 'Deduction Reason', key: 'reason', width: 30 }
+    ];
+    rows.forEach(r => {
+      sheet.addRow({
+        supervisor: r.supervisor_name,
+        department: r.department_name || '',
+        punching_id: r.punching_id,
+        employee: r.employee_name,
+        month: r.month,
+        gross: r.gross,
+        deduction: r.deduction,
+        advance_taken: r.advance_taken,
+        advance_deducted: r.advance_deducted,
+        net: r.net,
+        ot_hours: r.overtime_hours,
+        ot_days: r.overtime_days,
+        ut_hours: r.undertime_hours,
+        ut_days: r.undertime_days,
+        time_status: r.time_status,
+        reason: r.deduction_reason
+      });
+    });
+    res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary:', err);
+    req.flash('error', 'Could not download salary');
+    res.redirect('/supervisor/employees');
+  }
+});
+
 router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSupervisor, async (req, res) => {
   const empId = req.params.id;
   const { month, amount } = req.body;
