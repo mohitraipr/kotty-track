@@ -325,16 +325,19 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       }
       const isSun = moment(a.date).day() === 0;
       if (isSun && emp.salary_type !== 'dihadi') {
-        if (a.status === 'present') {
-          if (specialDept) {
-            a.deduction_reason = 'Leave credited';
-          } else if (parseFloat(emp.salary) < 13500) {
-            a.deduction_reason = 'Paid Sunday';
-          } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
-            a.deduction_reason = 'Paid Sunday (override)';
-            paidUsed++;
+        if (a.status === 'present' && a.punch_in && a.punch_out) {
+          const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          if (hrsWorked > 0) {
+            if (specialDept) {
+              a.deduction_reason = 'Leave credited';
+            } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
+              a.deduction_reason = 'Paid Sunday';
+              paidUsed++;
+            } else {
+              a.deduction_reason = 'Leave credited';
+            }
           } else {
-            a.deduction_reason = 'Leave credited';
+            a.deduction_reason = '';
           }
         } else {
           a.deduction_reason = '';

@@ -257,10 +257,10 @@ Punching in after **09:15** results in an additional one-hour deduction from the
 
 ### Sunday Attendance Rules
 
-- **Salary below 13,500** – each Sunday worked grants an extra day's pay unless the employee belongs to a special department.
-- **Special departments (`catalog`, `account`, `merchant`)** – Sundays do not grant extra pay; worked Sundays become leave credits.
-- **Salary 13,500 or more** – a worked Sunday is credited as leave unless covered by the employee's `paid_sunday_allowance`.
-- **Paid Sunday allowance** – specifies how many Sundays in a month are paid regardless of salary. Extra Sundays become leave credits.
+- **Special departments (`catalog`, `account`, `merchant`)** – Sundays never grant extra pay; any worked Sunday is credited as leave.
+- **All other departments** – a Sunday is paid only when the employee works that day and has unused `paid_sunday_allowance`. Otherwise the day is credited as leave.
+
+Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
 If an employee misses Saturday or Monday **and** also skips the Sunday, the weekend becomes a "sandwich" and all three days are deducted from salary. When the employee works on that Sunday, the sandwich rule is ignored and any adjacent absence is paid.
