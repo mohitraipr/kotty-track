@@ -386,6 +386,16 @@
             <button type="submit" class="btn btn-primary w-100">Fix Miss Punch</button>
           </div>
         </form>
+        <hr>
+        <form action="/operator/departments/bulk-fix-miss-punch" method="POST" enctype="multipart/form-data" class="row g-3 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">Excel File (employeeid column)</label>
+            <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+          </div>
+          <div class="col-md-6 text-end">
+            <button type="submit" class="btn btn-primary w-100">Fix in Bulk</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

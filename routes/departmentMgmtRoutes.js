@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const moment = require('moment');
 const ExcelJS = require('exceljs');
+const XLSX = require('xlsx');
 const {
   calculateSalaryForMonth,
   effectiveHours,
@@ -921,5 +922,99 @@ router.post('/departments/fix-miss-punch', isAuthenticated, isOperator, async (r
   }
   res.redirect('/operator/departments');
 });
+
+// Bulk fix miss punches using an Excel file of employee IDs
+router.post(
+  '/departments/bulk-fix-miss-punch',
+  isAuthenticated,
+  isOperator,
+  upload.single('excelFile'),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      req.flash('error', 'No file uploaded');
+      return res.redirect('/operator/departments');
+    }
+
+    let rows;
+    try {
+      const wb = XLSX.read(file.buffer, { type: 'buffer' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    } catch (err) {
+      console.error('Failed to parse Excel:', err);
+      req.flash('error', 'Invalid Excel file');
+      return res.redirect('/operator/departments');
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      let totalFixed = 0;
+
+      for (const r of rows) {
+        const empId = parseInt(
+          r.employeeid || r.employee_id || r.id || r.empid || 0,
+          10
+        );
+        if (!empId) continue;
+
+        const [[emp]] = await conn.query(
+          'SELECT id, allotted_hours FROM employees WHERE id = ?',
+          [empId]
+        );
+        if (!emp) continue;
+
+        const allot = parseFloat(emp.allotted_hours || 0);
+        const outTime = moment('09:00:00', 'HH:mm:ss')
+          .add(allot, 'hours')
+          .format('HH:mm:ss');
+
+        const [attRows] = await conn.query(
+          "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND (status = 'one punch only' OR punch_in IS NULL OR punch_out IS NULL)",
+          [empId]
+        );
+
+        const months = new Set();
+        for (const a of attRows) {
+          await conn.query(
+            'UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = "present" WHERE id = ?',
+            ['09:00:00', outTime, a.id]
+          );
+          await conn.query(
+            'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [
+              empId,
+              a.date,
+              a.punch_in,
+              a.punch_out,
+              '09:00:00',
+              outTime,
+              req.session.user.id
+            ]
+          );
+          months.add(moment(a.date).format('YYYY-MM'));
+        }
+
+        for (const m of months) {
+          await calculateSalaryForMonth(conn, empId, m);
+        }
+
+        totalFixed += attRows.length;
+      }
+
+      await conn.commit();
+      req.flash('success', `Fixed ${totalFixed} entries`);
+    } catch (err) {
+      await conn.rollback();
+      console.error('Error bulk fixing miss punches:', err);
+      req.flash('error', 'Failed to bulk fix miss punches');
+    } finally {
+      conn.release();
+    }
+
+    res.redirect('/operator/departments');
+  }
+);
 
 module.exports = router;
