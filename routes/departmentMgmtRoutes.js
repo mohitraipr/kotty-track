@@ -440,8 +440,9 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
           const diff = hrs - parseFloat(r.allotted_hours || 0);
           if (diff > 0) { otHours += diff; otDays++; }
           else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
-          if (hrs < parseFloat(r.allotted_hours || 0) * 0.55) halfDays++;
-          if (rule === 'monthly_short' && hrs < parseFloat(r.allotted_hours || 0)) shortDays++;
+          const allotted = parseFloat(r.allotted_hours || 0);
+          if (hrs >= allotted * 0.4 && hrs < allotted * 0.85) halfDays++;
+          if (rule === 'monthly_short' && hrs < allotted) shortDays++;
         }
       });
       const notes = [];

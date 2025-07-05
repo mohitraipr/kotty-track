@@ -531,12 +531,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           emp.salary_type === 'monthly' &&
           a.punch_in &&
           a.punch_out &&
-          emp.allotted_hours &&
-          effectiveHours(a.punch_in, a.punch_out, 'monthly') <
-            parseFloat(emp.allotted_hours) * 0.55
+          emp.allotted_hours
         ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') +
-            'Worked less than half day';
+          const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          const allotted = parseFloat(emp.allotted_hours);
+          if (hrsWorked >= allotted * 0.4 && hrsWorked < allotted * 0.85) {
+            a.deduction_reason += (a.deduction_reason ? '; ' : '') +
+              'Worked less than half day';
+          }
         }
 
         if (
@@ -606,6 +608,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
              e.paid_sunday_allowance, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS month_ded,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
@@ -698,38 +701,52 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.miss_punch_dates = missPunchDates; // retained for potential debugging
     }
 
+    const daysInMonth = moment(month + '-01').daysInMonth();
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Salary');
-    sheet.columns = [
-      { header: 'Supervisor', key: 'supervisor', width: 20 },
-      { header: 'Department', key: 'department', width: 15 },
-      { header: 'Punching ID', key: 'punching_id', width: 15 },
-      { header: 'Employee', key: 'employee', width: 20 },
-      { header: 'Salary', key: 'salary', width: 10 },
-      { header: 'Deduction', key: 'deduction', width: 12 },
-      { header: 'Advance Taken', key: 'advance_taken', width: 12 },
-      { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
-      { header: 'Net', key: 'net', width: 10 },
-      { header: 'Deduction Reason', key: 'deduction_reason', width: 30 },
-      { header: 'Worked Days', key: 'working_days', width: 12 },
-      { header: 'Sundays', key: 'sunday_worked', width: 10 }
+    const columns = [
+      { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Employee', key: 'employee', width: 20 }
     ];
-    rows.forEach(r => {
-      sheet.addRow({
-        supervisor: r.supervisor_name,
-        department: r.department_name || '',
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `d${String(d).padStart(2, '0')}`;
+      columns.push({ header: String(d).padStart(2, '0'), key, width: 4 });
+    }
+    columns.push({ header: 'Advance Deduct', key: 'advance_deduct', width: 14 });
+    columns.push({ header: 'Net', key: 'net', width: 10 });
+    sheet.columns = columns;
+
+    for (const r of rows) {
+      const [attRows] = await pool.query(
+        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+        [r.employee_id, month]
+      );
+      const attMap = {};
+      attRows.forEach(a => {
+        attMap[moment(a.date).format('YYYY-MM-DD')] = a;
+      });
+      const rowData = {
         punching_id: r.punching_id,
         employee: r.employee_name,
-        salary: r.base_salary,
-        deduction: r.deduction,
-        advance_taken: r.advance_taken,
-        advance_deducted: r.advance_deducted,
-        net: r.net,
-        deduction_reason: r.deduction_reason,
-        working_days: r.working_days,
-        sunday_worked: r.sunday_worked
-      });
-    });
+      };
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = moment(month + '-' + String(d).padStart(2, '0'));
+        const key = `d${String(d).padStart(2, '0')}`;
+        const rec = attMap[date.format('YYYY-MM-DD')];
+        let char = 'A';
+        if (rec && rec.punch_in && rec.punch_out && rec.status === 'present') {
+          const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+          const allot = parseFloat(r.allotted_hours || 0);
+          if (hrs >= allot * 0.4 && hrs < allot * 0.85) char = 'H';
+          else char = 'P';
+          if (date.day() === 0) char = 'ED';
+        }
+        rowData[key] = char;
+      }
+      rowData.advance_deduct = r.month_ded;
+      rowData.net = r.net;
+      sheet.addRow(rowData);
+    }
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
