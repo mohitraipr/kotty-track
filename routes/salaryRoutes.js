@@ -222,6 +222,106 @@ router.get('/salary/night-template', isAuthenticated, isOperator, async (req, re
   }
 });
 
+// POST advance Excel upload
+router.post('/salary/upload-advances', isAuthenticated, isOperator, upload.single('excelFile'), async (req, res) => {
+  const file = req.file;
+  if (!file) {
+    req.flash('error', 'No file uploaded');
+    return res.redirect('/operator/departments');
+  }
+
+  let rows;
+  try {
+    const wb = XLSX.read(file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  } catch (err) {
+    console.error('Failed to parse Excel:', err);
+    req.flash('error', 'Invalid Excel file');
+    return res.redirect('/operator/departments');
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    let uploadedCount = 0;
+    for (const r of rows) {
+      const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
+      const name = String(r.name || r.employee_name || '').trim();
+      const amount = parseFloat(r.amount || r.advance || 0);
+      if (!punchingId || !name || !amount) continue;
+      const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+      if (!emp) continue;
+      await conn.query('INSERT INTO employee_advances (employee_id, amount, reason) VALUES (?, ?, ?)', [emp.id, amount, r.reason || null]);
+      uploadedCount++;
+    }
+    await conn.commit();
+    req.flash('success', `Advance data uploaded for ${uploadedCount} employees`);
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error processing advance data:', err);
+    req.flash('error', 'Failed to process advance data');
+  } finally {
+    conn.release();
+  }
+
+  res.redirect('/operator/departments');
+});
+
+// POST advance deduction Excel upload
+router.post('/salary/upload-advance-deductions', isAuthenticated, isOperator, upload.single('excelFile'), async (req, res) => {
+  const file = req.file;
+  if (!file) {
+    req.flash('error', 'No file uploaded');
+    return res.redirect('/operator/departments');
+  }
+
+  let rows;
+  try {
+    const wb = XLSX.read(file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  } catch (err) {
+    console.error('Failed to parse Excel:', err);
+    req.flash('error', 'Invalid Excel file');
+    return res.redirect('/operator/departments');
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    let uploadedCount = 0;
+    for (const r of rows) {
+      const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
+      const name = String(r.name || r.employee_name || '').trim();
+      const month = String(r.month || '').trim();
+      const amount = parseFloat(r.amount || r.deduction || 0);
+      if (!punchingId || !name || !month || !amount) continue;
+      const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+      if (!emp) continue;
+      const [[sal]] = await conn.query('SELECT id, gross, deduction FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [emp.id, month]);
+      if (!sal) continue;
+      const [[exists]] = await conn.query('SELECT id FROM advance_deductions WHERE employee_id = ? AND month = ? LIMIT 1', [emp.id, month]);
+      if (exists) continue;
+      const newDed = parseFloat(sal.deduction) + amount;
+      const net = parseFloat(sal.gross) - newDed;
+      await conn.query('UPDATE employee_salaries SET deduction = ?, net = ? WHERE id = ?', [newDed, net, sal.id]);
+      await conn.query('INSERT INTO advance_deductions (employee_id, month, amount) VALUES (?, ?, ?)', [emp.id, month, amount]);
+      uploadedCount++;
+    }
+    await conn.commit();
+    req.flash('success', `Advance deductions uploaded for ${uploadedCount} employees`);
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error processing advance deductions:', err);
+    req.flash('error', 'Failed to process advance deductions');
+  } finally {
+    conn.release();
+  }
+
+  res.redirect('/operator/departments');
+});
+
 
 // View salary summary for operator
 router.get('/salaries', isAuthenticated, isOperator, async (req, res) => {
@@ -463,11 +563,21 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       });
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
+      let workingDays = 0;
+      const missPunchDates = [];
+      const absentDates = [];
       attRows.forEach(a => {
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
         const isSun = moment(a.date).day() === 0;
         const isSandwich = sandwichDates.includes(dateStr);
+        if (status === 'present' && a.punch_in && a.punch_out) {
+          workingDays++;
+        } else if (status === 'one punch only') {
+          missPunchDates.push(dateStr);
+        } else if (status === 'absent') {
+          absentDates.push(dateStr);
+        }
         if (isSun) {
           const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
           const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
@@ -509,6 +619,9 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.undertime_hours = utHours.toFixed(2);
       r.undertime_days = utDays;
       r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+      r.working_days = workingDays;
+      r.miss_punch_dates = missPunchDates;
+      r.absent_dates = absentDates;
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -524,7 +637,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       { header: 'Deduction', key: 'deduction', width: 12 },
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
-      { header: 'Net', key: 'net', width: 10 }
+      { header: 'Net', key: 'net', width: 10 },
+      { header: 'Working Days', key: 'working_days', width: 12 },
+      { header: 'Miss Punch Dates', key: 'miss_punch_dates', width: 25 },
+      { header: 'Absent Dates', key: 'absent_dates', width: 25 }
     ];
     rows.forEach(r => {
       sheet.addRow({
@@ -538,7 +654,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         deduction: r.deduction,
         advance_taken: r.advance_taken,
         advance_deducted: r.advance_deducted,
-        net: r.net
+        net: r.net,
+        working_days: r.working_days,
+        miss_punch_dates: r.miss_punch_dates.join(', '),
+        absent_dates: r.absent_dates.join(', ')
       });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
