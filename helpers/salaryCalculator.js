@@ -1,5 +1,9 @@
 const moment = require('moment');
 const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
+const {
+  SPECIAL_SUNDAY_SUPERVISORS,
+  FULL_SALARY_EMPLOYEE_IDS
+} = require('../utils/supervisors');
 
 function lunchDeduction(punchIn, punchOut, salaryType = 'dihadi') {
   if (salaryType !== 'dihadi') return 0;
@@ -39,8 +43,10 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   const [[emp]] = await conn.query(
     `SELECT e.salary, e.salary_type, e.paid_sunday_allowance, e.allotted_hours,
             e.date_of_joining,
-            d.name AS department
+            d.name AS department,
+            u.username AS supervisor_name
        FROM employees e
+       JOIN users u ON e.supervisor_id = u.id
        LEFT JOIN (
              SELECT user_id, MIN(department_id) AS department_id
                FROM department_supervisors
@@ -53,6 +59,19 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   if (!emp) return;
   const specialDept = SPECIAL_DEPARTMENTS.includes(
     (emp.department || '').toLowerCase()
+  );
+  if (FULL_SALARY_EMPLOYEE_IDS.includes(employeeId)) {
+    const gross = parseFloat(emp.salary);
+    await conn.query(
+      `INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at)
+       VALUES (?, ?, ?, 0, ?, NOW())
+       ON DUPLICATE KEY UPDATE gross=VALUES(gross), deduction=0, net=VALUES(net)`,
+      [employeeId, month, gross, gross]
+    );
+    return;
+  }
+  const specialSup = SPECIAL_SUNDAY_SUPERVISORS.map(s => s.toLowerCase()).includes(
+    (emp.supervisor_name || '').toLowerCase()
   );
   if (emp.salary_type === 'dihadi') {
     await calculateDihadiMonthly(conn, employeeId, month, emp);
@@ -87,20 +106,22 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   // If an employee works on Sunday but misses Saturday or Monday,
   // the adjacent absence should be paid. Collect those dates here
   const skipAbsent = new Set();
-  attendance.forEach(a => {
-    if (moment(a.date).day() !== 0) return;
-    if (a.status !== 'present') return;
-    const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
-    const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
-    const satStatus = attMap[satKey];
-    const monStatus = attMap[monKey];
-    if (satStatus && (satStatus === 'absent' || satStatus === 'one punch only')) {
-      skipAbsent.add(satKey);
-    }
-    if (monStatus && (monStatus === 'absent' || monStatus === 'one punch only')) {
-      skipAbsent.add(monKey);
-    }
-  });
+  if (!specialSup) {
+    attendance.forEach(a => {
+      if (moment(a.date).day() !== 0) return;
+      if (a.status !== 'present') return;
+      const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+      const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+      const satStatus = attMap[satKey];
+      const monStatus = attMap[monKey];
+      if (satStatus && (satStatus === 'absent' || satStatus === 'one punch only')) {
+        skipAbsent.add(satKey);
+      }
+      if (monStatus && (monStatus === 'absent' || monStatus === 'one punch only')) {
+        skipAbsent.add(monKey);
+      }
+    });
+  }
 
   let absent = 0;
   let halfDeduct = 0;
@@ -115,9 +136,9 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
     const status = a.status;
     const isSun = moment(a.date).day() === 0;
-    const isSandwich = sandwichDates.includes(dateStr);
+    const isSandwich = !specialSup && sandwichDates.includes(dateStr);
 
-    if (isSun) {
+    if (!specialSup && isSun) {
       const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
       const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
       const satStatus = attMap[satKey];
@@ -127,7 +148,18 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       if (status === 'present') {
         if (satStatus && missedSat) skipAbsent.add(satKey);
         if (monStatus && missedMon) skipAbsent.add(monKey);
-      } else if (status !== 'present' && ((satStatus && missedSat) || (monStatus && missedMon))) {
+      } else if (status !== 'present' && missedSat && missedMon) {
+        absent++;
+        return;
+      }
+    } else if (specialSup && isSun) {
+      const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+      const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+      const satStatus = attMap[satKey];
+      const monStatus = attMap[monKey];
+      const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
+      const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
+      if (status !== 'present' && missedSat && missedMon) {
         absent++;
         return;
       }
@@ -148,7 +180,9 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       if (status === 'present' && a.punch_in && a.punch_out) {
         const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
         if (hrsWorked > 0) {
-          if (specialDept) {
+          if (specialSup) {
+            extraPay += dailyRate;
+          } else if (specialDept) {
             creditLeaves.push(dateStr);
           } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
             extraPay += dailyRate;
@@ -173,16 +207,18 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
   });
 
-  for (const d of creditLeaves) {
-    const [rows] = await conn.query(
-      'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ?',
-      [employeeId, d]
-    );
-    if (!rows.length) {
-      await conn.query(
-        'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
-        [employeeId, d, 'Sunday Credit']
+  if (!specialSup) {
+    for (const d of creditLeaves) {
+      const [rows] = await conn.query(
+        'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ?',
+        [employeeId, d]
       );
+      if (!rows.length) {
+        await conn.query(
+          'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
+          [employeeId, d, 'Sunday Credit']
+        );
+      }
     }
   }
 
