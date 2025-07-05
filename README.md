@@ -305,6 +305,8 @@ CREATE TABLE employee_nights (
 ```
 Uploading a sheet increases the employee's salary by `nights * (salary / days_in_month)` for the specified month. Duplicate uploads for the same employee and month are ignored. Operators can download an Excel template via the `/salary/night-template` route. The file includes the columns `supervisorname`, `supervisordepartment`, `punchingid`, `name`, `nights`, `month`.
 
+Advance and deduction uploads also provide templates. Use `/salary/advance-template` to download a spreadsheet with columns `employeeid`, `punchingid`, `name`, `amount` and `reason`. For recording salary deductions of an advance, download `/salary/advance-deduction-template` which lists `employeeid`, `punchingid`, `name`, `month` and `amount`.
+
 ### Sandwich Dates
 
 Create a table so operators can mark certain dates as "sandwich" days:

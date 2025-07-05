@@ -222,6 +222,52 @@ router.get('/salary/night-template', isAuthenticated, isOperator, async (req, re
   }
 });
 
+// GET advance Excel template
+router.get('/salary/advance-template', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('AdvanceTemplate');
+    sheet.columns = [
+      { header: 'employeeid', key: 'employeeid', width: 12 },
+      { header: 'punchingid', key: 'punchingid', width: 15 },
+      { header: 'name', key: 'name', width: 20 },
+      { header: 'amount', key: 'amount', width: 10 },
+      { header: 'reason', key: 'reason', width: 20 }
+    ];
+    res.setHeader('Content-Disposition', 'attachment; filename="AdvanceTemplate.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    console.error('Error downloading advance template:', err);
+    req.flash('error', 'Error downloading advance template');
+    return res.redirect('/operator/departments');
+  }
+});
+
+// GET advance deduction Excel template
+router.get('/salary/advance-deduction-template', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('AdvanceDeductionTemplate');
+    sheet.columns = [
+      { header: 'employeeid', key: 'employeeid', width: 12 },
+      { header: 'punchingid', key: 'punchingid', width: 15 },
+      { header: 'name', key: 'name', width: 20 },
+      { header: 'month', key: 'month', width: 10 },
+      { header: 'amount', key: 'amount', width: 10 }
+    ];
+    res.setHeader('Content-Disposition', 'attachment; filename="AdvanceDeductionTemplate.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    console.error('Error downloading advance deduction template:', err);
+    req.flash('error', 'Error downloading advance deduction template');
+    return res.redirect('/operator/departments');
+  }
+});
+
 // POST advance Excel upload
 router.post('/salary/upload-advances', isAuthenticated, isOperator, upload.single('excelFile'), async (req, res) => {
   const file = req.file;
@@ -246,13 +292,23 @@ router.post('/salary/upload-advances', isAuthenticated, isOperator, upload.singl
     await conn.beginTransaction();
     let uploadedCount = 0;
     for (const r of rows) {
-      const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
-      const name = String(r.name || r.employee_name || '').trim();
+      const empIdInput = parseInt(r.employeeid || r.employee_id || r.empid || r.id || 0, 10);
+      let empId = null;
+      if (empIdInput) {
+        const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
+        if (emp) empId = emp.id;
+      }
+      if (!empId) {
+        const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
+        const name = String(r.name || r.employee_name || '').trim();
+        if (!punchingId || !name) continue;
+        const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+        if (!emp) continue;
+        empId = emp.id;
+      }
       const amount = parseFloat(r.amount || r.advance || 0);
-      if (!punchingId || !name || !amount) continue;
-      const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
-      if (!emp) continue;
-      await conn.query('INSERT INTO employee_advances (employee_id, amount, reason) VALUES (?, ?, ?)', [emp.id, amount, r.reason || null]);
+      if (!amount) continue;
+      await conn.query('INSERT INTO employee_advances (employee_id, amount, reason) VALUES (?, ?, ?)', [empId, amount, r.reason || null]);
       uploadedCount++;
     }
     await conn.commit();
@@ -292,21 +348,33 @@ router.post('/salary/upload-advance-deductions', isAuthenticated, isOperator, up
     await conn.beginTransaction();
     let uploadedCount = 0;
     for (const r of rows) {
-      const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
-      const name = String(r.name || r.employee_name || '').trim();
+      const empIdInput = parseInt(r.employeeid || r.employee_id || r.empid || r.id || 0, 10);
+      let empId = null;
+      if (empIdInput) {
+        const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
+        if (emp) empId = emp.id;
+      }
+      let punchingId = '';
+      let name = '';
+      if (!empId) {
+        punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
+        name = String(r.name || r.employee_name || '').trim();
+        if (!punchingId || !name) continue;
+        const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+        if (!emp) continue;
+        empId = emp.id;
+      }
       const month = String(r.month || '').trim();
       const amount = parseFloat(r.amount || r.deduction || 0);
-      if (!punchingId || !name || !month || !amount) continue;
-      const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
-      if (!emp) continue;
-      const [[sal]] = await conn.query('SELECT id, gross, deduction FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [emp.id, month]);
+      if (!month || !amount) continue;
+      const [[sal]] = await conn.query('SELECT id, gross, deduction FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
       if (!sal) continue;
-      const [[exists]] = await conn.query('SELECT id FROM advance_deductions WHERE employee_id = ? AND month = ? LIMIT 1', [emp.id, month]);
+      const [[exists]] = await conn.query('SELECT id FROM advance_deductions WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
       if (exists) continue;
       const newDed = parseFloat(sal.deduction) + amount;
       const net = parseFloat(sal.gross) - newDed;
       await conn.query('UPDATE employee_salaries SET deduction = ?, net = ? WHERE id = ?', [newDed, net, sal.id]);
-      await conn.query('INSERT INTO advance_deductions (employee_id, month, amount) VALUES (?, ?, ?)', [emp.id, month, amount]);
+      await conn.query('INSERT INTO advance_deductions (employee_id, month, amount) VALUES (?, ?, ?)', [empId, month, amount]);
       uploadedCount++;
     }
     await conn.commit();
