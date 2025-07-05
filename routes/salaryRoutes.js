@@ -595,6 +595,11 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
 router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (req, res) => {
   const month = req.query.month || moment().format('YYYY-MM');
   const supervisorId = req.session.user.id;
+  const daysInMonth = moment(month + '-01').daysInMonth();
+  let totalSundays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (moment(`${month}-${String(d).padStart(2, '0')}`).day() === 0) totalSundays++;
+  }
   try {
     const [sandwichRows] = await pool.query(
       'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
@@ -698,10 +703,12 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
       r.working_days = workingDays;
       r.sunday_worked = sundaysWorked;
+      r.absents = absent;
+      r.week_off = Math.max(0, totalSundays - (r.paid_sunday_allowance || 0));
       r.miss_punch_dates = missPunchDates; // retained for potential debugging
     }
 
-    const daysInMonth = moment(month + '-01').daysInMonth();
+    // daysInMonth calculated earlier
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Salary');
     const columns = [
@@ -715,6 +722,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     }
     columns.push({ header: 'Advance Deduct', key: 'advance_deduct', width: 14 });
     columns.push({ header: 'Net', key: 'net', width: 10 });
+    columns.push({ header: 'Working Days', key: 'working_days', width: 14 });
+    columns.push({ header: 'Sundays Worked', key: 'sunday_worked', width: 15 });
+    columns.push({ header: 'Absents', key: 'absents', width: 10 });
+    columns.push({ header: 'Week Off', key: 'week_off', width: 10 });
     sheet.columns = columns;
     sheet.getRow(1).font = { bold: true };
     sheet.getRow(1).alignment = { horizontal: 'center' };
@@ -731,6 +742,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     sheet.getColumn('net').numFmt = '0.00';
     sheet.getColumn('base_salary').alignment = { horizontal: 'right' };
     sheet.getColumn('net').alignment = { horizontal: 'right' };
+    sheet.getColumn('working_days').alignment = { horizontal: 'center' };
+    sheet.getColumn('sunday_worked').alignment = { horizontal: 'center' };
+    sheet.getColumn('absents').alignment = { horizontal: 'center' };
+    sheet.getColumn('week_off').alignment = { horizontal: 'center' };
 
     for (const r of rows) {
       const [attRows] = await pool.query(
@@ -746,11 +761,13 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         employee: r.employee_name,
         base_salary: r.base_salary
       };
+      let sundayCounter = 0;
       for (let d = 1; d <= daysInMonth; d++) {
         const date = moment(month + '-' + String(d).padStart(2, '0'));
         const key = `d${String(d).padStart(2, '0')}`;
         const rec = attMap[date.format('YYYY-MM-DD')];
         let char = 'A';
+        if (date.day() === 0) sundayCounter++;
         if (rec && rec.punch_in && rec.punch_out && rec.status === 'present') {
           const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
           const allot = parseFloat(r.allotted_hours || 0);
@@ -758,10 +775,17 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
           else char = 'P';
           if (date.day() === 0) char = 'ED';
         }
+        if (date.day() === 0 && sundayCounter > (r.paid_sunday_allowance || 0)) {
+          char = 'WO';
+        }
         rowData[key] = char;
       }
       rowData.advance_deduct = r.month_ded;
       rowData.net = r.net;
+      rowData.working_days = r.working_days;
+      rowData.sunday_worked = r.sunday_worked;
+      rowData.absents = r.absents;
+      rowData.week_off = r.week_off;
       sheet.addRow(rowData);
     }
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
