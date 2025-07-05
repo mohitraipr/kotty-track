@@ -833,4 +833,39 @@ router.post('/departments/reset-supervisor', isAuthenticated, isOperator, async 
   res.redirect('/operator/departments');
 });
 
+// Delete all employees and associated data for a supervisor
+router.post('/departments/delete-supervisor-employees', isAuthenticated, isOperator, async (req, res) => {
+  const supId = req.body.supervisor_id;
+  if (!supId) {
+    req.flash('error', 'Supervisor is required');
+    return res.redirect('/operator/departments');
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [empRows] = await conn.query('SELECT id FROM employees WHERE supervisor_id = ?', [supId]);
+    const empIds = empRows.map(e => e.id);
+    if (empIds.length) {
+      await conn.query('DELETE FROM attendance_edit_logs WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_attendance WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_salaries WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_nights WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_leaves WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_debits WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employee_advances WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM advance_deductions WHERE employee_id IN (?)', [empIds]);
+      await conn.query('DELETE FROM employees WHERE supervisor_id = ?', [supId]);
+    }
+    await conn.commit();
+    req.flash('success', 'Employees deleted');
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error deleting employees:', err);
+    req.flash('error', 'Failed to delete employees');
+  } finally {
+    conn.release();
+  }
+  res.redirect('/operator/departments');
+});
+
 module.exports = router;

@@ -332,6 +332,27 @@
   </div>
   <div class="mt-4">
     <div class="card shadow-sm">
+      <div class="card-header">Delete Supervisor Employees</div>
+      <div class="card-body">
+        <form action="/operator/departments/delete-supervisor-employees" method="POST" class="row g-3 align-items-end" onsubmit="return confirm('Delete all employees and related data for this supervisor?');">
+          <div class="col-md-6">
+            <label class="form-label">Supervisor</label>
+            <select name="supervisor_id" class="form-select" required>
+              <option value="">Choose...</option>
+              <% supervisors.forEach(function(s){ %>
+                <option value="<%= s.id %>"><%= s.username %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-6 text-end">
+            <button type="submit" class="btn btn-danger w-100">Delete Employees</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="mt-4">
+    <div class="card shadow-sm">
       <div class="card-header">Salary Rules</div>
       <div class="card-body">
         <div class="alert alert-info">Use SQL like conditions on attendance fields. Example: punch_in &gt; '09:15:00'.</div>

@@ -10,6 +10,7 @@ Kotty Track is a Node.js and Express application used to manage the production w
 - **Employee management** – Supervisors register employees, record attendance, handle salary calculations and upload night shift data.
 - **Store inventory** – Store admins maintain the list of goods while store employees add incoming stock and record dispatches.
 - **Bulk upload & search** – Operators can upload attendance files and perform bulk updates; Excel exports are available throughout the system.
+- **Supervisor cleanup** – Operators can remove a supervisor's employees and all related records in one action.
 - **Audit logging** – Important actions are written to log files for later review.
 
 ## Installation
