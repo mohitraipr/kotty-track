@@ -163,9 +163,10 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
         absent++;
       } else if (emp.allotted_hours) {
         const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-        if (hrsWorked <= 1) {
+        const allotted = parseFloat(emp.allotted_hours);
+        if (hrsWorked < allotted * 0.4) {
           absent++;
-        } else if (hrsWorked < parseFloat(emp.allotted_hours) * 0.55) {
+        } else if (hrsWorked < allotted * 0.85) {
           halfDeduct += 0.5;
         }
       }
