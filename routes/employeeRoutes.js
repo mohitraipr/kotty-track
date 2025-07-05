@@ -40,6 +40,7 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
     }
 
     let topEmployees = [];
+    let presentCount = 0;
     if (totalEmployees && monthStart.isValid()) {
       const startDate = monthStart.format('YYYY-MM-DD');
       const endDate = monthStart.endOf('month').format('YYYY-MM-DD');
@@ -74,6 +75,20 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
         .sort((a, b) => b.diff - a.diff)
         .slice(0, 3)
         .map(i => i.name);
+
+      const [presentRows] = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM (
+           SELECT employee_id
+             FROM employee_attendance
+            WHERE employee_id IN (?)
+              AND date BETWEEN ? AND ?
+              AND status = 'present'
+            GROUP BY employee_id
+           HAVING COUNT(*) >= 3
+         ) AS t`,
+        [ids, startDate, endDate]
+      );
+      presentCount = presentRows[0]?.cnt || 0;
     }
 
     res.render('supervisorEmployees', {
@@ -83,6 +98,7 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       totalEmployees,
       avgSalary,
       topEmployees,
+      presentCount,
       months,
       selectedMonth
     });
