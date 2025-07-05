@@ -94,10 +94,26 @@
             <div class="col-12 text-end">
               <button type="submit" class="btn btn-primary w-100">Upload Nights</button>
             </div>
-          </form>
-          <div class="mb-3 text-center">
-            <a href="/salary/night-template" class="btn btn-success w-100">Download Night Template</a>
-          </div>
+            </form>
+            <form action="/salary/upload-advances" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+              <div class="col-12">
+                <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+              </div>
+              <div class="col-12 text-end">
+                <button type="submit" class="btn btn-primary w-100">Upload Advances</button>
+              </div>
+            </form>
+            <form action="/salary/upload-advance-deductions" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+              <div class="col-12">
+                <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+              </div>
+              <div class="col-12 text-end">
+                <button type="submit" class="btn btn-primary w-100">Upload Deductions</button>
+              </div>
+            </form>
+            <div class="mb-3 text-center">
+              <a href="/salary/night-template" class="btn btn-success w-100">Download Night Template</a>
+            </div>
           <div class="download-buttons">
             <form action="/operator/departments/salary/download" method="GET">
               <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
