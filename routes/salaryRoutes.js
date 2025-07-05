@@ -523,13 +523,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       { header: 'Deduction', key: 'deduction', width: 12 },
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
-      { header: 'Net', key: 'net', width: 10 },
-      { header: 'OT Hours', key: 'ot_hours', width: 12 },
-      { header: 'OT Days', key: 'ot_days', width: 10 },
-      { header: 'UT Hours', key: 'ut_hours', width: 12 },
-      { header: 'UT Days', key: 'ut_days', width: 10 },
-      { header: 'Status', key: 'time_status', width: 12 },
-      { header: 'Deduction Reason', key: 'reason', width: 30 }
+      { header: 'Net', key: 'net', width: 10 }
     ];
     rows.forEach(r => {
       sheet.addRow({
@@ -542,13 +536,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         deduction: r.deduction,
         advance_taken: r.advance_taken,
         advance_deducted: r.advance_deducted,
-        net: r.net,
-        ot_hours: r.overtime_hours,
-        ot_days: r.overtime_days,
-        ut_hours: r.undertime_hours,
-        ut_days: r.undertime_days,
-        time_status: r.time_status,
-        reason: r.deduction_reason
+        net: r.net
       });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
