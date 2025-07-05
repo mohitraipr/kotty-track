@@ -868,4 +868,58 @@ router.post('/departments/delete-supervisor-employees', isAuthenticated, isOpera
   res.redirect('/operator/departments');
 });
 
+// Bulk fix miss punches for an employee
+router.post('/departments/fix-miss-punch', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.body.employee_id;
+  if (!empId) {
+    req.flash('error', 'Employee ID is required');
+    return res.redirect('/operator/departments');
+  }
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[emp]] = await conn.query('SELECT id, allotted_hours FROM employees WHERE id = ?', [empId]);
+    if (!emp) {
+      await conn.rollback();
+      conn.release();
+      req.flash('error', 'Employee not found');
+      return res.redirect('/operator/departments');
+    }
+    const allot = parseFloat(emp.allotted_hours || 0);
+    const outTime = moment('09:00:00', 'HH:mm:ss').add(allot, 'hours').format('HH:mm:ss');
+
+    const [rows] = await conn.query(
+      "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND (status = 'one punch only' OR punch_in IS NULL OR punch_out IS NULL)",
+      [empId]
+    );
+
+    const months = new Set();
+    for (const r of rows) {
+      await conn.query(
+        'UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = \"present\" WHERE id = ?',
+        ['09:00:00', outTime, r.id]
+      );
+      await conn.query(
+        'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [empId, r.date, r.punch_in, r.punch_out, '09:00:00', outTime, req.session.user.id]
+      );
+      months.add(moment(r.date).format('YYYY-MM'));
+    }
+
+    for (const m of months) {
+      await calculateSalaryForMonth(conn, empId, m);
+    }
+
+    await conn.commit();
+    req.flash('success', `Fixed ${rows.length} entries`);
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error fixing miss punch:', err);
+    req.flash('error', 'Failed to fix miss punches');
+  } finally {
+    conn.release();
+  }
+  res.redirect('/operator/departments');
+});
+
 module.exports = router;

@@ -375,6 +375,22 @@
   </div>
   <div class="mt-4">
     <div class="card shadow-sm">
+      <div class="card-header">Bulk Fix Miss Punch</div>
+      <div class="card-body">
+        <form action="/operator/departments/fix-miss-punch" method="POST" class="row g-3 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">Employee ID</label>
+            <input type="number" name="employee_id" class="form-control" required>
+          </div>
+          <div class="col-md-6 text-end">
+            <button type="submit" class="btn btn-primary w-100">Fix Miss Punch</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="mt-4">
+    <div class="card shadow-sm">
       <div class="card-header">Salary Rules</div>
       <div class="card-body">
         <div class="alert alert-info">Use SQL like conditions on attendance fields. Example: punch_in &gt; '09:15:00'.</div>
