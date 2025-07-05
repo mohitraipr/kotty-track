@@ -706,7 +706,8 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     const sheet = workbook.addWorksheet('Salary');
     const columns = [
       { header: 'Punching ID', key: 'punching_id', width: 12 },
-      { header: 'Employee', key: 'employee', width: 20 }
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Base Salary', key: 'base_salary', width: 12 }
     ];
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `d${String(d).padStart(2, '0')}`;
@@ -715,6 +716,21 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     columns.push({ header: 'Advance Deduct', key: 'advance_deduct', width: 14 });
     columns.push({ header: 'Net', key: 'net', width: 10 });
     sheet.columns = columns;
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: 'center' };
+    sheet.getRow(1).eachCell(cell => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    sheet.getColumn('base_salary').numFmt = '0.00';
+    sheet.getColumn('net').numFmt = '0.00';
+    sheet.getColumn('base_salary').alignment = { horizontal: 'right' };
+    sheet.getColumn('net').alignment = { horizontal: 'right' };
 
     for (const r of rows) {
       const [attRows] = await pool.query(
@@ -728,6 +744,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       const rowData = {
         punching_id: r.punching_id,
         employee: r.employee_name,
+        base_salary: r.base_salary
       };
       for (let d = 1; d <= daysInMonth; d++) {
         const date = moment(month + '-' + String(d).padStart(2, '0'));
