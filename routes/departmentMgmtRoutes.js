@@ -891,7 +891,7 @@ router.post('/departments/fix-miss-punch', isAuthenticated, isOperator, async (r
     const outTime = moment('09:00:00', 'HH:mm:ss').add(allot, 'hours').format('HH:mm:ss');
 
     const [rows] = await conn.query(
-      "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND (status = 'one punch only' OR punch_in IS NULL OR punch_out IS NULL)",
+      "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND status = 'one punch only'",
       [empId]
     );
 
@@ -972,7 +972,7 @@ router.post(
           .format('HH:mm:ss');
 
         const [attRows] = await conn.query(
-          "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND (status = 'one punch only' OR punch_in IS NULL OR punch_out IS NULL)",
+          "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND status = 'one punch only'",
           [empId]
         );
 
