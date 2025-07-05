@@ -639,12 +639,14 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         const status = a.status;
         const isSun = moment(a.date).day() === 0;
         const isSandwich = sandwichDates.includes(dateStr);
+        let recordedAbsent = false;
         if (status === 'present' && a.punch_in && a.punch_out) {
           workingDays++;
         } else if (status === 'one punch only') {
           missPunchDates.push(dateStr);
         } else if (status === 'absent') {
           absentDates.push(dateStr);
+          recordedAbsent = true;
         }
         if (isSun) {
           const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
@@ -653,6 +655,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
                             (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {
             sundayAbs++;
+            if (!recordedAbsent) absentDates.push(dateStr);
             return;
           }
         }
@@ -663,6 +666,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
                             (nextStatus === 'absent' || nextStatus === 'one punch only');
           if (adjAbsent) {
             absent++;
+            if (!recordedAbsent) absentDates.push(dateStr);
             return;
           }
         }
@@ -690,6 +694,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.working_days = workingDays;
       r.miss_punch_dates = missPunchDates;
       r.absent_dates = absentDates;
+      r.absent_days = absentDates.length;
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -707,9 +712,11 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
       { header: 'Working Days', key: 'working_days', width: 12 },
+      { header: 'Absent Days', key: 'absent_days', width: 12 },
       { header: 'Miss Punch Dates', key: 'miss_punch_dates', width: 25 },
       { header: 'Absent Dates', key: 'absent_dates', width: 25 }
     ];
+    sheet.getColumn('absent_dates').alignment = { wrapText: true };
     rows.forEach(r => {
       sheet.addRow({
         supervisor: r.supervisor_name,
@@ -724,8 +731,9 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         advance_deducted: r.advance_deducted,
         net: r.net,
         working_days: r.working_days,
+        absent_days: r.absent_days,
         miss_punch_dates: r.miss_punch_dates.join(', '),
-        absent_dates: r.absent_dates.join(', ')
+        absent_dates: r.absent_dates.join('\n')
       });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
