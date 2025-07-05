@@ -393,7 +393,61 @@ router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) =
     return res.json(data);
   } catch (err) {
     console.error("Error in /dashboard/api/lot:", err);
-    return res.status(500).json({ error: "Server error" });
+  return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name,
+             e.salary, u.username AS supervisor_name, d.name AS department_name,
+             (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_adv,
+             (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_ded
+        FROM employees e
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE e.is_active = 1
+       ORDER BY d.name, u.username, e.name
+    `);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Employees");
+    sheet.columns = [
+      { header: "Department", key: "department", width: 20 },
+      { header: "Supervisor", key: "supervisor", width: 20 },
+      { header: "Employee", key: "employee", width: 20 },
+      { header: "Punching ID", key: "punching_id", width: 15 },
+      { header: "Employee ID", key: "employee_id", width: 12 },
+      { header: "Salary", key: "salary", width: 12 },
+      { header: "Advance Left", key: "advance_left", width: 15 }
+    ];
+
+    rows.forEach(r => {
+      const advLeft = parseFloat(r.total_adv) - parseFloat(r.total_ded);
+      sheet.addRow({
+        department: r.department_name || "",
+        supervisor: r.supervisor_name,
+        employee: r.employee_name,
+        punching_id: r.punching_id,
+        employee_id: r.employee_id,
+        salary: r.salary,
+        advance_left: advLeft
+      });
+    });
+
+    res.setHeader("Content-Disposition", 'attachment; filename="EmployeeSummary.xlsx"');
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error in /dashboard/employees/download:", err);
+    return res.status(500).send("Server error");
   }
 });
 
