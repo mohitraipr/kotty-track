@@ -868,4 +868,80 @@ router.post('/departments/delete-supervisor-employees', isAuthenticated, isOpera
   res.redirect('/operator/departments');
 });
 
+
+router.post('/departments/fix-miss-punch', isAuthenticated, isOperator, upload.single('excel_file'), async (req, res) => {
+  const manual = req.body.employee_id && String(req.body.employee_id).trim();
+  const ids = [];
+  if (manual) {
+    const n = parseInt(manual, 10);
+    if (!Number.isNaN(n)) ids.push(n);
+  }
+
+  if (req.file) {
+    try {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(req.file.buffer);
+      const sheet = wb.worksheets[0];
+      sheet.eachRow(row => {
+        const val = parseInt(row.getCell(1).value, 10);
+        if (!Number.isNaN(val)) ids.push(val);
+      });
+    } catch (err) {
+      console.error('Invalid Excel file:', err);
+      req.flash('error', 'Invalid Excel file');
+      return res.redirect('/operator/departments');
+    }
+  }
+
+  if (!ids.length) {
+    req.flash('error', 'Provide an employee ID or Excel file');
+    return res.redirect('/operator/departments');
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    let total = 0;
+    for (const empId of ids) {
+      const [[emp]] = await conn.query('SELECT id, allotted_hours FROM employees WHERE id = ?', [empId]);
+      if (!emp) continue;
+      const allot = parseFloat(emp.allotted_hours || 0);
+      const outTime = moment('09:00:00', 'HH:mm:ss').add(allot, 'hours').format('HH:mm:ss');
+
+      const [rows] = await conn.query(
+        "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND (status = 'one punch only' OR punch_in IS NULL OR punch_out IS NULL)",
+        [empId]
+      );
+
+      const months = new Set();
+      for (const r of rows) {
+        await conn.query(
+          'UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = "present" WHERE id = ?',
+          ['09:00:00', outTime, r.id]
+        );
+        await conn.query(
+          'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [empId, r.date, r.punch_in, r.punch_out, '09:00:00', outTime, req.session.user.id]
+        );
+        months.add(moment(r.date).format('YYYY-MM'));
+      }
+
+      for (const m of months) {
+        await calculateSalaryForMonth(conn, empId, m);
+      }
+
+      total += rows.length;
+    }
+
+    await conn.commit();
+    req.flash('success', `Fixed ${total} entries`);
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error fixing miss punch:', err);
+    req.flash('error', 'Failed to fix miss punches');
+  } finally {
+    conn.release();
+  }
+  res.redirect('/operator/departments');
+});
 module.exports = router;
