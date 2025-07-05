@@ -123,4 +123,91 @@ router.post('/employees/:id/edit', isAuthenticated, isOperator, async (req, res)
   }
 });
 
+// Bulk edit attendance for dihadi employees under a supervisor
+router.get('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, async (req, res) => {
+  const supId = req.params.id;
+  const date = req.query.date || moment().format('YYYY-MM-DD');
+  try {
+    const [[supervisor]] = await pool.query(
+      'SELECT id, username FROM users WHERE id = ? AND role_id IN (SELECT id FROM roles WHERE name = "supervisor")',
+      [supId]
+    );
+    if (!supervisor) {
+      req.flash('error', 'Supervisor not found');
+      return res.redirect('/operator/supervisors');
+    }
+    const [employees] = await pool.query(
+      `SELECT e.id, e.punching_id, e.name, a.punch_in, a.punch_out
+         FROM employees e
+         LEFT JOIN employee_attendance a ON a.employee_id = e.id AND a.date = ?
+        WHERE e.supervisor_id = ? AND e.salary_type = 'dihadi'
+        ORDER BY e.name`,
+      [date, supId]
+    );
+    res.render('operatorBulkAttendance', { user: req.session.user, supervisor, employees, date });
+  } catch (err) {
+    console.error('Error loading bulk attendance:', err);
+    req.flash('error', 'Failed to load attendance');
+    res.redirect('/operator/supervisors');
+  }
+});
+
+router.post('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, async (req, res) => {
+  const supId = req.params.id;
+  const date = req.body.date;
+  if (!date) {
+    req.flash('error', 'Date is required');
+    return res.redirect('back');
+  }
+  let empIds = req.body.employee_id || [];
+  let punchIns = req.body.punch_in || [];
+  let punchOuts = req.body.punch_out || [];
+  if (!Array.isArray(empIds)) empIds = [empIds];
+  if (!Array.isArray(punchIns)) punchIns = [punchIns];
+  if (!Array.isArray(punchOuts)) punchOuts = [punchOuts];
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (let i = 0; i < empIds.length; i++) {
+      const empId = empIds[i];
+      const punch_in = punchIns[i] || null;
+      const punch_out = punchOuts[i] || null;
+
+      const [[emp]] = await conn.query('SELECT supervisor_id, salary_type FROM employees WHERE id = ?', [empId]);
+      if (!emp || emp.supervisor_id != supId || emp.salary_type !== 'dihadi') {
+        continue;
+      }
+
+      const [[att]] = await conn.query('SELECT id, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date = ?', [empId, date]);
+      const newStatus = punch_in && punch_out ? 'present' : punch_in || punch_out ? 'one punch only' : 'absent';
+      if (att) {
+        await conn.query('UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?', [punch_in, punch_out, newStatus, att.id]);
+        await conn.query(
+          'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [empId, date, att.punch_in, att.punch_out, punch_in, punch_out, req.session.user.id]
+        );
+      } else {
+        await conn.query('INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES (?, ?, ?, ?, ?)', [empId, date, punch_in, punch_out, newStatus]);
+        await conn.query(
+          'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [empId, date, null, null, punch_in, punch_out, req.session.user.id]
+        );
+      }
+
+      const month = moment(date).format('YYYY-MM');
+      await calculateSalaryForMonth(conn, empId, month);
+    }
+    await conn.commit();
+    conn.release();
+    req.flash('success', 'Attendance updated');
+    res.redirect(`/operator/supervisors/${supId}/employees`);
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    console.error('Error updating bulk attendance:', err);
+    req.flash('error', 'Failed to update attendance');
+    res.redirect('back');
+  }
+});
+
 module.exports = router;
