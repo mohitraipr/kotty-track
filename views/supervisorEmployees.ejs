@@ -64,6 +64,14 @@
       </div>
     </div>
   </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <form action="/supervisor/salary/download" method="GET" class="d-flex gap-2 align-items-end">
+        <input type="month" name="month" class="form-control" value="<%= selectedMonth %>" required>
+        <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Salary Excel</button>
+      </form>
+    </div>
+  </div>
   <h4>Add Employee</h4>
   <form action="/supervisor/employees" method="POST" class="row g-3 mb-4">
     <div class="col-md-3">

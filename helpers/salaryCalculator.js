@@ -74,6 +74,16 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
   });
 
+  // Treat missing attendance records as absences
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = moment(`${month}-${String(d).padStart(2, '0')}`).format('YYYY-MM-DD');
+    if (!attMap[dateStr]) {
+      attendance.push({ date: dateStr, status: 'absent', punch_in: null, punch_out: null });
+      attMap[dateStr] = 'absent';
+    }
+  }
+
+
   // If an employee works on Sunday but misses Saturday or Monday,
   // the adjacent absence should be paid. Collect those dates here
   const skipAbsent = new Set();
@@ -149,11 +159,13 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
         }
       }
     } else {
-      if (status === 'absent' || status === 'one punch only') {
+      if (status === 'absent' || status === 'one punch only' || !a.punch_in || !a.punch_out) {
         absent++;
-      } else if (a.punch_in && a.punch_out && emp.allotted_hours) {
+      } else if (emp.allotted_hours) {
         const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-        if (hrsWorked < parseFloat(emp.allotted_hours) * 0.55) {
+        if (hrsWorked <= 1) {
+          absent++;
+        } else if (hrsWorked < parseFloat(emp.allotted_hours) * 0.55) {
           halfDeduct += 0.5;
         }
       }
