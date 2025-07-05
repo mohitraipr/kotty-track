@@ -694,6 +694,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       r.working_days = workingDays;
       r.miss_punch_dates = missPunchDates;
       r.absent_dates = absentDates;
+      r.absent_days = absentDates.length;
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -711,6 +712,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
       { header: 'Working Days', key: 'working_days', width: 12 },
+      { header: 'Absent Days', key: 'absent_days', width: 12 },
       { header: 'Miss Punch Dates', key: 'miss_punch_dates', width: 25 },
       { header: 'Absent Dates', key: 'absent_dates', width: 25 }
     ];
@@ -729,6 +731,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         advance_deducted: r.advance_deducted,
         net: r.net,
         working_days: r.working_days,
+        absent_days: r.absent_days,
         miss_punch_dates: r.miss_punch_dates.join(', '),
         absent_dates: r.absent_dates.join('\n')
       });
