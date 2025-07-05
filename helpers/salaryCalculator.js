@@ -135,16 +135,17 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
 
     if (isSun) {
-      if (status === 'present') {
-        if (specialDept) {
-          creditLeaves.push(dateStr);
-        } else if (parseFloat(emp.salary) < 13500) {
-          extraPay += dailyRate;
-        } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
-          extraPay += dailyRate;
-          paidUsed++;
-        } else {
-          creditLeaves.push(dateStr);
+      if (status === 'present' && a.punch_in && a.punch_out) {
+        const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+        if (hrsWorked > 0) {
+          if (specialDept) {
+            creditLeaves.push(dateStr);
+          } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
+            extraPay += dailyRate;
+            paidUsed++;
+          } else {
+            creditLeaves.push(dateStr);
+          }
         }
       }
     } else {
