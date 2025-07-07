@@ -189,12 +189,22 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
   try {
     await conn.beginTransaction();
     let uploadedCount = 0;
+    const unmatched = [];
     for (const emp of data) {
       const [empRows] = await conn.query(
         'SELECT id, salary, salary_type FROM employees WHERE punching_id = ? AND name = ? AND supervisor_id = ? LIMIT 1',
         [emp.punchingId, emp.name, supervisorId]
       );
-      if (!empRows.length) continue;
+      if (!empRows.length) {
+        const hasPresent = Array.isArray(emp.attendance) && emp.attendance.some(a => {
+          const status = String(a.status || 'present').toLowerCase();
+          return status === 'present';
+        });
+        if (hasPresent) {
+          unmatched.push(`${emp.punchingId} - ${emp.name}`);
+        }
+        continue;
+      }
       const employee = empRows[0];
       for (const att of emp.attendance) {
         await conn.query(
@@ -209,7 +219,11 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
       uploadedCount++;
     }
     await conn.commit();
-    req.flash('success', `Attendance uploaded for ${uploadedCount} employees`);
+    let msg = `Attendance uploaded for ${uploadedCount} employees`;
+    if (unmatched.length) {
+      msg += `. Unmatched employees with present days: ${unmatched.join(', ')}`;
+    }
+    req.flash('success', msg);
   } catch (err) {
     await conn.rollback();
     console.error('Error processing attendance:', err);
