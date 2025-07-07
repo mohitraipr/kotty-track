@@ -31,8 +31,8 @@
       <label class="form-label">Punch Out</label>
       <input type="time" name="punch_out" class="form-control" value="<%= attendance ? attendance.punch_out : '' %>">
     </div>
-    <button type="submit" class="btn btn-primary" <% if(editCount >= 3){ %> disabled <% } %> >Update</button>
-    <span class="ms-2">Remaining edits: <%= 3 - editCount %></span>
+    <button type="submit" class="btn btn-primary" <% if(editCount >= 35){ %> disabled <% } %> >Update</button>
+    <span class="ms-2">Remaining edits: <%= 35 - editCount %></span>
   </form>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

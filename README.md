@@ -268,7 +268,7 @@ If an employee misses Saturday or Monday **and** also skips the Sunday, the week
 
 ### Attendance Edit Logs
 
-Operators can adjust an employee's punch in/out times. A log table tracks these updates and limits each employee to three edits total:
+Operators can adjust an employee's punch in/out times. A log table tracks these updates and limits each employee to thirty-five edits total:
 ```sql
 CREATE TABLE attendance_edit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -284,7 +284,7 @@ CREATE TABLE attendance_edit_logs (
   FOREIGN KEY (operator_id) REFERENCES users(id)
 );
 ```
-Operators can modify punch times from the dashboard, but once three rows exist in `attendance_edit_logs` for an employee no further edits are allowed. Every update recalculates the employee's salary for that month.
+Operators can modify punch times from the dashboard, but once thirty-five rows exist in `attendance_edit_logs` for an employee no further edits are allowed. Every update recalculates the employee's salary for that month.
 
 ### Night Shift Uploads
 
