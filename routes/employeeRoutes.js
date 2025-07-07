@@ -39,8 +39,9 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       months.push({ value: m.format('YYYY-MM'), label: m.format('MMM YYYY') });
     }
 
-    let topEmployees = [];
-    let presentCount = 0;
+  let topEmployees = [];
+  let presentCount = 0;
+  let paidCount = 0;
     if (totalEmployees && monthStart.isValid()) {
       const startDate = monthStart.format('YYYY-MM-DD');
       const endDate = monthStart.endOf('month').format('YYYY-MM-DD');
@@ -89,6 +90,12 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
         [ids, startDate, endDate]
       );
       presentCount = presentRows[0]?.cnt || 0;
+
+      const [salaryRows] = await pool.query(
+        'SELECT COUNT(*) AS cnt FROM employee_salaries WHERE employee_id IN (?) AND month = ? AND net > 0',
+        [ids, selectedMonth]
+      );
+      paidCount = salaryRows[0]?.cnt || 0;
     }
 
     res.render('supervisorEmployees', {
@@ -99,6 +106,7 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       avgSalary,
       topEmployees,
       presentCount,
+      paidCount,
       months,
       selectedMonth
     });
