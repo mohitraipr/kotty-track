@@ -282,8 +282,10 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         const isSun = moment(a.date).day() === 0;
         const isSandwich = sandwichDates.includes(dateStr);
         if (isSun) {
-          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
-          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+          const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
+          const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
           const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
                             (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {
@@ -426,8 +428,10 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         const isSun = moment(a.date).day() === 0;
         const isSandwich = sandwichDates.includes(dateStr);
         if (isSun) {
-          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
-          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+          const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
+          const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
           const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
                             (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {

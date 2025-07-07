@@ -658,7 +658,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         const isSandwich = !specialSup && sandwichDates.includes(dateStr);
         let recordedAbsent = false;
         if (status === 'present' && a.punch_in && a.punch_out) {
-          workingDays++;
+          const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
+          const allot = parseFloat(r.allotted_hours || 0);
+          const half = allot && hrs >= allot * 0.4 && hrs < allot * 0.85;
+          workingDays += half ? 0.5 : 1;
           if (isSun) sundaysWorked++;
         } else if (status === 'one punch only') {
           if (!(specialSup && isSun)) missPunchDates.push(dateStr);
@@ -669,8 +672,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
           }
         }
         if (!specialSup && isSun) {
-          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
-          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+          const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
+          const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
           const adjAbsent =
             (satStatus === 'absent' || satStatus === 'one punch only') &&
             (monStatus === 'absent' || monStatus === 'one punch only');
@@ -680,8 +685,10 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
             return;
           }
         } else if (specialSup && isSun) {
-          const satStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')] || 'absent';
-          const monStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')] || 'absent';
+          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+          const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
+          const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
           const adjAbsent =
             (satStatus === 'absent' || satStatus === 'one punch only') &&
             (monStatus === 'absent' || monStatus === 'one punch only');
