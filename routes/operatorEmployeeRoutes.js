@@ -123,7 +123,7 @@ router.post('/employees/:id/edit', isAuthenticated, isOperator, async (req, res)
   }
 });
 
-// Bulk edit attendance for dihadi employees under a supervisor
+// Bulk edit attendance for all employees under a supervisor
 router.get('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, async (req, res) => {
   const supId = req.params.id;
   const date = req.query.date || moment().format('YYYY-MM-DD');
@@ -140,7 +140,7 @@ router.get('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, asyn
       `SELECT e.id, e.punching_id, e.name, a.punch_in, a.punch_out
          FROM employees e
          LEFT JOIN employee_attendance a ON a.employee_id = e.id AND a.date = ?
-        WHERE e.supervisor_id = ? AND e.salary_type = 'dihadi'
+        WHERE e.supervisor_id = ?
         ORDER BY e.name`,
       [date, supId]
     );
@@ -173,8 +173,8 @@ router.post('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, asy
       const punch_in = punchIns[i] || null;
       const punch_out = punchOuts[i] || null;
 
-      const [[emp]] = await conn.query('SELECT supervisor_id, salary_type FROM employees WHERE id = ?', [empId]);
-      if (!emp || emp.supervisor_id != supId || emp.salary_type !== 'dihadi') {
+      const [[emp]] = await conn.query('SELECT supervisor_id FROM employees WHERE id = ?', [empId]);
+      if (!emp || emp.supervisor_id != supId) {
         continue;
       }
 
