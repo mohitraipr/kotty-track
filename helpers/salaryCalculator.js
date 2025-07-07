@@ -93,6 +93,37 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
   });
 
+  // Include the last day of the previous month and the first day of the next
+  // month so Sunday sandwich checks work across month boundaries.  If
+  // attendance for those dates doesn't exist, treat them as absences.
+  const startOfMonth = moment(month + '-01');
+  const prevDay = startOfMonth.clone().subtract(1, 'day').format('YYYY-MM-DD');
+  const endOfMonth = startOfMonth.clone().endOf('month');
+  const nextDay = endOfMonth.clone().add(1, 'day').format('YYYY-MM-DD');
+  if (!attMap[prevDay] || !attMap[nextDay]) {
+    const placeholders = [];
+    const params = [employeeId];
+    if (!attMap[prevDay]) {
+      placeholders.push('?');
+      params.push(prevDay);
+    }
+    if (!attMap[nextDay]) {
+      placeholders.push('?');
+      params.push(nextDay);
+    }
+    if (placeholders.length) {
+      const [adjacent] = await conn.query(
+        `SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (${placeholders.join(',')})`,
+        params
+      );
+      adjacent.forEach(r => {
+        attMap[moment(r.date).format('YYYY-MM-DD')] = r.status;
+      });
+    }
+    if (!attMap[prevDay]) attMap[prevDay] = 'absent';
+    if (!attMap[nextDay]) attMap[nextDay] = 'absent';
+  }
+
   // Treat missing attendance records as absences
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = moment(`${month}-${String(d).padStart(2, '0')}`).format('YYYY-MM-DD');
