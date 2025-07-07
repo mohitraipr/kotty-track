@@ -271,7 +271,12 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   const nightPay = (parseFloat(nightRows[0].total_nights) || 0) * dailyRate;
   extraPay += nightPay;
   const gross = parseFloat(emp.salary) + extraPay;
-  const deduction = (absent + halfDeduct) * dailyRate;
+  const [[advRow]] = await conn.query(
+    'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
+    [employeeId, month]
+  );
+  const advDeduct = parseFloat(advRow.total) || 0;
+  const deduction = (absent + halfDeduct) * dailyRate + advDeduct;
   const net = gross - deduction;
   await conn.query(
     `INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at)
@@ -295,9 +300,15 @@ async function calculateDihadiMonthly(conn, employeeId, month, emp) {
     totalHours += effectiveHours(a.punch_in, a.punch_out);
   }
   const gross = parseFloat((totalHours * hourlyRate).toFixed(2));
+  const [[advRow]] = await conn.query(
+    'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
+    [employeeId, month]
+  );
+  const advDeduct = parseFloat(advRow.total) || 0;
+  const net = gross - advDeduct;
   await conn.query(
-    "INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at) VALUES (?, ?, ?, 0, ?, NOW()) ON DUPLICATE KEY UPDATE gross=VALUES(gross), deduction=0, net=VALUES(net)",
-    [employeeId, month, gross, gross]
+    "INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at) VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE gross=VALUES(gross), deduction=VALUES(deduction), net=VALUES(net)",
+    [employeeId, month, gross, advDeduct, net]
   );
 }
 
