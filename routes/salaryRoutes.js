@@ -145,7 +145,7 @@ router.post('/salary/upload-nights', isAuthenticated, isOperator, upload.single(
       let supervisorCondition = '';
       const params = [punchingId, name];
       if (supName) {
-        const [[sup]] = await conn.query('SELECT id FROM users WHERE name = ? LIMIT 1', [supName]);
+        const [[sup]] = await conn.query('SELECT id FROM users WHERE username = ? LIMIT 1', [supName]);
         if (sup) {
           supervisorCondition = ' AND supervisor_id = ?';
           params.push(sup.id);
