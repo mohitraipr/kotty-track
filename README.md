@@ -286,6 +286,25 @@ CREATE TABLE attendance_edit_logs (
 ```
 Operators can modify punch times from the dashboard, but once thirty-five rows exist in `attendance_edit_logs` for an employee no further edits are allowed. Every update recalculates the employee's salary for that month.
 
+### Attendance Edit Routes
+
+Several endpoints update attendance records and then recalculate salary using
+`helpers/salaryCalculator.js`:
+
+- `POST /operator/employees/:id/edit` – update a single day of attendance
+  for one employee.
+- `POST /operator/supervisors/:id/bulk-attendance` – bulk edit a specific date
+  for all employees under a supervisor.
+- `POST /operator/employees/:id/bulk-attendance` – edit an entire month of
+  attendance for one employee.
+- `POST /departments/fix-miss-punch` – automatically correct "one punch only"
+  entries for a single employee.
+- `POST /departments/bulk-fix-miss-punch` – upload an Excel file to fix many
+  employees at once.
+
+Each of these routes calls `calculateSalaryForMonth` after saving attendance so
+that both monthly and dihadi salaries are updated with any advance deductions.
+
 ### Night Shift Uploads
 
 Operators can upload a monthly Excel sheet listing the night shifts worked by employees. Create a table to store these uploads:
