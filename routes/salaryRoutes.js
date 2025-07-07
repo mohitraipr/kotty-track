@@ -618,6 +618,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS month_ded,
+             (SELECT COALESCE(SUM(nights),0) FROM employee_nights en WHERE en.employee_id = es.employee_id AND en.month = es.month) AS nights,
              u.username AS supervisor_name, d.name AS department_name
         FROM employee_salaries es
         JOIN employees e ON es.employee_id = e.id
@@ -760,6 +761,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     columns.push({ header: 'Sundays Worked', key: 'sunday_worked', width: 15 });
     columns.push({ header: 'Absents', key: 'absents', width: 10 });
     columns.push({ header: 'Week Off', key: 'week_off', width: 10 });
+    columns.push({ header: 'Nights', key: 'nights', width: 10 });
     sheet.columns = columns;
     sheet.getRow(1).font = { bold: true };
     sheet.getRow(1).alignment = { horizontal: 'center' };
@@ -780,6 +782,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     sheet.getColumn('sunday_worked').alignment = { horizontal: 'center' };
     sheet.getColumn('absents').alignment = { horizontal: 'center' };
     sheet.getColumn('week_off').alignment = { horizontal: 'center' };
+    sheet.getColumn('nights').alignment = { horizontal: 'center' };
 
     for (const r of rows) {
       const [attRows] = await pool.query(
@@ -826,6 +829,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       rowData.sunday_worked = r.sunday_worked;
       rowData.absents = r.absents;
       rowData.week_off = r.week_off;
+      rowData.nights = r.nights;
       sheet.addRow(rowData);
     }
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
