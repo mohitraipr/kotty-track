@@ -829,7 +829,12 @@ router.post('/departments/reset-supervisor', isAuthenticated, isOperator, async 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [empRows] = await conn.query('SELECT id FROM employees WHERE supervisor_id = ?', [supId]);
+    let empRows;
+    if (supId === 'all') {
+      [empRows] = await conn.query('SELECT id FROM employees');
+    } else {
+      [empRows] = await conn.query('SELECT id FROM employees WHERE supervisor_id = ?', [supId]);
+    }
     const empIds = empRows.map(e => e.id);
     if (empIds.length) {
       await conn.query('DELETE FROM attendance_edit_logs WHERE employee_id IN (?)', [empIds]);
@@ -842,7 +847,11 @@ router.post('/departments/reset-supervisor', isAuthenticated, isOperator, async 
       await conn.query('DELETE FROM advance_deductions WHERE employee_id IN (?)', [empIds]);
     }
     await conn.commit();
-    req.flash('success', 'Supervisor data cleared');
+    if (supId === 'all') {
+      req.flash('success', 'All supervisors data cleared');
+    } else {
+      req.flash('success', 'Supervisor data cleared');
+    }
   } catch (err) {
     await conn.rollback();
     console.error('Error clearing supervisor data:', err);
