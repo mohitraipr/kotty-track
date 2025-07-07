@@ -86,7 +86,7 @@ router.post('/employees/:id/edit', isAuthenticated, isOperator, async (req, res)
     const supervisorId = emp.supervisor_id;
 
     const [logRows] = await conn.query('SELECT COUNT(*) AS cnt FROM attendance_edit_logs WHERE employee_id = ?', [empId]);
-    if (logRows[0].cnt >= 3) {
+    if (logRows[0].cnt >= 35) {
       await conn.rollback();
       req.flash('error', 'Edit limit reached for this employee');
       conn.release();
