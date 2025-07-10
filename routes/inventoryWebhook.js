@@ -52,7 +52,7 @@ router.post(
     // ================= Custom Logic =================
     try {
       if (Array.isArray(data.inventoryData)) {
-        const threshold = 5030;
+        const threshold = 30;
         const numbers = ['+917979026089', '+918920374028'];
         for (const item of data.inventoryData) {
           if (
