@@ -47,14 +47,6 @@ npm start
 ```
 The application listens on the port specified by `PORT` (default `3000`).
 
-### Cordova Mobile App
-
-This repository includes a minimal Cordova project under `cordova-app` that
-displays `/webhook/logs` and receives inventory alerts. After installing
-Cordova run `cordova prepare` inside that directory and build for your platform.
-The app connects to the server using `cordova-app/www/js/app.js`; update the
-`SERVER_URL` constant with your server's address.
-
 ## Database Schema
 
 Below are the tables used by the application.  Run these statements in your MySQL database before starting the server.
@@ -356,4 +348,3 @@ The `/webhook/inventory` endpoint records incoming webhook data and broadcasts a
 Requests do not require a session but must include the `Access-Token` header provided by EasyEcom.
 Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
-The optional Cordova app connects to `/webhook/logs/stream` to receive these alerts and displays a local notification for each one.
