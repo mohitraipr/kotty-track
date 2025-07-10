@@ -19,6 +19,12 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
 
 // In-memory store for recent webhook requests
 const logs = [];
+let sseClients = [];
+
+function broadcastLog(log) {
+  const data = `data: ${JSON.stringify({ log })}\n\n`;
+  sseClients.forEach((client) => client.res.write(data));
+}
 
 // Default alert configuration - can be updated at runtime via /webhook/config
 // Map SKU -> threshold
@@ -57,15 +63,17 @@ router.post(
     }
 
     // Store log entry
-    logs.push({
+    const entry = {
       time: new Date().toISOString(),
       headers,
       raw,
       data,
       accessToken: req.get('Access-Token'),
-    });
+    };
+    logs.push(entry);
     // keep only last 50
     if (logs.length > 50) logs.shift();
+    broadcastLog(entry);
 
     // ================= Custom Logic =================
     try {
@@ -144,6 +152,25 @@ router.post('/config', isAuthenticated, isOperator, (req, res) => {
 // View webhook logs
 router.get('/logs', isAuthenticated, isOperator, (req, res) => {
   res.render('webhookLogs', { logs });
+});
+
+// Stream logs via Server-Sent Events
+router.get('/logs/stream', isAuthenticated, isOperator, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Send existing logs on connect
+  res.write(`data: ${JSON.stringify({ logs })}\n\n`);
+
+  const clientId = Date.now();
+  const client = { id: clientId, res };
+  sseClients.push(client);
+
+  req.on('close', () => {
+    sseClients = sseClients.filter((c) => c.id !== clientId);
+  });
 });
 
 module.exports = router;
