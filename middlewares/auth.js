@@ -120,6 +120,18 @@ function isStoreAdmin(req, res, next) {
     return hasRole('store_admin')(req, res, next);
 }
 
+function isMohitOperator(req, res, next) {
+  if (
+    req.session &&
+    req.session.user &&
+    req.session.user.username === 'mohitOperator'
+  ) {
+    return next();
+  }
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
+}
+
 module.exports = {
     isAuthenticated,
     isAdmin,
@@ -137,5 +149,6 @@ module.exports = {
     isWashingInMaster,
     isCatalogUpload,
     isStoreEmployee,
-    isStoreAdmin
+    isStoreAdmin,
+    isMohitOperator
 };

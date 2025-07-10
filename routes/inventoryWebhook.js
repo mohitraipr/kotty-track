@@ -1,7 +1,7 @@
 // routes/inventoryWebhook.js
 const express = require('express');
 const router = express.Router();
-const { isAuthenticated, isOperator } = require('../middlewares/auth');
+const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
 
 // Access token used to authenticate incoming EasyEcom webhooks
 const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
@@ -107,7 +107,7 @@ router.post(
 );
 
 // Render a simple page to update alert configuration
-router.get('/config', isAuthenticated, isOperator, (req, res) => {
+router.get('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   const configText = Object.entries(alertConfig.skuThresholds)
     .map(([sku, th]) => `${sku}:${th}`)
     .join('\n');
@@ -119,7 +119,7 @@ router.get('/config', isAuthenticated, isOperator, (req, res) => {
 });
 
 // Update alert configuration
-router.post('/config', isAuthenticated, isOperator, (req, res) => {
+router.post('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   if (typeof req.body.rules === 'string') {
     const map = {};
     req.body.rules
@@ -142,12 +142,12 @@ router.post('/config', isAuthenticated, isOperator, (req, res) => {
 });
 
 // View webhook logs
-router.get('/logs', isAuthenticated, isOperator, (req, res) => {
+router.get('/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   res.render('webhookLogs', { logs });
 });
 
 // Stream logs via Server-Sent Events
-router.get('/logs/stream', isAuthenticated, isOperator, (req, res) => {
+router.get('/logs/stream', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
