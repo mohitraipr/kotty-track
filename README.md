@@ -348,6 +348,7 @@ Salaries are released 15 days after the end of the month so that any deductions 
 ### Inventory Webhook Alerts
 
 The `/webhook/inventory` endpoint can send WhatsApp alerts when stock levels are low.
+Operator authentication is required for all `/webhook` routes.
 Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
 Alerts are sent to the hard-coded phone numbers whenever a received payload includes an SKU with quantity below its configured threshold.
