@@ -2051,8 +2051,13 @@ const TWILIO_AUTH_TOKEN     = global.env.TWILIO_AUTH_TOKEN;
 const TWILIO_WHATSAPP_FROM  = global.env.TWILIO_WHATSAPP_FROM;
 const TWILIO_SMS_FROM       = global.env.TWILIO_SMS_FROM;
 
-// 2) Create Twilio Client
-const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+// 2) Create Twilio Client only when credentials are provided
+let TWILIO_CLIENT = null;
+if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
+  TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+} else {
+  console.warn("Twilio credentials missing; notifications disabled.");
+}
 
 // Hard-coded user → phone map
 const USER_PHONE_MAP = {
@@ -2080,6 +2085,9 @@ function chunkMessage(text, limit=1600) {
 
 /** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
 async function sendChunk(phone, body) {
+  if (!TWILIO_CLIENT) {
+    return { ok: false, via: null, error: "Twilio client not configured" };
+  }
   try {
     // Attempt WhatsApp
     await TWILIO_CLIENT.messages.create({
