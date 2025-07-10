@@ -10,14 +10,20 @@ router.post(
     // 1) Inspect all incoming headers
     console.log('— HEADERS —', req.headers);
 
-    // 2) Convert buffer → UTF-8 string and log raw JSON
-    const raw = req.body.toString('utf8');
+    // 2) Determine if body is Buffer (when express.json did NOT run)
+    let raw;
+    if (Buffer.isBuffer(req.body)) {
+      raw = req.body.toString('utf8');
+    } else {
+      // Already parsed to object; reconstruct JSON string for logging
+      raw = JSON.stringify(req.body);
+    }
     console.log('— RAW BODY —', raw);
 
-    // 3) Parse JSON manually
+    // 3) Parse JSON only when body is still a string
     let data;
     try {
-      data = JSON.parse(raw);
+      data = Buffer.isBuffer(req.body) ? JSON.parse(raw) : req.body;
     } catch (err) {
       console.error('❌ JSON.parse failed:', err);
       return res.status(400).send('Invalid JSON');
