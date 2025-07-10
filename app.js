@@ -82,6 +82,7 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const salaryRoutes = require('./routes/salaryRoutes');
 const operatorEmployeeRoutes = require('./routes/operatorEmployeeRoutes');
 const flipkartReturnRoutes = require('./routes/flipkartReturnRoutes');
+const inventoryWebhook = require('./routes/inventoryWebhook');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -108,7 +109,7 @@ app.use('/store-admin', storeAdminRoutes);
 app.use('/supervisor', employeeRoutes);
 app.use('/', salaryRoutes);
 app.use('/flipkart', flipkartReturnRoutes);
-
+app.use('/webhook', inventoryWebhook);
 
 // Home Route
 app.get('/', (req, res) => {
