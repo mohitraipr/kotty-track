@@ -48,6 +48,8 @@
       data.logs.slice().reverse().forEach(addRow);
     } else if (data.log) {
       addRow(data.log);
+    } else if (data.alert) {
+      showNotification(data.alert.message);
     }
   };
 
@@ -63,6 +65,16 @@
     if (logBody.rows.length > 50) {
       logBody.deleteRow(-1);
     }
+  }
+
+  function showNotification(msg) {
+    if (window.Notification && Notification.permission === 'granted') {
+      new Notification('Inventory Alert', { body: msg });
+    }
+  }
+
+  if (window.Notification && Notification.permission !== 'granted') {
+    Notification.requestPermission();
   }
 </script>
 </body>

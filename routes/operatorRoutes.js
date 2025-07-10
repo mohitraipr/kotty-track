@@ -2043,21 +2043,7 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
 
 // ====================== Single Route: /urgent-tat ======================
 // ====================== Single Route: /urgent-tat ======================
-const twilio = require("twilio");
-
-// 1) Twilio credentials loaded from encrypted environment variables
-const TWILIO_ACCOUNT_SID    = global.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN     = global.env.TWILIO_AUTH_TOKEN;
-const TWILIO_WHATSAPP_FROM  = global.env.TWILIO_WHATSAPP_FROM;
-const TWILIO_SMS_FROM       = global.env.TWILIO_SMS_FROM;
-
-// 2) Create Twilio Client only when credentials are provided
-let TWILIO_CLIENT = null;
-if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-  TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-} else {
-  console.warn("Twilio credentials missing; notifications disabled.");
-}
+// Twilio integration removed. Urgent TAT messages are no longer sent via SMS/WhatsApp.
 
 // Hard-coded user → phone map
 const USER_PHONE_MAP = {
@@ -2083,32 +2069,9 @@ function chunkMessage(text, limit=1600) {
   return chunks;
 }
 
-/** Send one chunk via WhatsApp, fallback to SMS if WA fails. */
-async function sendChunk(phone, body) {
-  if (!TWILIO_CLIENT) {
-    return { ok: false, via: null, error: "Twilio client not configured" };
-  }
-  try {
-    // Attempt WhatsApp
-    await TWILIO_CLIENT.messages.create({
-      from: TWILIO_WHATSAPP_FROM,
-      to:   "whatsapp:" + phone,
-      body
-    });
-    return { ok: true, via: "WhatsApp", error: null };
-  } catch (waErr) {
-    // fallback to SMS
-    try {
-      await TWILIO_CLIENT.messages.create({
-        from: TWILIO_SMS_FROM,
-        to:   phone,
-        body
-      });
-      return { ok: true, via: "SMS", error: null };
-    } catch (smsErr) {
-      return { ok: false, via: null, error: smsErr.message };
-    }
-  }
+// Dummy sender since Twilio integration was removed
+async function sendChunk() {
+  return { ok: false, via: null, error: 'Twilio removed' };
 }
 
 /** Returns how many days since the dateValue. */

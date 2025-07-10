@@ -1,7 +1,6 @@
 // routes/inventoryWebhook.js
 const express = require('express');
 const router = express.Router();
-const twilio = require('twilio');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 // Access token used to authenticate incoming EasyEcom webhooks
@@ -19,18 +18,7 @@ function verifyAccessToken(req, res, next) {
   return res.status(403).send('Invalid Access Token');
 }
 
-// Twilio credentials (same as used elsewhere)
-// Load Twilio credentials from encrypted environment variables
-const TWILIO_ACCOUNT_SID   = global.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN    = global.env.TWILIO_AUTH_TOKEN;
-const TWILIO_WHATSAPP_FROM = global.env.TWILIO_WHATSAPP_FROM;
-
-let TWILIO_CLIENT = null;
-if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-  TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-} else {
-  console.warn('Twilio credentials missing; webhook alerts disabled.');
-}
+// Removed Twilio integration. Alerts are now sent to connected clients via SSE.
 
 // In-memory store for recent webhook requests
 const logs = [];
@@ -38,6 +26,11 @@ let sseClients = [];
 
 function broadcastLog(log) {
   const data = `data: ${JSON.stringify({ log })}\n\n`;
+  sseClients.forEach((client) => client.res.write(data));
+}
+
+function broadcastAlert(message) {
+  const data = `data: ${JSON.stringify({ alert: { message } })}\n\n`;
   sseClients.forEach((client) => client.res.write(data));
 }
 
@@ -92,7 +85,6 @@ router.post(
     // ================= Custom Logic =================
     try {
       if (Array.isArray(data.inventoryData)) {
-        const numbers = ['+917979026089', '+918920374028'];
         for (const item of data.inventoryData) {
           if (!item || typeof item.sku !== 'string') continue;
 
@@ -100,22 +92,8 @@ router.post(
           const threshold = alertConfig.skuThresholds[sku];
 
           if (threshold !== undefined && Number(item.inventory) < threshold) {
-            const body = `Inventory alert for ${item.sku}: ${item.inventory}`;
-            for (const phone of numbers) {
-              if (!TWILIO_CLIENT) {
-                console.warn('Twilio client not configured; alert not sent');
-                continue;
-              }
-              try {
-                await TWILIO_CLIENT.messages.create({
-                  from: TWILIO_WHATSAPP_FROM,
-                  to: 'whatsapp:' + phone,
-                  body,
-                });
-              } catch (err) {
-                console.error('Twilio send failed:', err.message);
-              }
-            }
+            const message = `Inventory alert for ${item.sku}: ${item.inventory}`;
+            broadcastAlert(message);
           }
         }
       }
