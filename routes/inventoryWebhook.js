@@ -4,6 +4,21 @@ const router = express.Router();
 const twilio = require('twilio');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
+// Access token used to authenticate incoming EasyEcom webhooks
+const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
+
+function verifyAccessToken(req, res, next) {
+  if (!EASY_ECOM_TOKEN) {
+    console.warn('EASYEECOM_ACCESS_TOKEN not set; skipping token check');
+    return next();
+  }
+  const provided = req.get('Access-Token');
+  if (provided && provided === EASY_ECOM_TOKEN) {
+    return next();
+  }
+  return res.status(403).send('Invalid Access Token');
+}
+
 // Twilio credentials (same as used elsewhere)
 // Load Twilio credentials from encrypted environment variables
 const TWILIO_ACCOUNT_SID   = global.env.TWILIO_ACCOUNT_SID;
@@ -37,8 +52,7 @@ let alertConfig = {
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
   '/inventory',
-  isAuthenticated,
-  isOperator,
+  verifyAccessToken,
   express.raw({ type: 'application/json', limit: '1mb' }),
   async (req, res) => {
     // 1) Inspect all incoming headers
