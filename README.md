@@ -34,6 +34,8 @@ Kotty Track is a Node.js and Express application used to manage the production w
    TWILIO_AUTH_TOKEN=your-twilio-token
    TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
    TWILIO_SMS_FROM=+19284272221
+   # Token used to validate EasyEcom webhooks
+   EASYEECOM_ACCESS_TOKEN=your-easyecom-token
    ```
    Encrypt the file:
    ```bash
@@ -348,7 +350,7 @@ Salaries are released 15 days after the end of the month so that any deductions 
 ### Inventory Webhook Alerts
 
 The `/webhook/inventory` endpoint can send WhatsApp alerts when stock levels are low.
-Operator authentication is required for all `/webhook` routes.
+Requests do not require a session but must include the `Access-Token` header provided by EasyEcom.
 Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
 Alerts are sent to the hard-coded phone numbers whenever a received payload includes an SKU with quantity below its configured threshold.
