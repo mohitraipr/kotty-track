@@ -12,6 +12,14 @@ const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 // In-memory store for recent webhook requests
 const logs = [];
 
+// Default alert configuration - can be updated at runtime via /webhook/config
+// Map SKU -> threshold
+let alertConfig = {
+  skuThresholds: {
+    KTTWOMENSPANT261S: 30,
+  },
+};
+
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
   '/inventory',
@@ -52,15 +60,14 @@ router.post(
     // ================= Custom Logic =================
     try {
       if (Array.isArray(data.inventoryData)) {
-        const threshold = 30;
         const numbers = ['+917979026089', '+918920374028'];
         for (const item of data.inventoryData) {
-          if (
-            item &&
-            typeof item.sku === 'string' &&
-            item.sku.toUpperCase() === 'KTTWOMENSPANT261S' &&
-            Number(item.inventory) < threshold
-          ) {
+          if (!item || typeof item.sku !== 'string') continue;
+
+          const sku = item.sku.toUpperCase();
+          const threshold = alertConfig.skuThresholds[sku];
+
+          if (threshold !== undefined && Number(item.inventory) < threshold) {
             const body = `Inventory alert for ${item.sku}: ${item.inventory}`;
             for (const phone of numbers) {
               try {
@@ -84,6 +91,41 @@ router.post(
     res.status(200).send('OK');
   }
 );
+
+// Render a simple page to update alert configuration
+router.get('/config', (req, res) => {
+  const configText = Object.entries(alertConfig.skuThresholds)
+    .map(([sku, th]) => `${sku}:${th}`)
+    .join('\n');
+  res.render('inventoryAlertConfig', {
+    configText,
+    error: req.flash('error'),
+    success: req.flash('success'),
+  });
+});
+
+// Update alert configuration
+router.post('/config', (req, res) => {
+  if (typeof req.body.rules === 'string') {
+    const map = {};
+    req.body.rules
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .forEach((line) => {
+        const [sku, thresh] = line.split(':');
+        if (sku && thresh) {
+          const t = parseInt(thresh.trim(), 10);
+          if (!isNaN(t)) {
+            map[sku.trim().toUpperCase()] = t;
+          }
+        }
+      });
+    alertConfig.skuThresholds = map;
+  }
+  req.flash('success', 'Alert configuration updated');
+  res.redirect('/webhook/config');
+});
 
 // View webhook logs
 router.get('/logs', (req, res) => {
