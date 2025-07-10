@@ -1,17 +1,32 @@
+// routes/inventoryWebhook.js
 const express = require('express');
 const router = express.Router();
 
-// This endpoint will catch EasyEcom's inventory updates
-router.post('/inventory', (req, res) => {
-  // 1) Log the whole payload so you can see it in your console:
-  console.log('📥 Inventory update received:', JSON.stringify(req.body, null, 2));
+// 1) For this endpoint only, grab the raw body (all types)
+router.post(
+  '/inventory',
+  express.raw({ type: '*/*' }),
+  (req, res) => {
+    // 2) Convert the buffer → string and log it
+    const raw = req.body.toString('utf8');
+    console.log('— RAW PAYLOAD —\n', raw);
 
-  // 2) (Optional) Check the Access-Token header that EasyEcom sends you:
-  const token = req.header('Access-Token');
-  console.log('🔑 Access-Token:', token);
+    // 3) Try to parse it as JSON
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      console.error('❌ Could not JSON.parse incoming payload:', err);
+      return res.status(400).send('Bad JSON');
+    }
 
-  // 3) Tell EasyEcom “All good!” so it won’t retry.
-  res.status(200).send('OK');
-});
+    // 4) Now you’ll see the real object, not just {}
+    console.log('📥 Inventory update received:', JSON.stringify(data, null, 2));
+    console.log('🔑 Access-Token header:', req.get('Access-Token'));
+
+    // 5) Acknowledge receipt so EasyEcom stops retrying
+    res.status(200).send('OK');
+  }
+);
 
 module.exports = router;
