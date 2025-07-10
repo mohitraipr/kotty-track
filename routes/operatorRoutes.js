@@ -2045,11 +2045,11 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
 // ====================== Single Route: /urgent-tat ======================
 const twilio = require("twilio");
 
-// 1) Hard-coded Twilio Credentials
-const TWILIO_ACCOUNT_SID    = "AC255689e642be728f80630c179ad7b70d";
-const TWILIO_AUTH_TOKEN     = "86b13a472d5d64404d16ffcc444ef471";
-const TWILIO_WHATSAPP_FROM  = "whatsapp:+14155238886";
-const TWILIO_SMS_FROM       = "+19284272221";
+// 1) Twilio credentials loaded from encrypted environment variables
+const TWILIO_ACCOUNT_SID    = global.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN     = global.env.TWILIO_AUTH_TOKEN;
+const TWILIO_WHATSAPP_FROM  = global.env.TWILIO_WHATSAPP_FROM;
+const TWILIO_SMS_FROM       = global.env.TWILIO_SMS_FROM;
 
 // 2) Create Twilio Client
 const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);

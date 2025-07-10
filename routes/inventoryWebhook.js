@@ -4,9 +4,10 @@ const router = express.Router();
 const twilio = require('twilio');
 
 // Twilio credentials (same as used elsewhere)
-const TWILIO_ACCOUNT_SID   = "AC255689e642be728f80630c179ad7b70d";
-const TWILIO_AUTH_TOKEN    = "86b13a472d5d64404d16ffcc444ef471";
-const TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886";
+// Load Twilio credentials from encrypted environment variables
+const TWILIO_ACCOUNT_SID   = global.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN    = global.env.TWILIO_AUTH_TOKEN;
+const TWILIO_WHATSAPP_FROM = global.env.TWILIO_WHATSAPP_FROM;
 const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 // In-memory store for recent webhook requests
