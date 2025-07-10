@@ -339,3 +339,10 @@ CREATE TABLE sandwich_dates (
 A sandwich day is normally a paid leave. However, if an employee is absent either the day before or the day after, the sandwich day becomes unpaid and is deducted from salary.
 
 Salaries are released 15 days after the end of the month so that any deductions for damage or misconduct can be applied before payout.
+
+### Inventory Webhook Alerts
+
+The `/webhook/inventory` endpoint can send WhatsApp alerts when stock levels are low.
+Use `/webhook/config` to map each SKU to its own threshold.
+Enter one mapping per line in the form `SKU:THRESHOLD`.
+Alerts are sent to the hard-coded phone numbers whenever a received payload includes an SKU with quantity below its configured threshold.
