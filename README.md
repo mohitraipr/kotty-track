@@ -29,6 +29,11 @@ Kotty Track is a Node.js and Express application used to manage the production w
    SESSION_SECRET=your-session-secret
    PORT=3000
    NODE_ENV=development
+   # Twilio credentials (optional - required for WhatsApp/SMS alerts)
+   TWILIO_ACCOUNT_SID=your-twilio-sid
+   TWILIO_AUTH_TOKEN=your-twilio-token
+   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   TWILIO_SMS_FROM=+19284272221
    ```
    Encrypt the file:
    ```bash

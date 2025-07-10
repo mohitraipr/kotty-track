@@ -8,7 +8,13 @@ const twilio = require('twilio');
 const TWILIO_ACCOUNT_SID   = global.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN    = global.env.TWILIO_AUTH_TOKEN;
 const TWILIO_WHATSAPP_FROM = global.env.TWILIO_WHATSAPP_FROM;
-const TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+let TWILIO_CLIENT = null;
+if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
+  TWILIO_CLIENT = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+} else {
+  console.warn('Twilio credentials missing; webhook alerts disabled.');
+}
 
 // In-memory store for recent webhook requests
 const logs = [];
@@ -71,6 +77,10 @@ router.post(
           if (threshold !== undefined && Number(item.inventory) < threshold) {
             const body = `Inventory alert for ${item.sku}: ${item.inventory}`;
             for (const phone of numbers) {
+              if (!TWILIO_CLIENT) {
+                console.warn('Twilio client not configured; alert not sent');
+                continue;
+              }
               try {
                 await TWILIO_CLIENT.messages.create({
                   from: TWILIO_WHATSAPP_FROM,
