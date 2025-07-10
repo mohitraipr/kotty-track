@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const twilio = require('twilio');
+const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 // Twilio credentials (same as used elsewhere)
 // Load Twilio credentials from encrypted environment variables
@@ -30,6 +31,8 @@ let alertConfig = {
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
   '/inventory',
+  isAuthenticated,
+  isOperator,
   express.raw({ type: 'application/json', limit: '1mb' }),
   async (req, res) => {
     // 1) Inspect all incoming headers
@@ -104,7 +107,7 @@ router.post(
 );
 
 // Render a simple page to update alert configuration
-router.get('/config', (req, res) => {
+router.get('/config', isAuthenticated, isOperator, (req, res) => {
   const configText = Object.entries(alertConfig.skuThresholds)
     .map(([sku, th]) => `${sku}:${th}`)
     .join('\n');
@@ -116,7 +119,7 @@ router.get('/config', (req, res) => {
 });
 
 // Update alert configuration
-router.post('/config', (req, res) => {
+router.post('/config', isAuthenticated, isOperator, (req, res) => {
   if (typeof req.body.rules === 'string') {
     const map = {};
     req.body.rules
@@ -139,7 +142,7 @@ router.post('/config', (req, res) => {
 });
 
 // View webhook logs
-router.get('/logs', (req, res) => {
+router.get('/logs', isAuthenticated, isOperator, (req, res) => {
   res.render('webhookLogs', { logs });
 });
 
