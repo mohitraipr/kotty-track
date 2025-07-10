@@ -29,14 +29,9 @@ Kotty Track is a Node.js and Express application used to manage the production w
    SESSION_SECRET=your-session-secret
    PORT=3000
    NODE_ENV=development
-   # Twilio credentials (optional - required for WhatsApp/SMS alerts)
-   TWILIO_ACCOUNT_SID=your-twilio-sid
-   TWILIO_AUTH_TOKEN=your-twilio-token
-   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-   TWILIO_SMS_FROM=+19284272221
    # Token used to validate EasyEcom webhooks
    EASYEECOM_ACCESS_TOKEN=your-easyecom-token
-   ```
+  ```
    Encrypt the file:
    ```bash
    npx secure-env .env -s mySecretPassword
@@ -51,6 +46,14 @@ Start the server with:
 npm start
 ```
 The application listens on the port specified by `PORT` (default `3000`).
+
+### Cordova Mobile App
+
+This repository includes a minimal Cordova project under `cordova-app` that
+displays `/webhook/logs` and receives inventory alerts. After installing
+Cordova run `cordova prepare` inside that directory and build for your platform.
+The app connects to the server using `cordova-app/www/js/app.js`; update the
+`SERVER_URL` constant with your server's address.
 
 ## Database Schema
 
@@ -349,8 +352,8 @@ Salaries are released 15 days after the end of the month so that any deductions 
 
 ### Inventory Webhook Alerts
 
-The `/webhook/inventory` endpoint can send WhatsApp alerts when stock levels are low.
+The `/webhook/inventory` endpoint records incoming webhook data and broadcasts alerts via Server-Sent Events when stock levels fall below their configured threshold.
 Requests do not require a session but must include the `Access-Token` header provided by EasyEcom.
 Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
-Alerts are sent to the hard-coded phone numbers whenever a received payload includes an SKU with quantity below its configured threshold.
+The optional Cordova app connects to `/webhook/logs/stream` to receive these alerts and displays a local notification for each one.
