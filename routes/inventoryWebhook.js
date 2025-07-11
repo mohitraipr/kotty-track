@@ -27,6 +27,20 @@ const logs = [];
 let sseClients = [];
 let pushSubscriptions = [];
 
+async function loadPushSubscriptions() {
+  try {
+    const [rows] = await pool.query(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions'
+    );
+    pushSubscriptions = rows.map((r) => ({
+      endpoint: r.endpoint,
+      keys: { p256dh: r.p256dh, auth: r.auth },
+    }));
+  } catch (err) {
+    console.error('Failed to load push subscriptions', err);
+  }
+}
+
 // Configure web-push using VAPID keys from env
 if (global.env.VAPID_PUBLIC_KEY && global.env.VAPID_PRIVATE_KEY) {
   try {
@@ -87,6 +101,7 @@ async function loadSkuThresholds() {
 
 // Load configuration from DB on startup
 loadSkuThresholds();
+loadPushSubscriptions();
 
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
@@ -203,9 +218,25 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req,
 });
 
 // Store push subscription from client
-router.post('/subscribe', isAuthenticated, isOperator, (req, res) => {
+router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
   if (req.body && req.body.endpoint) {
-    pushSubscriptions.push(req.body);
+    const sub = req.body;
+    pushSubscriptions.push(sub);
+
+    // Persist to database
+    try {
+      const userId = req.session.user ? req.session.user.id : null;
+      const { endpoint, keys = {} } = sub;
+      const p256dh = keys.p256dh || '';
+      const auth = keys.auth || '';
+      await pool.query(
+        'INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)',
+        [userId, endpoint, p256dh, auth]
+      );
+    } catch (err) {
+      console.error('Failed to store push subscription', err);
+    }
+
     res.status(201).json({ ok: true });
   } else {
     res.status(400).json({ error: 'Invalid subscription' });

@@ -383,3 +383,5 @@ server restarts.
 To receive browser push notifications you must generate VAPID keys and set
 `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in your `.env` file. Clients visiting
 `/webhook/logs` will register a service worker that subscribes to push updates.
+Subscriptions are persisted in the `push_subscriptions` table so notifications
+continue working after server restarts.
