@@ -75,7 +75,8 @@
     if (window.Notification && Notification.permission === 'granted') {
       const n = new Notification('Inventory Alert', { body: msg });
       if (sku) {
-        n.onclick = () => window.open('/inventory/sku/' + encodeURIComponent(sku), '_blank');
+        // Open the SKU detail page directly
+        n.onclick = () => window.open('/sku/' + encodeURIComponent(sku), '_blank');
       }
     }
   }

@@ -51,7 +51,8 @@ function broadcastAlert(message, sku) {
   sseClients.forEach((client) => client.res.write(data));
 
   // Send push notifications to subscribed clients
-  const pushData = JSON.stringify({ message, url: `/inventory/sku/${sku}` });
+  // Link directly to the SKU detail page
+  const pushData = JSON.stringify({ message, url: `/sku/${sku}` });
   pushSubscriptions.forEach((sub) => {
     webPush
       .sendNotification(sub, pushData)

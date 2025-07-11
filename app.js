@@ -9,6 +9,9 @@ const path = require('path');
 const secureEnv = require('secure-env');
 global.env = secureEnv({ secret: 'mySecretPassword' }); // Replace with your actual secret
 
+// Ensure the application runs in IST regardless of server settings
+process.env.TZ = 'Asia/Kolkata';
+
 const app = express();
 
 // Trust the ALB proxy so that Express correctly identifies the protocol
