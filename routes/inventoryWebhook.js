@@ -1,6 +1,8 @@
 // routes/inventoryWebhook.js
 const express = require('express');
+const webPush = require('web-push');
 const router = express.Router();
+const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
 
 // Access token used to authenticate incoming EasyEcom webhooks
@@ -23,15 +25,42 @@ function verifyAccessToken(req, res, next) {
 // In-memory store for recent webhook requests
 const logs = [];
 let sseClients = [];
+let pushSubscriptions = [];
+
+// Configure web-push using VAPID keys from env
+if (global.env.VAPID_PUBLIC_KEY && global.env.VAPID_PRIVATE_KEY) {
+  try {
+    webPush.setVapidDetails(
+      'mailto:admin@example.com',
+      global.env.VAPID_PUBLIC_KEY,
+      global.env.VAPID_PRIVATE_KEY
+    );
+  } catch (err) {
+    console.error('Invalid VAPID keys', err);
+  }
+}
 
 function broadcastLog(log) {
   const data = `data: ${JSON.stringify({ log })}\n\n`;
   sseClients.forEach((client) => client.res.write(data));
 }
 
-function broadcastAlert(message) {
-  const data = `data: ${JSON.stringify({ alert: { message } })}\n\n`;
+function broadcastAlert(message, sku) {
+  const payload = { alert: { message, sku } };
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
   sseClients.forEach((client) => client.res.write(data));
+
+  // Send push notifications to subscribed clients
+  const pushData = JSON.stringify({ message, url: `/inventory/sku/${sku}` });
+  pushSubscriptions.forEach((sub) => {
+    webPush
+      .sendNotification(sub, pushData)
+      .catch((err) => console.error('Push send failed', err));
+  });
+
+  // Persist the alert
+  pool.query('INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())', [sku, message.match(/: (\d+)/) ? parseInt(message.match(/: (\d+)/)[1], 10) : 0])
+    .catch(err => console.error('Failed to insert alert', err));
 }
 
 // Default alert configuration - can be updated at runtime via /webhook/config
@@ -70,7 +99,7 @@ router.post(
     }
 
     // Store log entry
-    const entry = {
+const entry = {
       time: new Date().toISOString(),
       headers,
       raw,
@@ -93,7 +122,7 @@ router.post(
 
           if (threshold !== undefined && Number(item.inventory) < threshold) {
             const message = `Inventory alert for ${item.sku}: ${item.inventory}`;
-            broadcastAlert(message);
+            broadcastAlert(message, item.sku);
           }
         }
       }
@@ -139,6 +168,16 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) 
   }
   req.flash('success', 'Alert configuration updated');
   res.redirect('/webhook/config');
+});
+
+// Store push subscription from client
+router.post('/subscribe', isAuthenticated, isOperator, (req, res) => {
+  if (req.body && req.body.endpoint) {
+    pushSubscriptions.push(req.body);
+    res.status(201).json({ ok: true });
+  } else {
+    res.status(400).json({ error: 'Invalid subscription' });
+  }
 });
 
 // View webhook logs
