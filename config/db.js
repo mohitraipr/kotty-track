@@ -8,7 +8,8 @@ const pool = mysql.createPool({
     password: global.env.DB_PASSWORD,
     database: global.env.DB_NAME,
     port: parseInt(global.env.DB_PORT, 10), // Important: Parse port to integer
-    timezone: 'Z', // Ensure dates are returned without timezone shifts
+    // Use local timezone so timestamps match IST
+    timezone: 'local',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

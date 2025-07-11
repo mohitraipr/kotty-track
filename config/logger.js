@@ -5,7 +5,8 @@ const { createLogger, format, transports } = require('winston');
 const logger = createLogger({
   level: 'info',
   format: format.combine(
-      format.timestamp(),
+      // Use IST for all timestamps
+      format.timestamp({ format: () => new Date().toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }) }),
       format.json()
   ),
   transports: [
