@@ -64,13 +64,29 @@ function broadcastAlert(message, sku) {
     .catch(err => console.error('Failed to insert alert', err));
 }
 
-// Default alert configuration - can be updated at runtime via /webhook/config
+// Default alert configuration - will be replaced with DB values on startup
 // Map SKU -> threshold
 let alertConfig = {
   skuThresholds: {
     KTTWOMENSPANT261S: 30,
   },
 };
+
+async function loadSkuThresholds() {
+  try {
+    const [rows] = await pool.query('SELECT sku, threshold FROM sku_thresholds');
+    const map = {};
+    for (const r of rows) {
+      map[r.sku.toUpperCase()] = r.threshold;
+    }
+    alertConfig.skuThresholds = map;
+  } catch (err) {
+    console.error('Failed to load SKU thresholds', err);
+  }
+}
+
+// Load configuration from DB on startup
+loadSkuThresholds();
 
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
@@ -137,7 +153,8 @@ const entry = {
 );
 
 // Render a simple page to update alert configuration
-router.get('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
+router.get('/config', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  await loadSkuThresholds();
   const configText = Object.entries(alertConfig.skuThresholds)
     .map(([sku, th]) => `${sku}:${th}`)
     .join('\n');
@@ -149,7 +166,7 @@ router.get('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) =
 });
 
 // Update alert configuration
-router.post('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
+router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
   if (typeof req.body.rules === 'string') {
     const map = {};
     req.body.rules
@@ -165,8 +182,22 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, (req, res) 
           }
         }
       });
-    alertConfig.skuThresholds = map;
+
+    try {
+      for (const [sku, th] of Object.entries(map)) {
+        await pool.query(
+          'INSERT INTO sku_thresholds (sku, threshold) VALUES (?, ?) ON DUPLICATE KEY UPDATE threshold = VALUES(threshold)',
+          [sku, th]
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update SKU thresholds', err);
+      req.flash('error', 'Failed to save configuration');
+    }
+
+    await loadSkuThresholds();
   }
+
   req.flash('success', 'Alert configuration updated');
   res.redirect('/webhook/config');
 });
