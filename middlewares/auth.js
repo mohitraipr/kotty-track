@@ -121,10 +121,17 @@ function isStoreAdmin(req, res, next) {
 }
 
 function isMohitOperator(req, res, next) {
+  const allowed = [
+    'mohitOperator',
+    'chandanSir',
+    'sales',
+    'sonuOpe',
+    'mam',
+  ];
   if (
     req.session &&
     req.session.user &&
-    req.session.user.username === 'mohitOperator'
+    allowed.includes(req.session.user.username)
   ) {
     return next();
   }
