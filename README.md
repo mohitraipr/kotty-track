@@ -116,6 +116,28 @@ CREATE TABLE dispatched_data (
 ```
 `incoming_data` stores every addition with timestamp and user while `dispatched_data` tracks quantity sent out along with remarks.
 
+Create a table to persist inventory alerts triggered by the webhook:
+```sql
+CREATE TABLE inventory_alerts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sku VARCHAR(255) NOT NULL,
+  quantity INT NOT NULL,
+  created_at DATETIME NOT NULL
+);
+
+CREATE TABLE push_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL
+);
+```
+
+`inventory_alerts` stores each threshold breach so operators can review past
+events. `push_subscriptions` holds browser push registration data for users
+who have allowed notifications.
+
 Create a `store_admin` role in the `roles` table to allow managing the list of goods. Users with this role can add new items (description, size and unit) from the Store Admin dashboard. Newly created items automatically appear in the store inventory pages.
 
 ### Department & Supervisor Tables
@@ -348,3 +370,7 @@ The `/webhook/inventory` endpoint records incoming webhook data and broadcasts a
 Requests do not require a session but must include the `Access-Token` header provided by EasyEcom.
 Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
+
+To receive browser push notifications you must generate VAPID keys and set
+`VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in your `.env` file. Clients visiting
+`/webhook/logs` will register a service worker that subscribes to push updates.

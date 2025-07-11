@@ -53,6 +53,7 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use((req, res, next) => {
     res.locals.error = req.flash('error');
     res.locals.success = req.flash('success');
+    res.locals.vapidPublicKey = global.env.VAPID_PUBLIC_KEY || '';
     next();
 });
 
@@ -84,6 +85,7 @@ const salaryRoutes = require('./routes/salaryRoutes');
 const operatorEmployeeRoutes = require('./routes/operatorEmployeeRoutes');
 const flipkartReturnRoutes = require('./routes/flipkartReturnRoutes');
 const inventoryWebhook = require('./routes/inventoryWebhook');
+const skuRoutes = require('./routes/skuRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -112,6 +114,7 @@ app.use('/supervisor', employeeRoutes);
 app.use('/', salaryRoutes);
 app.use('/flipkart', flipkartReturnRoutes);
 app.use('/webhook', inventoryWebhook);
+app.use('/', skuRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
