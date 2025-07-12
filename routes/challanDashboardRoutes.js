@@ -18,11 +18,11 @@ const { isAuthenticated } = require('../middlewares/auth');
 // --------------------------------------------------------------------
 const FISCAL_YEAR = '25-26';                             // DC/25-26/…
 // IDs of users that act as washing vendors (consignees)
-const washers       = [49, 62, 59, 56, 57, 58, 60, 54, 64, 61, 63, 65];
+const washers       = [49, 62, 59, 56, 57, 58, 60, 54, 64, 61, 115, 116];
 const jeansAssembly = [44, 13];
 const WASHER_SHORT_CODES = {
   49:'AW', 62:'MW', 59:'MT', 56:'VW', 57:'SB', 58:'PE',
-  60:'SG', 54:'RE', 64:'AE', 61:'HP', 63:'RW', 65:'SD'
+  60:'SG', 54:'RE', 64:'AE', 61:'HP', 115:'RW', 116:'SD'
 };
 
 // --------------------------------------------------------------------
@@ -334,14 +334,14 @@ router.post('/create', isAuthenticated, async (req,res)=>{
           gstin:'06CVKPS2554J1Z4',
           address:'PLOT NO-5, NANGLA GAJI PUR ROAD, NEAR ANTRAM CHOWK, Nangla Gujran, Faridabad, Haryana, 121005',
           placeOfSupply:'06-HARYANA'},
-      63:{name:'RADHIKA ENTERPRISES',
-          gstin:'07AHFPY6350B1ZB',
-          address:'PLOT NO.B-78, SINDHU FARM ROAD, MEETHAPUR, BADARPUR, South Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      65:{name:'S S DYEING HOUSE',
-          gstin:'07AGFPC9403N1ZA',
-          address:'HOUSE NO 65, GALI NO 6 LAKHPAT COLONY, PART 2 MEETHAPUR EXTN.BADARPUR, South Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'}
+      115:{name:'RADHIKA ENTERPRISES',
+           gstin:'07AHFPY6350B1ZB',
+           address:'PLOT NO.B-78, SINDHU FARM ROAD, MEETHAPUR, BADARPUR, South Delhi, Delhi, 110044',
+           placeOfSupply:'07-DELHI'},
+      116:{name:'S S DYEING HOUSE',
+           gstin:'07AGFPC9403N1ZA',
+           address:'HOUSE NO 65, GALI NO 6 LAKHPAT COLONY, PART 2 MEETHAPUR EXTN.BADARPUR, South Delhi, Delhi, 110044',
+           placeOfSupply:'07-DELHI'}
     };
 
     const consignee = consigneeMapping[washerIDNum];
