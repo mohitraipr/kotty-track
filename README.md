@@ -295,7 +295,7 @@ Punching in after **09:15** results in an additional one-hour deduction from the
 Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
-If an employee misses Saturday or Monday **and** also skips the Sunday, the weekend becomes a "sandwich" and all three days are deducted from salary. When the employee works on that Sunday, the sandwich rule is ignored and any adjacent absence is paid.
+For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (Saturday–Sunday–Monday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
 
 ### Attendance Edit Logs
 
