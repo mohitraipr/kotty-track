@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="vapid-public" content="<%= vapidPublicKey %>">
+  <title>Inventory Alerts</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+  </style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Inventory Alerts</span>
+    <div class="ms-auto">
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container py-4">
+  <div class="table-responsive shadow-sm">
+    <table class="table table-bordered table-striped table-sm align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Time</th>
+          <th>SKU</th>
+          <th>Inventory</th>
+        </tr>
+      </thead>
+      <tbody id="alert-body">
+        <% alerts.forEach(function(a){ %>
+          <tr>
+            <td><%= a.created_at.toLocaleString('en-CA', { hour12: false }) %></td>
+            <td><%= a.sku %></td>
+            <td><%= a.quantity %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const alertBody = document.getElementById('alert-body');
+  const evt = new EventSource('/webhook/logs/stream');
+  evt.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.alert) {
+      addRow(data.alert);
+    }
+  };
+  function addRow(alert){
+    const row = document.createElement('tr');
+    const time = new Date().toLocaleString('en-CA', { hour12: false });
+    row.innerHTML = `<td>${time}</td><td>${alert.sku}</td><td>${alert.quantity}</td>`;
+    alertBody.prepend(row);
+    if(alertBody.rows.length > 50){
+      alertBody.deleteRow(-1);
+    }
+  }
+</script>
+<script src="/public/js/notification.js"></script>
+</body>
+</html>

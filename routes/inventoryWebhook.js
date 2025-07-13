@@ -59,14 +59,14 @@ function broadcastLog(log) {
   sseClients.forEach((client) => client.res.write(data));
 }
 
-function broadcastAlert(message, sku) {
-  const payload = { alert: { message, sku } };
+function broadcastAlert(message, sku, quantity) {
+  const payload = { alert: { message, sku, quantity } };
   const data = `data: ${JSON.stringify(payload)}\n\n`;
   sseClients.forEach((client) => client.res.write(data));
 
   // Send push notifications to subscribed clients
   // Link directly to the SKU detail page
-  const pushData = JSON.stringify({ message, url: `/sku/${sku}` });
+  const pushData = JSON.stringify({ message, url: `/inventory/alerts` });
   pushSubscriptions.forEach((sub) => {
     webPush
       .sendNotification(sub, pushData)
@@ -74,7 +74,7 @@ function broadcastAlert(message, sku) {
   });
 
   // Persist the alert
-  pool.query('INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())', [sku, message.match(/: (\d+)/) ? parseInt(message.match(/: (\d+)/)[1], 10) : 0])
+  pool.query('INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())', [sku, quantity])
     .catch(err => console.error('Failed to insert alert', err));
 }
 
@@ -154,7 +154,7 @@ const entry = {
 
           if (threshold !== undefined && Number(item.inventory) < threshold) {
             const message = `Inventory alert for ${item.sku}: ${item.inventory}`;
-            broadcastAlert(message, item.sku);
+            broadcastAlert(message, item.sku, Number(item.inventory));
           }
         }
       }

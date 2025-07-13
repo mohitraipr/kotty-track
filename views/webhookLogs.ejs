@@ -53,7 +53,7 @@
     } else if (data.log) {
       addRow(data.log);
     } else if (data.alert) {
-      showNotification(data.alert.message, data.alert.sku);
+      showNotification(data.alert.message);
     }
   };
 
@@ -71,13 +71,10 @@
     }
   }
 
-  function showNotification(msg, sku) {
+  function showNotification(msg) {
     if (window.Notification && Notification.permission === 'granted') {
       const n = new Notification('Inventory Alert', { body: msg });
-      if (sku) {
-        // Open the SKU detail page directly
-        n.onclick = () => window.open('/sku/' + encodeURIComponent(sku), '_blank');
-      }
+      n.onclick = () => window.open('/inventory/alerts', '_blank');
     }
   }
 
