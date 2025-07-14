@@ -6,6 +6,7 @@ const moment = require('moment');
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isSupervisor } = require('../middlewares/auth');
 const { calculateSalaryForMonth, effectiveHours, lunchDeduction } = require('../helpers/salaryCalculator');
+const { applyDetailedStatus } = require('../helpers/detailedStatus');
 const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
 const {
   SPECIAL_SUNDAY_SUPERVISORS,
@@ -452,6 +453,11 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
     }
     const [attendance] = await pool.query('SELECT * FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ? ORDER BY date', [empId, startDate, endDate]);
+    const [sandwichRows] = await pool.query(
+      'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
+      [month]
+    );
+    const sandwichDates = sandwichRows.map(r => moment(r.date).format('YYYY-MM-DD'));
     const daysInMonth = moment(month + '-01').daysInMonth();
     const dailyRate = parseFloat(emp.salary) / daysInMonth;
     let totalHours = 0;
@@ -573,6 +579,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
     const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
+    applyDetailedStatus(attendance, emp, sandwichDates);
     res.render('employeeSalary', {
       user: req.session.user,
       employee: emp,
