@@ -806,11 +806,11 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
 // Update an employee record
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
-  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, date_of_joining, is_active } = req.body;
+  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, leave_start_months, date_of_joining, is_active } = req.body;
   try {
     await pool.query(
-      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, date_of_joining=?, is_active=? WHERE id=?`,
-      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, date_of_joining, is_active ? 1 : 0, empId]
+      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
+      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, leave_start_months || 3, date_of_joining, is_active ? 1 : 0, empId]
     );
     res.json({ success: true });
   } catch (err) {

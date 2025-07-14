@@ -517,7 +517,7 @@
           table.className = 'table table-bordered table-sm nowrap w-100';
           table.innerHTML = `<thead><tr>
             <th>Punch ID</th><th>Name</th><th>Designation</th><th>Phone</th>
-            <th>Salary</th><th>Type</th><th>Hours</th><th>Paid Sun</th>
+            <th>Salary</th><th>Type</th><th>Hours</th><th>Paid Sun</th><th>Leave Start</th>
             <th>Join Date</th><th>Active</th><th>Save</th></tr></thead>`;
           const tbody = document.createElement('tbody');
           data.forEach(emp => {
@@ -540,6 +540,7 @@
                   </select></td>
               <td><input type="number" step="0.1" class="form-control form-control-sm" name="allotted_hours" value="${emp.allotted_hours}" required></td>
               <td><input type="number" class="form-control form-control-sm" name="paid_sunday_allowance" value="${emp.paid_sunday_allowance}" min="0"></td>
+              <td><input type="number" class="form-control form-control-sm" name="leave_start_months" value="${emp.leave_start_months}" min="0"></td>
               <td><input type="date" class="form-control form-control-sm" name="date_of_joining" value="${joinDate}" required></td>
               <td><select class="form-select form-select-sm" name="is_active">
                     <option value="1" ${emp.is_active? 'selected':''}>Active</option>

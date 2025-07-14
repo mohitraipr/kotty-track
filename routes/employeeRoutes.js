@@ -119,13 +119,13 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
 
 // Create a new employee for the logged in supervisor
 router.post('/employees', isAuthenticated, isSupervisor, async (req, res) => {
-  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, date_of_joining } = req.body;
+  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, leave_start_months, date_of_joining } = req.body;
   try {
     await pool.query(
       `INSERT INTO employees
-        (supervisor_id, punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, date_of_joining, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [req.session.user.id, punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, date_of_joining]
+        (supervisor_id, punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, leave_start_months, date_of_joining, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [req.session.user.id, punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, leave_start_months || 3, date_of_joining]
     );
     req.flash('success', 'Employee created');
     res.redirect('/supervisor/employees');
@@ -189,7 +189,8 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
     let leaveBalance = 'N/A';
     if (employee.salary_type !== 'dihadi') {
       const monthsWorked = moment().diff(moment(employee.date_of_joining), 'months');
-      const earned = monthsWorked >= 3 ? (monthsWorked - 2) * 1.5 : 0;
+      const startMonths = parseInt(employee.leave_start_months || 3, 10);
+      const earned = monthsWorked >= startMonths ? (monthsWorked - (startMonths - 1)) * 1.5 : 0;
       // Separate Sunday credit days so they increase the balance instead of
       // reducing it. Credits are inserted with remark "Sunday Credit" during
       // salary processing.
