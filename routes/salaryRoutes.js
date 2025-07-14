@@ -501,7 +501,17 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
           if (hrsWorked > 0) {
             if (specialDept) {
-              a.deduction_reason = 'Leave credited';
+              const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+              const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+              const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
+              const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
+              const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
+              const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
+              if (!missedSat && !missedMon) {
+                a.deduction_reason = 'Leave credited';
+              } else {
+                a.deduction_reason = 'Unpaid due to adjacent absence';
+              }
             } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
               a.deduction_reason = 'Paid Sunday';
               paidUsed++;

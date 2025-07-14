@@ -292,13 +292,13 @@ Punching in after **09:15** results in an additional one-hour deduction from the
 
 ### Sunday Attendance Rules
 
-- **Special departments (`catalog`, `account`, `merchant`)** – Sundays never grant extra pay; any worked Sunday is credited as leave.
+- **Special departments (`catalog`, `accounts`, `merchant`)** – Sundays never grant extra pay. A worked Sunday is credited as leave only when both the preceding Saturday and following Monday are present; if either is absent, that Sunday is unpaid.
 - **All other departments** – a Sunday is paid only when the employee works that day and has unused `paid_sunday_allowance`. Otherwise the day is credited as leave.
 
 Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
-For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (Saturday–Sunday–Monday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
+For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (Saturday–Sunday–Monday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual. Special departments only receive the Sunday credit when both adjacent days are present.
 
 ### Attendance Edit Logs
 

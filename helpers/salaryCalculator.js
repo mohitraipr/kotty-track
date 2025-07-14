@@ -177,8 +177,12 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
       const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
       if (status === 'present') {
-        if (satStatus && missedSat) skipAbsent.add(satKey);
-        if (monStatus && missedMon) skipAbsent.add(monKey);
+        if (!specialDept) {
+          if (satStatus && missedSat) skipAbsent.add(satKey);
+          if (monStatus && missedMon) skipAbsent.add(monKey);
+        } else if (missedSat || missedMon) {
+          absent++;
+        }
       } else if (status !== 'present' && (missedSat || missedMon)) {
         absent++;
         return;
@@ -213,13 +217,23 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
         if (hrsWorked > 0) {
           if (specialSup) {
             extraPay += dailyRate;
-          } else if (specialDept) {
-            creditLeaves.push(dateStr);
-          } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
-            extraPay += dailyRate;
-            paidUsed++;
           } else {
-            creditLeaves.push(dateStr);
+            const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+            const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+            const satStatus = attMap[satKey];
+            const monStatus = attMap[monKey];
+            const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
+            const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
+            if (specialDept) {
+              if (!missedSat && !missedMon) {
+                creditLeaves.push(dateStr);
+              }
+            } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
+              extraPay += dailyRate;
+              paidUsed++;
+            } else {
+              creditLeaves.push(dateStr);
+            }
           }
         }
       }
