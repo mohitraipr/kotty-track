@@ -180,6 +180,7 @@ CREATE TABLE employees (
   salary DECIMAL(10,2) NOT NULL,
   salary_type ENUM('dihadi', 'monthly') NOT NULL,
   paid_sunday_allowance INT NOT NULL DEFAULT 0,
+  leave_start_months INT NOT NULL DEFAULT 3,
   date_of_joining DATE NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   UNIQUE KEY uniq_supervisor_punch (supervisor_id, punching_id),
@@ -202,7 +203,9 @@ CREATE TABLE employee_leaves (
   FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
 ```
-Employees earn 1.5 days of leave after completing three months of service and accrue 1.5 days each month thereafter.
+Employees normally earn 1.5 days of leave starting in their third month of service.
+Supervisors may set the `leave_start_months` value per employee to change when this accrual begins.
+Each subsequent month after the start month grants another 1.5 days.
 Daily wage (`dihadi`) workers are paid only for hours worked and do not accumulate leaves.
 
 ### Employee Debits & Advances

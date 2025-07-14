@@ -131,6 +131,10 @@
       <label class="form-label">Paid Sunday Allowance</label>
       <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
     </div>
+    <div class="col-md-3">
+      <label class="form-label">Leave Start Months</label>
+      <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
+    </div>
     <div class="col-md-2 align-self-end">
       <button type="submit" class="btn btn-success"><i class="fas fa-plus me-1"></i> Create</button>
     </div>
@@ -154,6 +158,7 @@
           <th>Type</th>
           <th>Hours</th>
           <th>Paid Sundays</th>
+          <th>Leave Start</th>
           <th>Joined</th>
           <th>Status</th>
           <th>Action</th>
@@ -175,6 +180,7 @@
             <td><%= emp.salary_type %></td>
             <td><%= emp.allotted_hours %></td>
             <td><%= emp.paid_sunday_allowance %></td>
+            <td><%= emp.leave_start_months %></td>
             <td><%= emp.date_of_joining.toLocaleDateString('en-CA') %></td>
             <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
             <td class="d-flex gap-1">
