@@ -133,6 +133,9 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
   }
 
+  // Ensure attendance is processed chronologically so Sunday rules apply
+  attendance.sort((a, b) => moment(a.date).diff(moment(b.date)));
+
 
   // If an employee works on Sunday but misses Saturday or Monday,
   // the adjacent absence should be paid. Collect those dates here
@@ -211,15 +214,27 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
       if (status === 'present' && a.punch_in && a.punch_out) {
         const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
         if (hrsWorked > 0) {
+          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+          let sundayPaid = false;
           if (specialSup) {
             extraPay += dailyRate;
+            sundayPaid = true;
           } else if (specialDept) {
-            creditLeaves.push(dateStr);
+            if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
+              creditLeaves.push(dateStr);
+            }
           } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
             extraPay += dailyRate;
             paidUsed++;
+            sundayPaid = true;
           } else {
-            creditLeaves.push(dateStr);
+            if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
+              creditLeaves.push(dateStr);
+            }
+          }
+          if (sundayPaid) {
+            skipAbsent.delete(monKey);
           }
         }
       }
