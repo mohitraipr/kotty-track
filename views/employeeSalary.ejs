@@ -50,6 +50,7 @@
       <tr>
         <th>Date</th>
         <th>Status</th>
+        <th>Detailed Status</th>
         <th>Punch In</th>
         <th>Punch Out</th>
         <th>Hours</th>
@@ -68,6 +69,7 @@
         <tr>
           <td><%= a.date.toLocaleDateString('en-CA') %></td>
           <td><%= a.status %></td>
+          <td><%= a.detailed_status || '' %></td>
           <td><%= a.punch_in || '' %></td>
           <td><%= a.punch_out || '' %></td>
           <td><%= a.hours %></td>
