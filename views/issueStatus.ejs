@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flipkart Issue Status</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Issue Status</span>
+    <div class="d-flex">
+      <span class="navbar-text text-white me-3">Logged in as: <%= user.username %></span>
+      <a class="btn btn-outline-light" href="/logout">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container mt-4">
+  <% if (error && error.length > 0) { %>
+    <div class="alert alert-danger"><%= error[0] %></div>
+  <% } %>
+  <% if (success && success.length > 0) { %>
+    <div class="alert alert-success"><%= success[0] %></div>
+  <% } %>
+  <form method="POST" action="/flipkart/issue-status">
+    <div class="mb-3">
+      <label class="form-label">Ticket IDs (one per line)</label>
+      <textarea class="form-control" name="ticketIds" rows="5" required><%= ticketIds %></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Check Status</button>
+  </form>
+
+  <% if (results && results.length) { %>
+    <h3 class="mt-4">Results</h3>
+    <table class="table table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>Ticket ID</th>
+          <th>Issue ID</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Last Updated</th>
+          <th>Resolved</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+      <% results.forEach(r => { %>
+        <tr>
+          <td><%= r.ticketId %></td>
+          <td><%= r.issueId || '' %></td>
+          <td><%= r.displayStatus || '' %></td>
+          <td><%= r.createdDate || '' %></td>
+          <td><%= r.lastUpdatedDate || '' %></td>
+          <td><%= r.resolvedDate || '' %></td>
+          <td><%= r.error || '' %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
