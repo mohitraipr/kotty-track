@@ -324,6 +324,24 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       r.undertime_hours = utHours.toFixed(2);
       r.undertime_days = utDays;
       r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+
+      const netHours = utHours - otHours;
+      const allot = parseFloat(r.allotted_hours || 0);
+      const daysInMonth = moment(month + '-01').daysInMonth();
+      let utDeduct = 0;
+      let utDetail = '';
+      if (netHours > 0 && allot > 0) {
+        const cutDays = Math.floor(netHours / allot);
+        if (cutDays > 0) {
+          const dailyRate = parseFloat(r.base_salary) / daysInMonth;
+          utDeduct = parseFloat((dailyRate * cutDays).toFixed(2));
+          r.deduction = parseFloat(r.deduction) + utDeduct;
+          r.net = parseFloat(r.net) - utDeduct;
+          utDetail = `${cutDays} day salary cut due to undertime`;
+        }
+      }
+      r.ut_deduct = utDeduct.toFixed(2);
+      r.ut_detail = utDetail;
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -339,6 +357,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
+      { header: 'UT Deduct', key: 'ut_deduct', width: 12 },
+      { header: 'UT Detail', key: 'ut_detail', width: 25 },
       { header: 'OT Hours', key: 'ot_hours', width: 12 },
       { header: 'OT Days', key: 'ot_days', width: 10 },
       { header: 'UT Hours', key: 'ut_hours', width: 12 },
@@ -358,6 +378,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         advance_taken: r.advance_taken,
         advance_deducted: r.advance_deducted,
         net: r.net,
+        ut_deduct: r.ut_deduct,
+        ut_detail: r.ut_detail,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
         ut_hours: r.undertime_hours,
@@ -372,80 +394,6 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
     res.end();
   } catch (err) {
     console.error('Error downloading salary:', err);
-    req.flash('error', 'Could not download salary');
-    res.redirect('/operator/departments');
-  }
-});
-
-// GET /operator/departments/salary/download-hours?month=YYYY-MM - salary by hours
-router.get('/departments/salary/download-hours', isAuthenticated, isOperator, async (req, res) => {
-  const month = req.query.month || moment().format('YYYY-MM');
-  const daysInMonth = moment(month + '-01').daysInMonth();
-  let sundays = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    if (moment(`${month}-${String(d).padStart(2,'0')}`).day() === 0) sundays++;
-  }
-  try {
-    const [employees] = await pool.query(`
-      SELECT e.id, e.punching_id, e.name AS employee_name, e.salary, e.allotted_hours,
-             u.username AS supervisor_name, d.name AS department_name
-        FROM employees e
-        JOIN users u ON e.supervisor_id = u.id
-        LEFT JOIN (
-              SELECT user_id, MIN(department_id) AS department_id
-                FROM department_supervisors
-               GROUP BY user_id
-        ) ds ON ds.user_id = u.id
-        LEFT JOIN departments d ON ds.department_id = d.id
-       WHERE e.is_active = 1 AND e.salary_type = 'monthly'
-       ORDER BY u.username, e.name`);
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('SalaryHours');
-    sheet.columns = [
-      { header: 'Supervisor', key: 'supervisor', width: 20 },
-      { header: 'Department', key: 'department', width: 15 },
-      { header: 'Punching ID', key: 'punching_id', width: 12 },
-      { header: 'Employee', key: 'employee', width: 20 },
-      { header: 'Base Salary', key: 'base_salary', width: 12 },
-      { header: 'Payable', key: 'payable', width: 12 },
-      { header: 'Hours Worked', key: 'worked', width: 14 },
-      { header: 'Expected Hours', key: 'expected', width: 14 },
-      { header: 'Status', key: 'detail', width: 30 }
-    ];
-
-    for (const emp of employees) {
-      const [att] = await pool.query(
-        'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
-        [emp.id, month]
-      );
-      let total = 0;
-      for (const a of att) {
-        if (a.punch_in && a.punch_out) total += effectiveHours(a.punch_in, a.punch_out, 'monthly');
-      }
-      const expected = (daysInMonth - sundays) * parseFloat(emp.allotted_hours || 0);
-      const ratio = expected ? Math.min(total, expected) / expected : 0;
-      const payable = parseFloat((parseFloat(emp.salary) * ratio).toFixed(2));
-      const detail = total < expected ? `Worked ${formatHours(total)} of ${formatHours(expected)}` : 'Full salary';
-      sheet.addRow({
-        supervisor: emp.supervisor_name,
-        department: emp.department_name || '',
-        punching_id: emp.punching_id,
-        employee: emp.employee_name,
-        base_salary: emp.salary,
-        payable,
-        worked: total.toFixed(2),
-        expected: expected.toFixed(2),
-        detail
-      });
-    }
-
-    res.setHeader('Content-Disposition', 'attachment; filename="SalaryHours.xlsx"');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (err) {
-    console.error('Error downloading salary hours:', err);
     req.flash('error', 'Could not download salary');
     res.redirect('/operator/departments');
   }
@@ -549,6 +497,24 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       r.undertime_days = utDays;
       r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
 
+      const netHours = utHours - otHours;
+      const allot = parseFloat(r.allotted_hours || 0);
+      const daysInMonth = moment(month + '-01').daysInMonth();
+      let utDeduct = 0;
+      let utDetail = '';
+      if (netHours > 0 && allot > 0) {
+        const cutDays = Math.floor(netHours / allot);
+        if (cutDays > 0) {
+          const dailyRate = parseFloat(r.base_salary) / daysInMonth;
+          utDeduct = parseFloat((dailyRate * cutDays).toFixed(2));
+          r.deduction = parseFloat(r.deduction) + utDeduct;
+          r.net = parseFloat(r.net) - utDeduct;
+          utDetail = `${cutDays} day salary cut due to undertime`;
+        }
+      }
+      r.ut_deduct = utDeduct.toFixed(2);
+      r.ut_detail = utDetail;
+
       if (rule === 'monthly_short' && shortDays >= 3) {
         const daysInMonth = moment(month + '-01').daysInMonth();
         const dailyRate = parseFloat(r.base_salary) / daysInMonth;
@@ -571,6 +537,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       { header: 'Advance Taken', key: 'advance_taken', width: 12 },
       { header: 'Advance Deducted', key: 'advance_deducted', width: 12 },
       { header: 'Net', key: 'net', width: 10 },
+      { header: 'UT Deduct', key: 'ut_deduct', width: 12 },
+      { header: 'UT Detail', key: 'ut_detail', width: 25 },
       { header: 'OT Hours', key: 'ot_hours', width: 12 },
       { header: 'OT Days', key: 'ot_days', width: 10 },
       { header: 'UT Hours', key: 'ut_hours', width: 12 },
@@ -590,6 +558,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         advance_taken: r.advance_taken,
         advance_deducted: r.advance_deducted,
         net: r.net,
+        ut_deduct: r.ut_deduct,
+        ut_detail: r.ut_detail,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
         ut_hours: r.undertime_hours,
