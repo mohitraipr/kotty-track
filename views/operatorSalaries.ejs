@@ -19,6 +19,10 @@
 </nav>
 <div class="container my-4">
   <%- include('partials/flashMessages') %>
+  <form action="/operator/departments/salary/download-hours" method="GET" class="d-flex gap-2 mb-3">
+    <input type="month" name="month" class="form-control" required>
+    <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Hours Excel</button>
+  </form>
   <table class="table table-bordered">
     <thead>
       <tr>
