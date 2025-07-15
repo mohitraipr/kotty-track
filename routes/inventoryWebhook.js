@@ -70,7 +70,18 @@ function broadcastAlert(message, sku, quantity) {
   pushSubscriptions.forEach((sub) => {
     webPush
       .sendNotification(sub, pushData)
-      .catch((err) => console.error('Push send failed', err));
+      .catch(async (err) => {
+        console.error('Push send failed', err);
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          // Remove stale subscription from memory and DB
+          pushSubscriptions = pushSubscriptions.filter((s) => s.endpoint !== sub.endpoint);
+          try {
+            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]);
+          } catch (dbErr) {
+            console.error('Failed to delete push subscription', dbErr);
+          }
+        }
+      });
   });
 
   // Persist the alert
