@@ -377,6 +377,80 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
   }
 });
 
+// GET /operator/departments/salary/download-hours?month=YYYY-MM - salary by hours
+router.get('/departments/salary/download-hours', isAuthenticated, isOperator, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const daysInMonth = moment(month + '-01').daysInMonth();
+  let sundays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (moment(`${month}-${String(d).padStart(2,'0')}`).day() === 0) sundays++;
+  }
+  try {
+    const [employees] = await pool.query(`
+      SELECT e.id, e.punching_id, e.name AS employee_name, e.salary, e.allotted_hours,
+             u.username AS supervisor_name, d.name AS department_name
+        FROM employees e
+        JOIN users u ON e.supervisor_id = u.id
+        LEFT JOIN (
+              SELECT user_id, MIN(department_id) AS department_id
+                FROM department_supervisors
+               GROUP BY user_id
+        ) ds ON ds.user_id = u.id
+        LEFT JOIN departments d ON ds.department_id = d.id
+       WHERE e.is_active = 1 AND e.salary_type = 'monthly'
+       ORDER BY u.username, e.name`);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('SalaryHours');
+    sheet.columns = [
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Base Salary', key: 'base_salary', width: 12 },
+      { header: 'Payable', key: 'payable', width: 12 },
+      { header: 'Hours Worked', key: 'worked', width: 14 },
+      { header: 'Expected Hours', key: 'expected', width: 14 },
+      { header: 'Status', key: 'detail', width: 30 }
+    ];
+
+    for (const emp of employees) {
+      const [att] = await pool.query(
+        'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+        [emp.id, month]
+      );
+      let total = 0;
+      for (const a of att) {
+        if (a.punch_in && a.punch_out) total += effectiveHours(a.punch_in, a.punch_out, 'monthly');
+      }
+      const expected = (daysInMonth - sundays) * parseFloat(emp.allotted_hours || 0);
+      const ratio = expected ? Math.min(total, expected) / expected : 0;
+      const payable = parseFloat((parseFloat(emp.salary) * ratio).toFixed(2));
+      const detail = total < expected ? `Worked ${formatHours(total)} of ${formatHours(expected)}` : 'Full salary';
+      sheet.addRow({
+        supervisor: emp.supervisor_name,
+        department: emp.department_name || '',
+        punching_id: emp.punching_id,
+        employee: emp.employee_name,
+        base_salary: emp.salary,
+        payable,
+        worked: total.toFixed(2),
+        expected: expected.toFixed(2),
+        detail
+      });
+    }
+
+    res.setHeader('Content-Disposition', 'attachment; filename="SalaryHours.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary hours:', err);
+    req.flash('error', 'Could not download salary');
+    res.redirect('/operator/departments');
+  }
+});
+
 // Download monthly salary applying a rule
 router.get('/departments/salary/download-rule', isAuthenticated, isOperator, async (req, res) => {
   const month = req.query.month || moment().format('YYYY-MM');

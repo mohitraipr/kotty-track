@@ -598,6 +598,70 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
   } catch (err) {
     console.error('Error loading salary view:', err);
     req.flash('error', 'Failed to load salary');
+  res.redirect('/supervisor/employees');
+  }
+});
+
+// Supervisor download with hour check
+router.get('/supervisor/salary/download-hours', isAuthenticated, isSupervisor, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const daysInMonth = moment(month + '-01').daysInMonth();
+  let sundays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (moment(`${month}-${String(d).padStart(2,'0')}`).day() === 0) sundays++;
+  }
+  try {
+    const [emps] = await pool.query(
+      `SELECT id, punching_id, name AS employee_name, salary, allotted_hours
+         FROM employees
+        WHERE supervisor_id = ? AND salary_type = 'monthly' AND is_active = 1
+        ORDER BY name`,
+      [req.session.user.id]
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('SalaryHours');
+    sheet.columns = [
+      { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Base Salary', key: 'base_salary', width: 12 },
+      { header: 'Payable', key: 'payable', width: 12 },
+      { header: 'Hours Worked', key: 'worked', width: 14 },
+      { header: 'Expected Hours', key: 'expected', width: 14 },
+      { header: 'Status', key: 'detail', width: 30 }
+    ];
+
+    for (const e of emps) {
+      const [att] = await pool.query(
+        'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+        [e.id, month]
+      );
+      let total = 0;
+      for (const a of att) {
+        if (a.punch_in && a.punch_out) total += effectiveHours(a.punch_in, a.punch_out, 'monthly');
+      }
+      const expected = (daysInMonth - sundays) * parseFloat(e.allotted_hours || 0);
+      const ratio = expected ? Math.min(total, expected) / expected : 0;
+      const payable = parseFloat((parseFloat(e.salary) * ratio).toFixed(2));
+      const detail = total < expected ? `Worked ${formatHours(total)} of ${formatHours(expected)}` : 'Full salary';
+      sheet.addRow({
+        punching_id: e.punching_id,
+        employee: e.employee_name,
+        base_salary: e.salary,
+        payable,
+        worked: total.toFixed(2),
+        expected: expected.toFixed(2),
+        detail
+      });
+    }
+
+    res.setHeader('Content-Disposition', 'attachment; filename="SalaryHours.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary hours:', err);
+    req.flash('error', 'Could not download salary');
     res.redirect('/supervisor/employees');
   }
 });
