@@ -42,7 +42,7 @@ exports.effectiveHours = effectiveHours;
 async function calculateSalaryForMonth(conn, employeeId, month) {
   const [[emp]] = await conn.query(
     `SELECT e.salary, e.salary_type, e.paid_sunday_allowance, e.allotted_hours,
-            e.date_of_joining,
+            e.date_of_joining, e.designation,
             d.name AS department,
             u.username AS supervisor_name
        FROM employees e
@@ -60,6 +60,15 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   const specialDept = SPECIAL_DEPARTMENTS.includes(
     (emp.department || '').toLowerCase()
   );
+
+  // Check designation. Salary for checkers is handled manually.
+  if ((emp.designation || '').toLowerCase() === 'checker') {
+    await conn.query(
+      'DELETE FROM employee_salaries WHERE employee_id = ? AND month = ?',
+      [employeeId, month]
+    );
+    return;
+  }
   if (FULL_SALARY_EMPLOYEE_IDS.includes(employeeId)) {
     const gross = parseFloat(emp.salary);
     await conn.query(
