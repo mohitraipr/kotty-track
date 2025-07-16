@@ -318,12 +318,12 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       if (absent) notes.push(`${absent} day(s) absent`);
       if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
       if (sundayAbs) notes.push(`${sundayAbs} Sunday absence(s)`);
-      r.deduction_reason = notes.join(', ');
+      r.deduction_reason = notes.length ? notes.join(', ') : 'None';
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
       r.undertime_hours = utHours.toFixed(2);
       r.undertime_days = utDays;
-      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+      r.time_status = otHours > utHours ? 'Overtime' : utHours > otHours ? 'Undertime' : 'Even';
 
       const netHours = utHours - otHours;
       const allot = parseFloat(r.allotted_hours || 0);
@@ -490,12 +490,12 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
       if (sundayAbs) notes.push(`${sundayAbs} Sunday absence(s)`);
       if (halfDays) notes.push(`${halfDays} half-day(s)`);
-      r.deduction_reason = notes.join(', ');
+      r.deduction_reason = notes.length ? notes.join(', ') : 'None';
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
       r.undertime_hours = utHours.toFixed(2);
       r.undertime_days = utDays;
-      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+      r.time_status = otHours > utHours ? 'Overtime' : utHours > otHours ? 'Undertime' : 'Even';
 
       const netHours = utHours - otHours;
       const allot = parseFloat(r.allotted_hours || 0);
@@ -645,7 +645,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
         advance_taken: emp.advance_taken,
         advance_deducted: emp.advance_deducted,
         net,
-        reason: notes.join(', ')
+        reason: notes.length ? notes.join(', ') : 'None'
       });
     }
     const workbook = new ExcelJS.Workbook();
@@ -740,7 +740,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
         advance_taken: emp.advance_taken,
         advance_deducted: emp.advance_deducted,
         net,
-        reason: notes.join(', ')
+        reason: notes.length ? notes.join(', ') : 'None'
       });
     }
     const workbook = new ExcelJS.Workbook();
