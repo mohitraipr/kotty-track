@@ -483,7 +483,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'monthly') {
           const isSun = moment(a.date).day() === 0;
-          const baseHours = isSun ? 8 : parseFloat(emp.allotted_hours || 0);
+          const baseHours = isSun ? 9 : parseFloat(emp.allotted_hours || 0);
           const diff = hrsDec - baseHours;
           if (diff > 0) {
             a.overtime = formatHours(diff);
@@ -698,7 +698,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         if (a.punch_in && a.punch_out) {
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
           const isSun = moment(a.date).day() === 0;
-          const baseHours = isSun ? 8 : parseFloat(r.allotted_hours || 0);
+          const baseHours = isSun ? 9 : parseFloat(r.allotted_hours || 0);
           const diff = hrs - baseHours;
           if (diff > 0) { otHours += diff; otDays++; }
           else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
