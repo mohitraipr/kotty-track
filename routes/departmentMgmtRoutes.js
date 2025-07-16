@@ -10,6 +10,7 @@ const XLSX = require('xlsx');
 const {
   calculateSalaryForMonth,
   effectiveHours,
+  crossedLunch,
 } = require('../helpers/salaryCalculator');
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
 
@@ -311,7 +312,9 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
           const diff = hrs - parseFloat(r.allotted_hours || 0);
           if (diff > 0) { otHours += diff; otDays++; }
-          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+          else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
+            utHours += Math.abs(diff); utDays++;
+          }
         }
       });
       const notes = [];
@@ -479,7 +482,8 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
           const diff = hrs - parseFloat(r.allotted_hours || 0);
           if (diff > 0) { otHours += diff; otDays++; }
-          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+          else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
+            utHours += Math.abs(diff); utDays++; }
           const allotted = parseFloat(r.allotted_hours || 0);
           if (hrs >= allotted * 0.4 && hrs < allotted * 0.85) halfDays++;
           if (rule === 'monthly_short' && hrs < allotted) shortDays++;

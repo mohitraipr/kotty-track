@@ -5,7 +5,7 @@ const path = require('path');
 const moment = require('moment');
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isSupervisor } = require('../middlewares/auth');
-const { calculateSalaryForMonth, effectiveHours, lunchDeduction } = require('../helpers/salaryCalculator');
+const { calculateSalaryForMonth, effectiveHours, lunchDeduction, crossedLunch } = require('../helpers/salaryCalculator');
 const { applyDetailedStatus } = require('../helpers/detailedStatus');
 const { SPECIAL_DEPARTMENTS } = require('../utils/departments');
 const {
@@ -487,10 +487,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
             a.overtime = formatHours(diff);
             a.undertime = '00:00';
             overtimeTotal += diff;
-          } else if (diff < 0) {
+          } else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
             a.overtime = '00:00';
             a.undertime = formatHours(Math.abs(diff));
             undertimeTotal += Math.abs(diff);
+          } else if (diff < 0) {
+            a.overtime = '00:00';
+            a.undertime = '00:00';
           } else {
             a.overtime = '00:00';
             a.undertime = '00:00';
@@ -694,7 +697,8 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
           const diff = hrs - parseFloat(r.allotted_hours || 0);
           if (diff > 0) { otHours += diff; otDays++; }
-          else if (diff < 0) { utHours += Math.abs(diff); utDays++; }
+          else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
+            utHours += Math.abs(diff); utDays++; }
         }
       });
       const notes = [];

@@ -16,6 +16,14 @@ function lunchDeduction(punchIn, punchOut, salaryType = 'dihadi') {
 }
 exports.lunchDeduction = lunchDeduction;
 
+function crossedLunch(punchIn, punchOut) {
+  const start = moment(punchIn, 'HH:mm:ss');
+  const end = moment(punchOut, 'HH:mm:ss');
+  const lunch = moment('13:10:00', 'HH:mm:ss');
+  return start.isSameOrBefore(lunch) && end.isAfter(lunch);
+}
+exports.crossedLunch = crossedLunch;
+
 function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   const start = moment(punchIn, 'HH:mm:ss');
   const end = moment(punchOut, 'HH:mm:ss');
