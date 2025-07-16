@@ -437,6 +437,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       req.flash('error', 'Employee not found');
       return res.redirect('/supervisor/employees');
     }
+    const manualSalary = (emp.designation || '').toLowerCase() === 'checker';
     const specialDept = SPECIAL_DEPARTMENTS.includes(
       (emp.department || '').toLowerCase()
     );
@@ -585,6 +586,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       employee: emp,
       attendance,
       salary,
+      manualSalary,
       month,
       dailyRate,
       totalHours: totalHoursFormatted,
