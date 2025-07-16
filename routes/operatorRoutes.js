@@ -451,6 +451,74 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
   }
 });
 
+router.get("/dashboard/lot-duplicates/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT stage,
+             lot_no,
+             COUNT(*) AS count,
+             GROUP_CONCAT(id ORDER BY id) AS record_ids
+      FROM (
+        SELECT 'cutting_lots'        AS stage, lot_no, id FROM cutting_lots
+        UNION ALL
+        SELECT 'stitching_data',      lot_no, id FROM stitching_data
+        UNION ALL
+        SELECT 'washing_data',        lot_no, id FROM washing_data
+        UNION ALL
+        SELECT 'washing_in_data',     lot_no, id FROM washing_in_data
+        UNION ALL
+        SELECT 'finishing_data',      lot_no, id FROM finishing_data
+        UNION ALL
+        SELECT 'jeans_assembly_data', lot_no, id FROM jeans_assembly_data
+        UNION ALL
+        SELECT 'cutting_lot_sizes', cl.lot_no, cls.id
+          FROM cutting_lot_sizes cls
+          JOIN cutting_lots cl ON cls.cutting_lot_id = cl.id
+        UNION ALL
+        SELECT 'stitching_data_sizes', sd.lot_no, sds.id
+          FROM stitching_data_sizes sds
+          JOIN stitching_data sd ON sds.stitching_data_id = sd.id
+        UNION ALL
+        SELECT 'washing_data_sizes', wd.lot_no, wds.id
+          FROM washing_data_sizes wds
+          JOIN washing_data wd ON wds.washing_data_id = wd.id
+        UNION ALL
+        SELECT 'washing_in_data_sizes', wi.lot_no, wis.id
+          FROM washing_in_data_sizes wis
+          JOIN washing_in_data wi ON wis.washing_in_data_id = wi.id
+        UNION ALL
+        SELECT 'finishing_data_sizes', fd.lot_no, fds.id
+          FROM finishing_data_sizes fds
+          JOIN finishing_data fd ON fds.finishing_data_id = fd.id
+        UNION ALL
+        SELECT 'jeans_assembly_data_sizes', jd.lot_no, jds.id
+          FROM jeans_assembly_data_sizes jds
+          JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
+      ) AS t
+      GROUP BY stage, lot_no
+      HAVING COUNT(*) > 1
+      ORDER BY stage, lot_no
+    `);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Duplicates");
+    sheet.columns = [
+      { header: "Stage", key: "stage", width: 20 },
+      { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "Count", key: "count", width: 8 },
+      { header: "Record IDs", key: "record_ids", width: 30 }
+    ];
+    rows.forEach(r => sheet.addRow(r));
+    res.setHeader("Content-Disposition", 'attachment; filename="LotDuplicates.xlsx"');
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error in /dashboard/lot-duplicates/download:", err);
+    return res.status(500).send("Server error");
+  }
+});
+
 /**************************************************
  * 4) CSV/Excel leftover exports – same as your code
  **************************************************/
