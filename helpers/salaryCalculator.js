@@ -31,7 +31,8 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
     mins -= 60;
   }
 
-  if (mins > 11 * 60) mins = 11 * 60;
+  // Cap daily hours at 11 only for dihadi workers
+  if (salaryType === 'dihadi' && mins > 11 * 60) mins = 11 * 60;
   if (mins < 0) mins = 0;
   return mins / 60;
 }
