@@ -623,7 +623,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
-             e.paid_sunday_allowance, e.allotted_hours,
+             e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id AND ad.month = es.month) AS month_ded,
@@ -839,17 +839,22 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         const rec = attMap[date.format('YYYY-MM-DD')];
         let char = 'A';
         if (date.day() === 0) sundayCounter++;
+        const mandatory = date.day() === 0 && sundayCounter <= (r.paid_sunday_allowance || 0);
+
         if (rec && rec.punch_in && rec.punch_out && rec.status === 'present') {
           const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
           const allot = parseFloat(r.allotted_hours || 0);
           if (hrs >= allot * 0.4 && hrs < allot * 0.85) char = 'H';
           else char = 'P';
-          if (date.day() === 0) char = 'ED';
+          if (date.day() === 0 && !mandatory) {
+            if (r.pay_sunday && !specialSup && !SPECIAL_DEPARTMENTS.includes((r.department_name || '').toLowerCase())) {
+              char = 'ED';
+            } else {
+              char = 'WO';
+            }
+          }
         } else if (date.day() === 0) {
-          char = 'WO';
-        }
-        if (!specialSup && date.day() === 0 && sundayCounter > (r.paid_sunday_allowance || 0)) {
-          char = 'WO';
+          char = mandatory ? 'A' : 'WO';
         }
         rowData[key] = char;
       }

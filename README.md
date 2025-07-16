@@ -179,6 +179,7 @@ CREATE TABLE employees (
   phone_number VARCHAR(20),
   salary DECIMAL(10,2) NOT NULL,
   salary_type ENUM('dihadi', 'monthly') NOT NULL,
+  pay_sunday BOOLEAN NOT NULL DEFAULT TRUE,
   paid_sunday_allowance INT NOT NULL DEFAULT 0,
   leave_start_months INT NOT NULL DEFAULT 3,
   date_of_joining DATE NOT NULL,
@@ -282,6 +283,7 @@ CREATE TABLE employee_salaries (
 Update the `employees` table to store each worker's allotted hours per day:
 ```sql
 ALTER TABLE employees ADD COLUMN allotted_hours DECIMAL(4,2) NOT NULL DEFAULT 0;
+ALTER TABLE employees ADD COLUMN pay_sunday BOOLEAN NOT NULL DEFAULT TRUE;
 ```
 
 Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi` (daily wage) basis. Monthly salary employees keep their full punch duration.
@@ -292,8 +294,9 @@ Punching in after **09:15** results in an additional one-hour deduction from the
 
 ### Sunday Attendance Rules
 
-- **Special departments (`catalog`, `account`, `merchant`)** – Sundays never grant extra pay; any worked Sunday is credited as leave.
-- **All other departments** – a Sunday is paid only when the employee works that day and has unused `paid_sunday_allowance`. Otherwise the day is credited as leave.
+- **Special departments (`catalog`, `account`, `merchant`, `tech`)** – Sundays never grant extra pay; any worked Sunday is credited as leave.
+- **Other departments** – use the `pay_sunday` flag to control payment. When set to `TRUE` every worked Sunday is paid. When `FALSE` worked Sundays are credited as leave instead.
+- **Mandatory Sundays** – if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
 
 Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
 

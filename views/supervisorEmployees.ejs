@@ -133,6 +133,13 @@
       <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
     </div>
     <div class="col-md-3">
+      <label class="form-label">Pay Sundays?</label>
+      <select name="pay_sunday" class="form-select">
+        <option value="1" selected>Yes</option>
+        <option value="0">No</option>
+      </select>
+    </div>
+    <div class="col-md-3">
       <label class="form-label">Leave Start Months</label>
       <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
     </div>
@@ -159,6 +166,7 @@
           <th>Type</th>
           <th>Hours</th>
           <th>Paid Sundays</th>
+          <th>Pay Sunday?</th>
           <th>Leave Start</th>
           <th>Joined</th>
           <th>Status</th>
@@ -181,6 +189,7 @@
             <td><%= emp.salary_type %></td>
             <td><%= emp.allotted_hours %></td>
             <td><%= emp.paid_sunday_allowance %></td>
+            <td><%= emp.pay_sunday ? 'Yes' : 'No' %></td>
             <td><%= emp.leave_start_months %></td>
             <td><%= emp.date_of_joining.toLocaleDateString('en-CA') %></td>
             <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
