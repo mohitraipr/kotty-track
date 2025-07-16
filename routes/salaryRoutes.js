@@ -453,12 +453,18 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     } else {
       endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
     }
-    const [attendance] = await pool.query('SELECT * FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ? ORDER BY date', [empId, startDate, endDate]);
+    const [attendance] = await pool.query(
+      'SELECT * FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ? ORDER BY date',
+      [empId, startDate, endDate]
+    );
     const [sandwichRows] = await pool.query(
       'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
       [month]
     );
-    const sandwichDates = sandwichRows.map(r => moment(r.date).format('YYYY-MM-DD'));
+    const sandwichDates = sandwichRows.map(r =>
+      moment(r.date).format('YYYY-MM-DD')
+    );
+    applyDetailedStatus(attendance, emp, sandwichDates);
     const daysInMonth = moment(month + '-01').daysInMonth();
     const dailyRate = parseFloat(emp.salary) / daysInMonth;
     let totalHours = 0;
@@ -470,7 +476,6 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
         : 0;
     }
-    let paidUsed = 0;
     attendance.forEach(a => {
       if (a.punch_in && a.punch_out) {
         const hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
@@ -502,65 +507,27 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.undertime = '00:00';
         }
       }
-      const isSun = moment(a.date).day() === 0;
-      if (isSun && emp.salary_type !== 'dihadi') {
-        if (a.status === 'present' && a.punch_in && a.punch_out) {
-          const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-          if (hrsWorked > 0) {
-            if (specialDept) {
-              a.deduction_reason = 'Leave credited';
-            } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
-              a.deduction_reason = 'Paid Sunday';
-              paidUsed++;
-            } else {
-              a.deduction_reason = 'Leave credited';
-            }
-          } else {
-            a.deduction_reason = '';
-          }
-        } else {
-          a.deduction_reason = '';
-        }
-
-        if (
-          emp.salary_type === 'dihadi' &&
-          a.punch_in &&
-          moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
-        ) {
-          a.deduction_reason +=
-            (a.deduction_reason ? '; ' : '') + 'Late arrival after 09:15';
-        }
-      } else {
-        if (a.status === 'absent') {
-          a.deduction_reason = 'Absent from work';
-        } else if (a.status === 'one punch only') {
-          a.deduction_reason = 'Missing punch in/out';
-        } else {
-          a.deduction_reason = '';
-        }
-        if (
-          emp.salary_type === 'monthly' &&
-          a.punch_in &&
-          a.punch_out &&
-          emp.allotted_hours
-        ) {
-          const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-          const allotted = parseFloat(emp.allotted_hours);
-          if (hrsWorked >= allotted * 0.4 && hrsWorked < allotted * 0.85) {
-            a.deduction_reason += (a.deduction_reason ? '; ' : '') +
-              'Worked less than half day';
-          }
-        }
-
-        if (
-          emp.salary_type === 'dihadi' &&
-          a.punch_in &&
-          moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
-        ) {
-          a.deduction_reason += (a.deduction_reason ? '; ' : '') +
-            'Late arrival after 09:15';
-        }
+      const status = a.detailed_status || a.status;
+      let reason = '';
+      if (/^Absent/.test(status)) {
+        reason = 'Absent from work';
+      } else if (status === 'Missing punch') {
+        reason = 'Missing punch in/out';
+      } else if (status === 'Half Day') {
+        reason = 'Worked less than half day';
+      } else if (status === 'Paid Sunday' || status === 'Paid due to Sunday work') {
+        reason = 'Paid Sunday';
+      } else if (status === 'Leave credited') {
+        reason = 'Leave credited';
       }
+      if (
+        emp.salary_type === 'dihadi' &&
+        a.punch_in &&
+        moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss'))
+      ) {
+        reason += (reason ? '; ' : '') + 'Late arrival after 09:15';
+      }
+      a.deduction_reason = reason;
     });
     let totalHoursFormatted = null;
     if (emp.salary_type === 'dihadi') {
@@ -580,7 +547,6 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
     const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
-    applyDetailedStatus(attendance, emp, sandwichDates);
     res.render('employeeSalary', {
       user: req.session.user,
       employee: emp,
@@ -735,12 +701,12 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       if (absent) notes.push(`${absent} day(s) absent`);
       if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
       if (sundayAbs) notes.push(`${sundayAbs} Sunday absence(s)`);
-      r.deduction_reason = notes.join(', ');
+      r.deduction_reason = notes.length ? notes.join(', ') : 'None';
       r.overtime_hours = otHours.toFixed(2);
       r.overtime_days = otDays;
       r.undertime_hours = utHours.toFixed(2);
       r.undertime_days = utDays;
-      r.time_status = otHours > utHours ? 'overtime' : utHours > otHours ? 'undertime' : 'even';
+      r.time_status = otHours > utHours ? 'Overtime' : utHours > otHours ? 'Undertime' : 'Even';
 
       const netHours = utHours - otHours;
       const allot = parseFloat(r.allotted_hours || 0);
