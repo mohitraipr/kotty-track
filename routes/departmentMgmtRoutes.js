@@ -310,7 +310,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         }
         if (a.punch_in && a.punch_out) {
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-          const baseHours = isSun ? 8 : parseFloat(r.allotted_hours || 0);
+          const baseHours = isSun ? 9 : parseFloat(r.allotted_hours || 0);
           const diff = hrs - baseHours;
           if (diff > 0) { otHours += diff; otDays++; }
           else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
@@ -481,7 +481,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         }
         if (a.punch_in && a.punch_out) {
           const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-          const baseHours = isSun ? 8 : parseFloat(r.allotted_hours || 0);
+          const baseHours = isSun ? 9 : parseFloat(r.allotted_hours || 0);
           const diff = hrs - baseHours;
           if (diff > 0) { otHours += diff; otDays++; }
           else if (diff < 0 && crossedLunch(a.punch_in, a.punch_out)) {
