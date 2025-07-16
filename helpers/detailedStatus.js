@@ -23,7 +23,7 @@ function applyDetailedStatus(attendance, emp, sandwichDates) {
       if (monStatus && (monStatus === 'absent' || monStatus === 'one punch only')) skipAbsent.add(monKey);
     });
   }
-  let paidUsed = 0;
+  let mandatoryUsed = 0;
   attendance.forEach(a => {
     const dateStr = moment(a.date).format('YYYY-MM-DD');
     if (skipAbsent.has(dateStr)) {
@@ -40,18 +40,27 @@ function applyDetailedStatus(attendance, emp, sandwichDates) {
       const monStatus = attMap[monKey];
       const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
       const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
-      if (status === 'present' && a.punch_in && a.punch_out && effectiveHours(a.punch_in, a.punch_out, 'monthly') > 0) {
-        if (paidUsed < (emp.paid_sunday_allowance || 0)) {
+
+      if (status !== 'present' && (missedSat || missedMon)) {
+        a.detailed_status = 'Absent (Sandwich)';
+      } else if (!specialDept && status !== 'present' && mandatoryUsed < (emp.paid_sunday_allowance || 0)) {
+        mandatoryUsed++;
+        a.detailed_status = 'Absent (Mandatory)';
+      } else if (status === 'present' && a.punch_in && a.punch_out && effectiveHours(a.punch_in, a.punch_out, 'monthly') > 0) {
+        if (specialDept) {
+          if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) a.detailed_status = 'Leave credited';
+          else a.detailed_status = 'Worked Sunday';
+        } else if (mandatoryUsed < (emp.paid_sunday_allowance || 0)) {
+          mandatoryUsed++;
+          a.detailed_status = 'Worked Sunday';
+        } else if (emp.pay_sunday) {
           a.detailed_status = 'Paid Sunday';
-          paidUsed++;
           skipAbsent.delete(monKey);
         } else if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
           a.detailed_status = 'Leave credited';
         } else {
           a.detailed_status = 'Worked Sunday';
         }
-      } else if (status !== 'present' && (missedSat || missedMon)) {
-        a.detailed_status = 'Absent (Sandwich)';
       } else {
         a.detailed_status = status.charAt(0).toUpperCase() + status.slice(1);
       }

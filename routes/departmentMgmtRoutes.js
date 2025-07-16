@@ -248,7 +248,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
-             e.paid_sunday_allowance, e.allotted_hours,
+             e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              u.username AS supervisor_name, d.name AS department_name
@@ -413,7 +413,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
              e.punching_id, e.name AS employee_name, e.salary AS base_salary,
-             e.paid_sunday_allowance, e.allotted_hours,
+             e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
              u.username AS supervisor_name, d.name AS department_name
@@ -850,11 +850,11 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
 // Update an employee record
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
-  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, leave_start_months, date_of_joining, is_active } = req.body;
+  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active } = req.body;
   try {
     await pool.query(
-      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
-      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, leave_start_months || 3, date_of_joining, is_active ? 1 : 0, empId]
+      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, pay_sunday=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
+      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, pay_sunday ? 1 : 0, leave_start_months || 3, date_of_joining, is_active ? 1 : 0, empId]
     );
     res.json({ success: true });
   } catch (err) {

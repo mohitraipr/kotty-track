@@ -41,7 +41,7 @@ exports.effectiveHours = effectiveHours;
 
 async function calculateSalaryForMonth(conn, employeeId, month) {
   const [[emp]] = await conn.query(
-    `SELECT e.salary, e.salary_type, e.paid_sunday_allowance, e.allotted_hours,
+    `SELECT e.salary, e.salary_type, e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
             e.date_of_joining, e.designation,
             d.name AS department,
             u.username AS supervisor_name
@@ -169,7 +169,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
   let absent = 0;
   let halfDeduct = 0;
   let extraPay = 0;
-  let paidUsed = 0;
+  let mandatoryUsed = 0;
   const creditLeaves = [];
 
   attendance.forEach(a => {
@@ -220,11 +220,27 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     }
 
     if (isSun) {
+      const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
+      const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
+      const satStatus = attMap[satKey];
+      const monStatus = attMap[monKey];
+      const missedSat = satStatus === 'absent' || satStatus === 'one punch only';
+      const missedMon = monStatus === 'absent' || monStatus === 'one punch only';
+
+      if (!specialSup && status !== 'present' && (missedSat || missedMon)) {
+        absent++;
+        return;
+      }
+
+      if (!specialSup && !specialDept && status !== 'present' && mandatoryUsed < (emp.paid_sunday_allowance || 0)) {
+        mandatoryUsed++;
+        absent++;
+        return;
+      }
+
       if (status === 'present' && a.punch_in && a.punch_out) {
         const hrsWorked = effectiveHours(a.punch_in, a.punch_out, 'monthly');
         if (hrsWorked > 0) {
-          const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
-          const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
           let sundayPaid = false;
           if (specialSup) {
             extraPay += dailyRate;
@@ -233,15 +249,15 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
             if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
               creditLeaves.push(dateStr);
             }
-          } else if (paidUsed < (emp.paid_sunday_allowance || 0)) {
+          } else if (mandatoryUsed < (emp.paid_sunday_allowance || 0)) {
+            mandatoryUsed++;
+          } else if (emp.pay_sunday) {
             extraPay += dailyRate;
-            paidUsed++;
             sundayPaid = true;
-          } else {
-            if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
-              creditLeaves.push(dateStr);
-            }
+          } else if (!skipAbsent.has(satKey) && !skipAbsent.has(monKey)) {
+            creditLeaves.push(dateStr);
           }
+
           if (sundayPaid) {
             skipAbsent.delete(monKey);
           }
