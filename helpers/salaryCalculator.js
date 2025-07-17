@@ -4,6 +4,7 @@ const {
   SPECIAL_SUNDAY_SUPERVISORS,
   FULL_SALARY_EMPLOYEE_IDS
 } = require('../utils/supervisors');
+const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
 
 function lunchDeduction(punchIn, punchOut, salaryType = 'dihadi') {
   if (salaryType !== 'dihadi') return 0;
@@ -362,3 +363,70 @@ async function calculateDihadiMonthly(conn, employeeId, month, emp) {
 }
 
 exports.calculateSalaryForMonth = calculateSalaryForMonth;
+
+// Hourly salary calculation for monthly employees
+async function calculateHourlyMonthly(conn, employeeId, month, emp) {
+  const [attendance] = await conn.query(
+    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+    [employeeId, month]
+  );
+  const attMap = {};
+  attendance.forEach(a => {
+    attMap[moment(a.date).format('YYYY-MM-DD')] = a;
+  });
+  const daysInMonth = moment(month + '-01').daysInMonth();
+  const dailyRate = parseFloat(emp.salary) / daysInMonth;
+  const hourlyRate = emp.allotted_hours ? dailyRate / parseFloat(emp.allotted_hours) : 0;
+  let totalHours = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
+    const rec = attMap[dateStr];
+    const status = rec ? rec.status : 'absent';
+    const isSun = moment(dateStr).day() === 0;
+    if (isSun) {
+      const prevKey = moment(dateStr).subtract(1, 'day').format('YYYY-MM-DD');
+      const nextKey = moment(dateStr).add(1, 'day').format('YYYY-MM-DD');
+      const prevStatus = attMap[prevKey] ? attMap[prevKey].status : 'absent';
+      const nextStatus = attMap[nextKey] ? attMap[nextKey].status : 'absent';
+      const missedAdj = prevStatus === 'absent' || prevStatus === 'one punch only' ||
+                        nextStatus === 'absent' || nextStatus === 'one punch only';
+      if (missedAdj) continue; // sandwich unpaid
+      if (rec && rec.punch_in && rec.punch_out && status === 'present') {
+        let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        if (emp.pay_sunday) hrs *= 2;
+        else {
+          const [[row]] = await conn.query(
+            'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
+            [employeeId, dateStr]
+          );
+          if (!row) {
+            await conn.query(
+              'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
+              [employeeId, dateStr, 'Sunday Credit']
+            );
+          }
+        }
+        totalHours += hrs;
+      }
+    } else {
+      if (rec && rec.punch_in && rec.punch_out && status === 'present') {
+        totalHours += effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+      }
+    }
+  }
+  const gross = parseFloat((totalHours * hourlyRate).toFixed(2));
+  const [[advRow]] = await conn.query(
+    'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
+    [employeeId, month]
+  );
+  const advDeduct = parseFloat(advRow.total) || 0;
+  const net = gross - advDeduct;
+  await conn.query(
+    `INSERT INTO employee_salaries (employee_id, month, gross, deduction, net, created_at)
+     VALUES (?, ?, ?, ?, ?, NOW())
+     ON DUPLICATE KEY UPDATE gross=VALUES(gross), deduction=VALUES(deduction), net=VALUES(net)`,
+    [employeeId, month, gross, advDeduct, net]
+  );
+}
+
+exports.calculateSalaryHourly = calculateHourlyMonthly;

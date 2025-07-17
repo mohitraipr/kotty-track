@@ -9,9 +9,11 @@ const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
 const {
   calculateSalaryForMonth,
+  calculateSalaryHourly,
   effectiveHours,
   crossedLunch,
 } = require('../helpers/salaryCalculator');
+const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -170,6 +172,8 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
     return res.redirect('/operator/departments');
   }
 
+  const hourlyMode = req.body.hourly === '1';
+
   const validation = await validateAttendanceFilename(file.originalname);
   if (!validation.valid) {
     req.flash('error', validation.message);
@@ -193,7 +197,7 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
     const unmatched = [];
     for (const emp of data) {
       const [empRows] = await conn.query(
-        'SELECT id, salary, salary_type FROM employees WHERE punching_id = ? AND name = ? AND supervisor_id = ? LIMIT 1',
+        'SELECT id, salary, salary_type, pay_sunday, allotted_hours FROM employees WHERE punching_id = ? AND name = ? AND supervisor_id = ? LIMIT 1',
         [emp.punchingId, emp.name, supervisorId]
       );
       if (!empRows.length) {
@@ -216,7 +220,11 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
         );
       }
       const month = moment(data[0].attendance[0].date).format('YYYY-MM');
-      await calculateSalaryForMonth(conn, employee.id, month);
+      if (hourlyMode && employee.salary_type === 'monthly' && !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(employee.id)) {
+        await calculateSalaryHourly(conn, employee.id, month, employee);
+      } else {
+        await calculateSalaryForMonth(conn, employee.id, month);
+      }
       uploadedCount++;
     }
     await conn.commit();
