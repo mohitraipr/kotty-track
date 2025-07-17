@@ -14,6 +14,7 @@ const {
   crossedLunch,
 } = require('../helpers/salaryCalculator');
 const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
+const { SPECIAL_TEAM_EMPLOYEE_IDS } = require('../utils/specialTeamEmployees');
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -173,6 +174,7 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
   }
 
   const hourlyMode = req.body.hourly === '1';
+  const sundayHours = req.body.sunday_hours ? parseFloat(req.body.sunday_hours) : null;
 
   const validation = await validateAttendanceFilename(file.originalname);
   if (!validation.valid) {
@@ -220,8 +222,13 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
         );
       }
       const month = moment(data[0].attendance[0].date).format('YYYY-MM');
-      if (hourlyMode && employee.salary_type === 'monthly' && !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(employee.id)) {
-        await calculateSalaryHourly(conn, employee.id, month, employee);
+      if (
+        hourlyMode &&
+        employee.salary_type === 'monthly' &&
+        !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(employee.id) &&
+        !SPECIAL_TEAM_EMPLOYEE_IDS.includes(employee.id)
+      ) {
+        await calculateSalaryHourly(conn, employee.id, month, employee, sundayHours);
       } else {
         await calculateSalaryForMonth(conn, employee.id, month);
       }
