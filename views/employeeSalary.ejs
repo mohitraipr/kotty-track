@@ -62,7 +62,7 @@
         <% if (employee.salary_type === 'dihadi') { %>
           <th>Lunch Deduction (mins)</th>
         <% } %>
-        <th>Deduction Reason</th>
+        <th>Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -81,16 +81,17 @@
           <% if (employee.salary_type === 'dihadi') { %>
             <td><%= a.lunch_deduction %></td>
           <% } %>
-          <td><%= a.deduction_reason %></td>
+          <td><%= typeof a.amount === 'number' ? a.amount.toFixed(2) : '' %></td>
         </tr>
       <% }) %>
     </tbody>
   </table>
   <% if (employee.salary_type === 'monthly') { %>
     <h6>OT: <%= overtimeFormatted || '00:00' %> | UT: <%= undertimeFormatted || '00:00' %></h6>
+    <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>)</h6>
   <% } %>
   <% if (employee.salary_type === 'dihadi') { %>
-    <h6>Total Hours: <%= totalHours || '00:00' %> | Hourly Pay: <%= hourlyRate.toFixed(2) %> | Amount: <%= partialAmount ? partialAmount.toFixed(2) : '0.00' %></h6>
+    <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>) | Hourly Pay: <%= hourlyRate.toFixed(2) %> | Amount: <%= partialAmount ? partialAmount.toFixed(2) : '0.00' %></h6>
   <% } %>
   <% if (salary) { %>
     <h6 class="salary-container">

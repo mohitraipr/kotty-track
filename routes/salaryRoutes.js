@@ -468,6 +468,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const daysInMonth = moment(month + '-01').daysInMonth();
     const dailyRate = parseFloat(emp.salary) / daysInMonth;
     let totalHours = 0;
+    let sundayHours = 0;
     let hourlyRate = 0;
     let overtimeTotal = 0;
     let undertimeTotal = 0;
@@ -500,9 +501,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
             a.overtime = '00:00';
             a.undertime = '00:00';
           }
+          totalHours += hrsDec;
+          if (isSun) sundayHours += hrsDec;
+        } else {
+          totalHours += hrsDec;
+          if (moment(a.date).day() === 0) sundayHours += hrsDec;
         }
         if (emp.salary_type === 'dihadi') {
-          totalHours += hrsDec;
+          a.amount = parseFloat((hrsDec * hourlyRate).toFixed(2));
         }
       } else {
         a.hours = '00:00';
@@ -510,6 +516,9 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         if (emp.salary_type === 'monthly') {
           a.overtime = '00:00';
           a.undertime = '00:00';
+        }
+        if (emp.salary_type === 'dihadi') {
+          a.amount = 0;
         }
       }
       const status = a.detailed_status || a.status;
@@ -539,10 +548,23 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         reason += (reason ? '; ' : '') + 'Late arrival after 09:15';
       }
       a.deduction_reason = reason;
+      if (emp.salary_type === 'monthly') {
+        if (/^Absent/.test(status) || status === 'Missing punch') {
+          a.amount = 0;
+        } else if (status === 'Half Day') {
+          a.amount = parseFloat((dailyRate / 2).toFixed(2));
+        } else if (status === 'Paid Sunday' || status === 'Paid due to Sunday work') {
+          a.amount = parseFloat((dailyRate * 2).toFixed(2));
+        } else {
+          a.amount = parseFloat(dailyRate.toFixed(2));
+        }
+      }
     });
     let totalHoursFormatted = null;
-    if (emp.salary_type === 'dihadi') {
+    let sundayHoursFormatted = null;
+    if (emp.salary_type === 'dihadi' || emp.salary_type === 'monthly') {
       totalHoursFormatted = formatHours(totalHours);
+      sundayHoursFormatted = formatHours(sundayHours);
     }
     let overtimeFormatted = null;
     let undertimeFormatted = null;
@@ -567,6 +589,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       month,
       dailyRate,
       totalHours: totalHoursFormatted,
+      sundayHours: sundayHoursFormatted,
       hourlyRate,
       half,
       outstanding,
@@ -835,8 +858,11 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         if (rec && rec.punch_in && rec.punch_out && rec.status === 'present') {
           const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
           const allot = parseFloat(r.allotted_hours || 0);
-          if (hrs >= allot * 0.4 && hrs < allot * 0.85) char = 'H';
-          else char = 'P';
+          if (hrs >= allot * 0.4 && hrs < allot * 0.85) {
+            char = 'H';
+          } else {
+            char = hrs.toFixed(2);
+          }
           if (date.day() === 0 && !mandatory) {
             if (r.pay_sunday && !specialSup && !SPECIAL_DEPARTMENTS.includes((r.department_name || '').toLowerCase())) {
               char = 'ED';
