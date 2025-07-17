@@ -628,6 +628,17 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       attRows.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
+      const prevDay = moment(month + '-01').subtract(1, 'day').format('YYYY-MM-DD');
+      const nextDay = moment(month + '-01').endOf('month').add(1, 'day').format('YYYY-MM-DD');
+      const [adjacent] = await pool.query(
+        'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (?, ?)',
+        [r.employee_id, prevDay, nextDay]
+      );
+      adjacent.forEach(a => {
+        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
+      });
+      if (!attMap[prevDay]) attMap[prevDay] = 'absent';
+      if (!attMap[nextDay]) attMap[nextDay] = 'absent';
       const specialSup =
         SPECIAL_SUNDAY_SUPERVISORS.map(s => s.toLowerCase()).includes(
           (r.supervisor_name || '').toLowerCase()
