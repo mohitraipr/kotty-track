@@ -515,7 +515,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       const status = a.detailed_status || a.status;
       let reason = '';
       if (/^Absent/.test(status)) {
-        reason = 'Absent from work';
+        if (status.includes('Sandwich') || status.includes('Mandatory')) {
+          reason = 'Sunday absence';
+        } else if (status.includes('Short hours')) {
+          reason = 'Short hours absence';
+        } else {
+          reason = 'Absent from work';
+        }
       } else if (status === 'Missing punch') {
         reason = 'Missing punch in/out';
       } else if (status === 'Half Day') {
