@@ -275,6 +275,17 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       attRows.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
+      const prevDay = moment(month + '-01').subtract(1, 'day').format('YYYY-MM-DD');
+      const nextDay = moment(month + '-01').endOf('month').add(1, 'day').format('YYYY-MM-DD');
+      const [adjacent] = await pool.query(
+        'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (?, ?)',
+        [r.employee_id, prevDay, nextDay]
+      );
+      adjacent.forEach(a => {
+        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
+      });
+      if (!attMap[prevDay]) attMap[prevDay] = 'absent';
+      if (!attMap[nextDay]) attMap[nextDay] = 'absent';
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       attRows.forEach(a => {
