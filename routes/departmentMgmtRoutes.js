@@ -857,10 +857,29 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
   const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active } = req.body;
+
+  // Convert boolean like fields to proper numbers. Strings like "0" should be
+  // treated as false which JavaScript truthiness would not do by default.
+  const paySunday = pay_sunday === '1' || pay_sunday === 1 || pay_sunday === true;
+  const isActive = is_active === '1' || is_active === 1 || is_active === true;
   try {
     await pool.query(
       `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, pay_sunday=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
-      [punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance || 0, pay_sunday ? 1 : 0, leave_start_months || 3, date_of_joining, is_active ? 1 : 0, empId]
+      [
+        punching_id,
+        name,
+        designation,
+        phone_number,
+        salary,
+        salary_type,
+        allotted_hours,
+        paid_sunday_allowance || 0,
+        paySunday ? 1 : 0,
+        leave_start_months || 3,
+        date_of_joining,
+        isActive ? 1 : 0,
+        empId
+      ]
     );
     res.json({ success: true });
   } catch (err) {
