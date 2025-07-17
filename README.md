@@ -4,14 +4,14 @@ Kotty Track is a Node.js and Express application used to manage the production w
 
 ## Features
 
-- **Authentication** – Users log in and are redirected to dashboards based on their role.
-- **Admin tools** – Manage roles, users and dynamically create dashboard tables.
-- **Production workflow** – Routes exist for fabric, cutting, stitching, finishing, washing and jeans assembly managers.
-- **Employee management** – Supervisors register employees, record attendance, handle salary calculations and upload night shift data.
-- **Store inventory** – Store admins maintain the list of goods while store employees add incoming stock and record dispatches.
-- **Bulk upload & search** – Operators can upload attendance files and perform bulk updates; Excel exports are available throughout the system.
-- **Supervisor cleanup** – Operators can remove a supervisor's employees and all related records in one action.
-- **Audit logging** – Important actions are written to log files for later review.
+- **Authentication** â Users log in and are redirected to dashboards based on their role.
+- **Admin tools** â Manage roles, users and dynamically create dashboard tables.
+- **Production workflow** â Routes exist for fabric, cutting, stitching, finishing, washing and jeans assembly managers.
+- **Employee management** â Supervisors register employees, record attendance, handle salary calculations and upload night shift data.
+- **Store inventory** â Store admins maintain the list of goods while store employees add incoming stock and record dispatches.
+- **Bulk upload & search** â Operators can upload attendance files and perform bulk updates; Excel exports are available throughout the system.
+- **Supervisor cleanup** â Operators can remove a supervisor's employees and all related records in one action.
+- **Audit logging** â Important actions are written to log files for later review.
 
 ## Installation
 
@@ -294,14 +294,14 @@ Punching in after **09:15** results in an additional one-hour deduction from the
 
 ### Sunday Attendance Rules
 
-- **Special departments (`catalog`, `account`, `merchant`, `tech`)** – Sundays never grant extra pay; any worked Sunday is credited as leave.
-- **Other departments** – use the `pay_sunday` flag to control payment. When set to `TRUE` every worked Sunday is paid. When `FALSE` worked Sundays are credited as leave instead.
-- **Mandatory Sundays** – if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
+- **Special departments (`catalog`, `account`, `merchant`, `tech`)** â Sundays never grant extra pay; any worked Sunday is credited as leave.
+- **Other departments** â use the `pay_sunday` flag to control payment. When set to `TRUE` every worked Sunday is paid. When `FALSE` worked Sundays are credited as leave instead.
+- **Mandatory Sundays** â if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
 
 Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
-For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (Saturday–Sunday–Monday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
+For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (SaturdayâSundayâMonday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
 
 ### Attendance Edit Logs
 
@@ -328,15 +328,15 @@ Operators can modify punch times from the dashboard, but once thirty-five rows e
 Several endpoints update attendance records and then recalculate salary using
 `helpers/salaryCalculator.js`:
 
-- `POST /operator/employees/:id/edit` – update a single day of attendance
+- `POST /operator/employees/:id/edit` â update a single day of attendance
   for one employee.
-- `POST /operator/supervisors/:id/bulk-attendance` – bulk edit a specific date
+- `POST /operator/supervisors/:id/bulk-attendance` â bulk edit a specific date
   for all employees under a supervisor.
-- `POST /operator/employees/:id/bulk-attendance` – edit an entire month of
+- `POST /operator/employees/:id/bulk-attendance` â edit an entire month of
   attendance for one employee.
-- `POST /departments/fix-miss-punch` – automatically correct "one punch only"
+- `POST /departments/fix-miss-punch` â automatically correct "one punch only"
   entries for a single employee.
-- `POST /departments/bulk-fix-miss-punch` – upload an Excel file to fix many
+- `POST /departments/bulk-fix-miss-punch` â upload an Excel file to fix many
   employees at once.
 
 Each of these routes calls `calculateSalaryForMonth` after saving attendance so
@@ -376,6 +376,51 @@ CREATE TABLE sandwich_dates (
 A sandwich day is normally a paid leave. However, if an employee is absent either the day before or the day after, the sandwich day becomes unpaid and is deducted from salary.
 
 Salaries are released 15 days after the end of the month so that any deductions for damage or misconduct can be applied before payout.
+
+### Attendance and Payroll Rules
+
+The application enforces a number of salary calculation rules. These come
+primarily from `helpers/salaryCalculator.js` and related routes.
+
+#### Daily Hours and Lunch Breaks
+
+- A lunch break is automatically deducted for **dihadi** (daily wage) workers
+  based on their punch‑out time:
+  - 0 minutes if the employee leaves before **13:10**.
+  - 30 minutes if the employee leaves between **13:10** and **18:10**.
+  - 60 minutes for any punch‑out after **18:10**.
+- Dihadi workers arriving after **09:15** lose an additional hour for late
+  arrival. Their day is also capped at **11 working hours**.
+
+#### Monthly Worker Attendance
+
+- Monthly employees have an `allotted_hours` value. When the hours worked for a
+  day are below certain thresholds the day is deducted:
+  - Less than **40%** of the allotted hours -> marked **Absent**.
+  - Between **40%** and **85%** -> counts as a **Half Day**.
+
+#### Sunday Rules
+
+- Employees are only paid for a Sunday when valid punch in/out times result in
+  positive working hours.
+- If an employee is absent on the Saturday or Monday adjacent to a Sunday, that
+  Sunday normally becomes unpaid. When both days are missed the entire
+  Saturday–Sunday–Monday period is deducted.
+- `paid_sunday_allowance` specifies how many Sundays per month are mandatory.
+  Missing one counts as an absence. After the allowance is met, Sundays worked
+  are either paid (`pay_sunday` enabled) or credited as leave when neither
+  Saturday nor Monday is absent.
+- Departments listed in `utils/departments.js` receive leave credit for working
+  Sundays when there are no adjacent absences.
+- Supervisors listed in `utils/supervisors.js` follow an older rule where Sunday
+  counts as an absence only when **both** Saturday *and* Monday are missed. A
+  worked Sunday under these supervisors is always paid.
+
+#### Sandwich Days
+
+- Dates stored in the `sandwich_dates` table are normally treated as paid leave.
+  However, if the employee is absent on the day before **or** the day after, the
+  sandwich day becomes unpaid and is deducted from salary.
 
 ### Inventory Webhook Alerts
 
