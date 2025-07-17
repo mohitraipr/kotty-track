@@ -365,7 +365,7 @@ async function calculateDihadiMonthly(conn, employeeId, month, emp) {
 exports.calculateSalaryForMonth = calculateSalaryForMonth;
 
 // Hourly salary calculation for monthly employees
-async function calculateHourlyMonthly(conn, employeeId, month, emp) {
+async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursOverride = null) {
   const [attendance] = await conn.query(
     'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
     [employeeId, month]
@@ -377,7 +377,8 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp) {
   const daysInMonth = moment(month + '-01').daysInMonth();
   const dailyRate = parseFloat(emp.salary) / daysInMonth;
   const hourlyRate = emp.allotted_hours ? dailyRate / parseFloat(emp.allotted_hours) : 0;
-  let totalHours = 0;
+  const sundayRate = sundayHoursOverride ? dailyRate / sundayHoursOverride : hourlyRate;
+  let totalPay = 0;
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
@@ -393,8 +394,9 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp) {
       if (missedAdj) continue; // sandwich unpaid
       if (rec && rec.punch_in && rec.punch_out && status === 'present') {
         let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
-        if (emp.pay_sunday) hrs *= 2;
-        else {
+        if (emp.pay_sunday) {
+          totalPay += hrs * 2 * sundayRate;
+        } else {
           const [[row]] = await conn.query(
             'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
             [employeeId, dateStr]
@@ -405,16 +407,17 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp) {
               [employeeId, dateStr, 'Sunday Credit']
             );
           }
+          totalPay += hrs * hourlyRate;
         }
-        totalHours += hrs;
       }
     } else {
       if (rec && rec.punch_in && rec.punch_out && status === 'present') {
-        totalHours += effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        totalPay += hrs * hourlyRate;
       }
     }
   }
-  const gross = parseFloat((totalHours * hourlyRate).toFixed(2));
+  const gross = parseFloat(totalPay.toFixed(2));
   const [[advRow]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
     [employeeId, month]
