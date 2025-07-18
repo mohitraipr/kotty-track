@@ -112,36 +112,7 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
   });
 
-  // Include the last day of the previous month and the first day of the next
-  // month so Sunday sandwich checks work across month boundaries.  If
-  // attendance for those dates doesn't exist, treat them as absences.
-  const startOfMonth = moment(month + '-01');
-  const prevDay = startOfMonth.clone().subtract(1, 'day').format('YYYY-MM-DD');
-  const endOfMonth = startOfMonth.clone().endOf('month');
-  const nextDay = endOfMonth.clone().add(1, 'day').format('YYYY-MM-DD');
-  if (!attMap[prevDay] || !attMap[nextDay]) {
-    const placeholders = [];
-    const params = [employeeId];
-    if (!attMap[prevDay]) {
-      placeholders.push('?');
-      params.push(prevDay);
-    }
-    if (!attMap[nextDay]) {
-      placeholders.push('?');
-      params.push(nextDay);
-    }
-    if (placeholders.length) {
-      const [adjacent] = await conn.query(
-        `SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (${placeholders.join(',')})`,
-        params
-      );
-      adjacent.forEach(r => {
-        attMap[moment(r.date).format('YYYY-MM-DD')] = r.status;
-      });
-    }
-    if (!attMap[prevDay]) attMap[prevDay] = 'absent';
-    if (!attMap[nextDay]) attMap[nextDay] = 'absent';
-  }
+
 
   // Treat missing attendance records as absences
   for (let d = 1; d <= daysInMonth; d++) {
@@ -389,8 +360,8 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
     if (isSun) {
       const prevKey = moment(dateStr).subtract(1, 'day').format('YYYY-MM-DD');
       const nextKey = moment(dateStr).add(1, 'day').format('YYYY-MM-DD');
-      const prevStatus = attMap[prevKey] ? attMap[prevKey].status : 'absent';
-      const nextStatus = attMap[nextKey] ? attMap[nextKey].status : 'absent';
+      const prevStatus = attMap[prevKey] ? attMap[prevKey].status : null;
+      const nextStatus = attMap[nextKey] ? attMap[nextKey].status : null;
       const isAdjAbsent = s => s && (s.toLowerCase().startsWith('absent') || s === 'one punch only');
       const missedAdj = isAdjAbsent(prevStatus) || isAdjAbsent(nextStatus);
       if (missedAdj) continue; // sandwich unpaid
