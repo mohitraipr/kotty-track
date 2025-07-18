@@ -364,6 +364,7 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
   const sundayBaseHours = sundayHoursOverride || 9;
   const sundayRate = dailyRate / sundayBaseHours;
   let totalPay = 0;
+  const graceTime = moment('09:15:00', 'HH:mm:ss');
   for (let d = startHM; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
@@ -379,10 +380,18 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
 
       const worked = rec && rec.punch_in && rec.punch_out;
       if (worked) {
-        const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        const punch = moment(rec.punch_in, 'HH:mm:ss');
+        const base = sundayBaseHours;
+        let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        let credit = base;
+        if (punch.isAfter(graceTime)) {
+          const lateMin = punch.diff(graceTime, 'minutes');
+          credit = Math.max(base - lateMin / 60, 0);
+        }
+        if (hrs > credit) credit = hrs;
         if (emp.pay_sunday) {
-          // Pay double for actual hours worked
-          totalPay += hrs * sundayRate * 2;
+          // Pay double for credited hours (after grace adjustment)
+          totalPay += credit * sundayRate * 2;
         } else {
           // Pay base Sunday hours and credit leave when not paid
           totalPay += sundayBaseHours * sundayRate;
@@ -402,8 +411,19 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
         totalPay += sundayBaseHours * sundayRate;
       }
     } else if (rec && rec.punch_in && rec.punch_out) {
-      const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
-      if (hrs > 0) totalPay += hrs * hourlyRate;
+      let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+      const base = parseFloat(emp.allotted_hours || 0);
+      const punch = moment(rec.punch_in, 'HH:mm:ss');
+      let credit = base;
+      if (punch.isAfter(graceTime)) {
+        const lateMin = punch.diff(graceTime, 'minutes');
+        credit = Math.max(base - lateMin / 60, 0);
+      }
+      if (punch.isSameOrBefore(graceTime)) {
+        credit = base;
+      }
+      if (hrs > credit) credit = hrs;
+      if (credit > 0) totalPay += credit * hourlyRate;
     }
   }
   const gross = parseFloat(totalPay.toFixed(2));
