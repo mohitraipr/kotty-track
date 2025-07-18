@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const moment = require('moment');
 const { pool } = require('../config/db');
-const { calculateSalaryForMonth } = require('../helpers/salaryCalculator');
+const {
+  calculateSalaryForMonth,
+  calculateSalaryHourly,
+} = require('../helpers/salaryCalculator');
+const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
+const { SPECIAL_TEAM_EMPLOYEE_IDS } = require('../utils/specialTeamEmployees');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 // List all supervisors
@@ -76,7 +81,10 @@ router.post('/employees/:id/edit', isAuthenticated, isOperator, async (req, res)
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [[emp]] = await conn.query('SELECT supervisor_id FROM employees WHERE id = ?', [empId]);
+    const [[emp]] = await conn.query(
+      'SELECT supervisor_id, salary_type, salary, pay_sunday, allotted_hours FROM employees WHERE id = ?',
+      [empId]
+    );
     if (!emp) {
       await conn.rollback();
       req.flash('error', 'Employee not found');
@@ -109,7 +117,15 @@ router.post('/employees/:id/edit', isAuthenticated, isOperator, async (req, res)
       );
     }
     const month = moment(date).format('YYYY-MM');
-    await calculateSalaryForMonth(conn, empId, month);
+    if (
+      emp.salary_type === 'monthly' &&
+      !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(empId) &&
+      !SPECIAL_TEAM_EMPLOYEE_IDS.includes(empId)
+    ) {
+      await calculateSalaryHourly(conn, empId, month, emp);
+    } else {
+      await calculateSalaryForMonth(conn, empId, month);
+    }
     await conn.commit();
     req.flash('success', 'Attendance updated');
     conn.release();
@@ -173,7 +189,10 @@ router.post('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, asy
       const punch_in = punchIns[i] || null;
       const punch_out = punchOuts[i] || null;
 
-      const [[emp]] = await conn.query('SELECT supervisor_id FROM employees WHERE id = ?', [empId]);
+      const [[emp]] = await conn.query(
+        'SELECT supervisor_id, salary_type, salary, pay_sunday, allotted_hours FROM employees WHERE id = ?',
+        [empId]
+      );
       if (!emp || emp.supervisor_id != supId) {
         continue;
       }
@@ -195,7 +214,15 @@ router.post('/supervisors/:id/bulk-attendance', isAuthenticated, isOperator, asy
       }
 
       const month = moment(date).format('YYYY-MM');
-      await calculateSalaryForMonth(conn, empId, month);
+      if (
+        emp.salary_type === 'monthly' &&
+        !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(empId) &&
+        !SPECIAL_TEAM_EMPLOYEE_IDS.includes(empId)
+      ) {
+        await calculateSalaryHourly(conn, empId, month, emp);
+      } else {
+        await calculateSalaryForMonth(conn, empId, month);
+      }
     }
     await conn.commit();
     conn.release();
@@ -251,7 +278,10 @@ router.post('/employees/:id/bulk-attendance', isAuthenticated, isOperator, async
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [[emp]] = await conn.query('SELECT supervisor_id FROM employees WHERE id = ?', [empId]);
+    const [[emp]] = await conn.query(
+      'SELECT supervisor_id, salary_type, salary, pay_sunday, allotted_hours FROM employees WHERE id = ?',
+      [empId]
+    );
     if (!emp) {
       await conn.rollback();
       req.flash('error', 'Employee not found');
@@ -278,7 +308,15 @@ router.post('/employees/:id/bulk-attendance', isAuthenticated, isOperator, async
         );
       }
     }
-    await calculateSalaryForMonth(conn, empId, month);
+    if (
+      emp.salary_type === 'monthly' &&
+      !HOURLY_EXEMPT_EMPLOYEE_IDS.includes(empId) &&
+      !SPECIAL_TEAM_EMPLOYEE_IDS.includes(empId)
+    ) {
+      await calculateSalaryHourly(conn, empId, month, emp);
+    } else {
+      await calculateSalaryForMonth(conn, empId, month);
+    }
     await conn.commit();
     conn.release();
     req.flash('success', 'Attendance updated');
