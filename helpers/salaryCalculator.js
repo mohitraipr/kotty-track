@@ -364,24 +364,29 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
       const missedAdj = isAdjAbsent(prevStatus) || isAdjAbsent(nextStatus);
       if (missedAdj) continue; // sandwich unpaid
 
-      // Base pay for Sunday regardless of attendance
-      totalPay += sundayBaseHours * sundayRate;
-
       const worked = rec && rec.punch_in && rec.punch_out;
-      if (worked && emp.pay_sunday) {
-        // Additional pay for working on Sunday
-        totalPay += sundayBaseHours * sundayRate;
-      } else if (worked && !emp.pay_sunday) {
-        const [[row]] = await conn.query(
-          'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
-          [employeeId, dateStr]
-        );
-        if (!row) {
-          await conn.query(
-            'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
-            [employeeId, dateStr, 'Sunday Credit']
+      if (worked) {
+        const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        if (emp.pay_sunday) {
+          // Pay double for actual hours worked
+          totalPay += hrs * sundayRate * 2;
+        } else {
+          // Pay base Sunday hours and credit leave when not paid
+          totalPay += sundayBaseHours * sundayRate;
+          const [[row]] = await conn.query(
+            'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
+            [employeeId, dateStr]
           );
+          if (!row) {
+            await conn.query(
+              'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
+              [employeeId, dateStr, 'Sunday Credit']
+            );
+          }
         }
+      } else {
+        // Absent on Sunday but still paid the base hours
+        totalPay += sundayBaseHours * sundayRate;
       }
     } else if (rec && rec.punch_in && rec.punch_out) {
       const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
