@@ -96,9 +96,13 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
     await calculateDihadiMonthly(conn, employeeId, month, emp);
     return;
   }
+  const monthStart = moment(month + '-01');
+  const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
+  const start = join && join.isAfter(monthStart) ? join.format('YYYY-MM-DD') : monthStart.format('YYYY-MM-DD');
+
   const [attendance] = await conn.query(
-    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
-    [employeeId, month]
+    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date >= ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+    [employeeId, start, month]
   );
   const [sandwichRows] = await conn.query(
     'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
@@ -115,7 +119,8 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
 
 
   // Treat missing attendance records as absences
-  for (let d = 1; d <= daysInMonth; d++) {
+  const begin = join && join.isAfter(monthStart) ? join.date() : 1;
+  for (let d = begin; d <= daysInMonth; d++) {
     const dateStr = moment(`${month}-${String(d).padStart(2, '0')}`).format('YYYY-MM-DD');
     if (!attMap[dateStr]) {
       attendance.push({ date: dateStr, status: 'absent', punch_in: null, punch_out: null });
@@ -310,9 +315,12 @@ async function calculateSalaryForMonth(conn, employeeId, month) {
 // Dihadi workers are paid purely on hours worked. Grab all attendance
 // for the month and multiply the total hours by the hourly rate.
 async function calculateDihadiMonthly(conn, employeeId, month, emp) {
+  const monthStart = moment(month + '-01');
+  const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
+  const start = join && join.isAfter(monthStart) ? join.format('YYYY-MM-DD') : monthStart.format('YYYY-MM-DD');
   const [attendance] = await conn.query(
-    'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
-    [employeeId, month]
+    'SELECT punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date >= ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+    [employeeId, start, month]
   );
   const hourlyRate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
   let totalHours = 0;
@@ -337,21 +345,26 @@ exports.calculateSalaryForMonth = calculateSalaryForMonth;
 
 // Hourly salary calculation for monthly employees
 async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursOverride = null) {
+  const monthStart = moment(month + '-01');
+  const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
+  const start = join && join.isAfter(monthStart) ? join.format('YYYY-MM-DD') : monthStart.format('YYYY-MM-DD');
   const [attendance] = await conn.query(
-    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
-    [employeeId, month]
+    'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date >= ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+    [employeeId, start, month]
   );
   const attMap = {};
   attendance.forEach(a => {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a;
   });
-  const daysInMonth = moment(month + '-01').daysInMonth();
+  const monthStartHM = moment(month + '-01');
+  const startHM = join && join.isAfter(monthStartHM) ? join.date() : 1;
+  const daysInMonth = monthStartHM.daysInMonth();
   const dailyRate = parseFloat(emp.salary) / daysInMonth;
   const hourlyRate = emp.allotted_hours ? dailyRate / parseFloat(emp.allotted_hours) : 0;
   const sundayBaseHours = sundayHoursOverride || 9;
   const sundayRate = dailyRate / sundayBaseHours;
   let totalPay = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
+  for (let d = startHM; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
     const isSun = moment(dateStr).day() === 0;
