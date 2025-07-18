@@ -364,6 +364,7 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
   const sundayBaseHours = sundayHoursOverride || 9;
   const sundayRate = dailyRate / sundayBaseHours;
   let totalPay = 0;
+  const graceTime = moment('09:15:00', 'HH:mm:ss');
   for (let d = startHM; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
@@ -379,9 +380,13 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
 
       const worked = rec && rec.punch_in && rec.punch_out;
       if (worked) {
-        const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+        if (moment(rec.punch_in, 'HH:mm:ss').isSameOrBefore(graceTime)) {
+          const base = sundayBaseHours;
+          if (hrs < base) hrs = base;
+        }
         if (emp.pay_sunday) {
-          // Pay double for actual hours worked
+          // Pay double for actual hours worked (after grace adjustment)
           totalPay += hrs * sundayRate * 2;
         } else {
           // Pay base Sunday hours and credit leave when not paid
@@ -402,7 +407,11 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
         totalPay += sundayBaseHours * sundayRate;
       }
     } else if (rec && rec.punch_in && rec.punch_out) {
-      const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+      let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+      if (moment(rec.punch_in, 'HH:mm:ss').isSameOrBefore(graceTime)) {
+        const base = parseFloat(emp.allotted_hours || 0);
+        if (base && hrs < base) hrs = base;
+      }
       if (hrs > 0) totalPay += hrs * hourlyRate;
     }
   }

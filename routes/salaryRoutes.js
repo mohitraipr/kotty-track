@@ -503,7 +503,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'monthly') {
           const baseHours = isSun ? 9 : parseFloat(emp.allotted_hours || 0);
-          const diff = hrsDec - baseHours;
+          let diff = hrsDec - baseHours;
+          if (
+            hourlyView &&
+            diff < 0 &&
+            moment(a.punch_in, 'HH:mm:ss').isSameOrBefore(moment('09:15:00', 'HH:mm:ss'))
+          ) {
+            diff = 0; // grace minutes when punching in before 09:15
+          }
           if (diff > 0) {
             a.overtime = formatHours(diff);
             a.undertime = '00:00';
@@ -576,15 +583,22 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.amount = parseFloat(dailyRate.toFixed(2));
         }
       } else if (emp.salary_type === 'monthly' && hourlyView) {
+        let hrsPay = hrsDec;
+        if (
+          moment(a.punch_in, 'HH:mm:ss').isSameOrBefore(moment('09:15:00', 'HH:mm:ss')) &&
+          hrsDec < (isSun ? sundayBaseHours : parseFloat(emp.allotted_hours || 0))
+        ) {
+          hrsPay = isSun ? sundayBaseHours : parseFloat(emp.allotted_hours || 0);
+        }
         let amt;
         if (status === 'Leave credited') {
           amt = sundayBaseHours * sundayRate;
         } else if (status.startsWith('Absent (Sandwich)') || status.startsWith('Absent (Mandatory)')) {
           amt = 0;
         } else if (isSun) {
-          amt = hrsDec * sundayRate * 2;
+          amt = hrsPay * sundayRate * 2;
         } else {
-          amt = hrsDec * hourlyRate;
+          amt = hrsPay * hourlyRate;
         }
         a.amount = parseFloat(amt.toFixed(2));
         partialPay += amt;
