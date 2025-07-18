@@ -391,8 +391,8 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
       const nextKey = moment(dateStr).add(1, 'day').format('YYYY-MM-DD');
       const prevStatus = attMap[prevKey] ? attMap[prevKey].status : 'absent';
       const nextStatus = attMap[nextKey] ? attMap[nextKey].status : 'absent';
-      const missedAdj = prevStatus === 'absent' || prevStatus === 'one punch only' ||
-                        nextStatus === 'absent' || nextStatus === 'one punch only';
+      const isAdjAbsent = s => s && (s.toLowerCase().startsWith('absent') || s === 'one punch only');
+      const missedAdj = isAdjAbsent(prevStatus) || isAdjAbsent(nextStatus);
       if (missedAdj) continue; // sandwich unpaid
       if (emp.pay_sunday) {
         totalPay += hrs * 2 * sundayRate;
