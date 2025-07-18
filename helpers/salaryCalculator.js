@@ -382,39 +382,35 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
-    const status = rec ? rec.status : 'absent';
     const isSun = moment(dateStr).day() === 0;
+    if (!rec || !rec.punch_in || !rec.punch_out) continue;
+    let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+    if (hrs <= 0) continue;
     if (isSun) {
       const prevKey = moment(dateStr).subtract(1, 'day').format('YYYY-MM-DD');
       const nextKey = moment(dateStr).add(1, 'day').format('YYYY-MM-DD');
       const prevStatus = attMap[prevKey] ? attMap[prevKey].status : 'absent';
       const nextStatus = attMap[nextKey] ? attMap[nextKey].status : 'absent';
-      const missedAdj = prevStatus === 'absent' || prevStatus === 'one punch only' ||
-                        nextStatus === 'absent' || nextStatus === 'one punch only';
+      const isAdjAbsent = s => s && (s.toLowerCase().startsWith('absent') || s === 'one punch only');
+      const missedAdj = isAdjAbsent(prevStatus) || isAdjAbsent(nextStatus);
       if (missedAdj) continue; // sandwich unpaid
-      if (rec && rec.punch_in && rec.punch_out && status === 'present') {
-        let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
-        if (emp.pay_sunday) {
-          totalPay += hrs * 2 * sundayRate;
-        } else {
-          const [[row]] = await conn.query(
-            'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
-            [employeeId, dateStr]
+      if (emp.pay_sunday) {
+        totalPay += hrs * 2 * sundayRate;
+      } else {
+        const [[row]] = await conn.query(
+          'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
+          [employeeId, dateStr]
+        );
+        if (!row) {
+          await conn.query(
+            'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
+            [employeeId, dateStr, 'Sunday Credit']
           );
-          if (!row) {
-            await conn.query(
-              'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, 1, ?)',
-              [employeeId, dateStr, 'Sunday Credit']
-            );
-          }
-          totalPay += hrs * hourlyRate;
         }
-      }
-    } else {
-      if (rec && rec.punch_in && rec.punch_out && status === 'present') {
-        const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
         totalPay += hrs * hourlyRate;
       }
+    } else {
+      totalPay += hrs * hourlyRate;
     }
   }
   const gross = parseFloat(totalPay.toFixed(2));
