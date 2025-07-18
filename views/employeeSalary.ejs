@@ -35,6 +35,12 @@
         </select>
       </div>
     <% } %>
+    <% if (employee.salary_type === 'monthly') { %>
+      <div class="form-check col-auto">
+        <input class="form-check-input" type="checkbox" id="hourly" name="hourly" value="1" <%= hourlyMode ? 'checked' : '' %>>
+        <label class="form-check-label" for="hourly">Hourly view</label>
+      </div>
+    <% } %>
     <div class="col-auto">
       <button type="submit" class="btn btn-primary">Go</button>
     </div>
@@ -88,7 +94,11 @@
   </table>
   <% if (employee.salary_type === 'monthly') { %>
     <h6>OT: <%= overtimeFormatted || '00:00' %> | UT: <%= undertimeFormatted || '00:00' %></h6>
-    <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>)</h6>
+    <% if (hourlyMode) { %>
+      <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>) | Hourly Pay: <%= hourlyRate.toFixed(2) %> | Amount: <%= partialAmount ? partialAmount.toFixed(2) : '0.00' %></h6>
+    <% } else { %>
+      <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>)</h6>
+    <% } %>
   <% } %>
   <% if (employee.salary_type === 'dihadi') { %>
     <h6>Total Hours: <%= totalHours || '00:00' %> (Sundays: <%= sundayHours || '00:00' %>) | Hourly Pay: <%= hourlyRate.toFixed(2) %> | Amount: <%= partialAmount ? partialAmount.toFixed(2) : '0.00' %></h6>

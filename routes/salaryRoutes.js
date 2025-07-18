@@ -420,6 +420,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
   const empId = req.params.id;
   const month = req.query.month || moment().format('YYYY-MM');
   const half = parseInt(req.query.half, 10) === 2 ? 2 : 1;
+  const hourlyView = req.query.hourly === '1';
   try {
     const [[emp]] = await pool.query(
       `SELECT e.*, d.name AS department
@@ -472,7 +473,10 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     let hourlyRate = 0;
     let overtimeTotal = 0;
     let undertimeTotal = 0;
-    if (emp.salary_type === 'dihadi') {
+    if (
+      emp.salary_type === 'dihadi' ||
+      (emp.salary_type === 'monthly' && hourlyView)
+    ) {
       hourlyRate = emp.allotted_hours
         ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
         : 0;
@@ -507,8 +511,10 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           totalHours += hrsDec;
           if (moment(a.date).day() === 0) sundayHours += hrsDec;
         }
-        if (emp.salary_type === 'dihadi') {
-          a.amount = parseFloat((hrsDec * hourlyRate).toFixed(2));
+        if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
+          const isSun = moment(a.date).day() === 0;
+          const rate = isSun && emp.salary_type === 'monthly' ? hourlyRate * 2 : hourlyRate;
+          a.amount = parseFloat((hrsDec * rate).toFixed(2));
         }
       } else {
         a.hours = '00:00';
@@ -517,7 +523,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.overtime = '00:00';
           a.undertime = '00:00';
         }
-        if (emp.salary_type === 'dihadi') {
+        if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
           a.amount = 0;
         }
       }
@@ -548,7 +554,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         reason += (reason ? '; ' : '') + 'Late arrival after 09:15';
       }
       a.deduction_reason = reason;
-      if (emp.salary_type === 'monthly') {
+      if (emp.salary_type === 'monthly' && !hourlyView) {
         if (/^Absent/.test(status) || status === 'Missing punch') {
           a.amount = 0;
         } else if (status === 'Half Day') {
@@ -575,6 +581,8 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     let partialAmount = null;
     if (emp.salary_type === 'dihadi') {
       partialAmount = parseFloat((totalHours * hourlyRate).toFixed(2));
+    } else if (emp.salary_type === 'monthly' && hourlyView) {
+      partialAmount = parseFloat(((totalHours + sundayHours) * hourlyRate).toFixed(2));
     }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
@@ -595,7 +603,8 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       outstanding,
       overtimeFormatted,
       undertimeFormatted,
-      partialAmount
+      partialAmount,
+      hourlyMode: hourlyView
     });
   } catch (err) {
     console.error('Error loading salary view:', err);
