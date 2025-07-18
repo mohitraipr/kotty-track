@@ -29,6 +29,14 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   const start = moment(punchIn, 'HH:mm:ss');
   const end = moment(punchOut, 'HH:mm:ss');
   let mins = end.diff(start, 'minutes');
+  // Apply 15 minute grace period for monthly employees
+  if (salaryType !== 'dihadi') {
+    const shiftStart = moment('09:00:00', 'HH:mm:ss');
+    if (start.isAfter(shiftStart)) {
+      const grace = Math.min(15, start.diff(shiftStart, 'minutes'));
+      mins += grace;
+    }
+  }
   mins -= lunchDeduction(punchIn, punchOut, salaryType);
 
   // Deduct minutes for late arrivals after the 15 minute grace period
