@@ -478,7 +478,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       (emp.salary_type === 'monthly' && hourlyView)
     ) {
       hourlyRate = emp.allotted_hours
-        ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
+        ? dailyRate / parseFloat(emp.allotted_hours)
         : 0;
     }
     attendance.forEach(a => {
