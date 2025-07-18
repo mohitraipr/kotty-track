@@ -184,6 +184,8 @@ Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi
 
 Punching in after **09:15** results in an additional one-hour deduction from the day's counted hours for **dihadi** (daily wage) employees only.
 
+Monthly employees paid hourly receive their full allotted hours when both punches are present and the punch in time is before **09:15**. For arrivals after this grace time one minute is deducted from the credited hours for each minute late.
+
 ### Sunday Attendance Rules
 
 - **Special departments (`catalog`, `account`, `merchant`, `tech`)** â Sundays never grant extra pay; any worked Sunday is credited as leave.

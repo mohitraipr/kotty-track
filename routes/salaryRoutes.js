@@ -503,7 +503,18 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'monthly') {
           const baseHours = isSun ? 9 : parseFloat(emp.allotted_hours || 0);
-          const diff = hrsDec - baseHours;
+          const punch = moment(a.punch_in, 'HH:mm:ss');
+          let credit = baseHours;
+          const grace = moment('09:15:00', 'HH:mm:ss');
+          if (hourlyView && punch.isAfter(grace)) {
+            const lateMin = punch.diff(grace, 'minutes');
+            credit = Math.max(baseHours - lateMin / 60, 0);
+          }
+          if (hourlyView && punch.isSameOrBefore(grace)) {
+            credit = baseHours;
+          }
+          if (hrsDec > credit) credit = hrsDec;
+          const diff = credit - baseHours;
           if (diff > 0) {
             a.overtime = formatHours(diff);
             a.undertime = '00:00';
@@ -576,15 +587,25 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.amount = parseFloat(dailyRate.toFixed(2));
         }
       } else if (emp.salary_type === 'monthly' && hourlyView) {
+        const punch = moment(a.punch_in, 'HH:mm:ss');
+        const grace = moment('09:15:00', 'HH:mm:ss');
+        let hrsPay;
+        const base = isSun ? sundayBaseHours : parseFloat(emp.allotted_hours || 0);
+        if (punch.isSameOrBefore(grace)) {
+          hrsPay = Math.max(hrsDec, base);
+        } else {
+          const lateMin = punch.diff(grace, 'minutes');
+          hrsPay = Math.max(hrsDec, Math.max(base - lateMin / 60, 0));
+        }
         let amt;
         if (status === 'Leave credited') {
           amt = sundayBaseHours * sundayRate;
         } else if (status.startsWith('Absent (Sandwich)') || status.startsWith('Absent (Mandatory)')) {
           amt = 0;
         } else if (isSun) {
-          amt = hrsDec * sundayRate * 2;
+          amt = hrsPay * sundayRate * 2;
         } else {
-          amt = hrsDec * hourlyRate;
+          amt = hrsPay * hourlyRate;
         }
         a.amount = parseFloat(amt.toFixed(2));
         partialPay += amt;
