@@ -485,12 +485,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         : 0;
     }
     attendance.forEach(a => {
+      const isSun = moment(a.date).day() === 0;
+      let hrsDec = 0;
       if (a.punch_in && a.punch_out) {
-        const hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
+        hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
         a.hours = formatHours(hrsDec);
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'monthly') {
-          const isSun = moment(a.date).day() === 0;
           const baseHours = isSun ? 9 : parseFloat(emp.allotted_hours || 0);
           const diff = hrsDec - baseHours;
           if (diff > 0) {
@@ -515,10 +516,9 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           if (moment(a.date).day() === 0) sundayHours += hrsDec;
         }
         if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
-          const isSun = moment(a.date).day() === 0;
           let amt;
           if (emp.salary_type === 'monthly' && hourlyView && isSun) {
-            amt = sundayBaseHours * sundayRate * 2;
+            amt = hrsDec * sundayRate * 2;
           } else {
             amt = hrsDec * hourlyRate;
           }
@@ -533,7 +533,6 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.undertime = '00:00';
         }
         if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
-          const isSun = moment(a.date).day() === 0;
           let amt = 0;
           if (emp.salary_type === 'monthly' && hourlyView && isSun) {
             amt = sundayBaseHours * sundayRate;
@@ -571,11 +570,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       a.deduction_reason = reason;
       if (emp.salary_type === 'monthly' && !hourlyView) {
         if (/^Absent/.test(status) || status === 'Missing punch') {
-          a.amount = 0;
+          a.amount = isSun ? parseFloat(dailyRate.toFixed(2)) : 0;
         } else if (status === 'Half Day') {
           a.amount = parseFloat((dailyRate / 2).toFixed(2));
-        } else if (status === 'Paid Sunday' || status === 'Paid due to Sunday work') {
-          a.amount = parseFloat((dailyRate * 2).toFixed(2));
+        } else if (status === 'Paid Sunday') {
+          const hoursForPay = hrsDec || sundayBaseHours;
+          a.amount = parseFloat((hoursForPay * sundayRate * 2).toFixed(2));
+        } else if (status === 'Paid due to Sunday work') {
+          a.amount = parseFloat(dailyRate.toFixed(2));
         } else {
           a.amount = parseFloat(dailyRate.toFixed(2));
         }
