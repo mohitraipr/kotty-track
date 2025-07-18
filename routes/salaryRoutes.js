@@ -471,6 +471,9 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     let totalHours = 0;
     let sundayHours = 0;
     let hourlyRate = 0;
+    const sundayBaseHours = 9;
+    const sundayRate = dailyRate / sundayBaseHours;
+    let partialPay = 0;
     let overtimeTotal = 0;
     let undertimeTotal = 0;
     if (
@@ -513,8 +516,14 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         }
         if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
           const isSun = moment(a.date).day() === 0;
-          const rate = isSun && emp.salary_type === 'monthly' ? hourlyRate * 2 : hourlyRate;
-          a.amount = parseFloat((hrsDec * rate).toFixed(2));
+          let amt;
+          if (emp.salary_type === 'monthly' && hourlyView && isSun) {
+            amt = sundayBaseHours * sundayRate * 2;
+          } else {
+            amt = hrsDec * hourlyRate;
+          }
+          a.amount = parseFloat(amt.toFixed(2));
+          partialPay += amt;
         }
       } else {
         a.hours = '00:00';
@@ -524,7 +533,13 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.undertime = '00:00';
         }
         if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
-          a.amount = 0;
+          const isSun = moment(a.date).day() === 0;
+          let amt = 0;
+          if (emp.salary_type === 'monthly' && hourlyView && isSun) {
+            amt = sundayBaseHours * sundayRate;
+          }
+          a.amount = parseFloat(amt.toFixed(2));
+          partialPay += amt;
         }
       }
       const status = a.detailed_status || a.status;
@@ -582,7 +597,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     if (emp.salary_type === 'dihadi') {
       partialAmount = parseFloat((totalHours * hourlyRate).toFixed(2));
     } else if (emp.salary_type === 'monthly' && hourlyView) {
-      partialAmount = parseFloat(((totalHours + sundayHours) * hourlyRate).toFixed(2));
+      partialAmount = parseFloat(partialPay.toFixed(2));
     }
     const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
     const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);

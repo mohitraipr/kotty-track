@@ -348,15 +348,13 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
   const daysInMonth = moment(month + '-01').daysInMonth();
   const dailyRate = parseFloat(emp.salary) / daysInMonth;
   const hourlyRate = emp.allotted_hours ? dailyRate / parseFloat(emp.allotted_hours) : 0;
-  const sundayRate = sundayHoursOverride ? dailyRate / sundayHoursOverride : hourlyRate;
+  const sundayBaseHours = sundayHoursOverride || 9;
+  const sundayRate = dailyRate / sundayBaseHours;
   let totalPay = 0;
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = moment(month + '-' + String(d).padStart(2, '0')).format('YYYY-MM-DD');
     const rec = attMap[dateStr];
     const isSun = moment(dateStr).day() === 0;
-    if (!rec || !rec.punch_in || !rec.punch_out) continue;
-    let hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
-    if (hrs <= 0) continue;
     if (isSun) {
       const prevKey = moment(dateStr).subtract(1, 'day').format('YYYY-MM-DD');
       const nextKey = moment(dateStr).add(1, 'day').format('YYYY-MM-DD');
@@ -365,9 +363,15 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
       const isAdjAbsent = s => s && (s.toLowerCase().startsWith('absent') || s === 'one punch only');
       const missedAdj = isAdjAbsent(prevStatus) || isAdjAbsent(nextStatus);
       if (missedAdj) continue; // sandwich unpaid
-      if (emp.pay_sunday) {
-        totalPay += hrs * 2 * sundayRate;
-      } else {
+
+      // Base pay for Sunday regardless of attendance
+      totalPay += sundayBaseHours * sundayRate;
+
+      const worked = rec && rec.punch_in && rec.punch_out;
+      if (worked && emp.pay_sunday) {
+        // Additional pay for working on Sunday
+        totalPay += sundayBaseHours * sundayRate;
+      } else if (worked && !emp.pay_sunday) {
         const [[row]] = await conn.query(
           'SELECT id FROM employee_leaves WHERE employee_id = ? AND leave_date = ? LIMIT 1',
           [employeeId, dateStr]
@@ -378,10 +382,10 @@ async function calculateHourlyMonthly(conn, employeeId, month, emp, sundayHoursO
             [employeeId, dateStr, 'Sunday Credit']
           );
         }
-        totalPay += hrs * hourlyRate;
       }
-    } else {
-      totalPay += hrs * hourlyRate;
+    } else if (rec && rec.punch_in && rec.punch_out) {
+      const hrs = effectiveHours(rec.punch_in, rec.punch_out, 'monthly');
+      if (hrs > 0) totalPay += hrs * hourlyRate;
     }
   }
   const gross = parseFloat(totalPay.toFixed(2));
