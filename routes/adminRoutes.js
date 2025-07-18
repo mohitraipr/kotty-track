@@ -5,60 +5,71 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isAdmin } = require('../middlewares/auth');
 const { body, validationResult } = require('express-validator');
 
-// Utility: Fetch existing tables (if needed)
+// Utility: Fetch existing tables (cached to avoid heavy INFORMATION_SCHEMA calls)
+const TABLE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+let tableCache = { tables: null, expires: 0 };
+
 async function fetchExistingTables() {
+  if (tableCache.tables && Date.now() < tableCache.expires) {
+    return tableCache.tables;
+  }
+
   const sql = `
-    SELECT table_name 
-    FROM information_schema.tables 
-    WHERE table_schema = DATABASE() 
-      AND table_name NOT IN ('roles','users','dashboards', 'audit_logs') 
-      AND table_name NOT LIKE 'mysql%' 
-      AND table_name NOT LIKE 'performance_schema%' 
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name NOT IN ('roles','users','dashboards', 'audit_logs')
+      AND table_name NOT LIKE 'mysql%'
+      AND table_name NOT LIKE 'performance_schema%'
       AND table_name NOT LIKE 'information_schema%'
   `;
+
   const [rows] = await pool.query(sql);
-  return rows.map(r => r.table_name);
+  const tables = rows.map(r => r.table_name);
+  tableCache = { tables, expires: Date.now() + TABLE_CACHE_TTL };
+  return tables;
 }
 
 // GET /admin – Render admin page
 router.get('/', isAuthenticated, isAdmin, async (req, res) => {
   try {
-    // 1) Fetch Roles
-    const [roles] = await pool.query('SELECT * FROM roles');
+    const [rolesData, usersData, dashboardsData, auditLogData, existingTables] =
+      await Promise.all([
+        pool.query('SELECT * FROM roles'),
+        pool.query(`
+          SELECT u.*, r.name AS role_name
+          FROM users u
+          LEFT JOIN roles r ON u.role_id = r.id
+          ORDER BY r.name, u.username
+        `),
+        pool.query(`
+          SELECT d.*, r.id AS role_id, r.name AS role_name
+          FROM dashboards d
+          LEFT JOIN roles r ON d.role_id = r.id
+          ORDER BY d.name
+        `),
+        pool.query(`
+          SELECT al.id, u.username, al.action, al.details, al.performed_at
+          FROM audit_logs al
+          JOIN users u ON al.user_id = u.id
+          ORDER BY al.performed_at DESC
+          LIMIT 100
+        `),
+        fetchExistingTables()
+      ]);
 
-    // 2) Fetch Users with role names
-    const [users] = await pool.query(`
-      SELECT u.*, r.name AS role_name 
-      FROM users u 
-      LEFT JOIN roles r ON u.role_id = r.id 
-      ORDER BY r.name, u.username
-    `);
+    const roles = rolesData[0];
+    const users = usersData[0];
+    const dashboards = dashboardsData[0];
+    const auditLogs = auditLogData[0];
 
-    // 3) Fetch Dashboards
-    const [dashboards] = await pool.query(`
-      SELECT d.*, r.id AS role_id, r.name AS role_name 
-      FROM dashboards d 
-      LEFT JOIN roles r ON d.role_id = r.id 
-      ORDER BY d.name
-    `);
-
-    // (Optional) Existing tables and audit logs:
-    const existingTables = await fetchExistingTables();
-    const [auditLogs] = await pool.query(`
-      SELECT al.id, u.username, al.action, al.details, al.performed_at 
-      FROM audit_logs al 
-      JOIN users u ON al.user_id = u.id 
-      ORDER BY al.performed_at DESC 
-      LIMIT 100
-    `);
-
-    res.render('admin', { 
-      user: req.session.user, 
-      roles, 
-      users, 
-      dashboards, 
-      existingTables, 
-      auditLogs 
+    res.render('admin', {
+      user: req.session.user,
+      roles,
+      users,
+      dashboards,
+      existingTables,
+      auditLogs
     });
   } catch (err) {
     console.error('Error loading admin page:', err);
@@ -122,6 +133,7 @@ router.post(
     try {
       const conn = await pool.getConnection();
       try {
+        await conn.beginTransaction();
         await conn.query(createTableSQL);
         await conn.query(
           `INSERT INTO dashboards (name, table_name, role_id, can_update)
@@ -133,12 +145,14 @@ router.post(
            VALUES (?, 'Create Dashboard', 'Created dashboard: ${dashboardName} with table: ${tableName}')`,
           [req.session.user.id]
         );
-        conn.release();
+        await conn.commit();
       } catch (err2) {
-        conn.release();
+        await conn.rollback();
         console.error('Error creating table or dashboard:', err2);
         req.flash('error', 'Failed to create new table or dashboard.');
         return res.redirect('/admin');
+      } finally {
+        conn.release();
       }
       req.flash('success', 'Dashboard created successfully.');
       return res.redirect('/admin');
@@ -169,12 +183,23 @@ router.post(
         req.flash('error', 'Role already exists.');
         return res.redirect('/admin');
       }
-      await pool.query('INSERT INTO roles (name) VALUES (?)', [roleName]);
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, action, details)
-         VALUES (?, 'Create Role', 'Created role: ${roleName}')`,
-        [req.session.user.id]
-      );
+
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query('INSERT INTO roles (name) VALUES (?)', [roleName]);
+        await conn.query(
+          `INSERT INTO audit_logs (user_id, action, details)
+           VALUES (?, 'Create Role', 'Created role: ${roleName}')`,
+          [req.session.user.id]
+        );
+        await conn.commit();
+      } catch (err2) {
+        await conn.rollback();
+        throw err2;
+      } finally {
+        conn.release();
+      }
       return res.redirect('/admin');
     } catch (err) {
       console.error('Error creating role:', err);
@@ -214,15 +239,25 @@ router.post(
     }
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
-      await pool.query(
-        'INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)',
-        [username, hashedPassword, role_id]
-      );
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, action, details)
-         VALUES (?, 'Create User', 'Created user: ${username}')`,
-        [req.session.user.id]
-      );
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query(
+          'INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)',
+          [username, hashedPassword, role_id]
+        );
+        await conn.query(
+          `INSERT INTO audit_logs (user_id, action, details)
+           VALUES (?, 'Create User', 'Created user: ${username}')`,
+          [req.session.user.id]
+        );
+        await conn.commit();
+      } catch (err2) {
+        await conn.rollback();
+        throw err2;
+      } finally {
+        conn.release();
+      }
       req.flash('success', `User "${username}" created successfully.`);
       return res.redirect('/admin');
     } catch (err) {
@@ -265,12 +300,23 @@ router.post(
         query = 'UPDATE users SET username = ? WHERE id = ?';
         params = [username, user_id];
       }
-      await pool.query(query, params);
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, action, details)
-         VALUES (?, 'Update User', 'Updated user ID ${user_id} with new username and/or password')`,
-        [req.session.user.id]
-      );
+
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query(query, params);
+        await conn.query(
+          `INSERT INTO audit_logs (user_id, action, details)
+           VALUES (?, 'Update User', 'Updated user ID ${user_id} with new username and/or password')`,
+          [req.session.user.id]
+        );
+        await conn.commit();
+      } catch (err2) {
+        await conn.rollback();
+        throw err2;
+      } finally {
+        conn.release();
+      }
       req.flash('success', 'User updated successfully.');
       return res.redirect('/admin');
     } catch (err) {
@@ -298,12 +344,22 @@ router.post(
       return res.redirect('/admin');
     }
     try {
-      await pool.query(`UPDATE dashboards SET role_id = ? WHERE id = ?`, [roleId, dashboardId]);
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, action, details)
-         VALUES (?, 'Update Dashboard Role', 'Updated dashboard ID ${dashboardId} to role ID ${roleId}')`,
-        [req.session.user.id]
-      );
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query(`UPDATE dashboards SET role_id = ? WHERE id = ?`, [roleId, dashboardId]);
+        await conn.query(
+          `INSERT INTO audit_logs (user_id, action, details)
+           VALUES (?, 'Update Dashboard Role', 'Updated dashboard ID ${dashboardId} to role ID ${roleId}')`,
+          [req.session.user.id]
+        );
+        await conn.commit();
+      } catch (err2) {
+        await conn.rollback();
+        throw err2;
+      } finally {
+        conn.release();
+      }
       req.flash('success', 'Dashboard role updated successfully.');
       return res.redirect('/admin');
     } catch (err) {
@@ -334,12 +390,24 @@ router.post(
         return res.redirect('/admin');
       }
       const username = userRows[0].username;
-      await pool.query('DELETE FROM users WHERE id = ?', [user_id]);
-      await pool.query(
-        `INSERT INTO audit_logs (user_id, action, details)
-         VALUES (?, 'Delete User', 'Deleted user: ${username}')`,
-        [req.session.user.id]
-      );
+
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        await conn.query('DELETE FROM users WHERE id = ?', [user_id]);
+        await conn.query(
+          `INSERT INTO audit_logs (user_id, action, details)
+           VALUES (?, 'Delete User', 'Deleted user: ${username}')`,
+          [req.session.user.id]
+        );
+        await conn.commit();
+      } catch (err2) {
+        await conn.rollback();
+        throw err2;
+      } finally {
+        conn.release();
+      }
+
       req.flash('success', `User "${username}" deleted successfully.`);
       return res.redirect('/admin');
     } catch (err) {
