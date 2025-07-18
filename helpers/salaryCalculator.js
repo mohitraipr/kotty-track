@@ -31,13 +31,14 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   let mins = end.diff(start, 'minutes');
   mins -= lunchDeduction(punchIn, punchOut, salaryType);
 
-  // Deduct an additional hour for late arrivals after 09:15
+  // Deduct minutes for late arrivals after the 15 minute grace period
   // Late deduction only applies to daily wage (dihadi) employees
-  if (
-    salaryType === 'dihadi' &&
-    start.isAfter(moment('09:15:00', 'HH:mm:ss'))
-  ) {
-    mins -= 60;
+  if (salaryType === 'dihadi') {
+    const grace = moment('09:15:00', 'HH:mm:ss');
+    if (start.isAfter(grace)) {
+      const late = start.diff(grace, 'minutes');
+      mins -= late;
+    }
   }
 
   // Cap daily hours at 11 only for dihadi workers
