@@ -226,31 +226,35 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isStitchingMaster, async (r
       return res.status(404).json({ error: 'Lot not found' });
     }
     const [lotSizes] = await pool.query(`
-      SELECT *
+      SELECT id, size_label, total_pieces
       FROM cutting_lot_sizes
       WHERE cutting_lot_id = ?
       ORDER BY id ASC
     `, [lotId]);
 
-    const output = [];
-    for (const s of lotSizes) {
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
-        FROM stitching_data_sizes sds
-        JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ? AND sds.size_label = ?
-      `, [lot.lot_no, s.size_label]);
+    const [usageRows] = await pool.query(`
+      SELECT sds.size_label, SUM(sds.pieces) AS usedCount
+      FROM stitching_data_sizes sds
+      JOIN stitching_data sd ON sds.stitching_data_id = sd.id
+      WHERE sd.lot_no = ?
+      GROUP BY sds.size_label
+    `, [lot.lot_no]);
+    const usedMap = {};
+    usageRows.forEach(u => {
+      usedMap[u.size_label] = u.usedCount || 0;
+    });
 
-      const used = usedRow.usedCount || 0;
+    const output = lotSizes.map(s => {
+      const used = usedMap[s.size_label] || 0;
       const remain = s.total_pieces - used;
-      output.push({
+      return {
         id: s.id,
         size_label: s.size_label,
         total_pieces: s.total_pieces,
         used,
         remain: remain < 0 ? 0 : remain
-      });
-    }
+      };
+    });
     return res.json(output);
   } catch (err) {
     console.error('[ERROR] GET /get-lot-sizes =>', err);
@@ -347,7 +351,29 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
 
     // Validate pieces
     let grandTotal = 0;
-    for (const sizeId of Object.keys(sizesObj)) {
+    const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+
+    const [clsRows] = sizeIds.length
+      ? await conn.query(`SELECT * FROM cutting_lot_sizes WHERE id IN (?)`, [sizeIds])
+      : [ [] ];
+    const clsMap = {};
+    clsRows.forEach(r => {
+      clsMap[r.id] = r;
+    });
+
+    const [usageRows] = await conn.query(`
+      SELECT sds.size_label, SUM(sds.pieces) AS usedCount
+      FROM stitching_data_sizes sds
+      JOIN stitching_data sd ON sds.stitching_data_id = sd.id
+      WHERE sd.lot_no = ?
+      GROUP BY sds.size_label
+    `, [lot.lot_no]);
+    const usedMap = {};
+    usageRows.forEach(u => {
+      usedMap[u.size_label] = u.usedCount || 0;
+    });
+
+    for (const sizeId of sizeIds) {
       const userCount = parseInt(sizesObj[sizeId], 10);
       if (isNaN(userCount) || userCount < 0) {
         req.flash('error', `Invalid piece count for sizeId ${sizeId}.`);
@@ -357,22 +383,15 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
       }
       if (userCount === 0) continue;
 
-      const [[cls]] = await conn.query(`SELECT * FROM cutting_lot_sizes WHERE id = ?`, [sizeId]);
+      const cls = clsMap[sizeId];
       if (!cls) {
         req.flash('error', 'Invalid size reference: ' + sizeId);
         await conn.rollback();
         conn.release();
         return res.redirect('/stitchingdashboard');
       }
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
-        FROM stitching_data_sizes sds
-        JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ?
-          AND sds.size_label = ?
-      `, [lot.lot_no, cls.size_label]);
 
-      const used = usedRow.usedCount || 0;
+      const used = usedMap[cls.size_label] || 0;
       const remain = cls.total_pieces - used;
       if (userCount > remain) {
         req.flash('error', `Cannot create: requested ${userCount} for size [${cls.size_label}] but only ${remain} remain.`);
@@ -402,7 +421,7 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
     for (const sizeId of Object.keys(sizesObj)) {
       const countVal = parseInt(sizesObj[sizeId], 10) || 0;
       if (countVal <= 0) continue;
-      const [[cls]] = await conn.query(`SELECT * FROM cutting_lot_sizes WHERE id = ?`, [sizeId]);
+      const cls = clsMap[sizeId];
       await conn.query(`
         INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
         VALUES (?, ?, ?)
@@ -416,7 +435,7 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
       const assignedUser = assignmentsObj[sizeId];
       if (!assignedUser) continue;
 
-      const [[cls]] = await conn.query(`SELECT * FROM cutting_lot_sizes WHERE id = ?`, [sizeId]);
+      const cls = clsMap[sizeId];
       if (!assignMap[assignedUser]) {
         assignMap[assignedUser] = [];
       }
@@ -548,41 +567,48 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
     }
 
     let updatedGrandTotal = entry.total_pieces;
-    for (const key of Object.keys(updateSizes)) {
-      const lbl = key.replace(/^size_/, ''); // Remove prefix to get actual size label
-      let increment = parseInt(updateSizes[key], 10);     
+    const labels = Object.keys(updateSizes).map(k => k.replace(/^size_/, ''));
+
+    const [existingRows] = labels.length
+      ? await conn.query(`SELECT * FROM stitching_data_sizes WHERE stitching_data_id = ? AND size_label IN (?)`, [entryId, labels])
+      : [ [] ];
+    const existingMap = {};
+    existingRows.forEach(r => { existingMap[r.size_label] = r; });
+
+    const [clsRows] = labels.length
+      ? await conn.query(`
+          SELECT cls.size_label, cls.total_pieces
+          FROM cutting_lot_sizes cls
+          JOIN cutting_lots cl ON cls.cutting_lot_id = cl.id
+          WHERE cl.lot_no = ? AND cls.size_label IN (?)
+        `, [entry.lot_no, labels])
+      : [ [] ];
+    const clsMap = {};
+    clsRows.forEach(r => { clsMap[r.size_label] = r; });
+
+    const [usageRows] = await conn.query(`
+      SELECT sds.size_label, SUM(sds.pieces) AS usedCount
+      FROM stitching_data_sizes sds
+      JOIN stitching_data sd ON sds.stitching_data_id = sd.id
+      WHERE sd.lot_no = ? AND sds.size_label IN (?)
+      GROUP BY sds.size_label
+    `, [entry.lot_no, labels]);
+    const usedMap = {};
+    usageRows.forEach(u => { usedMap[u.size_label] = u.usedCount || 0; });
+
+    for (const lbl of labels) {
+      let increment = parseInt(updateSizes[`size_${lbl}`], 10);
       console.log(`Processing update for size label: ${lbl}, increment: ${increment}`);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
 
-      const [[existingRow]] = await conn.query(`
-        SELECT *
-        FROM stitching_data_sizes
-        WHERE stitching_data_id = ? AND size_label = ?
-      `, [entryId, lbl]);
-
-      // Fetch the cutting lot size for the given lot and size label
-      const [[cls]] = await conn.query(`
-        SELECT *
-        FROM cutting_lot_sizes
-        WHERE cutting_lot_id = (
-          SELECT id FROM cutting_lots WHERE lot_no = ? LIMIT 1
-        ) AND size_label = ?
-      `, [entry.lot_no, lbl]);
-
-      console.log(`For size label ${lbl}: fetched cutting lot size record:`, cls);
-
+      const existingRow = existingMap[lbl];
+      const cls = clsMap[lbl];
       if (!cls) {
         throw new Error(`Size label ${lbl} not found in cutting_lot_sizes for lot ${entry.lot_no}.`);
       }
 
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
-        FROM stitching_data_sizes sds
-        JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ? AND sds.size_label = ?
-      `, [entry.lot_no, lbl]);
-      const used = usedRow.usedCount || 0;
+      const used = usedMap[lbl] || 0;
       const remainGlobal = cls.total_pieces - used;
       console.log(`For size ${lbl}: total=${cls.total_pieces}, used=${used}, remain=${remainGlobal}`);
 
