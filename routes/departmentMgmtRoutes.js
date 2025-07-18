@@ -299,8 +299,6 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       adjacent.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
-      if (!attMap[prevDay]) attMap[prevDay] = 'absent';
-      if (!attMap[nextDay]) attMap[nextDay] = 'absent';
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
       attRows.forEach(a => {

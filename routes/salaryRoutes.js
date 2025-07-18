@@ -442,21 +442,31 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     const specialDept = SPECIAL_DEPARTMENTS.includes(
       (emp.department || '').toLowerCase()
     );
-    let startDate = moment(month + '-01').format('YYYY-MM-DD');
+    let startDate = moment(month + '-01');
     let endDate;
     if (emp.salary_type === 'dihadi') {
       if (half === 2) {
-        startDate = moment(month + '-16').format('YYYY-MM-DD');
-        endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
+        startDate = moment(month + '-16');
+        endDate = moment(month + '-01').endOf('month');
       } else {
-        endDate = moment(month + '-15').format('YYYY-MM-DD');
+        endDate = moment(month + '-15');
       }
     } else {
-      endDate = moment(month + '-01').endOf('month').format('YYYY-MM-DD');
+      endDate = moment(month + '-01').endOf('month');
     }
+
+    if (emp.date_of_joining) {
+      const joinDate = moment(emp.date_of_joining);
+      if (joinDate.isAfter(startDate)) {
+        startDate = joinDate;
+      }
+    }
+
+    const startStr = startDate.format('YYYY-MM-DD');
+    const endStr = endDate.format('YYYY-MM-DD');
     const [attendance] = await pool.query(
       'SELECT * FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ? ORDER BY date',
-      [empId, startDate, endDate]
+      [empId, startStr, endStr]
     );
     const [sandwichRows] = await pool.query(
       'SELECT date FROM sandwich_dates WHERE DATE_FORMAT(date, "%Y-%m") = ?',
@@ -515,16 +525,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           totalHours += hrsDec;
           if (moment(a.date).day() === 0) sundayHours += hrsDec;
         }
-        if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
-          let amt;
-          if (emp.salary_type === 'monthly' && hourlyView && isSun) {
-            amt = hrsDec * sundayRate * 2;
-          } else {
-            amt = hrsDec * hourlyRate;
-          }
-          a.amount = parseFloat(amt.toFixed(2));
-          partialPay += amt;
-        }
+        // amount will be calculated after determining detailed status
       } else {
         a.hours = '00:00';
         a.lunch_deduction = 0;
@@ -532,14 +533,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
           a.overtime = '00:00';
           a.undertime = '00:00';
         }
-        if (emp.salary_type === 'dihadi' || (emp.salary_type === 'monthly' && hourlyView)) {
-          let amt = 0;
-          if (emp.salary_type === 'monthly' && hourlyView && isSun) {
-            amt = sundayBaseHours * sundayRate;
-          }
-          a.amount = parseFloat(amt.toFixed(2));
-          partialPay += amt;
-        }
+        // amount will be calculated after determining detailed status
       }
       const status = a.detailed_status || a.status;
       let reason = '';
@@ -581,6 +575,23 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         } else {
           a.amount = parseFloat(dailyRate.toFixed(2));
         }
+      } else if (emp.salary_type === 'monthly' && hourlyView) {
+        let amt;
+        if (status === 'Leave credited') {
+          amt = sundayBaseHours * sundayRate;
+        } else if (status.startsWith('Absent (Sandwich)') || status.startsWith('Absent (Mandatory)')) {
+          amt = 0;
+        } else if (isSun) {
+          amt = hrsDec * sundayRate * 2;
+        } else {
+          amt = hrsDec * hourlyRate;
+        }
+        a.amount = parseFloat(amt.toFixed(2));
+        partialPay += amt;
+      } else if (emp.salary_type === 'dihadi') {
+        const amt = hrsDec * hourlyRate;
+        a.amount = parseFloat(amt.toFixed(2));
+        partialPay += amt;
       }
     });
     let totalHoursFormatted = null;
@@ -686,8 +697,6 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       adjacent.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
-      if (!attMap[prevDay]) attMap[prevDay] = 'absent';
-      if (!attMap[nextDay]) attMap[nextDay] = 'absent';
       const specialSup =
         SPECIAL_SUNDAY_SUPERVISORS.map(s => s.toLowerCase()).includes(
           (r.supervisor_name || '').toLowerCase()
