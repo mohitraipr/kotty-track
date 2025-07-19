@@ -6,10 +6,22 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
 const CURRENT_DB = process.env.DB_NAME || 'kotty_track';
 
+// simple in-memory caches to avoid repeated metadata queries
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+let tablesCache = { timestamp: 0, data: null };
+const columnsCache = {}; // { tableName: { timestamp, data } }
+
+const DEFAULT_LIMIT = 500; // limit rows when displaying results
+
 /** 
  * Fetch all table names from `information_schema.tables`
  */
 async function getAllTables() {
+  // return cached result if valid
+  if (tablesCache.data && Date.now() - tablesCache.timestamp < CACHE_TTL) {
+    return tablesCache.data;
+  }
+
   const sql = `
     SELECT table_name as table_name
     FROM information_schema.tables
@@ -18,7 +30,9 @@ async function getAllTables() {
   `;
   try {
     const [rows] = await pool.query(sql, [CURRENT_DB]);
-    return rows.map(r => r.table_name);
+    const tableNames = rows.map(r => r.table_name);
+    tablesCache = { data: tableNames, timestamp: Date.now() };
+    return tableNames;
   } catch (err) {
     console.error('Error in getAllTables:', err);
     return [];
@@ -29,6 +43,11 @@ async function getAllTables() {
  * Fetch all columns for a given table
  */
 async function getColumnsForTable(tableName) {
+  const cached = columnsCache[tableName];
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   const sql = `
     SELECT column_name as column_name
     FROM information_schema.columns
@@ -38,7 +57,9 @@ async function getColumnsForTable(tableName) {
   `;
   try {
     const [rows] = await pool.query(sql, [CURRENT_DB, tableName]);
-    return rows.map(r => r.column_name);
+    const cols = rows.map(r => r.column_name);
+    columnsCache[tableName] = { data: cols, timestamp: Date.now() };
+    return cols;
   } catch (err) {
     console.error(`Error in getColumnsForTable(${tableName}):`, err);
     return [];
@@ -55,11 +76,11 @@ async function getColumnsForTable(tableName) {
  * @param {string} primaryColumn - If set, only search in this column; if empty, search in all chosen columns
  * @returns rows
  */
-async function searchByColumns(tableName, columns, searchTerm, primaryColumn) {
+async function searchByColumns(tableName, columns, searchTerm, primaryColumn, limit) {
   // If no columns are selected, do "SELECT *" 
   // (meaning the user doesn't pick anything to display)
   if (!columns || !columns.length) {
-    const sql = `SELECT * FROM \`${tableName}\``;
+    const sql = `SELECT * FROM \`${tableName}\`${limit ? ` LIMIT ${limit}` : ''}`;
     const [allRows] = await pool.query(sql);
     return allRows;
   }
@@ -69,7 +90,7 @@ async function searchByColumns(tableName, columns, searchTerm, primaryColumn) {
 
   // If searchTerm is empty, just SELECT columns with no WHERE
   if (!searchTerm) {
-    const sql = `SELECT ${colList} FROM \`${tableName}\``;
+    const sql = `SELECT ${colList} FROM \`${tableName}\`${limit ? ` LIMIT ${limit}` : ''}`;
     const [rows] = await pool.query(sql);
     return rows;
   }
@@ -95,21 +116,18 @@ async function searchByColumns(tableName, columns, searchTerm, primaryColumn) {
     // Fill params
     terms.forEach(t => params.push(`%${t}%`));
   } else {
-    // 2) Searching across ALL chosen columns
-    // This is your existing logic:
-    // (col1 LIKE ? OR col2 LIKE ?) OR (col1 LIKE ? OR col2 LIKE ?) ...
-    const orBlocks = [];
-    terms.forEach(term => {
-      const singleTermConditions = columns.map(col => `\`${col}\` LIKE ?`).join(' OR ');
-      orBlocks.push(`(${singleTermConditions})`);
-      // For each column, we push param
-      columns.forEach(() => params.push(`%${term}%`));
-    });
-    whereClause = `WHERE ${orBlocks.join(' OR ')}`;
+    // 2) Searching across ALL chosen columns using CONCAT to reduce query size
+    const concatCols = columns.map(col => `COALESCE(\`${col}\`, '')`).join(", ' ', ");
+    const concatExpr = `CONCAT_WS(' ', ${concatCols})`;
+    const orConditions = terms.map(() => `${concatExpr} LIKE ?`).join(' OR ');
+    whereClause = `WHERE (${orConditions})`;
+    terms.forEach(t => params.push(`%${t}%`));
   }
 
-  const sql = `SELECT ${colList} FROM \`${tableName}\` ${whereClause}`;
-  console.log('[searchByColumns]', sql, params);
+  const sql = `SELECT ${colList} FROM \`${tableName}\` ${whereClause}${limit ? ` LIMIT ${limit}` : ''}`;
+  if (process.env.DEBUG_SEARCH) {
+    console.log('[searchByColumns]', sql, params);
+  }
   const [rows] = await pool.query(sql, params);
   return rows;
 }
@@ -173,7 +191,8 @@ router.route('/search-dashboard')
         selectedTable,
         chosenColumns,
         searchTerm,
-        primaryColumn
+        primaryColumn,
+        action === 'search' ? DEFAULT_LIMIT : null
       );
 
       // Based on action
