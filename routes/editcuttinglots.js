@@ -5,18 +5,27 @@ const upload = multer(); // This will parse multipart/form-data
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
+// simple in-memory cache for cutting masters
+const masterCache = { data: null, expires: 0 };
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * GET /operator/editcuttinglots
  * Renders the main page with cutting master selection.
  */
 router.get('/editcuttinglots', isAuthenticated, isOperator, async (req, res) => {
   try {
-    // Retrieve all cutting masters (assumed role "cutting_manager")
-    const [masters] = await pool.query(
-      `SELECT id, username FROM users 
-       WHERE role_id IN (SELECT id FROM roles WHERE name = 'cutting_manager')
-       ORDER BY username`
-    );
+    let masters = masterCache.data;
+    if (!masters || masterCache.expires < Date.now()) {
+      const [rows] = await pool.query(
+        `SELECT id, username FROM users
+         WHERE role_id IN (SELECT id FROM roles WHERE name = 'cutting_manager')
+         ORDER BY username`
+      );
+      masters = rows;
+      masterCache.data = masters;
+      masterCache.expires = Date.now() + CACHE_TTL;
+    }
     res.render('editcuttinglots', { user: req.session.user, masters });
   } catch (err) {
     console.error("Error in GET /operator/editcuttinglots:", err);
@@ -47,13 +56,10 @@ router.get('/editcuttinglots/lot-list', isAuthenticated, isOperator, async (req,
       countQuery += ` AND (lot_no LIKE ? OR sku LIKE ? OR fabric_type LIKE ? OR remark LIKE ?)`;
       countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
-    const [countRows] = await pool.query(countQuery, countParams);
-    const totalCount = countRows[0].total;
-    const totalPages = Math.ceil(totalCount / limit);
-    
+
     // Build main query with search and pagination.
-    let query = `SELECT id, lot_no, sku, fabric_type, remark, total_pieces, created_at 
-                 FROM cutting_lots 
+    let query = `SELECT id, lot_no, sku, fabric_type, remark, total_pieces, created_at
+                 FROM cutting_lots
                  WHERE user_id = ? `;
     let queryParams = [managerId];
     if (search && search.trim() !== '') {
@@ -62,8 +68,13 @@ router.get('/editcuttinglots/lot-list', isAuthenticated, isOperator, async (req,
     }
     query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     queryParams.push(limit, offset);
-    
-    const [lots] = await pool.query(query, queryParams);
+
+    const [[countRows], [lots]] = await Promise.all([
+      pool.query(countQuery, countParams),
+      pool.query(query, queryParams)
+    ]);
+    const totalCount = countRows.total;
+    const totalPages = Math.ceil(totalCount / limit);
     
     let html = `<div class="card">
       <div class="card-header"><h3>Cutting Lots</h3></div>
@@ -125,47 +136,44 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
   const { managerId, lotId } = req.query;
   if (!managerId || !lotId) return res.status(400).send('Manager and Lot IDs are required.');
   try {
-    // Fetch lot details (ensure the lot belongs to the selected manager)
-    const [lotRows] = await pool.query(
-      `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.total_pieces, l.created_at, u.username AS created_by
-       FROM cutting_lots l
-       JOIN users u ON l.user_id = u.id
-       WHERE l.id = ? AND l.user_id = ?`,
-      [lotId, managerId]
-    );
+    const [[lotRows], [sizes], [rolls], [assignments], [stitchingUsers]] = await Promise.all([
+      pool.query(
+        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.total_pieces, l.created_at, u.username AS created_by
+         FROM cutting_lots l
+         JOIN users u ON l.user_id = u.id
+         WHERE l.id = ? AND l.user_id = ?`,
+        [lotId, managerId]
+      ),
+      pool.query(
+        `SELECT id, size_label, pattern_count, total_pieces
+         FROM cutting_lot_sizes
+         WHERE cutting_lot_id = ?`,
+        [lotId]
+      ),
+      pool.query(
+        `SELECT id, roll_no, layers, weight_used, total_pieces
+         FROM cutting_lot_rolls
+         WHERE cutting_lot_id = ?`,
+        [lotId]
+      ),
+      pool.query(
+        `SELECT sa.id AS assignment_id, sa.assigned_on, u.username AS assigned_to, u.id AS assigned_to_user_id
+         FROM stitching_assignments sa
+         JOIN users u ON sa.user_id = u.id
+         WHERE sa.cutting_lot_id = ?
+         ORDER BY sa.assigned_on DESC`,
+        [lotId]
+      ),
+      pool.query(
+        `SELECT id, username
+         FROM users
+         WHERE is_active = 1 AND role_id IN (SELECT id FROM roles WHERE name = 'stitching_master')
+         ORDER BY username`
+      )
+    ]);
+
     if (!lotRows.length) return res.status(404).send('Lot not found.');
     const lot = lotRows[0];
-
-    // Fetch sizes for the lot.
-    const [sizes] = await pool.query(
-      `SELECT id, size_label, pattern_count, total_pieces
-       FROM cutting_lot_sizes
-       WHERE cutting_lot_id = ?`,
-       [lotId]
-    );
-    // Fetch rolls used for the lot.
-    const [rolls] = await pool.query(
-      `SELECT id, roll_no, layers, weight_used, total_pieces
-       FROM cutting_lot_rolls
-       WHERE cutting_lot_id = ?`,
-       [lotId]
-    );
-    // Fetch stitching assignments for the lot.
-    const [assignments] = await pool.query(
-      `SELECT sa.id AS assignment_id, sa.assigned_on, u.username AS assigned_to, u.id AS assigned_to_user_id
-       FROM stitching_assignments sa
-       JOIN users u ON sa.user_id = u.id
-       WHERE sa.cutting_lot_id = ?
-       ORDER BY sa.assigned_on DESC`,
-       [lotId]
-    );
-    // Fetch stitching users for the dropdown.
-    const [stitchingUsers] = await pool.query(
-      `SELECT id, username
-       FROM users
-       WHERE is_active = 1 AND role_id IN (SELECT id FROM roles WHERE name = 'stitching_master')
-       ORDER BY username`
-    );
 
     // Build the combined edit form HTML.
     let html = `
@@ -391,37 +399,55 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
       `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ? WHERE id = ?`,
       [sku, fabric_type, remark, lotId]
     );
+
+    let totalPatterns = 0;
     for (let i = 0; i < size_id.length; i++) {
       const newPattern = parseFloat(pattern_count[i]);
       if (isNaN(newPattern) || newPattern < 0) throw new Error('Invalid pattern count.');
+      totalPatterns += newPattern;
       await conn.query(`UPDATE cutting_lot_sizes SET pattern_count = ? WHERE id = ?`, [newPattern, size_id[i]]);
     }
+
+    const rollPlaceholders = roll_id.map(() => '?').join(',');
+    const [rollInfo] = await conn.query(
+      `SELECT r.id, r.roll_no, r.weight_used, r.layers, fi.per_roll_weight
+         FROM cutting_lot_rolls r
+         JOIN fabric_invoice_rolls fi ON r.roll_no = fi.roll_no
+         WHERE r.id IN (${rollPlaceholders}) FOR UPDATE`,
+      roll_id
+    );
+    const rollMap = new Map();
+    rollInfo.forEach(r => rollMap.set(r.id, r));
+
+    let totalLayers = 0;
     for (let i = 0; i < roll_id.length; i++) {
+      const id = parseInt(roll_id[i]);
+      const record = rollMap.get(id);
+      if (!record) throw new Error('Roll entry not found.');
       const newLayers = parseFloat(layers[i]);
       const newWeightUsed = parseFloat(weight_used[i]);
-      if (isNaN(newLayers) || newLayers < 0 || isNaN(newWeightUsed) || newWeightUsed < 0) throw new Error('Invalid roll data.');
-      const [rollRows] = await conn.query(`SELECT roll_no, weight_used FROM cutting_lot_rolls WHERE id = ?`, [roll_id[i]]);
-      if (!rollRows.length) throw new Error('Roll entry not found.');
-      const currentRoll = rollRows[0];
-      const delta = newWeightUsed - parseFloat(currentRoll.weight_used);
-      const [fiRows] = await conn.query(`SELECT per_roll_weight FROM fabric_invoice_rolls WHERE roll_no = ? FOR UPDATE`, [currentRoll.roll_no]);
-      if (!fiRows.length) throw new Error(`Roll No. ${currentRoll.roll_no} not found in fabric_invoice_rolls.`);
-      const availableWeight = parseFloat(fiRows[0].per_roll_weight);
-      if (delta > 0 && delta > availableWeight) throw new Error(`Insufficient available weight for Roll No. ${currentRoll.roll_no}. Needed additional ${delta}, available ${availableWeight}.`);
-      await conn.query(`UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`, [delta, currentRoll.roll_no]);
-      await conn.query(`UPDATE cutting_lot_rolls SET layers = ?, weight_used = ? WHERE id = ?`, [newLayers, newWeightUsed, roll_id[i]]);
+      if (isNaN(newLayers) || newLayers < 0 || isNaN(newWeightUsed) || newWeightUsed < 0) {
+        throw new Error('Invalid roll data.');
+      }
+      const delta = newWeightUsed - parseFloat(record.weight_used);
+      const availableWeight = parseFloat(record.per_roll_weight);
+      if (delta > 0 && delta > availableWeight) {
+        throw new Error(`Insufficient available weight for Roll No. ${record.roll_no}. Needed additional ${delta}, available ${availableWeight}.`);
+      }
+      await conn.query(`UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`, [delta, record.roll_no]);
+      await conn.query(`UPDATE cutting_lot_rolls SET layers = ?, weight_used = ? WHERE id = ?`, [newLayers, newWeightUsed, id]);
+      totalLayers += newLayers;
     }
+
     for (let i = 0; i < assignment_id.length; i++) {
       const newAssignedTo = assigned_to[i];
       await conn.query(`UPDATE stitching_assignments SET user_id = ? WHERE id = ?`, [newAssignedTo, assignment_id[i]]);
     }
-    const [rollSum] = await conn.query(`SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?`, [lotId]);
-    const totalLayers = parseFloat(rollSum[0].total_layers) || 0;
-    const [sizeSum] = await conn.query(`SELECT SUM(pattern_count) AS total_patterns FROM cutting_lot_sizes WHERE cutting_lot_id = ?`, [lotId]);
-    const totalPatterns = parseFloat(sizeSum[0].total_patterns) || 0;
+
     const totalPieces = totalLayers * totalPatterns;
     await conn.query(`UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`, [totalPieces, lotId]);
     await conn.query(`UPDATE cutting_lot_sizes SET total_pieces = pattern_count * ? WHERE cutting_lot_id = ?`, [totalLayers, lotId]);
+
     await conn.commit();
     conn.release();
     res.json({ success: true });
