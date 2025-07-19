@@ -281,27 +281,47 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
        ORDER BY u.username, e.name
     `, [month]);
 
-    for (const r of rows) {
-      const [attRows] = await pool.query(
-        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
-        [r.employee_id, month]
-      );
-      const attMap = {};
-      attRows.forEach(a => {
-        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
-      });
+    const empIds = rows.map(r => r.employee_id);
+    if (empIds.length) {
       const prevDay = moment(month + '-01').subtract(1, 'day').format('YYYY-MM-DD');
       const nextDay = moment(month + '-01').endOf('month').add(1, 'day').format('YYYY-MM-DD');
-      const [adjacent] = await pool.query(
-        'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (?, ?)',
-        [r.employee_id, prevDay, nextDay]
+
+      const [attRows] = await pool.query(
+        'SELECT employee_id, date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id IN (?) AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY employee_id, date',
+        [empIds, month]
       );
-      adjacent.forEach(a => {
-        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
-      });
+      const [adjacent] = await pool.query(
+        'SELECT employee_id, date, status FROM employee_attendance WHERE employee_id IN (?) AND date IN (?, ?)',
+        [empIds, prevDay, nextDay]
+      );
+
+      const attMap = new Map();
+      for (const a of attRows) {
+        const key = a.employee_id;
+        if (!attMap.has(key)) attMap.set(key, []);
+        attMap.get(key).push(a);
+      }
+
+      const adjMap = new Map();
+      for (const a of adjacent) {
+        const key = a.employee_id;
+        if (!adjMap.has(key)) adjMap.set(key, []);
+        adjMap.get(key).push(a);
+      }
+
+      for (const r of rows) {
+        const empAtt = attMap.get(r.employee_id) || [];
+        const adjAtt = adjMap.get(r.employee_id) || [];
+        const daily = {};
+        empAtt.forEach(a => {
+          daily[moment(a.date).format('YYYY-MM-DD')] = a.status;
+        });
+        adjAtt.forEach(a => {
+          daily[moment(a.date).format('YYYY-MM-DD')] = a.status;
+        });
       let absent = 0, onePunch = 0, sundayAbs = 0;
       let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
-      attRows.forEach(a => {
+        empAtt.forEach(a => {
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
         const isSun = moment(a.date).day() === 0;
@@ -309,8 +329,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         if (isSun) {
           const satKey = moment(a.date).subtract(1, 'day').format('YYYY-MM-DD');
           const monKey = moment(a.date).add(1, 'day').format('YYYY-MM-DD');
-          const satStatus = attMap[satKey] !== undefined ? attMap[satKey] : 'present';
-          const monStatus = attMap[monKey] !== undefined ? attMap[monKey] : 'present';
+          const satStatus = daily[satKey] !== undefined ? daily[satKey] : 'present';
+          const monStatus = daily[monKey] !== undefined ? daily[monKey] : 'present';
           const adjAbsent = (satStatus === 'absent' || satStatus === 'one punch only') ||
                             (monStatus === 'absent' || monStatus === 'one punch only');
           if (adjAbsent) {
@@ -319,8 +339,8 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
           }
         }
         if (isSandwich) {
-          const prevStatus = attMap[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
-          const nextStatus = attMap[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
+          const prevStatus = daily[moment(a.date).subtract(1, 'day').format('YYYY-MM-DD')];
+          const nextStatus = daily[moment(a.date).add(1, 'day').format('YYYY-MM-DD')];
           const adjAbsent = (prevStatus === 'absent' || prevStatus === 'one punch only') ||
                             (nextStatus === 'absent' || nextStatus === 'one punch only');
           if (adjAbsent) {
@@ -370,6 +390,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       }
       r.ut_deduct = utDeduct.toFixed(2);
       r.ut_detail = utDetail;
+    }
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -459,20 +480,31 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       [month]
     );
 
-    for (const r of rows) {
-      const [attRows] = await pool.query(
-        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
-        [r.employee_id, month]
+    const empIds2 = rows.map(r => r.employee_id);
+    if (empIds2.length) {
+      const [attRowsAll] = await pool.query(
+        'SELECT employee_id, date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id IN (?) AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY employee_id, date',
+        [empIds2, month]
       );
-      const attMap = {};
-      attRows.forEach(a => {
-        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
-      });
-      let absent = 0, onePunch = 0, sundayAbs = 0;
-      let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
-      let shortDays = 0;
-      let halfDays = 0;
-      attRows.forEach(a => {
+
+      const attMap2 = new Map();
+      for (const a of attRowsAll) {
+        const key = a.employee_id;
+        if (!attMap2.has(key)) attMap2.set(key, []);
+        attMap2.get(key).push(a);
+      }
+
+      for (const r of rows) {
+        const attRows = attMap2.get(r.employee_id) || [];
+        const daily = {};
+        attRows.forEach(a => {
+          daily[moment(a.date).format('YYYY-MM-DD')] = a.status;
+        });
+        let absent = 0, onePunch = 0, sundayAbs = 0;
+        let otHours = 0, utHours = 0, otDays = 0, utDays = 0;
+        let shortDays = 0;
+        let halfDays = 0;
+        attRows.forEach(a => {
         const dateStr = moment(a.date).format('YYYY-MM-DD');
         const status = a.status;
         const isSun = moment(a.date).day() === 0;
@@ -552,6 +584,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         r.net = parseFloat(r.net) - dailyRate;
         r.deduction_reason += (r.deduction_reason ? ', ' : '') + 'Rule Deduction';
       }
+    }
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -634,49 +667,60 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
        WHERE e.salary_type = 'dihadi' AND e.is_active = 1
        ORDER BY u.username, e.name`);
     const rows = [];
-    for (const emp of employees) {
-      const [att] = await pool.query(
-        'SELECT punch_in, punch_out, status FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?',
-        [emp.id, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
+    const empIds3 = employees.map(e => e.id);
+    if (empIds3.length) {
+      const startStr = start.format('YYYY-MM-DD');
+      const endStr = end.format('YYYY-MM-DD');
+      const [attAll] = await pool.query(
+        'SELECT employee_id, punch_in, punch_out, status FROM employee_attendance WHERE employee_id IN (?) AND date BETWEEN ? AND ?',
+        [empIds3, startStr, endStr]
       );
-      let totalHours = 0;
-      let absent = 0,
-        onePunch = 0,
-        late = 0;
-      for (const a of att) {
-        if (!a.punch_in || !a.punch_out) {
-          if (a.status === 'absent') absent++;
-          else if (a.status === 'one punch only') onePunch++;
-          continue;
-        }
-        let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
-        if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
-          late++;
-        if (hrs < 0) hrs = 0;
-        totalHours += hrs;
+      const attMap3 = new Map();
+      for (const a of attAll) {
+        const key = a.employee_id;
+        if (!attMap3.has(key)) attMap3.set(key, []);
+        attMap3.get(key).push(a);
       }
-      const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
-      const amount = parseFloat((totalHours * rate).toFixed(2));
-      const notes = [];
-      if (absent) notes.push(`${absent} day(s) absent`);
-      if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
-      if (late) notes.push(`${late} late arrival(s)`);
-      const net = parseFloat(
-        (amount - parseFloat(emp.advance_deducted)).toFixed(2)
-      );
-      rows.push({
-        supervisor: emp.supervisor_name,
-        department: emp.department_name || '',
-        punching_id: emp.punching_id,
-        employee: emp.name,
-        period: half === 1 ? '1-15' : '16-end',
-        hours: totalHours.toFixed(2),
-        amount,
-        advance_taken: emp.advance_taken,
-        advance_deducted: emp.advance_deducted,
-        net,
-        reason: notes.length ? notes.join(', ') : 'None'
-      });
+
+      for (const emp of employees) {
+        const att = attMap3.get(emp.id) || [];
+        let totalHours = 0;
+        let absent = 0,
+          onePunch = 0,
+          late = 0;
+        for (const a of att) {
+          if (!a.punch_in || !a.punch_out) {
+            if (a.status === 'absent') absent++;
+            else if (a.status === 'one punch only') onePunch++;
+            continue;
+          }
+          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+          if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
+            late++;
+          if (hrs < 0) hrs = 0;
+          totalHours += hrs;
+        }
+        const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
+        const amount = parseFloat((totalHours * rate).toFixed(2));
+        const notes = [];
+        if (absent) notes.push(`${absent} day(s) absent`);
+        if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
+        if (late) notes.push(`${late} late arrival(s)`);
+        const net = parseFloat((amount - parseFloat(emp.advance_deducted)).toFixed(2));
+        rows.push({
+          supervisor: emp.supervisor_name,
+          department: emp.department_name || '',
+          punching_id: emp.punching_id,
+          employee: emp.name,
+          period: half === 1 ? '1-15' : '16-end',
+          hours: totalHours.toFixed(2),
+          amount,
+          advance_taken: emp.advance_taken,
+          advance_deducted: emp.advance_deducted,
+          net,
+          reason: notes.length ? notes.join(', ') : 'None'
+        });
+      }
     }
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Dihadi');
@@ -729,49 +773,60 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
        WHERE e.salary_type = 'dihadi' AND e.is_active = 1
        ORDER BY u.username, e.name`);
     const rows = [];
-    for (const emp of employees) {
-      const [att] = await pool.query(
-        'SELECT punch_in, punch_out, status FROM employee_attendance WHERE employee_id = ? AND date BETWEEN ? AND ?',
-        [emp.id, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
+    const empIds4 = employees.map(e => e.id);
+    if (empIds4.length) {
+      const startStr = start.format('YYYY-MM-DD');
+      const endStr = end.format('YYYY-MM-DD');
+      const [attAll] = await pool.query(
+        'SELECT employee_id, punch_in, punch_out, status FROM employee_attendance WHERE employee_id IN (?) AND date BETWEEN ? AND ?',
+        [empIds4, startStr, endStr]
       );
-      let totalHours = 0;
-      let absent = 0,
-        onePunch = 0,
-        late = 0;
-      for (const a of att) {
-        if (!a.punch_in || !a.punch_out) {
-          if (a.status === 'absent') absent++;
-          else if (a.status === 'one punch only') onePunch++;
-          continue;
-        }
-        let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
-        if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
-          late++;
-        if (hrs < 0) hrs = 0;
-        totalHours += hrs;
+      const attMap4 = new Map();
+      for (const a of attAll) {
+        const key = a.employee_id;
+        if (!attMap4.has(key)) attMap4.set(key, []);
+        attMap4.get(key).push(a);
       }
-      const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
-      const amount = parseFloat((totalHours * rate).toFixed(2));
-      const notes = [];
-      if (absent) notes.push(`${absent} day(s) absent`);
-      if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
-      if (late) notes.push(`${late} late arrival(s)`);
-      const net = parseFloat(
-        (amount - parseFloat(emp.advance_deducted)).toFixed(2)
-      );
-      rows.push({
-        supervisor: emp.supervisor_name,
-        department: emp.department_name || '',
-        punching_id: emp.punching_id,
-        employee: emp.name,
-        period: half === 1 ? '1-15' : '16-end',
-        hours: totalHours.toFixed(2),
-        amount,
-        advance_taken: emp.advance_taken,
-        advance_deducted: emp.advance_deducted,
-        net,
-        reason: notes.length ? notes.join(', ') : 'None'
-      });
+
+      for (const emp of employees) {
+        const att = attMap4.get(emp.id) || [];
+        let totalHours = 0;
+        let absent = 0,
+          onePunch = 0,
+          late = 0;
+        for (const a of att) {
+          if (!a.punch_in || !a.punch_out) {
+            if (a.status === 'absent') absent++;
+            else if (a.status === 'one punch only') onePunch++;
+            continue;
+          }
+          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+          if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
+            late++;
+          if (hrs < 0) hrs = 0;
+          totalHours += hrs;
+        }
+        const rate = emp.allotted_hours ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours) : 0;
+        const amount = parseFloat((totalHours * rate).toFixed(2));
+        const notes = [];
+        if (absent) notes.push(`${absent} day(s) absent`);
+        if (onePunch) notes.push(`${onePunch} day(s) with missing punch`);
+        if (late) notes.push(`${late} late arrival(s)`);
+        const net = parseFloat((amount - parseFloat(emp.advance_deducted)).toFixed(2));
+        rows.push({
+          supervisor: emp.supervisor_name,
+          department: emp.department_name || '',
+          punching_id: emp.punching_id,
+          employee: emp.name,
+          period: half === 1 ? '1-15' : '16-end',
+          hours: totalHours.toFixed(2),
+          amount,
+          advance_taken: emp.advance_taken,
+          advance_deducted: emp.advance_deducted,
+          net,
+          reason: notes.length ? notes.join(', ') : 'None'
+        });
+      }
     }
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Dihadi');
