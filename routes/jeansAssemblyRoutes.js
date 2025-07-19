@@ -21,6 +21,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Simple in-memory cache for washers dropdown
+const washersCache = { data: null, expiry: 0 };
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
 // ------------------------------------------------------------------
 // 1) GET /jeansassemblydashboard
 //    Renders the main "Jeans Assembly Dashboard" with lots & washers
@@ -44,15 +48,24 @@ router.get('/', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
       
     `, [userId]);
 
-    // 2) Fetch washers (active users with role "washing")
-    const [washers] = await pool.query(`
-      SELECT u.id, u.username
-      FROM users u
-      JOIN roles r ON u.role_id = r.id
-      WHERE r.name = 'washing'
-        AND u.is_active = 1
-      ORDER BY u.username ASC
-    `);
+    // 2) Fetch washers (active users with role "washing") with simple caching
+    const now = Date.now();
+    let washers;
+    if (washersCache.data && washersCache.expiry > now) {
+      washers = washersCache.data;
+    } else {
+      const [rows] = await pool.query(`
+        SELECT u.id, u.username
+        FROM users u
+        JOIN roles r ON u.role_id = r.id
+        WHERE r.name = 'washing'
+          AND u.is_active = 1
+        ORDER BY u.username ASC
+      `);
+      washersCache.data = rows;
+      washersCache.expiry = now + CACHE_TTL_MS;
+      washers = rows;
+    }
 
     const error = req.flash('error');
     const success = req.flash('success');
@@ -131,9 +144,28 @@ router.post('/create',
         return res.redirect('/jeansassemblydashboard');
       }
 
-      // 3) Validate each size piece count
+      // 3) Validate each size piece count in batch
+      const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10));
+      const [sizeRows] = await conn.query(
+        `SELECT id, size_label, pieces FROM stitching_data_sizes WHERE id IN (?)`,
+        [sizeIds]
+      );
+      const sizeMap = {};
+      sizeRows.forEach(r => { sizeMap[r.id] = r; });
+
+      const [usedRows] = await conn.query(
+        `SELECT jds.size_label, COALESCE(SUM(jds.pieces),0) AS used
+         FROM jeans_assembly_data_sizes jds
+         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
+         WHERE jd.lot_no = ?
+         GROUP BY jds.size_label`,
+        [sd.lot_no]
+      );
+      const usedMap = {};
+      usedRows.forEach(r => { usedMap[r.size_label] = r.used; });
+
       let grandTotal = 0;
-      for (const sizeId of Object.keys(sizesObj)) {
+      for (const sizeId of sizeIds) {
         const requested = parseInt(sizesObj[sizeId], 10) || 0;
         if (requested < 0) {
           req.flash('error', 'Invalid negative pieces');
@@ -143,29 +175,14 @@ router.post('/create',
         }
         if (requested === 0) continue;
 
-        // Check that stitching_data_sizes row exists
-        const [[sds]] = await conn.query(`
-          SELECT *
-          FROM stitching_data_sizes
-          WHERE id = ?
-        `, [sizeId]);
+        const sds = sizeMap[sizeId];
         if (!sds) {
           req.flash('error', 'Bad size reference: ' + sizeId);
           await conn.rollback();
           conn.release();
           return res.redirect('/jeansassemblydashboard');
         }
-
-        // Check how many have already been used in previous Jeans Assembly
-        const [[usedRow]] = await conn.query(`
-          SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
-          FROM jeans_assembly_data_sizes jds
-          JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-          WHERE jd.lot_no = ?
-            AND jds.size_label = ?
-        `, [sd.lot_no, sds.size_label]);
-
-        const used = usedRow.usedCount || 0;
+        const used = usedMap[sds.size_label] || 0;
         const remain = sds.pieces - used;
         if (requested > remain) {
           req.flash('error', `Requested ${requested} but only ${remain} remain for size ${sds.size_label}.`);
@@ -191,22 +208,23 @@ router.post('/create',
       `, [userId, sd.lot_no, sd.sku, grandTotal, remark || null, image_url]);
       const newAssemblyId = main.insertId;
 
-      // 5) Insert each size
-      for (const sizeId of Object.keys(sizesObj)) {
+      // 5) Insert each size in a single query
+      const sizeInsertValues = [];
+      const now = new Date();
+      for (const sizeId of sizeIds) {
         const requested = parseInt(sizesObj[sizeId], 10) || 0;
         if (requested > 0) {
-          // Need the size_label from stitching_data_sizes
-          const [[sds]] = await conn.query(`
-            SELECT * FROM stitching_data_sizes
-            WHERE id = ?
-          `, [sizeId]);
-
-          await conn.query(`
-            INSERT INTO jeans_assembly_data_sizes
-              (jeans_assembly_data_id, size_label, pieces, created_at)
-            VALUES (?, ?, ?, NOW())
-          `, [newAssemblyId, sds.size_label, requested]);
+          const sds = sizeMap[sizeId];
+          sizeInsertValues.push([newAssemblyId, sds.size_label, requested, now]);
         }
+      }
+      if (sizeInsertValues.length) {
+        await conn.query(
+          `INSERT INTO jeans_assembly_data_sizes
+            (jeans_assembly_data_id, size_label, pieces, created_at)
+           VALUES ?`,
+          [sizeInsertValues]
+        );
       }
 
       // 6) If user selected a Washer, immediately assign to washing
@@ -264,33 +282,27 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isJeansAssemblyMaster, asyn
       return res.status(404).json({ error: 'Lot not found' });
     }
 
-    // Fetch sizes for that lot
-    const [sizes] = await pool.query(`
-      SELECT *
-      FROM stitching_data_sizes
-      WHERE stitching_data_id = ?
-    `, [lotId]);
-
-    // Calculate how many remain
-    const results = [];
-    for (const size of sizes) {
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
+    // Fetch sizes with remain calculation in one query
+    const [rows] = await pool.query(`
+      SELECT s.id, s.size_label, s.pieces,
+             s.pieces - COALESCE(u.usedCount,0) AS remain
+      FROM stitching_data_sizes s
+      LEFT JOIN (
+        SELECT jds.size_label, SUM(jds.pieces) AS usedCount
         FROM jeans_assembly_data_sizes jds
         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
         WHERE jd.lot_no = ?
-          AND jds.size_label = ?
-      `, [stData.lot_no, size.size_label]);
+        GROUP BY jds.size_label
+      ) u ON s.size_label = u.size_label
+      WHERE s.stitching_data_id = ?
+    `, [stData.lot_no, lotId]);
 
-      const used = usedRow.usedCount || 0;
-      const remain = size.pieces - used;
-      results.push({
-        id: size.id,
-        size_label: size.size_label,
-        pieces: size.pieces,
-        remain: remain < 0 ? 0 : remain
-      });
-    }
+    const results = rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    }));
 
     return res.json(results);
   } catch (err) {
@@ -338,30 +350,28 @@ router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (re
       return res.json({ sizes: outNoRemain });
     }
 
-    // gather the total pieces from stitching_data_sizes
-    const [sdSizes] = await pool.query(`
-      SELECT size_label, pieces
-      FROM stitching_data_sizes
-      WHERE stitching_data_id = ?
-    `, [sd.id]);
-
-    const sdMap = {};
-    sdSizes.forEach(r => { sdMap[r.size_label] = r.pieces; });
-
-    const output = [];
-    for (const sz of sizes) {
-      const totalDept = sdMap[sz.size_label] || 0;
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
+    // Calculate remain for each size in one query
+    const [rows] = await pool.query(`
+      SELECT sz.id, sz.size_label, sz.pieces,
+             sz.pieces - COALESCE(u.usedCount,0) AS remain
+      FROM jeans_assembly_data_sizes sz
+      LEFT JOIN (
+        SELECT jds.size_label, SUM(jds.pieces) AS usedCount
         FROM jeans_assembly_data_sizes jds
         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-        WHERE jd.lot_no = ? AND jds.size_label = ?
-      `, [entry.lot_no, sz.size_label]);
+        WHERE jd.lot_no = ?
+        GROUP BY jds.size_label
+      ) u ON sz.size_label = u.size_label
+      WHERE sz.jeans_assembly_data_id = ?
+    `, [entry.lot_no, entryId]);
 
-      const used = usedRow.usedCount || 0;
-      const remain = totalDept - used;
-      output.push({ ...sz, remain: remain < 0 ? 0 : remain });
-    }
+    const output = rows.map(r => ({
+      id: r.id,
+      jeans_assembly_data_id: entryId,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    }));
 
     return res.json({ sizes: output });
   } catch (err) {
@@ -422,55 +432,71 @@ router.post('/update/:id', isAuthenticated, isJeansAssemblyMaster, upload.none()
 
     let updatedTotal = entry.total_pieces;
 
-    for (const lbl of Object.keys(updateSizes)) {
-      let increment = parseInt(updateSizes[lbl], 10);
-      if (isNaN(increment) || increment < 0) increment = 0;
-      if (increment === 0) continue;
+    const labels = Object.keys(updateSizes);
+    if (labels.length) {
+      const [usedRows] = await conn.query(
+        `SELECT jds.size_label, SUM(jds.pieces) AS usedCount
+         FROM jeans_assembly_data_sizes jds
+         JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
+         WHERE jd.lot_no = ?
+         GROUP BY jds.size_label`,
+        [entry.lot_no]
+      );
+      const usedMap = {};
+      usedRows.forEach(r => { usedMap[r.size_label] = r.usedCount; });
 
-      // check remain
-      const totalDept = sdMap[lbl] || 0;
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(jds.pieces),0) AS usedCount
-        FROM jeans_assembly_data_sizes jds
-        JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-        WHERE jd.lot_no = ? AND jds.size_label = ?
-      `, [entry.lot_no, lbl]);
-      const used = usedRow.usedCount || 0;
-      const remain = totalDept - used;
-      if (increment > remain) {
-        throw new Error(`Cannot add ${increment} for [${lbl}]; only ${remain} remain.`);
+      const [existingRows] = await conn.query(
+        `SELECT id, size_label, pieces FROM jeans_assembly_data_sizes WHERE jeans_assembly_data_id = ?`,
+        [entryId]
+      );
+      const existMap = {};
+      existingRows.forEach(r => { existMap[r.size_label] = r; });
+
+      const now = new Date();
+      const insertValues = [];
+      const logValues = [];
+
+      for (const lbl of labels) {
+        let increment = parseInt(updateSizes[lbl], 10);
+        if (isNaN(increment) || increment < 0) increment = 0;
+        if (increment === 0) continue;
+
+        const totalDept = sdMap[lbl] || 0;
+        const used = usedMap[lbl] || 0;
+        const remain = totalDept - used;
+        if (increment > remain) {
+          throw new Error(`Cannot add ${increment} for [${lbl}]; only ${remain} remain.`);
+        }
+
+        const existing = existMap[lbl];
+        if (!existing) {
+          insertValues.push([entryId, lbl, increment, now]);
+          updatedTotal += increment;
+        } else {
+          const newCount = existing.pieces + increment;
+          await conn.query(
+            `UPDATE jeans_assembly_data_sizes SET pieces = ? WHERE id = ?`,
+            [newCount, existing.id]
+          );
+          updatedTotal += increment;
+        }
+
+        logValues.push([entryId, lbl, increment, now]);
       }
 
-      // Insert or update that size row
-      const [[existing]] = await conn.query(`
-        SELECT *
-        FROM jeans_assembly_data_sizes
-        WHERE jeans_assembly_data_id = ? AND size_label = ?
-      `, [entryId, lbl]);
-
-      if (!existing) {
-        await conn.query(`
-          INSERT INTO jeans_assembly_data_sizes
-            (jeans_assembly_data_id, size_label, pieces, created_at)
-          VALUES (?, ?, ?, NOW())
-        `, [entryId, lbl, increment]);
-        updatedTotal += increment;
-      } else {
-        const newCount = existing.pieces + increment;
-        await conn.query(`
-          UPDATE jeans_assembly_data_sizes
-          SET pieces = ?
-          WHERE id = ?
-        `, [newCount, existing.id]);
-        updatedTotal += increment;
+      if (insertValues.length) {
+        await conn.query(
+          `INSERT INTO jeans_assembly_data_sizes (jeans_assembly_data_id, size_label, pieces, created_at) VALUES ?`,
+          [insertValues]
+        );
       }
 
-      // Log the update
-      await conn.query(`
-        INSERT INTO jeans_assembly_data_updates
-          (jeans_assembly_data_id, size_label, pieces, updated_at)
-        VALUES (?, ?, ?, NOW())
-      `, [entryId, lbl, increment]);
+      if (logValues.length) {
+        await conn.query(
+          `INSERT INTO jeans_assembly_data_updates (jeans_assembly_data_id, size_label, pieces, updated_at) VALUES ?`,
+          [logValues]
+        );
+      }
     }
 
     // Update total
