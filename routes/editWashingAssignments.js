@@ -5,17 +5,31 @@ const upload = multer();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
+// Simple in-memory cache for washer dropdowns
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
+let washersCache = { data: null, expiry: 0 };
+
+async function fetchWashers() {
+  const now = Date.now();
+  if (washersCache.data && washersCache.expiry > now) {
+    return washersCache.data;
+  }
+  const [rows] = await pool.query(`
+    SELECT u.id, u.username
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+     WHERE r.name = 'washing'
+       AND u.is_active = 1
+     ORDER BY u.username
+  `);
+  washersCache = { data: rows, expiry: now + CACHE_TTL_MS };
+  return rows;
+}
+
 // GET /operator/editwashingassignments
 router.get('/editwashingassignments', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const [washers] = await pool.query(`
-      SELECT u.id, u.username
-        FROM users u
-        JOIN roles r ON u.role_id = r.id
-       WHERE r.name = 'washing'
-         AND u.is_active = 1
-       ORDER BY u.username
-    `);
+    const washers = await fetchWashers();
     res.render('editWashingAssignments', { user: req.session.user, washers });
   } catch (err) {
     console.error('Error in GET /operator/editwashingassignments:', err);
@@ -41,22 +55,20 @@ router.get('/editwashingassignments/assignment-list', isAuthenticated, isOperato
        ORDER BY wa.assigned_on DESC
     `, [washerId]);
 
-    let html = `<div class="card"><div class="card-header"><h3>Assignments</h3></div><div class="card-body"><table class="table table-bordered"><thead><tr><th>Lot No</th><th>SKU</th><th>Assigned On</th><th>Status</th><th>Edit</th></tr></thead><tbody>`;
-    if (!rows.length) {
-      html += '<tr><td colspan="5">No assignments found for this washer.</td></tr>';
-    } else {
-      rows.forEach(a => {
-        const status = a.is_approved === null ? 'Pending' : (a.is_approved ? 'Approved' : 'Denied');
-        html += `<tr data-assignment-id="${a.assignment_id}">` +
-                `<td>${a.lot_no}</td>` +
-                `<td>${a.sku}</td>` +
-                `<td>${new Date(a.assigned_on).toLocaleString()}</td>` +
-                `<td>${status}</td>` +
-                `<td><button class="btn btn-primary btn-sm edit-assignment-btn" data-assignment-id="${a.assignment_id}">Edit</button></td>` +
-                `</tr>`;
-      });
-    }
-    html += `</tbody></table></div></div>`;
+    const rowsHtml = rows.map(a => {
+      const status = a.is_approved === null ? 'Pending' : (a.is_approved ? 'Approved' : 'Denied');
+      return `<tr data-assignment-id="${a.assignment_id}">` +
+             `<td>${a.lot_no}</td>` +
+             `<td>${a.sku}</td>` +
+             `<td>${new Date(a.assigned_on).toLocaleString()}</td>` +
+             `<td>${status}</td>` +
+             `<td><button class="btn btn-primary btn-sm edit-assignment-btn" data-assignment-id="${a.assignment_id}">Edit</button></td>` +
+             `</tr>`;
+    }).join('');
+
+    const html = `<div class="card"><div class="card-header"><h3>Assignments</h3></div><div class="card-body"><table class="table table-bordered"><thead><tr><th>Lot No</th><th>SKU</th><th>Assigned On</th><th>Status</th><th>Edit</th></tr></thead><tbody>` +
+                 (rowsHtml || '<tr><td colspan="5">No assignments found for this washer.</td></tr>') +
+                 `</tbody></table></div></div>`;
     res.send(html);
   } catch (err) {
     console.error('Error in GET /operator/editwashingassignments/assignment-list:', err);
@@ -69,22 +81,21 @@ router.get('/editwashingassignments/edit-form', isAuthenticated, isOperator, asy
   const { washerId, assignmentId } = req.query;
   if (!washerId || !assignmentId) return res.status(400).send('IDs required.');
   try {
-    const [[assignment]] = await pool.query(`
+    const assignmentPromise = pool.query(`
       SELECT wa.id, wa.user_id, jd.lot_no, jd.sku
         FROM washing_assignments wa
         JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
        WHERE wa.id = ? AND wa.user_id = ?
     `, [assignmentId, washerId]);
-    if (!assignment) return res.status(404).send('Assignment not found.');
 
-    const [washers] = await pool.query(`
-      SELECT u.id, u.username
-        FROM users u
-        JOIN roles r ON u.role_id = r.id
-       WHERE r.name = 'washing'
-         AND u.is_active = 1
-       ORDER BY u.username
-    `);
+    const washersPromise = fetchWashers();
+
+    const [[assignment], washers] = await Promise.all([
+      assignmentPromise.then(r => r[0]),
+      washersPromise
+    ]);
+
+    if (!assignment) return res.status(404).send('Assignment not found.');
 
     let html = `<form id="updateAssignmentForm">` +
                `<div class="mb-3">` +
