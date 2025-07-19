@@ -134,7 +134,7 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
         lotsData.push({ lot_no, sku, fabric_type, remark });
       }
     });
-    console.log('Lots data extracted:', lotsData);
+    console.log('Lots data extracted:', lotsData.length);
 
     // Read sizes data, grouping by lot_no
     const sizesData = {};
@@ -151,7 +151,7 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
         }
       });
     }
-    console.log('Sizes data grouped by lot:', sizesData);
+    console.log('Sizes data grouped by lot:', Object.keys(sizesData).length);
 
     // Read rolls data, grouping by lot_no
     const rollsData = {};
@@ -173,7 +173,7 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
         }
       });
     }
-    console.log('Rolls data grouped by lot:', rollsData);
+    console.log('Rolls data grouped by lot:', Object.keys(rollsData).length);
 
     // Begin a database transaction
     conn = await pool.getConnection();
@@ -182,94 +182,57 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
 
     // Process each lot row from the Lots sheet
     for (const lot of lotsData) {
-      console.log('Inserting lot:', lot);
-      // Insert into cutting_lots (total_pieces will be updated later)
+      const lotSizes = sizesData[lot.lot_no] || [];
+      const lotRolls = rollsData[lot.lot_no] || [];
+      const sumPatterns = lotSizes.reduce((sum, s) => sum + s.pattern_count, 0);
+      const sumLayers = lotRolls.reduce((sum, r) => sum + r.layers, 0);
+      const totalPieces = sumPatterns * sumLayers;
+
       const [result] = await conn.query(
         `INSERT INTO cutting_lots (lot_no, sku, fabric_type, remark, user_id, total_pieces)
-         VALUES (?, ?, ?, ?, ?, 0)`,
-        [lot.lot_no, lot.sku, lot.fabric_type, lot.remark || null, req.session.user.id]
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [lot.lot_no, lot.sku, lot.fabric_type, lot.remark || null, req.session.user.id, totalPieces]
       );
       const cuttingLotId = result.insertId;
-      console.log(`Lot inserted with ID: ${cuttingLotId}`);
 
-      // Insert sizes for this lot (if any)
-      const lotSizes = sizesData[lot.lot_no] || [];
       for (const size of lotSizes) {
-        console.log(`Inserting size for lot ${lot.lot_no}:`, size);
         await conn.query(
           `INSERT INTO cutting_lot_sizes (cutting_lot_id, size_label, pattern_count, total_pieces, created_at)
-           VALUES (?, ?, ?, 0, NOW())`,
-          [cuttingLotId, size.size_label, size.pattern_count]
+           VALUES (?, ?, ?, ?, NOW())`,
+          [cuttingLotId, size.size_label, size.pattern_count, size.pattern_count * sumLayers]
         );
       }
 
       // Insert rolls for this lot (if any)
-      const lotRolls = rollsData[lot.lot_no] || [];
-      for (const roll of lotRolls) {
-        console.log(`Processing roll for lot ${lot.lot_no}:`, roll);
-        // Lock and check available weight in fabric_invoice_rolls
+      const rollNos = lotRolls.map(r => r.roll_no);
+      if (rollNos.length) {
         const [rollRows] = await conn.query(
-          `SELECT per_roll_weight FROM fabric_invoice_rolls WHERE roll_no = ? FOR UPDATE`,
-          [roll.roll_no]
+          `SELECT roll_no, per_roll_weight FROM fabric_invoice_rolls WHERE roll_no IN (?) FOR UPDATE`,
+          [rollNos]
         );
-        if (rollRows.length === 0) {
-          throw new Error(`Roll No. ${roll.roll_no} does not exist for lot ${lot.lot_no}.`);
-        }
-        const availableWeight = parseFloat(rollRows[0].per_roll_weight);
-        if (roll.weight_used > availableWeight) {
-          throw new Error(
-            `Insufficient weight for Roll No. ${roll.roll_no} in lot ${lot.lot_no}. ` +
-            `Available: ${availableWeight}, Requested: ${roll.weight_used}`
+        const rollMap = new Map(rollRows.map(r => [r.roll_no, parseFloat(r.per_roll_weight)]));
+
+        for (const roll of lotRolls) {
+          const availableWeight = rollMap.get(roll.roll_no);
+          if (availableWeight === undefined) {
+            throw new Error(`Roll No. ${roll.roll_no} does not exist for lot ${lot.lot_no}.`);
+          }
+          if (roll.weight_used > availableWeight) {
+            throw new Error(
+              `Insufficient weight for Roll No. ${roll.roll_no} in lot ${lot.lot_no}. ` +
+              `Available: ${availableWeight}, Requested: ${roll.weight_used}`
+            );
+          }
+          await conn.query(
+            `INSERT INTO cutting_lot_rolls (cutting_lot_id, roll_no, weight_used, layers, total_pieces, created_at)
+             VALUES (?, ?, ?, ?, 0, NOW())`,
+            [cuttingLotId, roll.roll_no, roll.weight_used, roll.layers]
+          );
+          await conn.query(
+            `UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`,
+            [roll.weight_used, roll.roll_no]
           );
         }
-        // Insert into cutting_lot_rolls
-        await conn.query(
-          `INSERT INTO cutting_lot_rolls (cutting_lot_id, roll_no, weight_used, layers, total_pieces, created_at)
-           VALUES (?, ?, ?, ?, 0, NOW())`,
-          [cuttingLotId, roll.roll_no, roll.weight_used, roll.layers]
-        );
-        console.log(`Roll ${roll.roll_no} inserted for lot ${lot.lot_no}.`);
-        // Deduct the used weight from fabric_invoice_rolls
-        await conn.query(
-          `UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`,
-          [roll.weight_used, roll.roll_no]
-        );
-        console.log(`Updated fabric_invoice_rolls for Roll No. ${roll.roll_no}.`);
-      }
-
-      // Calculate total pieces for this lot:
-      //   total_pieces = (sum of pattern_count from sizes) * (sum of layers from rolls)
-      const [sizeRows] = await conn.query(
-        `SELECT pattern_count FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
-        [cuttingLotId]
-      );
-      let sumPatterns = 0;
-      for (const row of sizeRows) {
-        sumPatterns += parseInt(row.pattern_count, 10);
-      }
-      const [rollRowsSum] = await conn.query(
-        `SELECT SUM(layers) AS total_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?`,
-        [cuttingLotId]
-      );
-      const sumLayers = parseInt(rollRowsSum[0].total_layers, 10) || 0;
-      const totalPieces = sumPatterns * sumLayers;
-      console.log(`Calculated total pieces for lot ${lot.lot_no}: ${totalPieces}`);
-
-      // Update the cutting_lots table
-      await conn.query(
-        `UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`,
-        [totalPieces, cuttingLotId]
-      );
-      console.log(`Updated total pieces in cutting_lots for lot ${lot.lot_no}.`);
-
-      // Also update each size’s total pieces
-      for (const size of lotSizes) {
-        const totalPiecesPerSize = size.pattern_count * sumLayers;
-        await conn.query(
-          `UPDATE cutting_lot_sizes SET total_pieces = ? WHERE cutting_lot_id = ? AND size_label = ?`,
-          [totalPiecesPerSize, cuttingLotId, size.size_label]
-        );
-        console.log(`Updated total pieces in cutting_lot_sizes for lot ${lot.lot_no} size ${size.size_label}.`);
       }
     }
 
@@ -362,58 +325,52 @@ router.post('/bulk-assign', isAuthenticated, isCuttingManager, upload.single('ex
       throw new Error('Missing "Assignments" sheet in Excel file.');
     }
 
-    // Read assignment rows (trimming Lot No values)
     const assignments = [];
     assignSheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       let lot_no = row.getCell(1).value;
       const user_id = row.getCell(2).value;
-      // Ensure lot_no is a string and trim extra spaces
-      if (lot_no) {
-        lot_no = lot_no.toString().trim();
-      }
-      console.log(`Assignments Row ${rowNumber} - Lot No: ${lot_no}, Stitching User ID: ${user_id}`);
-      if (lot_no && user_id) {
-        assignments.push({ lot_no, user_id });
-      }
+      if (lot_no) lot_no = lot_no.toString().trim();
+      if (lot_no && user_id) assignments.push({ lot_no, user_id });
     });
-    console.log('Assignments data extracted:', assignments);
+    console.log('Assignments data extracted:', assignments.length);
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
     console.log('Database transaction started for bulk assignment upload.');
 
-    for (const assign of assignments) {
-      console.log(`Processing assignment for Lot No: ${assign.lot_no} with Stitching User ID: ${assign.user_id}`);
-      // Verify that the lot exists and belongs to the current cutting manager.
-      // Using TRIM() in SQL to ensure comparison without trailing spaces.
-      const [lotRows] = await conn.query(
-        `SELECT id FROM cutting_lots WHERE TRIM(lot_no) = ? AND user_id = ?`,
-        [assign.lot_no, req.session.user.id]
+    const lotNos = [...new Set(assignments.map(a => a.lot_no))];
+    const [lotRows] = await conn.query(
+      `SELECT id, TRIM(lot_no) AS lot_no FROM cutting_lots WHERE TRIM(lot_no) IN (?) AND user_id = ?`,
+      [lotNos, req.session.user.id]
+    );
+    const lotMap = new Map(lotRows.map(r => [r.lot_no, r.id]));
+    const lotIds = Array.from(lotMap.values());
+    let assignedSet = new Set();
+    if (lotIds.length) {
+      const [assignedRows] = await conn.query(
+        `SELECT cutting_lot_id FROM stitching_assignments WHERE cutting_lot_id IN (?)`,
+        [lotIds]
       );
-      if (lotRows.length === 0) {
+      assignedSet = new Set(assignedRows.map(r => r.cutting_lot_id));
+    }
+
+    const insertValues = [];
+    for (const assign of assignments) {
+      const cuttingLotId = lotMap.get(assign.lot_no);
+      if (!cuttingLotId) {
         throw new Error(`Lot No. ${assign.lot_no} not found or not owned by you.`);
       }
-      const cuttingLotId = lotRows[0].id;
-      console.log(`Found lot ${assign.lot_no} with ID ${cuttingLotId} for assignment.`);
+      if (assignedSet.has(cuttingLotId)) continue;
+      insertValues.push([req.session.user.id, assign.user_id, cuttingLotId, new Date()]);
+      assignedSet.add(cuttingLotId);
+    }
 
-      // Check if this lot has already been assigned
-      const [checkRows] = await conn.query(
-        `SELECT id FROM stitching_assignments WHERE cutting_lot_id = ?`,
-        [cuttingLotId]
-      );
-      if (checkRows.length > 0) {
-        console.log(`Lot No. ${assign.lot_no} already has an assignment. Skipping.`);
-        continue;
-      }
-
-      // Insert into stitching_assignments
+    if (insertValues.length) {
       await conn.query(
-        `INSERT INTO stitching_assignments (assigner_cutting_master, user_id, cutting_lot_id, assigned_on)
-         VALUES (?, ?, ?, NOW())`,
-        [req.session.user.id, assign.user_id, cuttingLotId]
+        `INSERT INTO stitching_assignments (assigner_cutting_master, user_id, cutting_lot_id, assigned_on) VALUES ?`,
+        [insertValues]
       );
-      console.log(`Assignment created for Lot No: ${assign.lot_no}`);
     }
 
     await conn.commit();
