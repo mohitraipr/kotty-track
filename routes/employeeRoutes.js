@@ -5,22 +5,49 @@ const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
 const { calculateSalaryForMonth, effectiveHours } = require('../helpers/salaryCalculator');
 
+// simple in-memory cache for the dashboard
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const dashboardCache = new Map();
+
+function getCache(key) {
+  const entry = dashboardCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    dashboardCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCache(key, value) {
+  dashboardCache.set(key, { value, expiry: Date.now() + CACHE_TTL_MS });
+}
+
 // Show employee dashboard for a supervisor
 router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const [deptRows] = await pool.query(
-      `SELECT d.name FROM departments d
-       JOIN department_supervisors ds ON ds.department_id = d.id
-       WHERE ds.user_id = ? LIMIT 1`,
-      [userId]
-    );
-    const department = deptRows.length ? deptRows[0].name : 'N/A';
+  const userId = req.session.user.id;
+  const selectedMonth = req.query.month || moment().format('YYYY-MM');
+  const cacheKey = `emp-${userId}-${selectedMonth}`;
 
-    const [employees] = await pool.query(
-      'SELECT * FROM employees WHERE supervisor_id = ?',
-      [userId]
-    );
+  const cached = getCache(cacheKey);
+  if (cached) {
+    return res.render('supervisorEmployees', { user: req.session.user, ...cached, selectedMonth });
+  }
+
+  try {
+    const [deptResult, employeesResult] = await Promise.all([
+      pool.query(
+        `SELECT d.name FROM departments d
+         JOIN department_supervisors ds ON ds.department_id = d.id
+         WHERE ds.user_id = ? LIMIT 1`,
+        [userId]
+      ),
+      pool.query('SELECT * FROM employees WHERE supervisor_id = ?', [userId])
+    ]);
+
+    const deptRows = deptResult[0];
+    const employees = employeesResult[0];
+    const department = deptRows.length ? deptRows[0].name : 'N/A';
 
     const totalEmployees = employees.length;
     const avgSalary = totalEmployees
@@ -30,8 +57,6 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
         ).toFixed(2)
       : 0;
 
-
-    const selectedMonth = req.query.month || moment().format('YYYY-MM');
     const monthStart = moment(selectedMonth + '-01');
     const months = [];
     for (let i = 0; i < 6; i++) {
@@ -39,19 +64,43 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       months.push({ value: m.format('YYYY-MM'), label: m.format('MMM YYYY') });
     }
 
-  let topEmployees = [];
-  let presentCount = 0;
-  let paidCount = 0;
+    let topEmployees = [];
+    let presentCount = 0;
+    let paidCount = 0;
     if (totalEmployees && monthStart.isValid()) {
       const startDate = monthStart.format('YYYY-MM-DD');
       const endDate = monthStart.endOf('month').format('YYYY-MM-DD');
       const ids = employees.map(e => e.id);
-      const [att] = await pool.query(
-        `SELECT employee_id, punch_in, punch_out
-           FROM employee_attendance
-          WHERE employee_id IN (?) AND date BETWEEN ? AND ?`,
-        [ids, startDate, endDate]
-      );
+
+      const [att, [presentRows], [salaryRows]] = await Promise.all([
+        pool.query(
+          `SELECT employee_id, punch_in, punch_out
+             FROM employee_attendance
+            WHERE employee_id IN (?) AND date BETWEEN ? AND ?`,
+          [ids, startDate, endDate]
+        ).then(r => r[0]),
+        pool
+          .query(
+            `SELECT COUNT(*) AS cnt FROM (
+               SELECT employee_id
+                 FROM employee_attendance
+                WHERE employee_id IN (?)
+                  AND date BETWEEN ? AND ?
+                  AND status = 'present'
+                GROUP BY employee_id
+               HAVING COUNT(*) >= 3
+             ) AS t`,
+            [ids, startDate, endDate]
+          )
+          .then(r => r[0]),
+        pool
+          .query(
+            'SELECT COUNT(*) AS cnt FROM employee_salaries WHERE employee_id IN (?) AND month = ? AND net > 0',
+            [ids, selectedMonth]
+          )
+          .then(r => r[0])
+      ]);
+
       const map = new Map();
       employees.forEach(e => {
         map.set(e.id, { name: e.name, diff: 0, emp: e });
@@ -77,29 +126,11 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
         .slice(0, 3)
         .map(i => i.name);
 
-      const [presentRows] = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM (
-           SELECT employee_id
-             FROM employee_attendance
-            WHERE employee_id IN (?)
-              AND date BETWEEN ? AND ?
-              AND status = 'present'
-            GROUP BY employee_id
-           HAVING COUNT(*) >= 3
-         ) AS t`,
-        [ids, startDate, endDate]
-      );
       presentCount = presentRows[0]?.cnt || 0;
-
-      const [salaryRows] = await pool.query(
-        'SELECT COUNT(*) AS cnt FROM employee_salaries WHERE employee_id IN (?) AND month = ? AND net > 0',
-        [ids, selectedMonth]
-      );
       paidCount = salaryRows[0]?.cnt || 0;
     }
 
-    res.render('supervisorEmployees', {
-      user: req.session.user,
+    const data = {
       department,
       employees,
       totalEmployees,
@@ -107,9 +138,11 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       topEmployees,
       presentCount,
       paidCount,
-      months,
-      selectedMonth
-    });
+      months
+    };
+    setCache(cacheKey, data);
+
+    res.render('supervisorEmployees', { user: req.session.user, ...data, selectedMonth });
   } catch (err) {
     console.error('Error loading employees:', err);
     req.flash('error', 'Failed to load employees');
@@ -169,22 +202,29 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
     }
     const employee = empRows[0];
 
-    let leaves = [];
+    let leavesPromise = Promise.resolve([[]]);
     if (employee.salary_type !== 'dihadi') {
-      const [leaveRows] = await pool.query(
+      leavesPromise = pool.query(
         'SELECT * FROM employee_leaves WHERE employee_id = ? ORDER BY leave_date DESC',
         [empId]
       );
-      leaves = leaveRows;
     }
-    const [debits] = await pool.query(
-      'SELECT * FROM employee_debits WHERE employee_id = ? ORDER BY added_at DESC',
-      [empId]
-    );
-    const [advances] = await pool.query(
-      'SELECT * FROM employee_advances WHERE employee_id = ? ORDER BY added_at DESC',
-      [empId]
-    );
+
+    const [leavesRes, debitsRes, advancesRes] = await Promise.all([
+      leavesPromise,
+      pool.query(
+        'SELECT * FROM employee_debits WHERE employee_id = ? ORDER BY added_at DESC',
+        [empId]
+      ),
+      pool.query(
+        'SELECT * FROM employee_advances WHERE employee_id = ? ORDER BY added_at DESC',
+        [empId]
+      )
+    ]);
+
+    const leaves = leavesRes[0] || [];
+    const debits = debitsRes[0];
+    const advances = advancesRes[0];
 
     let leaveBalance = 'N/A';
     if (employee.salary_type !== 'dihadi') {
