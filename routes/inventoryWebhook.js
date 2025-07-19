@@ -25,17 +25,20 @@ function verifyAccessToken(req, res, next) {
 // In-memory store for recent webhook requests
 const logs = [];
 let sseClients = [];
-let pushSubscriptions = [];
+// Store push subscriptions in a Map keyed by endpoint for O(1) updates
+let pushSubscriptions = new Map();
 
 async function loadPushSubscriptions() {
   try {
     const [rows] = await pool.query(
       'SELECT endpoint, p256dh, auth FROM push_subscriptions'
     );
-    pushSubscriptions = rows.map((r) => ({
-      endpoint: r.endpoint,
-      keys: { p256dh: r.p256dh, auth: r.auth },
-    }));
+    pushSubscriptions = new Map(
+      rows.map((r) => [
+        r.endpoint,
+        { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
+      ])
+    );
   } catch (err) {
     console.error('Failed to load push subscriptions', err);
   }
@@ -59,7 +62,7 @@ function broadcastLog(log) {
   sseClients.forEach((client) => client.res.write(data));
 }
 
-function broadcastAlert(message, sku, quantity) {
+async function broadcastAlert(message, sku, quantity) {
   const payload = { alert: { message, sku, quantity } };
   const data = `data: ${JSON.stringify(payload)}\n\n`;
   sseClients.forEach((client) => client.res.write(data));
@@ -67,26 +70,46 @@ function broadcastAlert(message, sku, quantity) {
   // Send push notifications to subscribed clients
   // Link directly to the SKU detail page
   const pushData = JSON.stringify({ message, url: `/inventory/alerts` });
-  pushSubscriptions.forEach((sub) => {
-    webPush
-      .sendNotification(sub, pushData)
-      .catch(async (err) => {
-        console.error('Push send failed', err);
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          // Remove stale subscription from memory and DB
-          pushSubscriptions = pushSubscriptions.filter((s) => s.endpoint !== sub.endpoint);
-          try {
-            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]);
-          } catch (dbErr) {
-            console.error('Failed to delete push subscription', dbErr);
-          }
-        }
-      });
+  const subs = Array.from(pushSubscriptions.values());
+
+  const results = await Promise.allSettled(
+    subs.map((sub) => webPush.sendNotification(sub, pushData))
+  );
+
+  const staleEndpoints = [];
+  results.forEach((result, idx) => {
+    if (result.status === 'rejected') {
+      const err = result.reason;
+      console.error('Push send failed', err);
+      const sub = subs[idx];
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        pushSubscriptions.delete(sub.endpoint);
+        staleEndpoints.push(sub.endpoint);
+      }
+    }
   });
 
+  if (staleEndpoints.length) {
+    try {
+      const placeholders = staleEndpoints.map(() => '?').join(',');
+      await pool.query(
+        `DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`,
+        staleEndpoints
+      );
+    } catch (dbErr) {
+      console.error('Failed to delete push subscriptions', dbErr);
+    }
+  }
+
   // Persist the alert
-  pool.query('INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())', [sku, quantity])
-    .catch(err => console.error('Failed to insert alert', err));
+  try {
+    await pool.query(
+      'INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())',
+      [sku, quantity]
+    );
+  } catch (err) {
+    console.error('Failed to insert alert', err);
+  }
 }
 
 // Default alert configuration - will be replaced with DB values on startup
@@ -162,10 +185,13 @@ const entry = {
 
           const sku = item.sku.toUpperCase();
           const threshold = alertConfig.skuThresholds[sku];
+          const qty = Number(item.inventory);
 
-          if (threshold !== undefined && Number(item.inventory) < threshold) {
-            const message = `Inventory alert for ${item.sku}: ${item.inventory}`;
-            broadcastAlert(message, item.sku, Number(item.inventory));
+          if (threshold !== undefined && qty < threshold) {
+            const message = `Inventory alert for ${item.sku}: ${qty}`;
+            broadcastAlert(message, item.sku, qty).catch((e) =>
+              console.error('Broadcast alert failed', e)
+            );
           }
         }
       }
@@ -210,10 +236,13 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req,
       });
 
     try {
-      for (const [sku, th] of Object.entries(map)) {
+      const entries = Object.entries(map);
+      if (entries.length) {
+        const values = entries.map(() => '(?, ?)').join(',');
+        const params = entries.flatMap(([sku, th]) => [sku, th]);
         await pool.query(
-          'INSERT INTO sku_thresholds (sku, threshold) VALUES (?, ?) ON DUPLICATE KEY UPDATE threshold = VALUES(threshold)',
-          [sku, th]
+          `INSERT INTO sku_thresholds (sku, threshold) VALUES ${values} ON DUPLICATE KEY UPDATE threshold = VALUES(threshold)`,
+          params
         );
       }
     } catch (err) {
@@ -232,7 +261,8 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req,
 router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
   if (req.body && req.body.endpoint) {
     const sub = req.body;
-    pushSubscriptions.push(sub);
+    // Avoid duplicates
+    pushSubscriptions.set(sub.endpoint, sub);
 
     // Persist to database
     try {
@@ -241,7 +271,7 @@ router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
       const p256dh = keys.p256dh || '';
       const auth = keys.auth || '';
       await pool.query(
-        'INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)',
+        'INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE p256dh = VALUES(p256dh), auth = VALUES(auth)',
         [userId, endpoint, p256dh, auth]
       );
     } catch (err) {
