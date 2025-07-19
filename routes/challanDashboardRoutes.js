@@ -19,11 +19,77 @@ const { isAuthenticated } = require('../middlewares/auth');
 const FISCAL_YEAR = '25-26';                             // DC/25-26/…
 // IDs of users that act as washing vendors (consignees)
 const washers       = [49, 62, 59, 56, 57, 58, 60, 54, 64, 61, 115, 116];
+const washersSet    = new Set(washers);
 const jeansAssembly = [44, 13];
+const jeansAssemblySet = new Set(jeansAssembly);
 const WASHER_SHORT_CODES = {
   49:'AW', 62:'MW', 59:'MT', 56:'VW', 57:'SB', 58:'PE',
   60:'SG', 54:'RE', 64:'AE', 61:'HP', 115:'RW', 116:'SD'
 };
+
+// --------------------------------------------------------------------
+// STATIC DATA – defined once to avoid recreation per request
+// --------------------------------------------------------------------
+const sender = {
+  name   : 'KOTTY LIFESTYLE PRIVATE LIMITED',
+  address: 'GB-65, BHARAT VIHAR, LAKKARPUR, FARIDABAD, HARYANA, Haryana 121009',
+  gstin  : '06AAGCK0951K1ZH',
+  state  : '06-Haryana',
+  pan    : 'AAGCK0951K'
+};
+
+const consigneeMapping = {
+  49:{name:'A. D. S. ENTERPRISES',
+      gstin:'07OHFPK0221P1Z0',
+      address:'I-112, BLOCK I, BLOCK I, JAITPUR EXTN PART 1 BADARPUR, New Delhi, South East Delhi, Delhi, 110044',
+      placeOfSupply:'07-DELHI'},
+  62:{name:'MEENA TRADING WASHER',
+      gstin:'09DERPG5827R1ZF',
+      address:'Ground Floor, S 113, Harsha Compound, Loni Road Industrial Area, Mohan Nagar, Ghaziabad, Uttar Pradesh, 201003',
+      placeOfSupply:'09-UTTAR PRADESH'},
+  59:{name:'MAA TARA ENTERPRISES',
+      gstin:'07AMLPM6699N1ZX',
+      address:'G/F, B/P R/S, B-200, Main Sindhu Farm Road, Meethapur Extension, New Delhi, South East Delhi, Delhi, 110044',
+      placeOfSupply:'07-DELHI'},
+  56:{name:'VAISHNAVI WASHING',
+      gstin:'09BTJPM9580J1ZU',
+      address:'VILL-ASGARPUR, SEC-126, NOIDA, UTTAR PRADESH, Gautambuddha Nagar, Uttar Pradesh, 201301',
+      placeOfSupply:'09-UTTAR PRADESH'},
+  57:{name:'SHREE BALA JI WASHING',
+      gstin:'07ARNPP7012K1ZF',
+      address:'KH NO.490/1/2/3, VILLAGE MOLARBAND, NEAR SAPERA BASTI, BADARPUR, South Delhi, Delhi, 110044',
+      placeOfSupply:'07-DELHI'},
+  58:{name:'PRITY ENTERPRISES',
+      gstin:'07BBXPS1234F1ZD',
+      address:'G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044',
+      placeOfSupply:'07-DELHI'},
+  60:{name:'SHREE GANESH WASHING',
+      gstin:'06AHPPC4743G1ZE',
+      address:'2/2,6-2, KITA 2, AREA 7, KILLLA NO. 1/2/2, SIDHOLA, TIGAON, Faridabad, Haryana, 121101',
+      placeOfSupply:'06-HARYANA'},
+  54:{name:'RAJ ENTERPRISES WASHING',
+      gstin:'07KWWPS3671F1ZL',
+      address:'H No-199J Gali no-6, Block - A, Numbardar Colony Meethapur, Badarpur, New Delhi, South East Delhi, Delhi, 110044',
+      placeOfSupply:'07-DELHI'},
+  64:{name:'ANSHIK ENTERPRISES WASHING',
+      gstin:'09BGBPC8487K1ZX',
+      address:'00, Sultanpur, Main Rasta, Near J P Hospital, Noida, Gautambuddha Nagar, Uttar Pradesh, 201304',
+      placeOfSupply:'09-UTTAR PRADESH'},
+  61:{name:'H.P GARMENTS',
+      gstin:'06CVKPS2554J1Z4',
+      address:'PLOT NO-5, NANGLA GAJI PUR ROAD, NEAR ANTRAM CHOWK, Nangla Gujran, Faridabad, Haryana, 121005',
+      placeOfSupply:'06-HARYANA'},
+  115:{name:'RADHIKA ENTERPRISES',
+       gstin:'07AHFPY6350B1ZB',
+       address:'PLOT NO.B-78, SINDHU FARM ROAD, MEETHAPUR, BADARPUR, South Delhi, Delhi, 110044',
+       placeOfSupply:'07-DELHI'},
+  116:{name:'S S DYEING HOUSE',
+       gstin:'07AGFPC9403N1ZA',
+       address:'HOUSE NO 65, GALI NO 6 LAKHPAT COLONY, PART 2 MEETHAPUR EXTN.BADARPUR, South Delhi, Delhi, 110044',
+       placeOfSupply:'07-DELHI'}
+};
+
+const RATE = 200;
 
 // --------------------------------------------------------------------
 // HELPER: getNextChallanCounter – transaction-safe
@@ -85,7 +151,7 @@ const EXCLUDE_USED_LOTS_CLAUSE = `
 router.get('/', isAuthenticated, async (req,res)=>{
   try {
     const userId = req.session.user.id;
-    if (!jeansAssembly.includes(userId)) {
+    if (!jeansAssemblySet.has(userId)) {
       req.flash('error','You are not authorized to view the challan dashboard.');
       return res.redirect('/');
     }
@@ -135,7 +201,7 @@ router.get('/', isAuthenticated, async (req,res)=>{
 router.get('/search', isAuthenticated, async (req,res)=>{
   try {
     const userId = req.session.user.id;
-    if (!jeansAssembly.includes(userId))
+    if (!jeansAssemblySet.has(userId))
       return res.status(403).json({error:'Not authorized to search challans'});
 
     const search  = (req.query.search||'').trim();
@@ -194,7 +260,7 @@ router.get('/search', isAuthenticated, async (req,res)=>{
 router.post('/generate', isAuthenticated, async (req,res)=>{
   try {
     const userId = req.session.user.id;
-    if (!jeansAssembly.includes(userId)) {
+    if (!jeansAssemblySet.has(userId)) {
       req.flash('error','You are not authorized to generate challans.');
       return res.redirect('/');
     }
@@ -230,7 +296,7 @@ router.post('/create', isAuthenticated, async (req,res)=>{
   const conn = await pool.getConnection();
   try {
     const userId = req.session.user.id;
-    if (!jeansAssembly.includes(userId)) {
+    if (!jeansAssemblySet.has(userId)) {
       req.flash('error','You are not authorized to create challans.');
       conn.release(); return res.redirect('/');
     }
@@ -247,7 +313,7 @@ router.post('/create', isAuthenticated, async (req,res)=>{
     }
 
     const washerIDNum = parseInt(washerId,10);
-    if (!washers.includes(washerIDNum)) {
+    if (!washersSet.has(washerIDNum)) {
       req.flash('error','Invalid or unknown washer selected');
       conn.release(); return res.redirect('/challandashboard');
     }
@@ -268,81 +334,19 @@ router.post('/create', isAuthenticated, async (req,res)=>{
       conn.release(); return res.redirect('/challandashboard');
     }
 
-    // avoid duplicates
-    for (const id of washingIds) {
-      const [[exists]] = await conn.query(
-        `SELECT id FROM challan
-          WHERE JSON_SEARCH(items,'one',CAST(? AS CHAR),
-                            NULL,'$[*].washing_id') IS NOT NULL LIMIT 1`,
-        [id]
-      );
-      if (exists) {
-        req.flash('error',`Lot with washing_id=${id} already in challan #${exists.id}`);
-        conn.release(); return res.redirect('/challandashboard');
-      }
+    // avoid duplicates with a single query
+    const [dup] = await conn.query(
+      `SELECT ch.id AS challan_id, jt.washing_id
+         FROM challan ch
+         JOIN JSON_TABLE(ch.items, '$[*]' COLUMNS(washing_id INT PATH '$.washing_id')) jt
+        WHERE jt.washing_id IN (?)
+        LIMIT 1`,
+      [washingIds]
+    );
+    if (dup.length) {
+      req.flash('error',`Lot with washing_id=${dup[0].washing_id} already in challan #${dup[0].challan_id}`);
+      conn.release(); return res.redirect('/challandashboard');
     }
-
-    // ----------------------------------------------------------------
-    //  STATIC DATA
-    // ----------------------------------------------------------------
-    const sender = {
-      name   : 'KOTTY LIFESTYLE PRIVATE LIMITED',
-      address: 'GB-65, BHARAT VIHAR, LAKKARPUR, FARIDABAD, HARYANA, Haryana 121009',
-      gstin  : '06AAGCK0951K1ZH',
-      state  : '06-Haryana',
-      pan    : 'AAGCK0951K'
-    };
-
-    const consigneeMapping = {
-      49:{name:'A. D. S. ENTERPRISES',
-          gstin:'07OHFPK0221P1Z0',
-          address:'I-112, BLOCK I, BLOCK I, JAITPUR EXTN PART 1 BADARPUR, New Delhi, South East Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      62:{name:'MEENA TRADING WASHER',
-          gstin:'09DERPG5827R1ZF',
-          address:'Ground Floor, S 113, Harsha Compound, Loni Road Industrial Area, Mohan Nagar, Ghaziabad, Uttar Pradesh, 201003',
-          placeOfSupply:'09-UTTAR PRADESH'},
-      59:{name:'MAA TARA ENTERPRISES',
-          gstin:'07AMLPM6699N1ZX',
-          address:'G/F, B/P R/S, B-200, Main Sindhu Farm Road, Meethapur Extension, New Delhi, South East Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      56:{name:'VAISHNAVI WASHING',
-          gstin:'09BTJPM9580J1ZU',
-          address:'VILL-ASGARPUR, SEC-126, NOIDA, UTTAR PRADESH, Gautambuddha Nagar, Uttar Pradesh, 201301',
-          placeOfSupply:'09-UTTAR PRADESH'},
-      57:{name:'SHREE BALA JI WASHING',
-          gstin:'07ARNPP7012K1ZF',
-          address:'KH NO.490/1/2/3, VILLAGE MOLARBAND, NEAR SAPERA BASTI, BADARPUR, South Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      58:{name:'PRITY ENTERPRISES',
-          gstin:'07BBXPS1234F1ZD',
-          address:'G/F, CG-21-A, SHOP PUL PEHLAD PUR, New Delhi, South East Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      60:{name:'SHREE GANESH WASHING',
-          gstin:'06AHPPC4743G1ZE',
-          address:'2/2,6-2, KITA 2, AREA 7, KILLLA NO. 1/2/2, SIDHOLA, TIGAON, Faridabad, Haryana, 121101',
-          placeOfSupply:'06-HARYANA'},
-      54:{name:'RAJ ENTERPRISES WASHING',
-          gstin:'07KWWPS3671F1ZL',
-          address:'H No-199J Gali no-6, Block - A, Numbardar Colony Meethapur, Badarpur, New Delhi, South East Delhi, Delhi, 110044',
-          placeOfSupply:'07-DELHI'},
-      64:{name:'ANSHIK ENTERPRISES WASHING',
-          gstin:'09BGBPC8487K1ZX',
-          address:'00, Sultanpur, Main Rasta, Near J P Hospital, Noida, Gautambuddha Nagar, Uttar Pradesh, 201304',
-          placeOfSupply:'09-UTTAR PRADESH'},
-      61:{name:'H.P GARMENTS',
-          gstin:'06CVKPS2554J1Z4',
-          address:'PLOT NO-5, NANGLA GAJI PUR ROAD, NEAR ANTRAM CHOWK, Nangla Gujran, Faridabad, Haryana, 121005',
-          placeOfSupply:'06-HARYANA'},
-      115:{name:'RADHIKA ENTERPRISES',
-           gstin:'07AHFPY6350B1ZB',
-           address:'PLOT NO.B-78, SINDHU FARM ROAD, MEETHAPUR, BADARPUR, South Delhi, Delhi, 110044',
-           placeOfSupply:'07-DELHI'},
-      116:{name:'S S DYEING HOUSE',
-           gstin:'07AGFPC9403N1ZA',
-           address:'HOUSE NO 65, GALI NO 6 LAKHPAT COLONY, PART 2 MEETHAPUR EXTN.BADARPUR, South Delhi, Delhi, 110044',
-           placeOfSupply:'07-DELHI'}
-    };
 
     const consignee = consigneeMapping[washerIDNum];
     if (!consignee) {
@@ -353,7 +357,6 @@ router.post('/create', isAuthenticated, async (req,res)=>{
     // ----------------------------------------------------------------
     //  Item meta
     // ----------------------------------------------------------------
-    const RATE = 200;
     items.forEach(it=>{
       it.hsnSac           = '62034200';
       it.rate             = RATE;
@@ -432,8 +435,8 @@ router.get('/view/:challanId', isAuthenticated, async (req,res)=>{
     }
     const ch = rows[0];
 
-    if (jeansAssembly.includes(userId)) {
-      /* ok */ } else if (washers.includes(userId)) {
+    if (jeansAssemblySet.has(userId)) {
+      /* ok */ } else if (washersSet.has(userId)) {
       if (ch.consignee_id !== userId) {
         req.flash('error','Not authorized to view this challan.'); return res.redirect('/');
       }
@@ -495,9 +498,9 @@ router.get('/challanlist', isAuthenticated, async (req,res)=>{
     let sql = 'SELECT * FROM challan ';
     const params = [];
 
-    if (washers.includes(userId)) {
+    if (washersSet.has(userId)) {
       sql += 'WHERE consignee_id=? '; params.push(userId);
-    } else if (jeansAssembly.includes(userId)) {
+    } else if (jeansAssemblySet.has(userId)) {
       sql += 'WHERE 1 ';
     } else {
       req.flash('error','Not authorized to view challan list'); return res.redirect('/');
