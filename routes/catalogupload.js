@@ -17,6 +17,10 @@ const {
 const s3     = new S3Client({ region: 'ap-south-1' });
 const BUCKET = 'my-app-uploads-kotty';
 
+// In memory cache for searches { key: { data, ts } }
+const searchCache = new Map();
+const SEARCH_TTL  = 10 * 60 * 1000; // 10 minutes
+
 // Simple in-memory cache for marketplaces to avoid hitting DB on every request
 let marketCache = { data: null, ts: 0 };
 const MARKET_TTL = 5 * 60 * 1000; // 5 minutes
@@ -79,6 +83,48 @@ function listSql(userId, marketplaceId, lastId) {
   return { sql, args };
 }
 
+async function searchFiles(userId, marketplaceId, term) {
+  const cacheKey = `${userId}-${marketplaceId}-${term}`;
+  const now = Date.now();
+  const cached = searchCache.get(cacheKey);
+  if (cached && now - cached.ts < SEARCH_TTL) return cached.data;
+
+  const [rows] = await pool.query(
+    `SELECT id, filename, original_filename
+       FROM uploaded_files
+      WHERE user_id=? AND marketplace_id=?
+      ORDER BY uploaded_at DESC`,
+    [userId, marketplaceId]
+  );
+
+  const matches = [];
+  const batch = 5; // limit concurrent S3 fetches
+  for (let i = 0; i < rows.length; i += batch) {
+    const slice = rows.slice(i, i + batch);
+    const results = await Promise.all(slice.map(async r => {
+      const data = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: r.filename }));
+      if (r.filename.toLowerCase().endsWith('.csv')) {
+        for await (const chunk of data.Body) {
+          if (chunk.toString('utf8').toLowerCase().includes(term)) return r;
+        }
+        return null;
+      }
+      const chunks = [];
+      for await (const c of data.Body) chunks.push(c);
+      const wb = XLSX.read(Buffer.concat(chunks), { type: 'buffer' });
+      for (const sn of wb.SheetNames) {
+        const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
+        if (JSON.stringify(j).toLowerCase().includes(term)) return r;
+      }
+      return null;
+    }));
+    results.forEach(r => { if (r) matches.push(r); });
+  }
+
+  searchCache.set(cacheKey, { data: matches, ts: now });
+  return matches;
+}
+
 // GET /catalogUpload — main page with initial batch
 router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
   const userId        = req.session.user.id;
@@ -136,16 +182,17 @@ router.post(
 
       let originalName = req.file.originalname;
       const today      = new Date().toISOString().slice(0,10);
-      const [[{ cnt }]] = await pool.query(`
-        SELECT COUNT(*) AS cnt 
-          FROM uploaded_files 
+      const [[dup]] = await pool.query(`
+        SELECT 1
+          FROM uploaded_files
          WHERE user_id=?
            AND marketplace_id=?
            AND original_filename=?
            AND DATE(uploaded_at)=?
+         LIMIT 1
       `, [userId, marketplaceId, originalName, today]);
 
-      if (cnt > 0) {
+      if (dup) {
         const ext  = path.extname(originalName);
         const base = path.basename(originalName, ext);
         originalName = `${base}_${today}${ext}`;
@@ -177,37 +224,7 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
   }
 
   try {
-    const [rows] = await pool.query(`
-      SELECT id, filename, original_filename
-        FROM uploaded_files
-       WHERE user_id=? AND marketplace_id=?
-       ORDER BY uploaded_at DESC
-    `, [userId, marketplaceId]);
-
-    const matches = [];
-    const batch = 5; // limit concurrent S3 fetches
-    for (let i = 0; i < rows.length; i += batch) {
-      const slice = rows.slice(i, i + batch);
-      const results = await Promise.all(slice.map(async r => {
-        const data = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: r.filename }));
-        if (r.filename.toLowerCase().endsWith('.csv')) {
-          for await (const chunk of data.Body) {
-            if (chunk.toString('utf8').toLowerCase().includes(term)) return r;
-          }
-          return null;
-        }
-        const chunks = [];
-        for await (const c of data.Body) chunks.push(c);
-        const buf = Buffer.concat(chunks);
-        const wb = XLSX.read(buf, { type: 'buffer' });
-        for (const sn of wb.SheetNames) {
-          const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
-          if (JSON.stringify(j).toLowerCase().includes(term)) return r;
-        }
-        return null;
-      }));
-      results.forEach(r => { if (r) matches.push(r); });
-    }
+    const matches = await searchFiles(userId, marketplaceId, term);
 
     if (!matches.length) {
       req.flash('error','No matching files found.');
@@ -270,6 +287,7 @@ router.get(
   async (req, res) => {
     try {
       // 1) Detailed rows for listing
+      const limit = parseInt(req.query.limit, 10) || 500;
       const [files] = await pool.query(`
         SELECT uf.id,
                u.username,
@@ -280,7 +298,8 @@ router.get(
           JOIN users u ON uf.user_id = u.id
           JOIN marketplaces m ON uf.marketplace_id = m.id
          ORDER BY uf.uploaded_at DESC
-      `);
+         LIMIT ?
+      `, [limit]);
 
       // 2) Aggregated counts per user & marketplace
       const [aggData] = await pool.query(`
