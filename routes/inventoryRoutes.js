@@ -4,18 +4,43 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isStoreEmployee } = require('../middlewares/auth');
 const ExcelJS = require('exceljs');
 
+// Simple in-memory cache for goods list
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let goodsCache = { data: null, expiry: 0 };
+async function getGoodsCached() {
+  const now = Date.now();
+  if (goodsCache.data && goodsCache.expiry > now) {
+    return goodsCache.data;
+  }
+  const [rows] = await pool.query(
+    'SELECT * FROM goods_inventory ORDER BY description_of_goods, size'
+  );
+  goodsCache = { data: rows, expiry: now + CACHE_TTL_MS };
+  return rows;
+}
+
 // GET dashboard
 router.get('/dashboard', isAuthenticated, isStoreEmployee, async (req, res) => {
   try {
-    const [goods] = await pool.query('SELECT * FROM goods_inventory ORDER BY description_of_goods, size');
-    const [incoming] = await pool.query(`SELECT i.*, g.description_of_goods, g.size, g.unit
-                                         FROM incoming_data i
-                                         JOIN goods_inventory g ON i.goods_id = g.id
-                                         ORDER BY i.added_at DESC LIMIT 50`);
-    const [dispatched] = await pool.query(`SELECT d.*, g.description_of_goods, g.size, g.unit
-                                            FROM dispatched_data d
-                                            JOIN goods_inventory g ON d.goods_id = g.id
-                                            ORDER BY d.dispatched_at DESC LIMIT 50`);
+    const [goods, incoming, dispatched] = await Promise.all([
+      getGoodsCached(),
+      pool
+        .query(
+          `SELECT i.*, g.description_of_goods, g.size, g.unit
+             FROM incoming_data i
+             JOIN goods_inventory g ON i.goods_id = g.id
+            ORDER BY i.added_at DESC LIMIT 50`
+        )
+        .then(r => r[0]),
+      pool
+        .query(
+          `SELECT d.*, g.description_of_goods, g.size, g.unit
+             FROM dispatched_data d
+             JOIN goods_inventory g ON d.goods_id = g.id
+            ORDER BY d.dispatched_at DESC LIMIT 50`
+        )
+        .then(r => r[0])
+    ]);
     res.render('inventoryDashboard', { user: req.session.user, goods, incoming, dispatched });
   } catch (err) {
     console.error('Error loading inventory dashboard:', err);
@@ -64,15 +89,22 @@ router.post('/dispatch', isAuthenticated, isStoreEmployee, async (req, res) => {
   try {
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    const [[row]] = await conn.query('SELECT qty FROM goods_inventory WHERE id = ?', [goodsId]);
-    if (!row || row.qty < qty) {
+
+    // Atomically reduce quantity if enough stock is available
+    const [updateRes] = await conn.query(
+      'UPDATE goods_inventory SET qty = qty - ? WHERE id = ? AND qty >= ?',[qty, goodsId, qty]
+    );
+    if (!updateRes.affectedRows) {
       req.flash('error', 'Quantity exceeds available');
       await conn.rollback();
       return res.redirect('/inventory/dashboard');
     }
-    await conn.query('INSERT INTO dispatched_data (goods_id, quantity, remark, dispatched_by, dispatched_at) VALUES (?, ?, ?, ?, NOW())',
-      [goodsId, qty, remark, req.session.user.id]);
-    await conn.query('UPDATE goods_inventory SET qty = qty - ? WHERE id = ?', [qty, goodsId]);
+
+    await conn.query(
+      'INSERT INTO dispatched_data (goods_id, quantity, remark, dispatched_by, dispatched_at) VALUES (?, ?, ?, ?, NOW())',
+      [goodsId, qty, remark, req.session.user.id]
+    );
+
     await conn.commit();
     req.flash('success', 'Goods dispatched');
   } catch (err) {
@@ -88,11 +120,18 @@ router.post('/dispatch', isAuthenticated, isStoreEmployee, async (req, res) => {
 // Excel download for incoming and inventory history
 router.get('/download/incoming', isAuthenticated, isStoreEmployee, async (req, res) => {
   try {
-    const [goods] = await pool.query('SELECT * FROM goods_inventory ORDER BY description_of_goods, size');
-    const [incoming] = await pool.query(`SELECT i.*, g.description_of_goods, g.size, g.unit
-                                         FROM incoming_data i
-                                         JOIN goods_inventory g ON i.goods_id = g.id
-                                         ORDER BY i.added_at`);
+    const [goods, incoming] = await Promise.all([
+      getGoodsCached(),
+      pool
+        .query(
+          `SELECT i.*, g.description_of_goods, g.size, g.unit
+             FROM incoming_data i
+             JOIN goods_inventory g ON i.goods_id = g.id
+            ORDER BY i.added_at`
+        )
+        .then(r => r[0])
+    ]);
+
     const workbook = new ExcelJS.Workbook();
     const inventorySheet = workbook.addWorksheet('CurrentInventory');
     inventorySheet.columns = [
@@ -101,7 +140,9 @@ router.get('/download/incoming', isAuthenticated, isStoreEmployee, async (req, r
       { header: 'Unit', key: 'unit', width: 10 },
       { header: 'Qty', key: 'qty', width: 10 },
     ];
-    goods.forEach(g => inventorySheet.addRow({ desc: g.description_of_goods, size: g.size, unit: g.unit, qty: g.qty }));
+    inventorySheet.addRows(
+      goods.map(g => ({ desc: g.description_of_goods, size: g.size, unit: g.unit, qty: g.qty }))
+    );
 
     const historySheet = workbook.addWorksheet('IncomingHistory');
     historySheet.columns = [
@@ -113,15 +154,17 @@ router.get('/download/incoming', isAuthenticated, isStoreEmployee, async (req, r
       { header: 'Datetime', key: 'dt', width: 20 },
       { header: 'Remark', key: 'remark', width: 30 }
     ];
-    incoming.forEach(r => historySheet.addRow({
-      desc: r.description_of_goods,
-      size: r.size,
-      unit: r.unit,
-      quantity: r.quantity,
-      user: r.added_by,
-      dt: r.added_at,
-      remark: r.remark || ''
-    }));
+    historySheet.addRows(
+      incoming.map(r => ({
+        desc: r.description_of_goods,
+        size: r.size,
+        unit: r.unit,
+        quantity: r.quantity,
+        user: r.added_by,
+        dt: r.added_at,
+        remark: r.remark || ''
+      }))
+    );
     res.setHeader('Content-Disposition', 'attachment; filename="incoming.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
@@ -151,15 +194,17 @@ router.get('/download/dispatched', isAuthenticated, isStoreEmployee, async (req,
       { header: 'User', key: 'user', width: 10 },
       { header: 'Datetime', key: 'dt', width: 20 }
     ];
-    rows.forEach(r => sheet.addRow({
-      desc: r.description_of_goods,
-      size: r.size,
-      unit: r.unit,
-      qty: r.quantity,
-      remark: r.remark || '',
-      user: r.dispatched_by,
-      dt: r.dispatched_at
-    }));
+    sheet.addRows(
+      rows.map(r => ({
+        desc: r.description_of_goods,
+        size: r.size,
+        unit: r.unit,
+        qty: r.quantity,
+        remark: r.remark || '',
+        user: r.dispatched_by,
+        dt: r.dispatched_at
+      }))
+    );
     res.setHeader('Content-Disposition', 'attachment; filename="dispatched.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
