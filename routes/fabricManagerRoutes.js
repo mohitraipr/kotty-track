@@ -8,8 +8,8 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const { body, validationResult } = require('express-validator');
-const path = require('path');
 
 // Configure Multer for file uploads
 const upload = multer({ 
@@ -41,6 +41,34 @@ function formatDateToMySQL(dateObj) {
     const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+// Simple in-memory cache for vendor list
+let vendorCache = { data: null, expiry: 0 };
+async function getVendorsCached() {
+    const now = Date.now();
+    if (vendorCache.data && vendorCache.expiry > now) {
+        return vendorCache.data;
+    }
+    const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+    vendorCache = { data: vendors, expiry: now + 5 * 60 * 1000 }; // cache 5 minutes
+    return vendors;
+}
+
+async function getVendorIdsMap(names) {
+    if (!names.length) return new Map();
+    const [rows] = await pool.query('SELECT id, name FROM vendors WHERE name IN (?)', [names]);
+    const map = new Map();
+    rows.forEach(r => map.set(r.name, r.id));
+    return map;
+}
+
+async function getInvoicesMap(invoiceNos) {
+    if (!invoiceNos.length) return new Map();
+    const [rows] = await pool.query('SELECT id, vendor_id, invoice_no FROM fabric_invoices WHERE invoice_no IN (?)', [invoiceNos]);
+    const map = new Map();
+    rows.forEach(r => map.set(r.invoice_no, { id: r.id, vendor_id: r.vendor_id }));
+    return map;
 }
 
 /**
@@ -103,8 +131,8 @@ router.get('/dashboard', isAuthenticated, isFabricManager, async (req, res) => {
 
         const [fabricInvoices] = await pool.query(dataQuery, dataParams);
 
-        // Fetch all vendors for display purposes
-        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+        // Fetch all vendors with simple caching
+        const vendors = await getVendorsCached();
 
         // Pass variables to the EJS view
         res.render('fabricManagerDashboard', {
@@ -575,8 +603,7 @@ router.get('/invoice/:id/download-rolls', isAuthenticated, isFabricManager, asyn
  */
 router.get('/bulk-upload', isAuthenticated, isFabricManager, async (req, res) => {
     try {
-        // Fetch all vendors for the upload form
-        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+        const vendors = await getVendorsCached();
         res.render('bulkUpload', {
             user: req.session.user,
             tableName: 'fabric_invoices',
@@ -612,9 +639,12 @@ router.post('/bulk-upload/invoices',
             const workbook = xlsx.readFile(req.file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null }); // Use defval to handle empty cells
+            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null });
 
-            // Validate and prepare data
+            // Preload vendor IDs to minimize queries
+            const uniqueVendorNames = [...new Set(jsonData.map(r => r.vendor_name.toString().trim()))];
+            const vendorMap = await getVendorIdsMap(uniqueVendorNames);
+
             const preparedData = [];
             let rowNumber = 2; // Assuming the first row is headers
 
@@ -627,27 +657,13 @@ router.post('/bulk-upload/invoices',
                     }
                 }
 
-                // Resolve vendor_id from vendor_name
+                // Resolve vendor_id from vendor_name using cached map
                 const vendorName = row.vendor_name.toString().trim();
-                const [vendorRows] = await pool.query(
-                    'SELECT id FROM vendors WHERE name = ?',
-                    [vendorName]
-                );
-
-                let vendor_id;
-                if (vendorRows.length > 0) {
-                    vendor_id = vendorRows[0].id;
-                } else {
-                    // Option 1: Throw an error
-                    // throw new Error(`Vendor "${vendorName}" does not exist in row ${rowNumber}`);
-
-                    // Option 2: Create a new vendor
-                    const insertVendorQuery = `
-                        INSERT INTO vendors (name)
-                        VALUES (?)
-                    `;
-                    const [newVendor] = await pool.query(insertVendorQuery, [vendorName]);
+                let vendor_id = vendorMap.get(vendorName);
+                if (!vendor_id) {
+                    const [newVendor] = await pool.query('INSERT INTO vendors (name) VALUES (?)', [vendorName]);
                     vendor_id = newVendor.insertId;
+                    vendorMap.set(vendorName, vendor_id);
                 }
 
                 // Convert dates if necessary
@@ -690,20 +706,18 @@ router.post('/bulk-upload/invoices',
                 await connection.beginTransaction();
 
                 const insertQuery = `
-                    INSERT INTO fabric_invoices 
+                    INSERT INTO fabric_invoices
                     (invoice_no, vendor_id, date_invoice, date_received, total_roll_quantity, fabric_type, invoice_weight, short_weight, received_weight, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES ?
                 `;
 
-                for (const data of preparedData) {
-                    await connection.query(insertQuery, data);
-                }
+                await connection.query(insertQuery, [preparedData]);
 
                 await connection.commit();
                 connection.release();
 
                 // Delete the uploaded file after processing
-                fs.unlinkSync(req.file.path);
+                await fsPromises.unlink(req.file.path);
 
                 req.flash('success', 'Bulk upload of Fabric Invoices was successful.');
                 res.redirect('/fabric-manager/dashboard');
@@ -712,7 +726,7 @@ router.post('/bulk-upload/invoices',
                 connection.release();
 
                 // Delete the uploaded file after processing
-                fs.unlinkSync(req.file.path);
+                await fsPromises.unlink(req.file.path);
 
                 console.error('Transaction Error during bulk upload:', transactionError);
                 if (transactionError.code === 'ER_DUP_ENTRY') {
@@ -724,10 +738,7 @@ router.post('/bulk-upload/invoices',
             }
         } catch (err) {
             console.error('Error during bulk upload:', err);
-            // Delete the uploaded file after processing
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
+            try { await fsPromises.unlink(req.file.path); } catch (_) {}
             req.flash('error', `Bulk upload failed: ${err.message}`);
             res.redirect('/fabric-manager/bulk-upload');
         }
@@ -740,8 +751,7 @@ router.post('/bulk-upload/invoices',
  */
 router.get('/bulk-upload/rolls', isAuthenticated, isFabricManager, async (req, res) => {
     try {
-        // Fetch all vendors for the upload form
-        const [vendors] = await pool.query('SELECT id, name FROM vendors ORDER BY name ASC');
+        const vendors = await getVendorsCached();
         res.render('bulkUploadRolls', {
             user: req.session.user,
             tableName: 'fabric_invoice_rolls',
@@ -810,9 +820,12 @@ router.post('/bulk-upload/rolls',
             const workbook = xlsx.readFile(req.file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null }); // Use defval to handle empty cells
+            const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: null });
 
-            // Validate and prepare data
+            // Preload invoice IDs for faster lookup
+            const invoiceNos = [...new Set(jsonData.map(r => r.invoice_no.toString().trim()))];
+            const invoiceMap = await getInvoicesMap(invoiceNos);
+
             const preparedData = [];
             let rowNumber = 2; // Assuming the first row is headers
 
@@ -831,19 +844,14 @@ router.post('/bulk-upload/rolls',
                     throw new Error(`Invalid unit '${row.unit}' in row ${rowNumber}. Must be 'METER' or 'KG'.`);
                 }
 
-                // Resolve invoice_id from invoice_no
+                // Resolve invoice_id from invoice_no using preloaded map
                 const invoiceNo = row.invoice_no.toString().trim();
-                const [invoiceRows] = await pool.query(
-                    'SELECT id, vendor_id FROM fabric_invoices WHERE invoice_no = ?',
-                    [invoiceNo]
-                );
-
-                if (invoiceRows.length === 0) {
+                const invoice = invoiceMap.get(invoiceNo);
+                if (!invoice) {
                     throw new Error(`Fabric Invoice "${invoiceNo}" does not exist in row ${rowNumber}`);
                 }
-
-                const invoice_id = invoiceRows[0].id;
-                const vendor_id = invoiceRows[0].vendor_id;
+                const invoice_id = invoice.id;
+                const vendor_id = invoice.vendor_id;
 
                 // Check for duplicate roll_no within the same vendor in the uploaded data
                 const duplicateInPreparedData = preparedData.find(
@@ -880,20 +888,18 @@ router.post('/bulk-upload/rolls',
                 await connection.beginTransaction();
 
                 const insertQuery = `
-                    INSERT INTO fabric_invoice_rolls 
+                    INSERT INTO fabric_invoice_rolls
                     (invoice_id, roll_no, vendor_id, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES ?
                 `;
 
-                for (const data of preparedData) {
-                    await connection.query(insertQuery, data);
-                }
+                await connection.query(insertQuery, [preparedData]);
 
                 await connection.commit();
                 connection.release();
 
                 // Delete the uploaded file after processing
-                fs.unlinkSync(req.file.path);
+                await fsPromises.unlink(req.file.path);
 
                 req.flash('success', 'Bulk upload of Fabric Invoice Rolls was successful.');
                 res.redirect('/fabric-manager/dashboard');
@@ -902,7 +908,7 @@ router.post('/bulk-upload/rolls',
                 connection.release();
 
                 // Delete the uploaded file after processing
-                fs.unlinkSync(req.file.path);
+                await fsPromises.unlink(req.file.path);
 
                 // Handle duplicate entry error for (vendor_id, roll_no)
                 if (transactionError.code === 'ER_DUP_ENTRY') {
@@ -915,10 +921,7 @@ router.post('/bulk-upload/rolls',
             }
         } catch (err) {
             console.error('Error during bulk upload of rolls:', err);
-            // Delete the uploaded file after processing
-            if (fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
+            try { await fsPromises.unlink(req.file.path); } catch (_) {}
             req.flash('error', `Bulk upload failed: ${err.message}`);
             res.redirect('/fabric-manager/bulk-upload/rolls');
         }
