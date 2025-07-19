@@ -26,57 +26,32 @@ const upload = multer({ storage });
 router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    // Fetch approved assignments for the user
-    const [faRows] = await pool.query(`
-      SELECT fa.*,
-             CASE
-               WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
-               WHEN fa.washing_in_data_id IS NOT NULL THEN 'Washing'
-             END AS department
-      FROM finishing_assignments fa
-      WHERE fa.user_id = ? AND fa.is_approved = 1
-      ORDER BY fa.assigned_on DESC
-    `, [userId]);
 
-    const finalAssignments = [];
-    for (let fa of faRows) {
-      let lotNo = null, sku = null;
-      if (fa.stitching_assignment_id) {
-        const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
-        if (!sd) continue;
-        lotNo = sd.lot_no;
-        sku = sd.sku;
-      } else if (fa.washing_in_data_id) {
-        const [[wd]] = await pool.query(`SELECT * FROM washing_in_data WHERE id = ?`, [fa.washing_in_data_id]);
-        if (!wd) continue;
-        lotNo = wd.lot_no;
-        sku = wd.sku;
-      } else {
-        continue;
-      }
+    // Fetch all details in one go to avoid per-row queries
+    const [faRows] = await pool.query(
+      `SELECT fa.*, 
+              COALESCE(sd.lot_no, wd.lot_no) AS lot_no,
+              COALESCE(sd.sku, wd.sku) AS sku,
+              cl.remark AS cutting_remark,
+              cl.sku    AS cutting_sku,
+              CASE
+                WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
+                WHEN fa.washing_in_data_id IS NOT NULL THEN 'Washing'
+              END AS department,
+              COALESCE(fdCnt.cnt, 0) AS has_finishing
+       FROM finishing_assignments fa
+       LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+       LEFT JOIN washing_in_data wd ON fa.washing_in_data_id = wd.id
+       LEFT JOIN cutting_lots cl ON cl.lot_no = COALESCE(sd.lot_no, wd.lot_no)
+       LEFT JOIN (SELECT lot_no, COUNT(*) cnt FROM finishing_data GROUP BY lot_no) fdCnt
+              ON fdCnt.lot_no = COALESCE(sd.lot_no, wd.lot_no)
+       WHERE fa.user_id = ? AND fa.is_approved = 1
+       ORDER BY fa.assigned_on DESC`,
+      [userId]
+    );
 
-      // Skip this assignment if finishing_data already exists for this lot_no
-      const [[usedCheck]] = await pool.query(`SELECT COUNT(*) as cnt FROM finishing_data WHERE lot_no = ?`, [lotNo]);
-      if (usedCheck.cnt > 0) continue;
-      
-      // NEW CODE: Fetch cutting data (remark and sku) from cutting_lots using the lotNo
-      let cuttingRemark = '', cuttingSku = '';
-      if (lotNo) {
-        const [[cutData]] = await pool.query(`SELECT remark, sku FROM cutting_lots WHERE lot_no = ? LIMIT 1`, [lotNo]);
-        if (cutData) {
-          cuttingRemark = cutData.remark || '';
-          cuttingSku = cutData.sku || '';
-        }
-      }
-      
-      // Attach values to the assignment object
-      fa.lot_no = lotNo;
-      fa.sku = sku;
-      fa.cutting_remark = cuttingRemark;
-      fa.cutting_sku = cuttingSku;
-      
-      finalAssignments.push(fa);
-    }
+    // Filter assignments already used in finishing_data
+    const finalAssignments = faRows.filter(fa => fa.has_finishing === 0);
 
     const errorMessages = req.flash('error');
     const successMessages = req.flash('success');
@@ -103,38 +78,40 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
     if (isNaN(offset) || offset < 0) offset = 0;
     const limit = 5;
     const likeStr = `%${searchTerm}%`;
-    const [rows] = await pool.query(`
-      SELECT *
-      FROM finishing_data
-      WHERE user_id = ? AND (lot_no LIKE ? OR sku LIKE ?)
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, [userId, likeStr, likeStr, limit, offset]);
+    const [rows] = await pool.query(
+      `SELECT *
+         FROM finishing_data
+        WHERE user_id = ? AND (lot_no LIKE ? OR sku LIKE ?)
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?`,
+      [userId, likeStr, likeStr, limit, offset]
+    );
     if (!rows.length) return res.json({ data: [], hasMore: false });
+
     const ids = rows.map(r => r.id);
-    const [sizeRows] = await pool.query(`
-      SELECT *
-      FROM finishing_data_sizes
-      WHERE finishing_data_id IN (?)
-    `, [ids]);
+    // Fetch sizes and dispatched totals for all entries at once
+    const [sizeRows] = await pool.query(
+      `SELECT fds.*, COALESCE(d.qty,0) AS dispatched
+         FROM finishing_data_sizes fds
+         LEFT JOIN (
+             SELECT finishing_data_id, size_label, SUM(quantity) AS qty
+               FROM finishing_dispatches
+              WHERE finishing_data_id IN (?)
+              GROUP BY finishing_data_id, size_label
+         ) d ON fds.finishing_data_id=d.finishing_data_id AND fds.size_label=d.size_label
+        WHERE fds.finishing_data_id IN (?)`,
+      [ids, ids]
+    );
     const sizesMap = {};
     sizeRows.forEach(s => {
       if (!sizesMap[s.finishing_data_id]) sizesMap[s.finishing_data_id] = [];
-      sizesMap[s.finishing_data_id].push(s);
+      sizesMap[s.finishing_data_id].push({ id: s.id, size_label: s.size_label, pieces: s.pieces, dispatched: s.dispatched });
     });
-    const dataOut = rows.map(r => ({ ...r, sizes: sizesMap[r.id] || [] }));
-    for (const item of dataOut) {
-      let isFull = true;
-      for (const sz of item.sizes) {
-        const [[dispSum]] = await pool.query(`
-          SELECT COALESCE(SUM(quantity),0) as dispatched
-          FROM finishing_dispatches
-          WHERE finishing_data_id = ? AND size_label = ?
-        `, [item.id, sz.size_label]);
-        if (dispSum.dispatched < sz.pieces) { isFull = false; break; }
-      }
-      item.fullyDispatched = isFull;
-    }
+    const dataOut = rows.map(r => {
+      const sizes = sizesMap[r.id] || [];
+      const fullyDispatched = !sizes.some(sz => sz.dispatched < sz.pieces);
+      return { ...r, sizes, fullyDispatched };
+    });
     const [[{ totalCount }]] = await pool.query(`
       SELECT COUNT(*) AS totalCount
       FROM finishing_data
@@ -180,18 +157,23 @@ router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMa
     `, [dataIdValue]);
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
-    const result = [];
-    for (const lbl of assignedLabels) {
+    // Fetch used count for all labels in a single query
+    const [usedRows] = await pool.query(
+      `SELECT fds.size_label, SUM(fds.pieces) AS used
+         FROM finishing_data_sizes fds
+         JOIN finishing_data fd ON fd.id = fds.finishing_data_id
+        WHERE fd.lot_no = ? AND fds.size_label IN (?)
+        GROUP BY fds.size_label`,
+      [lotNo, assignedLabels]
+    );
+    const usedMap = {};
+    usedRows.forEach(r => { usedMap[r.size_label] = r.used; });
+    const result = assignedLabels.map(lbl => {
       const totalDept = deptMap[lbl] || 0;
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(fds.pieces),0) as usedCount
-        FROM finishing_data_sizes fds JOIN finishing_data fd ON fd.id = fds.finishing_data_id
-        WHERE fd.lot_no = ? AND fds.size_label = ?
-      `, [lotNo, lbl]);
-      const used = usedRow.usedCount || 0;
+      const used = usedMap[lbl] || 0;
       const remain = totalDept - used;
-      result.push({ size_label: lbl, total_produced: totalDept, used, remain: remain < 0 ? 0 : remain });
-    }
+      return { size_label: lbl, total_produced: totalDept, used, remain: remain < 0 ? 0 : remain };
+    });
     return res.json(result);
   } catch (err) {
     console.error('Error finishing get-assignment-sizes:', err);
@@ -255,13 +237,27 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       await conn.rollback(); conn.release();
       return res.redirect('/finishingdashboard');
     }
-    const [deptRows] = await conn.query(`
-      SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?
-    `, [dataIdValue]);
+    const [deptRows] = await conn.query(
+      `SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?`,
+      [dataIdValue]
+    );
     const deptMap = {};
     deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
+
+    const labels = Object.keys(sizesObj);
+    const [usedRows] = await conn.query(
+      `SELECT fds.size_label, SUM(fds.pieces) AS used
+         FROM finishing_data_sizes fds
+         JOIN finishing_data fd ON fd.id = fds.finishing_data_id
+        WHERE fd.lot_no = ? AND fds.size_label IN (?)
+        GROUP BY fds.size_label`,
+      [lotNo, labels]
+    );
+    const usedMap = {};
+    usedRows.forEach(r => { usedMap[r.size_label] = r.used; });
+
     let grandTotal = 0;
-    for (const label in sizesObj) {
+    for (const label of labels) {
       const requested = parseInt(sizesObj[label], 10);
       if (isNaN(requested) || requested < 0) {
         req.flash('error', `Invalid count for size ${label}`);
@@ -270,12 +266,7 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       }
       if (requested === 0) continue;
       const totalDept = deptMap[label] || 0;
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(fds.pieces),0) as usedCount
-        FROM finishing_data_sizes fds JOIN finishing_data fd ON fd.id = fds.finishing_data_id
-        WHERE fd.lot_no = ? AND fds.size_label = ?
-      `, [lotNo, label]);
-      const used = usedRow.usedCount || 0;
+      const used = usedMap[label] || 0;
       const remain = totalDept - used;
       if (requested > remain) {
         req.flash('error', `Cannot request ${requested} for size ${label}; only ${remain} remain.`);
@@ -289,19 +280,22 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
       await conn.rollback(); conn.release();
       return res.redirect('/finishingdashboard');
     }
-    const [ins] = await conn.query(`
-      INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, NOW())
-    `, [userId, lotNo, sku, grandTotal, remark || null, image_url]);
+    const [ins] = await conn.query(
+      `INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, lotNo, sku, grandTotal, remark || null, image_url]
+    );
     const newId = ins.insertId;
-    for (const label in sizesObj) {
+    const sizeInserts = [];
+    for (const label of labels) {
       const requested = parseInt(sizesObj[label], 10) || 0;
-      if (requested > 0) {
-        await conn.query(`
-          INSERT INTO finishing_data_sizes (finishing_data_id, size_label, pieces, created_at)
-          VALUES (?, ?, ?, NOW())
-        `, [newId, label, requested]);
-      }
+      if (requested > 0) sizeInserts.push([newId, label, requested, new Date()]);
+    }
+    if (sizeInserts.length) {
+      await conn.query(
+        'INSERT INTO finishing_data_sizes (finishing_data_id, size_label, pieces, created_at) VALUES ?',
+        [sizeInserts]
+      );
     }
     await conn.commit();
     conn.release();
@@ -656,22 +650,29 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
       SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
     `, [entryId, userId]);
     if (!entry) return res.status(403).json({ error: 'Not found or no permission' });
-    const [sizes] = await pool.query(`
-      SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ?
-    `, [entryId]);
-    const dispatchData = [];
+    const [sizes] = await pool.query(
+      `SELECT fds.*, COALESCE(d.qty,0) AS dispatched
+         FROM finishing_data_sizes fds
+         LEFT JOIN (
+           SELECT size_label, SUM(quantity) AS qty
+             FROM finishing_dispatches
+            WHERE finishing_data_id = ?
+            GROUP BY size_label
+         ) d ON fds.size_label = d.size_label
+        WHERE fds.finishing_data_id = ?`,
+      [entryId, entryId]
+    );
     let allDispatched = true;
-    for (const sz of sizes) {
-      const [[dispatchSum]] = await pool.query(`
-        SELECT COALESCE(SUM(quantity), 0) as dispatched
-        FROM finishing_dispatches
-        WHERE finishing_data_id = ? AND size_label = ?
-      `, [entryId, sz.size_label]);
-      const dispatched = dispatchSum.dispatched || 0;
-      const available = sz.pieces - dispatched;
+    const dispatchData = sizes.map(sz => {
+      const available = sz.pieces - sz.dispatched;
       if (available > 0) allDispatched = false;
-      dispatchData.push({ size_label: sz.size_label, total_produced: sz.pieces, dispatched, available: available < 0 ? 0 : available });
-    }
+      return {
+        size_label: sz.size_label,
+        total_produced: sz.pieces,
+        dispatched: sz.dispatched,
+        available: available < 0 ? 0 : available
+      };
+    });
     return res.json({ sizes: dispatchData, lot_no: entry.lot_no, fullyDispatched: allDispatched });
   } catch (err) {
     console.error('Error in dispatch JSON:', err);
@@ -721,8 +722,25 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
       return res.redirect('/finishingdashboard');
     }
     const [sizeRows] = await conn.query(
-      'SELECT id, size_label, pieces FROM finishing_data_sizes WHERE finishing_data_id = ? ORDER BY id',
-      [entryId]
+      `SELECT fds.id, fds.size_label, fds.pieces,
+              COALESCE(d.qty,0) AS dispatched,
+              COALESCE(dDest.qty,0) AS dest_dispatched
+         FROM finishing_data_sizes fds
+         LEFT JOIN (
+             SELECT size_label, SUM(quantity) AS qty
+               FROM finishing_dispatches
+              WHERE finishing_data_id = ?
+              GROUP BY size_label
+         ) d ON fds.size_label = d.size_label
+         LEFT JOIN (
+             SELECT size_label, SUM(quantity) AS qty
+               FROM finishing_dispatches
+              WHERE finishing_data_id = ? AND destination = ?
+              GROUP BY size_label
+         ) dDest ON fds.size_label = dDest.size_label
+        WHERE fds.finishing_data_id = ?
+        ORDER BY fds.id`,
+      [entryId, entryId, destination, entryId]
     );
 
     // Normalize dispatch sizes so that we always work with an object keyed by label
@@ -753,64 +771,29 @@ router.get('/dispatch/:id/json', isAuthenticated, isFinishingMaster, async (req,
       conn.release();
       return res.redirect('/finishingdashboard');
     }
+    const dispatchInserts = [];
     for (const sz of sizeRows) {
       const size = sz.size_label;
-      const produced = sz.pieces;
       const qty = parseInt(dispatchSizes[size], 10);
-      if (isNaN(qty) || qty <= 0) {
-        if (!isNaN(qty)) console.log(`Skipping size ${size} with invalid qty`, qty);
-        continue;
+      if (isNaN(qty) || qty <= 0) continue;
 
-        console.log(`Skipping size ${size} with invalid qty`, qty);
-        continue;
-      }
-      const [[sizeData]] = await conn.query(`
-        SELECT pieces FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
-      `, [entryId, size]);
-      if (!sizeData) {
-        console.log(`Size data not found for size ${size} and entry ${entryId}`);
-        req.flash('error', `Size ${size} not found.`);
-        await conn.rollback(); conn.release();
-        return res.redirect('/finishingdashboard');
-
-      }
-      const [[dispatchedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(quantity),0) as dispatched
-        FROM finishing_dispatches
-        WHERE finishing_data_id = ? AND size_label = ?
-      `, [entryId, size]);
-      const alreadyDispatched = dispatchedRow.dispatched || 0;
-      const available = produced - alreadyDispatched;
-      console.log(`Size ${size} summary`, {
-        produced,
-        alreadyDispatched,
-        available,
-        requested: qty,
-      });
+      const available = sz.pieces - sz.dispatched;
       if (qty > available) {
-        console.log(`Requested qty exceeds available for size ${size}`);
         req.flash('error', `Cannot dispatch ${qty} for size ${size}; only ${available} available.`);
-        await conn.rollback(); conn.release();
+        await conn.rollback();
+        conn.release();
         return res.redirect('/finishingdashboard');
       }
-      const [[existingDispatch]] = await conn.query(`
-        SELECT COALESCE(SUM(quantity),0) as totalSent
-        FROM finishing_dispatches
-        WHERE finishing_data_id = ? AND size_label = ? AND destination = ?
-      `, [entryId, size, destination]);
-      const totalSentBefore = existingDispatch.totalSent || 0;
-      const newTotalSent = totalSentBefore + qty;
-      await conn.query(`
-        INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `, [entryId, entry.lot_no, destination, size, qty, newTotalSent]);
-      console.log(`Inserted dispatch row`, {
-        entryId,
-        size,
-        qty,
-        destination,
-        newTotalSent,
-      });
+
+      const newTotalSent = sz.dest_dispatched + qty;
+      dispatchInserts.push([entryId, entry.lot_no, destination, size, qty, newTotalSent, new Date(), new Date()]);
+    }
+
+    if (dispatchInserts.length) {
+      await conn.query(
+        'INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at) VALUES ?',
+        [dispatchInserts]
+      );
     }
     await conn.commit();
     conn.release();
@@ -848,31 +831,38 @@ router.post('/dispatch-all/:id', isFinishingMaster, isAuthenticated, async (req,
       await conn.rollback(); conn.release();
       return res.redirect('/finishingdashboard');
     }
-    const [sizes] = await conn.query(`
-      SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ?
-    `, [entryId]);
+    const [sizes] = await conn.query(
+      `SELECT fds.size_label, fds.pieces,
+              COALESCE(d.qty,0) AS dispatched,
+              COALESCE(dDest.qty,0) AS dest_dispatched
+         FROM finishing_data_sizes fds
+         LEFT JOIN (
+             SELECT size_label, SUM(quantity) AS qty
+               FROM finishing_dispatches
+              WHERE finishing_data_id = ?
+              GROUP BY size_label
+         ) d ON fds.size_label = d.size_label
+         LEFT JOIN (
+             SELECT size_label, SUM(quantity) AS qty
+               FROM finishing_dispatches
+              WHERE finishing_data_id = ? AND destination = ?
+              GROUP BY size_label
+         ) dDest ON fds.size_label = dDest.size_label
+        WHERE fds.finishing_data_id = ?`,
+      [entryId, entryId, destination, entryId]
+    );
+    const inserts = [];
     for (const sz of sizes) {
-      const produced = sz.pieces;
-      const [[dispatchSum]] = await conn.query(`
-        SELECT COALESCE(SUM(quantity), 0) as dispatched
-        FROM finishing_dispatches
-        WHERE finishing_data_id = ? AND size_label = ?
-      `, [entryId, sz.size_label]);
-      const alreadyDispatched = dispatchSum.dispatched || 0;
-      const available = produced - alreadyDispatched;
-      if (available > 0) {
-        const [[existingDispatch]] = await conn.query(`
-          SELECT COALESCE(SUM(quantity),0) as totalSent
-          FROM finishing_dispatches
-          WHERE finishing_data_id = ? AND size_label = ? AND destination = ?
-        `, [entryId, sz.size_label, destination]);
-        const totalSentBefore = existingDispatch.totalSent || 0;
-        const newTotalSent = totalSentBefore + available;
-        await conn.query(`
-          INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-        `, [entryId, entry.lot_no, destination, sz.size_label, available, newTotalSent]);
-      }
+      const available = sz.pieces - sz.dispatched;
+      if (available <= 0) continue;
+      const newTotalSent = sz.dest_dispatched + available;
+      inserts.push([entryId, entry.lot_no, destination, sz.size_label, available, newTotalSent, new Date(), new Date()]);
+    }
+    if (inserts.length) {
+      await conn.query(
+        'INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at) VALUES ?',
+        [inserts]
+      );
     }
     await conn.commit();
     conn.release();
@@ -922,51 +912,68 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(req.file.path);
     const sheet = workbook.getWorksheet('BulkDispatchTemplate') || workbook.worksheets[0];
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
+
+    const rows = [];
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
-      const lotNo = row.getCell('A').value;
-      let destination = row.getCell('B').value;
-      const sizesToDispatch = {
-        S: parseInt(row.getCell('C').value || 0, 10),
-        M: parseInt(row.getCell('D').value || 0, 10),
-        L: parseInt(row.getCell('E').value || 0, 10),
-        XL: parseInt(row.getCell('F').value || 0, 10)
-      };
-      conn.query(`SELECT * FROM finishing_data WHERE lot_no = ?`, [lotNo], async (err, results) => {
-        if (err || !results || results.length === 0) return;
-        const entry = results[0];
-        for (const size in sizesToDispatch) {
-          const qty = sizesToDispatch[size];
-          if (qty > 0) {
-            const [[sizeData]] = await conn.query(`
-              SELECT pieces FROM finishing_data_sizes WHERE finishing_data_id = ? AND size_label = ?
-            `, [entry.id, size]);
-            if (!sizeData) continue;
-            const produced = sizeData.pieces;
-            const [[dispatchSum]] = await conn.query(`
-              SELECT COALESCE(SUM(quantity),0) as dispatched
-              FROM finishing_dispatches WHERE finishing_data_id = ? AND size_label = ?
-            `, [entry.id, size]);
-            const available = produced - (dispatchSum.dispatched || 0);
-            if (qty > available) continue;
-            if (destination === 'other') destination = 'other';
-            const [[existingDispatch]] = await conn.query(`
-              SELECT COALESCE(SUM(quantity),0) as totalSent
-              FROM finishing_dispatches
-              WHERE finishing_data_id = ? AND size_label = ? AND destination = ?
-            `, [entry.id, size, destination]);
-            const totalSentBefore = existingDispatch.totalSent || 0;
-            const newTotalSent = totalSentBefore + qty;
-            await conn.query(`
-              INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-            `, [entry.id, entry.lot_no, destination, size, qty, newTotalSent]);
-          }
+      rows.push({
+        lotNo: row.getCell('A').value,
+        destination: row.getCell('B').value,
+        sizes: {
+          S: parseInt(row.getCell('C').value || 0, 10),
+          M: parseInt(row.getCell('D').value || 0, 10),
+          L: parseInt(row.getCell('E').value || 0, 10),
+          XL: parseInt(row.getCell('F').value || 0, 10)
         }
       });
     });
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    for (const r of rows) {
+      let destination = r.destination === 'other' ? 'other' : r.destination;
+      const [[entry]] = await conn.query('SELECT id, lot_no FROM finishing_data WHERE lot_no = ?', [r.lotNo]);
+      if (!entry) continue;
+
+      const [sizeInfo] = await conn.query(
+        `SELECT fds.size_label, fds.pieces,
+                COALESCE(d.qty,0) AS dispatched,
+                COALESCE(dDest.qty,0) AS dest_dispatched
+           FROM finishing_data_sizes fds
+           LEFT JOIN (
+               SELECT size_label, SUM(quantity) AS qty
+                 FROM finishing_dispatches
+                WHERE finishing_data_id = ?
+                GROUP BY size_label
+           ) d ON fds.size_label = d.size_label
+           LEFT JOIN (
+               SELECT size_label, SUM(quantity) AS qty
+                 FROM finishing_dispatches
+                WHERE finishing_data_id = ? AND destination = ?
+                GROUP BY size_label
+           ) dDest ON fds.size_label = dDest.size_label
+          WHERE fds.finishing_data_id = ?`,
+        [entry.id, entry.id, destination, entry.id]
+      );
+
+      const inserts = [];
+      for (const sz of sizeInfo) {
+        const qty = parseInt(r.sizes[sz.size_label], 10);
+        if (!qty || qty <= 0) continue;
+        const available = sz.pieces - sz.dispatched;
+        if (qty > available) continue;
+        const newTotalSent = sz.dest_dispatched + qty;
+        inserts.push([entry.id, entry.lot_no, destination, sz.size_label, qty, newTotalSent, new Date(), new Date()]);
+      }
+      if (inserts.length) {
+        await conn.query(
+          'INSERT INTO finishing_dispatches (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at) VALUES ?',
+          [inserts]
+        );
+      }
+    }
+
     await conn.commit();
     conn.release();
     req.flash('success', 'Bulk dispatch via Excel processed successfully.');
