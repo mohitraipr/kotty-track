@@ -62,16 +62,22 @@ router.post('/salary/upload', isAuthenticated, isOperator, upload.single('attFil
     await conn.beginTransaction();
     let uploadedCount = 0;
     const recalc = new Map();
+
+    const [empList] = await conn.query(
+      'SELECT id, punching_id, name FROM employees WHERE supervisor_id = ?',
+      [supervisorId]
+    );
+    const empMap = new Map();
+    empList.forEach(e => {
+      empMap.set(`${e.punching_id}|${(e.name || '').toLowerCase()}`, e.id);
+    });
+
     for (const emp of data) {
-      const [empRows] = await conn.query(
-        'SELECT id, salary, salary_type FROM employees WHERE punching_id = ? AND name = ? AND supervisor_id = ? LIMIT 1',
-        [emp.punchingId, emp.name, supervisorId]
-      );
-      if (!empRows.length) continue;
-      const employee = empRows[0];
+      const empId = empMap.get(`${emp.punchingId}|${(emp.name || '').toLowerCase()}`);
+      if (!empId) continue;
 
       const attendanceValues = emp.attendance.map(att => [
-        employee.id,
+        empId,
         att.date,
         att.punchIn || null,
         att.punchOut || null,
@@ -87,7 +93,7 @@ router.post('/salary/upload', isAuthenticated, isOperator, upload.single('attFil
       }
 
       const month = moment(emp.attendance[0].date).format('YYYY-MM');
-      recalc.set(`${employee.id}_${month}`, { id: employee.id, month });
+      recalc.set(`${empId}_${month}`, { id: empId, month });
       uploadedCount++;
     }
     for (const { id, month } of recalc.values()) {
@@ -134,6 +140,8 @@ router.post('/salary/upload-nights', isAuthenticated, isOperator, upload.single(
     await conn.beginTransaction();
     let uploadedCount = 0;
     const recalc = new Map();
+    const supCache = new Map();
+    const empCache = new Map();
     for (const r of rows) {
       const month = String(r.month || r.Month || '').trim();
       if (!month) continue;
@@ -143,21 +151,33 @@ router.post('/salary/upload-nights', isAuthenticated, isOperator, upload.single(
       const supName = String(r.supervisorname || r.supervisor_name || '').trim();
       const nights = parseInt(r.nights || r.Nights || r.night || 0, 10);
       if (!punchingId || !name || !nights) continue;
-      let supervisorCondition = '';
-      const params = [punchingId, name];
+      let supId = null;
       if (supName) {
-        const [[sup]] = await conn.query('SELECT id FROM users WHERE username = ? LIMIT 1', [supName]);
-        if (sup) {
-          supervisorCondition = ' AND supervisor_id = ?';
-          params.push(sup.id);
+        if (supCache.has(supName)) {
+          supId = supCache.get(supName);
+        } else {
+          const [[sup]] = await conn.query('SELECT id FROM users WHERE username = ? LIMIT 1', [supName]);
+          supId = sup ? sup.id : null;
+          supCache.set(supName, supId);
         }
       }
-      const [empRows] = await conn.query(
-        `SELECT id, salary FROM employees WHERE punching_id = ? AND name = ?${supervisorCondition} LIMIT 1`,
-        params
-      );
-      if (!empRows.length) continue;
-      const empId = empRows[0].id;
+      const empKey = `${punchingId}|${name.toLowerCase()}|${supId || ''}`;
+      let empId = empCache.get(empKey);
+      if (empId === undefined) {
+        let supervisorCondition = '';
+        const params = [punchingId, name];
+        if (supId) {
+          supervisorCondition = ' AND supervisor_id = ?';
+          params.push(supId);
+        }
+        const [empRows] = await conn.query(
+          `SELECT id FROM employees WHERE punching_id = ? AND name = ?${supervisorCondition} LIMIT 1`,
+          params
+        );
+        empId = empRows.length ? empRows[0].id : null;
+        empCache.set(empKey, empId);
+      }
+      if (!empId) continue;
       const [[attMonth]] = await conn.query(
         'SELECT 1 FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? LIMIT 1',
         [empId, month]
@@ -296,20 +316,32 @@ router.post('/salary/upload-advances', isAuthenticated, isOperator, upload.singl
   try {
     await conn.beginTransaction();
     let uploadedCount = 0;
+    const empCache = new Map();
     for (const r of rows) {
       const empIdInput = parseInt(r.employeeid || r.employee_id || r.empid || r.id || 0, 10);
       let empId = null;
       if (empIdInput) {
-        const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
-        if (emp) empId = emp.id;
+        if (empCache.has(`id_${empIdInput}`)) {
+          empId = empCache.get(`id_${empIdInput}`);
+        } else {
+          const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
+          empId = emp ? emp.id : null;
+          empCache.set(`id_${empIdInput}`, empId);
+        }
       }
       if (!empId) {
         const punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
         const name = String(r.name || r.employee_name || '').trim();
         if (!punchingId || !name) continue;
-        const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
-        if (!emp) continue;
-        empId = emp.id;
+        const key = `${punchingId}|${name.toLowerCase()}`;
+        if (empCache.has(key)) {
+          empId = empCache.get(key);
+        } else {
+          const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+          empId = emp ? emp.id : null;
+          empCache.set(key, empId);
+        }
+        if (!empId) continue;
       }
       const amount = parseFloat(r.amount || r.advance || 0);
       if (!amount) continue;
@@ -352,12 +384,18 @@ router.post('/salary/upload-advance-deductions', isAuthenticated, isOperator, up
   try {
     await conn.beginTransaction();
     let uploadedCount = 0;
+    const empCache = new Map();
     for (const r of rows) {
       const empIdInput = parseInt(r.employeeid || r.employee_id || r.empid || r.id || 0, 10);
       let empId = null;
       if (empIdInput) {
-        const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
-        if (emp) empId = emp.id;
+        if (empCache.has(`id_${empIdInput}`)) {
+          empId = empCache.get(`id_${empIdInput}`);
+        } else {
+          const [[emp]] = await conn.query('SELECT id FROM employees WHERE id = ? LIMIT 1', [empIdInput]);
+          empId = emp ? emp.id : null;
+          empCache.set(`id_${empIdInput}`, empId);
+        }
       }
       let punchingId = '';
       let name = '';
@@ -365,9 +403,15 @@ router.post('/salary/upload-advance-deductions', isAuthenticated, isOperator, up
         punchingId = String(r.punchingid || r.punchingId || r.punching_id || '').trim();
         name = String(r.name || r.employee_name || '').trim();
         if (!punchingId || !name) continue;
-        const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
-        if (!emp) continue;
-        empId = emp.id;
+        const key = `${punchingId}|${name.toLowerCase()}`;
+        if (empCache.has(key)) {
+          empId = empCache.get(key);
+        } else {
+          const [[emp]] = await conn.query('SELECT id FROM employees WHERE punching_id = ? AND name = ? LIMIT 1', [punchingId, name]);
+          empId = emp ? emp.id : null;
+          empCache.set(key, empId);
+        }
+        if (!empId) continue;
       }
       const month = String(r.month || '').trim();
       const amount = parseFloat(r.amount || r.deduction || 0);
@@ -626,9 +670,11 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     } else if (emp.salary_type === 'monthly' && hourlyView) {
       partialAmount = parseFloat(partialPay.toFixed(2));
     }
-    const [[salary]] = await pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]);
-    const [[adv]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
-    const [[ded]] = await pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
+    const [[salary], [adv], [ded]] = await Promise.all([
+      pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]),
+      pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]),
+      pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId])
+    ]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
     res.render('employeeSalary', {
       user: req.session.user,
@@ -688,27 +734,35 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
                 FROM department_supervisors
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
-        LEFT JOIN departments d ON ds.department_id = d.id
+       LEFT JOIN departments d ON ds.department_id = d.id
        WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly' AND e.supervisor_id = ?
        ORDER BY e.name
     `, [month, supervisorId]);
+    const empIds = rows.map(r => r.employee_id);
+    const [allAtt] = await pool.query(
+      'SELECT employee_id, date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id IN (?) AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY employee_id, date',
+      [empIds, month]
+    );
+    const prevDay = moment(month + '-01').subtract(1, 'day').format('YYYY-MM-DD');
+    const nextDay = moment(month + '-01').endOf('month').add(1, 'day').format('YYYY-MM-DD');
+    const [adjacentRows] = await pool.query(
+      'SELECT employee_id, date, status FROM employee_attendance WHERE employee_id IN (?) AND date IN (?, ?)',
+      [empIds, prevDay, nextDay]
+    );
+    const attByEmp = {};
+    allAtt.forEach(a => {
+      const arr = attByEmp[a.employee_id] || (attByEmp[a.employee_id] = []);
+      arr.push(a);
+    });
+    adjacentRows.forEach(a => {
+      const arr = attByEmp[a.employee_id] || (attByEmp[a.employee_id] = []);
+      arr.push(a);
+    });
 
     for (const r of rows) {
-      const [attRows] = await pool.query(
-        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
-        [r.employee_id, month]
-      );
+      const attRows = attByEmp[r.employee_id] || [];
       const attMap = {};
       attRows.forEach(a => {
-        attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
-      });
-      const prevDay = moment(month + '-01').subtract(1, 'day').format('YYYY-MM-DD');
-      const nextDay = moment(month + '-01').endOf('month').add(1, 'day').format('YYYY-MM-DD');
-      const [adjacent] = await pool.query(
-        'SELECT date, status FROM employee_attendance WHERE employee_id = ? AND date IN (?, ?)',
-        [r.employee_id, prevDay, nextDay]
-      );
-      adjacent.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
       });
       const specialSup =
@@ -878,10 +932,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     sheet.getColumn('nights').alignment = { horizontal: 'center' };
 
     for (const r of rows) {
-      const [attRows] = await pool.query(
-        'SELECT date, status, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
-        [r.employee_id, month]
-      );
+      const attRows = attByEmp[r.employee_id] || [];
       const attMap = {};
       attRows.forEach(a => {
         attMap[moment(a.date).format('YYYY-MM-DD')] = a;
@@ -966,8 +1017,10 @@ router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSuperviso
       conn.release();
       return res.redirect(`/employees/${empId}/salary?month=${month}`);
     }
-    const [[adv]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]);
-    const [[ded]] = await conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId]);
+    const [[adv], [ded]] = await Promise.all([
+      conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]),
+      conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId])
+    ]);
     const outstanding = parseFloat(adv.total) - parseFloat(ded.total);
     const amt = parseFloat(amount);
     if (amt <= 0 || amt > outstanding) {
