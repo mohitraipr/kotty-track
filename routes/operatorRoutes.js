@@ -2222,58 +2222,37 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
               )
       `);
 
-      const cards = [];
-      for (const m of masters) {
-        const masterId = m.id;
+      const [summary] = await pool.query(`
+        SELECT sa.user_id,
+               u.username,
+               SUM(CASE WHEN sa.isApproved IS NULL THEN cl.total_pieces ELSE 0 END) AS pendingApproval,
+               SUM(CASE WHEN sa.isApproved = 1 AND (
+                     ((UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%') AND NOT EXISTS (
+                          SELECT 1 FROM jeans_assembly_assignments ja
+                           JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                          WHERE sd.lot_no = cl.lot_no AND ja.is_approved IS NOT NULL
+                     ))
+                     OR
+                     ((UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%') AND NOT EXISTS (
+                          SELECT 1 FROM finishing_assignments fa
+                           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                          WHERE sd.lot_no = cl.lot_no AND fa.is_approved IS NOT NULL
+                     ))
+                 ) THEN cl.total_pieces ELSE 0 END) AS inLinePieces
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+          JOIN users u ON sa.user_id = u.id
+         GROUP BY sa.user_id, u.username
+         HAVING pendingApproval > 0 OR inLinePieces > 0
+      `);
 
-        const [pendRows] = await pool.query(`
-          SELECT COALESCE(SUM(cl.total_pieces),0) AS pendingSum
-            FROM stitching_assignments sa
-            JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-           WHERE sa.user_id = ?
-             AND sa.isApproved IS NULL
-        `, [masterId]);
-        const pendingApproval = parseFloat(pendRows[0].pendingSum) || 0;
+      const cards = summary.map(r => ({
+        masterId: r.user_id,
+        username: r.username,
+        pendingApproval: parseFloat(r.pendingApproval) || 0,
+        inLinePieces: parseFloat(r.inLinePieces) || 0
+      }));
 
-        const [inLineRows] = await pool.query(`
-          SELECT COALESCE(SUM(cl.total_pieces),0) AS inLineSum
-            FROM stitching_assignments sa
-            JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-           WHERE sa.user_id = ?
-             AND sa.isApproved = 1
-             AND (
-               (
-                 (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                 AND NOT EXISTS (
-                   SELECT 1
-                     FROM jeans_assembly_assignments ja
-                     JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                    WHERE sd.lot_no = cl.lot_no
-                      AND ja.is_approved IS NOT NULL
-                 )
-               )
-               OR
-               (
-                 (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                 AND NOT EXISTS (
-                   SELECT 1
-                     FROM finishing_assignments fa
-                     JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                    WHERE sd.lot_no = cl.lot_no
-                      AND fa.is_approved IS NOT NULL
-                 )
-               )
-             )
-        `, [masterId]);
-        const inLinePieces = parseFloat(inLineRows[0].inLineSum) || 0;
-
-        cards.push({
-          masterId,
-          username: m.username,
-          pendingApproval,
-          inLinePieces
-        });
-      }
       return cards;
     });
 
@@ -2335,51 +2314,50 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
         [masterId]
       );
       if (!masterUser) return null;
+
       const [assignments] = await pool.query(`
-      SELECT sa.id           AS stitching_assignment_id,
-             sa.isApproved   AS stitchIsApproved,
-             sa.assigned_on  AS stitchAssignedOn,
-             cl.lot_no,
-             cl.sku,
-             cl.total_pieces,
-             cl.remark       AS cutting_remark
-        FROM stitching_assignments sa
-        JOIN cutting_lots cl
-          ON sa.cutting_lot_id = cl.id
-       WHERE sa.user_id = ?
-         AND (
-              sa.isApproved IS NULL
-              OR (
-                   sa.isApproved = 1
-                   AND (
-                     -- Denim => next step is Assembly
-                     (
-                       (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
-                       AND NOT EXISTS (
-                         SELECT 1
-                           FROM jeans_assembly_assignments ja
-                           JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no
-                            AND ja.is_approved IS NOT NULL
-                       )
-                     )
-                     OR
-                     -- Non-denim => next step is Finishing
-                     (
-                       (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
-                       AND NOT EXISTS (
-                         SELECT 1
-                           FROM finishing_assignments fa
-                           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no
-                            AND fa.is_approved IS NOT NULL
-                       )
+        SELECT sa.id AS stitching_assignment_id,
+               sa.isApproved AS stitchIsApproved,
+               sa.assigned_on AS stitchAssignedOn,
+               cl.lot_no,
+               cl.sku,
+               cl.total_pieces,
+               cl.remark AS cutting_remark,
+               asm.next_on AS asm_next_on,
+               fin.next_on AS fin_next_on
+          FROM stitching_assignments sa
+          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+          LEFT JOIN (
+                SELECT sd.lot_no, MIN(ja.assigned_on) AS next_on
+                  FROM jeans_assembly_assignments ja
+                  JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+                 WHERE ja.is_approved IS NOT NULL
+                 GROUP BY sd.lot_no
+          ) asm ON asm.lot_no = cl.lot_no
+          LEFT JOIN (
+                SELECT sd.lot_no, MIN(fa.assigned_on) AS next_on
+                  FROM finishing_assignments fa
+                  JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+                 WHERE fa.is_approved IS NOT NULL
+                 GROUP BY sd.lot_no
+          ) fin ON fin.lot_no = cl.lot_no
+         WHERE sa.user_id = ?
+           AND (
+                sa.isApproved IS NULL
+                OR (
+                     sa.isApproved = 1
+                     AND (
+                       ( (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                         AND asm.next_on IS NULL )
+                       OR
+                       ( (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                         AND fin.next_on IS NULL )
                      )
                    )
-                 )
-            )
-       ORDER BY sa.assigned_on DESC
+              )
+         ORDER BY sa.assigned_on DESC
       `, [masterId]);
+
       const detailRows = [];
       const currentDate = new Date();
       for (const a of assignments) {
@@ -2388,65 +2366,37 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
           sku,
           total_pieces,
           cutting_remark,
-        stitchAssignedOn,
-        stitchIsApproved
-      } = a;
-      let nextAssignedOn = null;
-      const isDenim = isDenimLot(lot_no);
+          stitchAssignedOn,
+          stitchIsApproved,
+          asm_next_on,
+          fin_next_on
+        } = a;
 
-      // If isApproved=1 => check next assignment
-      if (stitchIsApproved === 1) {
-        if (isDenim) {
-          // Next step => assembly
-          const [asmRows] = await pool.query(`
-            SELECT ja.assigned_on
-              FROM jeans_assembly_assignments ja
-              JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-             WHERE sd.lot_no = ?
-               AND ja.is_approved IS NOT NULL
-             ORDER BY ja.assigned_on ASC
-             LIMIT 1
-          `, [lot_no]);
-          if (asmRows.length) {
-            nextAssignedOn = asmRows[0].assigned_on;
-          }
-        } else {
-          // Next step => finishing
-          const [finRows] = await pool.query(`
-            SELECT fa.assigned_on
-              FROM finishing_assignments fa
-              JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-             WHERE sd.lot_no = ?
-               AND fa.is_approved IS NOT NULL
-             ORDER BY fa.assigned_on ASC
-             LIMIT 1
-          `, [lot_no]);
-          if (finRows.length) {
-            nextAssignedOn = finRows[0].assigned_on;
-          }
+        let nextAssignedOn = null;
+        const isDenim = isDenimLot(lot_no);
+        if (stitchIsApproved === 1) {
+          nextAssignedOn = isDenim ? asm_next_on : fin_next_on;
         }
-      }
 
-      // Calculate TAT (days)
-      let tatDays = 0;
-      if (stitchAssignedOn) {
-        const startMs = new Date(stitchAssignedOn).getTime();
-        const endMs = nextAssignedOn
-          ? new Date(nextAssignedOn).getTime()
-          : currentDate.getTime();
-        tatDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
-      }
+        let tatDays = 0;
+        if (stitchAssignedOn) {
+          const startMs = new Date(stitchAssignedOn).getTime();
+          const endMs = nextAssignedOn
+            ? new Date(nextAssignedOn).getTime()
+            : currentDate.getTime();
+          tatDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
+        }
 
-      detailRows.push({
-        lotNo: lot_no,
-        sku,
-        totalPieces: total_pieces,
-        cuttingRemark: cutting_remark || "",
-        assignedOn: stitchAssignedOn,
-        nextDeptAssignedOn: nextAssignedOn,
-        tatDays,
-        status: (stitchIsApproved === null) ? "Pending Approval" : "In Line"
-      });
+        detailRows.push({
+          lotNo: lot_no,
+          sku,
+          totalPieces: total_pieces,
+          cuttingRemark: cutting_remark || "",
+          assignedOn: stitchAssignedOn,
+          nextDeptAssignedOn: nextAssignedOn,
+          tatDays,
+          status: stitchIsApproved === null ? "Pending Approval" : "In Line"
+        });
       }
       return { masterUser, detailRows };
     });
