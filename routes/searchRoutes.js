@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { pool } = require('../config/db'); // your MySQL connection pool
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 
@@ -11,7 +11,71 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 let tablesCache = { timestamp: 0, data: null };
 const columnsCache = {}; // { tableName: { timestamp, data } }
 
+// Cache for search results (avoid repeated heavy queries)
+const SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_ENTRIES = 50;
+const searchCache = new Map();
+
+function getCachedResult(key) {
+  const cached = searchCache.get(key);
+  if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
+    return cached.data;
+  }
+  if (cached) searchCache.delete(key);
+  return null;
+}
+
+function setCachedResult(key, data) {
+  if (searchCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = searchCache.keys().next().value;
+    if (oldestKey) searchCache.delete(oldestKey);
+  }
+  searchCache.set(key, { data, ts: Date.now() });
+}
+
 const DEFAULT_LIMIT = 500; // limit rows when displaying results
+
+/**
+ * Build the SQL query and params for a search request.
+ */
+function buildSearchQuery(tableName, columns, searchTerm, primaryColumn, limit) {
+  if (!columns || !columns.length) {
+    const sql = `SELECT * FROM \`${tableName}\`${limit ? ' LIMIT ?' : ''}`;
+    const params = [];
+    if (limit) params.push(Number(limit));
+    return { sql, params };
+  }
+
+  const colList = columns.map(c => `\`${c}\``).join(', ');
+
+  if (!searchTerm) {
+    const sql = `SELECT ${colList} FROM \`${tableName}\`${limit ? ' LIMIT ?' : ''}`;
+    const params = [];
+    if (limit) params.push(Number(limit));
+    return { sql, params };
+  }
+
+  const terms = searchTerm.split(/\s+/).filter(Boolean);
+
+  let whereClause = '';
+  let params = [];
+
+  if (primaryColumn && columns.includes(primaryColumn)) {
+    const orConditions = terms.map(() => `\`${primaryColumn}\` LIKE ?`).join(' OR ');
+    whereClause = `WHERE (${orConditions})`;
+    terms.forEach(t => params.push(`%${t}%`));
+  } else {
+    const concatCols = columns.map(col => `COALESCE(\`${col}\`, '')`).join(", ' ', ");
+    const concatExpr = `CONCAT_WS(' ', ${concatCols})`;
+    const orConditions = terms.map(() => `${concatExpr} LIKE ?`).join(' OR ');
+    whereClause = `WHERE (${orConditions})`;
+    terms.forEach(t => params.push(`%${t}%`));
+  }
+
+  const sql = `SELECT ${colList} FROM \`${tableName}\` ${whereClause}${limit ? ' LIMIT ?' : ''}`;
+  if (limit) params.push(Number(limit));
+  return { sql, params };
+}
 
 /** 
  * Fetch all table names from `information_schema.tables`
@@ -77,59 +141,65 @@ async function getColumnsForTable(tableName) {
  * @returns rows
  */
 async function searchByColumns(tableName, columns, searchTerm, primaryColumn, limit) {
-  // If no columns are selected, do "SELECT *" 
-  // (meaning the user doesn't pick anything to display)
-  if (!columns || !columns.length) {
-    const sql = `SELECT * FROM \`${tableName}\`${limit ? ` LIMIT ${limit}` : ''}`;
-    const [allRows] = await pool.query(sql);
-    return allRows;
+  const cacheKey = JSON.stringify({ tableName, columns, searchTerm, primaryColumn, limit });
+  const cached = getCachedResult(cacheKey);
+  if (cached) {
+    return cached;
   }
 
-  // Build "SELECT col1, col2, ..." 
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-
-  // If searchTerm is empty, just SELECT columns with no WHERE
-  if (!searchTerm) {
-    const sql = `SELECT ${colList} FROM \`${tableName}\`${limit ? ` LIMIT ${limit}` : ''}`;
-    const [rows] = await pool.query(sql);
-    return rows;
-  }
-
-  // Parse multiple space-separated terms
-  const terms = searchTerm.split(/\s+/).filter(Boolean);
-
-  let whereClause = '';
-  let params = [];
-
-  if (primaryColumn && columns.includes(primaryColumn)) {
-    // 1) Searching in a single "primary" column
-    // e.g. for terms ["abc","def"], we do:
-    // (primaryColumn LIKE ? OR primaryColumn LIKE ?)
-    // with each OR block for multiple terms => Actually we want an OR across the terms:
-    //   (col LIKE ? OR col LIKE ? OR col LIKE ?)
-    // But typically you might do: col LIKE ? AND col LIKE ? for an AND logic. 
-    // The user wants OR logic across multiple terms? Usually it's OR logic.
-    // We'll do: for each term => primaryColumn LIKE ? => OR
-    // So for 2 terms => (lot_no LIKE ? OR lot_no LIKE ?)
-    const orConditions = terms.map(() => `\`${primaryColumn}\` LIKE ?`).join(' OR ');
-    whereClause = `WHERE (${orConditions})`;
-    // Fill params
-    terms.forEach(t => params.push(`%${t}%`));
-  } else {
-    // 2) Searching across ALL chosen columns using CONCAT to reduce query size
-    const concatCols = columns.map(col => `COALESCE(\`${col}\`, '')`).join(", ' ', ");
-    const concatExpr = `CONCAT_WS(' ', ${concatCols})`;
-    const orConditions = terms.map(() => `${concatExpr} LIKE ?`).join(' OR ');
-    whereClause = `WHERE (${orConditions})`;
-    terms.forEach(t => params.push(`%${t}%`));
-  }
-
-  const sql = `SELECT ${colList} FROM \`${tableName}\` ${whereClause}${limit ? ` LIMIT ${limit}` : ''}`;
+  const { sql, params } = buildSearchQuery(tableName, columns, searchTerm, primaryColumn, limit);
   if (process.env.DEBUG_SEARCH) {
     console.log('[searchByColumns]', sql, params);
   }
   const [rows] = await pool.query(sql, params);
+  setCachedResult(cacheKey, rows);
   return rows;
+}
+
+/**
+ * Stream search results directly to an Excel file to avoid high memory usage.
+ */
+async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn, res) {
+  const { sql, params } = buildSearchQuery(tableName, columns, searchTerm, primaryColumn, null);
+
+  const conn = await pool.getConnection();
+  try {
+    const queryStream = conn.query(sql, params).stream({ highWaterMark: 100 });
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
+    const ws = workbook.addWorksheet(tableName);
+
+    let columnsSet = false;
+    let hasRow = false;
+
+    queryStream.on('data', row => {
+      if (!columnsSet) {
+        ws.columns = Object.keys(row).map(k => ({ header: k, key: k }));
+        columnsSet = true;
+      }
+      ws.addRow(row).commit();
+      hasRow = true;
+    });
+
+    return new Promise((resolve, reject) => {
+      queryStream.on('end', async () => {
+        if (!hasRow) {
+          ws.addRow(['No Data']).commit();
+        }
+        await workbook.commit();
+        conn.release();
+        resolve();
+      });
+      queryStream.on('error', async err => {
+        console.error('Error streaming export:', err);
+        try { await workbook.commit(); } catch (e) { /* ignore */ }
+        conn.release();
+        reject(err);
+      });
+    });
+  } catch (err) {
+    conn.release();
+    throw err;
+  }
 }
 
 // Single route: /search-dashboard
@@ -186,17 +256,14 @@ router.route('/search-dashboard')
       // Get the columns for the chosen table
       const columnList = await getColumnsForTable(selectedTable);
 
-      // Perform the query
-      const rows = await searchByColumns(
-        selectedTable,
-        chosenColumns,
-        searchTerm,
-        primaryColumn,
-        action === 'search' ? DEFAULT_LIMIT : null
-      );
-
-      // Based on action
       if (action === 'search') {
+        const rows = await searchByColumns(
+          selectedTable,
+          chosenColumns,
+          searchTerm,
+          primaryColumn,
+          DEFAULT_LIMIT
+        );
         return res.render('searchDashboard', {
           allTables,
           selectedTable,
@@ -207,25 +274,10 @@ router.route('/search-dashboard')
           resultRows: rows
         });
       } else if (action === 'export') {
-        if (!rows.length) {
-          // No data => "No Data" file
-          const wbEmpty = XLSX.utils.book_new();
-          const wsEmpty = XLSX.utils.aoa_to_sheet([['No Data']]);
-          XLSX.utils.book_append_sheet(wbEmpty, wsEmpty, 'NoData');
-          const emptyBuf = XLSX.write(wbEmpty, { bookType: 'xlsx', type: 'buffer' });
-          res.setHeader('Content-Disposition', 'attachment; filename="no_data.xlsx"');
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          return res.send(emptyBuf);
-        } else {
-          // Convert rows to Excel
-          const wb = XLSX.utils.book_new();
-          const ws = XLSX.utils.json_to_sheet(rows);
-          XLSX.utils.book_append_sheet(wb, ws, selectedTable);
-          const excelBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-          res.setHeader('Content-Disposition', `attachment; filename="${selectedTable}_export.xlsx"`);
-          res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          return res.send(excelBuf);
-        }
+        res.setHeader('Content-Disposition', `attachment; filename="${selectedTable}_export.xlsx"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        await streamSearchToExcel(selectedTable, chosenColumns, searchTerm, primaryColumn, res);
+        return;
       } else {
         return res.redirect('/search-dashboard');
       }
