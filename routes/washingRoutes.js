@@ -117,33 +117,46 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
       return res.redirect('/washingdashboard');
     }
 
-    // 3) Validate each requested size against its available pieces in jeans_assembly_data_sizes
-    for (const sizeId of Object.keys(sizesObj)) {
-      const requested = parseInt(sizesObj[sizeId], 10) || 0;
-      if (requested === 0) continue;
-      const [[sds]] = await conn.query(`SELECT * FROM jeans_assembly_data_sizes WHERE id = ?`, [sizeId]);
-      if (!sds) {
-        req.flash('error', `Bad size reference: ${sizeId}`);
-        await conn.rollback();
-        conn.release();
-        return res.redirect('/washingdashboard');
-      }
-      // Calculate how many have been used so far in washing_data_sizes for this lot and size
-      const [[usedRow]] = await conn.query(`
-        SELECT COALESCE(SUM(wds.pieces),0) AS usedCount
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wd.lot_no = ? AND wds.size_label = ?
-      `, [jd.lot_no, sds.size_label]);
-      const used = usedRow.usedCount || 0;
-      const remain = sds.pieces - used;
-      if (requested > remain) {
-        req.flash('error', `Requested ${requested} for ${sds.size_label}, but only ${remain} remain.`);
-        await conn.rollback();
-        conn.release();
-        return res.redirect('/washingdashboard');
-      }
+  // 3) Validate each requested size against its available pieces in bulk
+  const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(Boolean);
+  const [sizeRows] = await conn.query(
+    `SELECT id, size_label, pieces FROM jeans_assembly_data_sizes WHERE id IN (?)`,
+    [sizeIds]
+  );
+  const sizeMap = {};
+  for (const row of sizeRows) sizeMap[row.id] = row;
+  if (sizeRows.length !== sizeIds.length) {
+    req.flash('error', 'Invalid size reference.');
+    await conn.rollback();
+    conn.release();
+    return res.redirect('/washingdashboard');
+  }
+
+  const sizeLabels = sizeRows.map(r => r.size_label);
+  const [usedRows] = await conn.query(
+    `SELECT wds.size_label, COALESCE(SUM(wds.pieces),0) AS usedCount
+       FROM washing_data_sizes wds
+       JOIN washing_data wd ON wds.washing_data_id = wd.id
+      WHERE wd.lot_no = ? AND wds.size_label IN (?)
+      GROUP BY wds.size_label`,
+    [jd.lot_no, sizeLabels]
+  );
+  const usedMap = {};
+  for (const row of usedRows) usedMap[row.size_label] = row.usedCount;
+
+  for (const sizeId of sizeIds) {
+    const row = sizeMap[sizeId];
+    const requested = parseInt(sizesObj[sizeId], 10) || 0;
+    if (requested === 0) continue;
+    const used = usedMap[row.size_label] || 0;
+    const remain = row.pieces - used;
+    if (requested > remain) {
+      req.flash('error', `Requested ${requested} for ${row.size_label}, but only ${remain} remain.`);
+      await conn.rollback();
+      conn.release();
+      return res.redirect('/washingdashboard');
     }
+  }
 
     // 4) Insert main record into washing_data
     const [mainResult] = await conn.query(`
@@ -156,11 +169,12 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
     for (const sizeId of Object.keys(sizesObj)) {
       const numVal = parseInt(sizesObj[sizeId], 10) || 0;
       if (numVal <= 0) continue;
-      const [[sds]] = await conn.query(`SELECT * FROM jeans_assembly_data_sizes WHERE id = ?`, [sizeId]);
-      await conn.query(`
-        INSERT INTO washing_data_sizes (washing_data_id, size_label, pieces, created_at)
-        VALUES (?, ?, ?, NOW())
-      `, [newId, sds.size_label, numVal]);
+      const sds = sizeMap[sizeId];
+      await conn.query(
+        `INSERT INTO washing_data_sizes (washing_data_id, size_label, pieces, created_at)
+         VALUES (?, ?, ?, NOW())`,
+        [newId, sds.size_label, numVal]
+      );
     }
 
     // 6) Process partial assignment (optional)
@@ -168,7 +182,7 @@ router.post('/create', isAuthenticated, isWashingMaster, upload.single('image_fi
     for (const sizeId of Object.keys(assignmentsObj)) {
       const assignedUser = assignmentsObj[sizeId];
       if (!assignedUser) continue;
-      const [[sds]] = await conn.query(`SELECT * FROM jeans_assembly_data_sizes WHERE id = ?`, [sizeId]);
+      const sds = sizeMap[sizeId];
       if (!sds) {
         req.flash('error', 'Invalid size reference in assignment: ' + sizeId);
         await conn.rollback();
@@ -219,31 +233,25 @@ router.get('/get-lot-sizes/:lotId', isAuthenticated, isWashingMaster, async (req
       return res.status(404).json({ error: 'Lot not found' });
     }
 
-    const [sizes] = await pool.query(`
-      SELECT *
-      FROM jeans_assembly_data_sizes
-      WHERE jeans_assembly_data_id = ?
-    `, [lotId]);
+    const [rows] = await pool.query(`
+      SELECT s.id, s.size_label, s.pieces,
+             s.pieces - COALESCE(SUM(wds.pieces),0) AS remain
+        FROM jeans_assembly_data_sizes s
+        LEFT JOIN washing_data_sizes wds
+          ON s.size_label = wds.size_label
+         AND wds.washing_data_id IN (
+              SELECT id FROM washing_data WHERE lot_no = ?
+          )
+       WHERE s.jeans_assembly_data_id = ?
+       GROUP BY s.id
+    `, [stData.lot_no, lotId]);
 
-    const results = [];
-    for (const size of sizes) {
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(wds.pieces),0) AS usedCount
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wd.lot_no = ?
-          AND wds.size_label = ?
-      `, [stData.lot_no, size.size_label]);
-      const used = usedRow.usedCount || 0;
-      const remain = size.pieces - used;
-      results.push({
-        id: size.id,
-        size_label: size.size_label,
-        pieces: size.pieces,
-        remain: remain < 0 ? 0 : remain
-      });
-    }
-    return res.json(results);
+    return res.json(rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    })));
   } catch (err) {
     console.error('[ERROR] GET /washingdashboard/get-lot-sizes/:lotId =>', err);
     return res.status(500).json({ error: 'Error fetching lot sizes: ' + err.message });
@@ -268,48 +276,31 @@ router.get('/update/:id/json', isAuthenticated, isWashingMaster, async (req, res
       return res.status(403).json({ error: 'Not found or no permission' });
     }
 
-    // 2) Fetch each size-row (we need its ID, label & existing pieces)
-    const [ sizes ] = await pool.query(`
-      SELECT id, size_label, pieces
-      FROM washing_data_sizes
-      WHERE washing_data_id = ?
-    `, [entryId]);
-
-    // 3) For each, compute remaining from jeans_assembly_data_sizes
-    const output = [];
-    for (const sz of sizes) {
-      const [[ latest ]] = await pool.query(`
-        SELECT pieces
-        FROM jeans_assembly_data_sizes
-        WHERE jeans_assembly_data_id = (
-          SELECT id FROM jeans_assembly_data
-          WHERE lot_no = ?
-          LIMIT 1
-        )
-        AND size_label = ?
-        LIMIT 1
-      `, [entry.lot_no, sz.size_label]);
-      const totalAllowed = latest ? latest.pieces : 0;
-
-      const [[ usedRow ]] = await pool.query(`
-        SELECT COALESCE(SUM(wds.pieces),0) AS usedCount
+    const [rows] = await pool.query(`
+      SELECT wds.id, wds.size_label, wds.pieces,
+             jad.pieces - COALESCE(u.usedCount,0) AS remain
         FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wd.lot_no = ?
-          AND wds.size_label = ?
-      `, [entry.lot_no, sz.size_label]);
-      const used = usedRow.usedCount || 0;
+        JOIN jeans_assembly_data_sizes jad
+          ON jad.size_label = wds.size_label
+         AND jad.jeans_assembly_data_id = (
+              SELECT id FROM jeans_assembly_data WHERE lot_no = ? LIMIT 1
+          )
+        LEFT JOIN (
+          SELECT wds.size_label, SUM(wds.pieces) AS usedCount
+            FROM washing_data_sizes wds
+            JOIN washing_data wd ON wds.washing_data_id = wd.id
+           WHERE wd.lot_no = ?
+           GROUP BY wds.size_label
+        ) u ON u.size_label = wds.size_label
+       WHERE wds.washing_data_id = ?
+    `, [entry.lot_no, entry.lot_no, entryId]);
 
-      const remain = totalAllowed - used;
-      output.push({
-        id:          sz.id,
-        size_label: sz.size_label,
-        pieces:     sz.pieces,
-        remain:     remain < 0 ? 0 : remain
-      });
-    }
-
-    return res.json({ sizes: output });
+    return res.json({ sizes: rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    })) });
   } catch (err) {
     console.error('[ERROR] GET /update/:id/json =>', err);
     return res.status(500).json({ error: err.message });
@@ -343,65 +334,53 @@ router.post('/update/:id', isAuthenticated, isWashingMaster, async (req, res) =>
 
     let updatedTotal = entry.total_pieces;
 
-    // 2) Loop by size-row ID
+    const sizeRows = await conn.query(
+      `SELECT id, size_label, pieces FROM washing_data_sizes WHERE washing_data_id = ?`,
+      [entryId]
+    );
+    const sizeMap = {};
+    const labels = [];
+    for (const row of sizeRows[0]) { sizeMap[row.id] = row; labels.push(row.size_label); }
+
+    const [allowedRows] = await conn.query(
+      `SELECT size_label, pieces FROM jeans_assembly_data_sizes
+        WHERE jeans_assembly_data_id = (SELECT id FROM jeans_assembly_data WHERE lot_no = ? LIMIT 1)
+          AND size_label IN (?)`,
+      [entry.lot_no, labels]
+    );
+    const allowedMap = {};
+    for (const r of allowedRows) allowedMap[r.size_label] = r.pieces;
+
+    const [usedRows] = await conn.query(
+      `SELECT wds.size_label, SUM(wds.pieces) AS usedCount
+         FROM washing_data_sizes wds
+         JOIN washing_data wd ON wds.washing_data_id = wd.id
+        WHERE wd.lot_no = ? AND wds.size_label IN (?)
+        GROUP BY wds.size_label`,
+      [entry.lot_no, labels]
+    );
+    const usedMap = {};
+    for (const r of usedRows) usedMap[r.size_label] = r.usedCount;
+
     for (const sizeIdStr of Object.keys(updateSizes)) {
       const sizeId    = parseInt(sizeIdStr, 10);
-      let   increment = parseInt(updateSizes[sizeIdStr], 10);
+      let increment   = parseInt(updateSizes[sizeIdStr], 10);
       if (isNaN(increment) || increment <= 0) continue;
 
-      // 3) Fetch the existing size-row
-      const [[ existingRow ]] = await conn.query(`
-        SELECT * 
-        FROM washing_data_sizes
-        WHERE id = ? AND washing_data_id = ?
-      `, [sizeId, entryId]);
-      if (!existingRow) {
-        throw new Error(`Invalid size ID ${sizeId} for this entry.`);
-      }
+      const existingRow = sizeMap[sizeId];
+      if (!existingRow) throw new Error(`Invalid size ID ${sizeId} for this entry.`);
       const label = existingRow.size_label;
-
-      // 4) Compute allowed / used by label
-      const [[ latest ]] = await conn.query(`
-        SELECT pieces
-        FROM jeans_assembly_data_sizes
-        WHERE jeans_assembly_data_id = (
-          SELECT id FROM jeans_assembly_data
-          WHERE lot_no = ?
-          LIMIT 1
-        )
-        AND size_label = ?
-        LIMIT 1
-      `, [entry.lot_no, label]);
-      const totalAllowed = latest ? latest.pieces : 0;
-
-      const [[ usedRow ]] = await conn.query(`
-        SELECT COALESCE(SUM(wds.pieces),0) AS usedCount
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-        WHERE wd.lot_no = ? AND wds.size_label = ?
-      `, [entry.lot_no, label]);
-      const used   = usedRow.usedCount || 0;
+      const totalAllowed = allowedMap[label] || 0;
+      const used = usedMap[label] || 0;
       const remain = totalAllowed - used;
-
       if (increment > remain) {
         throw new Error(`Cannot add ${increment} to size [${label}]; only ${remain} remain.`);
       }
 
-      // 5) Update the size-row
       const newCount = existingRow.pieces + increment;
-      await conn.query(`
-        UPDATE washing_data_sizes
-        SET pieces = ?
-        WHERE id = ?
-      `, [newCount, sizeId]);
-
-      // 6) Log the update
-      await conn.query(`
-        INSERT INTO washing_data_updates
-          (washing_data_id, size_label, pieces, updated_at)
-        VALUES (?, ?, ?, NOW())
-      `, [entryId, label, increment]);
-
+      await conn.query(`UPDATE washing_data_sizes SET pieces = ? WHERE id = ?`, [newCount, sizeId]);
+      await conn.query(`INSERT INTO washing_data_updates (washing_data_id, size_label, pieces, updated_at)
+                        VALUES (?, ?, ?, NOW())`, [entryId, label, increment]);
       updatedTotal += increment;
     }
 
@@ -801,6 +780,20 @@ router.post('/assign-washing-in', isAuthenticated, isWashingMaster, async (req, 
       return res.redirect('/washingdashboard/assign-washing-in');
     }
 
+    const allWDataIds = [];
+    for (const wInUserId of washingInUserIds) {
+      const arr = washingInAssignments[wInUserId];
+      if (Array.isArray(arr)) {
+        for (const item of arr) allWDataIds.push(parseInt(item.washing_data_id, 10));
+      }
+    }
+    const uniqueIds = [...new Set(allWDataIds)];
+    const [validRows] = await conn.query(
+      `SELECT id FROM washing_data WHERE user_id = ? AND id IN (?)`,
+      [washingMasterId, uniqueIds]
+    );
+    const validSet = new Set(validRows.map(r => r.id));
+
     for (const wInUserId of washingInUserIds) {
       const arr = washingInAssignments[wInUserId];
       if (!Array.isArray(arr) || !arr.length) continue;
@@ -827,14 +820,7 @@ router.post('/assign-washing-in', isAuthenticated, isWashingMaster, async (req, 
         if (!sizeLabels || !sizeLabels.length) continue;
 
         // Check that washing_data belongs to this washing master
-        const [[checkRow]] = await conn.query(`
-          SELECT id
-          FROM washing_data
-          WHERE id = ?
-            AND user_id = ?
-          LIMIT 1
-        `, [wDataId, washingMasterId]);
-        if (!checkRow) {
+        if (!validSet.has(wDataId)) {
           throw new Error(`No valid washing_data id=${wDataId} for user=${washingMasterId}`);
         }
 
