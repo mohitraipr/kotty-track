@@ -455,28 +455,40 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
   try {
     const rows = await fetchCached("lotDeptCounts", async () => {
       const [data] = await pool.query(`
-        SELECT lot_no,
-               SUM(stage='cutting')        AS cutting,
-               SUM(stage='stitching')      AS stitching,
-               SUM(stage='washing')        AS washing,
-               SUM(stage='washing_in')     AS washing_in,
-               SUM(stage='finishing')      AS finishing,
-               SUM(stage='assembly')       AS assembly
+        SELECT cl.lot_no,
+               cl.sku,
+               cl.total_pieces AS pieces,
+               counts.cutting,
+               counts.stitching,
+               counts.washing,
+               counts.washing_in,
+               counts.finishing,
+               counts.assembly
         FROM (
-          SELECT lot_no, 'cutting'    AS stage FROM cutting_lots
-          UNION ALL
-          SELECT lot_no, 'stitching'  AS stage FROM stitching_data
-          UNION ALL
-          SELECT lot_no, 'washing'    AS stage FROM washing_data
-          UNION ALL
-          SELECT lot_no, 'washing_in' AS stage FROM washing_in_data
-          UNION ALL
-          SELECT lot_no, 'finishing'  AS stage FROM finishing_data
-          UNION ALL
-          SELECT lot_no, 'assembly'   AS stage FROM jeans_assembly_data
-        ) AS t
-        GROUP BY lot_no
-        ORDER BY lot_no
+          SELECT lot_no,
+                 SUM(stage='cutting')    AS cutting,
+                 SUM(stage='stitching')  AS stitching,
+                 SUM(stage='washing')    AS washing,
+                 SUM(stage='washing_in') AS washing_in,
+                 SUM(stage='finishing')  AS finishing,
+                 SUM(stage='assembly')   AS assembly
+          FROM (
+            SELECT lot_no, 'cutting'    AS stage FROM cutting_lots
+            UNION ALL
+            SELECT lot_no, 'stitching'  AS stage FROM stitching_data
+            UNION ALL
+            SELECT lot_no, 'washing'    AS stage FROM washing_data
+            UNION ALL
+            SELECT lot_no, 'washing_in' AS stage FROM washing_in_data
+            UNION ALL
+            SELECT lot_no, 'finishing'  AS stage FROM finishing_data
+            UNION ALL
+            SELECT lot_no, 'assembly'   AS stage FROM jeans_assembly_data
+          ) AS t1
+          GROUP BY lot_no
+        ) AS counts
+        JOIN cutting_lots cl ON counts.lot_no = cl.lot_no
+        ORDER BY cl.lot_no
       `);
       return data;
     });
@@ -485,6 +497,8 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
     const sheet = workbook.addWorksheet("LotDeptCounts");
     sheet.columns = [
       { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "SKU", key: "sku", width: 20 },
+      { header: "Pieces", key: "pieces", width: 10 },
       { header: "Cutting", key: "cutting", width: 10 },
       { header: "Stitching", key: "stitching", width: 10 },
       { header: "Washing", key: "washing", width: 10 },
