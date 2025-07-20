@@ -417,15 +417,19 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
     `, [userId, lot.lot_no, lot.sku, grandTotal, remark || null, image_url]);
     const newStitchingId = mainResult.insertId;
 
-    // 2) Insert into stitching_data_sizes
+    // 2) Insert into stitching_data_sizes (bulk)
+    const sizeValues = [];
     for (const sizeId of Object.keys(sizesObj)) {
       const countVal = parseInt(sizesObj[sizeId], 10) || 0;
       if (countVal <= 0) continue;
       const cls = clsMap[sizeId];
-      await conn.query(`
-        INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
-        VALUES (?, ?, ?)
-      `, [newStitchingId, cls.size_label, countVal]);
+      sizeValues.push([newStitchingId, cls.size_label, countVal]);
+    }
+    if (sizeValues.length) {
+      await conn.query(
+        `INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces) VALUES ?`,
+        [sizeValues]
+      );
     }
 
     // 3) Partial assignment (optional)
@@ -442,21 +446,16 @@ router.post('/create', isAuthenticated, isStitchingMaster, upload.single('image_
       assignMap[assignedUser].push(cls.size_label);
     }
 
+    const assignValues = [];
     for (const uId of Object.keys(assignMap)) {
-      const sizesJson = JSON.stringify(assignMap[uId]);
-      if (isFinishingFlow) {
-        await conn.query(`
-          INSERT INTO finishing_assignments
-            (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved)
-          VALUES (?, ?, ?, NULL, NOW(), ?, NULL)
-        `, [userId, uId, newStitchingId, sizesJson]);
-      } else {
-        await conn.query(`
-          INSERT INTO jeans_assembly_assignments
-            (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved)
-          VALUES (?, ?, ?, NULL, NOW(), ?, NULL)
-        `, [userId, uId, newStitchingId, sizesJson]);
-      }
+      assignValues.push([userId, uId, newStitchingId, JSON.stringify(assignMap[uId])]);
+    }
+    if (assignValues.length) {
+      const table = isFinishingFlow ? 'finishing_assignments' : 'jeans_assembly_assignments';
+      await conn.query(
+        `INSERT INTO ${table} (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved) VALUES ?`,
+        [assignValues.map(v => [v[0], v[1], v[2], null, new Date(), v[3], null])]
+      );
     }
 
     await conn.commit();
@@ -489,48 +488,42 @@ router.get('/update/:id/json', isAuthenticated, isStitchingMaster, async (req, r
       return res.status(403).json({ error: 'No permission or not found' });
     }
 
-    const [sizes] = await pool.query(`
+  const [sizes] = await pool.query(`
       SELECT *
       FROM stitching_data_sizes
       WHERE stitching_data_id = ?
       ORDER BY id ASC
     `, [entryId]);
 
-    console.log(`Updating entry ${entryId} for lot ${entry.lot_no}`);
-    console.log('Fetched stitching_data_sizes:', sizes);
+    const labels = sizes.map(s => s.size_label);
 
-    // For each size, figure out how many remain
-    const output = [];
-    for (const sz of sizes) {
-      console.log(`Processing size label: ${sz.size_label} (ID: ${sz.id})`);
+    const totalMap = {};
+    const usedMap = {};
+    if (labels.length) {
+      const [clsRows] = await pool.query(`
+        SELECT cls.size_label, cls.total_pieces
+        FROM cutting_lot_sizes cls
+        JOIN cutting_lots cl ON cls.cutting_lot_id = cl.id
+        WHERE cl.lot_no = ? AND cls.size_label IN (?)
+      `, [entry.lot_no, labels]);
+      clsRows.forEach(r => { totalMap[r.size_label] = r.total_pieces; });
 
-      const [[cls]] = await pool.query(`
-        SELECT *
-        FROM cutting_lot_sizes
-        WHERE cutting_lot_id = (
-          SELECT id FROM cutting_lots WHERE lot_no = ? LIMIT 1
-        ) AND size_label = ?
-      `, [entry.lot_no, sz.size_label]);
-
-      if (!cls) {
-        console.log(`No cutting_lot_sizes record found for lot ${entry.lot_no} with size label ${sz.size_label}`);
-        output.push({ ...sz, remain: 99999 });
-        continue;
-      }
-
-      console.log(`Found cutting lot size:`, cls);
-
-      const [[usedRow]] = await pool.query(`
-        SELECT COALESCE(SUM(sds.pieces),0) AS usedCount
+      const [usedRows] = await pool.query(`
+        SELECT sds.size_label, SUM(sds.pieces) AS usedCount
         FROM stitching_data_sizes sds
         JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-        WHERE sd.lot_no = ? AND sds.size_label = ?
-      `, [entry.lot_no, sz.size_label]);
-      const used = usedRow.usedCount || 0;
-      const remainNow = cls.total_pieces - used;
-      console.log(`For size ${sz.size_label}: total=${cls.total_pieces}, used=${used}, remain=${remainNow < 0 ? 0 : remainNow}`);
-      output.push({ ...sz, remain: remainNow < 0 ? 0 : remainNow });
+        WHERE sd.lot_no = ? AND sds.size_label IN (?)
+        GROUP BY sds.size_label
+      `, [entry.lot_no, labels]);
+      usedRows.forEach(r => { usedMap[r.size_label] = r.usedCount || 0; });
     }
+
+    const output = sizes.map(sz => {
+      const total = totalMap[sz.size_label] || 0;
+      const used = usedMap[sz.size_label] || 0;
+      const remainNow = total - used;
+      return { ...sz, remain: remainNow < 0 ? 0 : remainNow };
+    });
 
     return res.json({ sizes: output });
   } catch (err) {
@@ -548,7 +541,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
     const entryId = req.params.id;
     const updateSizes = req.body.updateSizes || {};
 
-    console.log(`Update request for entry ${entryId}:`, updateSizes);
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
@@ -598,7 +590,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
 
     for (const lbl of labels) {
       let increment = parseInt(updateSizes[`size_${lbl}`], 10);
-      console.log(`Processing update for size label: ${lbl}, increment: ${increment}`);
       if (isNaN(increment) || increment < 0) increment = 0;
       if (increment === 0) continue;
 
@@ -610,7 +601,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
 
       const used = usedMap[lbl] || 0;
       const remainGlobal = cls.total_pieces - used;
-      console.log(`For size ${lbl}: total=${cls.total_pieces}, used=${used}, remain=${remainGlobal}`);
 
       if (increment > remainGlobal) {
         throw new Error(`Cannot add ${increment} to size [${lbl}]. Max remain is ${remainGlobal}.`);
@@ -621,7 +611,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
           INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
           VALUES (?, ?, ?)
         `, [entryId, lbl, increment]);
-        console.log(`Inserted new row for size label ${lbl} with ${increment} pieces.`);
       } else {
         const newPieceCount = existingRow.pieces + increment;
         await conn.query(`
@@ -629,7 +618,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
           SET pieces = ?
           WHERE id = ?
         `, [newPieceCount, existingRow.id]);
-        console.log(`Updated size label ${lbl}: previous=${existingRow.pieces}, new=${newPieceCount}`);
       }
 
       updatedGrandTotal += increment;
@@ -637,7 +625,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
         INSERT INTO stitching_data_updates (stitching_data_id, size_label, pieces, updated_at)
         VALUES (?, ?, ?, NOW())
       `, [entryId, lbl, increment]);
-      console.log(`Logged update for size label ${lbl} with increment ${increment}`);
     }
 
     await conn.query(`
@@ -645,7 +632,6 @@ router.post('/update/:id', isAuthenticated, isStitchingMaster, async (req, res) 
       SET total_pieces = ?
       WHERE id = ?
     `, [updatedGrandTotal, entryId]);
-    console.log(`Updated stitching_data total_pieces to ${updatedGrandTotal}`);
 
     await conn.commit();
     conn.release();
@@ -946,6 +932,8 @@ router.post('/assign-finishing', isAuthenticated, isStitchingMaster, async (req,
       return res.redirect('/stitchingdashboard/assign-finishing');
     }
 
+    const assignValues = [];
+    const idSet = new Set();
     for (const finUserId of Object.keys(parsed)) {
       const arr = parsed[finUserId];
       if (!Array.isArray(arr) || arr.length === 0) continue;
@@ -956,30 +944,34 @@ router.post('/assign-finishing', isAuthenticated, isStitchingMaster, async (req,
         const sizeLabel = item.size_label;
         if (!mapByAsgId[id]) mapByAsgId[id] = [];
         mapByAsgId[id].push(sizeLabel);
+        idSet.add(id);
       });
 
       for (const sAsgId of Object.keys(mapByAsgId)) {
         const sizeLabels = mapByAsgId[sAsgId];
-        if (!sizeLabels.length) continue;
-
-        const [[checkRow]] = await conn.query(`
-          SELECT id
-          FROM stitching_data
-          WHERE id = ?
-            AND user_id = ?
-          LIMIT 1
-        `, [sAsgId, stitchingMasterId]);
-        if (!checkRow) {
-          throw new Error(`No valid stitching_data record with id=${sAsgId} for user ${stitchingMasterId}`);
+        if (sizeLabels.length) {
+          assignValues.push([finUserId, sAsgId, JSON.stringify(sizeLabels)]);
         }
-
-        const sizesJson = JSON.stringify(sizeLabels);
-        await conn.query(`
-          INSERT INTO finishing_assignments
-            (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved)
-          VALUES (?, ?, ?, ?, NOW(), ?, NULL)
-        `, [stitchingMasterId, finUserId, sAsgId, target_day || null, sizesJson]);
       }
+    }
+
+    if (assignValues.length) {
+      const ids = Array.from(idSet);
+      if (ids.length) {
+        const [valid] = await conn.query(
+          `SELECT id FROM stitching_data WHERE user_id = ? AND id IN (?)`,
+          [stitchingMasterId, ids]
+        );
+        if (valid.length !== ids.length) {
+          throw new Error('Invalid stitching_data id found in assignments');
+        }
+      }
+
+      const insertRows = assignValues.map(v => [stitchingMasterId, v[0], v[1], target_day || null, new Date(), v[2], null]);
+      await conn.query(
+        `INSERT INTO finishing_assignments (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved) VALUES ?`,
+        [insertRows]
+      );
     }
 
     await conn.commit();
@@ -1122,7 +1114,8 @@ router.post('/assign-jeansassembly', isAuthenticated, isStitchingMaster, async (
       return res.redirect('/stitchingdashboard/assign-jeansassembly');
     }
 
-    // { jeansAssemblyUserId: [ { stitching_assignment_id, size_label }, ... ] }
+    const assignValues = [];
+    const idSet = new Set();
     for (const jaUserId of Object.keys(parsed)) {
       const arr = parsed[jaUserId];
       if (!Array.isArray(arr) || arr.length === 0) continue;
@@ -1133,31 +1126,34 @@ router.post('/assign-jeansassembly', isAuthenticated, isStitchingMaster, async (
         const sizeLabel = item.size_label;
         if (!mapByAsgId[id]) mapByAsgId[id] = [];
         mapByAsgId[id].push(sizeLabel);
+        idSet.add(id);
       });
 
       for (const sAsgId of Object.keys(mapByAsgId)) {
         const sizeLabels = mapByAsgId[sAsgId];
-        if (!sizeLabels.length) continue;
-
-        // Validate
-        const [[checkRow]] = await conn.query(`
-          SELECT id
-          FROM stitching_data
-          WHERE id = ?
-            AND user_id = ?
-          LIMIT 1
-        `, [sAsgId, stitchingMasterId]);
-        if (!checkRow) {
-          throw new Error(`No valid stitching_data record with id=${sAsgId} for user ${stitchingMasterId}`);
+        if (sizeLabels.length) {
+          assignValues.push([jaUserId, sAsgId, JSON.stringify(sizeLabels)]);
         }
-
-        const sizesJson = JSON.stringify(sizeLabels);
-        await conn.query(`
-          INSERT INTO jeans_assembly_assignments
-            (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved)
-          VALUES (?, ?, ?, ?, NOW(), ?, NULL)
-        `, [stitchingMasterId, jaUserId, sAsgId, target_day || null, sizesJson]);
       }
+    }
+
+    if (assignValues.length) {
+      const ids = Array.from(idSet);
+      if (ids.length) {
+        const [valid] = await conn.query(
+          `SELECT id FROM stitching_data WHERE user_id = ? AND id IN (?)`,
+          [stitchingMasterId, ids]
+        );
+        if (valid.length !== ids.length) {
+          throw new Error('Invalid stitching_data id found in assignments');
+        }
+      }
+
+      const insertRows = assignValues.map(v => [stitchingMasterId, v[0], v[1], target_day || null, new Date(), v[2], null]);
+      await conn.query(
+        `INSERT INTO jeans_assembly_assignments (stitching_master_id, user_id, stitching_assignment_id, target_day, assigned_on, sizes_json, is_approved) VALUES ?`,
+        [insertRows]
+      );
     }
 
     await conn.commit();
