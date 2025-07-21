@@ -1419,6 +1419,20 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       finMap[row.lot_no] = row;
     }
 
+    // --- Rewash Pending Quantities ---
+    const [rewashRows] = await pool.query(
+      `SELECT lot_no, SUM(total_requested) AS pendingQty
+         FROM rewash_requests
+        WHERE status = 'pending'
+          AND lot_no IN (?)
+        GROUP BY lot_no`,
+      [lotNos]
+    );
+    const rewashMap = {};
+    for (const row of rewashRows) {
+      rewashMap[row.lot_no] = parseFloat(row.pendingQty) || 0;
+    }
+
     // 5) Now build finalData from these maps
     const finalData = [];
     for (const lot of lots) {
@@ -1433,6 +1447,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const washedQty    = sums.washedQty     || 0;
       const washingInQty = sums.washingInQty  || 0;
       const finishedQty  = sums.finishedQty   || 0;
+      const rewashQty    = rewashMap[lotNo]   || 0;
 
       // Last assignments
       const stAssign  = stitchMap[lotNo]  || null;
@@ -1522,6 +1537,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         washingInOp:         statuses.washingInOp,
         washingInStatus:     statuses.washingInStatus,
         washingInQty,
+        rewashPendingQty: rewashQty,
 
         // Finishing
         finishingAssignedOn: statuses.finishingAssignedOn,
@@ -1573,6 +1589,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         { header: "WashIn Operator",      key: "washingInOp",          width: 15 },
         { header: "WashIn Status",        key: "washingInStatus",      width: 25 },
         { header: "WashIn Qty",           key: "washingInQty",         width: 15 },
+        { header: "Rewash Pending",       key: "rewashPendingQty",     width: 15 },
 
         // Finishing
         { header: "Finishing Assigned On",key: "finishingAssignedOn",  width: 20 },
@@ -1618,6 +1635,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
           washingInOp:         r.washingInOp,
           washingInStatus:     r.washingInStatus,
           washingInQty:        r.washingInQty,
+          rewashPendingQty:    r.rewashPendingQty,
 
           // Finishing
           finishingAssignedOn: r.finishingAssignedOn,
