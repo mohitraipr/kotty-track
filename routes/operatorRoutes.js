@@ -401,7 +401,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
   try {
     const [rows] = await pool.query(`
       SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name,
-             e.salary, u.username AS supervisor_name, d.name AS department_name,
+             e.salary, e.salary_type, u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_adv,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_ded
         FROM employees e
@@ -424,6 +424,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
       { header: "Employee", key: "employee", width: 20 },
       { header: "Punching ID", key: "punching_id", width: 15 },
       { header: "Employee ID", key: "employee_id", width: 12 },
+      { header: "Salary Type", key: "salary_type", width: 12 },
       { header: "Salary", key: "salary", width: 12 },
       { header: "Advance Left", key: "advance_left", width: 15 }
     ];
@@ -436,6 +437,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
         employee: r.employee_name,
         punching_id: r.punching_id,
         employee_id: r.employee_id,
+        salary_type: r.salary_type,
         salary: r.salary,
         advance_left: advLeft
       });

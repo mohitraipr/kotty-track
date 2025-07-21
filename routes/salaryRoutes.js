@@ -725,7 +725,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
 
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
-             e.punching_id, e.name AS employee_name, e.salary AS base_salary,
+             e.punching_id, e.name AS employee_name, e.salary AS base_salary, e.salary_type,
              e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
@@ -898,6 +898,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     const columns = [
       { header: 'Punching ID', key: 'punching_id', width: 12 },
       { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Base Salary', key: 'base_salary', width: 12 }
     ];
     for (let d = 1; d <= daysInMonth; d++) {
@@ -950,6 +951,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
       const rowData = {
         punching_id: r.punching_id,
         employee: r.employee_name,
+        salary_type: r.salary_type,
         base_salary: r.base_salary
       };
       let sundayCounter = 0;
