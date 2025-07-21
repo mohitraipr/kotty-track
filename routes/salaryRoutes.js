@@ -521,7 +521,12 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     );
     applyDetailedStatus(attendance, emp, sandwichDates);
     const daysInMonth = moment(month + '-01').daysInMonth();
-    const dailyRate = parseFloat(emp.salary) / daysInMonth;
+    let dailyRate;
+    if (emp.salary_type === 'dihadi') {
+      dailyRate = parseFloat(emp.salary);
+    } else {
+      dailyRate = parseFloat(emp.salary) / daysInMonth;
+    }
     let totalHours = 0;
     let sundayHours = 0;
     let hourlyRate = 0;
@@ -530,10 +535,11 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     let partialPay = 0;
     let overtimeTotal = 0;
     let undertimeTotal = 0;
-    if (
-      emp.salary_type === 'dihadi' ||
-      (emp.salary_type === 'monthly' && hourlyView)
-    ) {
+    if (emp.salary_type === 'dihadi') {
+      hourlyRate = emp.allotted_hours
+        ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
+        : 0;
+    } else if (emp.salary_type === 'monthly' && hourlyView) {
       hourlyRate = emp.allotted_hours
         ? dailyRate / parseFloat(emp.allotted_hours)
         : 0;
