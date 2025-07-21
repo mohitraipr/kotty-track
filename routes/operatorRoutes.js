@@ -667,12 +667,12 @@ async function getLastWashingInAssignment(lotNo) {
 
 async function getLastFinishingAssignment(lotNo, isDenim) {
   if (isDenim) {
-    // finishing for denim references washing_data
+    // finishing for denim references washing_in_data
     const [rows] = await pool.query(`
       SELECT fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id
         FROM finishing_assignments fa
-        JOIN washing_data wd ON fa.washing_assignment_id= wd.id
-       WHERE wd.lot_no= ?
+        JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
+       WHERE wid.lot_no = ?
        ORDER BY fa.assigned_on DESC
        LIMIT 1
     `, [lotNo]);
@@ -1182,9 +1182,9 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
             AND EXISTS (
               SELECT 1
                 FROM finishing_assignments fa
-                LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+                LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
                 LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
+                JOIN cutting_lots c2 ON (wid.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
                WHERE c2.lot_no = cl.lot_no
                  AND DATE(fa.assigned_on) BETWEEN ? AND ?
             )
@@ -1385,19 +1385,19 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     const [finRows] = await pool.query(`
       SELECT
         CASE
-          WHEN fa.washing_assignment_id IS NOT NULL THEN wd.lot_no
+          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
           WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
         END AS lot_no,
         fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
         u.username AS opName
       FROM finishing_assignments fa
-      LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
       LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
       LEFT JOIN users u         ON fa.user_id = u.id
       LEFT JOIN finishing_assignments fa2
              ON (
-                  fa.washing_assignment_id IS NOT NULL
-                  AND fa.washing_assignment_id = fa2.washing_assignment_id
+                  fa.washing_in_data_id IS NOT NULL
+                  AND fa.washing_in_data_id = fa2.washing_in_data_id
                   AND fa2.assigned_on > fa.assigned_on
                 )
                 OR
@@ -1408,7 +1408,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
                 )
       WHERE fa2.id IS NULL
         AND (
-             (wd.lot_no IN (?) AND wd.lot_no IS NOT NULL)
+             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
              OR
              (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
             )
@@ -1725,9 +1725,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
             AND EXISTS (
               SELECT 1
                 FROM finishing_assignments fa
-                LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+                LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
                 LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wd.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
+                JOIN cutting_lots c2 ON (wid.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
                WHERE c2.lot_no = cl.lot_no
                  AND DATE(fa.assigned_on) BETWEEN ? AND ?
             )
@@ -1906,19 +1906,19 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     const [finRows] = await pool.query(`
       SELECT
         CASE
-          WHEN fa.washing_assignment_id IS NOT NULL THEN wd.lot_no
+          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
           WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
         END AS lot_no,
         fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
         u.username AS opName
       FROM finishing_assignments fa
-      LEFT JOIN washing_data wd ON fa.washing_assignment_id = wd.id
+      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
       LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
       LEFT JOIN users u         ON fa.user_id = u.id
       LEFT JOIN finishing_assignments fa2
              ON (
-                  fa.washing_assignment_id IS NOT NULL
-                  AND fa.washing_assignment_id = fa2.washing_assignment_id
+                  fa.washing_in_data_id IS NOT NULL
+                  AND fa.washing_in_data_id = fa2.washing_in_data_id
                   AND fa2.assigned_on > fa.assigned_on
                 )
                 OR
@@ -1929,7 +1929,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
                 )
       WHERE fa2.id IS NULL
         AND (
-             (wd.lot_no IN (?) AND wd.lot_no IS NOT NULL)
+             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
              OR
              (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
             )
