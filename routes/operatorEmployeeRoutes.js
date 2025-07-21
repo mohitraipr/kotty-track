@@ -65,7 +65,7 @@ router.get(
   async (req, res) => {
     const supId = req.params.id;
     try {
-      const [[supervisor]] = await fetchCached(`op-sup-${supId}`, () =>
+      const [supervisor] = await fetchCached(`op-sup-${supId}`, () =>
         pool
           .query(
             'SELECT id, username FROM users WHERE id = ? AND role_id IN (SELECT id FROM roles WHERE name = "supervisor")',
@@ -256,7 +256,7 @@ router.get(
     const supId = req.params.id;
     const date = req.query.date || moment().format("YYYY-MM-DD");
     try {
-      const [[supervisor]] = await fetchCached(`op-sup-${supId}`, () =>
+      const [supervisor] = await fetchCached(`op-sup-${supId}`, () =>
         pool
           .query(
             'SELECT id, username FROM users WHERE id = ? AND role_id IN (SELECT id FROM roles WHERE name = "supervisor")',
