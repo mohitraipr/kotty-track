@@ -676,7 +676,7 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
     } else if (emp.salary_type === 'monthly' && hourlyView) {
       partialAmount = parseFloat(partialPay.toFixed(2));
     }
-    const [[salary], [adv], [ded]] = await Promise.all([
+    const [[[salary]], [[adv]], [[ded]]] = await Promise.all([
       pool.query('SELECT * FROM employee_salaries WHERE employee_id = ? AND month = ? LIMIT 1', [empId, month]),
       pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]),
       pool.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId])
@@ -1023,7 +1023,7 @@ router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSuperviso
       conn.release();
       return res.redirect(`/employees/${empId}/salary?month=${month}`);
     }
-    const [[adv], [ded]] = await Promise.all([
+    const [[[adv]], [[ded]]] = await Promise.all([
       conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM employee_advances WHERE employee_id = ?', [empId]),
       conn.query('SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ?', [empId])
     ]);
