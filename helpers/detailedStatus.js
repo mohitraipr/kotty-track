@@ -4,6 +4,20 @@ const { SPECIAL_SUNDAY_SUPERVISORS } = require('../utils/supervisors');
 const { effectiveHours } = require('./salaryCalculator');
 
 function applyDetailedStatus(attendance, emp, sandwichDates) {
+  if (emp.salary_type === 'dihadi') {
+    attendance.forEach(a => {
+      if (a.status === 'present' && a.punch_in && a.punch_out && effectiveHours(a.punch_in, a.punch_out, 'dihadi') > 0) {
+        a.detailed_status = 'Present';
+      } else if (a.status === 'one punch only') {
+        a.detailed_status = 'Missing punch';
+      } else if (a.status === 'absent') {
+        a.detailed_status = 'Absent';
+      } else {
+        a.detailed_status = a.status.charAt(0).toUpperCase() + a.status.slice(1);
+      }
+    });
+    return;
+  }
   const attMap = {};
   attendance.forEach(a => {
     attMap[moment(a.date).format('YYYY-MM-DD')] = a.status;
