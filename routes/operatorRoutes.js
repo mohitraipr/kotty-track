@@ -757,8 +757,16 @@ function getDepartmentStatuses({
     // we have a stitching assignment
     const { isApproved, assigned_on, approved_on, opName } = stAssign;
     stitchingOp= opName|| "";
-    stitchingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-    stitchingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+    stitchingAssignedOn = assigned_on
+      ? new Date(assigned_on)
+          .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+          .replace(/\//g, '-')
+      : "N/A";
+    stitchingApprovedOn = approved_on
+      ? new Date(approved_on)
+          .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+          .replace(/\//g, '-')
+      : "N/A";
 
     if (isApproved=== null) {
       stitchingStatus= `Pending Approval by ${stitchingOp}`;
@@ -832,8 +840,16 @@ function getDepartmentStatuses({
       // we have assembly
       const { is_approved, assigned_on, approved_on, opName }= asmAssign;
       assemblyOp= opName|| "";
-      assemblyAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-      assemblyApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+      assemblyAssignedOn = assigned_on
+        ? new Date(assigned_on)
+            .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+            .replace(/\//g, '-')
+        : "N/A";
+      assemblyApprovedOn = approved_on
+        ? new Date(approved_on)
+            .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+            .replace(/\//g, '-')
+        : "N/A";
 
       if (is_approved=== null) {
         assemblyStatus= `Pending Approval by ${assemblyOp}`;
@@ -886,8 +902,16 @@ function getDepartmentStatuses({
       } else {
         const { is_approved, assigned_on, approved_on, opName }= washAssign;
         washingOp= opName|| "";
-        washingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-        washingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+        washingAssignedOn = assigned_on
+          ? new Date(assigned_on)
+              .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+              .replace(/\//g, '-')
+          : "N/A";
+        washingApprovedOn = approved_on
+          ? new Date(approved_on)
+              .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+              .replace(/\//g, '-')
+          : "N/A";
 
         if (is_approved=== null) {
           washingStatus= `Pending Approval by ${washingOp}`;
@@ -937,8 +961,16 @@ function getDepartmentStatuses({
         } else {
           const { is_approved, assigned_on, approved_on, opName }= washInAssign;
           washingInOp= opName|| "";
-          washingInAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-          washingInApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+          washingInAssignedOn = assigned_on
+            ? new Date(assigned_on)
+                .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+                .replace(/\//g, '-')
+            : "N/A";
+          washingInApprovedOn = approved_on
+            ? new Date(approved_on)
+                .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+                .replace(/\//g, '-')
+            : "N/A";
 
           if (is_approved===null) {
             washingInStatus= `Pending Approval by ${washingInOp}`;
@@ -994,8 +1026,16 @@ function getDepartmentStatuses({
   } else {
     const { is_approved, assigned_on, approved_on, opName }= finAssign;
     finishingOp= opName|| "";
-    finishingAssignedOn= assigned_on? new Date(assigned_on).toLocaleString(): "N/A";
-    finishingApprovedOn= approved_on? new Date(approved_on).toLocaleString(): "N/A";
+    finishingAssignedOn = assigned_on
+      ? new Date(assigned_on)
+          .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+          .replace(/\//g, '-')
+      : "N/A";
+    finishingApprovedOn = approved_on
+      ? new Date(approved_on)
+          .toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })
+          .replace(/\//g, '-')
+      : "N/A";
 
     if (is_approved===null) {
       finishingStatus= `Pending Approval by ${finishingOp}`;
@@ -1508,7 +1548,9 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         lotType: denim ? "Denim" : "Hosiery",
         totalCut,
         createdAt: lot.created_at
-          ? new Date(lot.created_at).toLocaleDateString()
+          ? new Date(lot.created_at)
+              .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })
+              .replace(/\//g, '-')
           : "",
         remark: lot.remark || "",
 
@@ -2027,7 +2069,11 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         size: sizeLabel,
         lotType: denim ? "Denim" : "Hosiery",
         totalCut,
-        createdAt: row.created_at ? new Date(row.created_at).toLocaleDateString() : "",
+        createdAt: row.created_at
+          ? new Date(row.created_at)
+              .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })
+              .replace(/\//g, '-')
+          : "",
         remark: row.remark || "",
 
         stitchAssignedOn:   statuses.stitchingAssignedOn,
