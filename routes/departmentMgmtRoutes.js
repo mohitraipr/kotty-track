@@ -698,7 +698,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
             else if (a.status === 'one punch only') onePunch++;
             continue;
           }
-          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi', emp.allotted_hours);
           if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
             late++;
           if (hrs < 0) hrs = 0;
@@ -806,7 +806,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
             else if (a.status === 'one punch only') onePunch++;
             continue;
           }
-          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+          let hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi', emp.allotted_hours);
           if (moment(a.punch_in, 'HH:mm:ss').isAfter(moment('09:15:00', 'HH:mm:ss')))
             late++;
           if (hrs < 0) hrs = 0;

@@ -6,7 +6,7 @@ const { effectiveHours } = require('./salaryCalculator');
 function applyDetailedStatus(attendance, emp, sandwichDates) {
   if (emp.salary_type === 'dihadi') {
     attendance.forEach(a => {
-      if (a.status === 'present' && a.punch_in && a.punch_out && effectiveHours(a.punch_in, a.punch_out, 'dihadi') > 0) {
+      if (a.status === 'present' && a.punch_in && a.punch_out && effectiveHours(a.punch_in, a.punch_out, 'dihadi', emp.allotted_hours) > 0) {
         a.detailed_status = 'Present';
       } else if (a.status === 'one punch only') {
         a.detailed_status = 'Missing punch';
