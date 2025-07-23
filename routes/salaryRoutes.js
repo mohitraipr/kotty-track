@@ -1015,8 +1015,13 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
   if (half === 2) start = moment(month + '-16');
   try {
     const [employees] = await pool.query(
-      'SELECT id, punching_id, name, salary, allotted_hours FROM employees WHERE supervisor_id = ? AND salary_type = \'dihadi\' AND is_active = 1 ORDER BY name',
-      [supervisorId]
+      `SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
+              es.gross, es.deduction, es.net
+         FROM employees e
+    LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
+        WHERE e.supervisor_id = ? AND e.salary_type = 'dihadi' AND e.is_active = 1
+     ORDER BY e.name`,
+      [month, supervisorId]
     );
     const empIds = employees.map(e => e.id);
     const rows = [];
@@ -1059,6 +1064,9 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
         }
         row.total_hours = totalHrs.toFixed(2);
         row.lunch_deduction = (totalLunch / 60).toFixed(2);
+        row.total_amount = emp.gross != null ? parseFloat(emp.gross) : 0;
+        row.advance_deduct = emp.deduction != null ? parseFloat(emp.deduction) : 0;
+        row.net_payment = emp.net != null ? parseFloat(emp.net) : 0;
         rows.push(row);
       }
     }
@@ -1075,6 +1083,9 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
     }
     columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
     columns.push({ header: 'Lunch Deduction', key: 'lunch_deduction', width: 15 });
+    columns.push({ header: 'Total Amount', key: 'total_amount', width: 12 });
+    columns.push({ header: 'Advance Deducted', key: 'advance_deduct', width: 15 });
+    columns.push({ header: 'Net Payment', key: 'net_payment', width: 12 });
     sheet.columns = columns;
     rows.forEach(r => sheet.addRow(r));
     res.setHeader('Content-Disposition', 'attachment; filename="DihadiHours.xlsx"');
