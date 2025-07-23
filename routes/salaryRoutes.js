@@ -548,7 +548,12 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
       const isSun = moment(a.date).day() === 0;
       let hrsDec = 0;
       if (a.punch_in && a.punch_out) {
-        hrsDec = effectiveHours(a.punch_in, a.punch_out, emp.salary_type);
+        hrsDec = effectiveHours(
+          a.punch_in,
+          a.punch_out,
+          emp.salary_type,
+          emp.salary_type === 'dihadi' ? emp.allotted_hours : undefined
+        );
         a.hours = formatHours(hrsDec);
         a.lunch_deduction = lunchDeduction(a.punch_in, a.punch_out, emp.salary_type);
         if (emp.salary_type === 'monthly') {
@@ -1044,7 +1049,12 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
         for (const a of att) {
           const day = moment(a.date).date();
           if (a.punch_in && a.punch_out) {
-            const hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+            const hrs = effectiveHours(
+              a.punch_in,
+              a.punch_out,
+              'dihadi',
+              emp.allotted_hours
+            );
             const lunch = lunchDeduction(a.punch_in, a.punch_out, 'dihadi');
             byDate[day] = hrs.toFixed(2);
             totalHrs += hrs;

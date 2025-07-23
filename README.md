@@ -182,7 +182,7 @@ Lunch breaks are deducted from recorded hours only for workers paid on a `dihadi
 
 `dihadi` workers do not receive any special treatment for Sundays. Their pay is purely based on hours worked.
 
-Punching in after **09:15** reduces the day's counted hours minute-for-minute once the 15 minute grace period is exceeded. This late deduction applies only to **dihadi** (daily wage) employees.
+Punching in after **09:15** normally deducts **one hour** from the day's counted hours for **dihadi** (daily wage) workers. When the arrival is later than 40% of the allotted shift hours no late deduction is applied.
 
 Monthly employees paid hourly receive their full allotted hours when both punches are present and the punch in time is before **09:15**.
 
@@ -262,9 +262,10 @@ primarily from `helpers/salaryCalculator.js` and related routes.
   - 0 minutes if the employee leaves before **13:10**.
   - 30 minutes if the employee leaves between **13:10** and **18:10**.
 - 60 minutes for any punch‑out after **18:10**.
-- Dihadi workers arriving after **09:15** have minutes deducted equal to how
-  late they punch in beyond the 15 minute grace window. Their day is still
-  capped at **11 working hours**.
+- Dihadi workers arriving after **09:15** lose **one hour** from their total
+  working hours. This deduction is skipped when the punch in time is later
+  than 40% of the allotted shift. Their day is still capped at **11 working
+  hours**.
 
 #### Monthly Worker Attendance
 

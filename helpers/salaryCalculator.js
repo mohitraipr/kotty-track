@@ -25,7 +25,7 @@ function crossedLunch(punchIn, punchOut) {
 }
 exports.crossedLunch = crossedLunch;
 
-function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
+function effectiveHours(punchIn, punchOut, salaryType = 'dihadi', allottedHours = null) {
   const start = moment(punchIn, 'HH:mm:ss');
   const end = moment(punchOut, 'HH:mm:ss');
   let mins = end.diff(start, 'minutes');
@@ -39,13 +39,19 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi') {
   }
   mins -= lunchDeduction(punchIn, punchOut, salaryType);
 
-  // Deduct minutes for late arrivals after the 15 minute grace period
-  // Late deduction only applies to daily wage (dihadi) employees
+  // Deduct for late arrival after the 15 minute grace period
+  // For dihadi workers the deduction is a flat hour unless
+  // they arrive after 40% of their allotted hours, in which
+  // case no late deduction applies.
   if (salaryType === 'dihadi') {
     const grace = moment('09:15:00', 'HH:mm:ss');
     if (start.isAfter(grace)) {
-      const late = start.diff(grace, 'minutes');
-      mins -= late;
+      const lateMinutes = start.diff(grace, 'minutes');
+      const baseHours = allottedHours ? parseFloat(allottedHours) : 9;
+      const threshold = baseHours * 60 * 0.4; // 40% of the shift
+      if (lateMinutes < threshold) {
+        mins -= Math.min(60, lateMinutes);
+      }
     }
   }
 
@@ -335,7 +341,7 @@ async function calculateDihadiMonthly(conn, employeeId, month, emp) {
   let totalHours = 0;
   for (const a of attendance) {
     if (!a.punch_in || !a.punch_out) continue;
-    totalHours += effectiveHours(a.punch_in, a.punch_out);
+    totalHours += effectiveHours(a.punch_in, a.punch_out, 'dihadi', emp.allotted_hours);
   }
   const gross = parseFloat((totalHours * hourlyRate).toFixed(2));
   const [[advRow]] = await conn.query(
