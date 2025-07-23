@@ -1005,6 +1005,89 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
   }
 });
 
+// Supervisor download of dihadi hours sheet
+router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const half = parseInt(req.query.half, 10) === 2 ? 2 : 1;
+  const supervisorId = req.session.user.id;
+  let start = moment(month + '-01');
+  let end = half === 1 ? moment(month + '-15') : moment(month + '-01').endOf('month');
+  if (half === 2) start = moment(month + '-16');
+  try {
+    const [employees] = await pool.query(
+      'SELECT id, punching_id, name, salary, allotted_hours FROM employees WHERE supervisor_id = ? AND salary_type = \'dihadi\' AND is_active = 1 ORDER BY name',
+      [supervisorId]
+    );
+    const empIds = employees.map(e => e.id);
+    const rows = [];
+    if (empIds.length) {
+      const [attAll] = await pool.query(
+        'SELECT employee_id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id IN (?) AND date BETWEEN ? AND ? ORDER BY employee_id, date',
+        [empIds, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
+      );
+      const attMap = new Map();
+      for (const a of attAll) {
+        const key = a.employee_id;
+        if (!attMap.has(key)) attMap.set(key, []);
+        attMap.get(key).push(a);
+      }
+      for (const emp of employees) {
+        const att = attMap.get(emp.id) || [];
+        const byDate = {};
+        let totalHrs = 0;
+        let totalLunch = 0;
+        for (const a of att) {
+          const day = moment(a.date).date();
+          if (a.punch_in && a.punch_out) {
+            const hrs = effectiveHours(a.punch_in, a.punch_out, 'dihadi');
+            const lunch = lunchDeduction(a.punch_in, a.punch_out, 'dihadi');
+            byDate[day] = hrs.toFixed(2);
+            totalHrs += hrs;
+            totalLunch += lunch;
+          } else {
+            byDate[day] = '';
+          }
+        }
+        const row = {
+          employee: emp.name,
+          punching_id: emp.punching_id,
+          base_amount: emp.salary
+        };
+        for (let d = start.date(); d <= end.date(); d++) {
+          const key = `d${String(d).padStart(2, '0')}`;
+          row[key] = byDate[d] !== undefined ? byDate[d] : '';
+        }
+        row.total_hours = totalHrs.toFixed(2);
+        row.lunch_deduction = (totalLunch / 60).toFixed(2);
+        rows.push(row);
+      }
+    }
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Dihadi');
+    const columns = [
+      { header: 'Employee', key: 'employee', width: 20 },
+      { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Dihadi Base', key: 'base_amount', width: 12 }
+    ];
+    for (let d = start.date(); d <= end.date(); d++) {
+      const key = `d${String(d).padStart(2, '0')}`;
+      columns.push({ header: String(d), key, width: 5 });
+    }
+    columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
+    columns.push({ header: 'Lunch Deduction', key: 'lunch_deduction', width: 15 });
+    sheet.columns = columns;
+    rows.forEach(r => sheet.addRow(r));
+    res.setHeader('Content-Disposition', 'attachment; filename="DihadiHours.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading dihadi hours:', err);
+    req.flash('error', 'Could not download dihadi hours');
+    res.redirect('/supervisor/employees');
+  }
+});
+
 router.post('/employees/:id/salary/deduct-advance', isAuthenticated, isSupervisor, async (req, res) => {
   const empId = req.params.id;
   const { month, amount } = req.body;
