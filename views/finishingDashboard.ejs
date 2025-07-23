@@ -567,6 +567,10 @@
         const resp = await fetch(`/finishingdashboard/update/${entryId}/json`);
         if (!resp.ok) throw new Error('Failed to fetch update JSON');
         const data = await resp.json();
+        if (!Array.isArray(data.sizes) || !data.sizes.length) {
+          document.getElementById('updateAlertContainer').innerHTML = '<div class="alert alert-danger">No size data available.</div>';
+          return;
+        }
         data.sizes.forEach(sz => {
           const tr = document.createElement('tr');
           tr.innerHTML = `
@@ -589,7 +593,10 @@
           document.getElementById('updateSubmitBtn').classList.remove('btn-secondary');
           document.getElementById('updateSubmitBtn').classList.add('btn-primary');
         }
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('updateAlertContainer').innerHTML = '<div class="alert alert-danger">Failed to load data.</div>';
+      }
     });
     updateForm.addEventListener('submit', (evt) => {
       const oldFields = document.querySelectorAll('.updateSizeField');

@@ -432,12 +432,13 @@
           </div>
           <div class="modal-body">
             <p>
-              <strong>
-                <span data-lang="en">Updating Entry ID:</span>
-                <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
-              </strong>
-              <span id="updatingEntryId">-</span>
-            </p>
+            <strong>
+              <span data-lang="en">Updating Entry ID:</span>
+              <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
+            </strong>
+            <span id="updatingEntryId">-</span>
+            <div id="updateAlert" class="alert alert-danger d-none mt-2"></div>
+          </p>
             <div class="table-responsive">
               <table class="table table-bordered align-middle" id="updateSizesTable">
                 <thead class="table-light">
@@ -780,6 +781,7 @@
     const updateModal = document.getElementById('updateModal');
     const updateForm = document.getElementById('updateForm');
     const updateSizesTable = document.getElementById('updateSizesTable');
+    const updateAlert = document.getElementById('updateAlert');
     let currentUpdateEntryId = null;
 
     if (updateModal) {
@@ -789,15 +791,17 @@
         updateForm.action = '/stitchingdashboard/update/' + currentUpdateEntryId;
         document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
         updateSizesTable.querySelector('tbody').innerHTML = '';
+        updateAlert.classList.add('d-none');
 
         try {
           const res = await fetch(`/stitchingdashboard/update/${currentUpdateEntryId}/json`);
-          if (!res.ok) {
-            console.error('Error fetching existing sizes. Status:', res.status);
+          if (!res.ok) throw new Error(res.status);
+          const data = await res.json();
+          if (!Array.isArray(data.sizes) || !data.sizes.length) {
+            updateAlert.textContent = 'No size data available.';
+            updateAlert.classList.remove('d-none');
             return;
           }
-          const data = await res.json();
-          if (!data.sizes) return;
 
           data.sizes.forEach(sz => {
             const tr = document.createElement('tr');
@@ -832,6 +836,8 @@
           });
         } catch (err) {
           console.error(err);
+          updateAlert.textContent = 'Failed to load data.';
+          updateAlert.classList.remove('d-none');
         }
       });
 

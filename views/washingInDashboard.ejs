@@ -241,6 +241,7 @@
               <strong>Updating Entry ID:</strong>
               <span id="updatingEntryId">-</span>
             </p>
+            <div id="updateAlert" class="alert alert-danger d-none"></div>
             <!-- Table for showing existing sizes and allowing increment -->
             <div class="table-responsive">
               <table class="table table-bordered align-middle" id="updateSizesTable">
@@ -521,7 +522,8 @@
     const $updateModal = $('#updateModal'),
           $updateForm  = $('#updateForm'),
           $sizesBody   = $('#updateSizesTable tbody'),
-          $upId        = $('#updatingEntryId');
+          $upId        = $('#updatingEntryId'),
+          $alert       = $('#updateAlert');
 
     // When modal is shown, fetch current sizes for the entry
     $updateModal.on('show.bs.modal', async e => {
@@ -529,24 +531,33 @@
       $updateForm.attr('action', `/washingin/update/${id}`);
       $upId.text(id);
       $sizesBody.empty();
+      $alert.addClass('d-none').text('');
 
-      const res = await fetch(`/washingin/update/${id}/json`);
-      if (!res.ok) return alert('Fetch error');
-
-      // Populate table with existing size usage and remaining
-      (await res.json()).sizes.forEach(s => {
-        $sizesBody.append(`
-          <tr>
-            <td>${s.size_label}</td>
-            <td>${s.pieces}</td>
-            <td>${s.remain}</td>
-            <td>
-              <input type="number" class="form-control" min="0"
-                     data-size-id="${s.id}" autocomplete="off">
-            </td>
-          </tr>
-        `);
-      });
+      try {
+        const res = await fetch(`/washingin/update/${id}/json`);
+        if (!res.ok) throw new Error('Fetch error');
+        const data = await res.json();
+        if (!Array.isArray(data.sizes) || !data.sizes.length) {
+          $alert.text('No size data available.').removeClass('d-none');
+          return;
+        }
+        data.sizes.forEach(s => {
+          $sizesBody.append(`
+            <tr>
+              <td>${s.size_label}</td>
+              <td>${s.pieces}</td>
+              <td>${s.remain}</td>
+              <td>
+                <input type="number" class="form-control" min="0"
+                       data-size-id="${s.id}" autocomplete="off">
+              </td>
+            </tr>
+          `);
+        });
+      } catch (err) {
+        console.error(err);
+        $alert.text('Failed to load data.').removeClass('d-none');
+      }
     });
 
     // After modal closes, refresh the existing entries list
