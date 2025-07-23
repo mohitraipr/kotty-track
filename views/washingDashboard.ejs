@@ -291,9 +291,10 @@
         </div>
         <div class="modal-body">
           <p>
-            <strong>Updating Entry ID:</strong>
-            <span id="updatingEntryId">-</span>
-          </p>
+          <strong>Updating Entry ID:</strong>
+          <span id="updatingEntryId">-</span>
+          <div id="updateAlert" class="alert alert-danger d-none mt-2"></div>
+        </p>
           <div class="table-responsive">
             <table class="table table-bordered align-middle" id="updateSizesTable">
               <thead class="table-light">
@@ -597,6 +598,7 @@
     const $updateForm       = $('#updateForm');
     const $updateSizesTable = $('#updateSizesTable tbody');
     const $updatingEntryId  = $('#updatingEntryId');
+    const $updateAlert      = $('#updateAlert');
 
     // When modal opens, fetch current sizes & remain
     $updateModal.on('show.bs.modal', async function(e) {
@@ -604,11 +606,16 @@
       $updatingEntryId.text(entryId);
       $updateForm.attr('action', `/washingdashboard/update/${entryId}`);
       $updateSizesTable.empty();
+      $updateAlert.addClass('d-none').text('');
 
       try {
         const res  = await fetch(`/washingdashboard/update/${entryId}/json`);
+        if (!res.ok) throw new Error('Fetch error');
         const data = await res.json();
-        if (!Array.isArray(data.sizes)) return;
+        if (!Array.isArray(data.sizes) || !data.sizes.length) {
+          $updateAlert.text('No size data available.').removeClass('d-none');
+          return;
+        }
 
         data.sizes.forEach(sz => {
           const tr = $(`
@@ -632,6 +639,7 @@
         });
       } catch (err) {
         console.error('Error loading update data:', err);
+        $updateAlert.text('Failed to load data.').removeClass('d-none');
       }
     });
 
