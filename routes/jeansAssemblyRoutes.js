@@ -350,11 +350,15 @@ router.get('/update/:id/json', isAuthenticated, isJeansAssemblyMaster, async (re
       return res.json({ sizes: outNoRemain });
     }
 
-    // Calculate remain for each size in one query
+    // Calculate remain for each size in one query using stitching_data_sizes
     const [rows] = await pool.query(`
       SELECT sz.id, sz.size_label, sz.pieces,
-             sz.pieces - COALESCE(u.usedCount,0) AS remain
+             COALESCE(sds.pieces,0) - COALESCE(u.usedCount,0) AS remain
       FROM jeans_assembly_data_sizes sz
+      JOIN jeans_assembly_data ja   ON sz.jeans_assembly_data_id = ja.id
+      JOIN stitching_data sd        ON ja.lot_no = sd.lot_no
+      JOIN stitching_data_sizes sds ON sds.stitching_data_id = sd.id
+                                   AND sds.size_label = sz.size_label
       LEFT JOIN (
         SELECT jds.size_label, SUM(jds.pieces) AS usedCount
         FROM jeans_assembly_data_sizes jds
