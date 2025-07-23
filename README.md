@@ -261,11 +261,11 @@ primarily from `helpers/salaryCalculator.js` and related routes.
   based on their punch‑out time:
   - 0 minutes if the employee leaves before **13:10**.
   - 30 minutes if the employee leaves between **13:10** and **18:10**.
-- 60 minutes for any punch‑out after **18:10**.
-- Dihadi workers arriving after **09:15** lose **one hour** from their total
-  working hours. This deduction is skipped when the punch in time is later
-  than 40% of the allotted shift. Their day is still capped at **11 working
-  hours**.
+- 60 minutes for any punch‑out after **18:10** when the shift begins before the
+  40% mark; otherwise only **30 minutes** is deducted.
+Dihadi workers arriving after **09:15** lose **one hour** from their total
+working hours, unless their punch in time is later than **40%** of the allotted
+shift. Their day is still capped at **11 working hours**.
 
 #### Monthly Worker Attendance
 

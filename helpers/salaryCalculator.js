@@ -6,11 +6,28 @@ const {
 } = require('../utils/supervisors');
 const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
 
-function lunchDeduction(punchIn, punchOut, salaryType = 'dihadi') {
+function lunchDeduction(
+  punchIn,
+  punchOut,
+  salaryType = 'dihadi',
+  allottedHours = null
+) {
   if (salaryType !== 'dihadi') return 0;
   const out = moment(punchOut, 'HH:mm:ss');
   const firstCut = moment('13:10:00', 'HH:mm:ss');
   const secondCut = moment('18:10:00', 'HH:mm:ss');
+  const start = moment(punchIn, 'HH:mm:ss');
+
+  const baseHours = allottedHours ? parseFloat(allottedHours) : 9;
+  const shiftStart = moment('09:00:00', 'HH:mm:ss');
+  const threshold = baseHours * 60 * 0.4;
+  const after40 = start.diff(shiftStart, 'minutes') >= threshold;
+
+  if (after40) {
+    if (out.isSameOrBefore(firstCut)) return 0;
+    return 30;
+  }
+
   if (out.isSameOrBefore(firstCut)) return 0;
   if (out.isSameOrBefore(secondCut)) return 30;
   return 60;
@@ -37,7 +54,7 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi', allottedHours 
       mins += grace;
     }
   }
-  mins -= lunchDeduction(punchIn, punchOut, salaryType);
+  mins -= lunchDeduction(punchIn, punchOut, salaryType, allottedHours);
 
   // Deduct for late arrival after the 15 minute grace period
   // For dihadi workers the deduction is a flat hour unless
@@ -45,13 +62,12 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi', allottedHours 
   // case no late deduction applies.
   if (salaryType === 'dihadi') {
     const grace = moment('09:15:00', 'HH:mm:ss');
-    if (start.isAfter(grace)) {
-      const lateMinutes = start.diff(grace, 'minutes');
-      const baseHours = allottedHours ? parseFloat(allottedHours) : 9;
-      const threshold = baseHours * 60 * 0.4; // 40% of the shift
-      if (lateMinutes < threshold) {
-        mins -= Math.min(60, lateMinutes);
-      }
+    const shiftStart = moment('09:00:00', 'HH:mm:ss');
+    const baseHours = allottedHours ? parseFloat(allottedHours) : 9;
+    const threshold = baseHours * 60 * 0.4; // 40% of the shift
+    const after40 = start.diff(shiftStart, 'minutes') >= threshold;
+    if (start.isAfter(grace) && !after40) {
+      mins -= 60;
     }
   }
 
