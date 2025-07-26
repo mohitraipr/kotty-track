@@ -992,6 +992,11 @@ router.post('/departments/employees/:id/update', isAuthenticated, isOperator, as
   const paySunday = pay_sunday === '1' || pay_sunday === 1 || pay_sunday === true;
   const isActive = is_active === '1' || is_active === 1 || is_active === true;
   try {
+    let salaryVal = salary;
+    if (req.session.user.id !== PRIVILEGED_OPERATOR_ID) {
+      const [[row]] = await pool.query('SELECT salary FROM employees WHERE id=?', [empId]);
+      salaryVal = row ? row.salary : salary;
+    }
     await pool.query(
       `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, pay_sunday=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
       [
@@ -999,7 +1004,7 @@ router.post('/departments/employees/:id/update', isAuthenticated, isOperator, as
         name,
         designation,
         phone_number,
-        salary,
+        salaryVal,
         salary_type,
         allotted_hours,
         paid_sunday_allowance || 0,

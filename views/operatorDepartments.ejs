@@ -532,17 +532,18 @@
           data.forEach(emp => {
             const joinDate = new Date(emp.date_of_joining).toISOString().split('T')[0];
             const row = document.createElement('tr');
+            const salaryCell = canToggle
+              ? `<div class="input-group input-group-sm">
+                   <input type="password" step="0.01" class="form-control salary-input" name="salary" value="${emp.salary}" required>
+                   <button type="button" class="btn btn-outline-secondary toggle-salary"><i class="fas fa-eye"></i></button>
+                 </div>`
+              : '<span class="salary-hidden">****</span>';
             row.innerHTML = `
               <td><input type="text" class="form-control form-control-sm" name="punching_id" value="${emp.punching_id}"></td>
               <td><input type="text" class="form-control form-control-sm" name="name" value="${emp.name}" required></td>
               <td><input type="text" class="form-control form-control-sm" name="designation" value="${emp.designation || ''}"></td>
               <td><input type="text" class="form-control form-control-sm" name="phone_number" value="${emp.phone_number || ''}" pattern="\\d*"></td>
-              <td class="salary-container">
-                <div class="input-group input-group-sm">
-                  <input type="password" step="0.01" class="form-control salary-input" name="salary" value="${emp.salary}" required>
-                  ${canToggle ? '<button type="button" class="btn btn-outline-secondary toggle-salary"><i class="fas fa-eye"></i></button>' : ''}
-                </div>
-              </td>
+              <td class="salary-container">${salaryCell}</td>
               <td><select class="form-select form-select-sm" name="salary_type">
                     <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>
                     <option value="monthly" ${emp.salary_type==='monthly'?'selected':''}>Monthly</option>
