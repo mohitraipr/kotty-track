@@ -543,7 +543,7 @@
               <td><input type="text" class="form-control form-control-sm" name="name" value="${emp.name}" required></td>
               <td><input type="text" class="form-control form-control-sm" name="designation" value="${emp.designation || ''}"></td>
               <td><input type="text" class="form-control form-control-sm" name="phone_number" value="${emp.phone_number || ''}" pattern="\\d*"></td>
-              <td><input type="text" class="form-control form-control-sm" name="aadhar_card_number" value="${emp.aadhar_card_number || ''}"></td>
+              <td><input type="text" class="form-control form-control-sm" name="aadhar_card_number" value="${emp.aadhar_card_number || ''}" pattern="\\d{12}" minlength="12" maxlength="12"></td>
               <td class="salary-container">${salaryCell}</td>
               <td><select class="form-select form-select-sm" name="salary_type">
                     <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>

@@ -4,6 +4,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
 const { calculateSalaryForMonth, effectiveHours } = require('../helpers/salaryCalculator');
+const { isValidAadhar } = require('../helpers/aadharValidator');
 
 // simple in-memory cache for the dashboard
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -153,6 +154,10 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
 // Create a new employee for the logged in supervisor
 router.post('/employees', isAuthenticated, isSupervisor, async (req, res) => {
   const { punching_id, name, designation, phone_number, aadhar_card_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining } = req.body;
+  if (aadhar_card_number && !isValidAadhar(aadhar_card_number)) {
+    req.flash('error', 'Aadhar number must be 12 digits');
+    return res.redirect('/supervisor/employees');
+  }
   try {
     await pool.query(
       `INSERT INTO employees
