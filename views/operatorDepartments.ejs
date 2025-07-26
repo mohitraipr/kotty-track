@@ -525,7 +525,7 @@
           table.id = 'employeesTable';
           table.className = 'table table-bordered table-sm nowrap w-100';
           table.innerHTML = `<thead><tr>
-            <th>Punch ID</th><th>Name</th><th>Designation</th><th>Phone</th>
+            <th>Punch ID</th><th>Name</th><th>Designation</th><th>Phone</th><th>Aadhar</th>
             <th>Salary</th><th>Type</th><th>Hours</th><th>Mandatory Sun</th><th>Pay Sun?</th><th>Leave Start</th>
             <th>Join Date</th><th>Active</th><th>Save</th></tr></thead>`;
           const tbody = document.createElement('tbody');
@@ -543,6 +543,7 @@
               <td><input type="text" class="form-control form-control-sm" name="name" value="${emp.name}" required></td>
               <td><input type="text" class="form-control form-control-sm" name="designation" value="${emp.designation || ''}"></td>
               <td><input type="text" class="form-control form-control-sm" name="phone_number" value="${emp.phone_number || ''}" pattern="\\d*"></td>
+              <td><input type="text" class="form-control form-control-sm" name="aadhar_card_number" value="${emp.aadhar_card_number || ''}"></td>
               <td class="salary-container">${salaryCell}</td>
               <td><select class="form-select form-select-sm" name="salary_type">
                     <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>

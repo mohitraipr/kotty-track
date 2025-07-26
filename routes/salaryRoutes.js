@@ -741,7 +741,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
 
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
-             e.punching_id, e.name AS employee_name, e.salary AS base_salary, e.salary_type,
+             e.punching_id, e.name AS employee_name, e.aadhar_card_number, e.salary AS base_salary, e.salary_type,
              e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
@@ -913,6 +913,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
     const sheet = workbook.addWorksheet('Salary');
     const columns = [
       { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Base Salary', key: 'base_salary', width: 12 }
@@ -966,6 +967,7 @@ router.get('/supervisor/salary/download', isAuthenticated, isSupervisor, async (
         ) && !FULL_SALARY_EMPLOYEE_IDS.includes(r.employee_id);
       const rowData = {
         punching_id: r.punching_id,
+        aadhar: r.aadhar_card_number || '',
         employee: r.employee_name,
         salary_type: r.salary_type,
         base_salary: r.base_salary
@@ -1031,7 +1033,7 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
   if (half === 2) start = moment(month + '-16');
   try {
     const [employees] = await pool.query(
-      `SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
+      `SELECT e.id, e.punching_id, e.name, e.aadhar_card_number, e.salary, e.allotted_hours,
               es.gross, es.deduction, es.net
          FROM employees e
     LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
@@ -1082,6 +1084,7 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
         const row = {
           employee: emp.name,
           punching_id: emp.punching_id,
+          aadhar: emp.aadhar_card_number || '',
           base_amount: emp.salary
         };
         for (let d = start.date(); d <= end.date(); d++) {
@@ -1101,6 +1104,7 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
     const columns = [
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Punching ID', key: 'punching_id', width: 12 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Dihadi Base', key: 'base_amount', width: 12 }
     ];
     for (let d = start.date(); d <= end.date(); d++) {

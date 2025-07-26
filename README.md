@@ -116,6 +116,8 @@ CREATE TABLE employees (
  
 );
 ```
+The employees table now includes an optional `aadhar_card_number VARCHAR(20)` column for storing Aadhar information.
+
 Each supervisor must assign unique punching IDs to their employees. This ensures no duplicate entries. Employees earn leave and salary details stored in `employee_salaries`. These actions are available from the operator dashboard, which also lists each supervisor with their active employee count and total monthly salary.
 
 ### Employee Leaves
