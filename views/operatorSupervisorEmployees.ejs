@@ -20,6 +20,66 @@
   <div class="mb-3">
     <a href="/operator/supervisors/<%= supervisor.id %>/bulk-attendance" class="btn btn-sm btn-primary">Bulk Edit Attendance</a>
   </div>
+  <h5>Add Employee</h5>
+  <form action="/operator/supervisors/<%= supervisor.id %>/employees" method="POST" class="row g-3 mb-4">
+    <div class="col-md-3">
+      <label class="form-label">Punching ID</label>
+      <input type="text" name="punching_id" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Name</label>
+      <input type="text" name="name" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Designation</label>
+      <input type="text" name="designation" class="form-control">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Phone</label>
+      <input type="text" name="phone_number" class="form-control">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Aadhar</label>
+      <input type="text" name="aadhar_card_number" class="form-control" pattern="\d{12}" minlength="12" maxlength="12">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Date of Joining</label>
+      <input type="date" name="date_of_joining" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Salary</label>
+      <input type="number" step="0.01" name="salary" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Salary Type</label>
+      <select name="salary_type" class="form-select" required>
+        <option value="dihadi">Dihadi</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Allotted Hours</label>
+      <input type="number" step="0.1" name="allotted_hours" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Paid Sunday Allowance</label>
+      <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Pay Sundays?</label>
+      <select name="pay_sunday" class="form-select">
+        <option value="1" selected>Yes</option>
+        <option value="0">No</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Leave Start Months</label>
+      <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
+    </div>
+    <div class="col-md-2 align-self-end">
+      <button type="submit" class="btn btn-success">Create</button>
+    </div>
+  </form>
   <table class="table table-bordered">
     <thead>
       <tr>
