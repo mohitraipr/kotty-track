@@ -17,6 +17,7 @@ const router = express.Router();
 const { pool } = require("../config/db");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 const ExcelJS = require("exceljs");
+const { PRIVILEGED_OPERATOR_ID } = require("../utils/operators");
 
 // simple in-memory cache to avoid heavy repetitive queries
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -416,9 +417,11 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
        ORDER BY d.name, u.username, e.name
     `);
 
+    const canViewSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Employees");
-    sheet.columns = [
+    let columns = [
       { header: "Department", key: "department", width: 20 },
       { header: "Supervisor", key: "supervisor", width: 20 },
       { header: "Employee", key: "employee", width: 20 },
@@ -428,19 +431,24 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
       { header: "Salary", key: "salary", width: 12 },
       { header: "Advance Left", key: "advance_left", width: 15 }
     ];
+    if (!canViewSalary) {
+      columns = columns.filter(c => c.key !== "salary");
+    }
+    sheet.columns = columns;
 
     rows.forEach(r => {
       const advLeft = parseFloat(r.total_adv) - parseFloat(r.total_ded);
-      sheet.addRow({
+      const rowData = {
         department: r.department_name || "",
         supervisor: r.supervisor_name,
         employee: r.employee_name,
         punching_id: r.punching_id,
         employee_id: r.employee_id,
         salary_type: r.salary_type,
-        salary: r.salary,
         advance_left: advLeft
-      });
+      };
+      if (canViewSalary) rowData.salary = r.salary;
+      sheet.addRow(rowData);
     });
 
     res.setHeader("Content-Disposition", 'attachment; filename="EmployeeSummary.xlsx"');
