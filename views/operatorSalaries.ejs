@@ -33,10 +33,14 @@
           <td><%= s.supervisor_name %></td>
           <td><%= s.employee_count %></td>
           <td class="salary-container">
-            <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
-            <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
-              <i class="fas fa-eye"></i>
-            </button>
+            <% if (canViewSalary) { %>
+              <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
+              <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
+                <i class="fas fa-eye"></i>
+              </button>
+            <% } else { %>
+              ****
+            <% } %>
           </td>
         </tr>
       <% }) %>

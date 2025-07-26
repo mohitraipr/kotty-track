@@ -16,13 +16,14 @@ const {
 const { HOURLY_EXEMPT_EMPLOYEE_IDS } = require('../utils/hourlyExemptEmployees');
 const { SPECIAL_TEAM_EMPLOYEE_IDS } = require('../utils/specialTeamEmployees');
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
+const { PRIVILEGED_OPERATOR_ID } = require('../utils/operators');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 // GET /operator/departments - list departments and supervisors
 router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
   try {
-    const showSalary = true;
+    const showSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
     const currentMonth = moment().format('YYYY-MM');
     const [deptRows] = await pool.query(
       `SELECT d.id, d.name,
@@ -114,7 +115,8 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
       showSalarySection: showSalary,
       salarySummary,
       overview,
-      currentMonth
+      currentMonth,
+      canViewSalary: showSalary
     });
   } catch (err) {
     console.error('Error loading departments:', err);
@@ -278,8 +280,10 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         ) ds ON ds.user_id = u.id
         LEFT JOIN departments d ON ds.department_id = d.id
        WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly'
-       ORDER BY u.username, e.name
+      ORDER BY u.username, e.name
     `, [month]);
+
+    const canViewSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
 
     const empIds = rows.map(r => r.employee_id);
     if (empIds.length) {
@@ -395,7 +399,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Salary');
-    sheet.columns = [
+    let columns = [
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
@@ -416,20 +420,18 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Status', key: 'time_status', width: 12 },
       { header: 'Deduction Reason', key: 'reason', width: 30 }
     ];
+    if (!canViewSalary) {
+      columns = columns.filter(c => !['gross','deduction','advance_taken','advance_deducted','net','ut_deduct'].includes(c.key));
+    }
+    sheet.columns = columns;
     rows.forEach(r => {
-      sheet.addRow({
+      const rowData = {
         supervisor: r.supervisor_name,
         department: r.department_name || '',
         punching_id: r.punching_id,
         employee: r.employee_name,
         salary_type: r.salary_type,
         month: r.month,
-        gross: r.gross,
-        deduction: r.deduction,
-        advance_taken: r.advance_taken,
-        advance_deducted: r.advance_deducted,
-        net: r.net,
-        ut_deduct: r.ut_deduct,
         ut_detail: r.ut_detail,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
@@ -437,7 +439,18 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         ut_days: r.undertime_days,
         time_status: r.time_status,
         reason: r.deduction_reason
-      });
+      };
+      if (canViewSalary) {
+        Object.assign(rowData, {
+          gross: r.gross,
+          deduction: r.deduction,
+          advance_taken: r.advance_taken,
+          advance_deducted: r.advance_deducted,
+          net: r.net,
+          ut_deduct: r.ut_deduct,
+        });
+      }
+      sheet.addRow(rowData);
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -476,11 +489,13 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
                 FROM department_supervisors
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
-        LEFT JOIN departments d ON ds.department_id = d.id
+       LEFT JOIN departments d ON ds.department_id = d.id
        WHERE es.month = ? AND e.is_active = 1 AND e.salary_type = 'monthly'
        ORDER BY u.username, e.name`,
       [month]
     );
+
+    const canViewSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
 
     const empIds2 = rows.map(r => r.employee_id);
     if (empIds2.length) {
@@ -591,7 +606,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Salary');
-    sheet.columns = [
+    let columns = [
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
@@ -612,20 +627,18 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       { header: 'Status', key: 'time_status', width: 12 },
       { header: 'Deduction Reason', key: 'reason', width: 30 }
     ];
+    if (!canViewSalary) {
+      columns = columns.filter(c => !['gross','deduction','advance_taken','advance_deducted','net','ut_deduct'].includes(c.key));
+    }
+    sheet.columns = columns;
     rows.forEach(r => {
-      sheet.addRow({
+      const rowData = {
         supervisor: r.supervisor_name,
         department: r.department_name || '',
         punching_id: r.punching_id,
         employee: r.employee_name,
         salary_type: r.salary_type,
         month: r.month,
-        gross: r.gross,
-        deduction: r.deduction,
-        advance_taken: r.advance_taken,
-        advance_deducted: r.advance_deducted,
-        net: r.net,
-        ut_deduct: r.ut_deduct,
         ut_detail: r.ut_detail,
         ot_hours: r.overtime_hours,
         ot_days: r.overtime_days,
@@ -633,7 +646,18 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         ut_days: r.undertime_days,
         time_status: r.time_status,
         reason: r.deduction_reason
-      });
+      };
+      if (canViewSalary) {
+        Object.assign(rowData, {
+          gross: r.gross,
+          deduction: r.deduction,
+          advance_taken: r.advance_taken,
+          advance_deducted: r.advance_deducted,
+          net: r.net,
+          ut_deduct: r.ut_deduct,
+        });
+      }
+      sheet.addRow(rowData);
     });
     res.setHeader('Content-Disposition', 'attachment; filename="SalarySummary.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -667,9 +691,10 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
                 FROM department_supervisors
                GROUP BY user_id
         ) ds ON ds.user_id = u.id
-        LEFT JOIN departments d ON ds.department_id = d.id
+       LEFT JOIN departments d ON ds.department_id = d.id
        WHERE e.salary_type = 'dihadi' AND e.is_active = 1
        ORDER BY u.username, e.name`);
+    const canViewSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
     const rows = [];
     const empIds3 = employees.map(e => e.id);
     if (empIds3.length) {
@@ -729,7 +754,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
     }
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Dihadi');
-    sheet.columns = [
+    let columns = [
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
@@ -743,7 +768,19 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       { header: 'Net', key: 'net', width: 10 },
       { header: 'Deduction Reason', key: 'reason', width: 25 }
     ];
-    rows.forEach(r => sheet.addRow(r));
+    if (!canViewSalary) {
+      columns = columns.filter(c => !['amount','advance_taken','advance_deducted','net'].includes(c.key));
+    }
+    sheet.columns = columns;
+    rows.forEach(r => {
+      if (!canViewSalary) {
+        delete r.amount;
+        delete r.advance_taken;
+        delete r.advance_deducted;
+        delete r.net;
+      }
+      sheet.addRow(r);
+    });
     res.setHeader('Content-Disposition', 'attachment; filename="DihadiSalary.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
@@ -933,6 +970,11 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
       'SELECT * FROM employees WHERE supervisor_id = ? ORDER BY name',
       [req.params.supId]
     );
+    if (req.session.user.id !== PRIVILEGED_OPERATOR_ID) {
+      rows.forEach(r => {
+        r.salary = '';
+      });
+    }
     res.json(rows);
   } catch (err) {
     console.error('Error fetching employees:', err);

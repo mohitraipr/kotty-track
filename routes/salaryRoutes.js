@@ -12,6 +12,7 @@ const {
   SPECIAL_SUNDAY_SUPERVISORS,
   FULL_SALARY_EMPLOYEE_IDS
 } = require('../utils/supervisors');
+const { PRIVILEGED_OPERATOR_ID } = require('../utils/operators');
 
 function formatHours(h) {
   let hours = Math.floor(h);
@@ -450,7 +451,12 @@ router.get('/salaries', isAuthenticated, isOperator, async (req, res) => {
         FROM users u
         JOIN employees e ON e.supervisor_id = u.id
        GROUP BY u.id`);
-    res.render('operatorSalaries', { user: req.session.user, summary: rows });
+    const canViewSalary = req.session.user.id === PRIVILEGED_OPERATOR_ID;
+    res.render('operatorSalaries', {
+      user: req.session.user,
+      summary: rows,
+      canViewSalary
+    });
   } catch (err) {
     console.error('Error loading salary summary:', err);
     req.flash('error', 'Could not load salary summary');
