@@ -11,6 +11,7 @@ const {
 } = require("../utils/hourlyExemptEmployees");
 const { SPECIAL_TEAM_EMPLOYEE_IDS } = require("../utils/specialTeamEmployees");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
+const { isValidAadhar } = require("../helpers/aadharValidator");
 
 // Simple in-memory cache with TTL for frequently accessed queries
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -91,6 +92,62 @@ router.get(
       console.error("Error loading employees:", err);
       req.flash("error", "Failed to load employees");
       res.redirect("/operator/supervisors");
+    }
+  },
+);
+
+// Create a new employee for the given supervisor
+router.post(
+  "/supervisors/:id/employees",
+  isAuthenticated,
+  isOperator,
+  async (req, res) => {
+    const supId = req.params.id;
+    const {
+      punching_id,
+      name,
+      designation,
+      phone_number,
+      aadhar_card_number,
+      salary,
+      salary_type,
+      allotted_hours,
+      paid_sunday_allowance,
+      pay_sunday,
+      leave_start_months,
+      date_of_joining,
+    } = req.body;
+    if (aadhar_card_number && !isValidAadhar(aadhar_card_number)) {
+      req.flash("error", "Aadhar number must be 12 digits");
+      return res.redirect(`/operator/supervisors/${supId}/employees`);
+    }
+    try {
+      await pool.query(
+        `INSERT INTO employees
+          (supervisor_id, punching_id, name, designation, phone_number, aadhar_card_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          supId,
+          punching_id,
+          name,
+          designation,
+          phone_number,
+          aadhar_card_number,
+          salary,
+          salary_type,
+          allotted_hours,
+          paid_sunday_allowance || 0,
+          pay_sunday ? 1 : 0,
+          leave_start_months || 3,
+          date_of_joining,
+        ],
+      );
+      req.flash("success", "Employee created");
+      res.redirect(`/operator/supervisors/${supId}/employees`);
+    } catch (err) {
+      console.error("Error creating employee:", err);
+      req.flash("error", "Failed to create employee");
+      res.redirect(`/operator/supervisors/${supId}/employees`);
     }
   },
 );
