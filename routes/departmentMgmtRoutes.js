@@ -7,6 +7,7 @@ const path = require('path');
 const moment = require('moment');
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
+const { isValidAadhar } = require('../helpers/aadharValidator');
 const {
   calculateSalaryForMonth,
   calculateSalaryHourly,
@@ -996,6 +997,10 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
   const { punching_id, name, designation, phone_number, aadhar_card_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active } = req.body;
+
+  if (aadhar_card_number && !isValidAadhar(aadhar_card_number)) {
+    return res.status(400).json({ error: 'Aadhar number must be 12 digits' });
+  }
 
   // Convert boolean like fields to proper numbers. Strings like "0" should be
   // treated as false which JavaScript truthiness would not do by default.
