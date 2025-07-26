@@ -297,14 +297,18 @@
                 <td><%= s.supervisor_name %></td>
                 <td><%= s.employee_count %></td>
                 <td class="salary-container">
-                  <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
-                  <% if (s.monthly_salary && s.dihadi_salary) { %>
-                    <span class="badge bg-primary ms-1">M <%= s.monthly_salary %></span>
-                    <span class="badge bg-info text-dark ms-1">D <%= s.dihadi_salary %></span>
+                  <% if (canViewSalary) { %>
+                    <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
+                    <% if (s.monthly_salary && s.dihadi_salary) { %>
+                      <span class="badge bg-primary ms-1">M <%= s.monthly_salary %></span>
+                      <span class="badge bg-info text-dark ms-1">D <%= s.dihadi_salary %></span>
+                    <% } %>
+                    <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  <% } else { %>
+                    ****
                   <% } %>
-                  <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
-                    <i class="fas fa-eye"></i>
-                  </button>
                 </td>
               </tr>
               <% }) %>
@@ -499,6 +503,7 @@
   const tableContainer = document.getElementById('employeesTableContainer');
   const toastEl = document.getElementById('saveToast');
   const toast = toastEl ? new bootstrap.Toast(toastEl) : null;
+  const canToggle = <%= canViewSalary ? 'true' : 'false' %>;
 
   function showToast(msg, isError) {
     if (!toastEl) return;
@@ -535,7 +540,7 @@
               <td class="salary-container">
                 <div class="input-group input-group-sm">
                   <input type="password" step="0.01" class="form-control salary-input" name="salary" value="${emp.salary}" required>
-                  <button type="button" class="btn btn-outline-secondary toggle-salary"><i class="fas fa-eye"></i></button>
+                  ${canToggle ? '<button type="button" class="btn btn-outline-secondary toggle-salary"><i class="fas fa-eye"></i></button>' : ''}
                 </div>
               </td>
               <td><select class="form-select form-select-sm" name="salary_type">
@@ -561,11 +566,13 @@
             const toggleBtn = row.querySelector('.toggle-salary');
             const salaryInput = row.querySelector('.salary-input');
 
-            toggleBtn.addEventListener('click', () => {
-              const hidden = salaryInput.getAttribute('type') === 'password';
-              salaryInput.setAttribute('type', hidden ? 'number' : 'password');
-              toggleBtn.innerHTML = hidden ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
-            });
+            if (toggleBtn) {
+              toggleBtn.addEventListener('click', () => {
+                const hidden = salaryInput.getAttribute('type') === 'password';
+                salaryInput.setAttribute('type', hidden ? 'number' : 'password');
+                toggleBtn.innerHTML = hidden ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+              });
+            }
 
             saveBtn.addEventListener('click', () => {
               const inputs = row.querySelectorAll('input,select');
