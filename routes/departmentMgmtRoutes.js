@@ -993,6 +993,58 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
   }
 });
 
+// Create a new employee under a supervisor
+router.post('/departments/:supId/employees', isAuthenticated, isOperator, async (req, res) => {
+  const supId = req.params.supId;
+  const {
+    punching_id,
+    name,
+    designation,
+    phone_number,
+    aadhar_card_number,
+    salary,
+    salary_type,
+    allotted_hours,
+    paid_sunday_allowance,
+    pay_sunday,
+    leave_start_months,
+    date_of_joining,
+  } = req.body;
+
+  if (aadhar_card_number && !isValidAadhar(aadhar_card_number)) {
+    req.flash('error', 'Aadhar number must be 12 digits');
+    return res.redirect('/operator/departments');
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO employees
+        (supervisor_id, punching_id, name, designation, phone_number, aadhar_card_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        supId,
+        punching_id,
+        name,
+        designation,
+        phone_number,
+        aadhar_card_number,
+        salary,
+        salary_type,
+        allotted_hours,
+        paid_sunday_allowance || 0,
+        pay_sunday ? 1 : 0,
+        leave_start_months || 3,
+        date_of_joining,
+      ]
+    );
+    req.flash('success', 'Employee created');
+  } catch (err) {
+    console.error('Error creating employee:', err);
+    req.flash('error', 'Failed to create employee');
+  }
+  res.redirect('/operator/departments');
+});
+
 // Update an employee record
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
