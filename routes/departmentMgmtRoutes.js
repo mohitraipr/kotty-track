@@ -265,7 +265,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
 
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
-             e.punching_id, e.name AS employee_name, e.salary AS base_salary, e.salary_type,
+             e.punching_id, e.name AS employee_name, e.aadhar_card_number, e.salary AS base_salary, e.salary_type,
              e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
@@ -403,6 +403,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Month', key: 'month', width: 10 },
@@ -429,6 +430,7 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         supervisor: r.supervisor_name,
         department: r.department_name || '',
         punching_id: r.punching_id,
+        aadhar: r.aadhar_card_number || '',
         employee: r.employee_name,
         salary_type: r.salary_type,
         month: r.month,
@@ -476,7 +478,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
 
     const [rows] = await pool.query(`
       SELECT es.employee_id, es.gross, es.deduction, es.net, es.month,
-             e.punching_id, e.name AS employee_name, e.salary AS base_salary, e.salary_type,
+             e.punching_id, e.name AS employee_name, e.aadhar_card_number, e.salary AS base_salary, e.salary_type,
              e.paid_sunday_allowance, e.pay_sunday, e.allotted_hours,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = es.employee_id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = es.employee_id) AS advance_deducted,
@@ -610,6 +612,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Month', key: 'month', width: 10 },
@@ -636,6 +639,7 @@ router.get('/departments/salary/download-rule', isAuthenticated, isOperator, asy
         supervisor: r.supervisor_name,
         department: r.department_name || '',
         punching_id: r.punching_id,
+        aadhar: r.aadhar_card_number || '',
         employee: r.employee_name,
         salary_type: r.salary_type,
         month: r.month,
@@ -680,7 +684,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
   if (half === 2) start = moment(month + '-16');
   try {
     const [employees] = await pool.query(`
-      SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
+      SELECT e.id, e.punching_id, e.name, e.aadhar_card_number, e.salary, e.allotted_hours,
              u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS advance_deducted
@@ -740,6 +744,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
           supervisor: emp.supervisor_name,
           department: emp.department_name || '',
           punching_id: emp.punching_id,
+          aadhar: emp.aadhar_card_number || '',
           employee: emp.name,
           salary_type: 'dihadi',
           period: half === 1 ? '1-15' : '16-end',
@@ -758,6 +763,7 @@ router.get('/departments/dihadi/download-rule', isAuthenticated, isOperator, asy
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Period', key: 'period', width: 12 },
@@ -801,7 +807,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
   if (half === 2) start = moment(month + '-16');
   try {
     const [employees] = await pool.query(`
-      SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours,
+      SELECT e.id, e.punching_id, e.name, e.aadhar_card_number, e.salary, e.allotted_hours,
              u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS advance_taken,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS advance_deducted
@@ -860,6 +866,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
           supervisor: emp.supervisor_name,
           department: emp.department_name || '',
           punching_id: emp.punching_id,
+          aadhar: emp.aadhar_card_number || '',
           employee: emp.name,
           salary_type: 'dihadi',
           period: half === 1 ? '1-15' : '16-end',
@@ -878,6 +885,7 @@ router.get('/departments/dihadi/download', isAuthenticated, isOperator, async (r
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Period', key: 'period', width: 12 },
@@ -907,7 +915,7 @@ router.get('/departments/advances/download', isAuthenticated, isOperator, async 
   const period = half === 2 ? '16-end' : half === 1 ? '1-15' : 'full';
   try {
     const [rows] = await pool.query(`
-      SELECT e.id, e.punching_id, e.name, e.salary_type,
+      SELECT e.id, e.punching_id, e.name, e.aadhar_card_number, e.salary_type,
              u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_adv,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_ded,
@@ -931,6 +939,7 @@ router.get('/departments/advances/download', isAuthenticated, isOperator, async 
       { header: 'Supervisor', key: 'supervisor', width: 20 },
       { header: 'Department', key: 'department', width: 15 },
       { header: 'Punching ID', key: 'punching_id', width: 15 },
+      { header: 'Aadhar', key: 'aadhar', width: 18 },
       { header: 'Employee', key: 'employee', width: 20 },
       { header: 'Salary Type', key: 'salary_type', width: 12 },
       { header: 'Period', key: 'period', width: 12 },
@@ -944,6 +953,7 @@ router.get('/departments/advances/download', isAuthenticated, isOperator, async 
         supervisor: r.supervisor_name,
         department: r.department_name || '',
         punching_id: r.punching_id,
+        aadhar: r.aadhar_card_number || '',
         employee: r.name,
         salary_type: r.salary_type,
         period,
@@ -985,7 +995,7 @@ router.get('/departments/:supId/employees-json', isAuthenticated, isOperator, as
 // Update an employee record
 router.post('/departments/employees/:id/update', isAuthenticated, isOperator, async (req, res) => {
   const empId = req.params.id;
-  const { punching_id, name, designation, phone_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active } = req.body;
+  const { punching_id, name, designation, phone_number, aadhar_card_number, salary, salary_type, allotted_hours, paid_sunday_allowance, pay_sunday, leave_start_months, date_of_joining, is_active } = req.body;
 
   // Convert boolean like fields to proper numbers. Strings like "0" should be
   // treated as false which JavaScript truthiness would not do by default.
@@ -998,12 +1008,13 @@ router.post('/departments/employees/:id/update', isAuthenticated, isOperator, as
       salaryVal = row ? row.salary : salary;
     }
     await pool.query(
-      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, pay_sunday=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
+      `UPDATE employees SET punching_id=?, name=?, designation=?, phone_number=?, aadhar_card_number=?, salary=?, salary_type=?, allotted_hours=?, paid_sunday_allowance=?, pay_sunday=?, leave_start_months=?, date_of_joining=?, is_active=? WHERE id=?`,
       [
         punching_id,
         name,
         designation,
         phone_number,
+        aadhar_card_number,
         salaryVal,
         salary_type,
         allotted_hours,

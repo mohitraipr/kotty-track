@@ -401,7 +401,7 @@ router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) =
 router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name,
+      SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name, e.aadhar_card_number,
              e.salary, e.salary_type, u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_adv,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_ded
@@ -426,6 +426,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
       { header: "Supervisor", key: "supervisor", width: 20 },
       { header: "Employee", key: "employee", width: 20 },
       { header: "Punching ID", key: "punching_id", width: 15 },
+      { header: "Aadhar", key: "aadhar", width: 18 },
       { header: "Employee ID", key: "employee_id", width: 12 },
       { header: "Salary Type", key: "salary_type", width: 12 },
       { header: "Salary", key: "salary", width: 12 },
@@ -443,6 +444,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
         supervisor: r.supervisor_name,
         employee: r.employee_name,
         punching_id: r.punching_id,
+        aadhar: r.aadhar_card_number || "",
         employee_id: r.employee_id,
         salary_type: r.salary_type,
         advance_left: advLeft
