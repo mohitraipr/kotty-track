@@ -308,6 +308,7 @@ Use `/webhook/config` to map each SKU to its own threshold.
 Enter one mapping per line in the form `SKU:THRESHOLD`.
 Values are stored in `sku_thresholds` so the configuration persists across
 server restarts.
+The configuration page also provides a **Remove All** button to clear all saved thresholds in one step.
 
 To receive browser push notifications you must generate VAPID keys and set
 `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in your `.env` file. Clients visiting
