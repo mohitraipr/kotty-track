@@ -588,7 +588,11 @@ async function buildWasherMonthlySummary(prefix) {
     month: r.month,
     assigned: r.assigned,
     completed: r.completed,
-    cutting: r.cutting
+    cutting: r.cutting,
+    pending: r.assigned - r.completed,
+    completionRate: r.assigned > 0
+      ? parseFloat(((r.completed / r.assigned) * 100).toFixed(2))
+      : 0
   }));
 }
 
@@ -602,6 +606,8 @@ router.get("/dashboard/washing-summary/download", isAuthenticated, isOperator, a
       { header: "Month", key: "month", width: 10 },
       { header: "Assigned", key: "assigned", width: 12 },
       { header: "Completed", key: "completed", width: 12 },
+      { header: "Pending", key: "pending", width: 12 },
+      { header: "Completion %", key: "completionRate", width: 15 },
       { header: "Cutting", key: "cutting", width: 12 }
     ];
     sheetAk.columns = columns;
