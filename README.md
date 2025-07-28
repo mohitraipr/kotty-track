@@ -314,3 +314,6 @@ To receive browser push notifications you must generate VAPID keys and set
 `/webhook/logs` will register a service worker that subscribes to push updates.
 Subscriptions are persisted in the `push_subscriptions` table so notifications
 continue working after server restarts.
+Inventory alerts are aggregated and a single push notification is sent every
+three hours. Clicking the notification opens `/inventory/alerts` where the
+latest low stock events are listed.
