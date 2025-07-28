@@ -27,6 +27,9 @@ const logs = [];
 let sseClients = [];
 // Store push subscriptions in a Map keyed by endpoint for O(1) updates
 let pushSubscriptions = new Map();
+// Aggregate inventory alerts before sending push notifications
+const pendingPushAlerts = [];
+const PUSH_AGGREGATE_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 async function loadPushSubscriptions() {
   try {
@@ -62,20 +65,18 @@ function broadcastLog(log) {
   sseClients.forEach((client) => client.res.write(data));
 }
 
-async function broadcastAlert(message, sku, quantity) {
-  const payload = { alert: { message, sku, quantity } };
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  sseClients.forEach((client) => client.res.write(data));
-
-  // Send push notifications to subscribed clients
-  // Link directly to the SKU detail page
+async function sendPendingPushNotifications() {
+  if (!pendingPushAlerts.length) return;
+  const unique = [...new Set(pendingPushAlerts.map((a) => a.sku))];
+  const message =
+    unique.length === 1
+      ? `Low inventory for ${unique[0]}`
+      : `Low inventory for ${unique.length} SKUs`;
   const pushData = JSON.stringify({ message, url: `/inventory/alerts` });
   const subs = Array.from(pushSubscriptions.values());
-
   const results = await Promise.allSettled(
     subs.map((sub) => webPush.sendNotification(sub, pushData))
   );
-
   const staleEndpoints = [];
   results.forEach((result, idx) => {
     if (result.status === 'rejected') {
@@ -88,7 +89,6 @@ async function broadcastAlert(message, sku, quantity) {
       }
     }
   });
-
   if (staleEndpoints.length) {
     try {
       const placeholders = staleEndpoints.map(() => '?').join(',');
@@ -100,6 +100,18 @@ async function broadcastAlert(message, sku, quantity) {
       console.error('Failed to delete push subscriptions', dbErr);
     }
   }
+  pendingPushAlerts.length = 0;
+}
+
+setInterval(sendPendingPushNotifications, PUSH_AGGREGATE_INTERVAL_MS);
+
+async function broadcastAlert(message, sku, quantity) {
+  const payload = { alert: { message, sku, quantity } };
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  sseClients.forEach((client) => client.res.write(data));
+
+  // Queue push notifications instead of sending immediately
+  pendingPushAlerts.push({ sku, quantity });
 
   // Persist the alert
   try {
