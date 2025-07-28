@@ -286,6 +286,19 @@ router.post('/config/remove', isAuthenticated, isOperator, isMohitOperator, asyn
   res.redirect('/webhook/config');
 });
 
+// Remove all SKU thresholds
+router.post('/config/remove-all', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM sku_thresholds');
+    await loadSkuThresholds();
+    req.flash('success', 'Removed all thresholds');
+  } catch (err) {
+    console.error('Failed to remove all SKU thresholds', err);
+    req.flash('error', 'Failed to remove all SKU thresholds');
+  }
+  res.redirect('/webhook/config');
+});
+
 // Store push subscription from client
 router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
   if (req.body && req.body.endpoint) {
