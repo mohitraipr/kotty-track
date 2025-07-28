@@ -12,6 +12,7 @@ Kotty Track is a Node.js and Express application used to manage the production w
 - **Bulk upload & search** â Operators can upload attendance files and perform bulk updates; Excel exports are available throughout the system.
 - **Supervisor cleanup** â Operators can remove a supervisor's employees and all related records in one action.
 - **Audit logging** â Important actions are written to log files for later review.
+- **Washer monthly summary** – Export monthly washer statistics including assigned, completed, pending pieces and completion percentage.
 
 ## Installation
 
