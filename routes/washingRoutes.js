@@ -523,6 +523,149 @@ router.get('/download-all', isAuthenticated, isWashingMaster, async (req, res) =
   }
 });
 
+// GET /washingdashboard/download-summary
+router.get('/download-summary', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [assignRows] = await pool.query(
+      `SELECT wa.assigned_on, wa.sizes_json, jd.lot_no, jd.sku,
+              cl.remark AS cutting_remark, cl.total_pieces AS cutting_pieces
+         FROM washing_assignments wa
+         JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+         LEFT JOIN cutting_lots cl ON cl.lot_no = jd.lot_no
+        WHERE wa.user_id = ?
+        ORDER BY wa.assigned_on ASC`,
+      [userId]
+    );
+
+    const summaryMap = {};
+    assignRows.forEach(r => {
+      let pieces = 0;
+      try {
+        const arr = JSON.parse(r.sizes_json || '[]');
+        if (Array.isArray(arr)) {
+          for (const s of arr) pieces += parseInt(s.pieces, 10) || 0;
+        }
+      } catch (e) { pieces = 0; }
+      if (!summaryMap[r.lot_no]) {
+        summaryMap[r.lot_no] = {
+          lot_no: r.lot_no,
+          sku: r.sku,
+          cutting_pieces: r.cutting_pieces || 0,
+          cutting_remark: r.cutting_remark || '',
+          assigned_pieces: 0,
+          completed_pieces: 0,
+          washing_in_pieces: 0,
+          assigned_on: r.assigned_on,
+          washing_date: null
+        };
+      }
+      summaryMap[r.lot_no].assigned_pieces += pieces;
+    });
+
+    const [washRows] = await pool.query(
+      `SELECT lot_no, SUM(total_pieces) AS completed_pieces,
+              MIN(created_at) AS washing_date
+         FROM washing_data
+        WHERE user_id = ?
+        GROUP BY lot_no`,
+      [userId]
+    );
+    washRows.forEach(r => {
+      if (!summaryMap[r.lot_no]) {
+        summaryMap[r.lot_no] = {
+          lot_no: r.lot_no,
+          sku: '',
+          cutting_pieces: 0,
+          cutting_remark: '',
+          assigned_pieces: 0,
+          completed_pieces: parseInt(r.completed_pieces, 10) || 0,
+          washing_in_pieces: 0,
+          assigned_on: null,
+          washing_date: r.washing_date
+        };
+      } else {
+        summaryMap[r.lot_no].completed_pieces = parseInt(r.completed_pieces, 10) || 0;
+        summaryMap[r.lot_no].washing_date = r.washing_date;
+      }
+    });
+
+    const [wiaRows] = await pool.query(
+      `SELECT wia.washing_data_id, wia.sizes_json, wd.lot_no
+         FROM washing_in_assignments wia
+         JOIN washing_data wd ON wia.washing_data_id = wd.id
+        WHERE wia.washing_master_id = ?`,
+      [userId]
+    );
+    const dataIds = [...new Set(wiaRows.map(r => r.washing_data_id))];
+    if (dataIds.length) {
+      const [sizeRows] = await pool.query(
+        `SELECT washing_data_id, size_label, pieces
+           FROM washing_data_sizes
+          WHERE washing_data_id IN (?)`,
+        [dataIds]
+      );
+      const sizeMap = {};
+      sizeRows.forEach(s => {
+        if (!sizeMap[s.washing_data_id]) sizeMap[s.washing_data_id] = {};
+        sizeMap[s.washing_data_id][s.size_label] = s.pieces;
+      });
+      wiaRows.forEach(r => {
+        let pcs = 0;
+        try {
+          const arr = JSON.parse(r.sizes_json || '[]');
+          const mp = sizeMap[r.washing_data_id] || {};
+          if (Array.isArray(arr)) {
+            for (const lbl of arr) pcs += mp[lbl] || 0;
+          }
+        } catch (e) { pcs = 0; }
+        if (!summaryMap[r.lot_no]) {
+          summaryMap[r.lot_no] = {
+            lot_no: r.lot_no,
+            sku: '',
+            cutting_pieces: 0,
+            cutting_remark: '',
+            assigned_pieces: 0,
+            completed_pieces: 0,
+            washing_in_pieces: pcs,
+            assigned_on: null,
+            washing_date: null
+          };
+        } else {
+          summaryMap[r.lot_no].washing_in_pieces += pcs;
+        }
+      });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'KottyLifestyle';
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet('WashingSummary');
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Cutting Pieces', key: 'cutting_pieces', width: 15 },
+      { header: 'Cutting Remark', key: 'cutting_remark', width: 25 },
+      { header: 'Assigned On', key: 'assigned_on', width: 20 },
+      { header: 'Assigned Pieces', key: 'assigned_pieces', width: 15 },
+      { header: 'Completed Pieces', key: 'completed_pieces', width: 15 },
+      { header: 'Assigned to Washing In', key: 'washing_in_pieces', width: 20 },
+      { header: 'Washing Date', key: 'washing_date', width: 20 }
+    ];
+    Object.values(summaryMap).forEach(r => sheet.addRow(r));
+
+    res.setHeader('Content-Disposition', 'attachment; filename="WashingSummary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /washingdashboard/download-summary =>', err);
+    req.flash('error', 'Could not download summary: ' + err.message);
+    return res.redirect('/washingdashboard');
+  }
+});
+
 /*
   GET /washingdashboard/list-entries
   Used by front-end for pagination & searching existing washing_data
