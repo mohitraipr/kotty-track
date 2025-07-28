@@ -521,10 +521,105 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
     rows.forEach(r => sheet.addRow(r));
     res.setHeader("Content-Disposition", 'attachment; filename="LotDepartmentCounts.xlsx"');
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  await workbook.xlsx.write(res);
+  res.end();
+  } catch (err) {
+    console.error("Error in /dashboard/lot-departments/download:", err);
+    return res.status(500).send("Server error");
+  }
+});
+
+async function buildWasherMonthlySummary(prefix) {
+  const [assignRows] = await pool.query(
+    `SELECT wa.user_id, u.username,
+            DATE_FORMAT(wa.assigned_on,'%Y-%m') AS month,
+            wa.sizes_json, jd.lot_no,
+            cl.total_pieces AS cutting_pieces,
+            cl.remark
+       FROM washing_assignments wa
+       JOIN users u ON wa.user_id = u.id
+       JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+       LEFT JOIN cutting_lots cl ON jd.lot_no = cl.lot_no
+      WHERE jd.lot_no LIKE ?`,
+    [prefix]
+  );
+  const [compRows] = await pool.query(
+    `SELECT user_id,
+            DATE_FORMAT(created_at,'%Y-%m') AS month,
+            SUM(total_pieces) AS completed
+       FROM washing_data
+      WHERE lot_no LIKE ?
+      GROUP BY user_id, month`,
+    [prefix]
+  );
+
+  const map = {};
+  function ensure(uid, month, name) {
+    const key = `${uid}-${month}`;
+    if (!map[key]) {
+      map[key] = { washer: name, month, assigned: 0, completed: 0, cutting: 0, _lots: new Set() };
+    }
+    return map[key];
+  }
+
+  assignRows.forEach(r => {
+    let pcs = 0;
+    try {
+      const arr = JSON.parse(r.sizes_json || '[]');
+      if (Array.isArray(arr)) for (const s of arr) pcs += parseInt(s.pieces, 10) || 0;
+    } catch { pcs = 0; }
+    const entry = ensure(r.user_id, r.month, r.username);
+    entry.assigned += pcs;
+    if (!entry._lots.has(r.lot_no)) {
+      entry._lots.add(r.lot_no);
+      if (!r.remark || !r.remark.toLowerCase().includes('date')) {
+        entry.cutting += parseFloat(r.cutting_pieces) || 0;
+      }
+    }
+  });
+
+  compRows.forEach(r => {
+    const entry = ensure(r.user_id, r.month, '');
+    entry.completed += parseFloat(r.completed) || 0;
+  });
+
+  return Object.values(map).map(r => ({
+    washer: r.washer,
+    month: r.month,
+    assigned: r.assigned,
+    completed: r.completed,
+    cutting: r.cutting
+  }));
+}
+
+router.get("/dashboard/washing-summary/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheetAk = workbook.addWorksheet("AK Lots");
+    const sheetUm = workbook.addWorksheet("UM Lots");
+    const columns = [
+      { header: "Washer", key: "washer", width: 20 },
+      { header: "Month", key: "month", width: 10 },
+      { header: "Assigned", key: "assigned", width: 12 },
+      { header: "Completed", key: "completed", width: 12 },
+      { header: "Cutting", key: "cutting", width: 12 }
+    ];
+    sheetAk.columns = columns;
+    sheetUm.columns = columns;
+
+    const [akData, umData] = await Promise.all([
+      buildWasherMonthlySummary('AK%'),
+      buildWasherMonthlySummary('UM%')
+    ]);
+    akData.forEach(r => sheetAk.addRow(r));
+    umData.forEach(r => sheetUm.addRow(r));
+
+    res.setHeader('Content-Disposition', 'attachment; filename="WasherMonthlySummary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error("Error in /dashboard/lot-departments/download:", err);
+    console.error("Error in /dashboard/washing-summary/download:", err);
     return res.status(500).send("Server error");
   }
 });
