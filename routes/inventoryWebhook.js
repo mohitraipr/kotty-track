@@ -224,6 +224,7 @@ router.get('/config', isAuthenticated, isOperator, isMohitOperator, async (req, 
     .join('\n');
   res.render('inventoryAlertConfig', {
     configText,
+    thresholds: alertConfig.skuThresholds,
     error: req.flash('error'),
     success: req.flash('success'),
   });
@@ -266,6 +267,22 @@ router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req,
   }
 
   req.flash('success', 'Alert configuration updated');
+  res.redirect('/webhook/config');
+});
+
+// Remove a single SKU threshold
+router.post('/config/remove', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  const sku = (req.body.sku || '').trim().toUpperCase();
+  if (sku) {
+    try {
+      await pool.query('DELETE FROM sku_thresholds WHERE sku = ?', [sku]);
+      await loadSkuThresholds();
+      req.flash('success', `Removed ${sku}`);
+    } catch (err) {
+      console.error('Failed to remove SKU threshold', err);
+      req.flash('error', 'Failed to remove SKU threshold');
+    }
+  }
   res.redirect('/webhook/config');
 });
 
