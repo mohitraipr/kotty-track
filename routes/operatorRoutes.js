@@ -546,7 +546,8 @@ async function buildWasherMonthlySummary(prefix) {
   const [compRows] = await pool.query(
     `SELECT user_id,
             DATE_FORMAT(created_at,'%Y-%m') AS month,
-            SUM(total_pieces) AS completed
+            SUM(total_pieces) AS completed,
+            COUNT(DISTINCT lot_no) AS completed_lots
        FROM washing_data
       WHERE lot_no LIKE ?
       GROUP BY user_id, month`,
@@ -557,7 +558,18 @@ async function buildWasherMonthlySummary(prefix) {
   function ensure(uid, month, name) {
     const key = `${uid}-${month}`;
     if (!map[key]) {
-      map[key] = { washer: name, month, assigned: 0, completed: 0, cutting: 0, _lots: new Set() };
+      map[key] = {
+        washer: name,
+        month,
+        assigned: 0,
+        completed: 0,
+        cutting: 0,
+        assignedLots: new Set(),
+        completedLots: 0,
+        _lots: new Set()
+      };
+    } else if (name && !map[key].washer) {
+      map[key].washer = name;
     }
     return map[key];
   }
@@ -570,6 +582,7 @@ async function buildWasherMonthlySummary(prefix) {
     } catch { pcs = 0; }
     const entry = ensure(r.user_id, r.month, r.username);
     entry.assigned += pcs;
+    entry.assignedLots.add(r.lot_no);
     if (!entry._lots.has(r.lot_no)) {
       entry._lots.add(r.lot_no);
       if (!r.remark || !r.remark.toLowerCase().includes('date')) {
@@ -581,11 +594,14 @@ async function buildWasherMonthlySummary(prefix) {
   compRows.forEach(r => {
     const entry = ensure(r.user_id, r.month, '');
     entry.completed += parseFloat(r.completed) || 0;
+    entry.completedLots += parseInt(r.completed_lots, 10) || 0;
   });
 
   return Object.values(map).map(r => ({
     washer: r.washer,
     month: r.month,
+    assignedLots: r.assignedLots.size,
+    completedLots: r.completedLots,
     assigned: r.assigned,
     completed: r.completed,
     cutting: r.cutting
@@ -600,6 +616,8 @@ router.get("/dashboard/washing-summary/download", isAuthenticated, isOperator, a
     const columns = [
       { header: "Washer", key: "washer", width: 20 },
       { header: "Month", key: "month", width: 10 },
+      { header: "Assigned Lots", key: "assignedLots", width: 15 },
+      { header: "Completed Lots", key: "completedLots", width: 15 },
       { header: "Assigned", key: "assigned", width: 12 },
       { header: "Completed", key: "completed", width: 12 },
       { header: "Cutting", key: "cutting", width: 12 }
