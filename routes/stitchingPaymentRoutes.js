@@ -51,6 +51,43 @@ router.get('/contract', isAuthenticated, isStitchingMaster, allowUserIds(CONTRAC
   }
 });
 
+router.get('/contract/summary', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const ids = String(req.query.ids || '').split(',').map(id => parseInt(id, 10)).filter(Boolean);
+    if (!ids.length) return res.redirect('/stitchingdashboard/payments/contract');
+    const [rows] = await pool.query(
+      `SELECT sd.id, sd.lot_no, sd.sku, sd.total_pieces
+       FROM stitching_data sd
+       WHERE sd.user_id = ? AND sd.id IN (?)`,
+      [userId, ids]
+    );
+    for (const r of rows) {
+      r.rate = await getSkuRate(r.sku);
+      r.amount = r.rate * r.total_pieces;
+    }
+    const totalAmount = rows.reduce((sum, r) => sum + r.amount, 0);
+    res.render('stitchingContractSummary', { lots: rows, totalAmount: totalAmount.toFixed(2) });
+  } catch (err) {
+    console.error('contract summary', err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.get('/contract/history', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const [rows] = await pool.query(
+      'SELECT lot_no, sku, qty, rate, amount, paid_on FROM stitching_payments_contract WHERE master_id = ? ORDER BY paid_on DESC',
+      [userId]
+    );
+    res.render('stitchingContractHistory', { payments: rows });
+  } catch (err) {
+    console.error('contract history', err);
+    res.status(500).send('Server error');
+  }
+});
+
 router.post('/contract/pay', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -75,7 +112,7 @@ router.post('/contract/pay', isAuthenticated, isStitchingMaster, allowUserIds(CO
         [insertRows]
       );
     }
-    res.redirect('/stitchingdashboard/payments/contract');
+    res.redirect('/stitchingdashboard/payments/contract/history');
   } catch (err) {
     console.error('contract pay', err);
     res.status(500).send('Server error');

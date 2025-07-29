@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirm Contract Payment</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Confirm Payment</span>
+    <a href="/stitchingdashboard/payments/contract" class="btn btn-outline-light btn-sm">Back</a>
+  </div>
+</nav>
+  <div class="container mt-4">
+  <form method="POST" action="/stitchingdashboard/payments/contract/pay">
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Lot</th>
+          <th>SKU</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% lots.forEach(function(l){ %>
+          <tr>
+            <td><%= l.lot_no %></td>
+            <td><%= l.sku %></td>
+            <td><%= l.total_pieces %></td>
+            <td><%= l.rate %></td>
+            <td><%= l.amount %></td>
+          </tr>
+          <input type="hidden" name="lotIds" value="<%= l.id %>">
+        <% }) %>
+      </tbody>
+    </table>
+    <h5 class="text-end">Total Amount: <%= totalAmount %></h5>
+    <div class="text-end">
+      <button type="submit" class="btn btn-success">Confirm Payment</button>
+    </div>
+  </form>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
