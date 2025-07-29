@@ -37,7 +37,6 @@ router.get('/contract', isAuthenticated, isStitchingMaster, allowUserIds(CONTRAC
           SELECT lot_no FROM stitching_payments_contract WHERE master_id = ?
         )
       ORDER BY sd.created_at DESC
-      LIMIT 50
     `, [userId, userId]);
 
     for (const r of rows) {
@@ -103,7 +102,6 @@ router.get('/operation', isAuthenticated, isStitchingMaster, allowUserIds(OPERAT
       WHERE sd.user_id = ?
         AND ja.is_approved = 1
       ORDER BY sd.created_at DESC
-      LIMIT 50
     `, [userId]);
 
     res.render('stitchingOperationPayments', { user: req.session.user, lots, operations: OPERATIONS });
