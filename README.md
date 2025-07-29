@@ -318,3 +318,55 @@ continue working after server restarts.
 Inventory alerts are aggregated and a single push notification is sent every
 three hours. Clicking the notification opens `/inventory/alerts` where the
 latest low stock events are listed.
+
+### Stitching Payments
+
+Two new tables support recording payments to stitching masters.
+
+Create a table to store a per-SKU contract rate:
+```sql
+CREATE TABLE stitching_rates (
+  sku VARCHAR(50) PRIMARY KEY,
+  rate DECIMAL(10,2) NOT NULL
+);
+```
+
+Operation rates are kept in a separate table:
+```sql
+CREATE TABLE stitching_operation_rates (
+  operation VARCHAR(50) PRIMARY KEY,
+  rate DECIMAL(10,2) NOT NULL
+);
+```
+
+Contract payments are captured in `stitching_payments_contract`:
+```sql
+CREATE TABLE stitching_payments_contract (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  master_id INT NOT NULL,
+  lot_no VARCHAR(50) NOT NULL,
+  sku VARCHAR(50) NOT NULL,
+  qty INT NOT NULL,
+  rate DECIMAL(10,2) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  paid_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+Operation based payments use a separate table:
+```sql
+CREATE TABLE stitching_operation_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  master_id INT NOT NULL,
+  lot_no VARCHAR(50) NOT NULL,
+  operation VARCHAR(50) NOT NULL,
+  worker_name VARCHAR(100) NOT NULL,
+  qty INT NOT NULL,
+  rate DECIMAL(10,2) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  paid_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+The operator dashboard exposes a page to maintain `stitching_rates` so contract
+amounts can be calculated automatically.

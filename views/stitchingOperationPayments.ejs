@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stitching Operation Payments</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Operation Payments</span>
+    <a href="/stitchingdashboard" class="btn btn-outline-light btn-sm">Back</a>
+  </div>
+</nav>
+<div class="container mt-4">
+  <form method="POST" action="/stitchingdashboard/payments/operation/pay" id="opForm">
+    <div class="mb-3">
+      <label for="lotSelect" class="form-label">Lot</label>
+      <select class="form-select" id="lotSelect" name="lot_no">
+        <% lots.forEach(function(l){ %>
+          <option value="<%= l.lot_no %>"><%= l.lot_no %> - <%= l.sku %></option>
+        <% }) %>
+      </select>
+    </div>
+    <table class="table table-bordered" id="opTable">
+      <thead>
+        <tr>
+          <th>Operation</th>
+          <th>Name</th>
+          <th>Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <select class="form-select op" name="op">
+              <% operations.forEach(function(o){ %>
+                <option value="<%= o %>"><%= o %></option>
+              <% }) %>
+            </select>
+          </td>
+          <td><input type="text" class="form-control name" /></td>
+          <td><input type="number" class="form-control qty" /></td>
+        </tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn btn-secondary mb-3" id="addRow">Add Row</button>
+    <input type="hidden" name="payments" id="payments">
+    <button type="submit" class="btn btn-primary">Get Paid</button>
+  </form>
+</div>
+<script>
+  document.getElementById('addRow').addEventListener('click', function(){
+    const row = document.querySelector('#opTable tbody tr').cloneNode(true);
+    row.querySelectorAll('input').forEach(i=>i.value='');
+    document.querySelector('#opTable tbody').appendChild(row);
+  });
+  document.getElementById('opForm').addEventListener('submit', function(e){
+    const rows = document.querySelectorAll('#opTable tbody tr');
+    const data = [];
+    rows.forEach(r => {
+      data.push({
+        operation: r.querySelector('.op').value,
+        name: r.querySelector('.name').value,
+        qty: r.querySelector('.qty').value
+      });
+    });
+    document.getElementById('payments').value = JSON.stringify(data);
+  });
+</script>
+</body>
+</html>
