@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stitching Contract Payments</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Contract Payments</span>
+    <a href="/stitchingdashboard" class="btn btn-outline-light btn-sm">Back</a>
+  </div>
+</nav>
+<div class="container mt-4">
+  <form method="POST" action="/stitchingdashboard/payments/contract/pay">
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Lot</th>
+          <th>SKU</th>
+          <th>Cutting Remark</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% lots.forEach(function(l){ %>
+        <tr>
+          <td><input type="checkbox" name="lotIds" value="<%= l.id %>"></td>
+          <td><%= l.lot_no %></td>
+          <td><%= l.sku %></td>
+          <td><%= l.cutting_remark || '' %></td>
+          <td><%= l.total_pieces %></td>
+          <td><%= l.rate %></td>
+          <td><%= l.amount %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Get Paid</button>
+  </form>
+</div>
+</body>
+</html>
