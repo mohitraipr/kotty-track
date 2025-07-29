@@ -139,6 +139,22 @@ function isMohitOperator(req, res, next) {
   return res.redirect('/');
 }
 
+// ---------------------------------------------------------------------------
+// Helper to restrict routes to specific user ids
+function allowUserIds(ids) {
+  return function (req, res, next) {
+    if (req.session && req.session.user && ids.includes(req.session.user.id)) {
+      return next();
+    }
+
+    if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+      return res.status(403).json({ error: 'You do not have permission to view this resource.' });
+    }
+    req.flash('error', 'You do not have permission to view this page.');
+    return res.redirect('/');
+  };
+}
+
 module.exports = {
     isAuthenticated,
     isAdmin,
@@ -157,5 +173,6 @@ module.exports = {
     isCatalogUpload,
     isStoreEmployee,
     isStoreAdmin,
-    isMohitOperator
+    isMohitOperator,
+    allowUserIds
 };

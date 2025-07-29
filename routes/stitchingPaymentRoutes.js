@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { isAuthenticated, isStitchingMaster, isOperator } = require('../middlewares/auth');
+const { isAuthenticated, isStitchingMaster, isOperator, allowUserIds } = require('../middlewares/auth');
+
+// ---------------------
+// Allowed user ids for payment pages
+const CONTRACT_USERS = [6, 35];
+const OPERATION_USERS = [8];
 
 // ---------------------
 // Helper to fetch rates
@@ -12,7 +17,7 @@ async function getSkuRate(sku) {
 
 // ---------------------
 // Contract wise payments
-router.get('/contract', isAuthenticated, isStitchingMaster, async (req, res) => {
+router.get('/contract', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
   try {
     const userId = req.session.user.id;
     const [rows] = await pool.query(`
@@ -41,7 +46,7 @@ router.get('/contract', isAuthenticated, isStitchingMaster, async (req, res) => 
   }
 });
 
-router.post('/contract/pay', isAuthenticated, isStitchingMaster, async (req, res) => {
+router.post('/contract/pay', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { lotIds = [] } = req.body;
@@ -81,7 +86,7 @@ async function getOperationRate(op) {
   return row ? parseFloat(row.rate) : 0;
 }
 
-router.get('/operation', isAuthenticated, isStitchingMaster, async (req, res) => {
+router.get('/operation', isAuthenticated, isStitchingMaster, allowUserIds(OPERATION_USERS), async (req, res) => {
   try {
     const userId = req.session.user.id;
     const [lots] = await pool.query(`
@@ -102,7 +107,7 @@ router.get('/operation', isAuthenticated, isStitchingMaster, async (req, res) =>
   }
 });
 
-router.post('/operation/pay', isAuthenticated, isStitchingMaster, async (req, res) => {
+router.post('/operation/pay', isAuthenticated, isStitchingMaster, allowUserIds(OPERATION_USERS), async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { lot_no, payments } = req.body; // payments should be JSON string [{operation, name, qty}]
