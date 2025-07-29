@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster, isOperator, allowUserIds } = require('../middlewares/auth');
 
@@ -149,6 +150,28 @@ router.get('/rates', isAuthenticated, isOperator, async (req, res) => {
     error: req.flash('error'),
     success: req.flash('success')
   });
+});
+
+// Download Excel template for rate uploads
+router.get('/rates/template', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('RatesTemplate');
+    sheet.columns = [
+      { header: 'sku', key: 'sku', width: 15 },
+      { header: 'rate', key: 'rate', width: 10 }
+    ];
+    sheet.addRow({ sku: 'SKU001', rate: 0 });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="stitching_rates_template.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error generating rates template:', err);
+    req.flash('error', 'Failed to generate template');
+    res.redirect('/stitchingdashboard/payments/rates');
+  }
 });
 
 router.post('/rates', isAuthenticated, isOperator, async (req, res) => {
