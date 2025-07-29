@@ -14,7 +14,8 @@
 </nav>
 <div class="container mt-4">
   <form method="POST" action="/stitchingdashboard/payments/contract/pay">
-    <table class="table table-bordered">
+    <input type="text" id="searchTable" class="form-control mb-3" placeholder="Search lot or SKU">
+    <table class="table table-bordered" id="paymentsTable">
       <thead>
         <tr>
           <th>Select</th>
@@ -40,8 +41,21 @@
         <% }) %>
       </tbody>
     </table>
-    <button type="submit" class="btn btn-primary">Get Paid</button>
+    <div class="text-end">
+      <button type="submit" class="btn btn-primary">Get Paid</button>
+    </div>
   </form>
 </div>
+<script>
+  const searchInput = document.getElementById('searchTable');
+  const rows = Array.from(document.querySelectorAll('#paymentsTable tbody tr'));
+  searchInput.addEventListener('input', () => {
+    const term = searchInput.value.toLowerCase();
+    rows.forEach(r => {
+      const text = r.innerText.toLowerCase();
+      r.style.display = text.includes(term) ? '' : 'none';
+    });
+  });
+</script>
 </body>
 </html>

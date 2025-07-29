@@ -177,6 +177,22 @@
               <span data-lang="en">Approve</span>
             </a>
           </li>
+          <% if (user.id && (user.id === 6 || user.id === 35)) { %>
+            <li class="nav-item me-2">
+              <a href="/stitchingdashboard/payments/contract" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-rupee-sign"></i>
+                Contract Pay
+              </a>
+            </li>
+          <% } %>
+          <% if (user.id && user.id === 8) { %>
+            <li class="nav-item me-2">
+              <a href="/stitchingdashboard/payments/operation" class="btn btn-outline-light btn-sm">
+                <i class="fas fa-tasks"></i>
+                Operation Pay
+              </a>
+            </li>
+          <% } %>
           <!-- Logout -->
           <li class="nav-item">
             <a href="/logout" class="btn btn-sm btn-danger">
