@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const XLSX = require('xlsx');
 const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster, isOperator, allowUserIds } = require('../middlewares/auth');
+
+// Multer setup for Excel uploads (memory storage)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ---------------------
 // Allowed user ids for payment pages
@@ -138,7 +143,12 @@ router.post('/operation/pay', isAuthenticated, isStitchingMaster, allowUserIds(O
 router.get('/rates', isAuthenticated, isOperator, async (req, res) => {
   const [skuRows] = await pool.query('SELECT sku, rate FROM stitching_rates ORDER BY sku');
   const [opRows] = await pool.query('SELECT operation, rate FROM stitching_operation_rates ORDER BY operation');
-  res.render('stitchingRateConfig', { skuRows, opRows });
+  res.render('stitchingRateConfig', {
+    skuRows,
+    opRows,
+    error: req.flash('error'),
+    success: req.flash('success')
+  });
 });
 
 router.post('/rates', isAuthenticated, isOperator, async (req, res) => {
@@ -164,6 +174,66 @@ router.post('/rates', isAuthenticated, isOperator, async (req, res) => {
     const values = opEntries.map(() => '(?, ?)').join(',');
     const params = opEntries.flatMap(x => x);
     await pool.query(`INSERT INTO stitching_operation_rates (operation, rate) VALUES ${values} ON DUPLICATE KEY UPDATE rate = VALUES(rate)`, params);
+  }
+  res.redirect('/stitchingdashboard/payments/rates');
+});
+
+// Upload rates via Excel file
+router.post('/rates/upload', isAuthenticated, isOperator, upload.single('excelFile'), async (req, res) => {
+  const file = req.file;
+  if (!file) {
+    req.flash('error', 'No file uploaded');
+    return res.redirect('/stitchingdashboard/payments/rates');
+  }
+
+  let rows;
+  try {
+    const wb = XLSX.read(file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  } catch (err) {
+    console.error('Failed to parse Excel:', err);
+    req.flash('error', 'Invalid Excel file');
+    return res.redirect('/stitchingdashboard/payments/rates');
+  }
+
+  const inserts = [];
+  rows.forEach(r => {
+    const sku = String(r.sku || r.SKU || '').trim();
+    const rate = parseFloat(r.rate || r.Rate);
+    if (sku && !isNaN(rate)) inserts.push([sku, rate]);
+  });
+
+  if (inserts.length) {
+    const values = inserts.map(() => '(?, ?)').join(',');
+    const params = inserts.flat();
+    try {
+      await pool.query(`INSERT INTO stitching_rates (sku, rate) VALUES ${values} ON DUPLICATE KEY UPDATE rate = VALUES(rate)`, params);
+      req.flash('success', `Uploaded ${inserts.length} rates`);
+    } catch (err) {
+      console.error('Error uploading rates:', err);
+      req.flash('error', 'Failed to upload rates');
+    }
+  } else {
+    req.flash('error', 'No valid rows found');
+  }
+
+  res.redirect('/stitchingdashboard/payments/rates');
+});
+
+// Update a single SKU rate
+router.post('/rates/update', isAuthenticated, isOperator, async (req, res) => {
+  const { sku, rate } = req.body;
+  if (!sku) return res.redirect('/stitchingdashboard/payments/rates');
+  try {
+    await pool.query(
+      'INSERT INTO stitching_rates (sku, rate) VALUES (?, ?) ON DUPLICATE KEY UPDATE rate = VALUES(rate)',
+      [sku.trim(), parseFloat(rate) || 0]
+    );
+    req.flash('success', 'Rate updated');
+  } catch (err) {
+    console.error('Error updating rate', err);
+    req.flash('error', 'Failed to update rate');
   }
   res.redirect('/stitchingdashboard/payments/rates');
 });

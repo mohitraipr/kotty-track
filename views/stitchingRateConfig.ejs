@@ -13,10 +13,51 @@
   </div>
 </nav>
 <div class="container mt-4">
+  <% if (error && error.length) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+    <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <div class="mb-4">
+    <form method="POST" action="/stitchingdashboard/payments/rates/upload" enctype="multipart/form-data" class="row g-2">
+      <div class="col-md-5">
+        <input type="file" name="excelFile" accept=".xls,.xlsx" class="form-control" required>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Upload Excel</button>
+      </div>
+    </form>
+  </div>
+
+  <h5>Existing SKU Rates</h5>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th style="width:200px">Rate</th>
+        <th style="width:100px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% skuRows.forEach(function(r){ %>
+        <tr>
+          <form method="POST" action="/stitchingdashboard/payments/rates/update" class="row g-2">
+            <td><%= r.sku %><input type="hidden" name="sku" value="<%= r.sku %>"></td>
+            <td><input type="number" step="0.01" name="rate" value="<%= r.rate %>" class="form-control"></td>
+            <td><button type="submit" class="btn btn-sm btn-primary">Save</button></td>
+          </form>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <hr>
   <form method="POST" action="/stitchingdashboard/payments/rates">
     <div class="row">
       <div class="col-md-6">
-        <h5>SKU Rates</h5>
+        <h5>SKU Rates (Text)</h5>
         <textarea name="skuRates" class="form-control" rows="10"><% skuRows.forEach(function(r){ %><%= r.sku %>:<%= r.rate %>\n<% }) %></textarea>
       </div>
       <div class="col-md-6">
@@ -24,7 +65,7 @@
         <textarea name="opRates" class="form-control" rows="10"><% opRows.forEach(function(r){ %><%= r.operation %>:<%= r.rate %>\n<% }) %></textarea>
       </div>
     </div>
-    <button type="submit" class="btn btn-primary mt-3">Save</button>
+    <button type="submit" class="btn btn-success mt-3">Save All</button>
   </form>
 </div>
 </body>
