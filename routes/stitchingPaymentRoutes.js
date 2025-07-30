@@ -81,9 +81,48 @@ router.get('/contract/history', isAuthenticated, isStitchingMaster, allowUserIds
       'SELECT lot_no, sku, qty, rate, amount, paid_on FROM stitching_payments_contract WHERE master_id = ? ORDER BY paid_on DESC',
       [userId]
     );
-    res.render('stitchingContractHistory', { payments: rows });
+
+    const sessionsMap = new Map();
+    rows.forEach(r => {
+      const ts = r.paid_on.getTime();
+      if (!sessionsMap.has(ts)) {
+        sessionsMap.set(ts, { time: r.paid_on, payments: [], total: 0 });
+      }
+      const s = sessionsMap.get(ts);
+      s.payments.push(r);
+      s.total += parseFloat(r.amount);
+    });
+    const sessions = Array.from(sessionsMap.values()).sort((a, b) => b.time - a.time);
+
+    res.render('stitchingContractHistory', { sessions });
   } catch (err) {
     console.error('contract history', err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.get('/contract/receipt/:time', isAuthenticated, isStitchingMaster, allowUserIds(CONTRACT_USERS), async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const ts = parseInt(req.params.time, 10);
+    if (isNaN(ts)) return res.redirect('/stitchingdashboard/payments/contract/history');
+
+    const paidTime = new Date(ts);
+    const [rows] = await pool.query(
+      'SELECT lot_no, sku, qty, rate, amount FROM stitching_payments_contract WHERE master_id = ? AND paid_on = ?',
+      [userId, paidTime]
+    );
+
+    if (!rows.length) return res.redirect('/stitchingdashboard/payments/contract/history');
+
+    const totalAmount = rows.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+    res.render('stitchingContractReceipt', {
+      payments: rows,
+      paidAt: paidTime.toLocaleString('en-CA', { hour12: false }),
+      totalAmount: totalAmount.toFixed(2)
+    });
+  } catch (err) {
+    console.error('contract receipt', err);
     res.status(500).send('Server error');
   }
 });
