@@ -24,6 +24,8 @@ function verifyAccessToken(req, res, next) {
 
 // In-memory store for recent webhook requests
 const logs = [];
+const orderLogs = [];
+let orderSseClients = [];
 let sseClients = [];
 // Store push subscriptions in a Map keyed by endpoint for O(1) updates
 let pushSubscriptions = new Map();
@@ -65,6 +67,11 @@ function broadcastLog(log) {
   sseClients.forEach((client) => client.res.write(data));
 }
 
+
+function broadcastOrderLog(log) {
+  const data = `data: ${JSON.stringify({ log })}\n\n`;
+  orderSseClients.forEach((client) => client.res.write(data));
+}
 async function sendPendingPushNotifications() {
   if (!pendingPushAlerts.length) return;
   const unique = [...new Set(pendingPushAlerts.map((a) => a.sku))];
@@ -216,6 +223,39 @@ const entry = {
   }
 );
 
+// Endpoint to receive order webhooks
+router.post(
+  '/order',
+  verifyAccessToken,
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  async (req, res) => {
+    const headers = req.headers;
+    let raw;
+    if (Buffer.isBuffer(req.body)) {
+      raw = req.body.toString('utf8');
+    } else {
+      raw = JSON.stringify(req.body);
+    }
+    let data;
+    try {
+      data = Buffer.isBuffer(req.body) ? JSON.parse(raw) : req.body;
+    } catch (err) {
+      return res.status(400).send('Invalid JSON');
+    }
+    const entry = {
+      time: new Date().toISOString(),
+      headers,
+      raw,
+      data,
+      accessToken: req.get('Access-Token'),
+    };
+    orderLogs.push(entry);
+    if (orderLogs.length > 50) orderLogs.shift();
+    broadcastOrderLog(entry);
+    res.status(200).send('OK');
+  }
+);
+
 // Render a simple page to update alert configuration
 router.get('/config', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
   await loadSkuThresholds();
@@ -329,6 +369,22 @@ router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
 // View webhook logs
 router.get('/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   res.render('webhookLogs', { logs });
+});
+router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
+  res.render('orderWebhookLogs', { logs: orderLogs });
+});
+router.get('/order/logs/stream', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ logs: orderLogs })}\n\n`);
+  const clientId = Date.now();
+  const client = { id: clientId, res };
+  orderSseClients.push(client);
+  req.on('close', () => {
+    orderSseClients = orderSseClients.filter((c) => c.id !== clientId);
+  });
 });
 
 // Stream logs via Server-Sent Events
