@@ -569,13 +569,16 @@ router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, r
         );
         if (emp.salary_type === 'monthly') {
           const baseHours = isSun ? 9 : parseFloat(emp.allotted_hours || 0);
+          const grace = moment('09:15:00', 'HH:mm:ss');
           let diff = hrsDec - baseHours;
-          if (
-            hourlyView &&
-            diff < 0 &&
-            moment(a.punch_in, 'HH:mm:ss').isSameOrBefore(moment('09:15:00', 'HH:mm:ss'))
-          ) {
-            diff = 0; // grace minutes when punching in before 09:15
+          if (hourlyView) {
+            const punchIn = moment(a.punch_in, 'HH:mm:ss');
+            if (diff < 0 && punchIn.isSameOrBefore(grace)) {
+              diff = 0; // grace minutes when punching in before 09:15
+            } else if (punchIn.isAfter(grace)) {
+              const lateMins = punchIn.diff(grace, 'minutes');
+              diff -= lateMins / 60; // deduct 1 minute per minute late
+            }
           }
           if (diff > 0) {
             a.overtime = formatHours(diff);
