@@ -1034,12 +1034,12 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
   try {
     const [employees] = await pool.query(
       `SELECT e.id, e.punching_id, e.name, e.aadhar_card_number, e.salary, e.allotted_hours,
-              es.gross, es.deduction, es.net
+              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS advance_taken,
+              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS advance_deducted
          FROM employees e
-    LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
         WHERE e.supervisor_id = ? AND e.salary_type = 'dihadi' AND e.is_active = 1
      ORDER BY e.name`,
-      [month, supervisorId]
+      [supervisorId]
     );
     const empIds = employees.map(e => e.id);
     const rows = [];
@@ -1091,11 +1091,16 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
           const key = `d${String(d).padStart(2, '0')}`;
           row[key] = byDate[d] !== undefined ? byDate[d] : '';
         }
+        const rate = emp.allotted_hours
+          ? parseFloat(emp.salary) / parseFloat(emp.allotted_hours)
+          : 0;
+        const amount = parseFloat((totalHrs * rate).toFixed(2));
+        const net = parseFloat((amount - parseFloat(emp.advance_deducted)).toFixed(2));
         row.total_hours = totalHrs.toFixed(2);
         row.lunch_deduction = (totalLunch / 60).toFixed(2);
-        row.total_amount = emp.gross != null ? parseFloat(emp.gross) : 0;
-        row.advance_deduct = emp.deduction != null ? parseFloat(emp.deduction) : 0;
-        row.net_payment = emp.net != null ? parseFloat(emp.net) : 0;
+        row.total_amount = amount;
+        row.advance_deduct = parseFloat(emp.advance_deducted);
+        row.net_payment = net;
         rows.push(row);
       }
     }
