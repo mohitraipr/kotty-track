@@ -21,16 +21,31 @@ const { PRIVILEGED_OPERATOR_ID } = require("../utils/operators");
 
 // simple in-memory cache to avoid heavy repetitive queries
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_MAX_ITEMS = 50; // avoid unbounded growth
 const _cache = new Map();
+
 function getCache(key) {
   const entry = _cache.get(key);
-  if (entry && Date.now() - entry.ts < CACHE_TTL_MS) {
-    return entry.val;
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    _cache.delete(key);
+    return null;
   }
-  return null;
+  return entry.val;
 }
+
 function setCache(key, val) {
-  _cache.set(key, { ts: Date.now(), val });
+  const now = Date.now();
+  // purge expired keys
+  for (const [k, v] of _cache) {
+    if (now - v.ts > CACHE_TTL_MS) _cache.delete(k);
+  }
+  // enforce max cache size (simple LRU-style)
+  if (_cache.size >= CACHE_MAX_ITEMS) {
+    const oldestKey = _cache.keys().next().value;
+    _cache.delete(oldestKey);
+  }
+  _cache.set(key, { ts: now, val });
 }
 
 async function fetchCached(key, fn) {
@@ -58,54 +73,50 @@ function formatDateDDMMYYYY(dt) {
  * 2) Operator Performance & Analytics
  **************************************************/
 async function computeOperatorPerformance() {
-  const cached = getCache('operatorPerformance');
-  if (cached) return cached;
+  return fetchCached('operatorPerformance', async () => {
+    const perf = {};
 
-  const perf = {};
+    const [rows] = await pool.query(`
+      SELECT u.id AS user_id, u.username,
+             SUM(IF(src='stitch', val, 0))  AS totalStitched,
+             SUM(IF(src='wash',   val, 0))  AS totalWashed,
+             SUM(IF(src='finish', val, 0))  AS totalFinished
+        FROM (
+              SELECT user_id, SUM(total_pieces) AS val, 'stitch' AS src
+                FROM stitching_data
+               GROUP BY user_id
+              UNION ALL
+              SELECT user_id, SUM(total_pieces) AS val, 'wash' AS src
+                FROM washing_data
+               GROUP BY user_id
+              UNION ALL
+              SELECT user_id, SUM(total_pieces) AS val, 'finish' AS src
+                FROM finishing_data
+               GROUP BY user_id
+             ) t
+        JOIN users u ON u.id = t.user_id
+       GROUP BY t.user_id
+    `);
 
-  const [rows] = await pool.query(`
-    SELECT u.id AS user_id, u.username,
-           SUM(IF(src='stitch', val, 0))  AS totalStitched,
-           SUM(IF(src='wash',   val, 0))  AS totalWashed,
-           SUM(IF(src='finish', val, 0))  AS totalFinished
-      FROM (
-            SELECT user_id, SUM(total_pieces) AS val, 'stitch' AS src
-              FROM stitching_data
-             GROUP BY user_id
-            UNION ALL
-            SELECT user_id, SUM(total_pieces) AS val, 'wash' AS src
-              FROM washing_data
-             GROUP BY user_id
-            UNION ALL
-            SELECT user_id, SUM(total_pieces) AS val, 'finish' AS src
-              FROM finishing_data
-             GROUP BY user_id
-           ) t
-      JOIN users u ON u.id = t.user_id
-     GROUP BY t.user_id
-  `);
+    rows.forEach(r => {
+      perf[r.user_id] = {
+        username: r.username,
+        totalStitched: parseFloat(r.totalStitched) || 0,
+        totalWashed:   parseFloat(r.totalWashed)   || 0,
+        totalFinished: parseFloat(r.totalFinished) || 0
+      };
+    });
 
-  rows.forEach(r => {
-    perf[r.user_id] = {
-      username: r.username,
-      totalStitched: parseFloat(r.totalStitched) || 0,
-      totalWashed:   parseFloat(r.totalWashed)   || 0,
-      totalFinished: parseFloat(r.totalFinished) || 0
-    };
+    return perf;
   });
-
-  setCache('operatorPerformance', perf);
-  return perf;
 }
 
 async function computeAdvancedAnalytics(startDate, endDate) {
   const cacheKey = `adv-${startDate || ''}-${endDate || ''}`;
-  const cached = getCache(cacheKey);
-  if (cached) return cached;
+  return fetchCached(cacheKey, async () => {
+    const analytics = {};
 
-  const analytics = {};
-
-  const totalsQ = pool.query(`
+    const totalsQ = pool.query(`
     SELECT
       (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots)     AS totalCut,
       (SELECT COALESCE(SUM(total_pieces),0) FROM stitching_data)   AS totalStitched,
@@ -122,105 +133,105 @@ async function computeAdvancedAnalytics(startDate, endDate) {
           ) fd ON c.lot_no = fd.lot_no
          WHERE fd.sumFinish < c.total_pieces
       ) AS pendingLots
-  `);
+    `);
 
-  // Build top/bottom SKU queries
-  let skuQuery = 'SELECT sku, SUM(total_pieces) AS total FROM cutting_lots ';
-  const skuParams = [];
-  if (startDate && endDate) {
-    skuQuery += 'WHERE created_at BETWEEN ? AND ? ';
-    skuParams.push(startDate, endDate);
-  } else {
-    skuQuery += 'WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 DAY) ';
-  }
-  const topQuery = skuQuery + 'GROUP BY sku ORDER BY total DESC LIMIT 10';
-  const bottomQuery = skuQuery + 'GROUP BY sku ORDER BY total ASC LIMIT 10';
-
-  const turnaroundQ = pool.query(`
-    SELECT c.lot_no, c.created_at AS cut_date, MAX(f.created_at) AS finish_date,
-           c.total_pieces, COALESCE(SUM(f.total_pieces),0) as sumFin
-      FROM cutting_lots c
-      LEFT JOIN finishing_data f ON c.lot_no = f.lot_no
-     GROUP BY c.lot_no
-     HAVING sumFin >= c.total_pieces
-  `);
-  const stitchRateQ = pool.query(`
-    SELECT COUNT(*) AS totalAssigned,
-           SUM(CASE WHEN isApproved=1 THEN 1 ELSE 0 END) AS approvedCount
-      FROM stitching_assignments
-  `);
-  const washRateQ = pool.query(`
-    SELECT COUNT(*) AS totalAssigned,
-           SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) AS approvedCount
-      FROM washing_assignments
-  `);
-
-  const [
-    [totalsRow],
-    [topSkusRows],
-    [bottomSkusRows],
-    [turnRows],
-    [[stTotals]],
-    [[waTotals]]
-  ] = await Promise.all([
-    totalsQ,
-    pool.query(topQuery, skuParams),
-    pool.query(bottomQuery, skuParams),
-    turnaroundQ,
-    stitchRateQ,
-    washRateQ
-  ]);
-
-  analytics.totalCut = parseFloat(totalsRow.totalCut) || 0;
-  analytics.totalStitched = parseFloat(totalsRow.totalStitched) || 0;
-  analytics.totalWashed = parseFloat(totalsRow.totalWashed) || 0;
-  analytics.totalFinished = parseFloat(totalsRow.totalFinished) || 0;
-
-  // Conversion rates
-  analytics.stitchConversion = (analytics.totalCut > 0)
-    ? ((analytics.totalStitched / analytics.totalCut) * 100).toFixed(2)
-    : "0.00";
-  analytics.washConversion = (analytics.totalStitched > 0)
-    ? (((analytics.totalWashed > 0 ? analytics.totalWashed : analytics.totalFinished) / analytics.totalStitched) * 100).toFixed(2)
-    : "0.00";
-  analytics.finishConversion = (analytics.totalWashed > 0)
-    ? ((analytics.totalFinished / analytics.totalWashed) * 100).toFixed(2)
-    : (analytics.totalStitched > 0)
-      ? ((analytics.totalFinished / analytics.totalStitched) * 100).toFixed(2)
-      : "0.00";
-
-  // top10SKUs
-  analytics.top10SKUs = topSkusRows;
-  analytics.bottom10SKUs = bottomSkusRows;
-
-  analytics.totalLots = totalsRow.totalCount;
-  analytics.pendingLots = totalsRow.pendingLots;
-
-  let totalDiff = 0;
-  let countComplete = 0;
-  for (const row of turnRows) {
-    if (row.finish_date && row.cut_date) {
-      const diffMs = new Date(row.finish_date).getTime() -
-                     new Date(row.cut_date).getTime();
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-      totalDiff += diffDays;
-      countComplete++;
+    // Build top/bottom SKU queries
+    let skuQuery = 'SELECT sku, SUM(total_pieces) AS total FROM cutting_lots ';
+    const skuParams = [];
+    if (startDate && endDate) {
+      skuQuery += 'WHERE created_at BETWEEN ? AND ? ';
+      skuParams.push(startDate, endDate);
+    } else {
+      skuQuery += 'WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 DAY) ';
     }
-  }
-  analytics.avgTurnaroundTime = countComplete > 0
-    ? parseFloat((totalDiff / countComplete).toFixed(2))
-    : 0;
+    const topQuery = skuQuery + 'GROUP BY sku ORDER BY total DESC LIMIT 10';
+    const bottomQuery = skuQuery + 'GROUP BY sku ORDER BY total ASC LIMIT 10';
 
-  analytics.stitchApprovalRate = stTotals.totalAssigned > 0
-    ? ((stTotals.approvedCount / stTotals.totalAssigned) * 100).toFixed(2)
-    : '0.00';
+    const turnaroundQ = pool.query(`
+      SELECT c.lot_no, c.created_at AS cut_date, MAX(f.created_at) AS finish_date,
+             c.total_pieces, COALESCE(SUM(f.total_pieces),0) as sumFin
+        FROM cutting_lots c
+        LEFT JOIN finishing_data f ON c.lot_no = f.lot_no
+       GROUP BY c.lot_no
+       HAVING sumFin >= c.total_pieces
+    `);
+    const stitchRateQ = pool.query(`
+      SELECT COUNT(*) AS totalAssigned,
+             SUM(CASE WHEN isApproved=1 THEN 1 ELSE 0 END) AS approvedCount
+        FROM stitching_assignments
+    `);
+    const washRateQ = pool.query(`
+      SELECT COUNT(*) AS totalAssigned,
+             SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) AS approvedCount
+        FROM washing_assignments
+    `);
 
-  analytics.washApprovalRate = waTotals.totalAssigned > 0
-    ? ((waTotals.approvedCount / waTotals.totalAssigned) * 100).toFixed(2)
-    : '0.00';
+    const [
+      [totalsRow],
+      [topSkusRows],
+      [bottomSkusRows],
+      [turnRows],
+      [[stTotals]],
+      [[waTotals]]
+    ] = await Promise.all([
+      totalsQ,
+      pool.query(topQuery, skuParams),
+      pool.query(bottomQuery, skuParams),
+      turnaroundQ,
+      stitchRateQ,
+      washRateQ
+    ]);
 
-  setCache(cacheKey, analytics);
-  return analytics;
+    analytics.totalCut = parseFloat(totalsRow.totalCut) || 0;
+    analytics.totalStitched = parseFloat(totalsRow.totalStitched) || 0;
+    analytics.totalWashed = parseFloat(totalsRow.totalWashed) || 0;
+    analytics.totalFinished = parseFloat(totalsRow.totalFinished) || 0;
+
+    // Conversion rates
+    analytics.stitchConversion = (analytics.totalCut > 0)
+      ? ((analytics.totalStitched / analytics.totalCut) * 100).toFixed(2)
+      : "0.00";
+    analytics.washConversion = (analytics.totalStitched > 0)
+      ? (((analytics.totalWashed > 0 ? analytics.totalWashed : analytics.totalFinished) / analytics.totalStitched) * 100).toFixed(2)
+      : "0.00";
+    analytics.finishConversion = (analytics.totalWashed > 0)
+      ? ((analytics.totalFinished / analytics.totalWashed) * 100).toFixed(2)
+      : (analytics.totalStitched > 0)
+        ? ((analytics.totalFinished / analytics.totalStitched) * 100).toFixed(2)
+        : "0.00";
+
+    // top10SKUs
+    analytics.top10SKUs = topSkusRows;
+    analytics.bottom10SKUs = bottomSkusRows;
+
+    analytics.totalLots = totalsRow.totalCount;
+    analytics.pendingLots = totalsRow.pendingLots;
+
+    let totalDiff = 0;
+    let countComplete = 0;
+    for (const row of turnRows) {
+      if (row.finish_date && row.cut_date) {
+        const diffMs = new Date(row.finish_date).getTime() -
+                       new Date(row.cut_date).getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        totalDiff += diffDays;
+        countComplete++;
+      }
+    }
+    analytics.avgTurnaroundTime = countComplete > 0
+      ? parseFloat((totalDiff / countComplete).toFixed(2))
+      : 0;
+
+    analytics.stitchApprovalRate = stTotals.totalAssigned > 0
+      ? ((stTotals.approvedCount / stTotals.totalAssigned) * 100).toFixed(2)
+      : '0.00';
+
+    analytics.washApprovalRate = waTotals.totalAssigned > 0
+      ? ((waTotals.approvedCount / waTotals.totalAssigned) * 100).toFixed(2)
+      : '0.00';
+
+    return analytics;
+  });
 }
 
 /**************************************************
@@ -649,171 +660,181 @@ function isDenimLot(lotNo="") {
   return (up.startsWith("AK") || up.startsWith("UM"));
 }
 
-// Summation helpers: getStitchedQty, getAssembledQty, getWashedQty, getWashingInQty, getFinishedQty
-async function getStitchedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumStitched
-      FROM stitching_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumStitched)||0;
-}
-
-async function getAssembledQty(lotNo) {
-  // only relevant if denim
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumAsm
-      FROM jeans_assembly_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumAsm)||0;
-}
-
-async function getWashedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumWash
-      FROM washing_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumWash)||0;
-}
-
-async function getWashingInQty(lotNo) {
-  // not relevant if non-denim
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumWashIn
-      FROM washing_in_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumWashIn)||0;
-}
-
-async function getFinishedQty(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT COALESCE(SUM(total_pieces),0) AS sumFin
-      FROM finishing_data
-     WHERE lot_no= ?
-  `, [lotNo]);
-  return parseFloat(rows[0].sumFin)||0;
-}
-
-// "last assignment" fetchers:
-async function getLastStitchingAssignment(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT sa.id, sa.isApproved, sa.assigned_on, sa.approved_on, sa.user_id
-      FROM stitching_assignments sa
-      JOIN cutting_lots c ON sa.cutting_lot_id= c.id
-     WHERE c.lot_no= ?
-     ORDER BY sa.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
+// Aggregates and last-assignment data for multiple lots in one go
+async function fetchLotAggregates(lotNos = []) {
+  if (!lotNos.length) {
+    return {
+      lotSumsMap: {},
+      stitchMap: {},
+      asmMap: {},
+      washMap: {},
+      winMap: {},
+      finMap: {}
+    };
   }
-  return assign;
-}
 
-async function getLastAssemblyAssignment(lotNo) {
-  const [rows] = await pool.query(`
-    SELECT ja.id, ja.is_approved, ja.assigned_on, ja.approved_on, ja.user_id
-      FROM jeans_assembly_assignments ja
-      JOIN stitching_data sd ON ja.stitching_assignment_id= sd.id
-     WHERE sd.lot_no= ?
-     ORDER BY ja.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
-  }
-  return assign;
-}
+  const cacheKey = `lotAgg-${lotNos.slice().sort().join(',')}`;
+  return fetchCached(cacheKey, async () => {
+    const sumsQ = pool.query(`
+      SELECT 'stitched' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
+        FROM stitching_data
+       WHERE lot_no IN (?)
+       GROUP BY lot_no
 
-async function getLastWashingAssignment(lotNo) {
-  // only if denim
-  const [rows] = await pool.query(`
-    SELECT wa.id, wa.is_approved, wa.assigned_on, wa.approved_on, wa.user_id
-      FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id= jd.id
-     WHERE jd.lot_no= ?
-     ORDER BY wa.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  if (!rows.length) return null;
-  const assign= rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-    assign.opName= u ? u.username : "Unknown";
-  }
-  return assign;
-}
+      UNION ALL
 
-async function getLastWashingInAssignment(lotNo) {
-  // Only relevant if denim
-  const [rows] = await pool.query(`
-    SELECT wia.id, wia.is_approved, wia.assigned_on, wia.approved_on, wia.user_id
-      FROM washing_in_assignments wia
-      JOIN washing_data wd
-        ON wia.washing_data_id = wd.id
-     WHERE wd.lot_no = ?
-     ORDER BY wia.assigned_on DESC
-     LIMIT 1
-  `, [lotNo]);
-  
-  if (!rows.length) return null;
-  
-  const assign = rows[0];
-  if (assign.user_id) {
-    const [[u]] = await pool.query(
-      "SELECT username FROM users WHERE id = ?",
-      [assign.user_id]
-    );
-    assign.opName = u ? u.username : "Unknown";
-  }
-  return assign;
-}
+      SELECT 'assembled' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
+        FROM jeans_assembly_data
+       WHERE lot_no IN (?)
+       GROUP BY lot_no
 
-async function getLastFinishingAssignment(lotNo, isDenim) {
-  if (isDenim) {
-    // finishing for denim references washing_in_data
-    const [rows] = await pool.query(`
-      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id
-        FROM finishing_assignments fa
-        JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-       WHERE wid.lot_no = ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lotNo]);
-    if (!rows.length) return null;
-    const assign= rows[0];
-    if (assign.user_id) {
-      const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-      assign.opName= u ? u.username : "Unknown";
+      UNION ALL
+
+      SELECT 'washed' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
+        FROM washing_data
+       WHERE lot_no IN (?)
+       GROUP BY lot_no
+
+      UNION ALL
+
+      SELECT 'washing_in' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
+        FROM washing_in_data
+       WHERE lot_no IN (?)
+       GROUP BY lot_no
+
+      UNION ALL
+
+      SELECT 'finished' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
+        FROM finishing_data
+       WHERE lot_no IN (?)
+       GROUP BY lot_no
+    `, [lotNos, lotNos, lotNos, lotNos, lotNos]);
+
+    const stQ = pool.query(`
+      SELECT c.lot_no, sa.id, sa.isApproved AS is_approved,
+             sa.assigned_on, sa.approved_on, sa.user_id,
+             u.username AS opName
+        FROM stitching_assignments sa
+        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
+        LEFT JOIN users u ON sa.user_id = u.id
+        LEFT JOIN stitching_assignments sa2
+               ON sa2.cutting_lot_id = sa.cutting_lot_id
+              AND sa2.assigned_on > sa.assigned_on
+       WHERE sa2.id IS NULL
+         AND c.lot_no IN (?)
+    `, [lotNos]);
+
+    const asmQ = pool.query(`
+      SELECT sd.lot_no, ja.id, ja.is_approved,
+             ja.assigned_on, ja.approved_on, ja.user_id,
+             u.username AS opName
+        FROM jeans_assembly_assignments ja
+        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
+        LEFT JOIN users u ON ja.user_id = u.id
+        LEFT JOIN jeans_assembly_assignments ja2
+               ON ja2.stitching_assignment_id = ja.stitching_assignment_id
+              AND ja2.assigned_on > ja.assigned_on
+       WHERE ja2.id IS NULL
+         AND sd.lot_no IN (?)
+    `, [lotNos]);
+
+    const washQ = pool.query(`
+      SELECT jd.lot_no, wa.id, wa.is_approved,
+             wa.assigned_on, wa.approved_on, wa.user_id,
+             u.username AS opName
+        FROM washing_assignments wa
+        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+        LEFT JOIN users u ON wa.user_id = u.id
+        LEFT JOIN washing_assignments wa2
+               ON wa2.jeans_assembly_assignment_id = wa.jeans_assembly_assignment_id
+              AND wa2.assigned_on > wa.assigned_on
+       WHERE wa2.id IS NULL
+         AND jd.lot_no IN (?)
+    `, [lotNos]);
+
+    const winQ = pool.query(`
+      SELECT wd.lot_no, wia.id, wia.is_approved,
+             wia.assigned_on, wia.approved_on, wia.user_id,
+             u.username AS opName
+        FROM washing_in_assignments wia
+        JOIN washing_data wd ON wia.washing_data_id = wd.id
+        LEFT JOIN users u ON wia.user_id = u.id
+        LEFT JOIN washing_in_assignments wia2
+               ON wia2.washing_data_id = wia.washing_data_id
+              AND wia2.assigned_on > wia.assigned_on
+       WHERE wia2.id IS NULL
+         AND wd.lot_no IN (?)
+    `, [lotNos]);
+
+    const finQ = pool.query(`
+      SELECT
+        CASE
+          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
+          WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
+        END AS lot_no,
+        fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
+        u.username AS opName
+      FROM finishing_assignments fa
+      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
+      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
+      LEFT JOIN users u         ON fa.user_id = u.id
+      LEFT JOIN finishing_assignments fa2
+             ON (
+                  fa.washing_in_data_id IS NOT NULL
+                  AND fa.washing_in_data_id = fa2.washing_in_data_id
+                  AND fa2.assigned_on > fa.assigned_on
+                )
+                OR (
+                  fa.stitching_assignment_id IS NOT NULL
+                  AND fa.stitching_assignment_id = fa2.stitching_assignment_id
+                  AND fa2.assigned_on > fa.assigned_on
+                )
+      WHERE fa2.id IS NULL
+        AND (
+             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
+             OR
+             (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
+            )
+    `, [lotNos, lotNos]);
+
+    const [
+      [sumRows],
+      [stRows],
+      [asmRows],
+      [washRows],
+      [winRows],
+      [finRows]
+    ] = await Promise.all([sumsQ, stQ, asmQ, washQ, winQ, finQ]);
+
+    const lotSumsMap = {};
+    lotNos.forEach(ln => {
+      lotSumsMap[ln] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
+    });
+    for (const row of sumRows) {
+      const m = lotSumsMap[row.lot_no];
+      if (!m) continue;
+      switch (row.sumType) {
+        case 'stitched':   m.stitchedQty   = parseFloat(row.sumVal) || 0; break;
+        case 'assembled':  m.assembledQty  = parseFloat(row.sumVal) || 0; break;
+        case 'washed':     m.washedQty     = parseFloat(row.sumVal) || 0; break;
+        case 'washing_in': m.washingInQty  = parseFloat(row.sumVal) || 0; break;
+        case 'finished':   m.finishedQty   = parseFloat(row.sumVal) || 0; break;
+      }
     }
-    return assign;
-  } else {
-    // finishing for non-denim references stitching_data
-    const [rows] = await pool.query(`
-      SELECT fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id
-        FROM finishing_assignments fa
-        JOIN stitching_data sd ON fa.stitching_assignment_id= sd.id
-       WHERE sd.lot_no= ?
-       ORDER BY fa.assigned_on DESC
-       LIMIT 1
-    `, [lotNo]);
-    if (!rows.length) return null;
-    const assign= rows[0];
-    if (assign.user_id) {
-      const [[u]] = await pool.query("SELECT username FROM users WHERE id=?", [assign.user_id]);
-      assign.opName= u ? u.username : "Unknown";
-    }
-    return assign;
-  }
+
+    const stitchMap = {};
+    stRows.forEach(r => { stitchMap[r.lot_no] = r; });
+    const asmMap = {};
+    asmRows.forEach(r => { asmMap[r.lot_no] = r; });
+    const washMap = {};
+    washRows.forEach(r => { washMap[r.lot_no] = r; });
+    const winMap = {};
+    winRows.forEach(r => { winMap[r.lot_no] = r; });
+    const finMap = {};
+    finRows.forEach(r => { if (r.lot_no) finMap[r.lot_no] = r; });
+
+    return { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap };
+  });
 }
 
 /**
@@ -1391,186 +1412,8 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       }
     }
 
-    // 3) Get the sums for each relevant table in a SINGLE UNION query (ONE QUERY)
-    //    We'll store them in an object keyed by [lot_no].
-    const [sumRows] = await pool.query(`
-      SELECT 'stitched' AS sumType, lot_no, COALESCE(SUM(total_pieces), 0) AS sumVal
-        FROM stitching_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'assembled' AS sumType, lot_no, COALESCE(SUM(total_pieces), 0) AS sumVal
-        FROM jeans_assembly_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'washed' AS sumType, lot_no, COALESCE(SUM(total_pieces), 0) AS sumVal
-        FROM washing_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'washing_in' AS sumType, lot_no, COALESCE(SUM(total_pieces), 0) AS sumVal
-        FROM washing_in_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'finished' AS sumType, lot_no, COALESCE(SUM(total_pieces), 0) AS sumVal
-        FROM finishing_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-    `, [lotNos, lotNos, lotNos, lotNos, lotNos]);
-
-    const lotSumsMap = {};
-    // Initialize all sums to 0
-    for (const ln of lotNos) {
-      lotSumsMap[ln] = {
-        stitchedQty: 0,
-        assembledQty: 0,
-        washedQty: 0,
-        washingInQty: 0,
-        finishedQty: 0
-      };
-    }
-    // Fill in from sumRows
-    for (const row of sumRows) {
-      const ln = row.lot_no;
-      if (!lotSumsMap[ln]) continue; // Safety
-      switch (row.sumType) {
-        case "stitched":    lotSumsMap[ln].stitchedQty   = parseFloat(row.sumVal) || 0; break;
-        case "assembled":   lotSumsMap[ln].assembledQty  = parseFloat(row.sumVal) || 0; break;
-        case "washed":      lotSumsMap[ln].washedQty     = parseFloat(row.sumVal) || 0; break;
-        case "washing_in":  lotSumsMap[ln].washingInQty  = parseFloat(row.sumVal) || 0; break;
-        case "finished":    lotSumsMap[ln].finishedQty   = parseFloat(row.sumVal) || 0; break;
-      }
-    }
-
-    // 4) Get the *last* assignments for each department in separate queries (5 QUERIES total)
-    //    We'll do a "self-join" approach to pick only the row with the max assigned_on per lot.
-
-    // --- Stitching ---
-    const [stRows] = await pool.query(`
-      SELECT c.lot_no, sa.id, sa.isApproved AS is_approved,
-             sa.assigned_on, sa.approved_on, sa.user_id,
-             u.username AS opName
-        FROM stitching_assignments sa
-        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-        LEFT JOIN users u ON sa.user_id = u.id
-        LEFT JOIN stitching_assignments sa2
-               ON sa2.cutting_lot_id = sa.cutting_lot_id
-              AND sa2.assigned_on > sa.assigned_on
-       WHERE sa2.id IS NULL
-         AND c.lot_no IN (?)
-    `, [lotNos]);
-    const stitchMap = {};
-    for (const row of stRows) {
-      stitchMap[row.lot_no] = row;
-    }
-
-    // --- Assembly ---
-    const [asmRows] = await pool.query(`
-      SELECT sd.lot_no, ja.id, ja.is_approved,
-             ja.assigned_on, ja.approved_on, ja.user_id,
-             u.username AS opName
-        FROM jeans_assembly_assignments ja
-        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-        LEFT JOIN users u ON ja.user_id = u.id
-        LEFT JOIN jeans_assembly_assignments ja2
-               ON ja2.stitching_assignment_id = ja.stitching_assignment_id
-              AND ja2.assigned_on > ja.assigned_on
-       WHERE ja2.id IS NULL
-         AND sd.lot_no IN (?)
-    `, [lotNos]);
-    const asmMap = {};
-    for (const row of asmRows) {
-      asmMap[row.lot_no] = row;
-    }
-
-    // --- Washing ---
-    const [washRows] = await pool.query(`
-      SELECT jd.lot_no, wa.id, wa.is_approved,
-             wa.assigned_on, wa.approved_on, wa.user_id,
-             u.username AS opName
-        FROM washing_assignments wa
-        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-        LEFT JOIN users u ON wa.user_id = u.id
-        LEFT JOIN washing_assignments wa2
-               ON wa2.jeans_assembly_assignment_id = wa.jeans_assembly_assignment_id
-              AND wa2.assigned_on > wa.assigned_on
-       WHERE wa2.id IS NULL
-         AND jd.lot_no IN (?)
-    `, [lotNos]);
-    const washMap = {};
-    for (const row of washRows) {
-      washMap[row.lot_no] = row;
-    }
-
-    // --- WashingIn ---
-    const [winRows] = await pool.query(`
-      SELECT wd.lot_no, wia.id, wia.is_approved,
-             wia.assigned_on, wia.approved_on, wia.user_id,
-             u.username AS opName
-        FROM washing_in_assignments wia
-        JOIN washing_data wd ON wia.washing_data_id = wd.id
-        LEFT JOIN users u ON wia.user_id = u.id
-        LEFT JOIN washing_in_assignments wia2
-               ON wia2.washing_data_id = wia.washing_data_id
-              AND wia2.assigned_on > wia.assigned_on
-       WHERE wia2.id IS NULL
-         AND wd.lot_no IN (?)
-    `, [lotNos]);
-    const winMap = {};
-    for (const row of winRows) {
-      winMap[row.lot_no] = row;
-    }
-
-    // --- Finishing ---
-    // We have two possibilities: if denim => finishing references washing_data, else stitching_data.
-    // To unify, we’ll just get all finishing_assignments that link either washing_data or stitching_data
-    // by whichever is not null, then pick the last. Then we can figure out the lot_no in the SELECT.
-    const [finRows] = await pool.query(`
-      SELECT
-        CASE
-          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
-          WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
-        END AS lot_no,
-        fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
-        u.username AS opName
-      FROM finishing_assignments fa
-      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-      LEFT JOIN users u         ON fa.user_id = u.id
-      LEFT JOIN finishing_assignments fa2
-             ON (
-                  fa.washing_in_data_id IS NOT NULL
-                  AND fa.washing_in_data_id = fa2.washing_in_data_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-                OR
-                (
-                  fa.stitching_assignment_id IS NOT NULL
-                  AND fa.stitching_assignment_id = fa2.stitching_assignment_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-      WHERE fa2.id IS NULL
-        AND (
-             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
-             OR
-             (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
-            )
-    `, [lotNos, lotNos]);
-    const finMap = {};
-    for (const row of finRows) {
-      if (!row.lot_no) continue;
-      finMap[row.lot_no] = row;
-    }
+    // 3) Aggregate per-lot quantities and fetch last assignments in a batched manner
+    const { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
 
     // --- Rewash Pending Quantities ---
     const [rewashRows] = await pool.query(
@@ -2012,106 +1855,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     }
 
     // 4) Last assignments per lot (same as pic-report)
-    const [stRows] = await pool.query(`
-      SELECT c.lot_no, sa.id, sa.isApproved AS is_approved,
-             sa.assigned_on, sa.approved_on, sa.user_id,
-             u.username AS opName
-        FROM stitching_assignments sa
-        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-        LEFT JOIN users u ON sa.user_id = u.id
-        LEFT JOIN stitching_assignments sa2
-               ON sa2.cutting_lot_id = sa.cutting_lot_id
-              AND sa2.assigned_on > sa.assigned_on
-       WHERE sa2.id IS NULL
-         AND c.lot_no IN (?)
-    `, [lotNos]);
-    const stitchMap = {};
-    for (const r of stRows) stitchMap[r.lot_no] = r;
-
-    const [asmRows] = await pool.query(`
-      SELECT sd.lot_no, ja.id, ja.is_approved,
-             ja.assigned_on, ja.approved_on, ja.user_id,
-             u.username AS opName
-        FROM jeans_assembly_assignments ja
-        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-        LEFT JOIN users u ON ja.user_id = u.id
-        LEFT JOIN jeans_assembly_assignments ja2
-               ON ja2.stitching_assignment_id = ja.stitching_assignment_id
-              AND ja2.assigned_on > ja.assigned_on
-       WHERE ja2.id IS NULL
-         AND sd.lot_no IN (?)
-    `, [lotNos]);
-    const asmMap = {};
-    for (const r of asmRows) asmMap[r.lot_no] = r;
-
-    const [washRows] = await pool.query(`
-      SELECT jd.lot_no, wa.id, wa.is_approved,
-             wa.assigned_on, wa.approved_on, wa.user_id,
-             u.username AS opName
-        FROM washing_assignments wa
-        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-        LEFT JOIN users u ON wa.user_id = u.id
-        LEFT JOIN washing_assignments wa2
-               ON wa2.jeans_assembly_assignment_id = wa.jeans_assembly_assignment_id
-              AND wa2.assigned_on > wa.assigned_on
-       WHERE wa2.id IS NULL
-         AND jd.lot_no IN (?)
-    `, [lotNos]);
-    const washMap = {};
-    for (const r of washRows) washMap[r.lot_no] = r;
-
-    const [winRows] = await pool.query(`
-      SELECT wd.lot_no, wia.id, wia.is_approved,
-             wia.assigned_on, wia.approved_on, wia.user_id,
-             u.username AS opName
-        FROM washing_in_assignments wia
-        JOIN washing_data wd ON wia.washing_data_id = wd.id
-        LEFT JOIN users u ON wia.user_id = u.id
-        LEFT JOIN washing_in_assignments wia2
-               ON wia2.washing_data_id = wia.washing_data_id
-              AND wia2.assigned_on > wia.assigned_on
-       WHERE wia2.id IS NULL
-         AND wd.lot_no IN (?)
-    `, [lotNos]);
-    const winMap = {};
-    for (const r of winRows) winMap[r.lot_no] = r;
-
-    const [finRows] = await pool.query(`
-      SELECT
-        CASE
-          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
-          WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
-        END AS lot_no,
-        fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
-        u.username AS opName
-      FROM finishing_assignments fa
-      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-      LEFT JOIN users u         ON fa.user_id = u.id
-      LEFT JOIN finishing_assignments fa2
-             ON (
-                  fa.washing_in_data_id IS NOT NULL
-                  AND fa.washing_in_data_id = fa2.washing_in_data_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-                OR
-                (
-                  fa.stitching_assignment_id IS NOT NULL
-                  AND fa.stitching_assignment_id = fa2.stitching_assignment_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-      WHERE fa2.id IS NULL
-        AND (
-             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
-             OR
-             (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
-            )
-    `, [lotNos, lotNos]);
-    const finMap = {};
-    for (const r of finRows) {
-      if (!r.lot_no) continue;
-      finMap[r.lot_no] = r;
-    }
+    const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
 
     // 5) Build final data
     const finalData = [];
