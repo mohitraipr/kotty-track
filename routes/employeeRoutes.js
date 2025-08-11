@@ -285,37 +285,87 @@ router.post('/employees/:id/advances', isAuthenticated, isSupervisor, async (req
   }
 });
 
-// Download monthly salary sheet for salaried employees
+// Download detailed monthly salary sheet for salaried employees
 router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) => {
   const month = req.query.month || moment().format('YYYY-MM');
   const supervisorId = req.session.user.id;
   try {
-    const [rows] = await pool.query(
-      `SELECT e.punching_id, e.name, es.gross, es.deduction, es.net
+    const monthStart = moment(month + '-01');
+    const daysInMonth = monthStart.daysInMonth();
+    const [employees] = await pool.query(
+      `SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours, e.pay_sunday,
+              es.gross, es.deduction, es.net
          FROM employees e
          LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
         WHERE e.supervisor_id = ? AND e.salary_type != 'dihadi' AND e.is_active = 1
         ORDER BY e.name`,
       [month, supervisorId]
     );
+    const empIds = employees.map(e => e.id);
+    const attendanceMap = new Map();
+    if (empIds.length) {
+      const [attRows] = await pool.query(
+        'SELECT employee_id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id IN (?) AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY employee_id, date',
+        [empIds, month]
+      );
+      for (const a of attRows) {
+        if (!attendanceMap.has(a.employee_id)) attendanceMap.set(a.employee_id, []);
+        attendanceMap.get(a.employee_id).push(a);
+      }
+    }
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Salary');
-    sheet.columns = [
+    const columns = [
       { header: 'Punch ID', key: 'punching_id', width: 12 },
       { header: 'Name', key: 'name', width: 20 },
-      { header: 'Gross', key: 'gross', width: 12 },
-      { header: 'Deduction', key: 'deduction', width: 12 },
-      { header: 'Net', key: 'net', width: 12 }
+      { header: 'Base Salary', key: 'base_salary', width: 12 }
     ];
-    rows.forEach(r =>
-      sheet.addRow({
-        punching_id: r.punching_id,
-        name: r.name,
-        gross: r.gross || 0,
-        deduction: r.deduction || 0,
-        net: r.net || 0
-      })
-    );
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `d${String(d).padStart(2, '0')}`;
+      columns.push({ header: String(d), key, width: 5 });
+    }
+    columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
+    columns.push({ header: 'Hourly Salary', key: 'hour_salary', width: 12 });
+    columns.push({ header: 'Day Salary', key: 'day_salary', width: 12 });
+    columns.push({ header: 'Total Salary', key: 'total_salary', width: 12 });
+    columns.push({ header: 'Advance Deducted', key: 'advance_deducted', width: 15 });
+    columns.push({ header: 'Net Salary', key: 'net_salary', width: 12 });
+    sheet.columns = columns;
+    employees.forEach(emp => {
+      const dayRate = parseFloat(emp.salary) / daysInMonth;
+      const hourlyRate = emp.allotted_hours
+        ? dayRate / parseFloat(emp.allotted_hours)
+        : 0;
+      const att = attendanceMap.get(emp.id) || [];
+      const byDate = {};
+      let totalHours = 0;
+      for (const a of att) {
+        if (!a.punch_in || !a.punch_out) continue;
+        const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly', emp.allotted_hours);
+        const day = moment(a.date).date();
+        byDate[day] = hrs.toFixed(2);
+        totalHours += hrs;
+      }
+      const gross = parseFloat(emp.gross || 0);
+      const advDeduct = parseFloat(emp.deduction || 0);
+      const net = parseFloat(emp.net || gross - advDeduct);
+      const row = {
+        punching_id: emp.punching_id,
+        name: emp.name,
+        base_salary: emp.salary,
+        total_hours: totalHours.toFixed(2),
+        hour_salary: hourlyRate.toFixed(2),
+        day_salary: dayRate.toFixed(2),
+        total_salary: gross.toFixed(2),
+        advance_deducted: advDeduct,
+        net_salary: net.toFixed(2)
+      };
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `d${String(d).padStart(2, '0')}`;
+        row[key] = byDate[d] !== undefined ? byDate[d] : '';
+      }
+      sheet.addRow(row);
+    });
     res.setHeader('Content-Disposition', `attachment; filename="salary_${month}.xlsx"`);
     res.setHeader(
       'Content-Type',

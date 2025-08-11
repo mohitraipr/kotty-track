@@ -229,5 +229,77 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
 });
 
 
+// Download monthly salary summary for all salaried employees
+router.get('/departments/salary/download', isAuthenticated, isOperator, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  try {
+    const [rows] = await pool.query(
+      `SELECT e.id, e.punching_id, e.name, e.salary,
+              u.username AS supervisor_name,
+              d.name AS department_name,
+              COALESCE(es.gross,0) AS gross,
+              COALESCE(es.deduction,0) AS deduction,
+              COALESCE(es.net,0) AS net,
+              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS adv_total,
+              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS adv_deduct_total
+         FROM employees e
+         JOIN users u ON e.supervisor_id = u.id
+         LEFT JOIN (
+           SELECT user_id, MIN(department_id) AS department_id
+             FROM department_supervisors
+            GROUP BY user_id
+         ) ds ON ds.user_id = u.id
+         LEFT JOIN departments d ON ds.department_id = d.id
+         LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
+        WHERE e.salary_type != 'dihadi' AND e.is_active = 1
+        ORDER BY d.name, u.username, e.name`,
+      [month]
+    );
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Salary');
+    sheet.columns = [
+      { header: 'Department', key: 'department', width: 20 },
+      { header: 'Supervisor', key: 'supervisor', width: 20 },
+      { header: 'Punch ID', key: 'punching_id', width: 12 },
+      { header: 'Name', key: 'name', width: 20 },
+      { header: 'Base Salary', key: 'base_salary', width: 12 },
+      { header: 'Gross', key: 'gross', width: 12 },
+      { header: 'Advance Deducted', key: 'deduction', width: 15 },
+      { header: 'Net Salary', key: 'net', width: 12 },
+      { header: 'Advance Left', key: 'advance_left', width: 15 }
+    ];
+    rows.forEach(r => {
+      const advLeft =
+        parseFloat(r.adv_total || 0) - parseFloat(r.adv_deduct_total || 0);
+      sheet.addRow({
+        department: r.department_name || '',
+        supervisor: r.supervisor_name,
+        punching_id: r.punching_id,
+        name: r.name,
+        base_salary: r.salary,
+        gross: r.gross,
+        deduction: r.deduction,
+        net: r.net,
+        advance_left: advLeft
+      });
+    });
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="operator_salary_${month}.xlsx"`
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary sheet:', err);
+    req.flash('error', 'Could not download salary sheet');
+    res.redirect('/operator/departments');
+  }
+});
+
+
 module.exports = router;
 
