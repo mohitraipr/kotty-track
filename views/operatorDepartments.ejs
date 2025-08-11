@@ -299,8 +299,7 @@
                 <td class="salary-container">
                   <% if (canViewSalary) { %>
                     <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
-                    <% if (s.monthly_salary && s.dihadi_salary) { %>
-                      <span class="badge bg-primary ms-1">M <%= s.monthly_salary %></span>
+                    <% if (s.dihadi_salary) { %>
                       <span class="badge bg-info text-dark ms-1">D <%= s.dihadi_salary %></span>
                     <% } %>
                     <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
@@ -453,7 +452,6 @@
             <label class="form-label">Preset Rule</label>
             <select name="rule" class="form-select">
               <option value="">Custom</option>
-              <option value="monthly_short">3 short days deduct 1 day</option>
             </select>
           </div>
           <div class="col-md-6">
@@ -544,7 +542,6 @@
           <label class="form-label">Salary Type</label>
           <select name="salary_type" class="form-select" required>
             <option value="dihadi">Dihadi</option>
-            <option value="monthly">Monthly</option>
           </select>
         </div>
         <div class="col-md-3">
@@ -616,7 +613,6 @@
               <td class="salary-container">${salaryCell}</td>
               <td><select class="form-select form-select-sm" name="salary_type">
                     <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>
-                    <option value="monthly" ${emp.salary_type==='monthly'?'selected':''}>Monthly</option>
                   </select></td>
               <td><input type="number" step="0.1" class="form-control form-control-sm" name="allotted_hours" value="${emp.allotted_hours}" required></td>
               <td><input type="number" class="form-control form-control-sm" name="paid_sunday_allowance" value="${emp.paid_sunday_allowance}" min="0"></td>

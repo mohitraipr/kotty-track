@@ -2,14 +2,7 @@ const express = require("express");
 const router = express.Router();
 const moment = require("moment");
 const { pool } = require("../config/db");
-const {
-  calculateSalaryForMonth,
-  calculateSalaryHourly,
-} = require("../helpers/salaryCalculator");
-const {
-  HOURLY_EXEMPT_EMPLOYEE_IDS,
-} = require("../utils/hourlyExemptEmployees");
-const { SPECIAL_TEAM_EMPLOYEE_IDS } = require("../utils/specialTeamEmployees");
+const { calculateSalaryForMonth } = require("../helpers/salaryCalculator");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 const { isValidAadhar } = require("../helpers/aadharValidator");
 
@@ -34,9 +27,6 @@ async function fetchCached(key, fn) {
   return result;
 }
 
-// Convert exemption arrays to Sets for faster lookups
-const HOURLY_EXEMPT_SET = new Set(HOURLY_EXEMPT_EMPLOYEE_IDS);
-const SPECIAL_TEAM_SET = new Set(SPECIAL_TEAM_EMPLOYEE_IDS);
 
 // List all supervisors
 router.get("/supervisors", isAuthenticated, isOperator, async (req, res) => {
@@ -281,13 +271,7 @@ router.post(
         );
       }
       const month = moment(date).format("YYYY-MM");
-      if (
-        emp.salary_type === "monthly" &&
-        !HOURLY_EXEMPT_SET.has(empId) &&
-        !SPECIAL_TEAM_SET.has(empId)
-      ) {
-        await calculateSalaryHourly(conn, empId, month, emp);
-      } else {
+      if (emp.salary_type === "dihadi") {
         await calculateSalaryForMonth(conn, empId, month);
       }
       await conn.commit();
@@ -423,13 +407,7 @@ router.post(
           );
         }
 
-        if (
-          emp.salary_type === "monthly" &&
-          !HOURLY_EXEMPT_SET.has(parseInt(empId)) &&
-          !SPECIAL_TEAM_SET.has(parseInt(empId))
-        ) {
-          await calculateSalaryHourly(conn, empId, month, emp);
-        } else {
+        if (emp.salary_type === "dihadi") {
           await calculateSalaryForMonth(conn, empId, month);
         }
       }
@@ -572,13 +550,7 @@ router.post(
           );
         }
       }
-      if (
-        emp.salary_type === "monthly" &&
-        !HOURLY_EXEMPT_SET.has(empId) &&
-        !SPECIAL_TEAM_SET.has(empId)
-      ) {
-        await calculateSalaryHourly(conn, empId, month, emp);
-      } else {
+      if (emp.salary_type === "dihadi") {
         await calculateSalaryForMonth(conn, empId, month);
       }
       await conn.commit();
