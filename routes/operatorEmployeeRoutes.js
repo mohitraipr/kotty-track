@@ -271,9 +271,7 @@ router.post(
         );
       }
       const month = moment(date).format("YYYY-MM");
-      if (emp.salary_type === "dihadi") {
-        await calculateSalaryForMonth(conn, empId, month);
-      }
+      await calculateSalaryForMonth(conn, empId, month);
       await conn.commit();
       req.flash("success", "Attendance updated");
       conn.release();
@@ -407,9 +405,7 @@ router.post(
           );
         }
 
-        if (emp.salary_type === "dihadi") {
-          await calculateSalaryForMonth(conn, empId, month);
-        }
+        await calculateSalaryForMonth(conn, empId, month);
       }
       await conn.commit();
       conn.release();
@@ -550,9 +546,7 @@ router.post(
           );
         }
       }
-      if (emp.salary_type === "dihadi") {
-        await calculateSalaryForMonth(conn, empId, month);
-      }
+      await calculateSalaryForMonth(conn, empId, month);
       await conn.commit();
       conn.release();
       req.flash("success", "Attendance updated");
