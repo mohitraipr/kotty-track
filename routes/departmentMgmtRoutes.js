@@ -208,9 +208,7 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
         );
       }
       const month = moment(data[0].attendance[0].date).format('YYYY-MM');
-      if (employee.salary_type === 'dihadi') {
-        await calculateSalaryForMonth(conn, employee.id, month);
-      }
+      await calculateSalaryForMonth(conn, employee.id, month);
       uploadedCount++;
     }
     await conn.commit();
