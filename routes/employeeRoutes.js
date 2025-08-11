@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
-const { calculateSalaryForMonth, effectiveHours } = require('../helpers/salaryCalculator');
+const { effectiveHours } = require('../helpers/salaryCalculator');
 const { isValidAadhar } = require('../helpers/aadharValidator');
 
 // simple in-memory cache for the dashboard
@@ -106,27 +106,6 @@ router.get('/employees', isAuthenticated, isSupervisor, async (req, res) => {
       employees.forEach(e => {
         map.set(e.id, { name: e.name, diff: 0, emp: e });
       });
-      att.forEach(a => {
-        const item = map.get(a.employee_id);
-        if (!item) return;
-        const emp = item.emp;
-        if (
-          emp.salary_type !== 'monthly' ||
-          !a.punch_in ||
-          !a.punch_out ||
-          !emp.allotted_hours
-        )
-          return;
-        const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly');
-        const diff = hrs - parseFloat(emp.allotted_hours || 0);
-        item.diff += diff;
-      });
-      topEmployees = Array.from(map.values())
-        .filter(i => i.diff > 0)
-        .sort((a, b) => b.diff - a.diff)
-        .slice(0, 3)
-        .map(i => i.name);
-
       presentCount = presentRows[0]?.cnt || 0;
       paidCount = salaryRows[0]?.cnt || 0;
     }
@@ -267,45 +246,6 @@ router.get('/employees/:id/details', isAuthenticated, isSupervisor, async (req, 
   }
 });
 
-// Record a leave for an employee
-router.post('/employees/:id/leaves', isAuthenticated, isSupervisor, async (req, res) => {
-  const empId = req.params.id;
-  const { leave_date, days, remark } = req.body;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [rows] = await conn.query(
-      'SELECT salary_type FROM employees WHERE id = ? AND supervisor_id = ?',
-      [empId, req.session.user.id]
-    );
-    if (!rows.length) {
-      await conn.rollback();
-      req.flash('error', 'Employee not found');
-      return res.redirect('/supervisor/employees');
-    }
-    if (rows[0].salary_type === 'dihadi') {
-      await conn.rollback();
-      req.flash('error', 'Dihadi employees cannot record leaves');
-      return res.redirect(`/supervisor/employees/${empId}/details`);
-    }
-    await conn.query(
-      'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES (?, ?, ?, ?)',
-      [empId, leave_date, days, remark]
-    );
-    const month = moment(leave_date).format('YYYY-MM');
-    await calculateSalaryForMonth(conn, empId, month);
-    await conn.commit();
-    req.flash('success', 'Leave recorded');
-    res.redirect(`/supervisor/employees/${empId}/details`);
-  } catch (err) {
-    await conn.rollback();
-    console.error('Error recording leave:', err);
-    req.flash('error', 'Failed to record leave');
-    res.redirect(`/supervisor/employees/${empId}/details`);
-  } finally {
-    conn.release();
-  }
-});
 
 // Record a debit for an employee
 router.post('/employees/:id/debits', isAuthenticated, isSupervisor, async (req, res) => {
