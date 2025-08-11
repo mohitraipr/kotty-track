@@ -5,6 +5,8 @@ const { isAuthenticated, isSupervisor } = require('../middlewares/auth');
 const moment = require('moment');
 const { effectiveHours } = require('../helpers/salaryCalculator');
 const { isValidAadhar } = require('../helpers/aadharValidator');
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 
 // simple in-memory cache for the dashboard
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -280,6 +282,128 @@ router.post('/employees/:id/advances', isAuthenticated, isSupervisor, async (req
     console.error('Error recording advance:', err);
     req.flash('error', 'Failed to record advance');
     res.redirect(`/supervisor/employees/${empId}/details`);
+  }
+});
+
+// Download monthly salary sheet for salaried employees
+router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  const supervisorId = req.session.user.id;
+  try {
+    const [rows] = await pool.query(
+      `SELECT e.punching_id, e.name, es.gross, es.deduction, es.net
+         FROM employees e
+         LEFT JOIN employee_salaries es ON es.employee_id = e.id AND es.month = ?
+        WHERE e.supervisor_id = ? AND e.salary_type != 'dihadi' AND e.is_active = 1
+        ORDER BY e.name`,
+      [month, supervisorId]
+    );
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Salary');
+    sheet.columns = [
+      { header: 'Punch ID', key: 'punching_id', width: 12 },
+      { header: 'Name', key: 'name', width: 20 },
+      { header: 'Gross', key: 'gross', width: 12 },
+      { header: 'Deduction', key: 'deduction', width: 12 },
+      { header: 'Net', key: 'net', width: 12 }
+    ];
+    rows.forEach(r =>
+      sheet.addRow({
+        punching_id: r.punching_id,
+        name: r.name,
+        gross: r.gross || 0,
+        deduction: r.deduction || 0,
+        net: r.net || 0
+      })
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="salary_${month}.xlsx"`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary sheet:', err);
+    req.flash('error', 'Could not download salary sheet');
+    res.redirect('/supervisor/employees');
+  }
+});
+
+// View salary details for an employee
+router.get('/employees/:id/salary', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  try {
+    const [[emp]] = await pool.query(
+      'SELECT id, name FROM employees WHERE id = ? AND supervisor_id = ?',
+      [empId, req.session.user.id]
+    );
+    if (!emp) {
+      req.flash('error', 'Employee not found');
+      return res.redirect('/supervisor/employees');
+    }
+    const [salaries] = await pool.query(
+      'SELECT month, gross, deduction, net FROM employee_salaries WHERE employee_id = ? ORDER BY month DESC',
+      [empId]
+    );
+    res.render('employeeSalary', {
+      user: req.session.user,
+      employee: emp,
+      salaries
+    });
+  } catch (err) {
+    console.error('Error loading employee salary:', err);
+    req.flash('error', 'Failed to load salary details');
+    res.redirect('/supervisor/employees');
+  }
+});
+
+// Download salary slip for an employee
+router.get('/employees/:id/salary/download', isAuthenticated, isSupervisor, async (req, res) => {
+  const empId = req.params.id;
+  const month = req.query.month;
+  if (!month) {
+    req.flash('error', 'Month is required');
+    return res.redirect(`/supervisor/employees/${empId}/salary`);
+  }
+  try {
+    const [[emp]] = await pool.query(
+      'SELECT name, punching_id FROM employees WHERE id = ? AND supervisor_id = ?',
+      [empId, req.session.user.id]
+    );
+    if (!emp) {
+      req.flash('error', 'Employee not found');
+      return res.redirect('/supervisor/employees');
+    }
+    const [[sal]] = await pool.query(
+      'SELECT gross, deduction, net FROM employee_salaries WHERE employee_id = ? AND month = ?',
+      [empId, month]
+    );
+    if (!sal) {
+      req.flash('error', 'Salary not found');
+      return res.redirect(`/supervisor/employees/${empId}/salary`);
+    }
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="salary_${emp.name}_${month}.pdf"`
+    );
+    doc.pipe(res);
+    doc.fontSize(16).text('Salary Slip', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Employee: ${emp.name}`);
+    doc.text(`Punch ID: ${emp.punching_id}`);
+    doc.text(`Month: ${month}`);
+    doc.moveDown();
+    doc.text(`Gross Salary: ${sal.gross}`);
+    doc.text(`Deductions: ${sal.deduction}`);
+    doc.text(`Net Salary: ${sal.net}`);
+    doc.end();
+  } catch (err) {
+    console.error('Error downloading salary slip:', err);
+    req.flash('error', 'Failed to download salary slip');
+    res.redirect(`/supervisor/employees/${empId}/salary`);
   }
 });
 
