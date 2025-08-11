@@ -229,3 +229,7 @@ router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.si
 
   res.redirect('/operator/departments');
 });
+
+
+module.exports = router;
+
