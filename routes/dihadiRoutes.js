@@ -60,6 +60,8 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
             byDate[day] = hrs.toFixed(2);
             totalHrs += hrs;
             totalLunch += lunch;
+          } else if (a.punch_in || a.punch_out) {
+            byDate[day] = 'MP';
           } else {
             byDate[day] = '';
           }
