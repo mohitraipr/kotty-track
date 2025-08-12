@@ -356,34 +356,14 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         }
       }
 
-      // Determine Sunday credits (worked Sundays without pay)
-      let sundayCredits = 0;
+      // Fill in absences for days without attendance
       for (let d = 1; d <= daysInMonth; d++) {
-        const date = monthStart.clone().date(d);
-        if (date.day() === 0 && byDate[d] && parseInt(emp.pay_sunday) !== 1) {
-          sundayCredits++;
-        }
-      }
-
-      // Fill in absences and track how many were covered by Sunday credits
-      let adjustments = 0;
-      for (let d = 1; d <= daysInMonth; d++) {
-        const date = monthStart.clone().date(d);
         if (byDate[d] === undefined) {
           byDate[d] = 'A';
-          if (date.day() !== 0 && sundayCredits > 0) {
-            sundayCredits--;
-            adjustments++;
-          }
         }
       }
 
-      const status =
-        adjustments > 0
-          ? `Adjusted ${adjustments} day(s)`
-          : sundayCredits > 0
-          ? `Credit ${sundayCredits} Sunday(s)`
-          : '';
+      const status = '';
 
       const gross = parseFloat(emp.gross || 0);
       const advDeduct = parseFloat(emp.deduction || 0);

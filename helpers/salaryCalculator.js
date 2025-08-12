@@ -123,8 +123,7 @@ exports.calculateSalaryForMonth = calculateSalaryForMonth;
 // month. The hourly rate is derived from their monthly salary by
 // dividing by the number of days in the month and then by the allotted
 // hours per day. Sundays always earn the normal day rate unless the
-// sandwich rule applies. When `pay_sunday` is enabled a worked Sunday
-// pays double. When it's disabled the day is credited as leave.
+// sandwich rule applies. A worked Sunday always earns double pay.
 async function calculateMonthly(conn, employeeId, month, emp) {
   const monthStart = moment(month + '-01');
   const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
@@ -152,11 +151,8 @@ async function calculateMonthly(conn, employeeId, month, emp) {
     worked.set(dateStr, hrs);
   }
 
-  const paySunday = parseInt(emp.pay_sunday) === 1;
   const startDate = moment(start, 'YYYY-MM-DD');
   const monthEnd = monthStart.clone().endOf('month');
-
-  const unusedSundayLeaves = [];
   let gross = 0;
 
   for (let day = startDate.clone(); day.isSameOrBefore(monthEnd); day.add(1, 'day')) {
@@ -169,31 +165,15 @@ async function calculateMonthly(conn, employeeId, month, emp) {
       const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
 
       if (hours > 0) {
-        if (paySunday) {
-          gross += dayRate * 2; // double pay when allowed
-        } else {
-          // credit this Sunday as leave, to be used against a future absence
-          unusedSundayLeaves.push(dateStr);
-        }
+        gross += dayRate * 2; // double pay for worked Sundays
       } else if (satWorked && monWorked) {
         gross += dayRate;
       }
     } else if (hours > 0) {
       gross += hours * hourlyRate;
-    } else if (unusedSundayLeaves.length > 0) {
-      // Use one credited Sunday leave to pay for this absence
-      unusedSundayLeaves.shift();
-      gross += dayRate;
     }
   }
-
-  if (unusedSundayLeaves.length > 0) {
-    await conn.query(
-      'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES ?',
-      [unusedSundayLeaves.map(d => [employeeId, d, 1, 'Sunday work'])]
-    );
-  }
-  const [[advRow]] = await conn.query(
+    const [[advRow]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
     [employeeId, month]
   );

@@ -192,11 +192,9 @@ Monthly employees paid hourly receive their full allotted hours when both punche
 ### Sunday Attendance Rules
 
 - Sundays are paid at the normal day rate even when the employee is absent, unless the sandwich rule applies.
-- **Special departments (`catalog`, `account`, `merchant`, `tech`)** â worked Sundays never grant extra pay and are credited as leave.
-- **Other departments** â the `pay_sunday` flag controls Sundays. When set to `TRUE` a worked Sunday earns double pay; when `FALSE` the day is credited as leave.
+- Worked Sundays always earn double pay.
 - **Mandatory Sundays** â if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
 
-These credited days are automatically inserted into `employee_leaves` during salary calculations.
 For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (SaturdayâSundayâMonday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
 
 ### Attendance Edit Logs
@@ -285,10 +283,7 @@ shift. Their day is still capped at **11 working hours**.
   Saturday–Sunday–Monday period is deducted.
 - `paid_sunday_allowance` specifies how many Sundays per month are mandatory.
   Missing one counts as an absence. After the allowance is met, Sundays worked
-  are either paid (`pay_sunday` enabled) or credited as leave when neither
-  Saturday nor Monday is absent.
-- Departments listed in `utils/departments.js` receive leave credit for working
-  Sundays when there are no adjacent absences.
+  are paid double when neither Saturday nor Monday is absent.
 - Supervisors listed in `utils/supervisors.js` follow an older rule where Sunday
   counts as an absence only when **both** Saturday *and* Monday are missed. A
   worked Sunday under these supervisors is always paid.
