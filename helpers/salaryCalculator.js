@@ -139,15 +139,36 @@ async function calculateMonthly(conn, employeeId, month, emp) {
     'SELECT date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date >= ? AND DATE_FORMAT(date, "%Y-%m") = ?',
     [employeeId, start, month]
   );
-  let gross = 0;
+
+  // Build a map of worked days to their effective hours
+  const worked = new Map();
   for (const a of attendance) {
     if (!a.punch_in || !a.punch_out) continue;
-    const hours = effectiveHours(a.punch_in, a.punch_out, 'monthly', emp.allotted_hours);
-    if (hours <= 0) continue;
-    const day = moment(a.date);
-    const isSunday = day.day() === 0;
-    const multiplier = emp.pay_sunday && isSunday ? 2 : 1;
-    gross += hours * hourlyRate * multiplier;
+    const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly', emp.allotted_hours);
+    if (hrs <= 0) continue;
+    const dateStr = moment(a.date).format('YYYY-MM-DD');
+    worked.set(dateStr, hrs);
+  }
+
+  const paySunday = parseInt(emp.pay_sunday) === 1;
+  const startDate = moment(start, 'YYYY-MM-DD');
+  const monthEnd = monthStart.clone().endOf('month');
+
+  let gross = 0;
+  for (const [dateStr, hours] of worked.entries()) {
+    const day = moment(dateStr);
+    if (day.day() === 0) {
+      // Sandwich rule: only pay for Sunday if both Saturday and Monday were worked
+      const sat = day.clone().subtract(1, 'day');
+      const mon = day.clone().add(1, 'day');
+      const satWorked = sat.isBefore(startDate) || worked.has(sat.format('YYYY-MM-DD'));
+      const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
+      if (!satWorked || !monWorked) continue;
+      const multiplier = paySunday ? 2 : 1;
+      gross += hours * hourlyRate * multiplier;
+    } else {
+      gross += hours * hourlyRate;
+    }
   }
   const [[advRow]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
