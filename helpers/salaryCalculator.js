@@ -42,32 +42,40 @@ function effectiveHours(punchIn, punchOut, salaryType = 'dihadi', allottedHours 
   const shiftStart = moment('09:00:00', 'HH:mm:ss');
   const grace = moment('09:15:00', 'HH:mm:ss');
 
-  // For monthly salaried workers arriving within the 15 minute grace
-  // period, treat the start as 09:00 so that a punch at 09:15 and an
-  // exit at 18:00 counts as nine hours.
+  // For monthly salaried workers the punch-in grace period is applied to
+  // the start time only. Always measure the working duration from the
+  // scheduled shift start (09:00) and deduct any minutes beyond the grace
+  // period if the employee is late.
   let calcStart = start;
-  if (salaryType !== 'dihadi' && start.isSameOrBefore(grace)) {
+  if (salaryType !== 'dihadi') {
     calcStart = shiftStart;
   }
 
   let mins = end.diff(calcStart, 'minutes');
   mins -= lunchDeduction(punchIn, punchOut, salaryType, allottedHours);
 
-  // Deduct for late arrival after the 15 minute grace period
-  // For dihadi workers the deduction is a flat hour unless
-  // they arrive after 40% of their allotted hours, in which
-  // case no late deduction applies.
-  if (salaryType === 'dihadi') {
+  if (salaryType !== 'dihadi') {
+    // Late arrival beyond the 15 minute grace period results in a
+    // minute-for-minute deduction from the day's total time.
+    if (start.isAfter(grace)) {
+      mins -= start.diff(grace, 'minutes');
+    }
+  } else {
+    // Deduct for late arrival after the 15 minute grace period
+    // For dihadi workers the deduction is a flat hour unless
+    // they arrive after 40% of their allotted hours, in which
+    // case no late deduction applies.
     const baseHours = allottedHours ? parseFloat(allottedHours) : 9;
     const threshold = baseHours * 60 * 0.4; // 40% of the shift
     const after40 = start.diff(shiftStart, 'minutes') >= threshold;
     if (start.isAfter(grace) && !after40) {
       mins -= 60;
     }
+
+    // Cap daily hours at 11 only for dihadi workers
+    if (mins > 11 * 60) mins = 11 * 60;
   }
 
-  // Cap daily hours at 11 only for dihadi workers
-  if (salaryType === 'dihadi' && mins > 11 * 60) mins = 11 * 60;
   if (mins < 0) mins = 0;
   return mins / 60;
 }
