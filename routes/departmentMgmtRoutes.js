@@ -283,10 +283,9 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
         advance_left: advLeft
       });
     });
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="operator_salary_${month}.xlsx"`
-    );
+    const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss');
+    const filename = `${req.session.user.username}_${timestamp}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

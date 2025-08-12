@@ -108,7 +108,9 @@ router.get('/supervisor/dihadi/download', isAuthenticated, isSupervisor, async (
     columns.push({ header: 'Net Payment', key: 'net_payment', width: 12 });
     sheet.columns = columns;
     rows.forEach(r => sheet.addRow(r));
-    res.setHeader('Content-Disposition', 'attachment; filename="DihadiHours.xlsx"');
+    const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss');
+    const filename = `${req.session.user.username}_${timestamp}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await workbook.xlsx.write(res);
     res.end();

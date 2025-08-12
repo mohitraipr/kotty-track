@@ -122,7 +122,8 @@ exports.calculateSalaryForMonth = calculateSalaryForMonth;
 // Monthly salaried workers are paid based on the hours they work in the
 // month. The hourly rate is derived from their monthly salary by
 // dividing by the number of days in the month and then by the allotted
-// hours per day. Sundays optionally pay double when `pay_sunday` is set.
+// hours per day. Sundays are paid only when `pay_sunday` is enabled and
+// those days earn double the normal hourly rate.
 async function calculateMonthly(conn, employeeId, month, emp) {
   const monthStart = moment(month + '-01');
   const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
@@ -163,9 +164,8 @@ async function calculateMonthly(conn, employeeId, month, emp) {
       const mon = day.clone().add(1, 'day');
       const satWorked = sat.isBefore(startDate) || worked.has(sat.format('YYYY-MM-DD'));
       const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
-      if (!satWorked || !monWorked) continue;
-      const multiplier = paySunday ? 2 : 1;
-      gross += hours * hourlyRate * multiplier;
+      if (!satWorked || !monWorked || !paySunday) continue;
+      gross += hours * hourlyRate * 2;
     } else {
       gross += hours * hourlyRate;
     }
