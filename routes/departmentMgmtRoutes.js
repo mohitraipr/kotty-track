@@ -300,6 +300,83 @@ router.get('/departments/salary/download', isAuthenticated, isOperator, async (r
   }
 });
 
+// POST /operator/departments/reset-supervisor - clear attendance and salary data
+router.post(
+  '/departments/reset-supervisor',
+  isAuthenticated,
+  isOperator,
+  async (req, res) => {
+    const { supervisor_id } = req.body;
+    if (!supervisor_id) {
+      req.flash('error', 'Supervisor is required');
+      return res.redirect('/operator/departments');
+    }
+
+    try {
+      let ids = [];
+      if (supervisor_id === 'all') {
+        const [rows] = await pool.query(
+          `SELECT u.id
+             FROM users u
+             JOIN roles r ON u.role_id = r.id
+            WHERE r.name = 'supervisor'`
+        );
+        ids = rows.map(r => r.id);
+      } else {
+        ids = [supervisor_id];
+      }
+
+      if (!ids.length) {
+        req.flash('error', 'No supervisors found');
+        return res.redirect('/operator/departments');
+      }
+
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const params = [ids];
+        await conn.query(
+          'DELETE ea FROM employee_attendance ea JOIN employees e ON ea.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.query(
+          'DELETE es FROM employee_salaries es JOIN employees e ON es.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.query(
+          'DELETE el FROM employee_leaves el JOIN employees e ON el.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.query(
+          'DELETE ael FROM attendance_edit_logs ael JOIN employees e ON ael.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.query(
+          'DELETE ea FROM employee_advances ea JOIN employees e ON ea.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.query(
+          'DELETE ad FROM advance_deductions ad JOIN employees e ON ad.employee_id = e.id WHERE e.supervisor_id IN (?)',
+          params
+        );
+        await conn.commit();
+        req.flash('success', 'Supervisor data cleared');
+      } catch (err) {
+        await conn.rollback();
+        console.error('Error resetting supervisor data:', err);
+        req.flash('error', 'Failed to clear supervisor data');
+      } finally {
+        conn.release();
+      }
+    } catch (err) {
+      console.error('Error resetting supervisor data:', err);
+      req.flash('error', 'Failed to clear supervisor data');
+    }
+
+    res.redirect('/operator/departments');
+  }
+);
+
 
 module.exports = router;
 
