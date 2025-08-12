@@ -154,7 +154,9 @@ async function calculateMonthly(conn, employeeId, month, emp) {
 
   const startDate = moment(start, 'YYYY-MM-DD');
   const monthEnd = monthStart.clone().endOf('month');
-  let gross = 0;
+  let weekdayHours = 0;
+  let sundayHours = 0;
+  let sundayPaidDays = 0; // Sundays paid via sandwich rule
 
   for (let day = startDate.clone(); day.isSameOrBefore(monthEnd); day.add(1, 'day')) {
     const dateStr = day.format('YYYY-MM-DD');
@@ -166,15 +168,19 @@ async function calculateMonthly(conn, employeeId, month, emp) {
       const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
 
       if (hours > 0) {
-        const sundayRate = dayRate / 9; // Sunday hourly rate fixed to 9 hours per day
-        gross += hours * sundayRate;
+        sundayHours += hours;
       } else if (satWorked && monWorked) {
-        gross += dayRate;
+        sundayPaidDays++;
       }
     } else if (hours > 0) {
-      gross += hours * hourlyRate;
+      weekdayHours += hours;
     }
   }
+  let gross =
+    weekdayHours * hourlyRate +
+    sundayHours * hourlyRate * 2 +
+    sundayPaidDays * dayRate;
+  gross = parseFloat(gross.toFixed(2));
     const [[advRow]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
     [employeeId, month]

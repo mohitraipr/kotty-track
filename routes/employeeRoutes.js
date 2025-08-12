@@ -325,6 +325,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
       columns.push({ header: String(d), key, width: 5 });
     }
     columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
+    columns.push({ header: 'Sunday Hours (x2)', key: 'sunday_hours', width: 15 });
     columns.push({ header: 'Hourly Salary', key: 'hour_salary', width: 12 });
     columns.push({ header: 'Day Salary', key: 'day_salary', width: 12 });
     columns.push({ header: 'Total Salary', key: 'total_salary', width: 12 });
@@ -339,9 +340,11 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         : 0;
       const att = attendanceMap.get(emp.id) || [];
       const byDate = {};
-      let totalHours = 0;
+      let weekdayHours = 0;
+      let sundayHours = 0;
       for (const a of att) {
-        const day = moment(a.date).date();
+        const dateMoment = moment(a.date);
+        const day = dateMoment.date();
         if (a.punch_in && a.punch_out) {
           const hrs = effectiveHours(
             a.punch_in,
@@ -350,7 +353,11 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
             emp.allotted_hours
           );
           byDate[day] = hrs.toFixed(2);
-          totalHours += hrs;
+          if (dateMoment.day() === 0) {
+            sundayHours += hrs;
+          } else {
+            weekdayHours += hrs;
+          }
         } else if (a.punch_in || a.punch_out) {
           byDate[day] = 'MP';
         }
@@ -372,7 +379,8 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         punching_id: emp.punching_id,
         name: emp.name,
         base_salary: emp.salary,
-        total_hours: totalHours.toFixed(2),
+        total_hours: weekdayHours.toFixed(2),
+        sunday_hours: (sundayHours * 2).toFixed(2),
         hour_salary: hourlyRate.toFixed(2),
         day_salary: dayRate.toFixed(2),
         total_salary: gross.toFixed(2),
