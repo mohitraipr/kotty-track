@@ -374,7 +374,9 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
       }
       sheet.addRow(row);
     });
-    res.setHeader('Content-Disposition', `attachment; filename="salary_${month}.xlsx"`);
+    const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss');
+    const filename = `${req.session.user.username}_${timestamp}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -443,10 +445,9 @@ router.get('/employees/:id/salary/download', isAuthenticated, isSupervisor, asyn
     }
     const doc = new PDFDocument();
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="salary_${emp.name}_${month}.pdf"`
-    );
+    const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss');
+    const filename = `${req.session.user.username}_${timestamp}.pdf`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     doc.pipe(res);
     doc.fontSize(16).text('Salary Slip', { align: 'center' });
     doc.moveDown();
