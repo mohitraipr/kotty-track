@@ -340,11 +340,19 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
       const byDate = {};
       let totalHours = 0;
       for (const a of att) {
-        if (!a.punch_in || !a.punch_out) continue;
-        const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly', emp.allotted_hours);
         const day = moment(a.date).date();
-        byDate[day] = hrs.toFixed(2);
-        totalHours += hrs;
+        if (a.punch_in && a.punch_out) {
+          const hrs = effectiveHours(
+            a.punch_in,
+            a.punch_out,
+            'monthly',
+            emp.allotted_hours
+          );
+          byDate[day] = hrs.toFixed(2);
+          totalHours += hrs;
+        } else if (a.punch_in || a.punch_out) {
+          byDate[day] = 'MP';
+        }
       }
       const gross = parseFloat(emp.gross || 0);
       const advDeduct = parseFloat(emp.deduction || 0);
