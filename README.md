@@ -191,14 +191,13 @@ Monthly employees paid hourly receive their full allotted hours when both punche
 
 ### Sunday Attendance Rules
 
-- **Special departments (`catalog`, `account`, `merchant`, `tech`)** â Sundays never grant extra pay; any worked Sunday is credited as leave.
-- **Other departments** â use the `pay_sunday` flag to control payment. When set to `TRUE` every worked Sunday is paid. When `FALSE` worked Sundays are credited as leave instead.
-- **Mandatory Sundays** â if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
-
-Employees receive Sunday pay only when they have valid punch in/out times with positive working hours.
+- Sundays are paid at the normal day rate even when the employee is absent, unless the sandwich rule applies.
+- **Special departments (`catalog`, `account`, `merchant`, `tech`)** â worked Sundays never grant extra pay and are credited as leave.
+- **Other departments** â the `pay_sunday` flag controls Sundays. When set to `TRUE` a worked Sunday earns double pay; when `FALSE` the day is credited as leave.
+- **Mandatory Sundays** â if `paid_sunday_allowance` is greater than zero the employee must work that many Sundays in the month. Missing one counts as an absence and these required days never earn extra pay.
 
 These credited days are automatically inserted into `employee_leaves` during salary calculations.
-For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (SaturdayâSundayâMonday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
+For most teams, a Sunday becomes unpaid whenever the employee is absent on the adjacent Saturday or Monday. If both days are missed, all three (SaturdayâSundayâMonday) are deducted from salary. Teams supervised by **Rohit Shukla** follow the old rule where Sunday counts only when Saturday *and* Monday are absent. When the employee works on that Sunday, any adjacent absence is paid as usual.
 
 ### Attendance Edit Logs
 

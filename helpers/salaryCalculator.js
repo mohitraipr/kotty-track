@@ -122,8 +122,9 @@ exports.calculateSalaryForMonth = calculateSalaryForMonth;
 // Monthly salaried workers are paid based on the hours they work in the
 // month. The hourly rate is derived from their monthly salary by
 // dividing by the number of days in the month and then by the allotted
-// hours per day. Sundays are paid only when `pay_sunday` is enabled and
-// those days earn double the normal hourly rate.
+// hours per day. Sundays always earn the normal day rate unless the
+// sandwich rule applies. When `pay_sunday` is enabled a worked Sunday
+// pays double. When it's disabled the day is credited as leave.
 async function calculateMonthly(conn, employeeId, month, emp) {
   const monthStart = moment(month + '-01');
   const join = emp.date_of_joining ? moment(emp.date_of_joining) : null;
@@ -155,20 +156,35 @@ async function calculateMonthly(conn, employeeId, month, emp) {
   const startDate = moment(start, 'YYYY-MM-DD');
   const monthEnd = monthStart.clone().endOf('month');
 
+  const sundayLeaves = [];
   let gross = 0;
-  for (const [dateStr, hours] of worked.entries()) {
-    const day = moment(dateStr);
+
+  for (let day = startDate.clone(); day.isSameOrBefore(monthEnd); day.add(1, 'day')) {
+    const dateStr = day.format('YYYY-MM-DD');
+    const hours = worked.get(dateStr) || 0;
     if (day.day() === 0) {
-      // Sandwich rule: only pay for Sunday if both Saturday and Monday were worked
       const sat = day.clone().subtract(1, 'day');
       const mon = day.clone().add(1, 'day');
       const satWorked = sat.isBefore(startDate) || worked.has(sat.format('YYYY-MM-DD'));
       const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
-      if (!satWorked || !monWorked || !paySunday) continue;
-      gross += hours * hourlyRate * 2;
-    } else {
+
+      if (hours > 0) {
+        gross += dayRate;
+        if (paySunday) gross += dayRate;
+        else sundayLeaves.push(dateStr);
+      } else if (satWorked && monWorked) {
+        gross += dayRate;
+      }
+    } else if (hours > 0) {
       gross += hours * hourlyRate;
     }
+  }
+
+  if (sundayLeaves.length > 0) {
+    await conn.query(
+      'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES ?',
+      [sundayLeaves.map(d => [employeeId, d, 1, 'Sunday work'])]
+    );
   }
   const [[advRow]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
