@@ -330,6 +330,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
     columns.push({ header: 'Total Salary', key: 'total_salary', width: 12 });
     columns.push({ header: 'Advance Deducted', key: 'advance_deducted', width: 15 });
     columns.push({ header: 'Net Salary', key: 'net_salary', width: 12 });
+    columns.push({ header: 'Status', key: 'status', width: 20 });
     sheet.columns = columns;
     employees.forEach(emp => {
       const dayRate = parseFloat(emp.salary) / daysInMonth;
@@ -354,6 +355,36 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
           byDate[day] = 'MP';
         }
       }
+
+      // Determine Sunday credits (worked Sundays without pay)
+      let sundayCredits = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = monthStart.clone().date(d);
+        if (date.day() === 0 && byDate[d] && parseInt(emp.pay_sunday) !== 1) {
+          sundayCredits++;
+        }
+      }
+
+      // Fill in absences and track how many were covered by Sunday credits
+      let adjustments = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = monthStart.clone().date(d);
+        if (byDate[d] === undefined) {
+          byDate[d] = 'A';
+          if (date.day() !== 0 && sundayCredits > 0) {
+            sundayCredits--;
+            adjustments++;
+          }
+        }
+      }
+
+      const status =
+        adjustments > 0
+          ? `Adjusted ${adjustments} day(s)`
+          : sundayCredits > 0
+          ? `Credit ${sundayCredits} Sunday(s)`
+          : '';
+
       const gross = parseFloat(emp.gross || 0);
       const advDeduct = parseFloat(emp.deduction || 0);
       const net = parseFloat(emp.net || gross - advDeduct);
@@ -366,11 +397,12 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         day_salary: dayRate.toFixed(2),
         total_salary: gross.toFixed(2),
         advance_deducted: advDeduct,
-        net_salary: net.toFixed(2)
+        net_salary: net.toFixed(2),
+        status
       };
       for (let d = 1; d <= daysInMonth; d++) {
         const key = `d${String(d).padStart(2, '0')}`;
-        row[key] = byDate[d] !== undefined ? byDate[d] : '';
+        row[key] = byDate[d];
       }
       sheet.addRow(row);
     });
