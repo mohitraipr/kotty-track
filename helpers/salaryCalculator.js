@@ -156,7 +156,7 @@ async function calculateMonthly(conn, employeeId, month, emp) {
   const startDate = moment(start, 'YYYY-MM-DD');
   const monthEnd = monthStart.clone().endOf('month');
 
-  const sundayLeaves = [];
+  const unusedSundayLeaves = [];
   let gross = 0;
 
   for (let day = startDate.clone(); day.isSameOrBefore(monthEnd); day.add(1, 'day')) {
@@ -169,21 +169,28 @@ async function calculateMonthly(conn, employeeId, month, emp) {
       const monWorked = mon.isAfter(monthEnd) || worked.has(mon.format('YYYY-MM-DD'));
 
       if (hours > 0) {
-        gross += dayRate;
-        if (paySunday) gross += dayRate;
-        else sundayLeaves.push(dateStr);
+        if (paySunday) {
+          gross += dayRate * 2; // double pay when allowed
+        } else {
+          // credit this Sunday as leave, to be used against a future absence
+          unusedSundayLeaves.push(dateStr);
+        }
       } else if (satWorked && monWorked) {
         gross += dayRate;
       }
     } else if (hours > 0) {
       gross += hours * hourlyRate;
+    } else if (unusedSundayLeaves.length > 0) {
+      // Use one credited Sunday leave to pay for this absence
+      unusedSundayLeaves.shift();
+      gross += dayRate;
     }
   }
 
-  if (sundayLeaves.length > 0) {
+  if (unusedSundayLeaves.length > 0) {
     await conn.query(
       'INSERT INTO employee_leaves (employee_id, leave_date, days, remark) VALUES ?',
-      [sundayLeaves.map(d => [employeeId, d, 1, 'Sunday work'])]
+      [unusedSundayLeaves.map(d => [employeeId, d, 1, 'Sunday work'])]
     );
   }
   const [[advRow]] = await conn.query(
