@@ -322,7 +322,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
     ];
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `d${String(d).padStart(2, '0')}`;
-      columns.push({ header: String(d), key, width: 5 });
+      columns.push({ header: String(d), key, width: 10 });
     }
     columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
     columns.push({ header: 'Sunday Hours (x2)', key: 'sunday_hours', width: 15 });
@@ -331,6 +331,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
     columns.push({ header: 'Total Salary', key: 'total_salary', width: 12 });
     columns.push({ header: 'Advance Deducted', key: 'advance_deducted', width: 15 });
     columns.push({ header: 'Net Salary', key: 'net_salary', width: 12 });
+    columns.push({ header: 'MP Count', key: 'mp_count', width: 10 });
     columns.push({ header: 'Status', key: 'status', width: 20 });
     sheet.columns = columns;
     employees.forEach(emp => {
@@ -340,8 +341,11 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         : 0;
       const att = attendanceMap.get(emp.id) || [];
       const byDate = {};
+      const workedDates = new Set();
       let weekdayHours = 0;
       let sundayHours = 0;
+      let sundayPaidDays = 0;
+      let mpCount = 0;
       for (const a of att) {
         const dateMoment = moment(a.date);
         const day = dateMoment.date();
@@ -352,27 +356,56 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
             'monthly',
             emp.allotted_hours
           );
-          byDate[day] = hrs.toFixed(2);
+          const pay =
+            dateMoment.day() === 0
+              ? hrs * hourlyRate * 2
+              : hrs * hourlyRate;
+          byDate[day] = `${hrs.toFixed(2)}|${pay.toFixed(2)}`;
           if (dateMoment.day() === 0) {
             sundayHours += hrs;
           } else {
             weekdayHours += hrs;
           }
+          workedDates.add(dateMoment.format('YYYY-MM-DD'));
         } else if (a.punch_in || a.punch_out) {
           byDate[day] = 'MP';
+          mpCount++;
         }
       }
 
-      // Fill in absences for days without attendance
+      // Fill in absences and handle sandwich-rule Sundays
+      const monthEnd = monthStart.clone().endOf('month');
       for (let d = 1; d <= daysInMonth; d++) {
-        if (byDate[d] === undefined) {
-          byDate[d] = 'A';
+        if (byDate[d] !== undefined) continue;
+        const dateMoment = monthStart.clone().date(d);
+        if (dateMoment.day() === 0) {
+          const sat = dateMoment.clone().subtract(1, 'day');
+          const mon = dateMoment.clone().add(1, 'day');
+          const satWorked =
+            sat.isBefore(monthStart) || workedDates.has(sat.format('YYYY-MM-DD'));
+          const monWorked =
+            mon.isAfter(monthEnd) || workedDates.has(mon.format('YYYY-MM-DD'));
+          if (satWorked && monWorked) {
+            const pay = dayRate;
+            byDate[d] = `0.00|${pay.toFixed(2)}`;
+            sundayPaidDays++;
+            continue;
+          }
         }
+        byDate[d] = 'A';
       }
+
+      const calcGross =
+        weekdayHours * hourlyRate +
+        sundayHours * hourlyRate * 2 +
+        sundayPaidDays * dayRate;
 
       const status = '';
 
-      const gross = parseFloat(emp.gross || 0);
+      const gross =
+        emp.gross !== null && emp.gross !== undefined
+          ? parseFloat(emp.gross)
+          : parseFloat(calcGross.toFixed(2));
       const advDeduct = parseFloat(emp.deduction || 0);
       const net = parseFloat(emp.net || gross - advDeduct);
       const row = {
@@ -386,6 +419,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         total_salary: gross.toFixed(2),
         advance_deducted: advDeduct,
         net_salary: net.toFixed(2),
+        mp_count: mpCount,
         status
       };
       for (let d = 1; d <= daysInMonth; d++) {
