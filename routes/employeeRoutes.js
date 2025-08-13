@@ -339,6 +339,8 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
       const hourlyRate = emp.allotted_hours
         ? dayRate / parseFloat(emp.allotted_hours)
         : 0;
+      // Sundays always use 9 hours as the base for hourly calculation
+      const sundayHourlyRate = dayRate / 9;
       const att = attendanceMap.get(emp.id) || [];
       const byDate = {};
       const workedDates = new Set();
@@ -358,7 +360,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
           );
           const pay =
             dateMoment.day() === 0
-              ? hrs * hourlyRate * 2
+              ? hrs * sundayHourlyRate * 2
               : hrs * hourlyRate;
           byDate[day] = `${hrs.toFixed(2)}|${pay.toFixed(2)}`;
           if (dateMoment.day() === 0) {
@@ -397,7 +399,7 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
 
       const calcGross =
         weekdayHours * hourlyRate +
-        sundayHours * hourlyRate * 2 +
+        sundayHours * sundayHourlyRate * 2 +
         sundayPaidDays * dayRate;
 
       const status = '';

@@ -145,6 +145,8 @@ async function calculateMonthly(conn, employeeId, month, emp) {
   const hourlyRate = emp.allotted_hours
     ? dayRate / parseFloat(emp.allotted_hours)
     : 0;
+  // Sundays always use a fixed 9-hour divisor regardless of allotted hours
+  const sundayHourlyRate = dayRate / 9;
   const [attendance] = await conn.query(
     'SELECT date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date >= ? AND DATE_FORMAT(date, "%Y-%m") = ?',
     [employeeId, start, month]
@@ -186,7 +188,7 @@ async function calculateMonthly(conn, employeeId, month, emp) {
   }
   let gross =
     weekdayHours * hourlyRate +
-    sundayHours * hourlyRate * 2 +
+    sundayHours * sundayHourlyRate * 2 +
     sundayPaidDays * dayRate;
   gross = parseFloat(gross.toFixed(2));
     const [[advRow]] = await conn.query(
