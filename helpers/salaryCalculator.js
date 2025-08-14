@@ -141,7 +141,16 @@ async function calculateMonthly(conn, employeeId, month, emp) {
       ? join.format('YYYY-MM-DD')
       : monthStart.format('YYYY-MM-DD');
   const daysInMonth = monthStart.daysInMonth();
-  const dayRate = parseFloat(emp.salary) / daysInMonth;
+  const sundaysInMonth = Array.from({ length: daysInMonth }, (_, i) =>
+    monthStart
+      .clone()
+      .date(i + 1)
+      .day()
+  ).filter(d => d === 0).length;
+  const paidDays = emp.pay_sunday
+    ? daysInMonth
+    : daysInMonth - sundaysInMonth;
+  const dayRate = parseFloat(emp.salary) / paidDays;
   const hourlyRate = emp.allotted_hours
     ? dayRate / parseFloat(emp.allotted_hours)
     : 0;

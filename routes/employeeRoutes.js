@@ -292,6 +292,12 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
   try {
     const monthStart = moment(month + '-01');
     const daysInMonth = monthStart.daysInMonth();
+    const sundaysInMonth = Array.from({ length: daysInMonth }, (_, i) =>
+      monthStart
+        .clone()
+        .date(i + 1)
+        .day()
+    ).filter(d => d === 0).length;
     const [employees] = await pool.query(
       `SELECT e.id, e.punching_id, e.name, e.salary, e.allotted_hours, e.pay_sunday,
               es.gross, es.deduction, es.net
@@ -335,7 +341,10 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
     columns.push({ header: 'Status', key: 'status', width: 20 });
     sheet.columns = columns;
     employees.forEach(emp => {
-      const dayRate = parseFloat(emp.salary) / daysInMonth;
+      const paidDays = emp.pay_sunday
+        ? daysInMonth
+        : daysInMonth - sundaysInMonth;
+      const dayRate = parseFloat(emp.salary) / paidDays;
       const hourlyRate = emp.allotted_hours
         ? dayRate / parseFloat(emp.allotted_hours)
         : 0;
