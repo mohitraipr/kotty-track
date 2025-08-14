@@ -365,3 +365,32 @@ CREATE TABLE stitching_operation_payments (
 
 The operator dashboard exposes a page to maintain `stitching_rates` so contract
 amounts can be calculated automatically.
+
+### Purchase Dashboard
+
+The Purchase dashboard stores party and factory details along with simple
+payment terms.
+
+```sql
+CREATE TABLE parties (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  gst_number VARCHAR(50),
+  state VARCHAR(100),
+  pincode VARCHAR(20),
+  due_payment_days INT DEFAULT 0
+);
+
+CREATE TABLE factories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  gst_number VARCHAR(50),
+  state VARCHAR(100)
+);
+
+-- allow purchaseGRN users to sign in
+INSERT INTO roles (name) VALUES ('purchaseGRN');
+```
+
+`due_payment_days` records how many days after billing a payment becomes due.
+Accounts users can edit this number but only the day count is stored.

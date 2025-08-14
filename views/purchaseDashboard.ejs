@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Purchase Dashboard</title>
+  <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+  <%- include('partials/flashMessages') %>
+  <h1>Purchase Dashboard</h1>
+
+  <h2>Parties</h2>
+  <% if (user.roleName === 'accounts') { %>
+  <form method="post" action="/purchase/parties">
+    <input type="text" name="name" placeholder="Party Name" required>
+    <input type="text" name="gst_number" placeholder="GST Number">
+    <input type="text" name="state" placeholder="State">
+    <input type="text" name="pincode" placeholder="Pincode">
+    <input type="number" name="due_payment_days" placeholder="Due Days">
+    <button type="submit">Add Party</button>
+  </form>
+  <% } %>
+
+  <table border="1" cellspacing="0" cellpadding="4">
+    <tr>
+      <th>Name</th>
+      <th>GST Number</th>
+      <th>State</th>
+      <th>Pincode</th>
+      <th>Due Days</th>
+      <% if (user.roleName === 'accounts') { %><th>Action</th><% } %>
+    </tr>
+    <% parties.forEach(p => { %>
+    <tr>
+      <form method="post" action="/purchase/parties/<%= p.id %>">
+        <td><input type="text" name="name" value="<%= p.name %>"></td>
+        <td><input type="text" name="gst_number" value="<%= p.gst_number %>"></td>
+        <td><input type="text" name="state" value="<%= p.state %>"></td>
+        <td><input type="text" name="pincode" value="<%= p.pincode %>"></td>
+        <td><input type="number" name="due_payment_days" value="<%= p.due_payment_days %>"></td>
+        <% if (user.roleName === 'accounts') { %>
+        <td><button type="submit">Update</button></td>
+        <% } %>
+      </form>
+    </tr>
+    <% }) %>
+  </table>
+
+  <h2>Factories</h2>
+  <% if (user.roleName === 'accounts') { %>
+  <form method="post" action="/purchase/factories">
+    <input type="text" name="name" placeholder="Factory Name" required>
+    <input type="text" name="gst_number" placeholder="GST Number">
+    <input type="text" name="state" placeholder="State">
+    <button type="submit">Add Factory</button>
+  </form>
+  <% } %>
+
+  <table border="1" cellspacing="0" cellpadding="4">
+    <tr>
+      <th>Name</th>
+      <th>GST Number</th>
+      <th>State</th>
+      <% if (user.roleName === 'accounts') { %><th>Action</th><% } %>
+    </tr>
+    <% factories.forEach(f => { %>
+    <tr>
+      <form method="post" action="/purchase/factories/<%= f.id %>">
+        <td><input type="text" name="name" value="<%= f.name %>"></td>
+        <td><input type="text" name="gst_number" value="<%= f.gst_number %>"></td>
+        <td><input type="text" name="state" value="<%= f.state %>"></td>
+        <% if (user.roleName === 'accounts') { %>
+        <td><button type="submit">Update</button></td>
+        <% } %>
+      </form>
+    </tr>
+    <% }) %>
+  </table>
+</body>
+</html>
