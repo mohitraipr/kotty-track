@@ -330,10 +330,10 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
       const key = `d${String(d).padStart(2, '0')}`;
       columns.push({ header: String(d), key, width: 10 });
     }
-    columns.push({ header: 'Total Hours', key: 'total_hours', width: 12 });
-    columns.push({ header: 'Sunday Hours (x2)', key: 'sunday_hours', width: 15 });
-    columns.push({ header: 'Hourly Salary', key: 'hour_salary', width: 12 });
-    columns.push({ header: 'Day Salary', key: 'day_salary', width: 12 });
+    columns.push({ header: 'Weekday Hours', key: 'weekday_hours', width: 15 });
+    columns.push({ header: 'Weekday Amount', key: 'weekday_amount', width: 15 });
+    columns.push({ header: 'Sunday Hours', key: 'sunday_hours', width: 12 });
+    columns.push({ header: 'Sunday Amount', key: 'sunday_amount', width: 15 });
     columns.push({ header: 'Total Salary', key: 'total_salary', width: 12 });
     columns.push({ header: 'Advance Deducted', key: 'advance_deducted', width: 15 });
     columns.push({ header: 'Net Salary', key: 'net_salary', width: 12 });
@@ -406,10 +406,11 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         byDate[d] = 'A';
       }
 
-      const calcGross =
-        weekdayHours * hourlyRate +
+      const weekdayAmount = weekdayHours * hourlyRate;
+      const sundayAmount =
         sundayHours * sundayHourlyRate * 2 +
         sundayPaidDays * dayRate;
+      const calcGross = weekdayAmount + sundayAmount;
 
       const status = '';
 
@@ -423,10 +424,10 @@ router.get('/salary/download', isAuthenticated, isSupervisor, async (req, res) =
         punching_id: emp.punching_id,
         name: emp.name,
         base_salary: emp.salary,
-        total_hours: weekdayHours.toFixed(2),
-        sunday_hours: (sundayHours * 2).toFixed(2),
-        hour_salary: hourlyRate.toFixed(2),
-        day_salary: dayRate.toFixed(2),
+        weekday_hours: weekdayHours.toFixed(2),
+        weekday_amount: weekdayAmount.toFixed(2),
+        sunday_hours: sundayHours.toFixed(2),
+        sunday_amount: sundayAmount.toFixed(2),
         total_salary: gross.toFixed(2),
         advance_deducted: advDeduct,
         net_salary: net.toFixed(2),
