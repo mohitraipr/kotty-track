@@ -155,6 +155,25 @@ function allowUserIds(ids) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Helper to restrict routes to specific roles
+function allowRoles(roles) {
+  return function (req, res, next) {
+    if (req.session && req.session.user && roles.includes(req.session.user.roleName)) {
+      return next();
+    }
+
+    if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+      return res.status(403).json({ error: 'You do not have permission to view this resource.' });
+    }
+    req.flash('error', 'You do not have permission to view this page.');
+    return res.redirect('/');
+  };
+}
+
+// Allow purchaseGRN and accounts roles to access purchase dashboard
+const isPurchaseOrAccounts = allowRoles(['purchaseGRN', 'accounts']);
+
 module.exports = {
     isAuthenticated,
     isAdmin,
@@ -174,5 +193,7 @@ module.exports = {
     isStoreEmployee,
     isStoreAdmin,
     isMohitOperator,
-    allowUserIds
+    allowUserIds,
+    allowRoles,
+    isPurchaseOrAccounts
 };
