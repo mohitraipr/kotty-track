@@ -152,6 +152,102 @@ router.post('/departments/:id/assign', isAuthenticated, isOperator, async (req, 
   }
 });
 
+// GET /operator/departments/salary/download - download monthly salary sheet
+router.get('/departments/salary/download', isAuthenticated, isOperator, async (req, res) => {
+  const month = req.query.month || moment().format('YYYY-MM');
+  try {
+    const [employees] = await pool.query(
+      `SELECT id, punching_id, name, salary, allotted_hours
+         FROM employees
+        WHERE salary_type != 'dihadi' AND is_active = 1
+        ORDER BY name`
+    );
+
+    const monthStart = moment(month + '-01');
+    const daysInMonth = monthStart.daysInMonth();
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Salary');
+
+    const dayCols = Array.from({ length: daysInMonth }, (_, i) => ({
+      header: String(i + 1),
+      key: `d${i + 1}`,
+      width: 5
+    }));
+
+    sheet.columns = [
+      { header: 'Punch ID', key: 'punching_id', width: 12 },
+      { header: 'Name', key: 'name', width: 20 },
+      { header: 'Base Salary', key: 'base_salary', width: 12 },
+      ...dayCols,
+      { header: 'Total Hours', key: 'total_hours', width: 12 },
+      { header: 'Hourly Rate', key: 'hourly_rate', width: 12 },
+      { header: 'Daily Rate', key: 'daily_rate', width: 12 },
+      { header: 'Gross', key: 'gross', width: 12 },
+      { header: 'Advance Deduction', key: 'advance', width: 15 },
+      { header: 'Net', key: 'net', width: 12 }
+    ];
+
+    for (const emp of employees) {
+      const [attendance] = await pool.query(
+        'SELECT date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ?',
+        [emp.id, month]
+      );
+
+      const dayHours = {};
+      for (let i = 1; i <= daysInMonth; i++) dayHours[i] = '';
+      let totalHours = 0;
+      for (const a of attendance) {
+        if (!a.punch_in || !a.punch_out) continue;
+        const day = moment(a.date).date();
+        const hrs = effectiveHours(a.punch_in, a.punch_out, 'monthly', emp.allotted_hours);
+        if (hrs <= 0) continue;
+        const rounded = parseFloat(hrs.toFixed(2));
+        dayHours[day] = rounded;
+        totalHours += rounded;
+      }
+
+      const dayRate = daysInMonth ? parseFloat(emp.salary) / daysInMonth : 0;
+      const hourlyRate = emp.allotted_hours ? dayRate / parseFloat(emp.allotted_hours) : 0;
+      const gross = parseFloat((totalHours * hourlyRate).toFixed(2));
+
+      const [[advRow]] = await pool.query(
+        'SELECT COALESCE(SUM(amount),0) AS total FROM advance_deductions WHERE employee_id = ? AND month = ?',
+        [emp.id, month]
+      );
+      const adv = parseFloat(advRow.total) || 0;
+      const net = gross - adv;
+
+      const row = {
+        punching_id: emp.punching_id,
+        name: emp.name,
+        base_salary: emp.salary,
+        total_hours: parseFloat(totalHours.toFixed(2)),
+        hourly_rate: parseFloat(hourlyRate.toFixed(2)),
+        daily_rate: parseFloat(dayRate.toFixed(2)),
+        gross,
+        advance: adv,
+        net
+      };
+
+      for (let i = 1; i <= daysInMonth; i++) {
+        row[`d${i}`] = dayHours[i];
+      }
+
+      sheet.addRow(row);
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="salary_${month}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading salary sheet:', err);
+    req.flash('error', 'Could not download salary sheet');
+    res.redirect('/operator/departments');
+  }
+});
+
 // POST attendance JSON upload for salary processing
 router.post('/departments/salary/upload', isAuthenticated, isOperator, upload.single('attFile'), async (req, res) => {
   const file = req.file;
