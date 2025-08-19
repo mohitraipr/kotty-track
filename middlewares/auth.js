@@ -171,9 +171,6 @@ function allowRoles(roles) {
   };
 }
 
-// Allow purchaseGRN and accounts roles to access purchase dashboard
-const isPurchaseOrAccounts = allowRoles(['purchaseGRN', 'accounts']);
-
 module.exports = {
     isAuthenticated,
     isAdmin,
@@ -194,6 +191,5 @@ module.exports = {
     isStoreAdmin,
     isMohitOperator,
     allowUserIds,
-    allowRoles,
-    isPurchaseOrAccounts
+    allowRoles
 };

@@ -1,17 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { isAuthenticated, isAccountsAdmin, isPurchaseOrAccounts } = require('../middlewares/auth');
+const { isAuthenticated, isAccountsAdmin } = require('../middlewares/auth');
 
-// GET /purchase - render dashboard for purchaseGRN and accounts roles
-router.get('/', isAuthenticated, isPurchaseOrAccounts, async (req, res) => {
+// GET /purchase - render dashboard for accounts role
+router.get('/', isAuthenticated, isAccountsAdmin, async (req, res) => {
   try {
-    const [parties] = await pool.query(
-      'SELECT id, name, gst_number, state, pincode, due_payment_days FROM parties ORDER BY name'
-    );
-    const [factories] = await pool.query(
-      'SELECT id, name, gst_number, state FROM factories ORDER BY name'
-    );
+    // Fetch parties and factories concurrently to speed up dashboard load
+    const [[parties], [factories]] = await Promise.all([
+      pool.query(
+        'SELECT id, name, gst_number, state, pincode, due_payment_days FROM parties ORDER BY name'
+      ),
+      pool.query(
+        'SELECT id, name, gst_number, state FROM factories ORDER BY name'
+      )
+    ]);
+
     res.render('purchaseDashboard', {
       user: req.session.user,
       parties,
