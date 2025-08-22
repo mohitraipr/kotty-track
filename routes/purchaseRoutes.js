@@ -2,6 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isAccountsAdmin } = require('../middlewares/auth');
+const multer = require('multer');
+const path = require('path');
+const ExcelJS = require('exceljs');
+const fs = require('fs');
+
+// Multer setup for Excel uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    fs.mkdirSync('uploads', { recursive: true });
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage });
 
 // GET /purchase - render dashboard for accounts role
 router.get('/', isAuthenticated, isAccountsAdmin, async (req, res) => {
@@ -107,6 +123,80 @@ router.post('/factories/:id', isAuthenticated, isAccountsAdmin, async (req, res)
     req.flash('error', 'Failed to update factory');
     res.redirect('/purchase');
   }
+});
+
+// GET /purchase/parties/template - download Excel template for bulk upload
+router.get('/parties/template', isAuthenticated, isAccountsAdmin, async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Parties');
+    sheet.columns = [
+      { header: 'Name', key: 'name', width: 25 },
+      { header: 'GST Number', key: 'gst_number', width: 20 },
+      { header: 'State', key: 'state', width: 15 },
+      { header: 'Pincode', key: 'pincode', width: 10 },
+      { header: 'Due Payment Days', key: 'due_payment_days', width: 18 }
+    ];
+    sheet.addRow({
+      name: 'ABC Traders',
+      gst_number: '22AAAAA0000A1Z5',
+      state: 'Karnataka',
+      pincode: '560001',
+      due_payment_days: 30
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=PartyTemplate.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error generating parties template:', err);
+    req.flash('error', 'Failed to generate template');
+    res.redirect('/purchase');
+  }
+});
+
+// POST /purchase/parties/bulk - upload parties from Excel
+router.post('/parties/bulk', isAuthenticated, isAccountsAdmin, upload.single('excelFile'), async (req, res) => {
+  const file = req.file;
+  if (!file) {
+    req.flash('error', 'No file uploaded');
+    return res.redirect('/purchase');
+  }
+  let conn;
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(file.path);
+    const sheet = workbook.getWorksheet('Parties') || workbook.worksheets[0];
+    const rows = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const name = row.getCell(1).value ? row.getCell(1).value.toString().trim() : '';
+      const gst_number = row.getCell(2).value ? row.getCell(2).value.toString().trim() : null;
+      const state = row.getCell(3).value ? row.getCell(3).value.toString().trim() : null;
+      const pincode = row.getCell(4).value ? row.getCell(4).value.toString().trim() : null;
+      const dueVal = row.getCell(5).value;
+      const due_payment_days = dueVal ? parseInt(dueVal) : 0;
+      if (name) rows.push([name, gst_number, state, pincode, due_payment_days]);
+    });
+    if (!rows.length) {
+      throw new Error('No valid data found in file');
+    }
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    await conn.query(`INSERT INTO parties (name, gst_number, state, pincode, due_payment_days) VALUES ?`, [rows]);
+    await conn.commit();
+    req.flash('success', 'Parties uploaded successfully');
+  } catch (err) {
+    console.error('Error uploading parties:', err);
+    if (conn) {
+      await conn.rollback();
+    }
+    req.flash('error', err.message || 'Failed to upload parties');
+  } finally {
+    if (conn) conn.release();
+    fs.unlink(file.path, () => {});
+  }
+  res.redirect('/purchase');
 });
 
 module.exports = router;
