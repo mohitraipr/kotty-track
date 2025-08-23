@@ -412,8 +412,9 @@ router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) =
 router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name, e.aadhar_card_number,
-             e.salary, e.salary_type, u.username AS supervisor_name, d.name AS department_name,
+      SELECT e.id AS employee_id, e.punching_id, e.name AS employee_name, e.designation,
+             e.aadhar_card_number, e.salary, e.salary_type, e.pay_sunday,
+             u.username AS supervisor_name, d.name AS department_name,
              (SELECT COALESCE(SUM(amount),0) FROM employee_advances ea WHERE ea.employee_id = e.id) AS total_adv,
              (SELECT COALESCE(SUM(amount),0) FROM advance_deductions ad WHERE ad.employee_id = e.id) AS total_ded
         FROM employees e
@@ -436,10 +437,12 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
       { header: "Department", key: "department", width: 20 },
       { header: "Supervisor", key: "supervisor", width: 20 },
       { header: "Employee", key: "employee", width: 20 },
+      { header: "Designation", key: "designation", width: 20 },
       { header: "Punching ID", key: "punching_id", width: 15 },
       { header: "Aadhar", key: "aadhar", width: 18 },
       { header: "Employee ID", key: "employee_id", width: 12 },
       { header: "Salary Type", key: "salary_type", width: 12 },
+      { header: "Pay Sunday", key: "pay_sunday", width: 12 },
       { header: "Salary", key: "salary", width: 12 },
       { header: "Advance Left", key: "advance_left", width: 15 }
     ];
@@ -454,10 +457,12 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
         department: r.department_name || "",
         supervisor: r.supervisor_name,
         employee: r.employee_name,
+        designation: r.designation || "",
         punching_id: r.punching_id,
         aadhar: r.aadhar_card_number || "",
         employee_id: r.employee_id,
         salary_type: r.salary_type,
+        pay_sunday: r.pay_sunday ? "Yes" : "No",
         advance_left: advLeft
       };
       if (canViewSalary) rowData.salary = r.salary;
