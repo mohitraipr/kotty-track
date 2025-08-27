@@ -182,7 +182,11 @@ router.post('/parties/bulk', isAuthenticated, isAccountsAdmin, upload.single('ex
       const state = row.getCell(3).value ? row.getCell(3).value.toString().trim() : null;
       const pincode = row.getCell(4).value ? row.getCell(4).value.toString().trim() : null;
       const dueVal = row.getCell(5).value;
-      const due_payment_days = dueVal ? parseInt(dueVal) : 0;
+      let due_payment_days = 0;
+      if (dueVal) {
+        const match = dueVal.toString().match(/\d+/);
+        due_payment_days = match ? parseInt(match[0], 10) : 0;
+      }
       if (name) rows.push([name, gst_number, state, pincode, due_payment_days]);
     });
     if (!rows.length) {
@@ -190,7 +194,12 @@ router.post('/parties/bulk', isAuthenticated, isAccountsAdmin, upload.single('ex
     }
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    await conn.query(`INSERT INTO parties (name, gst_number, state, pincode, due_payment_days) VALUES ?`, [rows]);
+    await conn.query(
+      `INSERT INTO parties (name, gst_number, state, pincode, due_payment_days) VALUES ?
+       ON DUPLICATE KEY UPDATE name = VALUES(name), state = VALUES(state),
+       pincode = VALUES(pincode), due_payment_days = VALUES(due_payment_days)`,
+      [rows]
+    );
     await conn.commit();
     req.flash('success', 'Parties uploaded successfully');
   } catch (err) {
