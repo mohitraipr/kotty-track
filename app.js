@@ -27,8 +27,9 @@ app.set('trust proxy', true);
 });
 */
 // Middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Increase body size limits to handle large JSON and form payloads
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Session Configuration
 app.use(session({

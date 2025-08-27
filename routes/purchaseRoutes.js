@@ -67,9 +67,16 @@ router.post('/parties', isAuthenticated, isAccountsAdmin, async (req, res) => {
 });
 
 // POST /purchase/parties/:id - update an existing party
-router.post('/parties/:id', isAuthenticated, isAccountsAdmin, async (req, res) => {
-  const id = req.params.id;
+// Restrict :id to digits only so that routes like /parties/bulk don't match
+router.post('/parties/:id(\\d+)', isAuthenticated, isAccountsAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
   const { name, gst_number, state, pincode, due_payment_days } = req.body;
+
+  if (Number.isNaN(id)) {
+    req.flash('error', 'Invalid party ID');
+    return res.redirect('/purchase');
+  }
+
   try {
     await pool.query(
       `UPDATE parties
