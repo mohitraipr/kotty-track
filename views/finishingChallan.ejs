@@ -54,6 +54,7 @@
   </style>
 </head>
 <body>
+  <% const pad = n => (n<10?'0':'')+n; %>
   <div class="challan-wrap">
     <!-- -----------  HEADER  ----------- -->
     <button class="btn-print no-print" onclick="window.print()">Print</button>
@@ -62,18 +63,15 @@
 
     <!-- -----------  META  ----------- -->
     <table class="meta">
-      <tr>
-        <td><strong>Challan ID:</strong></td>
-        <td>#<%= entry.id %></td>
-        <td><strong>Date:</strong></td>
-        <td>
-          <%
-            const d = new Date(entry.created_at);
-            const pad = n => (n<10?'0':'')+n;
-          %>
-          <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
-        </td>
-      </tr>
+        <tr>
+          <td><strong>Challan ID:</strong></td>
+          <td>#<%= entry.id %></td>
+          <td><strong>Date:</strong></td>
+          <td>
+            <% const d = new Date(entry.created_at); %>
+            <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
+          </td>
+        </tr>
       <tr>
         <td><strong>Lot No:</strong></td><td><%= entry.lot_no %></td>
         <td><strong>SKU:</strong></td><td><%= entry.sku %></td>
@@ -84,7 +82,15 @@
       </tr>
       <tr>
         <td><strong>Remark:</strong></td>
-        <td colspan="3"><%= entry.remark || '—' %></td>
+        <td colspan="3">
+          <%= entry.cutting_remark || '—' %>
+          <% if (dispatches && dispatches.length) { %>
+            <br>Dispatched:<br>
+            <% dispatches.forEach((d, idx) => { const dt = new Date(d.sent_at); %>
+              - <%= d.destination %> (<%= pad(dt.getDate()) %>-<%= pad(dt.getMonth()+1) %>-<%= dt.getFullYear() %>)<br>
+            <% }) %>
+          <% } %>
+        </td>
       </tr>
     </table>
 

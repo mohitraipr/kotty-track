@@ -568,7 +568,10 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const userId = req.session.user.id;
     const entryId = req.params.id;
     const [[row]] = await pool.query(`
-      SELECT * FROM finishing_data WHERE id = ? AND user_id = ?
+      SELECT fd.*, cl.remark AS cutting_remark
+      FROM finishing_data fd
+      LEFT JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
+      WHERE fd.id = ? AND fd.user_id = ?
     `, [entryId, userId]);
     if (!row) {
       req.flash('error', 'Challan not found or no permission.');
@@ -580,7 +583,13 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const [updates] = await pool.query(`
       SELECT * FROM finishing_data_updates WHERE finishing_data_id = ? ORDER BY updated_at ASC
     `, [entryId]);
-    return res.render('finishingChallan', { user: req.session.user, entry: row, sizes, updates });
+    const [dispatches] = await pool.query(`
+      SELECT destination, sent_at
+      FROM finishing_dispatches
+      WHERE finishing_data_id = ?
+      ORDER BY sent_at ASC
+    `, [entryId]);
+    return res.render('finishingChallan', { user: req.session.user, entry: row, sizes, updates, dispatches });
   } catch (err) {
     console.error('Error finishing challan:', err);
     req.flash('error', 'Error loading finishing challan: ' + err.message);
