@@ -580,7 +580,24 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const [updates] = await pool.query(`
       SELECT * FROM finishing_data_updates WHERE finishing_data_id = ? ORDER BY updated_at ASC
     `, [entryId]);
-    return res.render('finishingChallan', { user: req.session.user, entry: row, sizes, updates });
+    const [dispatches] = await pool.query(`
+      SELECT destination, size_label, quantity, sent_at
+        FROM finishing_dispatches
+       WHERE finishing_data_id = ?
+       ORDER BY sent_at ASC, id ASC
+    `, [entryId]);
+    const [[cuttingLot]] = await pool.query(`
+      SELECT remark FROM cutting_lots WHERE lot_no = ? LIMIT 1
+    `, [row.lot_no]);
+    const cuttingRemark = cuttingLot ? cuttingLot.remark : null;
+    return res.render('finishingChallan', {
+      user: req.session.user,
+      entry: row,
+      sizes,
+      updates,
+      dispatches,
+      cuttingRemark
+    });
   } catch (err) {
     console.error('Error finishing challan:', err);
     req.flash('error', 'Error loading finishing challan: ' + err.message);
