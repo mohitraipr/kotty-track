@@ -366,6 +366,20 @@ CREATE TABLE stitching_operation_payments (
 The operator dashboard exposes a page to maintain `stitching_rates` so contract
 amounts can be calculated automatically.
 
+### Washing Payments
+
+Store per-item washing rates in the `washing_item_rates` table:
+
+```sql
+CREATE TABLE washing_item_rates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  description VARCHAR(100) NOT NULL UNIQUE,
+  rate DECIMAL(10,2) NOT NULL DEFAULT 0
+);
+```
+
+Operators can add items such as "ice wash" or "acid wash" and set the amount to be paid for each from the washing payment dashboard.
+
 ### Purchase Dashboard
 
 The Purchase dashboard stores party and factory details along with simple
