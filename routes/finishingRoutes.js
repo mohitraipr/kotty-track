@@ -610,6 +610,13 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
       WHERE fd.user_id = ?
       ORDER BY fds.finishing_data_id, fds.id
     `, [userId]);
+    const [dispatchRows] = await pool.query(`
+      SELECT d.finishing_data_id, d.lot_no, fd.sku, d.destination, d.size_label, d.quantity, d.sent_at
+      FROM finishing_dispatches d
+      JOIN finishing_data fd ON fd.id = d.finishing_data_id
+      WHERE fd.user_id = ?
+      ORDER BY d.finishing_data_id, d.id
+    `, [userId]);
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'KottyLifestyle';
     workbook.created = new Date();
@@ -636,6 +643,19 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
     ];
     allSizes.forEach(s => {
       sizesSheet.addRow({ id: s.id, finishing_data_id: s.finishing_data_id, size_label: s.size_label, pieces: s.pieces, created_at: s.created_at });
+    });
+    const dispatchSheet = workbook.addWorksheet('FinishingDispatches');
+    dispatchSheet.columns = [
+      { header: 'Finishing ID', key: 'finishing_data_id', width: 12 },
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Destination', key: 'destination', width: 20 },
+      { header: 'Size Label', key: 'size_label', width: 12 },
+      { header: 'Quantity', key: 'quantity', width: 10 },
+      { header: 'Sent At', key: 'sent_at', width: 20 }
+    ];
+    dispatchRows.forEach(d => {
+      dispatchSheet.addRow({ finishing_data_id: d.finishing_data_id, lot_no: d.lot_no, sku: d.sku, destination: d.destination, size_label: d.size_label, quantity: d.quantity, sent_at: d.sent_at });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="FinishingData.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
