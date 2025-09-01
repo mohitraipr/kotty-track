@@ -94,6 +94,7 @@ const flipkartIssueStatusRoutes = require('./routes/flipkartIssueStatusRoutes');
 const inventoryWebhook = require('./routes/inventoryWebhook');
 const skuRoutes = require('./routes/skuRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
+const apiAuthRoutes = require('./routes/apiAuthRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -127,6 +128,7 @@ app.use('/flipkart', flipkartIssueStatusRoutes);
 app.use('/webhook', inventoryWebhook);
 app.use('/purchase', purchaseRoutes);
 app.use('/', skuRoutes);
+app.use('/api', apiAuthRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
