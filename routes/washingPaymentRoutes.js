@@ -46,25 +46,39 @@ router.post('/rates/update', isAuthenticated, isOperator, async (req, res) => {
 router.get('/', isAuthenticated, isOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT wd.id, wd.lot_no, wd.total_pieces, wd.user_id, u.username
+      SELECT u.id, u.username, COUNT(*) AS lot_count
       FROM washing_data wd
       JOIN users u ON wd.user_id = u.id
       JOIN washing_in_assignments wia ON wia.washing_data_id = wd.id AND wia.is_approved = 1
       LEFT JOIN washing_invoice_items wii ON wii.washing_data_id = wd.id
       WHERE wii.id IS NULL
-      ORDER BY u.username, wd.id DESC
+      GROUP BY u.id, u.username
+      ORDER BY u.username
     `);
-    const washers = new Map();
-    rows.forEach(r => {
-      if (!washers.has(r.user_id)) {
-        washers.set(r.user_id, { id: r.user_id, name: r.username, lots: [] });
-      }
-      washers.get(r.user_id).lots.push(r);
-    });
-    res.render('washingPaymentDashboard', { washers: Array.from(washers.values()) });
+    res.render('washingPaymentDashboard', { washers: rows });
   } catch (err) {
     console.error('washing payment dashboard', err);
     res.status(500).send('Server error');
+  }
+});
+
+// Fetch pending lots for a washer (AJAX)
+router.get('/washer/:id/lots', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const washerId = parseInt(req.params.id, 10);
+    const [rows] = await pool.query(
+      `SELECT wd.id, wd.lot_no, wd.total_pieces
+       FROM washing_data wd
+       JOIN washing_in_assignments wia ON wia.washing_data_id = wd.id AND wia.is_approved = 1
+       LEFT JOIN washing_invoice_items wii ON wii.washing_data_id = wd.id
+       WHERE wii.id IS NULL AND wd.user_id = ?
+       ORDER BY wd.id DESC`,
+      [washerId]
+    );
+    res.json({ lots: rows });
+  } catch (err) {
+    console.error('fetch washer lots', err);
+    res.status(500).json({ error: 'Failed to load lots' });
   }
 });
 
