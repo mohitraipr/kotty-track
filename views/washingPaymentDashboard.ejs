@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Washing Payments</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
 <nav class="navbar navbar-dark bg-dark">
@@ -15,39 +16,100 @@
     </div>
   </div>
 </nav>
+
 <div class="container mt-4">
-<form id="lotForm">
-<table class="table table-bordered">
-  <thead>
-    <tr>
-      <th>Select</th>
-      <th>Washer</th>
-      <th>Lot</th>
-      <th>Qty</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% washers.forEach(function(w){ w.lots.forEach(function(l){ %>
-      <tr>
-        <td><input type="checkbox" name="lotIds" value="<%= l.id %>"></td>
-        <td><%= w.name %></td>
-        <td><%= l.lot_no %></td>
-        <td><%= l.total_pieces %></td>
-      </tr>
-    <% }); }); %>
-  </tbody>
-</table>
-<div class="text-end">
-  <button type="button" id="proceedBtn" class="btn btn-primary">Proceed to Payment</button>
+  <div class="input-group mb-3">
+    <input type="text" class="form-control" placeholder="Search washer..." id="searchWasher">
+    <button class="btn btn-outline-secondary" type="button" id="searchBtn" data-bs-toggle="tooltip" title="Search washers">
+      <i class="fa fa-search"></i>
+    </button>
+  </div>
+
+  <div class="row" id="washerList">
+    <% washers.forEach(function(w){ %>
+      <div class="col-md-4 mb-3 washer-card" data-washer-name="<%= w.name.toLowerCase() %>">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div>
+              <i class="fa fa-user me-2 text-primary" data-bs-toggle="tooltip" title="Washer"></i>
+              <span class="washer-name"><%= w.name %></span>
+              <span class="badge bg-secondary"><%= w.lots.length %> lots</span>
+            </div>
+            <button
+              class="btn btn-sm btn-outline-primary collapse-btn"
+              data-bs-toggle="collapse"
+              data-bs-target="#lots-<%= w.id %>"
+              aria-expanded="false"
+              aria-controls="lots-<%= w.id %>"
+              title="View lots">
+              <i class="fa fa-eye"></i>
+            </button>
+          </div>
+          <div id="lots-<%= w.id %>" class="collapse">
+            <div class="card-body">
+              <form class="lotForm">
+                <table class="table table-sm table-bordered">
+                  <thead>
+                    <tr>
+                      <th>Lot</th>
+                      <th>Qty</th>
+                      <th>Select</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% w.lots.forEach(function(l){ %>
+                      <tr>
+                        <td><%= l.lot_no %></td>
+                        <td><%= l.total_pieces %></td>
+                        <td><input type="checkbox" name="lotIds" value="<%= l.id %>"></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+                <div class="text-end">
+                  <button type="button" class="btn btn-success proceedBtn" data-bs-toggle="tooltip" title="Proceed to payment for selected lots">
+                    <i class="fa fa-arrow-right"></i> Proceed to Payment
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% }); %>
+  </div>
 </div>
-</form>
-</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  document.getElementById('proceedBtn').addEventListener('click', function(){
-    const ids = Array.from(document.querySelectorAll('input[name="lotIds"]:checked')).map(c=>c.value);
-    if(!ids.length) return;
-    window.location.href = '/washingdashboard/payments/summary?ids=' + ids.join(',');
+  function filterWashers() {
+    const q = document.getElementById('searchWasher').value.toLowerCase();
+    document.querySelectorAll('.washer-card').forEach(card => {
+      const name = card.dataset.washerName;
+      card.style.display = name.includes(q) ? '' : 'none';
+    });
+  }
+  document.getElementById('searchBtn').addEventListener('click', filterWashers);
+  document.getElementById('searchWasher').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      filterWashers();
+    }
   });
+
+  document.querySelectorAll('.proceedBtn').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const form = this.closest('.lotForm');
+      const ids = Array.from(form.querySelectorAll('input[name="lotIds"]:checked')).map(c=>c.value);
+      if(!ids.length) return;
+      window.location.href = '/washingdashboard/payments/summary?ids=' + ids.join(',');
+    });
+  });
+
+  // enable tooltips
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"], .collapse-btn'));
+  tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
 </script>
 </body>
 </html>
+
