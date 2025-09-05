@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Washing Invoices</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Washing Invoices</span>
+    <div class="d-flex gap-2 ms-auto">
+      <a href="/washingdashboard/payments" class="btn btn-outline-light btn-sm">Back</a>
+    </div>
+  </div>
+</nav>
+<div class="container mt-4">
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <% if (invoices[0] && invoices[0].washer_name) { %><th>Washer</th><% } %>
+      <th>Total Amount</th>
+      <th>Date</th>
+      <th>View</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% invoices.forEach(function(inv){ %>
+      <tr>
+        <td><%= inv.id %></td>
+        <% if (inv.washer_name) { %><td><%= inv.washer_name %></td><% } %>
+        <td><%= inv.total_amount %></td>
+        <td><%= inv.created_at.toISOString ? inv.created_at.toISOString().replace('T',' ').slice(0,19) : inv.created_at %></td>
+        <td><a class="btn btn-sm btn-primary" href="<%= baseUrl %><%= inv.id %>">View</a></td>
+      </tr>
+    <% }); %>
+  </tbody>
+</table>
+</div>
+</body>
+</html>
