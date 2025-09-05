@@ -27,13 +27,13 @@
 
   <div class="row" id="washerList">
     <% washers.forEach(function(w){ %>
-      <div class="col-md-4 mb-3 washer-card" data-washer-name="<%= w.name.toLowerCase() %>">
+      <div class="col-md-4 mb-3 washer-card" data-washer-name="<%= w.username.toLowerCase() %>" data-washer-id="<%= w.id %>">
         <div class="card h-100 shadow-sm">
           <div class="card-header d-flex align-items-center justify-content-between">
             <div>
               <i class="fa fa-user me-2 text-primary" data-bs-toggle="tooltip" title="Washer"></i>
-              <span class="washer-name"><%= w.name %></span>
-              <span class="badge bg-secondary"><%= w.lots.length %> lots</span>
+              <span class="washer-name"><%= w.username %></span>
+              <span class="badge bg-secondary" id="count-<%= w.id %>"><%= w.lot_count %> lots</span>
             </div>
             <button
               class="btn btn-sm btn-outline-primary collapse-btn"
@@ -45,33 +45,9 @@
               <i class="fa fa-eye"></i>
             </button>
           </div>
-          <div id="lots-<%= w.id %>" class="collapse">
+          <div id="lots-<%= w.id %>" class="collapse" data-loaded="false">
             <div class="card-body">
-              <form class="lotForm">
-                <table class="table table-sm table-bordered">
-                  <thead>
-                    <tr>
-                      <th>Lot</th>
-                      <th>Qty</th>
-                      <th>Select</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% w.lots.forEach(function(l){ %>
-                      <tr>
-                        <td><%= l.lot_no %></td>
-                        <td><%= l.total_pieces %></td>
-                        <td><input type="checkbox" name="lotIds" value="<%= l.id %>"></td>
-                      </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
-                <div class="text-end">
-                  <button type="button" class="btn btn-success proceedBtn" data-bs-toggle="tooltip" title="Proceed to payment for selected lots">
-                    <i class="fa fa-arrow-right"></i> Proceed to Payment
-                  </button>
-                </div>
-              </form>
+              <div class="text-center text-muted">Select to view lots</div>
             </div>
           </div>
         </div>
@@ -97,18 +73,46 @@
     }
   });
 
-  document.querySelectorAll('.proceedBtn').forEach(btn => {
-    btn.addEventListener('click', function(){
-      const form = this.closest('.lotForm');
-      const ids = Array.from(form.querySelectorAll('input[name="lotIds"]:checked')).map(c=>c.value);
-      if(!ids.length) return;
-      window.location.href = '/washingdashboard/payments/summary?ids=' + ids.join(',');
-    });
-  });
-
   // enable tooltips
   const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"], .collapse-btn'));
   tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
+
+  // load lots on first expansion
+  document.querySelectorAll('.collapse').forEach(col => {
+    col.addEventListener('show.bs.collapse', async function () {
+      if (this.dataset.loaded === 'true') return;
+      const washerId = this.id.split('-')[1];
+      const body = this.querySelector('.card-body');
+      body.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+      try {
+        const res = await fetch(`/washingdashboard/payments/washer/${washerId}/lots`);
+        const data = await res.json();
+        if (!data.lots.length) {
+          body.innerHTML = '<p class="text-muted">No pending lots.</p>';
+          this.dataset.loaded = 'true';
+          return;
+        }
+        const form = document.createElement('form');
+        form.className = 'lotForm';
+        let tableHtml = '<table class="table table-sm table-bordered"><thead><tr><th>Lot</th><th>Qty</th><th>Select</th></tr></thead><tbody>';
+        data.lots.forEach(l => {
+          tableHtml += `<tr><td>${l.lot_no}</td><td>${l.total_pieces}</td><td><input type="checkbox" name="lotIds" value="${l.id}"></td></tr>`;
+        });
+        tableHtml += '</tbody></table><div class="text-end"><button type="button" class="btn btn-success proceedBtn"><i class="fa fa-arrow-right"></i> Proceed to Payment</button></div>';
+        form.innerHTML = tableHtml;
+        body.innerHTML = '';
+        body.appendChild(form);
+        form.querySelector('.proceedBtn').addEventListener('click', function(){
+          const ids = Array.from(form.querySelectorAll('input[name="lotIds"]:checked')).map(c=>c.value);
+          if(!ids.length) return;
+          window.location.href = '/washingdashboard/payments/summary?ids=' + ids.join(',');
+        });
+        this.dataset.loaded = 'true';
+      } catch (err) {
+        body.innerHTML = '<p class="text-danger">Failed to load lots</p>';
+      }
+    });
+  });
 </script>
 </body>
 </html>

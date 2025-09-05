@@ -23,13 +23,23 @@
         Lot <%= l.lot_no %> (Qty: <%= l.total_pieces %>)
       </div>
       <div class="card-body">
-        <% rates.forEach(function(r){ %>
-          <div class="form-check">
-            <input class="form-check-input rate-check" data-rate="<%= r.rate %>" type="checkbox" name="desc_<%= l.id %>" value="<%= r.description %>">
-            <label class="form-check-label"><%= r.description %> (₹<%= r.rate %>)</label>
+        <div id="desc-container-<%= l.id %>" class="desc-container" data-lot="<%= l.id %>" data-qty="<%= l.total_pieces %>">
+          <div class="row g-2 desc-row">
+            <div class="col">
+              <select class="form-select desc-select" name="desc_<%= l.id %>[]">
+                <option value="">Select description</option>
+                <% rates.forEach(function(r){ %>
+                  <option value="<%= r.description %>" data-rate="<%= r.rate %>"><%= r.description %> (₹<%= r.rate %>)</option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-auto">
+              <button type="button" class="btn btn-outline-danger remove-desc d-none">&times;</button>
+            </div>
           </div>
-        <% }); %>
-        <p class="mt-2">Total Rate: ₹<span id="rate-<%= l.id %>">0</span></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary add-desc" data-lot="<%= l.id %>">Add Description</button>
+        <p class="mt-2 mb-0">Total Rate: ₹<span id="rate-<%= l.id %>">0</span></p>
         <p>Amount: ₹<span id="amount-<%= l.id %>">0</span></p>
       </div>
     </div>
@@ -40,17 +50,38 @@
 </form>
 </div>
 <script>
-  const rateMap = { <% rates.forEach(function(r, idx){ %>'<%= r.description %>':<%= r.rate %><% if (idx < rates.length-1) { %>,<% } %><% }); %> };
-  <% lots.forEach(function(l){ %>
-    document.querySelectorAll('input[name="desc_<%= l.id %>"]').forEach(cb => {
-      cb.addEventListener('change', function(){
-        const sel = Array.from(document.querySelectorAll('input[name="desc_<%= l.id %>"]:checked'));
-        let rate = 0; sel.forEach(c => { rate += rateMap[c.value] || 0; });
-        document.getElementById('rate-<%= l.id %>').innerText = rate.toFixed(2);
-        document.getElementById('amount-<%= l.id %>').innerText = (rate * <%= l.total_pieces %>).toFixed(2);
-      });
+  const rateOptions = `<option value="">Select description</option><% rates.forEach(function(r){ %><option value="<%= r.description %>" data-rate="<%= r.rate %>"><%= r.description %> (₹<%= r.rate %>)</option><% }); %>`;
+
+  function updateTotals(lotId){
+    const container = document.getElementById('desc-container-' + lotId);
+    const qty = parseFloat(container.dataset.qty);
+    let totalRate = 0;
+    container.querySelectorAll('.desc-select').forEach(sel => {
+      const rate = parseFloat(sel.selectedOptions[0]?.dataset.rate || 0);
+      totalRate += rate;
     });
-  <% }); %>
+    document.getElementById('rate-' + lotId).innerText = totalRate.toFixed(2);
+    document.getElementById('amount-' + lotId).innerText = (totalRate * qty).toFixed(2);
+  }
+
+  document.querySelectorAll('.add-desc').forEach(btn => {
+    btn.addEventListener('click', function(){
+      const lotId = this.dataset.lot;
+      const container = document.getElementById('desc-container-' + lotId);
+      const row = document.createElement('div');
+      row.className = 'row g-2 desc-row mt-1';
+      row.innerHTML = `<div class="col"><select class="form-select desc-select" name="desc_${lotId}[]">${rateOptions}</select></div><div class="col-auto"><button type="button" class="btn btn-outline-danger remove-desc">&times;</button></div>`;
+      container.appendChild(row);
+      row.querySelector('.desc-select').addEventListener('change', () => updateTotals(lotId));
+      row.querySelector('.remove-desc').addEventListener('click', () => { row.remove(); updateTotals(lotId); });
+    });
+  });
+
+  document.querySelectorAll('.desc-container').forEach(container => {
+    const lotId = container.dataset.lot;
+    const select = container.querySelector('.desc-select');
+    select.addEventListener('change', () => updateTotals(lotId));
+  });
 </script>
 </body>
 </html>
