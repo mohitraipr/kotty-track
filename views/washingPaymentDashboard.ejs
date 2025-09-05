@@ -5,9 +5,46 @@
   <title>Washing Payments</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .navbar {
+      background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+    }
+
+    .washer-card .card {
+      border: none;
+      border-radius: 0.75rem;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .washer-card .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .search-input {
+      border-radius: 0.5rem 0 0 0.5rem;
+    }
+
+    .search-btn {
+      border-radius: 0 0.5rem 0.5rem 0;
+    }
+
+    .washer-name {
+      font-weight: 600;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+    }
+  </style>
 </head>
 <body>
-<nav class="navbar navbar-dark bg-dark">
+<nav class="navbar navbar-dark">
   <div class="container-fluid">
     <span class="navbar-brand">Washing Payments</span>
     <div class="d-flex gap-2 ms-auto">
@@ -18,36 +55,38 @@
 </nav>
 
 <div class="container mt-4">
-  <div class="input-group mb-3">
-    <input type="text" class="form-control" placeholder="Search washer..." id="searchWasher">
-    <button class="btn btn-outline-secondary" type="button" id="searchBtn" data-bs-toggle="tooltip" title="Search washers">
+  <div class="input-group mb-4">
+    <input type="text" class="form-control search-input" placeholder="Search washer..." id="searchWasher">
+    <button class="btn btn-primary search-btn" type="button" id="searchBtn" data-bs-toggle="tooltip" title="Search washers">
       <i class="fa fa-search"></i>
     </button>
   </div>
 
   <div class="row" id="washerList">
     <% washers.forEach(function(w){ %>
-      <div class="col-md-4 mb-3 washer-card" data-washer-name="<%= w.username.toLowerCase() %>" data-washer-id="<%= w.id %>">
+      <div class="col-lg-3 col-md-4 col-sm-6 mb-4 washer-card" data-washer-name="<%= w.username.toLowerCase() %>" data-washer-id="<%= w.id %>">
         <div class="card h-100 shadow-sm">
-          <div class="card-header d-flex align-items-center justify-content-between">
-            <div>
-              <i class="fa fa-user me-2 text-primary" data-bs-toggle="tooltip" title="Washer"></i>
+          <div class="card-header bg-white border-0 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+              <i class="fa fa-user fa-lg me-2 text-primary" data-bs-toggle="tooltip" title="Washer"></i>
               <span class="washer-name"><%= w.username %></span>
-              <span class="badge bg-secondary" id="count-<%= w.id %>"><%= w.lot_count %> lots</span>
             </div>
+            <span class="badge bg-light text-dark" id="count-<%= w.id %>"><%= w.lot_count %> lots</span>
+          </div>
+          <div class="card-body pt-0 d-flex flex-column">
             <button
-              class="btn btn-sm btn-outline-primary collapse-btn"
+              class="btn btn-outline-primary mt-auto collapse-btn w-100"
               data-bs-toggle="collapse"
               data-bs-target="#lots-<%= w.id %>"
               aria-expanded="false"
               aria-controls="lots-<%= w.id %>"
               title="View lots">
-              <i class="fa fa-eye"></i>
+              <i class="fa fa-eye me-1"></i> View Lots
             </button>
-          </div>
-          <div id="lots-<%= w.id %>" class="collapse" data-loaded="false">
-            <div class="card-body">
-              <div class="text-center text-muted">Select to view lots</div>
+            <div id="lots-<%= w.id %>" class="collapse mt-3" data-loaded="false">
+              <div class="lot-container border-top pt-3">
+                <div class="text-center text-muted">Select to view lots</div>
+              </div>
             </div>
           </div>
         </div>
@@ -82,26 +121,26 @@
     col.addEventListener('show.bs.collapse', async function () {
       if (this.dataset.loaded === 'true') return;
       const washerId = this.id.split('-')[1];
-      const body = this.querySelector('.card-body');
-      body.innerHTML = '<div class="text-center text-muted">Loading...</div>';
+      const container = this.querySelector('.lot-container');
+      container.innerHTML = '<div class="text-center text-muted">Loading...</div>';
       try {
         const res = await fetch(`/washingdashboard/payments/washer/${washerId}/lots`);
         const data = await res.json();
         if (!data.lots.length) {
-          body.innerHTML = '<p class="text-muted">No pending lots.</p>';
+          container.innerHTML = '<p class="text-muted">No pending lots.</p>';
           this.dataset.loaded = 'true';
           return;
         }
         const form = document.createElement('form');
         form.className = 'lotForm';
-        let tableHtml = '<table class="table table-sm table-bordered"><thead><tr><th>Lot</th><th>Qty</th><th>Select</th></tr></thead><tbody>';
+        let tableHtml = '<table class="table table-sm table-hover table-bordered align-middle"><thead><tr><th>Lot</th><th>Qty</th><th>Select</th></tr></thead><tbody>';
         data.lots.forEach(l => {
           tableHtml += `<tr><td>${l.lot_no}</td><td>${l.total_pieces}</td><td><input type="checkbox" name="lotIds" value="${l.id}"></td></tr>`;
         });
         tableHtml += '</tbody></table><div class="text-end"><button type="button" class="btn btn-success proceedBtn"><i class="fa fa-arrow-right"></i> Proceed to Payment</button></div>';
         form.innerHTML = tableHtml;
-        body.innerHTML = '';
-        body.appendChild(form);
+        container.innerHTML = '';
+        container.appendChild(form);
         form.querySelector('.proceedBtn').addEventListener('click', function(){
           const ids = Array.from(form.querySelectorAll('input[name="lotIds"]:checked')).map(c=>c.value);
           if(!ids.length) return;
@@ -109,7 +148,7 @@
         });
         this.dataset.loaded = 'true';
       } catch (err) {
-        body.innerHTML = '<p class="text-danger">Failed to load lots</p>';
+        container.innerHTML = '<p class="text-danger">Failed to load lots</p>';
       }
     });
   });
