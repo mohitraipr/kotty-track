@@ -67,9 +67,9 @@
       <div class="col-lg-3 col-md-4 col-sm-6 mb-4 washer-card" data-washer-name="<%= w.username.toLowerCase() %>" data-washer-id="<%= w.id %>">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-white border-0 d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center flex-grow-1 overflow-hidden">
               <i class="fa fa-user fa-lg me-2 text-primary" data-bs-toggle="tooltip" title="Washer"></i>
-              <span class="washer-name"><%= w.username %></span>
+              <span class="washer-name text-truncate" data-bs-toggle="tooltip" title="<%= w.username %>"><%= w.username %></span>
             </div>
             <span class="badge bg-light text-dark" id="count-<%= w.id %>"><%= w.lot_count %> lots</span>
           </div>
