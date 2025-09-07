@@ -95,6 +95,7 @@ const inventoryWebhook = require('./routes/inventoryWebhook');
 const skuRoutes = require('./routes/skuRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const apiAuthRoutes = require('./routes/apiAuthRoutes');
+const apiRoutes = require('./routes/apiRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -129,6 +130,7 @@ app.use('/webhook', inventoryWebhook);
 app.use('/purchase', purchaseRoutes);
 app.use('/', skuRoutes);
 app.use('/api', apiAuthRoutes);
+app.use('/api', apiRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
