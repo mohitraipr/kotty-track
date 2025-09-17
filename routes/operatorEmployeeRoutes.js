@@ -563,4 +563,97 @@ router.post(
   },
 );
 
+// Bulk edit attendance for a single employee over a month
+router.get('/employees/:id/bulk-attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const month = req.query.month || moment().format('YYYY-MM');
+  try {
+    const [[employee]] = await pool.query('SELECT id, name, supervisor_id FROM employees WHERE id = ?', [empId]);
+    if (!employee) {
+      req.flash('error', 'Employee not found');
+      return res.redirect('/operator/supervisors');
+    }
+    const [rows] = await pool.query(
+      'SELECT date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND DATE_FORMAT(date, "%Y-%m") = ? ORDER BY date',
+      [empId, month]
+    );
+    const daysInMonth = moment(month, 'YYYY-MM').daysInMonth();
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = moment(`${month}-${d}`, 'YYYY-MM-D').format('YYYY-MM-DD');
+      const att = rows.find(a => moment(a.date).format('YYYY-MM-DD') === dateStr);
+      days.push({ date: dateStr, punch_in: att ? att.punch_in : '', punch_out: att ? att.punch_out : '' });
+    }
+    res.render('operatorEmployeeBulkAttendance', { user: req.session.user, employee, month, days });
+  } catch (err) {
+    console.error('Error loading attendance:', err);
+    req.flash('error', 'Failed to load attendance');
+    res.redirect('back');
+  }
+});
+
+router.post('/employees/:id/bulk-attendance', isAuthenticated, isOperator, async (req, res) => {
+  const empId = req.params.id;
+  const month = req.body.month;
+  let dates = req.body.date || [];
+  let punchIns = req.body.punch_in || [];
+  let punchOuts = req.body.punch_out || [];
+  if (!Array.isArray(dates)) dates = [dates];
+  if (!Array.isArray(punchIns)) punchIns = [punchIns];
+  if (!Array.isArray(punchOuts)) punchOuts = [punchOuts];
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[emp]] = await conn.query('SELECT supervisor_id FROM employees WHERE id = ?', [empId]);
+    if (!emp) {
+      await conn.rollback();
+      req.flash('error', 'Employee not found');
+      conn.release();
+      return res.redirect('/operator/supervisors');
+    }
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
+      const punch_in = punchIns[i] || null;
+      const punch_out = punchOuts[i] || null;
+      const [[att]] = await conn.query('SELECT id, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date = ?', [empId, date]);
+
+      // If both fields are blank and a record already exists, skip instead of clearing
+      if (!punch_in && !punch_out && att) {
+        continue;
+      }
+
+      // If both fields are blank and no record exists, nothing to do
+      if (!punch_in && !punch_out && !att) {
+        continue;
+      }
+
+      const newStatus = punch_in && punch_out ? 'present' : punch_in || punch_out ? 'one punch only' : 'absent';
+      if (att) {
+        await conn.query('UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?', [punch_in, punch_out, newStatus, att.id]);
+        await conn.query(
+          'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [empId, date, att.punch_in, att.punch_out, punch_in, punch_out, req.session.user.id]
+        );
+      } else {
+        await conn.query('INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES (?, ?, ?, ?, ?)', [empId, date, punch_in, punch_out, newStatus]);
+        await conn.query(
+          'INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [empId, date, null, null, punch_in, punch_out, req.session.user.id]
+        );
+      }
+    }
+    await calculateSalaryForMonth(conn, empId, month);
+    await conn.commit();
+    conn.release();
+    req.flash('success', 'Attendance updated');
+    res.redirect(`/operator/employees/${empId}/bulk-attendance?month=${month}`);
+  } catch (err) {
+    await conn.rollback();
+    conn.release();
+    console.error('Error updating attendance:', err);
+    req.flash('error', 'Failed to update attendance');
+    res.redirect('back');
+  }
+});
+
 module.exports = router;
