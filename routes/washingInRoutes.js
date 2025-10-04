@@ -1020,26 +1020,36 @@ router.get('/assign-rewash', isAuthenticated, isWashingInMaster, async (req, res
 
     const [lots] = await pool.query(`
       SELECT
-        wd.id             AS washing_data_id,
+        wd.id   AS washing_data_id,
         wd.lot_no,
         wd.sku,
-        wd.total_pieces
+        wd.total_pieces,
+        SUM(GREATEST(wds.pieces - COALESCE(used.total_used, 0), 0)) AS available_for_rewash
       FROM washing_data wd
       JOIN washing_in_assignments wia
         ON wia.washing_data_id = wd.id
+      LEFT JOIN washing_data_sizes wds
+        ON wds.washing_data_id = wd.id
+      LEFT JOIN (
+        SELECT
+          wid.lot_no,
+          wids.size_label,
+          SUM(wids.pieces) AS total_used
+        FROM washing_in_data wid
+        JOIN washing_in_data_sizes wids ON wids.washing_in_data_id = wid.id
+        WHERE wid.user_id = ?
+        GROUP BY wid.lot_no, wids.size_label
+      ) used
+        ON used.lot_no = wd.lot_no AND used.size_label = wds.size_label
       LEFT JOIN rewash_requests rr
         ON rr.washing_data_id = wd.id
           AND rr.status = 'pending'
-      LEFT JOIN washing_in_data wid
-        ON wid.lot_no = wd.lot_no
-          AND wid.user_id = ?
       WHERE
         wia.user_id    = ?
         AND wia.is_approved = 1
-        -- no already‑pending rewash
         AND rr.id IS NULL
-        -- no already‑created washingIn data
-        AND wid.id IS NULL
+      GROUP BY wd.id, wd.lot_no, wd.sku, wd.total_pieces
+      HAVING available_for_rewash > 0
       ORDER BY wd.id DESC
     `, [userId, userId]);
 
@@ -1061,24 +1071,39 @@ router.get('/assign-rewash', isAuthenticated, isWashingInMaster, async (req, res
 router.get('/assign-rewash/data/:wdId', isAuthenticated, isWashingInMaster, async (req, res) => {
   try {
     const wdId = req.params.wdId;
-    // base washing_data row
+    const userId = req.session.user.id;
+
     const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [wdId]);
     if (!wd) return res.status(404).json({ error: 'Lot not found' });
 
-    // sizes from washing_data_sizes
     const [sizes] = await pool.query(`
-      SELECT *
-      FROM washing_data_sizes
-      WHERE washing_data_id = ?
-    `, [wdId]);
+      SELECT
+        wds.id,
+        wds.size_label,
+        GREATEST(wds.pieces - COALESCE(used.total_used, 0), 0) AS available
+      FROM washing_data_sizes wds
+      LEFT JOIN (
+        SELECT
+          wids.size_label,
+          SUM(wids.pieces) AS total_used
+        FROM washing_in_data wid
+        JOIN washing_in_data_sizes wids ON wids.washing_in_data_id = wid.id
+        WHERE wid.lot_no = ?
+          AND wid.user_id = ?
+        GROUP BY wids.size_label
+      ) used
+        ON used.size_label = wds.size_label
+      WHERE wds.washing_data_id = ?
+    `, [wd.lot_no, userId, wdId]);
 
-    // compute how many already used in rewash_requests + existing rewash sizes?
-    // But since we only allow one pending per lot, we can just show full pool
-    const output = sizes.map(s => ({
-      id: s.id,
-      size_label: s.size_label,
-      available: s.pieces, 
-    }));
+    const output = sizes
+      .filter(s => s.available > 0)
+      .map(s => ({
+        id: s.id,
+        size_label: s.size_label,
+        available: s.available,
+      }));
+
     res.json(output);
   } catch (err) {
     console.error('[ERROR] GET /assign-rewash/data] =>', err);
@@ -1125,14 +1150,32 @@ router.post('/assign-rewash', isAuthenticated, isWashingInMaster, async (req, re
     const sizeMap = {};
     sizeRows.forEach(r => (sizeMap[r.id] = r));
 
+    const sizeLabels = sizeRows.map(r => r.size_label);
+    const [usedRows] = sizeLabels.length
+      ? await conn.query(
+          `SELECT wids.size_label, SUM(wids.pieces) AS usedCount
+             FROM washing_in_data wid
+             JOIN washing_in_data_sizes wids ON wids.washing_in_data_id = wid.id
+            WHERE wid.lot_no = ?
+              AND wid.user_id = ?
+              AND wids.size_label IN (?)
+            GROUP BY wids.size_label`,
+          [wd.lot_no, userId, sizeLabels]
+        )
+      : [[]];
+    const usedMap = {};
+    usedRows.forEach(r => (usedMap[r.size_label] = r.usedCount || 0));
+
     for (const sizeId of sizeIds) {
       const reqCount = parseInt(sizes[sizeId], 10) || 0;
       if (reqCount <= 0) continue;
       const srow = sizeMap[sizeId];
       if (!srow) throw new Error('Bad size reference.');
 
-      if (reqCount > srow.pieces)
-        throw new Error(`Requested ${reqCount} exceeds available ${srow.pieces} for ${srow.size_label}`);
+      const alreadyUsed = usedMap[srow.size_label] || 0;
+      const available = srow.pieces - alreadyUsed;
+      if (reqCount > available)
+        throw new Error(`Requested ${reqCount} exceeds available ${available < 0 ? 0 : available} for ${srow.size_label}`);
 
       await conn.query(
         `INSERT INTO rewash_request_sizes (rewash_request_id, size_label, pieces_requested)

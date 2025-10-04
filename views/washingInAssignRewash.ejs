@@ -95,7 +95,7 @@
               <option value="">-- Choose a lot --</option>
               <% lots.forEach(l => { %>
               <option value="<%= l.washing_data_id %>">
-                <%= l.lot_no %> | SKU: <%= l.sku %> | Bal: <%= l.total_pieces %>
+                <%= l.lot_no %> | SKU: <%= l.sku %> | Total: <%= l.total_pieces %> | Rewash Bal: <%= l.available_for_rewash %>
               </option>
               <% }) %>
             </select>
@@ -168,6 +168,14 @@
         try {
           const res = await fetch(`/washingin/assign-rewash/data/${selectedVal}`);
           const sizes = await res.json();
+
+          if (!sizes.length) {
+            sizeBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No balance available for rewash.</td></tr>`;
+            totalRequested.textContent = '0';
+            submitBtn.disabled = true;
+            sizeSection.style.display = '';
+            return;
+          }
 
           sizeBody.innerHTML = sizes.map(s => `
             <tr>
