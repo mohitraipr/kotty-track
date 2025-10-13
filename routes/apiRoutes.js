@@ -311,7 +311,16 @@ function normaliseRollEntry(entry) {
     );
   }
 
-  return { rollNo, weightUsed };
+  const layersSource =
+    entry.layers ?? entry.layerCount ?? entry.totalLayers ?? entry.layer_count;
+  const layers = Number(layersSource);
+  if (!Number.isInteger(layers) || layers <= 0) {
+    throw createClientError(
+      `Layers must be provided for roll ${rollNo} and must be a positive whole number.`,
+    );
+  }
+
+  return { rollNo, weightUsed, layers };
 }
 
 router.post(
@@ -441,8 +450,8 @@ router.post(
         );
 
         await conn.query(
-          `INSERT INTO api_lot_rolls (lot_id, fabric_roll_id, roll_no, weight_used) VALUES (?, ?, ?, ?)`,
-          [lotId, rollRecord.id, roll.rollNo, roll.weightUsed],
+          `INSERT INTO api_lot_rolls (lot_id, fabric_roll_id, roll_no, weight_used, layers) VALUES (?, ?, ?, ?, ?)`,
+          [lotId, rollRecord.id, roll.rollNo, roll.weightUsed, roll.layers],
         );
       }
 

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS api_lot_rolls (
   fabric_roll_id BIGINT UNSIGNED NOT NULL,
   roll_no VARCHAR(100) NOT NULL,
   weight_used DECIMAL(12,3) NOT NULL,
+  layers INT UNSIGNED NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_api_lot_rolls_lot FOREIGN KEY (lot_id) REFERENCES api_lots(id) ON DELETE CASCADE,
   CONSTRAINT fk_api_lot_rolls_fabric_roll FOREIGN KEY (fabric_roll_id) REFERENCES fabric_invoice_rolls(id)
