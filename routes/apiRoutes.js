@@ -7,6 +7,62 @@ const generateApiLotNumber = require('../utils/generateApiLotNumber');
 // Simple in-memory cache for rolls to avoid repeated DB reads
 let rollsCache = { data: null, expires: 0 };
 
+function csvEscape(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const stringValue = String(value);
+  if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+}
+
+function buildCsv(rows, columns) {
+  const header = columns.map((column) => column.label).join(',');
+  const dataLines = rows.map((row) =>
+    columns.map((column) => csvEscape(row[column.key])).join(','),
+  );
+  return [header, ...dataLines].join('\n');
+}
+
+async function fetchLotIfAuthorized(req, res, lotId) {
+  const user = req.session?.user;
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+
+  try {
+    const [[lot]] = await pool.query(
+      `SELECT id, lot_number AS lotNumber, cutting_master_id AS cuttingMasterId, sku, fabric_type AS fabricType, total_pieces AS totalPieces
+       FROM api_lots
+       WHERE id = ?`,
+      [lotId],
+    );
+
+    if (!lot) {
+      res.status(404).json({ error: 'Lot not found.' });
+      return null;
+    }
+
+    const isOperator = user.roleName === 'operator';
+    const isOwnCuttingMaster =
+      user.roleName === 'cutting_master' && Number(user.id) === Number(lot.cuttingMasterId);
+
+    if (!isOperator && !isOwnCuttingMaster) {
+      res.status(403).json({ error: 'You do not have permission to view this lot.' });
+      return null;
+    }
+
+    return lot;
+  } catch (error) {
+    console.error('Error checking lot authorization:', error);
+    res.status(500).json({ error: 'Failed to verify lot access.' });
+    return null;
+  }
+}
+
 // Function to fetch rolls by fabric type from existing tables
 async function getRollsByFabricType() {
   if (rollsCache.data && Date.now() < rollsCache.expires) {
@@ -57,6 +113,118 @@ router.get(
     }
   }
 );
+
+router.get('/lots/:lotId', isAuthenticated, async (req, res) => {
+  const lotId = Number(req.params.lotId);
+  if (!Number.isInteger(lotId) || lotId <= 0) {
+    return res.status(400).json({ error: 'Invalid lot id.' });
+  }
+
+  const lot = await fetchLotIfAuthorized(req, res, lotId);
+  if (!lot) {
+    return;
+  }
+
+  return res.json({
+    lotNumber: lot.lotNumber,
+    sku: lot.sku,
+    fabricType: lot.fabricType,
+    totalPieces: lot.totalPieces,
+    downloads: {
+      bundleCodes: `/api/lots/${lot.id}/bundles/download`,
+      pieceCodes: `/api/lots/${lot.id}/pieces/download`,
+    },
+  });
+});
+
+router.get('/lots/:lotId/bundles/download', isAuthenticated, async (req, res) => {
+  const lotId = Number(req.params.lotId);
+  if (!Number.isInteger(lotId) || lotId <= 0) {
+    return res.status(400).json({ error: 'Invalid lot id.' });
+  }
+
+  const lot = await fetchLotIfAuthorized(req, res, lotId);
+  if (!lot) {
+    return;
+  }
+
+  try {
+    const [bundleRows] = await pool.query(
+      `SELECT b.bundle_code AS bundleCode, s.size_label AS sizeLabel, b.pieces_in_bundle AS piecesInBundle
+       FROM api_lot_bundles b
+       INNER JOIN api_lot_sizes s ON b.size_id = s.id
+       WHERE b.lot_id = ?
+       ORDER BY b.bundle_sequence`,
+      [lot.id],
+    );
+
+    if (!bundleRows.length) {
+      return res.status(404).json({ error: 'No bundle codes found for this lot.' });
+    }
+
+    const csv = buildCsv(bundleRows, [
+      { key: 'bundleCode', label: 'Bundle Code' },
+      { key: 'sizeLabel', label: 'Size Label' },
+      { key: 'piecesInBundle', label: 'Pieces In Bundle' },
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=lot-${lot.lotNumber}-bundle-codes.csv`,
+    );
+
+    return res.send(csv);
+  } catch (error) {
+    console.error('Error downloading bundle codes for lot:', error);
+    return res.status(500).json({ error: 'Failed to download bundle codes.' });
+  }
+});
+
+router.get('/lots/:lotId/pieces/download', isAuthenticated, async (req, res) => {
+  const lotId = Number(req.params.lotId);
+  if (!Number.isInteger(lotId) || lotId <= 0) {
+    return res.status(400).json({ error: 'Invalid lot id.' });
+  }
+
+  const lot = await fetchLotIfAuthorized(req, res, lotId);
+  if (!lot) {
+    return;
+  }
+
+  try {
+    const [pieceRows] = await pool.query(
+      `SELECT p.piece_code AS pieceCode, b.bundle_code AS bundleCode, s.size_label AS sizeLabel
+       FROM api_lot_piece_codes p
+       INNER JOIN api_lot_bundles b ON p.bundle_id = b.id
+       INNER JOIN api_lot_sizes s ON p.size_id = s.id
+       WHERE p.lot_id = ?
+       ORDER BY p.piece_sequence`,
+      [lot.id],
+    );
+
+    if (!pieceRows.length) {
+      return res.status(404).json({ error: 'No piece codes found for this lot.' });
+    }
+
+    const csv = buildCsv(pieceRows, [
+      { key: 'pieceCode', label: 'Piece Code' },
+      { key: 'bundleCode', label: 'Bundle Code' },
+      { key: 'sizeLabel', label: 'Size Label' },
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=lot-${lot.lotNumber}-piece-codes.csv`,
+    );
+
+    return res.send(csv);
+  } catch (error) {
+    console.error('Error downloading piece codes for lot:', error);
+    return res.status(500).json({ error: 'Failed to download piece codes.' });
+  }
+});
 
 function createClientError(message, status = 400) {
   const error = new Error(message);
