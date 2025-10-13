@@ -233,7 +233,7 @@ function createClientError(message, status = 400) {
   return error;
 }
 
-function normaliseSizeEntry(entry, bundleSize) {
+function normaliseSizeEntry(entry) {
   if (!entry || typeof entry !== 'object') {
     throw createClientError('Each size entry must be an object.');
   }
@@ -248,33 +248,9 @@ function normaliseSizeEntry(entry, bundleSize) {
     entry.patternCount ?? entry.pattern_count ?? entry.pattern ?? entry.patterns;
   let patternCount = Number(patternSource);
   if (!Number.isFinite(patternCount) || patternCount <= 0) {
-    patternCount = Number(entry.totalPieces ?? entry.total_pieces);
-  }
-  if (!Number.isFinite(patternCount) || patternCount <= 0) {
     throw createClientError(
       `Pattern count is required for size ${sizeLabel} and must be greater than zero.`,
     );
-  }
-
-  const totalSource = entry.totalPieces ?? entry.total_pieces;
-  let totalPieces = Number(totalSource);
-  if (!Number.isFinite(totalPieces) || totalPieces <= 0) {
-    const layersSource = entry.layers ?? entry.totalLayers ?? entry.layer_count;
-    const layers = Number(layersSource);
-    if (Number.isFinite(layers) && layers > 0) {
-      totalPieces = patternCount * layers;
-    }
-  }
-
-  if (!Number.isFinite(totalPieces) || totalPieces <= 0) {
-    throw createClientError(
-      `Total pieces must be provided for size ${sizeLabel} and must be greater than zero.`,
-    );
-  }
-
-  const roundedTotal = Math.round(totalPieces);
-  if (Math.abs(roundedTotal - totalPieces) > 0.0001) {
-    throw createClientError(`Total pieces for size ${sizeLabel} must be a whole number.`);
   }
 
   const roundedPattern = Math.round(patternCount);
@@ -282,13 +258,9 @@ function normaliseSizeEntry(entry, bundleSize) {
     throw createClientError(`Pattern count for size ${sizeLabel} must be a whole number.`);
   }
 
-  const bundleCount = Math.max(1, Math.ceil(roundedTotal / bundleSize));
-
   return {
     sizeLabel,
     patternCount: roundedPattern,
-    totalPieces: roundedTotal,
-    bundleCount,
   };
 }
 
@@ -363,7 +335,7 @@ router.post(
 
     let normalisedSizes;
     try {
-      normalisedSizes = rawSizes.map((entry) => normaliseSizeEntry(entry, numericBundleSize));
+      normalisedSizes = rawSizes.map((entry) => normaliseSizeEntry(entry));
     } catch (validationError) {
       return res
         .status(validationError.statusCode || 400)
@@ -383,8 +355,24 @@ router.post(
         .json({ error: validationError.clientMessage || validationError.message });
     }
 
-    const totalPieces = normalisedSizes.reduce((sum, size) => sum + size.totalPieces, 0);
-    const totalBundles = normalisedSizes.reduce((sum, size) => sum + size.bundleCount, 0);
+    const totalLayers = normalisedRolls.reduce((sum, roll) => sum + roll.layers, 0);
+    if (!Number.isInteger(totalLayers) || totalLayers <= 0) {
+      throw createClientError('At least one layer is required across the selected rolls.');
+    }
+
+    const computedSizes = normalisedSizes.map((entry) => {
+      const totalPiecesForSize = entry.patternCount * totalLayers;
+      const bundleCount = Math.max(1, Math.ceil(totalPiecesForSize / numericBundleSize));
+
+      return {
+        ...entry,
+        totalPieces: totalPiecesForSize,
+        bundleCount,
+      };
+    });
+
+    const totalPieces = computedSizes.reduce((sum, size) => sum + size.totalPieces, 0);
+    const totalBundles = computedSizes.reduce((sum, size) => sum + size.bundleCount, 0);
     const totalWeight = normalisedRolls.reduce((sum, roll) => sum + roll.weightUsed, 0);
 
     let conn;
@@ -461,7 +449,7 @@ router.post(
       let bundleSequence = 1;
       let pieceSequence = 1;
 
-      for (const sizeEntry of normalisedSizes) {
+      for (const sizeEntry of computedSizes) {
         const [sizeResult] = await conn.query(
           `
             INSERT INTO api_lot_sizes (lot_id, size_label, pattern_count, total_pieces, bundle_count)
@@ -567,7 +555,7 @@ router.post(
           totalBundles,
           totalPieces,
           totalWeight,
-          sizes: normalisedSizes,
+          sizes: computedSizes,
           bundles: bundleOutputs,
           pieces: pieceOutputs,
         },
