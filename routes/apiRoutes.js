@@ -298,7 +298,7 @@ function normaliseRollEntry(entry) {
 router.post(
   '/lots',
   isAuthenticated,
-  allowRoles(['cutting_master']),
+  allowRoles(['cutting_manager']),
   async (req, res) => {
     const user = req.session?.user;
     if (!user || !user.id) {
