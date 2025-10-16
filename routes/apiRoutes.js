@@ -48,7 +48,7 @@ async function fetchLotIfAuthorized(req, res, lotId) {
 
     const isOperator = user.roleName === 'operator';
     const isOwnCuttingMaster =
-      user.roleName === 'cutting_master' && Number(user.id) === Number(lot.cuttingMasterId);
+      user.roleName === 'cutting_manager' && Number(user.id) === Number(lot.cuttingMasterId);
 
     if (!isOperator && !isOwnCuttingMaster) {
       res.status(403).json({ error: 'You do not have permission to view this lot.' });
