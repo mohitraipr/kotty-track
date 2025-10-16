@@ -115,6 +115,54 @@ router.get(
   }
 );
 
+router.get(
+  '/lots',
+  isAuthenticated,
+  allowRoles(['cutting_manager']),
+  async (req, res) => {
+    const user = req.session?.user;
+
+    if (!user?.id) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const [lots] = await pool.query(
+        `SELECT
+           id,
+           lot_number AS lotNumber,
+           cutting_master_id AS cuttingMasterId,
+           sku,
+           fabric_type AS fabricType,
+           remark,
+           bundle_size AS bundleSize,
+           total_bundles AS totalBundles,
+           total_pieces AS totalPieces,
+           total_weight AS totalWeight,
+           created_at AS createdAt,
+           updated_at AS updatedAt
+         FROM api_lots
+         WHERE cutting_master_id = ?
+         ORDER BY created_at DESC`,
+        [user.id],
+      );
+
+      const response = lots.map((lot) => ({
+        ...lot,
+        downloads: {
+          bundleCodes: `/api/lots/${lot.id}/bundles/download`,
+          pieceCodes: `/api/lots/${lot.id}/pieces/download`,
+        },
+      }));
+
+      return res.json(response);
+    } catch (error) {
+      console.error('Error fetching lots for cutting manager:', error);
+      return res.status(500).json({ error: 'Failed to fetch lots.' });
+    }
+  },
+);
+
 router.get('/lots/:lotId', isAuthenticated, async (req, res) => {
   const lotId = Number(req.params.lotId);
   if (!Number.isInteger(lotId) || lotId <= 0) {
