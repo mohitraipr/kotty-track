@@ -170,6 +170,10 @@ async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn
     const ws = workbook.addWorksheet(tableName);
 
     let columnsSet = false;
+    if (Array.isArray(columns) && columns.length > 0) {
+      ws.columns = columns.map(col => ({ header: col, key: col }));
+      columnsSet = true;
+    }
     let hasRow = false;
 
     queryStream.on('data', row => {
@@ -185,8 +189,18 @@ async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn
       queryStream.on('end', async () => {
         try {
           if (!hasRow) {
-            ws.addRow(['No Data']).commit();
+            if (!columnsSet) {
+              ws.columns = [{ header: 'Message', key: '__message__' }];
+              columnsSet = true;
+            }
+            const firstColumnKey = ws.columns[0] && ws.columns[0].key;
+            if (firstColumnKey) {
+              ws.addRow({ [firstColumnKey]: 'No data available' }).commit();
+            } else {
+              ws.addRow(['No data available']).commit();
+            }
           }
+          await ws.commit();
           await workbook.commit();
           resolve();
         } catch (err) {
