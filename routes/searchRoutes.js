@@ -165,7 +165,7 @@ async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn
   let conn;
   try {
     conn = await pool.getConnection();
-    const queryStream = conn.query(sql, params).stream({ highWaterMark: 100 });
+    const [rows] = await conn.query(sql, params);
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
     const ws = workbook.addWorksheet(tableName);
 
@@ -174,50 +174,30 @@ async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn
       ws.columns = columns.map(col => ({ header: col, key: col }));
       columnsSet = true;
     }
-    let hasRow = false;
 
-    queryStream.on('data', row => {
+    if (rows.length === 0) {
       if (!columnsSet) {
-        ws.columns = Object.keys(row).map(k => ({ header: k, key: k }));
+        ws.columns = [{ header: 'Message', key: '__message__' }];
         columnsSet = true;
       }
-      ws.addRow(row).commit();
-      hasRow = true;
-    });
-
-    await new Promise((resolve, reject) => {
-      queryStream.on('end', async () => {
-        try {
-          if (!hasRow) {
-            if (!columnsSet) {
-              ws.columns = [{ header: 'Message', key: '__message__' }];
-              columnsSet = true;
-            }
-            const firstColumnKey = ws.columns[0] && ws.columns[0].key;
-            if (firstColumnKey) {
-              ws.addRow({ [firstColumnKey]: 'No data available' }).commit();
-            } else {
-              ws.addRow(['No data available']).commit();
-            }
-          }
-          await ws.commit();
-          await workbook.commit();
-          resolve();
-        } catch (err) {
-          reject(err);
+      const firstColumnKey = ws.columns[0] && ws.columns[0].key;
+      if (firstColumnKey) {
+        ws.addRow({ [firstColumnKey]: 'No data available' }).commit();
+      } else {
+        ws.addRow(['No data available']).commit();
+      }
+    } else {
+      for (const row of rows) {
+        if (!columnsSet) {
+          ws.columns = Object.keys(row).map(k => ({ header: k, key: k }));
+          columnsSet = true;
         }
-      });
+        ws.addRow(row).commit();
+      }
+    }
 
-      queryStream.on('error', async err => {
-        console.error('Error streaming export:', err);
-        try {
-          await workbook.commit();
-        } catch (e) {
-          // ignore secondary commit errors
-        }
-        reject(err);
-      });
-    });
+    await ws.commit();
+    await workbook.commit();
   } finally {
     if (conn) {
       conn.release();
