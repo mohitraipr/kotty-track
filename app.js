@@ -37,9 +37,9 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: global.env.NODE_ENV === 'production', // With ALB and redirection, ensure cookies are sent only over HTTPS
+        secure: false,           // <— force false while using http://13.203.180.77
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 // 1 day
+        maxAge: 1000 * 60 * 60 * 24
     }
 }));
 
@@ -175,3 +175,4 @@ const PORT = global.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
