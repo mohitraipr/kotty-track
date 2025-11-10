@@ -162,8 +162,9 @@ async function searchByColumns(tableName, columns, searchTerm, primaryColumn, li
 async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn, res) {
   const { sql, params } = buildSearchQuery(tableName, columns, searchTerm, primaryColumn, null);
 
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await pool.getConnection();
     const queryStream = conn.query(sql, params).stream({ highWaterMark: 100 });
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
     const ws = workbook.addWorksheet(tableName);
@@ -180,25 +181,33 @@ async function streamSearchToExcel(tableName, columns, searchTerm, primaryColumn
       hasRow = true;
     });
 
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       queryStream.on('end', async () => {
-        if (!hasRow) {
-          ws.addRow(['No Data']).commit();
+        try {
+          if (!hasRow) {
+            ws.addRow(['No Data']).commit();
+          }
+          await workbook.commit();
+          resolve();
+        } catch (err) {
+          reject(err);
         }
-        await workbook.commit();
-        conn.release();
-        resolve();
       });
+
       queryStream.on('error', async err => {
         console.error('Error streaming export:', err);
-        try { await workbook.commit(); } catch (e) { /* ignore */ }
-        conn.release();
+        try {
+          await workbook.commit();
+        } catch (e) {
+          // ignore secondary commit errors
+        }
         reject(err);
       });
     });
-  } catch (err) {
-    conn.release();
-    throw err;
+  } finally {
+    if (conn) {
+      conn.release();
+    }
   }
 }
 
@@ -274,9 +283,23 @@ router.route('/search-dashboard')
           resultRows: rows
         });
       } else if (action === 'export') {
+        res.status(200);
         res.setHeader('Content-Disposition', `attachment; filename="${selectedTable}_export.xlsx"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        await streamSearchToExcel(selectedTable, chosenColumns, searchTerm, primaryColumn, res);
+        if (typeof res.flushHeaders === 'function') {
+          res.flushHeaders();
+        }
+
+        try {
+          await streamSearchToExcel(selectedTable, chosenColumns, searchTerm, primaryColumn, res);
+          res.end();
+        } catch (err) {
+          console.error('Error exporting data:', err);
+          if (!res.headersSent) {
+            return res.status(500).send('Error generating export');
+          }
+          res.end();
+        }
         return;
       } else {
         return res.redirect('/search-dashboard');
