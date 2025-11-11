@@ -380,18 +380,6 @@ router.post(
           throw createHttpError(409, 'No open jeans assembly bundles remain for this lot.');
         }
 
-        const [existing] = await connection.query(
-          `SELECT COUNT(*) AS already
-             FROM production_flow_events
-            WHERE stage = 'washing'
-              AND lot_id = ?`,
-          [lot.lot_id],
-        );
-
-        if (existing[0].already) {
-          throw createHttpError(409, 'This lot has already been processed for washing.');
-        }
-
         const [pieces] = await connection.query(
           `SELECT DISTINCT p.id   AS piece_id,
                           p.piece_code,
