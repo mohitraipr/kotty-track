@@ -133,7 +133,7 @@ app.use('/purchase', purchaseRoutes);
 app.use('/', skuRoutes);
 app.use('/api', apiAuthRoutes);
 app.use('/api', apiRoutes);
-app.use('/production', productionApiRoutes);
+app.use('/api', productionApiRoutes);
 app.use('/', featuresRoutes);
 
 // Home Route
@@ -177,5 +177,6 @@ const PORT = global.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
 
 
