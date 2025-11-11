@@ -108,23 +108,26 @@ async function ensureNoDuplicate(connection, stage, codeValue) {
   }
 }
 
-async function closeEvents(connection, { stage, lotId, bundleId, pieceId, closedByStage, closedByUserId, closedByUsername }) {
-  const params = [];
+async function closeEvents(
+  connection,
+  { stage, lotId, bundleId, pieceId, closedByStage, closedByUserId, closedByUsername },
+) {
+  const whereParams = [];
   let whereClause = 'stage = ? AND is_closed = 0';
-  params.push(stage);
+  whereParams.push(stage);
 
   if (bundleId) {
     whereClause += ' AND bundle_id = ?';
-    params.push(bundleId);
+    whereParams.push(bundleId);
   } else if (pieceId) {
     whereClause += ' AND piece_id = ?';
-    params.push(pieceId);
+    whereParams.push(pieceId);
   } else {
     whereClause += ' AND lot_id = ?';
-    params.push(lotId);
+    whereParams.push(lotId);
   }
 
-  params.push(closedByStage, closedByUserId, closedByUsername);
+  const params = [closedByStage, closedByUserId, closedByUsername, ...whereParams];
 
   const [result] = await connection.query(
     `UPDATE production_flow_events
