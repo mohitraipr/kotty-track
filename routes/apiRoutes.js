@@ -535,7 +535,7 @@ router.post(
           }
 
           const piecesInBundle = Math.min(numericBundleSize, remainingPieces);
-          const bundleCode = String(bundleSequence).padStart(6, '0');
+          const bundleCode = `${lotNumber}b${bundleSequence}`;
 
           const [bundleResult] = await conn.query(
             `
@@ -567,7 +567,7 @@ router.post(
                 'Piece code limit exceeded. Please reduce total pieces for this lot.',
               );
             }
-            const pieceCode = String(pieceSequence).padStart(8, '0');
+            const pieceCode = `${lotNumber}p${pieceSequence}`;
             pieceRows.push([lotId, bundleId, sizeId, pieceSequence, index, pieceCode]);
             pieceOutputs.push({
               pieceCode,
