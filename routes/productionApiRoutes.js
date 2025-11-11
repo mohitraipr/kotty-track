@@ -388,7 +388,7 @@ router.post(
           [lot.lot_id],
         );
 
-        if (existing[0].already) {
+        if (existing[0].already >= lot.total_pieces) {
           throw createHttpError(409, 'This lot has already been processed for washing.');
         }
 
