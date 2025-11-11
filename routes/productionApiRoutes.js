@@ -393,18 +393,26 @@ router.post(
         }
 
         const [pieces] = await connection.query(
-          `SELECT p.id   AS piece_id,
-                  p.piece_code,
-                  p.bundle_id,
-                  b.bundle_code
+          `SELECT DISTINCT p.id   AS piece_id,
+                          p.piece_code,
+                          p.bundle_id,
+                          b.bundle_code
              FROM api_lot_piece_codes p
-             INNER JOIN api_lot_bundles b ON b.id = p.bundle_id
+             INNER JOIN api_lot_bundles b
+                     ON b.id = p.bundle_id
+             INNER JOIN production_flow_events je
+                     ON je.bundle_id = p.bundle_id
+                    AND je.stage = 'jeans_assembly'
+                    AND je.is_closed = 0
             WHERE p.lot_id = ?`,
           [lot.lot_id],
         );
 
         if (!pieces.length) {
-          throw createHttpError(409, 'No piece codes found for this lot.');
+          throw createHttpError(
+            409,
+            'No open jeans assembly bundles available to close for this lot.',
+          );
         }
 
         const rowsToInsert = pieces.map(piece => [
