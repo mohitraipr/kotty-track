@@ -1,4 +1,4 @@
-const DEFAULT_PREFIX = 'api';
+const DEFAULT_PREFIX = 'ap';
 
 function extractPrefix(username) {
   if (!username || typeof username !== 'string') {
@@ -8,7 +8,7 @@ function extractPrefix(username) {
   if (!cleaned) {
     return DEFAULT_PREFIX;
   }
-  return cleaned.substring(0, 3).padEnd(3, 'x');
+  return cleaned.substring(0, 2).padEnd(2, 'x');
 }
 
 async function generateApiLotNumber(username, userId, conn) {
@@ -39,7 +39,7 @@ async function generateApiLotNumber(username, userId, conn) {
   }
 
   const nextCounter = counter + 1;
-  const numeric = String(nextCounter).padStart(5, '0');
+  const numeric = String(nextCounter);
 
   return `${prefix}${numeric}`;
 }
