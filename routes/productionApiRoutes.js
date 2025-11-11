@@ -23,6 +23,12 @@ const ROLE_STAGE_MAP = {
 };
 
 const STAGES = Object.values(ROLE_STAGE_MAP);
+const STAGES_REQUIRING_MASTER = new Set([
+  'back_pocket',
+  'stitching_master',
+  'jeans_assembly',
+  'finishing',
+]);
 
 function normaliseCode(input) {
   if (typeof input !== 'string') return '';
@@ -141,11 +147,71 @@ async function insertEventRows(connection, rows) {
     await connection.query(
       `INSERT INTO production_flow_events
          (stage, code_type, code_value, lot_id, bundle_id, piece_id, lot_number, bundle_code, piece_code, pieces_total,
-          user_id, user_username, user_role, remark)
+         user_id, user_username, user_role, master_id, master_name, remark)
        VALUES ?`,
       [chunk],
     );
   }
+}
+
+function parseMasterId(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw createHttpError(400, 'Invalid masterId provided.');
+  }
+
+  return parsed;
+}
+
+function normaliseMasterName(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+async function resolveUserMaster(connection, userId, payload) {
+  const masterIdRaw =
+    payload.masterId ??
+    payload.master_id ??
+    payload.masterID;
+  const masterNameRaw =
+    payload.masterName ??
+    payload.master_name ??
+    payload.mastername ??
+    payload.master;
+
+  const masterId = parseMasterId(masterIdRaw);
+  const masterName = normaliseMasterName(masterNameRaw);
+
+  if (!masterId && !masterName) {
+    throw createHttpError(400, 'Master selection is required for this stage.');
+  }
+
+  let query;
+  let params;
+
+  if (masterId) {
+    query =
+      'SELECT id, master_name FROM user_masters WHERE id = ? AND creator_user_id = ? LIMIT 1';
+    params = [masterId, userId];
+  } else {
+    query =
+      'SELECT id, master_name FROM user_masters WHERE creator_user_id = ? AND master_name = ? LIMIT 1';
+    params = [userId, masterName];
+  }
+
+  const [rows] = await connection.query(query, params);
+
+  if (!rows.length) {
+    throw createHttpError(404, 'Selected master was not found for the current user.');
+  }
+
+  return { masterId: rows[0].id, masterName: rows[0].master_name };
 }
 
 router.post(
@@ -162,6 +228,7 @@ router.post(
     const rawCode = req.body.code;
     const remark = normaliseRemark(req.body.remark);
     const code = normaliseCode(rawCode);
+    const requiresMaster = STAGES_REQUIRING_MASTER.has(stage);
 
     if (!code) {
       return res.status(400).json({ error: 'A valid code is required.' });
@@ -170,6 +237,10 @@ router.post(
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+
+      const masterDetails = requiresMaster
+        ? await resolveUserMaster(connection, user.id, req.body)
+        : { masterId: null, masterName: null };
 
       if (stage === 'back_pocket' || stage === 'stitching_master') {
         const bundle = await fetchBundleByCode(connection, code);
@@ -193,6 +264,8 @@ router.post(
           user.id,
           user.username,
           user.roleName,
+          masterDetails.masterId,
+          masterDetails.masterName,
           remark,
         ]]);
 
@@ -205,6 +278,8 @@ router.post(
             lotNumber: bundle.lot_number,
             bundleCode: bundle.bundle_code,
             pieces: bundle.pieces_in_bundle,
+            masterId: masterDetails.masterId,
+            masterName: masterDetails.masterName,
           },
         });
       }
@@ -246,6 +321,8 @@ router.post(
           user.id,
           user.username,
           user.roleName,
+          masterDetails.masterId,
+          masterDetails.masterName,
           remark,
         ]]);
 
@@ -275,6 +352,8 @@ router.post(
             bundleCode: bundle.bundle_code,
             pieces: bundle.pieces_in_bundle,
             closedPrevious: closed + closed2,
+            masterId: masterDetails.masterId,
+            masterName: masterDetails.masterName,
           },
         });
       }
@@ -339,6 +418,8 @@ router.post(
           user.id,
           user.username,
           user.roleName,
+          null,
+          null,
           remark,
         ]);
 
@@ -404,6 +485,8 @@ router.post(
           user.id,
           user.username,
           user.roleName,
+          null,
+          null,
           remark,
         ]]);
 
@@ -461,6 +544,8 @@ router.post(
           user.id,
           user.username,
           user.roleName,
+          masterDetails.masterId,
+          masterDetails.masterName,
           remark,
         ]]);
 
@@ -482,6 +567,8 @@ router.post(
             bundleCode: bundle.bundle_code,
             pieces: bundle.pieces_in_bundle,
             washingInClosed: closed,
+            masterId: masterDetails.masterId,
+            masterName: masterDetails.masterName,
           },
         });
       }
@@ -562,6 +649,7 @@ router.get(
                   lot_number AS lotNumber, bundle_code AS bundleCode, piece_code AS pieceCode,
                   pieces_total AS piecesTotal,
                   user_id AS userId, user_username AS userUsername, user_role AS userRole,
+                  master_id AS masterId, master_name AS masterName,
                   remark, is_closed AS isClosed,
                   closed_by_stage AS closedByStage,
                   closed_by_user_id AS closedByUserId,
@@ -586,6 +674,7 @@ router.get(
                   lot_number AS lotNumber, bundle_code AS bundleCode, piece_code AS pieceCode,
                   pieces_total AS piecesTotal,
                   user_id AS userId, user_username AS userUsername, user_role AS userRole,
+                  master_id AS masterId, master_name AS masterName,
                   remark, is_closed AS isClosed,
                   closed_by_stage AS closedByStage,
                   closed_by_user_id AS closedByUserId,
