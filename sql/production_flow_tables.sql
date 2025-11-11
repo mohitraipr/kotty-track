@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS production_flow_events (
   user_id BIGINT UNSIGNED NOT NULL,
   user_username VARCHAR(100) NOT NULL,
   user_role VARCHAR(64) NOT NULL,
+  master_id BIGINT UNSIGNED DEFAULT NULL,
+  master_name VARCHAR(255) DEFAULT NULL,
   remark VARCHAR(255) DEFAULT NULL,
   is_closed TINYINT(1) NOT NULL DEFAULT 0,
   closed_by_stage ENUM('back_pocket','stitching_master','jeans_assembly','washing','washing_in','finishing') DEFAULT NULL,
@@ -32,6 +34,13 @@ CREATE TABLE IF NOT EXISTS production_flow_events (
   CONSTRAINT fk_production_flow_bundle FOREIGN KEY (bundle_id) REFERENCES api_lot_bundles(id),
   CONSTRAINT fk_production_flow_piece FOREIGN KEY (piece_id) REFERENCES api_lot_piece_codes(id),
   CONSTRAINT fk_production_flow_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_production_flow_master FOREIGN KEY (master_id) REFERENCES user_masters(id) ON DELETE SET NULL,
   CONSTRAINT fk_production_flow_closed_user FOREIGN KEY (closed_by_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Migration snippet to add master tracking to an existing installation:
+-- ALTER TABLE production_flow_events
+--   ADD COLUMN master_id BIGINT UNSIGNED DEFAULT NULL AFTER user_role,
+--   ADD COLUMN master_name VARCHAR(255) DEFAULT NULL AFTER master_id,
+--   ADD CONSTRAINT fk_production_flow_master FOREIGN KEY (master_id) REFERENCES user_masters(id) ON DELETE SET NULL;
 
