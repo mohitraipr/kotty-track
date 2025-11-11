@@ -6,6 +6,10 @@ const generateApiLotNumber = require('../utils/generateApiLotNumber');
 
 const GENDERS = ['men', 'women', 'ladies', 'girls', 'boys'];
 const CATEGORIES = ['jeans', 'skirt', 'denimjacket'];
+const MASTER_CREATOR_ROLES = ['back_pocket', 'jeans_assembly', 'stitching_master'];
+const MASTER_NAME_MAX_LENGTH = 255;
+const MASTER_PHONE_MAX_LENGTH = 20;
+const MASTER_NOTES_MAX_LENGTH = 255;
 
 // Simple in-memory cache for rolls to avoid repeated DB reads
 let rollsCache = { data: null, expires: 0 };
@@ -637,6 +641,142 @@ router.post(
       if (conn) {
         conn.release();
       }
+    }
+  },
+);
+
+router.get(
+  '/masters',
+  isAuthenticated,
+  allowRoles(MASTER_CREATOR_ROLES),
+  async (req, res) => {
+    const userId = req.session?.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const [masters] = await pool.query(
+        `SELECT
+           id,
+           master_name AS masterName,
+           contact_number AS contactNumber,
+           notes,
+           creator_role AS creatorRole,
+           created_at AS createdAt,
+           updated_at AS updatedAt
+         FROM user_masters
+         WHERE creator_user_id = ?
+         ORDER BY created_at DESC`,
+        [userId],
+      );
+
+      return res.json(masters);
+    } catch (error) {
+      console.error('Error fetching user masters:', error);
+      return res.status(500).json({ error: 'Failed to fetch masters.' });
+    }
+  },
+);
+
+router.post(
+  '/masters',
+  isAuthenticated,
+  allowRoles(MASTER_CREATOR_ROLES),
+  async (req, res) => {
+    const user = req.session?.user;
+
+    if (!user?.id) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const payload = req.body || {};
+    const {
+      name,
+      contactNumber,
+      phone,
+      phoneNumber,
+      notes,
+      description,
+      masterName: bodyMasterName,
+      fullName,
+      contact,
+      mobile,
+      remarks,
+      note,
+    } = payload;
+
+    const rawName = name ?? bodyMasterName ?? fullName;
+    const masterName = typeof rawName === 'string' ? rawName.trim() : '';
+
+    if (!masterName) {
+      return res.status(400).json({ error: 'Master name is required.' });
+    }
+
+    if (masterName.length > MASTER_NAME_MAX_LENGTH) {
+      return res.status(400).json({
+        error: `Master name must be at most ${MASTER_NAME_MAX_LENGTH} characters long.`,
+      });
+    }
+
+    const rawContact = contactNumber ?? phone ?? phoneNumber ?? contact ?? mobile;
+    const contactValue = typeof rawContact === 'string' ? rawContact.trim() : '';
+    if (contactValue && contactValue.length > MASTER_PHONE_MAX_LENGTH) {
+      return res.status(400).json({
+        error: `Contact number must be at most ${MASTER_PHONE_MAX_LENGTH} characters long.`,
+      });
+    }
+
+    const rawNotes = notes ?? description ?? remarks ?? note;
+    const noteValue = typeof rawNotes === 'string' ? rawNotes.trim() : '';
+    if (noteValue && noteValue.length > MASTER_NOTES_MAX_LENGTH) {
+      return res.status(400).json({
+        error: `Notes must be at most ${MASTER_NOTES_MAX_LENGTH} characters long.`,
+      });
+    }
+
+    try {
+      const [[existing]] = await pool.query(
+        `SELECT id FROM user_masters WHERE creator_user_id = ? AND master_name = ?`,
+        [user.id, masterName],
+      );
+
+      if (existing) {
+        return res.status(409).json({
+          error: 'A master with this name already exists for the current user.',
+        });
+      }
+
+      const [result] = await pool.query(
+        `INSERT INTO user_masters
+          (creator_user_id, creator_role, master_name, contact_number, notes)
+         VALUES (?, ?, ?, ?, ?)`,
+        [user.id, user.roleName, masterName, contactValue || null, noteValue || null],
+      );
+
+      const insertId = result.insertId;
+      const [[createdMaster]] = await pool.query(
+        `SELECT
+           id,
+           master_name AS masterName,
+           contact_number AS contactNumber,
+           notes,
+           creator_role AS creatorRole,
+           created_at AS createdAt,
+           updated_at AS updatedAt
+         FROM user_masters
+         WHERE id = ?`,
+        [insertId],
+      );
+
+      return res.status(201).json({
+        message: 'Master created successfully.',
+        master: createdMaster,
+      });
+    } catch (error) {
+      console.error('Error creating user master:', error);
+      return res.status(500).json({ error: 'Failed to create master.' });
     }
   },
 );
