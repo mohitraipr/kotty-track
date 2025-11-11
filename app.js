@@ -96,6 +96,7 @@ const skuRoutes = require('./routes/skuRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const apiAuthRoutes = require('./routes/apiAuthRoutes');
 const apiRoutes = require('./routes/apiRoutes');
+const productionApiRoutes = require('./routes/productionApiRoutes');
 const featuresRoutes = require('./routes/featuresRoutes');
 
 // Use Routes
@@ -132,6 +133,7 @@ app.use('/purchase', purchaseRoutes);
 app.use('/', skuRoutes);
 app.use('/api', apiAuthRoutes);
 app.use('/api', apiRoutes);
+app.use('/production', productionApiRoutes);
 app.use('/', featuresRoutes);
 
 // Home Route
