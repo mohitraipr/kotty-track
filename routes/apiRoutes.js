@@ -4,6 +4,9 @@ const { pool } = require('../config/db');
 const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const generateApiLotNumber = require('../utils/generateApiLotNumber');
 
+const GENDERS = ['men', 'women', 'ladies', 'girls', 'boys'];
+const CATEGORIES = ['jeans', 'skirt', 'denimjacket'];
+
 // Simple in-memory cache for rolls to avoid repeated DB reads
 let rollsCache = { data: null, expires: 0 };
 
@@ -114,6 +117,13 @@ router.get(
     }
   }
 );
+
+router.get('/filters', isAuthenticated, (req, res) => {
+  res.json({
+    genders: GENDERS,
+    categories: CATEGORIES,
+  });
+});
 
 router.get(
   '/lots',
