@@ -118,7 +118,7 @@ router.get(
   }
 );
 
-router.get('/filters', isAuthenticated, (req, res) => {
+router.get('/filters', isAuthenticated,allowRoles(['cutting_manager']), (req, res) => {
   res.json({
     genders: GENDERS,
     categories: CATEGORIES,
