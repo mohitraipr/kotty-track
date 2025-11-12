@@ -23,12 +23,7 @@ const ROLE_STAGE_MAP = {
 };
 
 const STAGES = Object.values(ROLE_STAGE_MAP);
-const STAGES_REQUIRING_MASTER = new Set([
-  'back_pocket',
-  'stitching_master',
-  'jeans_assembly',
-  'finishing',
-]);
+const STAGES_REQUIRING_MASTER = new Set(['back_pocket', 'stitching_master']);
 
 function normaliseCode(input) {
   if (typeof input !== 'string') return '';
@@ -54,6 +49,7 @@ async function fetchBundleByCode(connection, bundleCode) {
             b.pieces_in_bundle,
             b.lot_id,
             b.size_id,
+            b.bundle_sequence,
             s.size_label,
             s.pattern_count,
             s.bundle_count,
@@ -75,6 +71,7 @@ async function fetchPieceByCode(connection, pieceCode) {
             p.lot_id,
             b.id AS bundle_id,
             b.bundle_code,
+            b.bundle_sequence,
             b.size_id,
             s.size_label,
             l.lot_number
@@ -233,6 +230,92 @@ function parsePieceCodeList(raw) {
   return Array.from(unique.values());
 }
 
+function coerceArrayLike(input) {
+  if (input === undefined || input === null) {
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input;
+  }
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+      return [parsed];
+    } catch (err) {
+      return trimmed.split(',');
+    }
+  }
+
+  return [input];
+}
+
+function extractBundleSelection(assignment) {
+  const bundleIds = new Set();
+  const bundleCodes = new Set();
+  const bundleSequences = new Set();
+
+  const addNumbers = value => {
+    for (const entry of coerceArrayLike(value)) {
+      if (entry === undefined || entry === null || entry === '') continue;
+      const parsed = Number.parseInt(entry, 10);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        bundleIds.add(parsed);
+        bundleSequences.add(parsed);
+      }
+    }
+  };
+
+  const addCodes = value => {
+    for (const entry of coerceArrayLike(value)) {
+      const code = normaliseCode(entry);
+      if (code) {
+        bundleCodes.add(code);
+      }
+    }
+  };
+
+  addNumbers(assignment.bundleId ?? assignment.bundle_id);
+  addNumbers(assignment.bundleIds ?? assignment.bundle_ids);
+  addNumbers(assignment.bundleSequence ?? assignment.bundle_sequence);
+  addNumbers(assignment.bundleSequences ?? assignment.bundle_sequences);
+  addNumbers(assignment.pattern ?? assignment.pattern_number);
+  addNumbers(assignment.patterns ?? assignment.patternNumbers ?? assignment.pattern_numbers);
+
+  addCodes(assignment.bundleCode ?? assignment.bundle_code);
+  addCodes(assignment.bundleCodes ?? assignment.bundle_codes);
+
+  for (const entry of coerceArrayLike(assignment.bundles)) {
+    if (!entry && entry !== 0) continue;
+    if (typeof entry === 'object') {
+      addNumbers(entry.id ?? entry.bundleId ?? entry.bundle_id);
+      addNumbers(entry.sequence ?? entry.bundleSequence ?? entry.bundle_sequence ?? entry.pattern);
+      addCodes(entry.code ?? entry.bundleCode ?? entry.bundle_code);
+    } else if (typeof entry === 'number') {
+      addNumbers(entry);
+    } else {
+      const code = normaliseCode(entry);
+      if (code) {
+        bundleCodes.add(code);
+      } else {
+        addNumbers(entry);
+      }
+    }
+  }
+
+  const hasSelection = bundleIds.size > 0 || bundleCodes.size > 0 || bundleSequences.size > 0;
+  return { hasSelection, bundleIds, bundleCodes, bundleSequences };
+}
+
 async function maybeResolveUserMaster(connection, userId, payload, { allowMissing = false } = {}) {
   if (!payload || typeof payload !== 'object') {
     if (allowMissing) return null;
@@ -316,6 +399,7 @@ async function insertEventRows(connection, rows) {
       row.piece_id ?? row.pieceId ?? null,
       row.lot_number ?? row.lotNumber,
       row.bundle_code ?? row.bundleCode ?? null,
+      row.bundle_sequence ?? row.bundleSequence ?? null,
       row.size_label ?? row.sizeLabel ?? null,
       row.piece_code ?? row.pieceCode ?? null,
       row.pattern_count ?? row.patternCount ?? null,
@@ -338,7 +422,7 @@ async function insertEventRows(connection, rows) {
     await connection.query(
       `INSERT INTO production_flow_events
          (stage, code_type, code_value, lot_id, bundle_id, size_id, piece_id,
-          lot_number, bundle_code, size_label, piece_code, pattern_count, bundle_count, pieces_total,
+          lot_number, bundle_code, bundle_sequence, size_label, piece_code, pattern_count, bundle_count, pieces_total,
           user_id, user_username, user_role, master_id, master_name, remark, event_status,
           is_closed, closed_by_stage, closed_by_user_id, closed_by_user_username, closed_at)
        VALUES ?`,
@@ -349,7 +433,7 @@ async function insertEventRows(connection, rows) {
 
 async function insertRejectionEvents(connection, stage, user, pieceCodes, remark) {
   if (!pieceCodes.length) {
-    return { inserted: 0, codes: [], pieces: [] };
+    return { inserted: 0, updated: 0, codes: [], pieces: [] };
   }
 
   const [pieces] = await connection.query(
@@ -359,6 +443,7 @@ async function insertRejectionEvents(connection, stage, user, pieceCodes, remark
             p.size_id,
             p.bundle_id,
             b.bundle_code,
+            b.bundle_sequence,
             s.size_label,
             l.lot_number
        FROM api_lot_piece_codes p
@@ -381,54 +466,85 @@ async function insertRejectionEvents(connection, stage, user, pieceCodes, remark
 
   const pieceIds = pieces.map(p => p.piece_id);
   const [existing] = await connection.query(
-    `SELECT piece_id
+    `SELECT id, piece_id
        FROM production_flow_events
       WHERE stage = ?
         AND piece_id IN (?)`,
     [stage, pieceIds],
   );
 
-  if (existing.length) {
-    const existingIds = new Set(existing.map(row => row.piece_id));
-    const duplicates = pieces
-      .filter(p => existingIds.has(p.piece_id))
-      .map(p => p.piece_code);
-    throw createHttpError(
-      409,
-      `Piece codes already submitted for ${stage}: ${duplicates.join(', ')}`,
+  const existingMap = new Map(existing.map(row => [row.piece_id, row.id]));
+  const now = new Date();
+
+  const toInsert = [];
+  const toUpdateIds = [];
+
+  for (const piece of pieces) {
+    const existingId = existingMap.get(piece.piece_id);
+    if (existingId) {
+      toUpdateIds.push(existingId);
+    } else {
+      toInsert.push({
+        stage,
+        code_type: 'piece',
+        code_value: piece.piece_code,
+        lot_id: piece.lot_id,
+        bundle_id: piece.bundle_id,
+        size_id: piece.size_id,
+        piece_id: piece.piece_id,
+        lot_number: piece.lot_number,
+        bundle_code: piece.bundle_code,
+        bundle_sequence: piece.bundle_sequence,
+        size_label: piece.size_label,
+        piece_code: piece.piece_code,
+        pieces_total: 1,
+        user_id: user.id,
+        user_username: user.username,
+        user_role: user.roleName,
+        master_id: null,
+        master_name: null,
+        remark,
+        event_status: 'rejected',
+        is_closed: true,
+        closed_by_stage: stage,
+        closed_by_user_id: user.id,
+        closed_by_user_username: user.username,
+        closed_at: now,
+      });
+    }
+  }
+
+  if (toInsert.length) {
+    await insertEventRows(connection, toInsert);
+  }
+
+  if (toUpdateIds.length) {
+    const updateRemark = remark && remark.trim() ? remark : null;
+    const remarkFragment = updateRemark ? 'remark = ?,' : '';
+    const params = updateRemark
+      ? [updateRemark, stage, user.id, user.username, toUpdateIds]
+      : [stage, user.id, user.username, toUpdateIds];
+
+    await connection.query(
+      `UPDATE production_flow_events
+          SET ${remarkFragment}
+              event_status = 'rejected',
+              is_closed = 1,
+              closed_at = NOW(),
+              closed_by_stage = ?,
+              closed_by_user_id = ?,
+              closed_by_user_username = ?
+        WHERE id IN (?)`,
+      params,
     );
   }
 
-  const now = new Date();
-  const rows = pieces.map(piece => ({
-    stage,
-    code_type: 'piece',
-    code_value: piece.piece_code,
-    lot_id: piece.lot_id,
-    bundle_id: piece.bundle_id,
-    size_id: piece.size_id,
-    piece_id: piece.piece_id,
-    lot_number: piece.lot_number,
-    bundle_code: piece.bundle_code,
-    size_label: piece.size_label,
-    piece_code: piece.piece_code,
-    pieces_total: 1,
-    user_id: user.id,
-    user_username: user.username,
-    user_role: user.roleName,
-    master_id: null,
-    master_name: null,
-    remark,
-    event_status: 'rejected',
-    is_closed: true,
-    closed_by_stage: stage,
-    closed_by_user_id: user.id,
-    closed_by_user_username: user.username,
-    closed_at: now,
-  }));
-
-  await insertEventRows(connection, rows);
-  return { inserted: rows.length, codes: pieceCodes, pieces };
+  return {
+    inserted: toInsert.length,
+    updated: toUpdateIds.length,
+    codes: pieceCodes,
+    pieces,
+  };
 }
 
 function parseMasterId(value) {
@@ -507,7 +623,7 @@ router.post(
     const code = normaliseCode(rawCode);
     const stageRequiresMaster = STAGES_REQUIRING_MASTER.has(stage);
     const rejectedPiecesInput =
-      stage === 'jeans_assembly' || stage === 'washing_in'
+      stage === 'jeans_assembly' || stage === 'washing_in' || stage === 'finishing'
         ? parsePieceCodeList(
             req.body.rejectedPieces ??
               req.body.rejectPieces ??
@@ -552,10 +668,9 @@ router.post(
           throw createHttpError(400, 'No sizes found to assign for this lot.');
         }
 
-        const usedSizeIds = new Set();
+        const assignedBundleIds = new Set();
         const eventRows = [];
         const summary = [];
-        const bundleCodeMap = new Map();
 
         for (const assignment of assignments) {
           const sizeIdRaw = assignment.sizeId ?? assignment.size_id ?? assignment.id;
@@ -579,10 +694,10 @@ router.post(
             throw createHttpError(404, 'One or more sizes were not found in this lot.');
           }
 
-          if (usedSizeIds.has(size.size_id)) {
+          if (!Array.isArray(size.bundles) || !size.bundles.length) {
             throw createHttpError(
               409,
-              `Size ${size.size_label} has been provided multiple times in the request.`,
+              `No bundles were generated for size ${size.size_label}.`,
             );
           }
 
@@ -600,23 +715,50 @@ router.post(
             }
           }
 
-          if (!Array.isArray(size.bundles) || !size.bundles.length) {
+          const selection = extractBundleSelection(assignment);
+          let targetBundles = [];
+
+          if (!selection.hasSelection) {
+            targetBundles = size.bundles.filter(bundle => !assignedBundleIds.has(bundle.bundle_id));
+          } else {
+            targetBundles = size.bundles.filter(bundle => {
+              const code = normaliseCode(bundle.bundle_code);
+              const sequence =
+                bundle.bundle_sequence !== undefined && bundle.bundle_sequence !== null
+                  ? Number.parseInt(bundle.bundle_sequence, 10)
+                  : null;
+              return (
+                selection.bundleIds.has(bundle.bundle_id) ||
+                (sequence !== null && selection.bundleSequences.has(sequence)) ||
+                selection.bundleCodes.has(code)
+              );
+            });
+          }
+
+          if (!targetBundles.length) {
+            if (selection.hasSelection) {
+              throw createHttpError(
+                404,
+                `No bundles matched the selection for size ${size.size_label}.`,
+              );
+            }
+
             throw createHttpError(
               409,
-              `No bundles were generated for size ${size.size_label}.`,
+              `All bundles for size ${size.size_label} are already assigned.`,
             );
           }
 
-          usedSizeIds.add(size.size_id);
-          summary.push({
-            sizeId: size.size_id,
-            sizeLabel: size.size_label,
-            bundles: size.bundles.length,
-            masterId: masterDetails.masterId ?? null,
-            masterName: masterDetails.masterName ?? null,
-          });
+          const bundleDetails = [];
+          for (const bundle of targetBundles) {
+            if (assignedBundleIds.has(bundle.bundle_id)) {
+              throw createHttpError(
+                409,
+                `Bundle ${bundle.bundle_code} has been provided multiple times in the request.`,
+              );
+            }
+            assignedBundleIds.add(bundle.bundle_id);
 
-          for (const bundle of size.bundles) {
             eventRows.push({
               stage,
               code_type: 'bundle',
@@ -626,6 +768,7 @@ router.post(
               size_id: size.size_id,
               lot_number: lot.lot_number,
               bundle_code: bundle.bundle_code,
+              bundle_sequence: bundle.bundle_sequence,
               size_label: size.size_label,
               pattern_count: size.pattern_count,
               bundle_count: size.bundle_count,
@@ -637,15 +780,30 @@ router.post(
               master_name: masterDetails.masterName ?? null,
               remark,
             });
-            bundleCodeMap.set(bundle.bundle_id, bundle.bundle_code);
+
+            bundleDetails.push({
+              bundleId: bundle.bundle_id,
+              bundleCode: bundle.bundle_code,
+              bundleSequence: bundle.bundle_sequence,
+              pieces: bundle.pieces_in_bundle,
+            });
           }
+
+          summary.push({
+            sizeId: size.size_id,
+            sizeLabel: size.size_label,
+            bundleCount: bundleDetails.length,
+            bundleDetails,
+            masterId: masterDetails.masterId ?? null,
+            masterName: masterDetails.masterName ?? null,
+          });
         }
 
         if (!eventRows.length) {
           throw createHttpError(400, 'No bundle assignments could be generated for this request.');
         }
 
-        const bundleIds = Array.from(new Set(eventRows.map(r => r.bundle_id).filter(Boolean)));
+        const bundleIds = Array.from(assignedBundleIds.values());
         if (bundleIds.length) {
           const [existing] = await connection.query(
             `SELECT bundle_id
@@ -656,13 +814,22 @@ router.post(
           );
 
           if (existing.length) {
-            const duplicates = existing
-              .map(row => bundleCodeMap.get(row.bundle_id))
+            const existingIds = new Set(existing.map(row => row.bundle_id));
+            const duplicates = Array.from(assignedBundleIds)
+              .filter(id => existingIds.has(id))
+              .map(id => {
+                const match = summary
+                  .flatMap(entry => entry.bundleDetails)
+                  .find(detail => detail.bundleId === id);
+                return match?.bundleCode;
+              })
               .filter(Boolean);
-            throw createHttpError(
-              409,
-              `Bundles already submitted for this stage: ${duplicates.join(', ')}`,
-            );
+            if (duplicates.length) {
+              throw createHttpError(
+                409,
+                `Bundles already submitted for this stage: ${duplicates.join(', ')}`,
+              );
+            }
           }
         }
 
@@ -720,6 +887,7 @@ router.post(
             size_id: bundle.size_id,
             lot_number: bundle.lot_number,
             bundle_code: bundle.bundle_code,
+            bundle_sequence: bundle.bundle_sequence,
             size_label: bundle.size_label,
             pattern_count: bundle.pattern_count,
             bundle_count: bundle.bundle_count,
@@ -749,7 +917,7 @@ router.post(
           });
         }
 
-        let rejectionResult = { inserted: 0, codes: [], pieces: [] };
+        let rejectionResult = { inserted: 0, updated: 0, codes: [], pieces: [] };
         if (rejectedPiecesInput.length) {
           rejectionResult = await insertRejectionEvents(
             connection,
@@ -760,7 +928,7 @@ router.post(
           );
         }
 
-        if (!bundle && rejectionResult.inserted === 0) {
+        if (!bundle && rejectionResult.inserted === 0 && rejectionResult.updated === 0) {
           throw createHttpError(400, 'Bundle code or rejected piece codes are required.');
         }
 
@@ -782,6 +950,8 @@ router.post(
             masterId: masterDetails.masterId,
             masterName: masterDetails.masterName,
             rejectedPieces: rejectionResult.codes,
+            rejectionInserted: rejectionResult.inserted,
+            rejectionUpdated: rejectionResult.updated,
             closedBackPocket,
             closedStitching,
           },
@@ -825,7 +995,8 @@ router.post(
                           p.bundle_id,
                           p.size_id,
                           s.size_label,
-                          b.bundle_code
+                          b.bundle_code,
+                          b.bundle_sequence
              FROM api_lot_piece_codes p
              INNER JOIN api_lot_bundles b
                      ON b.id = p.bundle_id
@@ -856,6 +1027,7 @@ router.post(
           piece_id: piece.piece_id,
           lot_number: lot.lot_number,
           bundle_code: piece.bundle_code,
+          bundle_sequence: piece.bundle_sequence,
           size_label: piece.size_label,
           piece_code: piece.piece_code,
           pieces_total: 1,
@@ -926,6 +1098,7 @@ router.post(
             piece_id: piece.piece_id,
             lot_number: piece.lot_number,
             bundle_code: piece.bundle_code,
+            bundle_sequence: piece.bundle_sequence,
             size_label: piece.size_label,
             piece_code: piece.piece_code,
             pieces_total: 1,
@@ -946,7 +1119,7 @@ router.post(
           });
         }
 
-        let rejectionResult = { inserted: 0, codes: [], pieces: [] };
+        let rejectionResult = { inserted: 0, updated: 0, codes: [], pieces: [] };
         if (rejectedPiecesInput.length) {
           rejectionResult = await insertRejectionEvents(
             connection,
@@ -967,7 +1140,7 @@ router.post(
           }
         }
 
-        if (!piece && rejectionResult.inserted === 0) {
+        if (!piece && rejectionResult.inserted === 0 && rejectionResult.updated === 0) {
           throw createHttpError(400, 'Piece code or rejected piece codes are required.');
         }
 
@@ -987,57 +1160,78 @@ router.post(
             bundleCode: responseBundleCode,
             pieceCode: responsePieceCode,
             rejectedPieces: rejectionResult.codes,
+            rejectionInserted: rejectionResult.inserted,
+            rejectionUpdated: rejectionResult.updated,
           },
         });
       }
 
       if (stage === 'finishing') {
-        const bundle = await fetchBundleByCode(connection, code);
-        if (!bundle) {
+        const bundle = code ? await fetchBundleByCode(connection, code) : null;
+        if (code && !bundle) {
           throw createHttpError(404, 'Bundle code not found.');
         }
 
-        await ensureNoDuplicate(connection, stage, code);
+        let washingInClosed = 0;
+        if (bundle) {
+          await ensureNoDuplicate(connection, stage, code);
 
-        const [[counts]] = await connection.query(
-          `SELECT
-              (SELECT COUNT(*) FROM api_lot_piece_codes WHERE bundle_id = ?) AS totalPieces,
-              (SELECT COUNT(*) FROM production_flow_events WHERE stage = 'washing_in' AND bundle_id = ?) AS washingInPieces`,
-          [bundle.bundle_id, bundle.bundle_id],
-        );
+          const [[counts]] = await connection.query(
+            `SELECT
+                (SELECT COUNT(*) FROM api_lot_piece_codes WHERE bundle_id = ?) AS totalPieces,
+                (SELECT COUNT(*) FROM production_flow_events WHERE stage = 'washing_in' AND bundle_id = ?) AS washingInPieces`,
+            [bundle.bundle_id, bundle.bundle_id],
+          );
 
-        if (!counts.washingInPieces || counts.totalPieces !== counts.washingInPieces) {
-          throw createHttpError(409, 'All pieces must be recorded in washing_in before finishing.');
+          if (!counts.washingInPieces || counts.totalPieces !== counts.washingInPieces) {
+            throw createHttpError(409, 'All pieces must be recorded in washing_in before finishing.');
+          }
+
+          await insertEventRows(connection, [{
+            stage,
+            code_type: 'bundle',
+            code_value: code,
+            lot_id: bundle.lot_id,
+            bundle_id: bundle.bundle_id,
+            size_id: bundle.size_id,
+            lot_number: bundle.lot_number,
+            bundle_code: bundle.bundle_code,
+            bundle_sequence: bundle.bundle_sequence,
+            size_label: bundle.size_label,
+            pattern_count: bundle.pattern_count,
+            bundle_count: bundle.bundle_count,
+            pieces_total: bundle.pieces_in_bundle,
+            user_id: user.id,
+            user_username: user.username,
+            user_role: user.roleName,
+            master_id: masterDetails.masterId,
+            master_name: masterDetails.masterName,
+            remark,
+          }]);
+
+          washingInClosed = await closeEvents(connection, {
+            stage: 'washing_in',
+            bundleId: bundle.bundle_id,
+            closedByStage: 'finishing',
+            closedByUserId: user.id,
+            closedByUsername: user.username,
+          });
         }
 
-        await insertEventRows(connection, [{
-          stage,
-          code_type: 'bundle',
-          code_value: code,
-          lot_id: bundle.lot_id,
-          bundle_id: bundle.bundle_id,
-          size_id: bundle.size_id,
-          lot_number: bundle.lot_number,
-          bundle_code: bundle.bundle_code,
-          size_label: bundle.size_label,
-          pattern_count: bundle.pattern_count,
-          bundle_count: bundle.bundle_count,
-          pieces_total: bundle.pieces_in_bundle,
-          user_id: user.id,
-          user_username: user.username,
-          user_role: user.roleName,
-          master_id: masterDetails.masterId,
-          master_name: masterDetails.masterName,
-          remark,
-        }]);
+        let rejectionResult = { inserted: 0, updated: 0, codes: [], pieces: [] };
+        if (rejectedPiecesInput.length) {
+          rejectionResult = await insertRejectionEvents(
+            connection,
+            stage,
+            user,
+            rejectedPiecesInput,
+            remark,
+          );
+        }
 
-        const closed = await closeEvents(connection, {
-          stage: 'washing_in',
-          bundleId: bundle.bundle_id,
-          closedByStage: 'finishing',
-          closedByUserId: user.id,
-          closedByUsername: user.username,
-        });
+        if (!bundle && rejectionResult.inserted === 0 && rejectionResult.updated === 0) {
+          throw createHttpError(400, 'Bundle code or rejected piece codes are required.');
+        }
 
         await connection.commit();
 
@@ -1045,12 +1239,15 @@ router.post(
           success: true,
           stage,
           data: {
-            lotNumber: bundle.lot_number,
-            bundleCode: bundle.bundle_code,
-            pieces: bundle.pieces_in_bundle,
-            washingInClosed: closed,
+            lotNumber: bundle ? bundle.lot_number : rejectionResult.pieces[0]?.lot_number || null,
+            bundleCode: bundle ? bundle.bundle_code : null,
+            pieces: bundle ? bundle.pieces_in_bundle : null,
+            washingInClosed,
             masterId: masterDetails.masterId,
             masterName: masterDetails.masterName,
+            rejectedPieces: rejectionResult.codes,
+            rejectionInserted: rejectionResult.inserted,
+            rejectionUpdated: rejectionResult.updated,
           },
         });
       }
@@ -1128,7 +1325,8 @@ router.get(
         const [rows] = await pool.query(
           `SELECT id, stage, code_type AS codeType, code_value AS codeValue,
                   lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, piece_id AS pieceId,
-                  lot_number AS lotNumber, bundle_code AS bundleCode, size_label AS sizeLabel, piece_code AS pieceCode,
+                  lot_number AS lotNumber, bundle_code AS bundleCode, bundle_sequence AS bundleSequence,
+                  size_label AS sizeLabel, piece_code AS pieceCode,
                   pattern_count AS patternCount, bundle_count AS bundleCount, pieces_total AS piecesTotal,
                   user_id AS userId, user_username AS userUsername, user_role AS userRole,
                   master_id AS masterId, master_name AS masterName,
@@ -1153,7 +1351,8 @@ router.get(
         const [rows] = await pool.query(
           `SELECT id, stage, code_type AS codeType, code_value AS codeValue,
                   lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, piece_id AS pieceId,
-                  lot_number AS lotNumber, bundle_code AS bundleCode, size_label AS sizeLabel, piece_code AS pieceCode,
+                  lot_number AS lotNumber, bundle_code AS bundleCode, bundle_sequence AS bundleSequence,
+                  size_label AS sizeLabel, piece_code AS pieceCode,
                   pattern_count AS patternCount, bundle_count AS bundleCount, pieces_total AS piecesTotal,
                   user_id AS userId, user_username AS userUsername, user_role AS userRole,
                   master_id AS masterId, master_name AS masterName,
