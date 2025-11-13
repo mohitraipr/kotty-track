@@ -358,6 +358,10 @@ function normaliseRollEntry(entry) {
   return { rollNo, weightUsed, layers };
 }
 
+// Lot creation now materialises explicit pattern records per (lot,size). For every
+// size we duplicate the layer count across each pattern, generate bundles within
+// that pattern, and link bundles -> patterns. This keeps the public API identical
+// while making downstream pattern-wise assignments trivial.
 router.post(
   '/lots',
   isAuthenticated,
@@ -425,12 +429,14 @@ router.post(
 
     const computedSizes = normalisedSizes.map((entry) => {
       const totalPiecesForSize = entry.patternCount * totalLayers;
-      const bundleCount = Math.max(1, Math.ceil(totalPiecesForSize / numericBundleSize));
+      const bundlesPerPattern = Math.max(1, Math.ceil(totalLayers / numericBundleSize));
+      const bundleCount = bundlesPerPattern * entry.patternCount;
 
       return {
         ...entry,
         totalPieces: totalPiecesForSize,
         bundleCount,
+        bundlesPerPattern,
       };
     });
 
@@ -508,6 +514,7 @@ router.post(
 
       const bundleOutputs = [];
       const pieceOutputs = [];
+      const patternOutputs = [];
       const pieceRows = [];
       let bundleSequence = 1;
       let pieceSequence = 1;
@@ -528,63 +535,106 @@ router.post(
         );
 
         const sizeId = sizeResult.insertId;
-        let remainingPieces = sizeEntry.totalPieces;
         let sizeBundleIndex = 1;
 
-        while (remainingPieces > 0) {
-          if (bundleSequence > 999999) {
-            throw createClientError(
-              'Bundle code limit exceeded. Please reduce bundle size or split the lot.',
-            );
-          }
+        const sizePatterns = [];
 
-          const piecesInBundle = Math.min(numericBundleSize, remainingPieces);
-          const bundleCode = `${lotNumber}b${bundleSequence}`;
-
-          const [bundleResult] = await conn.query(
+        for (let patternNo = 1; patternNo <= sizeEntry.patternCount; patternNo += 1) {
+          const [patternResult] = await conn.query(
             `
-              INSERT INTO api_lot_bundles
-                (lot_id, size_id, bundle_sequence, size_bundle_index, bundle_code, pieces_in_bundle)
-              VALUES (?, ?, ?, ?, ?, ?)
+              INSERT INTO api_lot_size_patterns (lot_id, size_id, pattern_no, pieces_total)
+              VALUES (?, ?, ?, ?)
             `,
-            [
-              lotId,
-              sizeId,
-              bundleSequence,
-              sizeBundleIndex,
-              bundleCode,
-              piecesInBundle,
-            ],
+            [lotId, sizeId, patternNo, totalLayers],
           );
 
-          const bundleId = bundleResult.insertId;
+          const patternId = patternResult.insertId;
+          let remainingPieces = totalLayers;
+          const patternBundles = [];
 
-          bundleOutputs.push({
-            bundleCode,
-            sizeLabel: sizeEntry.sizeLabel,
-            pieces: piecesInBundle,
-          });
-
-          for (let index = 1; index <= piecesInBundle; index += 1) {
-            if (pieceSequence > 99999999) {
+          while (remainingPieces > 0) {
+            if (bundleSequence > 999999) {
               throw createClientError(
-                'Piece code limit exceeded. Please reduce total pieces for this lot.',
+                'Bundle code limit exceeded. Please reduce bundle size or split the lot.',
               );
             }
-            const pieceCode = `${lotNumber}p${pieceSequence}`;
-            pieceRows.push([lotId, bundleId, sizeId, pieceSequence, index, pieceCode]);
-            pieceOutputs.push({
-              pieceCode,
+
+            const piecesInBundle = Math.min(numericBundleSize, remainingPieces);
+            const bundleCode = `${lotNumber}b${bundleSequence}`;
+
+            const [bundleResult] = await conn.query(
+              `
+                INSERT INTO api_lot_bundles
+                  (lot_id, size_id, pattern_id, bundle_sequence, size_bundle_index, bundle_code, pieces_in_bundle)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `,
+              [
+                lotId,
+                sizeId,
+                patternId,
+                bundleSequence,
+                sizeBundleIndex,
+                bundleCode,
+                piecesInBundle,
+              ],
+            );
+
+            const bundleId = bundleResult.insertId;
+
+            const bundleSummary = {
+              bundleId,
               bundleCode,
               sizeLabel: sizeEntry.sizeLabel,
+              patternNo,
+              patternId,
+              pieces: piecesInBundle,
+            };
+
+            bundleOutputs.push(bundleSummary);
+            patternBundles.push({
+              bundleId,
+              bundleCode,
+              bundleSequence,
+              piecesInBundle,
             });
-            pieceSequence += 1;
+
+            for (let index = 1; index <= piecesInBundle; index += 1) {
+              if (pieceSequence > 99999999) {
+                throw createClientError(
+                  'Piece code limit exceeded. Please reduce total pieces for this lot.',
+                );
+              }
+              const pieceCode = `${lotNumber}p${pieceSequence}`;
+              pieceRows.push([lotId, bundleId, sizeId, pieceSequence, index, pieceCode]);
+              pieceOutputs.push({
+                pieceCode,
+                bundleCode,
+                sizeLabel: sizeEntry.sizeLabel,
+                patternNo,
+                patternId,
+              });
+              pieceSequence += 1;
+            }
+
+            remainingPieces -= piecesInBundle;
+            bundleSequence += 1;
+            sizeBundleIndex += 1;
           }
 
-          remainingPieces -= piecesInBundle;
-          bundleSequence += 1;
-          sizeBundleIndex += 1;
+          sizePatterns.push({
+            patternId,
+            patternNo,
+            piecesTotal: totalLayers,
+            bundleCount: patternBundles.length,
+            bundles: patternBundles,
+          });
         }
+
+        patternOutputs.push({
+          sizeId,
+          sizeLabel: sizeEntry.sizeLabel,
+          patterns: sizePatterns,
+        });
       }
 
       if (pieceRows.length) {
@@ -618,9 +668,15 @@ router.post(
           totalBundles,
           totalPieces,
           totalWeight,
-          sizes: computedSizes,
+          sizes: computedSizes.map((size) => ({
+            sizeLabel: size.sizeLabel,
+            patternCount: size.patternCount,
+            totalPieces: size.totalPieces,
+            bundleCount: size.bundleCount,
+          })),
           bundles: bundleOutputs,
           pieces: pieceOutputs,
+          patterns: patternOutputs,
         },
       });
     } catch (error) {

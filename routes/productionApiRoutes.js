@@ -49,13 +49,16 @@ async function fetchBundleByCode(connection, bundleCode) {
             b.pieces_in_bundle,
             b.lot_id,
             b.size_id,
+            b.pattern_id,
             b.bundle_sequence,
             s.size_label,
             s.pattern_count,
             s.bundle_count,
+            sp.pattern_no,
             l.lot_number
        FROM api_lot_bundles b
        INNER JOIN api_lot_sizes s ON s.id = b.size_id
+       LEFT JOIN api_lot_size_patterns sp ON sp.id = b.pattern_id
        INNER JOIN api_lots l ON l.id = b.lot_id
       WHERE b.bundle_code = ?
       LIMIT 1`,
@@ -73,11 +76,14 @@ async function fetchPieceByCode(connection, pieceCode) {
             b.bundle_code,
             b.bundle_sequence,
             b.size_id,
+            b.pattern_id,
             s.size_label,
+            sp.pattern_no,
             l.lot_number
        FROM api_lot_piece_codes p
        INNER JOIN api_lot_bundles b ON b.id = p.bundle_id
        INNER JOIN api_lot_sizes s ON s.id = p.size_id
+       LEFT JOIN api_lot_size_patterns sp ON sp.id = b.pattern_id
        INNER JOIN api_lots l ON l.id = p.lot_id
       WHERE p.piece_code = ?
       LIMIT 1`,
@@ -99,7 +105,8 @@ async function fetchLotByNumber(connection, lotNumber) {
   return rows[0] || null;
 }
 
-async function fetchLotWithSizes(connection, lotNumber) {
+// Fetches a lot together with sizes, explicit pattern rows, and bundles grouped per pattern.
+async function fetchLotWithSizesAndPatterns(connection, lotNumber) {
   const [rows] = await connection.query(
     `SELECT l.id AS lot_id,
             l.lot_number,
@@ -109,15 +116,19 @@ async function fetchLotWithSizes(connection, lotNumber) {
             s.pattern_count,
             s.total_pieces AS size_total_pieces,
             s.bundle_count,
+            p.id AS pattern_id,
+            p.pattern_no,
+            p.pieces_total AS pattern_pieces_total,
             b.id AS bundle_id,
             b.bundle_code,
-            b.pieces_in_bundle,
-            b.bundle_sequence
+            b.bundle_sequence,
+            b.pieces_in_bundle
        FROM api_lots l
        INNER JOIN api_lot_sizes s ON s.lot_id = l.id
-       LEFT JOIN api_lot_bundles b ON b.size_id = s.id
+       LEFT JOIN api_lot_size_patterns p ON p.lot_id = l.id AND p.size_id = s.id
+       LEFT JOIN api_lot_bundles b ON b.size_id = s.id AND b.pattern_id = p.id
       WHERE l.lot_number = ?
-      ORDER BY s.size_label, b.bundle_sequence`,
+      ORDER BY s.size_label, p.pattern_no, b.bundle_sequence`,
     [lotNumber],
   );
 
@@ -138,26 +149,109 @@ async function fetchLotWithSizes(connection, lotNumber) {
   for (const row of rows) {
     let size = sizeMap.get(row.size_id);
     if (!size) {
+      const patternIdMap = new Map();
+      const patternNoMap = new Map();
       size = {
         size_id: row.size_id,
         size_label: row.size_label,
         pattern_count: row.pattern_count,
         total_pieces: row.size_total_pieces,
         bundle_count: row.bundle_count,
-        bundles: [],
+        patterns: [],
       };
+      Object.defineProperty(size, 'patternIdMap', { value: patternIdMap, enumerable: false });
+      Object.defineProperty(size, 'patternNoMap', { value: patternNoMap, enumerable: false });
+      Object.defineProperty(size, 'legacyBundles', { value: [], enumerable: false, writable: true });
       sizeMap.set(row.size_id, size);
       labelMap.set((row.size_label || '').toUpperCase(), size);
       lot.sizes.push(size);
     }
 
-    if (row.bundle_id) {
-      size.bundles.push({
+    if (row.pattern_id) {
+      let pattern = size.patternIdMap.get(row.pattern_id);
+      if (!pattern) {
+        pattern = {
+          pattern_id: row.pattern_id,
+          patternNo: row.pattern_no,
+          pieces_total: row.pattern_pieces_total,
+          bundles: [],
+        };
+        size.patternIdMap.set(row.pattern_id, pattern);
+        if (row.pattern_no !== null && row.pattern_no !== undefined) {
+          size.patternNoMap.set(Number(row.pattern_no), pattern);
+        }
+        size.patterns.push(pattern);
+      }
+
+      if (row.bundle_id) {
+        pattern.bundles.push({
+          bundle_id: row.bundle_id,
+          bundle_code: row.bundle_code,
+          bundle_sequence: row.bundle_sequence,
+          pieces_in_bundle: row.pieces_in_bundle,
+        });
+      }
+    } else if (row.bundle_id) {
+      size.legacyBundles.push({
         bundle_id: row.bundle_id,
         bundle_code: row.bundle_code,
         bundle_sequence: row.bundle_sequence,
         pieces_in_bundle: row.pieces_in_bundle,
       });
+    }
+  }
+
+  for (const size of lot.sizes) {
+    if (Array.isArray(size.legacyBundles) && size.legacyBundles.length) {
+      // Legacy lots (created before pattern rows existed) stored bundles without
+      // pattern ids. Distribute those bundles across synthetic patterns in
+      // bundle-sequence order so assignment logic can continue to work.
+      for (let idx = 1; idx <= size.pattern_count; idx += 1) {
+        if (!size.patternNoMap.has(idx)) {
+          const placeholder = {
+            pattern_id: null,
+            patternNo: idx,
+            pieces_total: null,
+            bundles: [],
+          };
+          size.patterns.push(placeholder);
+          size.patternNoMap.set(idx, placeholder);
+        }
+      }
+
+      const orderedPatterns = size.patterns
+        .filter(pattern => Number.isInteger(pattern.patternNo))
+        .sort((a, b) => a.patternNo - b.patternNo);
+
+      let cursor = 0;
+      let remaining = size.legacyBundles.length;
+      for (let i = 0; i < orderedPatterns.length && cursor < size.legacyBundles.length; i += 1) {
+        const pattern = orderedPatterns[i];
+        const patternsLeft = orderedPatterns.length - i;
+        const take = Math.ceil(remaining / patternsLeft);
+        const slice = size.legacyBundles.slice(cursor, cursor + take);
+        for (const bundle of slice) {
+          pattern.bundles.push({ ...bundle });
+        }
+        cursor += take;
+        remaining -= take;
+      }
+
+      size.legacyBundles = [];
+    }
+
+    // Ensure patterns exist even if no bundles are yet linked (e.g. during migrations).
+    if (!size.patterns.length) {
+      for (let idx = 1; idx <= size.pattern_count; idx += 1) {
+        const placeholder = {
+          pattern_id: null,
+          patternNo: idx,
+          pieces_total: null,
+          bundles: [],
+        };
+        size.patterns.push(placeholder);
+        size.patternNoMap.set(idx, placeholder);
+      }
     }
   }
 
@@ -259,61 +353,26 @@ function coerceArrayLike(input) {
   return [input];
 }
 
-function extractBundleSelection(assignment) {
-  const bundleIds = new Set();
-  const bundleCodes = new Set();
-  const bundleSequences = new Set();
+function parsePatternNumbers(assignment) {
+  const numbers = new Set();
 
   const addNumbers = value => {
     for (const entry of coerceArrayLike(value)) {
       if (entry === undefined || entry === null || entry === '') continue;
       const parsed = Number.parseInt(entry, 10);
       if (Number.isInteger(parsed) && parsed > 0) {
-        bundleIds.add(parsed);
-        bundleSequences.add(parsed);
+        numbers.add(parsed);
       }
     }
   };
 
-  const addCodes = value => {
-    for (const entry of coerceArrayLike(value)) {
-      const code = normaliseCode(entry);
-      if (code) {
-        bundleCodes.add(code);
-      }
-    }
-  };
-
-  addNumbers(assignment.bundleId ?? assignment.bundle_id);
-  addNumbers(assignment.bundleIds ?? assignment.bundle_ids);
-  addNumbers(assignment.bundleSequence ?? assignment.bundle_sequence);
-  addNumbers(assignment.bundleSequences ?? assignment.bundle_sequences);
+  addNumbers(assignment.patternNo ?? assignment.pattern_no);
   addNumbers(assignment.pattern ?? assignment.pattern_number);
-  addNumbers(assignment.patterns ?? assignment.patternNumbers ?? assignment.pattern_numbers);
+  addNumbers(assignment.patternNos ?? assignment.pattern_nos);
+  addNumbers(assignment.patternNumbers ?? assignment.pattern_numbers);
+  addNumbers(assignment.patterns);
 
-  addCodes(assignment.bundleCode ?? assignment.bundle_code);
-  addCodes(assignment.bundleCodes ?? assignment.bundle_codes);
-
-  for (const entry of coerceArrayLike(assignment.bundles)) {
-    if (!entry && entry !== 0) continue;
-    if (typeof entry === 'object') {
-      addNumbers(entry.id ?? entry.bundleId ?? entry.bundle_id);
-      addNumbers(entry.sequence ?? entry.bundleSequence ?? entry.bundle_sequence ?? entry.pattern);
-      addCodes(entry.code ?? entry.bundleCode ?? entry.bundle_code);
-    } else if (typeof entry === 'number') {
-      addNumbers(entry);
-    } else {
-      const code = normaliseCode(entry);
-      if (code) {
-        bundleCodes.add(code);
-      } else {
-        addNumbers(entry);
-      }
-    }
-  }
-
-  const hasSelection = bundleIds.size > 0 || bundleCodes.size > 0 || bundleSequences.size > 0;
-  return { hasSelection, bundleIds, bundleCodes, bundleSequences };
+  return Array.from(numbers.values()).sort((a, b) => a - b);
 }
 
 async function maybeResolveUserMaster(connection, userId, payload, { allowMissing = false } = {}) {
@@ -396,6 +455,7 @@ async function insertEventRows(connection, rows) {
       row.lot_id ?? row.lotId,
       row.bundle_id ?? row.bundleId ?? null,
       row.size_id ?? row.sizeId ?? null,
+      row.pattern_id ?? row.patternId ?? null,
       row.piece_id ?? row.pieceId ?? null,
       row.lot_number ?? row.lotNumber,
       row.bundle_code ?? row.bundleCode ?? null,
@@ -421,7 +481,7 @@ async function insertEventRows(connection, rows) {
 
     await connection.query(
       `INSERT INTO production_flow_events
-         (stage, code_type, code_value, lot_id, bundle_id, size_id, piece_id,
+         (stage, code_type, code_value, lot_id, bundle_id, size_id, pattern_id, piece_id,
           lot_number, bundle_code, bundle_sequence, size_label, piece_code, pattern_count, bundle_count, pieces_total,
           user_id, user_username, user_role, master_id, master_name, remark, event_status,
           is_closed, closed_by_stage, closed_by_user_id, closed_by_user_username, closed_at)
@@ -444,11 +504,14 @@ async function insertRejectionEvents(connection, stage, user, pieceCodes, remark
             p.bundle_id,
             b.bundle_code,
             b.bundle_sequence,
+            b.pattern_id,
             s.size_label,
+            sp.pattern_no,
             l.lot_number
        FROM api_lot_piece_codes p
        INNER JOIN api_lot_bundles b ON b.id = p.bundle_id
        INNER JOIN api_lot_sizes s ON s.id = p.size_id
+       LEFT JOIN api_lot_size_patterns sp ON sp.id = b.pattern_id
        INNER JOIN api_lots l ON l.id = p.lot_id
       WHERE p.piece_code IN (?)`,
     [pieceCodes],
@@ -491,6 +554,7 @@ async function insertRejectionEvents(connection, stage, user, pieceCodes, remark
         lot_id: piece.lot_id,
         bundle_id: piece.bundle_id,
         size_id: piece.size_id,
+        pattern_id: piece.pattern_id ?? null,
         piece_id: piece.piece_id,
         lot_number: piece.lot_number,
         bundle_code: piece.bundle_code,
@@ -642,8 +706,10 @@ router.post(
     try {
       await connection.beginTransaction();
 
+      // Back pocket & stitching master now operate on (size, pattern) selections instead of
+      // bundle lists. Each assignment expands to the bundles under the chosen patterns.
       if (stage === 'back_pocket' || stage === 'stitching_master') {
-        const lot = await fetchLotWithSizes(connection, code);
+        const lot = await fetchLotWithSizesAndPatterns(connection, code);
         if (!lot) {
           throw createHttpError(404, 'Lot code not found.');
         }
@@ -661,7 +727,12 @@ router.post(
           : { masterId: null, masterName: null };
 
         if (!assignments.length) {
-          assignments = lot.sizes.map(size => ({ sizeId: size.size_id }));
+          assignments = lot.sizes.map(size => ({
+            sizeId: size.size_id,
+            patternNos: size.patterns
+              .map(pattern => Number(pattern.patternNo))
+              .filter(value => Number.isInteger(value) && value > 0),
+          }));
         }
 
         if (!assignments.length) {
@@ -669,6 +740,7 @@ router.post(
         }
 
         const assignedBundleIds = new Set();
+        const assignedPatternKeys = new Set();
         const eventRows = [];
         const summary = [];
 
@@ -694,13 +766,6 @@ router.post(
             throw createHttpError(404, 'One or more sizes were not found in this lot.');
           }
 
-          if (!Array.isArray(size.bundles) || !size.bundles.length) {
-            throw createHttpError(
-              409,
-              `No bundles were generated for size ${size.size_label}.`,
-            );
-          }
-
           let masterDetails = { masterId: null, masterName: null };
           if (stageRequiresMaster) {
             masterDetails =
@@ -715,85 +780,116 @@ router.post(
             }
           }
 
-          const selection = extractBundleSelection(assignment);
-          let targetBundles = [];
+          const availablePatternNos = size.patterns
+            .map(pattern => Number(pattern.patternNo))
+            .filter(value => Number.isInteger(value) && value > 0);
+          const availablePatternSet = new Set(availablePatternNos);
 
-          if (!selection.hasSelection) {
-            targetBundles = size.bundles.filter(bundle => !assignedBundleIds.has(bundle.bundle_id));
-          } else {
-            targetBundles = size.bundles.filter(bundle => {
-              const code = normaliseCode(bundle.bundle_code);
-              const sequence =
-                bundle.bundle_sequence !== undefined && bundle.bundle_sequence !== null
-                  ? Number.parseInt(bundle.bundle_sequence, 10)
-                  : null;
-              return (
-                selection.bundleIds.has(bundle.bundle_id) ||
-                (sequence !== null && selection.bundleSequences.has(sequence)) ||
-                selection.bundleCodes.has(code)
-              );
-            });
+          let patternNumbers = parsePatternNumbers(assignment);
+          if (!patternNumbers.length) {
+            patternNumbers = availablePatternNos;
           }
 
-          if (!targetBundles.length) {
-            if (selection.hasSelection) {
-              throw createHttpError(
-                404,
-                `No bundles matched the selection for size ${size.size_label}.`,
-              );
-            }
+          patternNumbers = patternNumbers.filter(value => availablePatternSet.has(value));
 
+          if (!patternNumbers.length) {
             throw createHttpError(
-              409,
-              `All bundles for size ${size.size_label} are already assigned.`,
+              404,
+              `No valid patterns specified for size ${size.size_label}.`,
             );
           }
 
           const bundleDetails = [];
-          for (const bundle of targetBundles) {
-            if (assignedBundleIds.has(bundle.bundle_id)) {
+          const assignmentPatternNos = [];
+          const assignmentPatternIds = new Set();
+
+          for (const patternNo of patternNumbers) {
+            const pattern = size.patternNoMap.get(patternNo);
+            if (!pattern) {
               throw createHttpError(
-                409,
-                `Bundle ${bundle.bundle_code} has been provided multiple times in the request.`,
+                404,
+                `Pattern ${patternNo} for size ${size.size_label} was not found.`,
               );
             }
-            assignedBundleIds.add(bundle.bundle_id);
 
-            eventRows.push({
-              stage,
-              code_type: 'bundle',
-              code_value: bundle.bundle_code,
-              lot_id: lot.lot_id,
-              bundle_id: bundle.bundle_id,
-              size_id: size.size_id,
-              lot_number: lot.lot_number,
-              bundle_code: bundle.bundle_code,
-              bundle_sequence: bundle.bundle_sequence,
-              size_label: size.size_label,
-              pattern_count: size.pattern_count,
-              bundle_count: size.bundle_count,
-              pieces_total: bundle.pieces_in_bundle,
-              user_id: user.id,
-              user_username: user.username,
-              user_role: user.roleName,
-              master_id: masterDetails.masterId ?? null,
-              master_name: masterDetails.masterName ?? null,
-              remark,
-            });
+            const patternKey = pattern.pattern_id
+              ? `id:${pattern.pattern_id}`
+              : `size:${size.size_id}:pattern:${patternNo}`;
+            if (assignedPatternKeys.has(patternKey)) {
+              throw createHttpError(
+                409,
+                `Pattern ${patternNo} for size ${size.size_label} was provided multiple times.`,
+              );
+            }
 
-            bundleDetails.push({
-              bundleId: bundle.bundle_id,
-              bundleCode: bundle.bundle_code,
-              bundleSequence: bundle.bundle_sequence,
-              pieces: bundle.pieces_in_bundle,
-            });
+            const patternBundles = Array.isArray(pattern.bundles) ? pattern.bundles : [];
+            const availableBundles = patternBundles.filter(
+              bundle => !assignedBundleIds.has(bundle.bundle_id),
+            );
+
+            if (!availableBundles.length) {
+              throw createHttpError(
+                409,
+                `All bundles for size ${size.size_label} pattern ${patternNo} are already assigned.`,
+              );
+            }
+
+            assignedPatternKeys.add(patternKey);
+            assignmentPatternNos.push(patternNo);
+            if (pattern.pattern_id !== null && pattern.pattern_id !== undefined) {
+              assignmentPatternIds.add(pattern.pattern_id);
+            }
+
+            for (const bundle of availableBundles) {
+              if (assignedBundleIds.has(bundle.bundle_id)) {
+                throw createHttpError(
+                  409,
+                  `Bundle ${bundle.bundle_code} has been provided multiple times in the request.`,
+                );
+              }
+              assignedBundleIds.add(bundle.bundle_id);
+
+              eventRows.push({
+                stage,
+                code_type: 'bundle',
+                code_value: bundle.bundle_code,
+                lot_id: lot.lot_id,
+                bundle_id: bundle.bundle_id,
+                size_id: size.size_id,
+                pattern_id: pattern.pattern_id ?? null,
+                lot_number: lot.lot_number,
+                bundle_code: bundle.bundle_code,
+                bundle_sequence: bundle.bundle_sequence,
+                size_label: size.size_label,
+                pattern_count: size.pattern_count,
+                bundle_count: size.bundle_count,
+                pieces_total: bundle.pieces_in_bundle,
+                user_id: user.id,
+                user_username: user.username,
+                user_role: user.roleName,
+                master_id: masterDetails.masterId ?? null,
+                master_name: masterDetails.masterName ?? null,
+                remark,
+              });
+
+              bundleDetails.push({
+                bundleId: bundle.bundle_id,
+                bundleCode: bundle.bundle_code,
+                bundleSequence: bundle.bundle_sequence,
+                pieces: bundle.pieces_in_bundle,
+                patternId: pattern.pattern_id ?? null,
+                patternNo,
+              });
+            }
           }
 
           summary.push({
             sizeId: size.size_id,
             sizeLabel: size.size_label,
+            patternNos: assignmentPatternNos.sort((a, b) => a - b),
             bundleCount: bundleDetails.length,
             bundleDetails,
+            patternIds: Array.from(assignmentPatternIds.values()).sort((a, b) => a - b),
             masterId: masterDetails.masterId ?? null,
             masterName: masterDetails.masterName ?? null,
           });
@@ -885,6 +981,7 @@ router.post(
             lot_id: bundle.lot_id,
             bundle_id: bundle.bundle_id,
             size_id: bundle.size_id,
+            pattern_id: bundle.pattern_id ?? null,
             lot_number: bundle.lot_number,
             bundle_code: bundle.bundle_code,
             bundle_sequence: bundle.bundle_sequence,
@@ -994,14 +1091,18 @@ router.post(
                           p.piece_code,
                           p.bundle_id,
                           p.size_id,
+                          b.pattern_id,
                           s.size_label,
                           b.bundle_code,
-                          b.bundle_sequence
+                          b.bundle_sequence,
+                          sp.pattern_no
              FROM api_lot_piece_codes p
              INNER JOIN api_lot_bundles b
                      ON b.id = p.bundle_id
              INNER JOIN api_lot_sizes s
                      ON s.id = p.size_id
+             LEFT JOIN api_lot_size_patterns sp
+                     ON sp.id = b.pattern_id
              INNER JOIN production_flow_events je
                      ON je.bundle_id = p.bundle_id
                     AND je.stage = 'jeans_assembly'
@@ -1024,6 +1125,7 @@ router.post(
           lot_id: lot.lot_id,
           bundle_id: piece.bundle_id,
           size_id: piece.size_id,
+          pattern_id: piece.pattern_id ?? null,
           piece_id: piece.piece_id,
           lot_number: lot.lot_number,
           bundle_code: piece.bundle_code,
@@ -1095,6 +1197,7 @@ router.post(
             lot_id: piece.lot_id,
             bundle_id: piece.bundle_id,
             size_id: piece.size_id,
+            pattern_id: piece.pattern_id ?? null,
             piece_id: piece.piece_id,
             lot_number: piece.lot_number,
             bundle_code: piece.bundle_code,
@@ -1194,6 +1297,7 @@ router.post(
             lot_id: bundle.lot_id,
             bundle_id: bundle.bundle_id,
             size_id: bundle.size_id,
+            pattern_id: bundle.pattern_id ?? null,
             lot_number: bundle.lot_number,
             bundle_code: bundle.bundle_code,
             bundle_sequence: bundle.bundle_sequence,
@@ -1279,21 +1383,24 @@ router.get(
 
     try {
       const [rows] = await pool.query(
-        `SELECT b.id AS bundleId,
-                b.bundle_code AS bundleCode,
-                b.pieces_in_bundle AS piecesInBundle,
-                b.lot_id AS lotId,
-                l.lot_number AS lotNumber,
-                l.sku,
-                l.fabric_type AS fabricType,
-                COUNT(p.id) AS pieceCount
-           FROM api_lot_bundles b
-           INNER JOIN api_lots l ON l.id = b.lot_id
-           LEFT JOIN api_lot_piece_codes p ON p.bundle_id = b.id
-          WHERE b.bundle_code = ?
-          GROUP BY b.id, b.bundle_code, b.pieces_in_bundle, b.lot_id, l.lot_number, l.sku, l.fabric_type`,
-        [bundleCode],
-      );
+      `SELECT b.id AS bundleId,
+              b.bundle_code AS bundleCode,
+              b.pieces_in_bundle AS piecesInBundle,
+              b.lot_id AS lotId,
+              b.pattern_id AS patternId,
+              sp.pattern_no AS patternNo,
+              l.lot_number AS lotNumber,
+              l.sku,
+              l.fabric_type AS fabricType,
+              COUNT(p.id) AS pieceCount
+         FROM api_lot_bundles b
+          INNER JOIN api_lots l ON l.id = b.lot_id
+          LEFT JOIN api_lot_piece_codes p ON p.bundle_id = b.id
+          LEFT JOIN api_lot_size_patterns sp ON sp.id = b.pattern_id
+        WHERE b.bundle_code = ?
+         GROUP BY b.id, b.bundle_code, b.pieces_in_bundle, b.lot_id, l.lot_number, l.sku, l.fabric_type, b.pattern_id, sp.pattern_no`,
+      [bundleCode],
+    );
 
       if (!rows.length) {
         return res.status(404).json({ error: 'Bundle not found.' });
@@ -1324,7 +1431,7 @@ router.get(
         }
         const [rows] = await pool.query(
           `SELECT id, stage, code_type AS codeType, code_value AS codeValue,
-                  lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, piece_id AS pieceId,
+                  lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, pattern_id AS patternId, piece_id AS pieceId,
                   lot_number AS lotNumber, bundle_code AS bundleCode, bundle_sequence AS bundleSequence,
                   size_label AS sizeLabel, piece_code AS pieceCode,
                   pattern_count AS patternCount, bundle_count AS bundleCount, pieces_total AS piecesTotal,
@@ -1350,7 +1457,7 @@ router.get(
       for (const stage of STAGES) {
         const [rows] = await pool.query(
           `SELECT id, stage, code_type AS codeType, code_value AS codeValue,
-                  lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, piece_id AS pieceId,
+                  lot_id AS lotId, bundle_id AS bundleId, size_id AS sizeId, pattern_id AS patternId, piece_id AS pieceId,
                   lot_number AS lotNumber, bundle_code AS bundleCode, bundle_sequence AS bundleSequence,
                   size_label AS sizeLabel, piece_code AS pieceCode,
                   pattern_count AS patternCount, bundle_count AS bundleCount, pieces_total AS piecesTotal,
