@@ -41,10 +41,24 @@ CREATE TABLE IF NOT EXISTS api_lot_sizes (
   UNIQUE KEY uk_api_lot_sizes (lot_id, size_label)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS api_lot_size_patterns (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lot_id BIGINT UNSIGNED NOT NULL,
+  size_id BIGINT UNSIGNED NOT NULL,
+  pattern_no INT UNSIGNED NOT NULL,
+  pieces_total INT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_api_lot_size_patterns_lot FOREIGN KEY (lot_id) REFERENCES api_lots(id) ON DELETE CASCADE,
+  CONSTRAINT fk_api_lot_size_patterns_size FOREIGN KEY (size_id) REFERENCES api_lot_sizes(id) ON DELETE CASCADE,
+  UNIQUE KEY uniq_lot_size_pattern (lot_id, size_id, pattern_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS api_lot_bundles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   lot_id BIGINT UNSIGNED NOT NULL,
   size_id BIGINT UNSIGNED NOT NULL,
+  pattern_id BIGINT UNSIGNED DEFAULT NULL,
   bundle_sequence INT UNSIGNED NOT NULL,
   size_bundle_index INT UNSIGNED NOT NULL,
   bundle_code VARCHAR(64) NOT NULL,
@@ -52,6 +66,7 @@ CREATE TABLE IF NOT EXISTS api_lot_bundles (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_api_lot_bundles_lot FOREIGN KEY (lot_id) REFERENCES api_lots(id) ON DELETE CASCADE,
   CONSTRAINT fk_api_lot_bundles_size FOREIGN KEY (size_id) REFERENCES api_lot_sizes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_api_lot_bundles_pattern FOREIGN KEY (pattern_id) REFERENCES api_lot_size_patterns(id) ON DELETE SET NULL,
   UNIQUE KEY uk_api_lot_bundle_code (lot_id, bundle_code),
   UNIQUE KEY uk_api_lot_bundle_sequence (lot_id, bundle_sequence)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
