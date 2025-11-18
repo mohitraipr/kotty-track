@@ -98,6 +98,7 @@ const apiAuthRoutes = require('./routes/apiAuthRoutes');
 const apiRoutes = require('./routes/apiRoutes');
 const productionApiRoutes = require('./routes/productionApiRoutes');
 const featuresRoutes = require('./routes/featuresRoutes');
+const indentRoutes = require('./routes/indentRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -135,6 +136,7 @@ app.use('/api', apiAuthRoutes);
 app.use('/api', apiRoutes);
 app.use('/api', productionApiRoutes);
 app.use('/', featuresRoutes);
+app.use('/indent', indentRoutes);
 
 // Home Route
 app.get('/', (req, res) => {

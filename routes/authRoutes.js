@@ -88,6 +88,12 @@ router.post('/login', async (req, res) => {
       case 'store_employee':
         res.redirect('/inventory/dashboard');
         break;
+      case 'indent_filler':
+        res.redirect('/indent');
+        break;
+      case 'store_manager':
+        res.redirect('/indent/manage');
+        break;
       case 'accounts':
         res.redirect('/purchase');
         break;

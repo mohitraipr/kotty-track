@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Store Manager · Indent Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      integrity="sha512-1ycn6Ica9999htg3bK+0m0RwlcC4GjXnu5N219X2Dz7P+G9hbQUn7qYB6czS4fFqqTZPIYO/V+B2Bl+zYxZ3g=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #eff3fb;
+        --card: #ffffff;
+        --primary: #1d4ed8;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #e2e8f0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .page {
+        max-width: 1300px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 2rem;
+      }
+      header .user-meta {
+        color: var(--muted);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      a.btn-link {
+        color: var(--primary);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      a.btn-link:hover {
+        text-decoration: underline;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+        margin-bottom: 24px;
+      }
+      .stat-card {
+        background: var(--card);
+        border-radius: 20px;
+        padding: 20px;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+      }
+      .stat-label {
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        margin-bottom: 10px;
+      }
+      .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 24px;
+        padding: 24px;
+        border: 1px solid var(--border);
+        box-shadow: 0 15px 40px rgba(15, 23, 42, 0.08);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+      }
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.95rem;
+        vertical-align: middle;
+      }
+      th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: capitalize;
+      }
+      .status-open {
+        background: rgba(249, 115, 22, 0.16);
+        color: #9a3412;
+      }
+      .status-proceeding {
+        background: rgba(8, 145, 178, 0.2);
+        color: #155e75;
+      }
+      .status-arrived {
+        background: rgba(15, 157, 88, 0.18);
+        color: #0f9d58;
+      }
+      .action-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .action-bar form {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .btn {
+        border-radius: 999px;
+        border: none;
+        padding: 8px 18px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .btn-primary {
+        background: linear-gradient(120deg, #2563eb, #1e40af);
+        color: #fff;
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+      }
+      .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .arrival-form {
+        display: none;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border);
+      }
+      .arrival-form.active {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      .arrival-form label {
+        display: flex;
+        flex-direction: column;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--muted);
+        gap: 6px;
+      }
+      .arrival-form input,
+      .arrival-form textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        font-family: inherit;
+      }
+      .alert {
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-weight: 500;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
+      }
+      .alert-danger {
+        background: rgba(239, 68, 68, 0.12);
+        color: #b91c1c;
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+      .alert-success {
+        background: rgba(15, 157, 88, 0.12);
+        color: #0f9d58;
+        border-color: rgba(15, 157, 88, 0.3);
+      }
+      .btn-close {
+        float: right;
+        border: none;
+        background: transparent;
+        font-size: 1rem;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .alert-dismissible {
+        position: relative;
+        padding-right: 2.5rem;
+      }
+      .alert-dismissible .btn-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        float: none;
+      }
+      .alert.fade.show {
+        opacity: 1;
+      }
+      @media (max-width: 960px) {
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+        thead {
+          display: none;
+        }
+        tr {
+          border: 1px solid var(--border);
+          margin-bottom: 12px;
+          border-radius: 18px;
+          padding: 12px;
+          background: var(--card);
+        }
+        td {
+          border: none;
+          padding: 6px 0;
+        }
+        td::before {
+          content: attr(data-label);
+          display: block;
+          font-weight: 600;
+          color: var(--muted);
+          margin-bottom: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <h1>Indent Control Room</h1>
+        <div class="user-meta">
+          <span><strong><%= user.username %></strong> &middot; Store Manager</span>
+          <a class="btn-link" href="/logout">Logout</a>
+        </div>
+      </header>
+
+      <%- include('partials/flashMessages'); %>
+
+      <div class="cards">
+        <div class="stat-card">
+          <div class="stat-label">Open</div>
+          <div class="stat-value"><%= stats.open || 0 %></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Proceeding</div>
+          <div class="stat-value" style="color: #0f766e"><%= stats.proceeding || 0 %></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Arrived</div>
+          <div class="stat-value" style="color: #0f9d58"><%= stats.arrived || 0 %></div>
+        </div>
+      </div>
+
+      <section class="card">
+        <h2 style="margin-top: 0">Latest Indent Requests</h2>
+        <p style="color: var(--muted); margin-bottom: 20px">
+          Keep the flow smooth by acknowledging requests promptly.
+        </p>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Goods &amp; Description</th>
+                <th>Quantity</th>
+                <th>Indent Filler</th>
+                <th>Dates</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!requests || !requests.length) { %>
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 32px">No requests yet.</td>
+              </tr>
+              <% } else { %>
+              <% requests.forEach(row => { %>
+              <tr>
+                <td data-label="Goods">
+                  <strong><%= row.goods_description %></strong>
+                  <div style="color: var(--muted); font-size: 0.85rem; margin-top: 4px">
+                    Used last month: <%= row.used_last_month || 0 %> · last 7 days:
+                    <%= row.used_last_seven_days || 0 %>
+                  </div>
+                </td>
+                <td data-label="Quantity"><%= row.quantity_requested %></td>
+                <td data-label="Filler">
+                  <strong><%= row.filler_name || '—' %></strong>
+                </td>
+                <td data-label="Dates">
+                  <div><small>Requested:</small> <%= row.request_date ? new Date(row.request_date).toLocaleDateString('en-IN') : '-' %></div>
+                  <div><small>Proceed:</small> <%= row.proceed_date ? new Date(row.proceed_date).toLocaleDateString('en-IN') : '-' %></div>
+                  <div><small>Arrived:</small> <%= row.arrival_date ? new Date(row.arrival_date).toLocaleDateString('en-IN') : '-' %></div>
+                </td>
+                <td data-label="Status">
+                  <span class="status-pill status-<%= row.status %>"><%= row.status %></span>
+                  <% if (row.final_quantity) { %>
+                  <div style="font-size: 0.8rem; color: var(--muted)">Final qty: <%= row.final_quantity %></div>
+                  <% } %>
+                  <% if (row.remark) { %>
+                  <div style="font-size: 0.8rem; color: var(--muted)"><%= row.remark %></div>
+                  <% } %>
+                </td>
+                <td data-label="Actions">
+                  <% if (row.status === 'arrived') { %>
+                  <div style="color: var(--muted); font-size: 0.85rem">Completed</div>
+                  <% } else { %>
+                  <div class="action-bar">
+                    <% if (row.status === 'open') { %>
+                    <form action="/indent/requests/<%= row.id %>/proceed" method="POST">
+                      <button class="btn btn-primary" type="submit">Proceed</button>
+                    </form>
+                    <% } %>
+                    <button class="btn btn-outline arrival-toggle" data-id="<%= row.id %>">
+                      Mark Arrived
+                    </button>
+                  </div>
+                  <form
+                    class="arrival-form"
+                    id="arrival-form-<%= row.id %>"
+                    action="/indent/requests/<%= row.id %>/arrive"
+                    method="POST"
+                  >
+                    <label>
+                      Arrival Date
+                      <input type="date" name="arrivalDate" required />
+                    </label>
+                    <label>
+                      Quantity Received
+                      <input type="number" step="0.01" name="finalQuantity" placeholder="Optional" />
+                    </label>
+                    <label>
+                      Remark
+                      <textarea name="remark" rows="2" placeholder="Optional"></textarea>
+                    </label>
+                    <div>
+                      <button class="btn btn-primary" type="submit">Confirm</button>
+                    </div>
+                  </form>
+                  <% } %>
+                </td>
+              </tr>
+              <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <script>
+      document.querySelectorAll('.arrival-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const form = document.getElementById(`arrival-form-${btn.dataset.id}`);
+          if (form) {
+            form.classList.toggle('active');
+          }
+        });
+      });
+      document.querySelectorAll('.btn-close').forEach(btn => {
+        btn.addEventListener('click', () => btn.parentElement && btn.parentElement.remove());
+      });
+    </script>
+  </body>
+</html>

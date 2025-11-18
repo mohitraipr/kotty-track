@@ -120,6 +120,14 @@ function isStoreAdmin(req, res, next) {
     return hasRole('store_admin')(req, res, next);
 }
 
+function isIndentFiller(req, res, next) {
+  return hasRole('indent_filler')(req, res, next);
+}
+
+function isStoreManager(req, res, next) {
+  return hasRole('store_manager')(req, res, next);
+}
+
 function isMohitOperator(req, res, next) {
   const allowed = [
     'mohitOperator',
@@ -189,6 +197,8 @@ module.exports = {
     isCatalogUpload,
     isStoreEmployee,
     isStoreAdmin,
+    isIndentFiller,
+    isStoreManager,
     isMohitOperator,
     allowUserIds,
     allowRoles
