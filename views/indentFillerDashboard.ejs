@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Indent Request Desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      integrity="sha512-1ycn6Ica9999htg3bK+0m0RwlcC4GjXnu5N219X2Dz7P+G9hbQUn7qYB6czS4fFqqTZPIYO/V+B2Bl+zYxZ3g=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --primary: #2563eb;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --success: #0f9d58;
+        --warning: #f97316;
+        --info: #0891b2;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 600;
+      }
+      header .user-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      a.btn-link {
+        color: var(--primary);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      a.btn-link:hover {
+        text-decoration: underline;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 18px;
+        padding: 24px;
+        box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+        border: 1px solid var(--border);
+        margin-bottom: 24px;
+      }
+      form label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      form input,
+      form textarea {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        font-size: 1rem;
+        background: #fdfefe;
+      }
+      form textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 18px;
+      }
+      .actions {
+        text-align: right;
+        margin-top: 16px;
+      }
+      button.primary {
+        padding: 12px 28px;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(120deg, #2563eb, #1d4ed8);
+        color: #fff;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
+      }
+      button.primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+      }
+      th,
+      td {
+        padding: 14px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.95rem;
+      }
+      th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 6px 14px;
+        border-radius: 999px;
+        text-transform: capitalize;
+      }
+      .status-open {
+        background: rgba(249, 115, 22, 0.15);
+        color: #c2410c;
+      }
+      .status-proceeding {
+        background: rgba(8, 145, 178, 0.15);
+        color: #0f766e;
+      }
+      .status-arrived {
+        background: rgba(15, 157, 88, 0.18);
+        color: #0f9d58;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 40px 0 10px;
+        color: var(--muted);
+      }
+      .flash {
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-weight: 500;
+        margin-bottom: 18px;
+      }
+      .alert {
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-weight: 500;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
+      }
+      .alert-danger {
+        background: rgba(239, 68, 68, 0.12);
+        color: #b91c1c;
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+      .alert-success {
+        background: rgba(15, 157, 88, 0.12);
+        color: #0f9d58;
+        border-color: rgba(15, 157, 88, 0.3);
+      }
+      .btn-close {
+        float: right;
+        border: none;
+        background: transparent;
+        font-size: 1rem;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .alert-dismissible {
+        position: relative;
+        padding-right: 2.5rem;
+      }
+      .alert-dismissible .btn-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        float: none;
+      }
+      .alert.fade.show {
+        opacity: 1;
+      }
+      .flash-success {
+        background: rgba(15, 157, 88, 0.1);
+        color: #0f9d58;
+        border: 1px solid rgba(15, 157, 88, 0.2);
+      }
+      .flash-error {
+        background: rgba(239, 68, 68, 0.1);
+        color: #b91c1c;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+      }
+      @media (max-width: 720px) {
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+        thead {
+          display: none;
+        }
+        tr {
+          border: 1px solid var(--border);
+          margin-bottom: 14px;
+          border-radius: 16px;
+          padding: 10px 12px;
+          background: var(--card);
+        }
+        td {
+          border: none;
+          padding: 6px 0;
+        }
+        td::before {
+          content: attr(data-label);
+          display: block;
+          font-weight: 600;
+          color: var(--muted);
+          margin-bottom: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <h1>Indent Request Desk</h1>
+        <div class="user-meta">
+          <span><strong><%= user.username %></strong> &middot; Indent Filler</span>
+          <a class="btn-link" href="/logout">Logout</a>
+        </div>
+      </header>
+
+      <%- include('partials/flashMessages'); %>
+
+      <section class="card">
+        <h2 style="margin-top: 0">Raise a Requirement</h2>
+        <p style="color: var(--muted); margin-bottom: 24px">
+          Submit a clear description so the store manager can act on it quickly.
+        </p>
+        <form action="/indent/create" method="POST">
+          <div class="grid">
+            <div>
+              <label for="goodsDescription">Goods &amp; Description</label>
+              <textarea
+                id="goodsDescription"
+                name="goodsDescription"
+                placeholder="e.g. Thread cones 40/2 for Line A"
+                required
+              ></textarea>
+            </div>
+            <div>
+              <label for="quantity">Quantity</label>
+              <input
+                type="number"
+                id="quantity"
+                name="quantity"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
+            <div>
+              <label for="requestDate">Date Needed</label>
+              <input type="date" id="requestDate" name="requestDate" required />
+            </div>
+            <div>
+              <label for="usedLastMonth">Used in last 30 days</label>
+              <input
+                type="number"
+                id="usedLastMonth"
+                name="usedLastMonth"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label for="usedLastSevenDays">Used in last 7 days</label>
+              <input
+                type="number"
+                id="usedLastSevenDays"
+                name="usedLastSevenDays"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div class="actions">
+            <button class="primary" type="submit">Submit Request</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2 style="margin-top: 0">Recent Activity</h2>
+        <% if (!requests || !requests.length) { %>
+        <div class="empty-state">No requests raised yet.</div>
+        <% } else { %>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Goods &amp; Description</th>
+                <th>Qty</th>
+                <th>Request Date</th>
+                <th>Status</th>
+                <th>Proceed Date</th>
+                <th>Arrival Date</th>
+                <th>Final Qty</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% requests.forEach(item => { %>
+              <tr>
+                <td data-label="Goods"><strong><%= item.goods_description %></strong></td>
+                <td data-label="Qty"><%= item.quantity_requested %></td>
+                <td data-label="Date"><%= item.request_date ? new Date(item.request_date).toLocaleDateString('en-IN') : '-' %></td>
+                <td data-label="Status">
+                  <span class="status-pill status-<%= item.status %>"><%= item.status %></span>
+                </td>
+                <td data-label="Proceed">
+                  <%= item.proceed_date ? new Date(item.proceed_date).toLocaleDateString('en-IN') : '-' %>
+                </td>
+                <td data-label="Arrival">
+                  <%= item.arrival_date ? new Date(item.arrival_date).toLocaleDateString('en-IN') : '-' %>
+                </td>
+                <td data-label="Final Qty"><%= item.final_quantity || '-' %></td>
+                <td data-label="Remarks"><%= item.remark || '-' %></td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+        <% } %>
+      </section>
+    </div>
+    <script>
+      const dateInput = document.getElementById('requestDate');
+      if (dateInput && !dateInput.value) {
+        const today = new Date();
+        dateInput.value = today.toISOString().substring(0, 10);
+      }
+      document.querySelectorAll('.btn-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.parentElement) {
+            btn.parentElement.remove();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
