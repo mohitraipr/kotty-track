@@ -6,6 +6,25 @@ const PERIOD_PRESETS = {
   '7d': { label: 'Last 7 days', hours: 168 },
 };
 
+// Simple in-memory cache to cut down on repeated expensive queries during bursts
+// of webhook traffic. The data is short-lived to ensure correctness while
+// significantly lowering the database pressure when the same SKU/warehouse data
+// arrives repeatedly within a short window.
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const cache = new Map();
+
+async function memoize(key, ttlMs, fetcher) {
+  const entry = cache.get(key);
+  const now = Date.now();
+  if (entry && now - entry.time < ttlMs) {
+    return entry.value;
+  }
+
+  const value = await fetcher();
+  cache.set(key, { value, time: now });
+  return value;
+}
+
 function resolvePeriod(periodKey = '1d') {
   const preset = PERIOD_PRESETS[periodKey] || PERIOD_PRESETS['1d'];
   const end = new Date();
@@ -62,20 +81,26 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
 }
 
 async function getDrrForSku(pool, { sku, warehouseId, periodKey = '7d' }) {
-  const aggregates = await getOrderAggregates(pool, { periodKey, warehouseId, sku });
-  return aggregates[0] || null;
+  const key = `drr:${sku}:${warehouseId ?? 'any'}:${periodKey}`;
+  return memoize(key, CACHE_TTL_MS, async () => {
+    const aggregates = await getOrderAggregates(pool, { periodKey, warehouseId, sku });
+    return aggregates[0] || null;
+  });
 }
 
 async function getReplenishmentRule(pool, sku, warehouseId) {
-  const [rows] = await pool.query(
-    `SELECT sku, warehouse_id, threshold, making_time_days
-     FROM ee_replenishment_rules
-     WHERE sku = ? AND (warehouse_id IS NULL OR warehouse_id = ?)
-     ORDER BY warehouse_id IS NULL DESC
-     LIMIT 1`,
-    [sku, warehouseId]
-  );
-  return rows[0] || null;
+  const key = `rule:${sku}:${warehouseId ?? 'any'}`;
+  return memoize(key, CACHE_TTL_MS, async () => {
+    const [rows] = await pool.query(
+      `SELECT sku, warehouse_id, threshold, making_time_days
+       FROM ee_replenishment_rules
+       WHERE sku = ? AND (warehouse_id IS NULL OR warehouse_id = ?)
+       ORDER BY warehouse_id IS NULL DESC
+       LIMIT 1`,
+      [sku, warehouseId]
+    );
+    return rows[0] || null;
+  });
 }
 
 async function refreshInventoryHealth(pool, { sku, warehouseId, inventory, periodKey = '7d' }) {
