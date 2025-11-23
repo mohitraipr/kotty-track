@@ -1,9 +1,11 @@
 // routes/inventoryWebhook.js
 const express = require('express');
-const webPush = require('web-push');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
+const {
+  refreshInventoryHealth,
+} = require('../utils/easyecomAnalytics');
 
 // Access token used to authenticate incoming EasyEcom webhooks
 const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
@@ -20,171 +22,238 @@ function verifyAccessToken(req, res, next) {
   return res.status(403).send('Invalid Access Token');
 }
 
-// Removed Twilio integration. Alerts are now sent to connected clients via SSE.
-
 // In-memory store for recent webhook requests
 const logs = [];
 const orderLogs = [];
-let orderSseClients = [];
-let sseClients = [];
-// Store push subscriptions in a Map keyed by endpoint for O(1) updates
-let pushSubscriptions = new Map();
-// Aggregate inventory alerts before sending push notifications
-const pendingPushAlerts = [];
-const PUSH_AGGREGATE_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
-async function loadPushSubscriptions() {
+async function persistInventorySnapshots(inventoryData = []) {
+  if (!Array.isArray(inventoryData) || !inventoryData.length) return [];
+
+  const results = [];
+  const connection = await pool.getConnection();
   try {
-    const [rows] = await pool.query(
-      'SELECT endpoint, p256dh, auth FROM push_subscriptions'
-    );
-    pushSubscriptions = new Map(
-      rows.map((r) => [
-        r.endpoint,
-        { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
-      ])
-    );
-  } catch (err) {
-    console.error('Failed to load push subscriptions', err);
-  }
-}
-
-// Configure web-push using VAPID keys from env
-if (global.env.VAPID_PUBLIC_KEY && global.env.VAPID_PRIVATE_KEY) {
-  try {
-    webPush.setVapidDetails(
-      'mailto:admin@example.com',
-      global.env.VAPID_PUBLIC_KEY,
-      global.env.VAPID_PRIVATE_KEY
-    );
-  } catch (err) {
-    console.error('Invalid VAPID keys', err);
-  }
-}
-
-function broadcastLog(log) {
-  const data = `data: ${JSON.stringify({ log })}\n\n`;
-  sseClients.forEach((client) => client.res.write(data));
-}
-
-
-function broadcastOrderLog(log) {
-  const data = `data: ${JSON.stringify({ log })}\n\n`;
-  orderSseClients.forEach((client) => client.res.write(data));
-}
-async function sendPendingPushNotifications() {
-  if (!pendingPushAlerts.length) return;
-  const unique = [...new Set(pendingPushAlerts.map((a) => a.sku))];
-  const message =
-    unique.length === 1
-      ? `Low inventory for ${unique[0]}`
-      : `Low inventory for ${unique.length} SKUs`;
-  const pushData = JSON.stringify({ message, url: `/inventory/alerts` });
-  const subs = Array.from(pushSubscriptions.values());
-  const results = await Promise.allSettled(
-    subs.map((sub) => webPush.sendNotification(sub, pushData))
-  );
-  const staleEndpoints = [];
-  results.forEach((result, idx) => {
-    if (result.status === 'rejected') {
-      const err = result.reason;
-      console.error('Push send failed', err);
-      const sub = subs[idx];
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        pushSubscriptions.delete(sub.endpoint);
-        staleEndpoints.push(sub.endpoint);
+    await connection.beginTransaction();
+    for (const item of inventoryData) {
+      if (!item || !item.sku) continue;
+      const payload = {
+        sku: item.sku.toUpperCase(),
+        warehouse_id: item.warehouse_id || item.warehouseId || null,
+        company_product_id: item.company_product_id || null,
+        product_id: item.product_id || null,
+        inventory: item.inventory != null ? Number(item.inventory) : null,
+        sku_status: item.sku_status || null,
+        location_key: item.location_key || null,
+        raw: JSON.stringify(item),
+      };
+      await connection.query(
+        `INSERT INTO ee_inventory_snapshots
+          (sku, warehouse_id, company_product_id, product_id, inventory, sku_status, location_key, raw)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          payload.sku,
+          payload.warehouse_id,
+          payload.company_product_id,
+          payload.product_id,
+          payload.inventory,
+          payload.sku_status,
+          payload.location_key,
+          payload.raw,
+        ]
+      );
+      results.push(payload);
+      if (payload.inventory !== null && payload.warehouse_id !== null) {
+        await refreshInventoryHealth(pool, {
+          sku: payload.sku,
+          warehouseId: payload.warehouse_id,
+          inventory: payload.inventory,
+        });
       }
     }
-  });
-  if (staleEndpoints.length) {
-    try {
-      const placeholders = staleEndpoints.map(() => '?').join(',');
-      await pool.query(
-        `DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`,
-        staleEndpoints
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+  return results;
+}
+
+async function persistOrders(orders = []) {
+  if (!Array.isArray(orders) || !orders.length) return [];
+  const savedOrders = [];
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const order of orders) {
+      if (!order || !order.order_id) continue;
+      const orderPayload = {
+        order_id: order.order_id,
+        invoice_id: order.invoice_id || null,
+        reference_code: order.reference_code || null,
+        company_name: order.company_name || null,
+        marketplace: order.marketplace || null,
+        marketplace_id: order.marketplace_id || null,
+        warehouse_id: order.warehouseId || order.import_warehouse_id || null,
+        location_key: order.location_key || null,
+        order_status: order.order_status || null,
+        order_status_id: order.order_status_id || null,
+        order_date: order.order_date || null,
+        import_date: order.import_date || null,
+        tat: order.tat || null,
+        last_update_date: order.last_update_date || null,
+        total_amount: order.total_amount || null,
+        total_tax: order.total_tax || null,
+        total_shipping_charge: order.total_shipping_charge || null,
+        total_discount: order.total_discount || null,
+        collectable_amount: order.collectable_amount || null,
+        order_quantity: order.order_quantity || null,
+        raw: JSON.stringify(order),
+      };
+
+      await connection.query(
+        `INSERT INTO ee_orders
+          (order_id, invoice_id, reference_code, company_name, marketplace, marketplace_id, warehouse_id, location_key, order_status, order_status_id, order_date, import_date, tat, last_update_date, total_amount, total_tax, total_shipping_charge, total_discount, collectable_amount, order_quantity, raw)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+          invoice_id = VALUES(invoice_id),
+          reference_code = VALUES(reference_code),
+          company_name = VALUES(company_name),
+          marketplace = VALUES(marketplace),
+          marketplace_id = VALUES(marketplace_id),
+          warehouse_id = VALUES(warehouse_id),
+          location_key = VALUES(location_key),
+          order_status = VALUES(order_status),
+          order_status_id = VALUES(order_status_id),
+          order_date = VALUES(order_date),
+          import_date = VALUES(import_date),
+          tat = VALUES(tat),
+          last_update_date = VALUES(last_update_date),
+          total_amount = VALUES(total_amount),
+          total_tax = VALUES(total_tax),
+          total_shipping_charge = VALUES(total_shipping_charge),
+          total_discount = VALUES(total_discount),
+          collectable_amount = VALUES(collectable_amount),
+          order_quantity = VALUES(order_quantity),
+          raw = VALUES(raw),
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          orderPayload.order_id,
+          orderPayload.invoice_id,
+          orderPayload.reference_code,
+          orderPayload.company_name,
+          orderPayload.marketplace,
+          orderPayload.marketplace_id,
+          orderPayload.warehouse_id,
+          orderPayload.location_key,
+          orderPayload.order_status,
+          orderPayload.order_status_id,
+          orderPayload.order_date,
+          orderPayload.import_date,
+          orderPayload.tat,
+          orderPayload.last_update_date,
+          orderPayload.total_amount,
+          orderPayload.total_tax,
+          orderPayload.total_shipping_charge,
+          orderPayload.total_discount,
+          orderPayload.collectable_amount,
+          orderPayload.order_quantity,
+          orderPayload.raw,
+        ]
       );
-    } catch (dbErr) {
-      console.error('Failed to delete push subscriptions', dbErr);
+
+      if (Array.isArray(order.suborders)) {
+        for (const sub of order.suborders) {
+          await connection.query(
+            `INSERT INTO ee_suborders
+              (order_id, suborder_id, sku, marketplace_sku, product_id, company_product_id, quantity, selling_price, tax, tax_rate, status, shipment_type, size, brand, category, product_name, warehouse_id, marketplace_id, order_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+              sku = VALUES(sku),
+              marketplace_sku = VALUES(marketplace_sku),
+              product_id = VALUES(product_id),
+              company_product_id = VALUES(company_product_id),
+              quantity = VALUES(quantity),
+              selling_price = VALUES(selling_price),
+              tax = VALUES(tax),
+              tax_rate = VALUES(tax_rate),
+              status = VALUES(status),
+              shipment_type = VALUES(shipment_type),
+              size = VALUES(size),
+              brand = VALUES(brand),
+              category = VALUES(category),
+              product_name = VALUES(product_name),
+              warehouse_id = VALUES(warehouse_id),
+              marketplace_id = VALUES(marketplace_id),
+              order_date = VALUES(order_date),
+              updated_at = CURRENT_TIMESTAMP`,
+            [
+              orderPayload.order_id,
+              sub.suborder_id,
+              (sub.sku || '').toUpperCase(),
+              sub.marketplace_sku || null,
+              sub.product_id || null,
+              sub.company_product_id || null,
+              sub.suborder_quantity || sub.item_quantity || null,
+              sub.selling_price || null,
+              sub.tax || null,
+              sub.tax_rate || null,
+              sub.item_status || null,
+              sub.shipment_type || null,
+              sub.size || null,
+              sub.brand || null,
+              sub.category || null,
+              sub.productName || null,
+              orderPayload.warehouse_id,
+              orderPayload.marketplace_id,
+              orderPayload.order_date,
+            ]
+          );
+        }
+      }
+      savedOrders.push(orderPayload);
     }
-  }
-  pendingPushAlerts.length = 0;
-}
-
-setInterval(sendPendingPushNotifications, PUSH_AGGREGATE_INTERVAL_MS);
-
-async function broadcastAlert(message, sku, quantity) {
-  const payload = { alert: { message, sku, quantity } };
-  const data = `data: ${JSON.stringify(payload)}\n\n`;
-  sseClients.forEach((client) => client.res.write(data));
-
-  // Queue push notifications instead of sending immediately
-  pendingPushAlerts.push({ sku, quantity });
-
-  // Persist the alert
-  try {
-    await pool.query(
-      'INSERT INTO inventory_alerts (sku, quantity, created_at) VALUES (?, ?, NOW())',
-      [sku, quantity]
-    );
+    await connection.commit();
   } catch (err) {
-    console.error('Failed to insert alert', err);
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
+  return savedOrders;
 }
 
-// Default alert configuration - will be replaced with DB values on startup
-// Map SKU -> threshold
-let alertConfig = {
-  skuThresholds: {
-    KTTWOMENSPANT261S: 30,
-  },
-};
-
-async function loadSkuThresholds() {
-  try {
-    const [rows] = await pool.query('SELECT sku, threshold FROM sku_thresholds');
-    const map = {};
-    for (const r of rows) {
-      map[r.sku.toUpperCase()] = r.threshold;
-    }
-    alertConfig.skuThresholds = map;
-  } catch (err) {
-    console.error('Failed to load SKU thresholds', err);
+function captureRawBody(req) {
+  if (Buffer.isBuffer(req.body)) {
+    return req.body.toString('utf8');
   }
+  if (typeof req.body === 'string') return req.body;
+  return JSON.stringify(req.body);
 }
 
-// Load configuration from DB on startup
-loadSkuThresholds();
-loadPushSubscriptions();
+function parseBody(raw) {
+  if (typeof raw === 'string') {
+    return JSON.parse(raw);
+  }
+  return raw;
+}
 
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
   '/inventory',
   verifyAccessToken,
-  express.raw({ type: 'application/json', limit: '1mb' }),
+  express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {
-    // 1) Inspect all incoming headers
     const headers = req.headers;
-
-    // 2) Determine if body is Buffer (when express.json did NOT run)
-    let raw;
-    if (Buffer.isBuffer(req.body)) {
-      raw = req.body.toString('utf8');
-    } else {
-      // Already parsed to object; reconstruct JSON string for logging
-      raw = JSON.stringify(req.body);
-    }
-
-
-    // 3) Parse JSON only when body is still a string
+    const raw = captureRawBody(req);
     let data;
     try {
-      data = Buffer.isBuffer(req.body) ? JSON.parse(raw) : req.body;
+      data = parseBody(raw);
     } catch (err) {
       return res.status(400).send('Invalid JSON');
     }
 
-    // Store log entry
-const entry = {
+    const entry = {
       time: new Date().toISOString(),
       headers,
       raw,
@@ -192,34 +261,15 @@ const entry = {
       accessToken: req.get('Access-Token'),
     };
     logs.push(entry);
-    // keep only last 50
     if (logs.length > 50) logs.shift();
-    broadcastLog(entry);
 
-    // ================= Custom Logic =================
     try {
-      if (Array.isArray(data.inventoryData)) {
-        for (const item of data.inventoryData) {
-          if (!item || typeof item.sku !== 'string') continue;
-
-          const sku = item.sku.toUpperCase();
-          const threshold = alertConfig.skuThresholds[sku];
-          const qty = Number(item.inventory);
-
-          if (threshold !== undefined && qty < threshold) {
-            const message = `Inventory alert for ${item.sku}: ${qty}`;
-            broadcastAlert(message, item.sku, qty).catch((e) =>
-              console.error('Broadcast alert failed', e)
-            );
-          }
-        }
-      }
+      const snapshots = await persistInventorySnapshots(data.inventoryData);
+      res.status(200).json({ ok: true, saved: snapshots.length });
     } catch (err) {
       console.error('Inventory webhook processing failed:', err);
+      res.status(500).json({ error: 'Failed to store inventory' });
     }
-
-    // Acknowledge receipt to prevent retries
-    res.status(200).send('OK');
   }
 );
 
@@ -227,18 +277,13 @@ const entry = {
 router.post(
   '/order',
   verifyAccessToken,
-  express.raw({ type: 'application/json', limit: '1mb' }),
+  express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {
     const headers = req.headers;
-    let raw;
-    if (Buffer.isBuffer(req.body)) {
-      raw = req.body.toString('utf8');
-    } else {
-      raw = JSON.stringify(req.body);
-    }
+    const raw = captureRawBody(req);
     let data;
     try {
-      data = Buffer.isBuffer(req.body) ? JSON.parse(raw) : req.body;
+      data = parseBody(raw);
     } catch (err) {
       return res.status(400).send('Invalid JSON');
     }
@@ -251,120 +296,15 @@ router.post(
     };
     orderLogs.push(entry);
     if (orderLogs.length > 50) orderLogs.shift();
-    broadcastOrderLog(entry);
-    res.status(200).send('OK');
+    try {
+      const saved = await persistOrders(data.orders);
+      res.status(200).json({ ok: true, saved: saved.length });
+    } catch (err) {
+      console.error('Order webhook processing failed:', err);
+      res.status(500).json({ error: 'Failed to store order payload' });
+    }
   }
 );
-
-// Render a simple page to update alert configuration
-router.get('/config', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
-  await loadSkuThresholds();
-  const configText = Object.entries(alertConfig.skuThresholds)
-    .map(([sku, th]) => `${sku}:${th}`)
-    .join('\n');
-  res.render('inventoryAlertConfig', {
-    configText,
-    thresholds: alertConfig.skuThresholds,
-    error: req.flash('error'),
-    success: req.flash('success'),
-  });
-});
-
-// Update alert configuration
-router.post('/config', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
-  if (typeof req.body.rules === 'string') {
-    const map = {};
-    req.body.rules
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .forEach((line) => {
-        const [sku, thresh] = line.split(':');
-        if (sku && thresh) {
-          const t = parseInt(thresh.trim(), 10);
-          if (!isNaN(t)) {
-            map[sku.trim().toUpperCase()] = t;
-          }
-        }
-      });
-
-    try {
-      const entries = Object.entries(map);
-      if (entries.length) {
-        const values = entries.map(() => '(?, ?)').join(',');
-        const params = entries.flatMap(([sku, th]) => [sku, th]);
-        await pool.query(
-          `INSERT INTO sku_thresholds (sku, threshold) VALUES ${values} ON DUPLICATE KEY UPDATE threshold = VALUES(threshold)`,
-          params
-        );
-      }
-    } catch (err) {
-      console.error('Failed to update SKU thresholds', err);
-      req.flash('error', 'Failed to save configuration');
-    }
-
-    await loadSkuThresholds();
-  }
-
-  req.flash('success', 'Alert configuration updated');
-  res.redirect('/webhook/config');
-});
-
-// Remove a single SKU threshold
-router.post('/config/remove', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
-  const sku = (req.body.sku || '').trim().toUpperCase();
-  if (sku) {
-    try {
-      await pool.query('DELETE FROM sku_thresholds WHERE sku = ?', [sku]);
-      await loadSkuThresholds();
-      req.flash('success', `Removed ${sku}`);
-    } catch (err) {
-      console.error('Failed to remove SKU threshold', err);
-      req.flash('error', 'Failed to remove SKU threshold');
-    }
-  }
-  res.redirect('/webhook/config');
-});
-
-// Remove all SKU thresholds
-router.post('/config/remove-all', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM sku_thresholds');
-    await loadSkuThresholds();
-    req.flash('success', 'Removed all thresholds');
-  } catch (err) {
-    console.error('Failed to remove all SKU thresholds', err);
-    req.flash('error', 'Failed to remove all SKU thresholds');
-  }
-  res.redirect('/webhook/config');
-});
-
-// Store push subscription from client
-router.post('/subscribe', isAuthenticated, isOperator, async (req, res) => {
-  if (req.body && req.body.endpoint) {
-    const sub = req.body;
-    // Avoid duplicates
-    pushSubscriptions.set(sub.endpoint, sub);
-
-    // Persist to database
-    try {
-      const userId = req.session.user ? req.session.user.id : null;
-      const { endpoint, keys = {} } = sub;
-      const p256dh = keys.p256dh || '';
-      const auth = keys.auth || '';
-      await pool.query(
-        'INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE p256dh = VALUES(p256dh), auth = VALUES(auth)',
-        [userId, endpoint, p256dh, auth]
-      );
-    } catch (err) {
-      console.error('Failed to store push subscription', err);
-    }
-
-    res.status(201).json({ ok: true });
-  } else {
-    res.status(400).json({ error: 'Invalid subscription' });
-  }
-});
 
 // View webhook logs
 router.get('/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
@@ -372,38 +312,6 @@ router.get('/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => 
 });
 router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
   res.render('orderWebhookLogs', { logs: orderLogs });
-});
-router.get('/order/logs/stream', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-  res.write(`data: ${JSON.stringify({ logs: orderLogs })}\n\n`);
-  const clientId = Date.now();
-  const client = { id: clientId, res };
-  orderSseClients.push(client);
-  req.on('close', () => {
-    orderSseClients = orderSseClients.filter((c) => c.id !== clientId);
-  });
-});
-
-// Stream logs via Server-Sent Events
-router.get('/logs/stream', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  // Send existing logs on connect
-  res.write(`data: ${JSON.stringify({ logs })}\n\n`);
-
-  const clientId = Date.now();
-  const client = { id: clientId, res };
-  sseClients.push(client);
-
-  req.on('close', () => {
-    sseClients = sseClients.filter((c) => c.id !== clientId);
-  });
 });
 
 module.exports = router;
