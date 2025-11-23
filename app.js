@@ -98,6 +98,7 @@ const apiAuthRoutes = require('./routes/apiAuthRoutes');
 const apiRoutes = require('./routes/apiRoutes');
 const productionApiRoutes = require('./routes/productionApiRoutes');
 const easyecomApiRoutes = require('./routes/easyecomapi');
+const easyecomUiRoutes = require('./routes/easyecomRoutes');
 const featuresRoutes = require('./routes/featuresRoutes');
 const indentRoutes = require('./routes/indentRoutes');
 
@@ -137,6 +138,7 @@ app.use('/api', apiAuthRoutes);
 app.use('/api', apiRoutes);
 app.use('/api', productionApiRoutes);
 app.use('/api/easyecom', easyecomApiRoutes);
+app.use('/easyecom', easyecomUiRoutes);
 app.use('/', featuresRoutes);
 app.use('/indent', indentRoutes);
 

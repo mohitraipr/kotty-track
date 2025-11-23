@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EasyEcom Orders & Inventory</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background-color: #f5f7fb; }
+    .card { box-shadow: 0 6px 18px rgba(0,0,0,0.05); }
+    .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .dot-green { background-color: #28a745; }
+    .dot-orange { background-color: #fd7e14; }
+    .dot-red { background-color: #dc3545; }
+    .muted-label { font-size: 0.9rem; color: #6c757d; }
+    #status-banner { display: none; }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">EasyEcom Ops</span>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <% if (user) { %>
+        <span class="text-light small">Signed in as <strong><%= user.username || user.name %></strong></span>
+      <% } %>
+      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container py-4">
+  <div id="status-banner" class="alert" role="alert"></div>
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+    <div>
+      <h3 class="mb-0">Orders & Inventory Health</h3>
+      <p class="text-muted mb-0">Realtime monitoring powered by EasyEcom webhooks and analytics.</p>
+    </div>
+    <div class="btn-group" role="group">
+      <button id="refresh-now" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat me-1"></i>Refresh now</button>
+      <button id="toggle-auto" class="btn btn-outline-secondary btn-sm" data-enabled="true"><i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: On</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="card-title mb-0">Filters</h5>
+            <span class="badge bg-light text-dark">Period: <span id="period-label"><%= period.label %></span></span>
+          </div>
+          <form id="filter-form" class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Time window</label>
+              <select id="period" name="period" class="form-select form-select-sm">
+                <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
+                  <option value="<%= key %>" <%= key === period.key ? 'selected' : '' %>><%= preset.label %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Marketplace ID</label>
+              <input id="marketplaceId" name="marketplaceId" class="form-control form-control-sm" value="<%= filters.marketplaceId %>" placeholder="Optional">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Warehouse ID</label>
+              <input id="warehouseId" name="warehouseId" class="form-control form-control-sm" value="<%= filters.warehouseId %>" placeholder="Optional">
+            </div>
+            <div class="col-12">
+              <label class="form-label">SKU</label>
+              <input id="sku" name="sku" class="form-control form-control-sm" value="<%= filters.sku %>" placeholder="Optional">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Inventory status filter</label>
+              <select id="invStatus" class="form-select form-select-sm">
+                <option value="">Any</option>
+                <option value="green">Healthy</option>
+                <option value="orange">Watch</option>
+                <option value="red">At risk</option>
+              </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Apply</button>
+              <button type="button" id="clear-filters" class="btn btn-outline-secondary btn-sm">Reset</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Replenishment rule</h5>
+          <p class="muted-label">Save thresholds to influence reorder signals.</p>
+          <form id="rule-form" class="row g-2">
+            <div class="col-6">
+              <label class="form-label">SKU *</label>
+              <input name="sku" class="form-control form-control-sm" placeholder="e.g. KOT-123" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Warehouse</label>
+              <input name="warehouse_id" class="form-control form-control-sm" placeholder="Optional">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Threshold</label>
+              <input name="threshold" type="number" class="form-control form-control-sm" min="0" step="1">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Making time (days)</label>
+              <input name="making_time_days" type="number" class="form-control form-control-sm" min="0" step="1">
+            </div>
+            <div class="col-12">
+              <button class="btn btn-success btn-sm w-100" type="submit"><i class="bi bi-save me-1"></i>Save rule</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Inventory health check</h5>
+          <p class="muted-label">Force a recalculation for a SKU/warehouse pairing.</p>
+          <form id="health-form" class="row g-2">
+            <div class="col-5">
+              <label class="form-label">SKU *</label>
+              <input name="sku" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-3">
+              <label class="form-label">Warehouse *</label>
+              <input name="warehouse_id" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-4">
+              <label class="form-label">Inventory *</label>
+              <input name="inventory" type="number" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Lookback window</label>
+              <select name="period" class="form-select form-select-sm">
+                <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
+                  <option value="<%= key %>" <%= key === '7d' ? 'selected' : '' %>><%= preset.label %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12">
+              <button class="btn btn-outline-primary btn-sm w-100" type="submit"><i class="bi bi-activity me-1"></i>Refresh health</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title mb-0">Order momentum</h5>
+              <small class="text-muted">Aggregated orders inside the selected window.</small>
+            </div>
+            <span class="badge text-bg-light">Updated <span id="summary-updated">just now</span></span>
+          </div>
+          <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle" id="order-summary-table">
+              <thead class="table-light">
+                <tr>
+                  <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th>Marketplace</th>
+                  <th class="text-end">Orders</th>
+                  <th class="text-end">Orders/day</th>
+                  <th>Last order</th>
+                </tr>
+              </thead>
+              <tbody id="order-summary-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title mb-0">Realtime order feed</h5>
+              <small class="text-muted">Automatically refreshes every 15 seconds.</small>
+            </div>
+            <span class="badge bg-dark" id="realtime-window"><%= period.label %></span>
+          </div>
+          <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle" id="order-realtime-table">
+              <thead class="table-dark">
+                <tr>
+                  <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th>Marketplace</th>
+                  <th class="text-end">Orders</th>
+                  <th class="text-end">Orders/day</th>
+                  <th>Last order</th>
+                </tr>
+              </thead>
+              <tbody id="order-realtime-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Inventory status</h5>
+            <span class="badge text-bg-secondary" id="status-count">0 SKUs</span>
+          </div>
+          <div class="table-responsive mt-3" style="max-height: 420px; overflow-y: auto;">
+            <table class="table table-sm align-middle" id="inventory-status-table">
+              <thead class="table-light">
+                <tr>
+                  <th>SKU</th>
+                  <th>WH</th>
+                  <th>Status</th>
+                  <th class="text-end">Inventory</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-status-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Alerts</h5>
+            <span class="badge text-bg-danger" id="alert-count">0</span>
+          </div>
+          <div class="table-responsive mt-3" style="max-height: 260px; overflow-y: auto;">
+            <table class="table table-sm" id="alerts-table">
+              <thead class="table-light">
+                <tr>
+                  <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th>Qty</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody id="alert-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const initialOrders = <%- JSON.stringify(orders || []) %>;
+  const initialAlerts = <%- JSON.stringify(alerts || []) %>;
+  const initialStatuses = <%- JSON.stringify(statuses || []) %>;
+  const initialFilters = <%- JSON.stringify(filters || {}) %>;
+
+  const periodSelect = document.getElementById('period');
+  const marketplaceInput = document.getElementById('marketplaceId');
+  const warehouseInput = document.getElementById('warehouseId');
+  const skuInput = document.getElementById('sku');
+  const invStatusInput = document.getElementById('invStatus');
+
+  const banner = document.getElementById('status-banner');
+  const summaryBody = document.getElementById('order-summary-body');
+  const realtimeBody = document.getElementById('order-realtime-body');
+  const alertBody = document.getElementById('alert-body');
+  const statusBody = document.getElementById('inventory-status-body');
+  const statusCount = document.getElementById('status-count');
+  const alertCount = document.getElementById('alert-count');
+  const periodLabel = document.getElementById('period-label');
+  const realtimeWindow = document.getElementById('realtime-window');
+  const summaryUpdated = document.getElementById('summary-updated');
+
+  let autoRefresh = true;
+  let realtimeTimer = null;
+
+  function formatDate(value) {
+    if (!value) return '—';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString('en-CA', { hour12: false });
+  }
+
+  function renderOrders(rows, targetBody) {
+    targetBody.innerHTML = '';
+    if (!rows || !rows.length) {
+      targetBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No data</td></tr>';
+      return;
+    }
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${row.sku || '—'}</td>
+        <td>${row.warehouse_id ?? '—'}</td>
+        <td>${row.marketplace_id ?? '—'}</td>
+        <td class="text-end">${row.order_count ?? 0}</td>
+        <td class="text-end">${(row.drr_per_day ?? 0).toFixed(2)}</td>
+        <td>${formatDate(row.last_order_date)}</td>
+      `;
+      targetBody.appendChild(tr);
+    });
+  }
+
+  function renderAlerts(rows) {
+    alertBody.innerHTML = '';
+    if (!rows || !rows.length) {
+      alertBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No alerts</td></tr>';
+      alertCount.textContent = '0';
+      return;
+    }
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${row.sku}</td>
+        <td>${row.warehouse_id ?? '—'}</td>
+        <td>${row.inventory ?? row.quantity ?? '—'}</td>
+        <td>${formatDate(row.created_at || row.updated_at)}</td>
+      `;
+      alertBody.appendChild(tr);
+    });
+    alertCount.textContent = rows.length;
+  }
+
+  function renderStatuses(rows) {
+    statusBody.innerHTML = '';
+    if (!rows || !rows.length) {
+      statusBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No inventory rows</td></tr>';
+      statusCount.textContent = '0 SKUs';
+      return;
+    }
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      const color = row.status === 'red' ? 'dot-red' : row.status === 'orange' ? 'dot-orange' : 'dot-green';
+      tr.innerHTML = `
+        <td>${row.sku}</td>
+        <td>${row.warehouse_id ?? '—'}</td>
+        <td><span class="status-dot ${color}"></span>${row.status}</td>
+        <td class="text-end">${row.inventory ?? '—'}</td>
+      `;
+      statusBody.appendChild(tr);
+    });
+    statusCount.textContent = `${rows.length} SKU${rows.length === 1 ? '' : 's'}`;
+  }
+
+  function showBanner(message, type = 'info') {
+    banner.textContent = message;
+    banner.className = `alert alert-${type}`;
+    banner.style.display = 'block';
+    setTimeout(() => { banner.style.display = 'none'; }, 4000);
+  }
+
+  function currentQuery() {
+    return {
+      period: periodSelect.value,
+      marketplaceId: marketplaceInput.value.trim(),
+      warehouseId: warehouseInput.value.trim(),
+      sku: skuInput.value.trim().toUpperCase(),
+      status: invStatusInput.value,
+    };
+  }
+
+  async function fetchJson(url, options = {}) {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Request failed');
+    }
+    return res.json();
+  }
+
+  async function refreshSummary() {
+    const query = currentQuery();
+    const params = new URLSearchParams({
+      period: query.period,
+      marketplaceId: query.marketplaceId,
+      warehouseId: query.warehouseId,
+      sku: query.sku,
+    });
+    const data = await fetchJson(`/api/easyecom/orders/summary?${params.toString()}`);
+    renderOrders(data.results, summaryBody);
+    periodLabel.textContent = data.period.label;
+    realtimeWindow.textContent = data.period.label;
+    summaryUpdated.textContent = 'just now';
+  }
+
+  async function refreshRealtime() {
+    const query = currentQuery();
+    const params = new URLSearchParams({
+      period: query.period,
+      marketplaceId: query.marketplaceId,
+      warehouseId: query.warehouseId,
+      sku: query.sku,
+    });
+    const data = await fetchJson(`/api/easyecom/orders/realtime?${params.toString()}`);
+    renderOrders(data.results, realtimeBody);
+  }
+
+  async function refreshAlerts() {
+    const query = currentQuery();
+    const params = new URLSearchParams();
+    if (query.warehouseId) params.set('warehouseId', query.warehouseId);
+    const data = await fetchJson(`/api/easyecom/inventory/alerts?${params.toString()}`);
+    renderAlerts(data.alerts || []);
+  }
+
+  async function refreshStatuses() {
+    const query = currentQuery();
+    const params = new URLSearchParams();
+    if (query.warehouseId) params.set('warehouseId', query.warehouseId);
+    if (query.status) params.set('status', query.status);
+    const data = await fetchJson(`/api/easyecom/inventory/status?${params.toString()}`);
+    renderStatuses(data.statuses || []);
+  }
+
+  function scheduleRealtime() {
+    if (realtimeTimer) clearInterval(realtimeTimer);
+    if (!autoRefresh) return;
+    realtimeTimer = setInterval(refreshRealtime, 15000);
+  }
+
+  document.getElementById('refresh-now').addEventListener('click', async () => {
+    try {
+      await Promise.all([refreshSummary(), refreshRealtime(), refreshAlerts(), refreshStatuses()]);
+      showBanner('Dashboard refreshed', 'success');
+    } catch (err) {
+      console.error(err);
+      showBanner('Refresh failed: ' + err.message, 'danger');
+    }
+  });
+
+  document.getElementById('toggle-auto').addEventListener('click', (e) => {
+    autoRefresh = !autoRefresh;
+    e.target.dataset.enabled = autoRefresh;
+    e.target.innerHTML = `<i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: ${autoRefresh ? 'On' : 'Off'}`;
+    if (autoRefresh) {
+      refreshRealtime().catch(console.error);
+      scheduleRealtime();
+    } else if (realtimeTimer) {
+      clearInterval(realtimeTimer);
+    }
+  });
+
+  document.getElementById('filter-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await Promise.all([refreshSummary(), refreshRealtime(), refreshAlerts(), refreshStatuses()]);
+      showBanner('Filters applied', 'success');
+      summaryUpdated.textContent = 'just now';
+    } catch (err) {
+      showBanner('Failed to apply filters: ' + err.message, 'danger');
+    }
+  });
+
+  document.getElementById('clear-filters').addEventListener('click', () => {
+    periodSelect.value = '<%= period.key %>';
+    marketplaceInput.value = '';
+    warehouseInput.value = '';
+    skuInput.value = '';
+    invStatusInput.value = '';
+  });
+
+  document.getElementById('rule-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.sku = (payload.sku || '').toUpperCase();
+    try {
+      await fetchJson('/api/easyecom/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      showBanner('Rule saved', 'success');
+      form.reset();
+    } catch (err) {
+      showBanner('Unable to save rule: ' + err.message, 'danger');
+    }
+  });
+
+  document.getElementById('health-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const payload = Object.fromEntries(new FormData(form).entries());
+    payload.sku = (payload.sku || '').toUpperCase();
+    payload.inventory = Number(payload.inventory);
+    try {
+      const result = await fetchJson('/api/easyecom/inventory/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      showBanner('Inventory health refreshed', 'success');
+      renderStatuses([result.health]);
+      form.reset();
+    } catch (err) {
+      showBanner('Failed to refresh health: ' + err.message, 'danger');
+    }
+  });
+
+  function hydrateInitial() {
+    if (initialFilters.status) {
+      invStatusInput.value = initialFilters.status;
+    }
+    renderOrders(initialOrders, summaryBody);
+    renderOrders(initialOrders, realtimeBody);
+    renderAlerts(initialAlerts);
+    renderStatuses(initialStatuses);
+    scheduleRealtime();
+  }
+
+  hydrateInitial();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
