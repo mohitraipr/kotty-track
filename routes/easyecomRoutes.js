@@ -10,12 +10,25 @@ const {
   getInventoryStatuses,
   getInventoryRunway,
   getMomentumWithGrowth,
+  saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
 
 const PERIOD_KEYS = new Set(Object.keys(PERIOD_PRESETS));
 function normalizePeriod(period) {
   if (PERIOD_KEYS.has(period)) return period;
   return '1d';
+}
+
+function allowStockMarketAccess(req, res, next) {
+  const username = req.session?.user?.username?.toLowerCase();
+  const role = req.session?.user?.roleName;
+
+  if (username === 'mohitoperator' || role === 'inventory_operator' || role === 'operator') {
+    return next();
+  }
+
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
 }
 
 router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
@@ -54,7 +67,7 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
-router.get('/stock-market', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
     const [inventory, orders] = await Promise.all([
@@ -77,7 +90,7 @@ router.get('/stock-market', isAuthenticated, isOnlyMohitOperator, async (req, re
   }
 });
 
-router.get('/stock-market/data', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
     const [inventory, orders] = await Promise.all([
