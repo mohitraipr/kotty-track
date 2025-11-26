@@ -147,6 +147,15 @@ function isMohitOperator(req, res, next) {
   return res.redirect('/');
 }
 
+function isOnlyMohitOperator(req, res, next) {
+  const username = req.session?.user?.username;
+  if (username && username.toLowerCase() === 'mohitoperator') {
+    return next();
+  }
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
+}
+
 // ---------------------------------------------------------------------------
 // Helper to restrict routes to specific user ids
 function allowUserIds(ids) {
@@ -200,6 +209,7 @@ module.exports = {
     isIndentFiller,
     isStoreManager,
     isMohitOperator,
+    isOnlyMohitOperator,
     allowUserIds,
     allowRoles
 };
