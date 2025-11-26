@@ -8,6 +8,8 @@ const {
   getOrderAggregates,
   getInventoryAlerts,
   getInventoryStatuses,
+  getInventoryRunway,
+  getMomentumWithGrowth,
 } = require('../utils/easyecomAnalytics');
 
 const PERIOD_KEYS = new Set(Object.keys(PERIOD_PRESETS));
@@ -48,6 +50,29 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Failed to render EasyEcom Ops UI:', err);
     req.flash('error', 'Could not load EasyEcom operations');
+    res.redirect('/');
+  }
+});
+
+router.get('/stock-market', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const periodKey = normalizePeriod(req.query.period);
+    const [inventory, orders] = await Promise.all([
+      getInventoryRunway(pool),
+      getMomentumWithGrowth(pool, { periodKey }),
+    ]);
+
+    res.render('stockMarket', {
+      user: req.session?.user || null,
+      inventory,
+      orders,
+      periodKey,
+      period: resolvePeriod(periodKey),
+      periodPresets: PERIOD_PRESETS,
+    });
+  } catch (err) {
+    console.error('Failed to render stock market view:', err);
+    req.flash('error', 'Could not load stock market view');
     res.redirect('/');
   }
 });
