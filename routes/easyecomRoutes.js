@@ -10,6 +10,7 @@ const {
   getInventoryStatuses,
   getInventoryRunway,
   getMomentumWithGrowth,
+  saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
 
 const PERIOD_KEYS = new Set(Object.keys(PERIOD_PRESETS));
@@ -54,7 +55,7 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
-router.get('/stock-market', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+router.get('/stock-market', isAuthenticated, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
     const [inventory, orders] = await Promise.all([
@@ -77,7 +78,7 @@ router.get('/stock-market', isAuthenticated, isOnlyMohitOperator, async (req, re
   }
 });
 
-router.get('/stock-market/data', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+router.get('/stock-market/data', isAuthenticated, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
     const [inventory, orders] = await Promise.all([
