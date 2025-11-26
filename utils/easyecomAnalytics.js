@@ -215,6 +215,149 @@ async function getInventoryStatuses(pool, { warehouseId, status }) {
   return rows;
 }
 
+function getYesterdayBounds() {
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+function buildRuleMaps(ruleRows = []) {
+  const specific = new Map();
+  const defaults = new Map();
+
+  for (const rule of ruleRows) {
+    if (rule.warehouse_id === null || rule.warehouse_id === undefined) {
+      defaults.set(rule.sku, rule);
+    } else {
+      specific.set(`${rule.sku}:${rule.warehouse_id}`, rule);
+    }
+  }
+  return { specific, defaults };
+}
+
+async function getYesterdayOrdersBySku(pool) {
+  const { start, end } = getYesterdayBounds();
+  const [rows] = await pool.query(
+    `SELECT es.sku, eo.warehouse_id, COUNT(*) AS orders
+     FROM ee_suborders es
+     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+     WHERE eo.order_date >= ? AND eo.order_date < ?
+     GROUP BY es.sku, eo.warehouse_id`,
+    [start, end]
+  );
+
+  const map = new Map();
+  for (const row of rows) {
+    const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
+    map.set(key, Number(row.orders) || 0);
+  }
+  return map;
+}
+
+async function getInventoryRunway(pool) {
+  const [healthRows, ruleRows] = await Promise.all([
+    pool.query('SELECT sku, warehouse_id, inventory FROM ee_inventory_health').then((r) => r[0]),
+    pool
+      .query('SELECT sku, warehouse_id, making_time_days FROM ee_replenishment_rules')
+      .then((r) => r[0]),
+  ]);
+
+  const yesterdayOrders = await getYesterdayOrdersBySku(pool);
+  const { specific, defaults } = buildRuleMaps(ruleRows);
+  const statusOrder = { red: 0, purple: 1, green: 2 };
+
+  const rows = healthRows.map((row) => {
+    const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
+    const rule = specific.get(key) || defaults.get(row.sku);
+    const makingTimeDays = rule?.making_time_days ? Number(rule.making_time_days) : 0;
+    const orders = yesterdayOrders.get(key) || 0;
+
+    let daysLeft;
+    if (orders <= 0) {
+      daysLeft = Number.POSITIVE_INFINITY;
+    } else {
+      const coverableDays = Number(row.inventory || 0) / orders;
+      daysLeft = coverableDays - makingTimeDays;
+    }
+
+    let status = 'green';
+    if (!Number.isFinite(daysLeft) || daysLeft === null) {
+      status = 'green';
+    } else if (daysLeft <= 0) {
+      status = 'red';
+    } else if (daysLeft < 3) {
+      status = 'purple';
+    }
+
+    return {
+      sku: row.sku,
+      warehouse_id: row.warehouse_id,
+      inventory: Number(row.inventory || 0),
+      making_time_days: makingTimeDays,
+      yesterday_orders: orders,
+      days_left: daysLeft,
+      status,
+      status_sort: statusOrder[status] ?? 3,
+    };
+  });
+
+  return rows.sort((a, b) => {
+    if (a.status_sort !== b.status_sort) return a.status_sort - b.status_sort;
+    return (b.yesterday_orders || 0) - (a.yesterday_orders || 0);
+  });
+}
+
+async function getAggregateForWindow(pool, start, end) {
+  const [rows] = await pool.query(
+    `SELECT es.sku, eo.warehouse_id, COUNT(*) AS order_count
+     FROM ee_suborders es
+     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+     WHERE eo.order_date >= ? AND eo.order_date < ?
+     GROUP BY es.sku, eo.warehouse_id`,
+    [start, end]
+  );
+  return rows;
+}
+
+async function getMomentumWithGrowth(pool, { periodKey = '1d' } = {}) {
+  const period = resolvePeriod(periodKey);
+  const prevEnd = period.start;
+  const prevStart = new Date(prevEnd.getTime() - period.hours * 60 * 60 * 1000);
+
+  const [currentRows, prevRows] = await Promise.all([
+    getAggregateForWindow(pool, period.start, period.end),
+    getAggregateForWindow(pool, prevStart, prevEnd),
+  ]);
+
+  const prevMap = new Map();
+  for (const row of prevRows) {
+    prevMap.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
+  }
+
+  const combined = currentRows.map((row) => {
+    const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
+    const previousCount = prevMap.get(key) || 0;
+    const currentCount = Number(row.order_count) || 0;
+    const growth = previousCount > 0
+      ? ((currentCount - previousCount) / previousCount) * 100
+      : currentCount > 0
+        ? 100
+        : 0;
+
+    return {
+      sku: row.sku,
+      warehouse_id: row.warehouse_id,
+      orders: currentCount,
+      previous_orders: previousCount,
+      growth,
+    };
+  });
+
+  combined.sort((a, b) => (b.orders || 0) - (a.orders || 0));
+  return combined;
+}
+
 module.exports = {
   PERIOD_PRESETS,
   resolvePeriod,
@@ -224,4 +367,6 @@ module.exports = {
   saveReplenishmentRule,
   getInventoryAlerts,
   getInventoryStatuses,
+  getInventoryRunway,
+  getMomentumWithGrowth,
 };
