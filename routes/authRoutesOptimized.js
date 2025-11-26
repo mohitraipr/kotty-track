@@ -71,6 +71,7 @@ router.post('/login', async (req, res) => {
       fabric_manager: '/fabric-manager/dashboard',
       stitching_master: '/stitchingdashboard',
       operator: '/operator/dashboard',
+      inventory_operator: '/easyecom/stock-market',
       supervisor: '/supervisor/employees',
       finishing: '/finishingDashboard',
       washing: '/washingdashboard',
