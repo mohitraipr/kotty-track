@@ -255,6 +255,27 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
       `SELECT
          u.id AS washer_id,
          u.username,
+
+         COALESCE(ap.approvedLots, 0) AS approvedLots,
+         COALESCE(wc.completedLots, 0) AS completedLots
+       FROM users u
+       LEFT JOIN (
+         SELECT wa.user_id, COUNT(DISTINCT jd.lot_no) AS approvedLots
+           FROM washing_assignments wa
+           LEFT JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+          WHERE wa.is_approved = 1
+            AND DATE(wa.approved_on) BETWEEN ? AND ?
+          GROUP BY wa.user_id
+       ) ap ON ap.user_id = u.id
+       LEFT JOIN (
+         SELECT wd.user_id, COUNT(DISTINCT wd.lot_no) AS completedLots
+           FROM washing_data wd
+          WHERE DATE(wd.created_at) BETWEEN ? AND ?
+          GROUP BY wd.user_id
+       ) wc ON wc.user_id = u.id
+      WHERE ap.user_id IS NOT NULL OR wc.user_id IS NOT NULL
+      ORDER BY u.username ASC`,
+
          COUNT(DISTINCT CASE
            WHEN wa.is_approved = 1 AND DATE(wa.approved_on) BETWEEN ? AND ? THEN jd.lot_no
          END) AS approvedLots,
@@ -267,6 +288,7 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
        LEFT JOIN washing_data wd ON wd.washing_assignment_id = wa.id
        GROUP BY u.id, u.username
        ORDER BY u.username ASC`,
+
       [startDate, endDate, startDate, endDate]
     );
 
