@@ -275,20 +275,6 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
        ) wc ON wc.user_id = u.id
       WHERE ap.user_id IS NOT NULL OR wc.user_id IS NOT NULL
       ORDER BY u.username ASC`,
-
-         COUNT(DISTINCT CASE
-           WHEN wa.is_approved = 1 AND DATE(wa.approved_on) BETWEEN ? AND ? THEN jd.lot_no
-         END) AS approvedLots,
-         COUNT(DISTINCT CASE
-           WHEN DATE(wd.created_at) BETWEEN ? AND ? THEN wd.lot_no
-         END) AS completedLots
-       FROM washing_assignments wa
-       JOIN users u ON wa.user_id = u.id
-       LEFT JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-       LEFT JOIN washing_data wd ON wd.washing_assignment_id = wa.id
-       GROUP BY u.id, u.username
-       ORDER BY u.username ASC`,
-
       [startDate, endDate, startDate, endDate]
     );
 
