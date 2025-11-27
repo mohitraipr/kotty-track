@@ -234,6 +234,49 @@ async function computeAdvancedAnalytics(startDate, endDate) {
   });
 }
 
+router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: "startDate and endDate are required" });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid date range" });
+    }
+    if (start > end) {
+      return res.status(400).json({ error: "startDate cannot be after endDate" });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT
+         u.id AS washer_id,
+         u.username,
+         COUNT(DISTINCT CASE
+           WHEN wa.is_approved = 1 AND DATE(wa.approved_on) BETWEEN ? AND ? THEN jd.lot_no
+         END) AS approvedLots,
+         COUNT(DISTINCT CASE
+           WHEN DATE(wd.created_at) BETWEEN ? AND ? THEN wd.lot_no
+         END) AS completedLots
+       FROM washing_assignments wa
+       JOIN users u ON wa.user_id = u.id
+       LEFT JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+       LEFT JOIN washing_data wd ON wd.washing_assignment_id = wa.id
+       GROUP BY u.id, u.username
+       ORDER BY u.username ASC`,
+      [startDate, endDate, startDate, endDate]
+    );
+
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error("Error in /dashboard/washer-activity:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 /**************************************************
  * 3) /operator/dashboard – must define lotCount etc.
  **************************************************/

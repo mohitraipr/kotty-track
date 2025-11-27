@@ -359,6 +359,34 @@
       </div>
     </div>
 
+    <!-- Washer Approvals vs Completions -->
+    <div class="data-panel mb-4">
+      <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-bucket"></i> Washer approvals vs completions</span>
+        <div class="d-flex align-items-center gap-2">
+          <input type="date" id="washerStartDate" class="form-control form-control-sm" aria-label="Start date for washer stats">
+          <input type="date" id="washerEndDate" class="form-control form-control-sm" aria-label="End date for washer stats">
+          <button id="loadWasherStats" class="btn btn-primary btn-sm">Apply</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Washer</th>
+                <th>Approved Lots</th>
+                <th>Completed Lots</th>
+              </tr>
+            </thead>
+            <tbody id="washerStatsBody">
+              <tr><td colspan="3" class="text-center text-muted">Select a date range to load washer performance.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Operator Performance Panel -->
     <div class="data-panel mb-4">
       <div class="panel-header"><i class="bi bi-people"></i> Operator Tracking</div>
@@ -439,6 +467,69 @@
             ? '<i class="bi bi-moon"></i>'
             : '<i class="bi bi-sun"></i>';
         });
+      }
+
+      // Washer approvals vs completions
+      const washerStartInput = document.getElementById('washerStartDate');
+      const washerEndInput = document.getElementById('washerEndDate');
+      const washerTableBody = document.getElementById('washerStatsBody');
+      const loadWasherBtn = document.getElementById('loadWasherStats');
+
+      const formatDateForInput = (dateObj) => {
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      };
+
+      const setDefaultWasherRange = () => {
+        if (!washerStartInput || !washerEndInput) return;
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 7);
+        washerStartInput.value = formatDateForInput(start);
+        washerEndInput.value = formatDateForInput(end);
+      };
+
+      const renderWasherRows = (rows = []) => {
+        if (!washerTableBody) return;
+        if (!rows.length) {
+          washerTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No activity found for this range.</td></tr>';
+          return;
+        }
+        washerTableBody.innerHTML = rows.map(r => `
+          <tr>
+            <td>${r.username || 'N/A'}</td>
+            <td>${r.approvedLots || 0}</td>
+            <td>${r.completedLots || 0}</td>
+          </tr>
+        `).join('');
+      };
+
+      const loadWasherStats = async () => {
+        if (!washerStartInput || !washerEndInput || !washerTableBody) return;
+        const startVal = washerStartInput.value;
+        const endVal = washerEndInput.value;
+        if (!startVal || !endVal) {
+          washerTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Select both start and end dates.</td></tr>';
+          return;
+        }
+        try {
+          washerTableBody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+          const res = await fetch(`/operator/dashboard/washer-activity?startDate=${encodeURIComponent(startVal)}&endDate=${encodeURIComponent(endVal)}`);
+          if (!res.ok) throw new Error('Failed to load washer activity');
+          const json = await res.json();
+          renderWasherRows(json.data || []);
+        } catch (err) {
+          console.error('Error fetching washer activity:', err);
+          washerTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Unable to load washer activity.</td></tr>';
+        }
+      };
+
+      if (loadWasherBtn) {
+        loadWasherBtn.addEventListener('click', loadWasherStats);
+        setDefaultWasherRange();
+        loadWasherStats();
       }
 
       // Pendency Table Setup
