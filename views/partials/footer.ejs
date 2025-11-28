@@ -1,0 +1,126 @@
+  <!-- Bootstrap JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Page-specific JavaScript -->
+  <% if (typeof additionalJS !== 'undefined' && additionalJS.length > 0) { %>
+    <% additionalJS.forEach(function(js) { %>
+      <script src="<%= js %>"></script>
+    <% }); %>
+  <% } %>
+
+  <!-- Inline JavaScript -->
+  <%= typeof inlineJS !== 'undefined' ? inlineJS : '' %>
+
+  <!-- Global Kotty Track Scripts -->
+  <script>
+    // Initialize all tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+
+      // Initialize all popovers
+      const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+      popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl);
+      });
+
+      // Auto-dismiss alerts after 5 seconds
+      const alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
+      alerts.forEach(function(alert) {
+        setTimeout(function() {
+          const bsAlert = new bootstrap.Alert(alert);
+          bsAlert.close();
+        }, 5000);
+      });
+
+      // Add fade-in animation to cards
+      const cards = document.querySelectorAll('.kotty-card');
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      };
+
+      const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.opacity = '0';
+            entry.target.style.transform = 'translateY(20px)';
+            entry.target.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+
+            setTimeout(() => {
+              entry.target.style.opacity = '1';
+              entry.target.style.transform = 'translateY(0)';
+            }, 100);
+
+            observer.unobserve(entry.target);
+          }
+        });
+      }, observerOptions);
+
+      cards.forEach(card => observer.observe(card));
+
+      // Service Worker for PWA (if needed)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      }
+    });
+
+    // Global helper functions
+    window.KottyTrack = {
+      // Show toast notification
+      showToast: function(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+          <div class="d-flex align-items-center">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+            <div>${message}</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+          const bsAlert = new bootstrap.Alert(toast);
+          bsAlert.close();
+        }, 3000);
+      },
+
+      // Confirm action with modal
+      confirmAction: function(message, onConfirm) {
+        if (confirm(message)) {
+          onConfirm();
+        }
+      },
+
+      // Format date
+      formatDate: function(date) {
+        return new Date(date).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      },
+
+      // Format number with commas
+      formatNumber: function(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+    };
+
+    // Performance monitoring
+    window.addEventListener('load', function() {
+      if (window.performance) {
+        const perfData = window.performance.timing;
+        const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
+        console.log('Page load time:', pageLoadTime + 'ms');
+      }
+    });
+  </script>
+
+</body>
+</html>

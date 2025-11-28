@@ -1,0 +1,403 @@
+<%- include('partials/header', {
+  pageTitle: 'Operator Dashboard',
+  additionalCSS: [],
+  inlineStyles: ''
+}) %>
+
+<%- include('partials/navbar', {
+  currentUser: user,
+  showNotifications: true
+}) %>
+
+<%- include('partials/sidebar', {
+  currentRole: user.role_name || 'operator',
+  currentPath: '/operator/dashboard'
+}) %>
+
+<!-- Main Content -->
+<main class="main-content">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Operator Dashboard</h1>
+      <p class="page-subtitle">Enhanced Production Overview</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-outline-primary" onclick="location.reload()">
+        <i class="bi bi-arrow-clockwise me-2"></i>Refresh
+      </button>
+      <a href="/operator/dashboard/download-all-lots" class="btn btn-primary">
+        <i class="bi bi-download me-2"></i>Export All
+      </a>
+    </div>
+  </div>
+
+  <!-- Flash Messages -->
+  <%- include('partials/flashMessages') %>
+
+  <!-- Quick Stats Cards -->
+  <div class="stats-grid">
+    <div class="stat-card stat-card-primary">
+      <div class="stat-icon">
+        <i class="bi bi-scissors"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Total Cutting Lots</div>
+        <div class="stat-value" id="totalCuttingLots">
+          <span class="spinner-border spinner-border-sm"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card stat-card-success">
+      <div class="stat-icon">
+        <i class="bi bi-check-circle"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Completed Today</div>
+        <div class="stat-value" id="completedToday">
+          <span class="spinner-border spinner-border-sm"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card stat-card-warning">
+      <div class="stat-icon">
+        <i class="bi bi-clock-history"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Pending Approval</div>
+        <div class="stat-value" id="pendingApproval">
+          <span class="spinner-border spinner-border-sm"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card stat-card-info">
+      <div class="stat-icon">
+        <i class="bi bi-people"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Active Workers</div>
+        <div class="stat-value" id="activeWorkers">
+          <span class="spinner-border spinner-border-sm"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="content-card">
+    <div class="card-header">
+      <h2 class="card-title">Quick Actions</h2>
+    </div>
+    <div class="card-body">
+      <div class="quick-actions-grid">
+        <a href="/operator/editcuttinglots" class="quick-action-item">
+          <div class="quick-action-icon bg-primary">
+            <i class="bi bi-pencil-square"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Edit Cutting Lots</div>
+            <div class="quick-action-desc">Modify cutting lot details</div>
+          </div>
+        </a>
+
+        <a href="/search-dashboard" class="quick-action-item">
+          <div class="quick-action-icon bg-success">
+            <i class="bi bi-search"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Search Dashboard</div>
+            <div class="quick-action-desc">Find lots and assignments</div>
+          </div>
+        </a>
+
+        <a href="/assign-to-washing" class="quick-action-item">
+          <div class="quick-action-icon bg-info">
+            <i class="bi bi-arrow-right-circle"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Assign to Washing</div>
+            <div class="quick-action-desc">Create washing assignments</div>
+          </div>
+        </a>
+
+        <a href="/operator/editwashingassignments" class="quick-action-item">
+          <div class="quick-action-icon bg-warning">
+            <i class="bi bi-droplet"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Edit Washing</div>
+            <div class="quick-action-desc">Manage washing assignments</div>
+          </div>
+        </a>
+
+        <a href="/operator/departments" class="quick-action-item">
+          <div class="quick-action-icon bg-purple">
+            <i class="bi bi-wallet2"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Salaries</div>
+            <div class="quick-action-desc">Employee salary management</div>
+          </div>
+        </a>
+
+        <a href="/operator/supervisors" class="quick-action-item">
+          <div class="quick-action-icon bg-orange">
+            <i class="bi bi-clock-fill"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Attendance</div>
+            <div class="quick-action-desc">Track employee attendance</div>
+          </div>
+        </a>
+
+        <a href="/easyecom/stock-market" class="quick-action-item">
+          <div class="quick-action-icon bg-cyan">
+            <i class="bi bi-graph-up-arrow"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">Stock Market</div>
+            <div class="quick-action-desc">View inventory levels</div>
+          </div>
+        </a>
+
+        <a href="/operator/dashboard/pic-report" class="quick-action-item">
+          <div class="quick-action-icon bg-teal">
+            <i class="bi bi-file-earmark-check"></i>
+          </div>
+          <div class="quick-action-content">
+            <div class="quick-action-title">PIC Report</div>
+            <div class="quick-action-desc">Production in count report</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-8">
+      <div class="content-card">
+        <div class="card-header">
+          <h2 class="card-title">Recent Cutting Lots</h2>
+          <a href="/operator/editcuttinglots" class="btn btn-sm btn-outline-primary">View All</a>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Lot No</th>
+                  <th>SKU</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="recentLotsTable">
+                <tr>
+                  <td colspan="6" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="content-card">
+        <div class="card-header">
+          <h2 class="card-title">Pending Tasks</h2>
+        </div>
+        <div class="card-body">
+          <div class="task-list" id="pendingTasksList">
+            <div class="text-center py-4">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Production Analytics -->
+  <div class="content-card mb-4">
+    <div class="card-header">
+      <h2 class="card-title">Production Analytics</h2>
+      <div class="btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-outline-primary active" data-period="week">Week</button>
+        <button type="button" class="btn btn-outline-primary" data-period="month">Month</button>
+        <button type="button" class="btn btn-outline-primary" data-period="year">Year</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container" style="height: 300px;">
+        <canvas id="productionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Department-wise Summary -->
+  <div class="content-card">
+    <div class="card-header">
+      <h2 class="card-title">Department-wise Summary</h2>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <div class="dept-summary-card">
+            <div class="dept-icon bg-primary-subtle">
+              <i class="bi bi-scissors text-primary"></i>
+            </div>
+            <div class="dept-info">
+              <div class="dept-name">Cutting</div>
+              <div class="dept-count" id="cuttingCount">-</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="dept-summary-card">
+            <div class="dept-icon bg-success-subtle">
+              <i class="bi bi-needle-fill text-success"></i>
+            </div>
+            <div class="dept-info">
+              <div class="dept-name">Stitching</div>
+              <div class="dept-count" id="stitchingCount">-</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="dept-summary-card">
+            <div class="dept-icon bg-info-subtle">
+              <i class="bi bi-droplet-fill text-info"></i>
+            </div>
+            <div class="dept-info">
+              <div class="dept-name">Washing</div>
+              <div class="dept-count" id="washingCount">-</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="dept-summary-card">
+            <div class="dept-icon bg-warning-subtle">
+              <i class="bi bi-check2-square text-warning"></i>
+            </div>
+            <div class="dept-info">
+              <div class="dept-name">Finishing</div>
+              <div class="dept-count" id="finishingCount">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Custom Page Scripts -->
+<script>
+  // Sample data loading - Replace with actual API calls
+  document.addEventListener('DOMContentLoaded', function() {
+
+    // Load stats
+    setTimeout(() => {
+      document.getElementById('totalCuttingLots').textContent = '1,234';
+      document.getElementById('completedToday').textContent = '89';
+      document.getElementById('pendingApproval').textContent = '23';
+      document.getElementById('activeWorkers').textContent = '156';
+    }, 500);
+
+    // Load department counts
+    setTimeout(() => {
+      document.getElementById('cuttingCount').textContent = '456 lots';
+      document.getElementById('stitchingCount').textContent = '342 lots';
+      document.getElementById('washingCount').textContent = '278 lots';
+      document.getElementById('finishingCount').textContent = '198 lots';
+    }, 600);
+
+    // Load recent lots table
+    setTimeout(() => {
+      const tbody = document.getElementById('recentLotsTable');
+      tbody.innerHTML = `
+        <tr>
+          <td><a href="#" class="text-primary fw-medium">LOT-2024-001</a></td>
+          <td>SKU-ABC-123</td>
+          <td>500 pcs</td>
+          <td><span class="badge bg-success">Completed</span></td>
+          <td>2 hours ago</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button>
+          </td>
+        </tr>
+        <tr>
+          <td><a href="#" class="text-primary fw-medium">LOT-2024-002</a></td>
+          <td>SKU-XYZ-456</td>
+          <td>300 pcs</td>
+          <td><span class="badge bg-warning">In Progress</span></td>
+          <td>4 hours ago</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button>
+          </td>
+        </tr>
+        <tr>
+          <td><a href="#" class="text-primary fw-medium">LOT-2024-003</a></td>
+          <td>SKU-DEF-789</td>
+          <td>750 pcs</td>
+          <td><span class="badge bg-info">Pending</span></td>
+          <td>6 hours ago</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button>
+          </td>
+        </tr>
+      `;
+    }, 700);
+
+    // Load pending tasks
+    setTimeout(() => {
+      const tasksList = document.getElementById('pendingTasksList');
+      tasksList.innerHTML = `
+        <div class="task-item">
+          <div class="task-icon bg-warning-subtle">
+            <i class="bi bi-exclamation-triangle text-warning"></i>
+          </div>
+          <div class="task-content">
+            <div class="task-title">Approve Stitching Batch #45</div>
+            <div class="task-meta">23 pieces pending</div>
+          </div>
+        </div>
+        <div class="task-item">
+          <div class="task-icon bg-info-subtle">
+            <i class="bi bi-clock text-info"></i>
+          </div>
+          <div class="task-content">
+            <div class="task-title">Review Washing Assignment</div>
+            <div class="task-meta">Due in 2 hours</div>
+          </div>
+        </div>
+        <div class="task-item">
+          <div class="task-icon bg-success-subtle">
+            <i class="bi bi-check-circle text-success"></i>
+          </div>
+          <div class="task-content">
+            <div class="task-title">Update Finishing Data</div>
+            <div class="task-meta">5 lots ready</div>
+          </div>
+        </div>
+      `;
+    }, 800);
+  });
+</script>
+
+<%- include('partials/footer') %>

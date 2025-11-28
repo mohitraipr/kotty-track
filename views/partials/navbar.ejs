@@ -1,0 +1,128 @@
+<!-- Kotty Track - Professional Navigation Bar -->
+<nav class="kotty-navbar">
+  <div class="navbar-container">
+    <!-- Left Section: Brand + Mobile Menu Toggle -->
+    <div class="d-flex align-items-center gap-3">
+      <!-- Mobile Menu Toggle -->
+      <button class="mobile-menu-toggle" id="sidebarToggle" aria-label="Toggle Sidebar">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <!-- Brand Logo & Name -->
+      <a href="<%= typeof dashboardUrl !== 'undefined' ? dashboardUrl : '/dashboard' %>" class="navbar-brand">
+        <div class="brand-logo">
+          K
+        </div>
+        <span class="d-none d-sm-inline">Kotty Track</span>
+      </a>
+    </div>
+
+    <!-- Right Section: User Menu -->
+    <div class="navbar-menu">
+      <!-- Dark Mode Toggle -->
+      <button class="navbar-btn" id="themeToggle" aria-label="Toggle Dark Mode">
+        <i class="bi bi-moon-stars"></i>
+        <span class="d-none d-md-inline">Dark Mode</span>
+      </button>
+
+      <!-- Notifications (if any) -->
+      <% if (typeof user !== 'undefined' && user.role === 'operator') { %>
+        <button class="navbar-btn position-relative" data-bs-toggle="dropdown">
+          <i class="bi bi-bell"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
+            3
+          </span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="#"><i class="bi bi-info-circle me-2"></i>New assignment</a></li>
+          <li><a class="dropdown-item" href="#"><i class="bi bi-check-circle me-2"></i>Task completed</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-center" href="#">View all</a></li>
+        </ul>
+      <% } %>
+
+      <!-- User Profile -->
+      <% if (typeof user !== 'undefined') { %>
+        <div class="navbar-user dropdown">
+          <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
+            <div class="user-avatar">
+              <%= user.username ? user.username.charAt(0).toUpperCase() : 'U' %>
+            </div>
+            <div class="d-none d-md-block ms-2">
+              <div style="font-size: 0.875rem; font-weight: 500;"><%= user.username %></div>
+              <div style="font-size: 0.75rem; opacity: 0.8;"><%= user.role || 'User' %></div>
+            </div>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Profile</a></li>
+            <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-2"></i>Settings</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+          </ul>
+        </div>
+      <% } %>
+
+      <!-- Logout Button (Alternative if no user object) -->
+      <% if (typeof user === 'undefined') { %>
+        <a href="/logout" class="navbar-btn">
+          <i class="bi bi-box-arrow-right"></i>
+          <span class="d-none d-md-inline">Logout</span>
+        </a>
+      <% } %>
+    </div>
+  </div>
+</nav>
+
+<!-- Sidebar Overlay for Mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<script>
+// Mobile Sidebar Toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  const body = document.body;
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', function() {
+      body.classList.toggle('sidebar-open');
+    });
+  }
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', function() {
+      body.classList.remove('sidebar-open');
+    });
+  }
+
+  // Theme Toggle
+  const themeToggle = document.getElementById('themeToggle');
+  const html = document.documentElement;
+
+  // Load saved theme
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  html.setAttribute('data-theme', savedTheme);
+  updateThemeIcon(savedTheme);
+
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function() {
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+    });
+  }
+
+  function updateThemeIcon(theme) {
+    const icon = themeToggle?.querySelector('i');
+    if (icon) {
+      icon.className = theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun';
+    }
+    const text = themeToggle?.querySelector('span');
+    if (text) {
+      text.textContent = theme === 'light' ? 'Dark Mode' : 'Light Mode';
+    }
+  }
+});
+</script>

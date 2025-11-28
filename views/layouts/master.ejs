@@ -1,0 +1,36 @@
+<%- include('../partials/header', {
+  pageTitle: typeof pageTitle !== 'undefined' ? pageTitle : 'Dashboard',
+  additionalCSS: typeof additionalCSS !== 'undefined' ? additionalCSS : [],
+  inlineStyles: typeof inlineStyles !== 'undefined' ? inlineStyles : ''
+}) %>
+
+<!-- Navbar -->
+<%- include('../partials/navbar', {
+  user: typeof user !== 'undefined' ? user : null,
+  dashboardUrl: typeof dashboardUrl !== 'undefined' ? dashboardUrl : '/dashboard'
+}) %>
+
+<!-- Sidebar -->
+<%- include('../partials/sidebar', {
+  user: typeof user !== 'undefined' ? user : null,
+  req: typeof req !== 'undefined' ? req : {}
+}) %>
+
+<!-- Main Content Area -->
+<main class="kotty-main">
+  <div class="content-wrapper">
+
+    <!-- Flash Messages -->
+    <%- include('../partials/flashMessages') %>
+
+    <!-- Page Content -->
+    <%- body %>
+
+  </div>
+</main>
+
+<!-- Footer -->
+<%- include('../partials/footer', {
+  additionalJS: typeof additionalJS !== 'undefined' ? additionalJS : [],
+  inlineJS: typeof inlineJS !== 'undefined' ? inlineJS : ''
+}) %>

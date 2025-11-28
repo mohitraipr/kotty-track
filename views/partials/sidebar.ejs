@@ -1,0 +1,385 @@
+<!-- Kotty Track - Professional Sidebar Navigation -->
+<aside class="kotty-sidebar" id="sidebar">
+
+  <%
+  // Get current user role
+  const userRole = typeof user !== 'undefined' ? user.role : 'guest';
+  const currentPath = typeof req !== 'undefined' && typeof req.path !== 'undefined' ? req.path : '';
+
+  // Helper function to check if link is active
+  function isActive(path) {
+    if (!currentPath) return '';
+    return currentPath.startsWith(path) ? 'active' : '';
+  }
+  %>
+
+  <!-- OPERATOR NAVIGATION -->
+  <% if (userRole === 'operator') { %>
+
+    <!-- Dashboard Section -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Overview</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/operator/dashboard" class="sidebar-link <%= isActive('/operator/dashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/search" class="sidebar-link <%= isActive('/search') %>">
+            <i class="sidebar-icon bi bi-search"></i>
+            <span class="sidebar-text">Search Lots</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Production Management -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Production</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/operator/converted" class="sidebar-link <%= isActive('/operator/converted') %>">
+            <i class="sidebar-icon bi bi-check2-circle"></i>
+            <span class="sidebar-text">Converted Report</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/stitching-pendency" class="sidebar-link <%= isActive('/operator/stitching-pendency') %>">
+            <i class="sidebar-icon bi bi-scissors"></i>
+            <span class="sidebar-text">Stitching Pendency</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/assembly-pendency" class="sidebar-link <%= isActive('/operator/assembly-pendency') %>">
+            <i class="sidebar-icon bi bi-box-seam"></i>
+            <span class="sidebar-text">Assembly Pendency</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/washing-pendency" class="sidebar-link <%= isActive('/operator/washing-pendency') %>">
+            <i class="sidebar-icon bi bi-droplet"></i>
+            <span class="sidebar-text">Washing Pendency</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/finishing-pendency" class="sidebar-link <%= isActive('/operator/finishing-pendency') %>">
+            <i class="sidebar-icon bi bi-stars"></i>
+            <span class="sidebar-text">Finishing Pendency</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Reports -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Reports</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/operator/stitching-tat" class="sidebar-link <%= isActive('/operator/stitching-tat') %>">
+            <i class="sidebar-icon bi bi-clock-history"></i>
+            <span class="sidebar-text">Stitching TAT</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/size-report" class="sidebar-link <%= isActive('/operator/size-report') %>">
+            <i class="sidebar-icon bi bi-bar-chart"></i>
+            <span class="sidebar-text">Size Report</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/pic-report" class="sidebar-link <%= isActive('/operator/pic-report') %>">
+            <i class="sidebar-icon bi bi-file-earmark-text"></i>
+            <span class="sidebar-text">PIC Report</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Employee Management -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Employee Management</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/operator/supervisors" class="sidebar-link <%= isActive('/operator/supervisors') %>">
+            <i class="sidebar-icon bi bi-people"></i>
+            <span class="sidebar-text">Supervisors</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/operator/departments" class="sidebar-link <%= isActive('/operator/departments') %>">
+            <i class="sidebar-icon bi bi-building"></i>
+            <span class="sidebar-text">Departments</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'cutting_manager') { %>
+
+    <!-- CUTTING MANAGER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Cutting</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/cutting-manager/dashboard" class="sidebar-link <%= isActive('/cutting-manager/dashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/cutting-manager/lots" class="sidebar-link <%= isActive('/cutting-manager/lots') %>">
+            <i class="sidebar-icon bi bi-box"></i>
+            <span class="sidebar-text">Manage Lots</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/edit-cutting-lots" class="sidebar-link <%= isActive('/edit-cutting-lots') %>">
+            <i class="sidebar-icon bi bi-pencil-square"></i>
+            <span class="sidebar-text">Edit Lots</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'stitching_master') { %>
+
+    <!-- STITCHING MASTER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Stitching</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/stitchingdashboard" class="sidebar-link <%= isActive('/stitchingdashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/stitchingdashboard/approve" class="sidebar-link <%= isActive('/stitchingdashboard/approve') %>">
+            <i class="sidebar-icon bi bi-check-circle"></i>
+            <span class="sidebar-text">Approve Assignments</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/stitching-payment" class="sidebar-link <%= isActive('/stitching-payment') %>">
+            <i class="sidebar-icon bi bi-currency-dollar"></i>
+            <span class="sidebar-text">Payment</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'jeans_assembly_master') { %>
+
+    <!-- JEANS ASSEMBLY NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Jeans Assembly</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/jeans-assembly-dashboard" class="sidebar-link <%= isActive('/jeans-assembly-dashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/jeans-assembly-dashboard/approve" class="sidebar-link <%= isActive('/jeans-assembly-dashboard/approve') %>">
+            <i class="sidebar-icon bi bi-check-circle"></i>
+            <span class="sidebar-text">Approve Assignments</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'washing_master') { %>
+
+    <!-- WASHING MASTER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Washing</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/washingdashboard" class="sidebar-link <%= isActive('/washingdashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/washing-payment-dashboard" class="sidebar-link <%= isActive('/washing-payment-dashboard') %>">
+            <i class="sidebar-icon bi bi-currency-dollar"></i>
+            <span class="sidebar-text">Payment Dashboard</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'washing_in_master') { %>
+
+    <!-- WASHING IN NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Washing In</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/washingin" class="sidebar-link <%= isActive('/washingin') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/washingin/approve" class="sidebar-link <%= isActive('/washingin/approve') %>">
+            <i class="sidebar-icon bi bi-check-circle"></i>
+            <span class="sidebar-text">Approve Assignments</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/washingin/rewash-pending" class="sidebar-link <%= isActive('/washingin/rewash-pending') %>">
+            <i class="sidebar-icon bi bi-arrow-repeat"></i>
+            <span class="sidebar-text">Rewash Pending</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'finishing_master') { %>
+
+    <!-- FINISHING MASTER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Finishing</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/finishingdashboard" class="sidebar-link <%= isActive('/finishingdashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/finishing/approve" class="sidebar-link <%= isActive('/finishing/approve') %>">
+            <i class="sidebar-icon bi bi-check-circle"></i>
+            <span class="sidebar-text">Approve Assignments</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'fabric_manager') { %>
+
+    <!-- FABRIC MANAGER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Fabric Management</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/fabric-manager-dashboard" class="sidebar-link <%= isActive('/fabric-manager-dashboard') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/fabric-manager-view" class="sidebar-link <%= isActive('/fabric-manager-view') %>">
+            <i class="sidebar-icon bi bi-eye"></i>
+            <span class="sidebar-text">View Inventory</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } else if (userRole === 'admin') { %>
+
+    <!-- ADMIN NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Administration</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/admin" class="sidebar-link <%= isActive('/admin') %>">
+            <i class="sidebar-icon bi bi-speedometer2"></i>
+            <span class="sidebar-text">Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/admin/users" class="sidebar-link <%= isActive('/admin/users') %>">
+            <i class="sidebar-icon bi bi-people"></i>
+            <span class="sidebar-text">Users</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/admin/settings" class="sidebar-link <%= isActive('/admin/settings') %>">
+            <i class="sidebar-icon bi bi-gear"></i>
+            <span class="sidebar-text">Settings</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- System Section -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">System</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/admin/logs" class="sidebar-link <%= isActive('/admin/logs') %>">
+            <i class="sidebar-icon bi bi-journal-text"></i>
+            <span class="sidebar-text">System Logs</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/admin/database" class="sidebar-link <%= isActive('/admin/database') %>">
+            <i class="sidebar-icon bi bi-database"></i>
+            <span class="sidebar-text">Database</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+  <% } %>
+
+  <!-- Common Section for All Roles -->
+  <div class="sidebar-section">
+    <div class="sidebar-title">Help & Support</div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/help" class="sidebar-link <%= isActive('/help') %>">
+          <i class="sidebar-icon bi bi-question-circle"></i>
+          <span class="sidebar-text">Help Center</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/feedback" class="sidebar-link <%= isActive('/feedback') %>">
+          <i class="sidebar-icon bi bi-chat-dots"></i>
+          <span class="sidebar-text">Feedback</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Sidebar Footer (Version Info) -->
+  <div class="sidebar-section mt-auto" style="padding-top: 2rem; border-top: 1px solid var(--border-light);">
+    <div style="padding: 0 0.75rem; color: var(--text-tertiary); font-size: var(--font-size-xs);">
+      <div>Kotty Track v2.0</div>
+      <div class="mt-1">© 2025 Kotty</div>
+    </div>
+  </div>
+
+</aside>
+
+<script>
+// Sidebar Collapse Toggle
+document.addEventListener('DOMContentLoaded', function() {
+  const sidebar = document.getElementById('sidebar');
+  const sidebarLinks = sidebar?.querySelectorAll('.sidebar-link');
+
+  // Add tooltips for collapsed sidebar
+  sidebarLinks?.forEach(link => {
+    const text = link.querySelector('.sidebar-text')?.textContent;
+    if (text) {
+      link.setAttribute('title', text);
+      link.setAttribute('data-bs-toggle', 'tooltip');
+      link.setAttribute('data-bs-placement', 'right');
+    }
+  });
+
+  // Initialize Bootstrap tooltips if sidebar is collapsed
+  if (document.body.classList.contains('sidebar-collapsed')) {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  }
+});
+</script>

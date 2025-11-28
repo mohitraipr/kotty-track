@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Kotty Track</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+  <!-- Kotty Theme -->
+  <link rel="stylesheet" href="/css/kotty-theme.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 450px;
+    }
+
+    .login-card {
+      background: white;
+      border-radius: var(--radius-2xl);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      animation: slideIn 0.5s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .login-header {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+      padding: 2.5rem 2rem;
+      text-align: center;
+    }
+
+    .brand-logo-large {
+      width: 80px;
+      height: 80px;
+      background: white;
+      border-radius: var(--radius-xl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .login-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle {
+      opacity: 0.9;
+      font-size: 0.95rem;
+    }
+
+    .login-body {
+      padding: 2.5rem 2rem;
+    }
+
+    .form-floating {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-floating > label {
+      color: var(--text-secondary);
+    }
+
+    .form-control {
+      border: 2px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      height: calc(3.5rem + 2px);
+      transition: all var(--transition-fast);
+    }
+
+    .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.1);
+    }
+
+    .input-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .input-group .form-control {
+      border-right: none;
+    }
+
+    .input-group-text {
+      background: white;
+      border: 2px solid var(--border-light);
+      border-left: none;
+      color: var(--text-secondary);
+    }
+
+    .form-control:focus + .input-group-text {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 0.875rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      border: none;
+      color: white;
+      transition: all var(--transition-base);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-login:active {
+      transform: translateY(0);
+    }
+
+    .remember-forgot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      font-size: 0.875rem;
+    }
+
+    .form-check-label {
+      color: var(--text-secondary);
+    }
+
+    .forgot-link {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color var(--transition-fast);
+    }
+
+    .forgot-link:hover {
+      color: var(--primary-hover);
+      text-decoration: underline;
+    }
+
+    .login-footer {
+      text-align: center;
+      padding: 1.5rem 2rem 2rem;
+      border-top: 1px solid var(--border-light);
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 2rem 0 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.875rem;
+    }
+
+    .feature-item i {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.5rem;
+      z-index: 10;
+    }
+
+    .password-wrapper {
+      position: relative;
+    }
+
+    @media (max-width: 576px) {
+      .login-header {
+        padding: 2rem 1.5rem;
+      }
+
+      .login-body {
+        padding: 2rem 1.5rem;
+      }
+
+      .brand-logo-large {
+        width: 64px;
+        height: 64px;
+        font-size: 2rem;
+      }
+
+      .login-title {
+        font-size: 1.5rem;
+      }
+
+      .feature-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="login-card">
+
+      <!-- Header -->
+      <div class="login-header">
+        <div class="brand-logo-large">
+          K
+        </div>
+        <h1 class="login-title">Kotty Track</h1>
+        <p class="login-subtitle">Production Management System</p>
+
+        <!-- Features -->
+        <ul class="feature-list">
+          <li class="feature-item">
+            <i class="bi bi-shield-check"></i>
+            <span>Secure Access</span>
+          </li>
+          <li class="feature-item">
+            <i class="bi bi-speedometer2"></i>
+            <span>Real-time Tracking</span>
+          </li>
+          <li class="feature-item">
+            <i class="bi bi-graph-up"></i>
+            <span>Analytics</span>
+          </li>
+          <li class="feature-item">
+            <i class="bi bi-people"></i>
+            <span>Team Management</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Body -->
+      <div class="login-body">
+
+        <!-- Flash Messages -->
+        <% if (typeof error !== 'undefined' && error.length > 0) { %>
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <%= error[0] %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        <% } %>
+
+        <% if (typeof success !== 'undefined' && success.length > 0) { %>
+          <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <%= success[0] %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        <% } %>
+
+        <!-- Login Form -->
+        <form action="/login" method="POST" id="loginForm">
+
+          <!-- Username -->
+          <div class="form-floating">
+            <input
+              type="text"
+              class="form-control"
+              id="username"
+              name="username"
+              placeholder="Username"
+              required
+              autofocus
+            >
+            <label for="username">
+              <i class="bi bi-person me-2"></i>Username
+            </label>
+          </div>
+
+          <!-- Password -->
+          <div class="password-wrapper">
+            <div class="form-floating">
+              <input
+                type="password"
+                class="form-control"
+                id="password"
+                name="password"
+                placeholder="Password"
+                required
+              >
+              <label for="password">
+                <i class="bi bi-lock me-2"></i>Password
+              </label>
+            </div>
+            <button type="button" class="password-toggle" id="togglePassword">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+
+          <!-- Remember & Forgot -->
+          <div class="remember-forgot">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="remember" name="remember">
+              <label class="form-check-label" for="remember">
+                Remember me
+              </label>
+            </div>
+            <a href="/forgot-password" class="forgot-link">Forgot Password?</a>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="btn btn-login">
+            <i class="bi bi-box-arrow-in-right me-2"></i>
+            Sign In
+          </button>
+
+        </form>
+      </div>
+
+      <!-- Footer -->
+      <div class="login-footer">
+        <p class="mb-0">
+          © 2025 Kotty Track. All rights reserved.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Version Info -->
+    <div class="text-center mt-3" style="color: rgba(255, 255, 255, 0.8); font-size: 0.875rem;">
+      <p class="mb-0">Version 2.0 | <a href="/help" style="color: white; text-decoration: underline;">Need Help?</a></p>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // Password Toggle
+    document.getElementById('togglePassword').addEventListener('click', function() {
+      const password = document.getElementById('password');
+      const icon = this.querySelector('i');
+
+      if (password.type === 'password') {
+        password.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+      } else {
+        password.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+      }
+    });
+
+    // Form Validation
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        e.preventDefault();
+        alert('Please fill in all fields');
+        return false;
+      }
+
+      // Show loading state
+      const btn = this.querySelector('.btn-login');
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing in...';
+      btn.disabled = true;
+    });
+
+    // Auto-dismiss alerts
+    setTimeout(function() {
+      const alerts = document.querySelectorAll('.alert');
+      alerts.forEach(function(alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      });
+    }, 5000);
+  </script>
+
+</body>
+</html>
