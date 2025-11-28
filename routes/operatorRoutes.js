@@ -303,7 +303,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
 
 async function fetchPendencyRows(dept, searchLike, offset, limit) {
   const cacheKey = `pend-${dept}-${searchLike}-${offset}-${limit}`;
-  return fetchCached(cacheKey, async () => {
+  return cache.fetchCached(cacheKey, async () => {
     let query = "";
     const params = [searchLike, offset, limit];
     if (dept === "assembly") {
@@ -408,7 +408,7 @@ router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) =
   try {
     const { lotNo } = req.query;
     if (!lotNo) return res.status(400).json({ error: "lotNo required" });
-    const data = await fetchCached(`lot-${lotNo}`, async () => {
+    const data = await cache.fetchCached(`lot-${lotNo}`, async () => {
       const [[lot]] = await pool.query(
         `SELECT id, lot_no, sku, fabric_type, total_pieces FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
         [lotNo]
@@ -500,7 +500,7 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
 
 router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const rows = await fetchCached("lotDeptCounts", async () => {
+    const rows = await cache.fetchCached("lotDeptCounts", async () => {
       const [data] = await pool.query(`
         SELECT cl.lot_no,
                cl.sku,
@@ -698,7 +698,7 @@ async function fetchLotAggregates(lotNos = []) {
   }
 
   const cacheKey = `lotAgg-${lotNos.slice().sort().join(',')}`;
-  return fetchCached(cacheKey, async () => {
+  return cache.fetchCached(cacheKey, async () => {
     const sumsQ = pool.query(`
       SELECT 'stitched' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
         FROM stitching_data
@@ -2125,7 +2125,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
   try {
     const { download = "0" } = req.query;
-    const masterCards = await fetchCached(`tat-summary-${download}`, async () => {
+    const masterCards = await cache.fetchCached(`tat-summary-${download}`, async () => {
       // 1) Identify all users (Stitching Masters) who have either
       //    pending or in-line lots
       const [masters] = await pool.query(`
@@ -2251,7 +2251,7 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
       return res.status(400).send("Invalid Master ID");
     }
     const { download = "0" } = req.query;
-    const data = await fetchCached(`tat-detail-${masterId}`, async () => {
+    const data = await cache.fetchCached(`tat-detail-${masterId}`, async () => {
       const [[masterUser]] = await pool.query(
         `SELECT id, username FROM users WHERE id = ?`,
         [masterId]
@@ -2423,7 +2423,7 @@ router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
       });
     }
 
-    const results = await fetchCached(`sku-${sku}`, async () => {
+    const results = await cache.fetchCached(`sku-${sku}`, async () => {
       const tables = [
         { tableName: "cutting_lots", label: "Cutting Lots" },
         { tableName: "stitching_data", label: "Stitching Data" },
@@ -2570,7 +2570,7 @@ router.route("/urgent-tat")
         return res.end(noMapHtml);
       }
 
-      const [rows] = await fetchCached(`urgent-${userIds.join('-')}`, async () =>
+      const [rows] = await cache.fetchCached(`urgent-${userIds.join('-')}`, async () =>
         pool.query(
           `SELECT sa.user_id, u.username,
                   cl.lot_no, cl.remark,
