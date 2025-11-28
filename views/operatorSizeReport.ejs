@@ -1,168 +1,337 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Download Size PIC Report</title>
+<%- include('partials/header', {
+  pageTitle: 'Size PIC Report',
+  additionalCSS: [],
+  inlineStyles: ''
+}) %>
 
-  <!-- Bootstrap CSS (for basic styling) -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
+<%- include('partials/navbar', {
+  currentUser: user,
+  showNotifications: true
+}) %>
 
-  <style>
-    /* Simple overlay for "Processing..." state */
-    #overlaySpinner {
-      position: fixed;
-      top: 0; 
-      left: 0; 
-      width: 100%; 
-      height: 100%;
-      background: rgba(0,0,0,0.4);
-      display: none; /* hidden by default */
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-    }
-    #overlaySpinner .spinner {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-    }
-  </style>
-</head>
-<body class="p-3">
-  <h1>Size Wise PIC Report Download</h1>
-  <hr>
+<%- include('partials/sidebar', {
+  currentRole: user.role_name || 'operator',
+  currentPath: '/operator/dashboard/pic-size-report'
+}) %>
 
-  <div class="mb-4">
-    <p>
-      This page downloads the Excel-based PIC Report broken down by size. Select your filters
-      below and click <strong>Download Report</strong>. A “Processing” overlay 
-      will appear while the system generates the Excel file.
-    </p>
+<!-- Main Content -->
+<main class="main-content">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+        <i class="bi bi-file-earmark-spreadsheet me-2"></i>
+        Size-Wise PIC Report
+      </h1>
+      <p class="page-subtitle">Production In Count Report with Size Breakdown</p>
+    </div>
+    <div class="page-actions">
+      <a href="/operator/dashboard" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+      </a>
+      <a href="/operator/dashboard/pic-report" class="btn btn-outline-primary">
+        <i class="bi bi-file-earmark-check me-2"></i>Regular PIC Report
+      </a>
+    </div>
   </div>
 
-  <!-- Filter Form (no direct submission, we'll handle it via JS) -->
-  <form id="filterForm" class="row g-3">
-    <div class="col-md-2">
-      <label class="form-label">Lot Type</label>
-      <select name="lotType" class="form-select">
-        <option value="all">All</option>
-        <option value="denim">Denim</option>
-        <option value="hosiery">Hosiery</option>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Department</label>
-      <select name="department" class="form-select">
-        <option value="all">All</option>
-        <option value="cutting">Cutting</option>
-        <option value="stitching">Stitching</option>
-        <option value="assembly">Assembly</option>
-        <option value="washing">Washing</option>
-        <option value="washing_in">Washing In</option>
-        <option value="finishing">Finishing</option>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Status</label>
-      <select name="status" class="form-select">
-        <option value="all">All</option>
-        <option value="pending">Pending</option>
-        <option value="inline">In-Line</option>
-        <option value="completed">Completed</option>
-        <option value="denied">Denied</option>
-        <option value="not_assigned">Not Assigned</option>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Date Filter</label>
-      <select name="dateFilter" class="form-select">
-        <option value="createdAt">Created At</option>
-        <option value="assignedOn">Assigned On</option>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Start Date</label>
-      <input type="date" name="startDate" class="form-control">
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">End Date</label>
-      <input type="date" name="endDate" class="form-control">
-    </div>
-  </form>
-
-  <div class="mt-3">
-    <button class="btn btn-success" onclick="downloadReport()">Download Report</button>
-  </div>
-
-  <!-- Overlay Spinner -->
-  <div id="overlaySpinner">
-    <div class="spinner">
-      <div class="mb-2">Generating Excel report...</div>
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
+  <!-- Instructions Card -->
+  <div class="content-card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-start">
+        <div class="text-primary me-3">
+          <i class="bi bi-info-circle-fill fs-3"></i>
+        </div>
+        <div>
+          <h5 class="mb-2">About Size-Wise Report</h5>
+          <p class="mb-0">
+            This report provides detailed size breakdown for each production lot. Select your filters below and click
+            <strong>Download Report</strong> to generate an Excel file with size-specific data across all departments.
+            This is particularly useful for inventory planning and size distribution analysis.
+          </p>
+        </div>
       </div>
     </div>
   </div>
 
-  <script>
-    // Show the overlay spinner
-    function showSpinner() {
-      document.getElementById("overlaySpinner").style.display = "flex";
-    }
-    // Hide the overlay spinner
-    function hideSpinner() {
-      document.getElementById("overlaySpinner").style.display = "none";
-    }
+  <!-- Filter Form -->
+  <div class="content-card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <i class="bi bi-funnel me-2"></i>
+        Report Filters
+      </h2>
+    </div>
+    <div class="card-body">
+      <form id="filterForm">
+        <div class="row g-3">
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">Lot Type</label>
+            <select name="lotType" class="form-select">
+              <option value="all" <%= filters.lotType === 'all' ? 'selected' : '' %>>All Types</option>
+              <option value="denim" <%= filters.lotType === 'denim' ? 'selected' : '' %>>Denim</option>
+              <option value="hosiery" <%= filters.lotType === 'hosiery' ? 'selected' : '' %>>Hosiery</option>
+            </select>
+          </div>
 
-    // Collect form filters, call /dashboard/pic-report with download=1,
-    // fetch as Blob, then force download
-    async function downloadReport() {
-      try {
-        // 1. Collect form data
-        const form = document.getElementById("filterForm");
-        const formData = new FormData(form);
-        const params = new URLSearchParams();
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">Department</label>
+            <select name="department" class="form-select">
+              <option value="all" <%= filters.department === 'all' ? 'selected' : '' %>>All Departments</option>
+              <option value="cutting" <%= filters.department === 'cutting' ? 'selected' : '' %>>Cutting</option>
+              <option value="stitching" <%= filters.department === 'stitching' ? 'selected' : '' %>>Stitching</option>
+              <option value="assembly" <%= filters.department === 'assembly' ? 'selected' : '' %>>Assembly</option>
+              <option value="washing" <%= filters.department === 'washing' ? 'selected' : '' %>>Washing</option>
+              <option value="washing_in" <%= filters.department === 'washing_in' ? 'selected' : '' %>>Washing In</option>
+              <option value="finishing" <%= filters.department === 'finishing' ? 'selected' : '' %>>Finishing</option>
+            </select>
+          </div>
 
-        for (const [key, val] of formData.entries()) {
-          params.append(key, val);
-        }
-        // Make sure we include download=1 to trigger Excel output
-        params.set("download", "1");
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">Status</label>
+            <select name="status" class="form-select">
+              <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All Statuses</option>
+              <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
+              <option value="inline" <%= filters.status === 'inline' ? 'selected' : '' %>>In-Line</option>
+              <option value="completed" <%= filters.status === 'completed' ? 'selected' : '' %>>Completed</option>
+              <option value="denied" <%= filters.status === 'denied' ? 'selected' : '' %>>Denied</option>
+              <option value="not_assigned" <%= filters.status === 'not_assigned' ? 'selected' : '' %>>Not Assigned</option>
+            </select>
+          </div>
 
-        // 2. Show spinner
-        showSpinner();
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">Date Filter</label>
+            <select name="dateFilter" class="form-select">
+              <option value="createdAt" <%= filters.dateFilter === 'createdAt' ? 'selected' : '' %>>Created At</option>
+              <option value="assignedOn" <%= filters.dateFilter === 'assignedOn' ? 'selected' : '' %>>Assigned On</option>
+            </select>
+          </div>
 
-        // 3. Fetch the route that returns the Excel as a binary
-        const url = "/operator/dashboard/pic-size-report?" + params.toString();
-        const response = await fetch(url, { method: "GET" });
-        if (!response.ok) {
-          throw new Error("Server responded with status " + response.status);
-        }
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">Start Date</label>
+            <input
+              type="date"
+              name="startDate"
+              class="form-control"
+              value="<%= filters.startDate || '' %>"
+            />
+          </div>
 
-        // 4. Convert response to Blob
-        const blob = await response.blob();
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label fw-medium">End Date</label>
+            <input
+              type="date"
+              name="endDate"
+              class="form-control"
+              value="<%= filters.endDate || '' %>"
+            />
+          </div>
+        </div>
 
-        // 5. Force download
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        // We'll set the file name ourselves
-        a.download = "PICReport-BySize.xlsx";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-      } catch (err) {
-        alert("Error downloading report: " + err.message);
-      } finally {
-        // 6. Hide spinner
-        hideSpinner();
+        <div class="mt-4 d-flex gap-2">
+          <button type="button" class="btn btn-success btn-lg" onclick="downloadReport()">
+            <i class="bi bi-download me-2"></i>
+            Download Size Report
+          </button>
+          <button type="reset" class="btn btn-outline-secondary btn-lg">
+            <i class="bi bi-arrow-clockwise me-2"></i>
+            Reset Filters
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Data Preview (if rows exist) -->
+  <% if (typeof rows !== 'undefined' && rows.length > 0) { %>
+  <div class="content-card mt-4">
+    <div class="card-header">
+      <h2 class="card-title">
+        <i class="bi bi-table me-2"></i>
+        Size Breakdown Preview
+      </h2>
+      <div class="text-muted">
+        Showing <%= rows.length %> record<%= rows.length !== 1 ? 's' : '' %> with size details
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Size</th>
+              <th>Pieces</th>
+              <th>Department</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% rows.slice(0, 15).forEach(row => { %>
+            <tr>
+              <td><span class="fw-medium"><%= row.lot_no %></span></td>
+              <td><%= row.sku %></td>
+              <td><span class="badge bg-secondary"><%= row.size_label || 'N/A' %></span></td>
+              <td><%= row.pieces || 0 %></td>
+              <td><%= row.department || 'N/A' %></td>
+              <td>
+                <% if (row.status === 'completed') { %>
+                  <span class="badge bg-success-subtle text-success">Completed</span>
+                <% } else if (row.status === 'pending') { %>
+                  <span class="badge bg-warning-subtle text-warning">Pending</span>
+                <% } else if (row.status === 'inline') { %>
+                  <span class="badge bg-info-subtle text-info">In-Line</span>
+                <% } else if (row.status === 'denied') { %>
+                  <span class="badge bg-danger-subtle text-danger">Denied</span>
+                <% } else { %>
+                  <span class="badge bg-secondary-subtle text-secondary"><%= row.status %></span>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <% if (rows.length > 15) { %>
+      <div class="card-body">
+        <p class="text-muted mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          Showing first 15 records. Download the full report to see all <%= rows.length %> records with complete size breakdown.
+        </p>
+      </div>
+      <% } %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Size Information Card -->
+  <div class="content-card mt-4">
+    <div class="card-header">
+      <h2 class="card-title">
+        <i class="bi bi-rulers me-2"></i>
+        Size Information
+      </h2>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <h6 class="fw-semibold mb-2">What's included in the Size Report:</h6>
+          <ul class="mb-0">
+            <li>Individual size breakdown for each lot</li>
+            <li>Piece count per size across departments</li>
+            <li>Size-specific status tracking</li>
+            <li>Department-wise size distribution</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6 class="fw-semibold mb-2">Common Size Labels:</h6>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="badge bg-secondary">28</span>
+            <span class="badge bg-secondary">30</span>
+            <span class="badge bg-secondary">32</span>
+            <span class="badge bg-secondary">34</span>
+            <span class="badge bg-secondary">36</span>
+            <span class="badge bg-secondary">38</span>
+            <span class="badge bg-secondary">40</span>
+            <span class="badge bg-secondary">S</span>
+            <span class="badge bg-secondary">M</span>
+            <span class="badge bg-secondary">L</span>
+            <span class="badge bg-secondary">XL</span>
+            <span class="badge bg-secondary">XXL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Processing Overlay -->
+<div id="overlaySpinner" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 9999;">
+  <div class="bg-white rounded-3 shadow-lg p-4 text-center" style="min-width: 300px;">
+    <div class="mb-3">
+      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <h5 class="mb-2">Generating Size Report</h5>
+    <p class="text-muted mb-0">Processing size data for all lots...</p>
+  </div>
+</div>
+
+<!-- Page-specific scripts -->
+<script>
+  // Show the overlay spinner
+  function showSpinner() {
+    document.getElementById("overlaySpinner").style.display = "flex";
+  }
+
+  // Hide the overlay spinner
+  function hideSpinner() {
+    document.getElementById("overlaySpinner").style.display = "none";
+  }
+
+  // Download report function
+  async function downloadReport() {
+    try {
+      // 1. Collect form data
+      const form = document.getElementById("filterForm");
+      const formData = new FormData(form);
+      const params = new URLSearchParams();
+
+      for (const [key, val] of formData.entries()) {
+        if (val) params.append(key, val);
       }
+      // Add download=1 to trigger Excel output
+      params.set("download", "1");
+
+      // 2. Show spinner
+      showSpinner();
+
+      // 3. Fetch the Excel file
+      const url = "/operator/dashboard/pic-size-report?" + params.toString();
+      const response = await fetch(url, { method: "GET" });
+
+      if (!response.ok) {
+        throw new Error("Server responded with status " + response.status);
+      }
+
+      // 4. Convert response to Blob
+      const blob = await response.blob();
+
+      // 5. Force download
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+
+      // Generate filename with current date
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      a.download = `PICReport-BySize-${dateStr}.xlsx`;
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      // Show success message
+      KottyTrack.showToast('Size report downloaded successfully!', 'success');
+    } catch (err) {
+      console.error('Download error:', err);
+      KottyTrack.showToast('Error downloading report: ' + err.message, 'danger');
+    } finally {
+      // 6. Hide spinner
+      hideSpinner();
     }
-  </script>
-</body>
-</html>
+  }
+
+  // Auto-download if coming from direct link with download=1
+  document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('download') === '1') {
+      downloadReport();
+    }
+  });
+</script>
+
+<%- include('partials/footer') %>
