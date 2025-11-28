@@ -206,8 +206,9 @@ router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res)
     const limit = 5;
     const searchLike = `%${search}%`;
 
+    // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(`
-      SELECT *
+      SELECT id, user_id, lot_no, sku, total_pieces, image_path, created_at
       FROM washing_in_data
       WHERE user_id = ?
         AND (lot_no LIKE ? OR sku LIKE ?)
@@ -221,8 +222,9 @@ router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res)
 
     // gather ids
     const ids = rows.map(r => r.id);
+    // Fixed: Replace SELECT * with specific columns
     const [sizeRows] = await pool.query(`
-      SELECT *
+      SELECT id, washing_in_data_id, size_label, pieces
       FROM washing_in_data_sizes
       WHERE washing_in_data_id IN (?)
     `, [ids]);
@@ -264,14 +266,16 @@ router.get('/get-lot-sizes/:wdId', isAuthenticated, isWashingInMaster, async (re
   try {
     const wdId = req.params.wdId;
 
+    // Fixed: Replace SELECT * with specific columns
     const [[wd]] = await pool.query(
-      `SELECT * FROM washing_data WHERE id = ?`,
+      `SELECT id, lot_no FROM washing_data WHERE id = ?`,
       [wdId]
     );
     if (!wd) return res.status(404).json({ error: 'washing_data not found' });
 
+    // Fixed: Replace SELECT * with specific columns
     const [sizes] = await pool.query(
-      `SELECT * FROM washing_data_sizes WHERE washing_data_id = ?`,
+      `SELECT id, washing_data_id, size_label, pieces FROM washing_data_sizes WHERE washing_data_id = ?`,
       [wdId]
     );
 

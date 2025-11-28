@@ -8,6 +8,7 @@ const multer = require('multer');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const generateLotNumber = require('../utils/generateLotNumber'); // Import the utility function
+const { cache } = require('../utils/cache');
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
@@ -20,44 +21,39 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Simple in-memory cache for rolls to avoid repeated DB reads
-let rollsCache = { data: null, expires: 0 };
-
 // Function to fetch rolls by fabric type from existing tables
 async function getRollsByFabricType() {
-  if (rollsCache.data && Date.now() < rollsCache.expires) {
-    return rollsCache.data;
-  }
-  try {
-    const [rows] = await pool.query(`
-      SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight, fir.unit, v.name AS vendor_name
-      FROM fabric_invoice_rolls fir
-      JOIN fabric_invoices fi ON fir.invoice_id = fi.id
-      JOIN vendors v ON fir.vendor_id = v.id
-      WHERE fir.per_roll_weight > 0 AND fi.fabric_type IS NOT NULL
-    `);
+  // Fixed: Use centralized cache instead of local cache
+  return cache.fetchCached('rollsByFabricType', async () => {
+    try {
+      const [rows] = await pool.query(`
+        SELECT fi.fabric_type, fir.roll_no, fir.per_roll_weight, fir.unit, v.name AS vendor_name
+        FROM fabric_invoice_rolls fir
+        JOIN fabric_invoices fi ON fir.invoice_id = fi.id
+        JOIN vendors v ON fir.vendor_id = v.id
+        WHERE fir.per_roll_weight > 0 AND fi.fabric_type IS NOT NULL
+      `);
 
-    // Transform the data into the desired format
-    const rollsByFabricType = {};
-    rows.forEach((row) => {
-      if (!rollsByFabricType[row.fabric_type]) {
-        rollsByFabricType[row.fabric_type] = [];
-      }
-      rollsByFabricType[row.fabric_type].push({
-        roll_no: row.roll_no,
-        unit: row.unit,
-        per_roll_weight: row.per_roll_weight,
-        vendor_name: row.vendor_name, // Include vendor_name
+      // Transform the data into the desired format
+      const rollsByFabricType = {};
+      rows.forEach((row) => {
+        if (!rollsByFabricType[row.fabric_type]) {
+          rollsByFabricType[row.fabric_type] = [];
+        }
+        rollsByFabricType[row.fabric_type].push({
+          roll_no: row.roll_no,
+          unit: row.unit,
+          per_roll_weight: row.per_roll_weight,
+          vendor_name: row.vendor_name,
+        });
       });
-    });
 
-    // Cache result for five minutes
-    rollsCache = { data: rollsByFabricType, expires: Date.now() + 5 * 60 * 1000 };
-    return rollsByFabricType;
-  } catch (err) {
-    console.error('Error fetching rolls by fabric type:', err);
-    return {}; // Return an empty object on error to prevent crashing
-  }
+      return rollsByFabricType;
+    } catch (err) {
+      console.error('Error fetching rolls by fabric type:', err);
+      return {}; // Return an empty object on error to prevent crashing
+    }
+  });
 }
 
 // GET /cutting-manager/dashboard

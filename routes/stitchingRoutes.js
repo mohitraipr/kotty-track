@@ -167,8 +167,9 @@ router.get('/list-entries', isAuthenticated, isStitchingMaster, async (req, res)
     const limit = 5;
     const searchLike = `%${searchTerm}%`;
 
+    // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(`
-      SELECT *
+      SELECT id, user_id, lot_no, sku, total_pieces, image_path, created_at
       FROM stitching_data
       WHERE user_id = ?
         AND (lot_no LIKE ? OR sku LIKE ?)
@@ -181,8 +182,9 @@ router.get('/list-entries', isAuthenticated, isStitchingMaster, async (req, res)
     }
 
     const entryIds = rows.map(r => r.id);
+    // Fixed: Replace SELECT * with specific columns
     const [sizeRows] = await pool.query(`
-      SELECT *
+      SELECT id, stitching_data_id, size_label, pieces
       FROM stitching_data_sizes
       WHERE stitching_data_id IN (?)
     `, [entryIds]);
@@ -221,7 +223,8 @@ router.get('/list-entries', isAuthenticated, isStitchingMaster, async (req, res)
 router.get('/get-lot-sizes/:lotId', isAuthenticated, isStitchingMaster, async (req, res) => {
   try {
     const lotId = req.params.lotId;
-    const [[lot]] = await pool.query(`SELECT * FROM cutting_lots WHERE id = ?`, [lotId]);
+    // Fixed: Replace SELECT * with specific columns
+    const [[lot]] = await pool.query(`SELECT id, lot_no FROM cutting_lots WHERE id = ?`, [lotId]);
     if (!lot) {
       return res.status(404).json({ error: 'Lot not found' });
     }

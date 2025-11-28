@@ -27,9 +27,10 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
 
-    // Fetch all details in one go to avoid per-row queries
+    // Fixed: Replaced SELECT fa.* with specific columns
     const [faRows] = await pool.query(
-      `SELECT fa.*, 
+      `SELECT fa.id, fa.user_id, fa.stitching_assignment_id, fa.washing_in_data_id,
+              fa.sizes_json, fa.assigned_on, fa.is_approved, fa.assignment_remark,
               COALESCE(sd.lot_no, wd.lot_no) AS lot_no,
               COALESCE(sd.sku, wd.sku) AS sku,
               cl.remark AS cutting_remark,
@@ -78,8 +79,9 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
     if (isNaN(offset) || offset < 0) offset = 0;
     const limit = 5;
     const likeStr = `%${searchTerm}%`;
+    // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(
-      `SELECT *
+      `SELECT id, user_id, lot_no, sku, total_pieces, image_path, created_at
          FROM finishing_data
         WHERE user_id = ? AND (lot_no LIKE ? OR sku LIKE ?)
         ORDER BY created_at DESC
@@ -131,19 +133,22 @@ router.get('/list-entries', isAuthenticated, isFinishingMaster, async (req, res)
 router.get('/get-assignment-sizes/:assignmentId', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const assignmentId = req.params.assignmentId;
+    // Fixed: Replace SELECT * with specific columns
     const [[fa]] = await pool.query(`
-      SELECT *
+      SELECT id, stitching_assignment_id, washing_in_data_id, sizes_json
       FROM finishing_assignments
       WHERE id = ?
     `, [assignmentId]);
     if (!fa) return res.status(404).json({ error: 'Assignment not found.' });
     let lotNo = null, tableSizes = null, dataIdField = null, dataIdValue = null;
     if (fa.stitching_assignment_id) {
-      const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
+      // Fixed: Replace SELECT * with specific columns
+      const [[sd]] = await pool.query(`SELECT id, lot_no FROM stitching_data WHERE id = ?`, [fa.stitching_assignment_id]);
       if (!sd) return res.json([]);
       lotNo = sd.lot_no; tableSizes = 'stitching_data_sizes'; dataIdField = 'stitching_data_id'; dataIdValue = sd.id;
     } else if (fa.washing_in_data_id) {
-      const [[wd]] = await pool.query(`SELECT * FROM washing_in_data WHERE id = ?`, [fa.washing_in_data_id]);
+      // Fixed: Replace SELECT * with specific columns
+      const [[wd]] = await pool.query(`SELECT id, lot_no FROM washing_in_data WHERE id = ?`, [fa.washing_in_data_id]);
       if (!wd) return res.json([]);
       lotNo = wd.lot_no; tableSizes = 'washing_in_data_sizes'; dataIdField = 'washing_in_data_id'; dataIdValue = wd.id;
     } else return res.json([]);

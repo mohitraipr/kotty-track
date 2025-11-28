@@ -11,8 +11,16 @@ const pool = mysql.createPool({
     // Use local timezone so timestamps match IST
     timezone: 'local',
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    // Increased from 10 to 50 for better concurrent handling
+    connectionLimit: 50,
+    // Limit queue to prevent memory issues (5x connection limit)
+    queueLimit: 250,
+    // Enable multiple statements for batch operations
+    multipleStatements: false,
+    // Connection timeout
+    connectTimeout: 10000,
+    // Acquire timeout
+    acquireTimeout: 10000,
     // Add debug option for troubleshooting (optional)
     debug: false // Set to true for more verbose output
 });

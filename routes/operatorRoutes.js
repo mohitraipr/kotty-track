@@ -18,43 +18,7 @@ const { pool } = require("../config/db");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 const ExcelJS = require("exceljs");
 const { PRIVILEGED_OPERATOR_ID } = require("../utils/operators");
-
-// simple in-memory cache to avoid heavy repetitive queries
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const CACHE_MAX_ITEMS = 50; // avoid unbounded growth
-const _cache = new Map();
-
-function getCache(key) {
-  const entry = _cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL_MS) {
-    _cache.delete(key);
-    return null;
-  }
-  return entry.val;
-}
-
-function setCache(key, val) {
-  const now = Date.now();
-  // purge expired keys
-  for (const [k, v] of _cache) {
-    if (now - v.ts > CACHE_TTL_MS) _cache.delete(k);
-  }
-  // enforce max cache size (simple LRU-style)
-  if (_cache.size >= CACHE_MAX_ITEMS) {
-    const oldestKey = _cache.keys().next().value;
-    _cache.delete(oldestKey);
-  }
-  _cache.set(key, { ts: now, val });
-}
-
-async function fetchCached(key, fn) {
-  const cached = getCache(key);
-  if (cached) return cached;
-  const result = await fn();
-  setCache(key, result);
-  return result;
-}
+const { cache } = require("../utils/cache");
 
 /**************************************************
  * Helper: Format a JS Date as DD/MM/YYYY
@@ -73,7 +37,7 @@ function formatDateDDMMYYYY(dt) {
  * 2) Operator Performance & Analytics
  **************************************************/
 async function computeOperatorPerformance() {
-  return fetchCached('operatorPerformance', async () => {
+  return cache.fetchCached('operatorPerformance', async () => {
     const perf = {};
 
     const [rows] = await pool.query(`
@@ -113,7 +77,7 @@ async function computeOperatorPerformance() {
 
 async function computeAdvancedAnalytics(startDate, endDate) {
   const cacheKey = `adv-${startDate || ''}-${endDate || ''}`;
-  return fetchCached(cacheKey, async () => {
+  return cache.fetchCached(cacheKey, async () => {
     const analytics = {};
 
     const totalsQ = pool.query(`
@@ -251,14 +215,19 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
       return res.status(400).json({ error: "startDate cannot be after endDate" });
     }
 
+    // Fixed: Optimized to filter users first before joining
     const [rows] = await pool.query(
       `SELECT
          u.id AS washer_id,
          u.username,
-
          COALESCE(ap.approvedLots, 0) AS approvedLots,
          COALESCE(wc.completedLots, 0) AS completedLots
-       FROM users u
+       FROM (
+         SELECT DISTINCT user_id FROM washing_assignments WHERE DATE(approved_on) BETWEEN ? AND ?
+         UNION
+         SELECT DISTINCT user_id FROM washing_data WHERE DATE(created_at) BETWEEN ? AND ?
+       ) active_washers
+       JOIN users u ON u.id = active_washers.user_id
        LEFT JOIN (
          SELECT wa.user_id, COUNT(DISTINCT jd.lot_no) AS approvedLots
            FROM washing_assignments wa
@@ -273,9 +242,8 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
           WHERE DATE(wd.created_at) BETWEEN ? AND ?
           GROUP BY wd.user_id
        ) wc ON wc.user_id = u.id
-      WHERE ap.user_id IS NOT NULL OR wc.user_id IS NOT NULL
       ORDER BY u.username ASC`,
-      [startDate, endDate, startDate, endDate]
+      [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate]
     );
 
     return res.json({ data: rows });

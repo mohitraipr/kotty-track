@@ -5,35 +5,15 @@ const { pool } = require("../config/db");
 const { calculateSalaryForMonth } = require("../helpers/salaryCalculator");
 const { isAuthenticated, isOperator } = require("../middlewares/auth");
 const { isValidAadhar } = require("../helpers/aadharValidator");
-
-// Simple in-memory cache with TTL for frequently accessed queries
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const _cache = new Map();
-function getCache(key) {
-  const entry = _cache.get(key);
-  if (entry && Date.now() - entry.ts < CACHE_TTL_MS) {
-    return entry.val;
-  }
-  return null;
-}
-function setCache(key, val) {
-  _cache.set(key, { ts: Date.now(), val });
-}
-async function fetchCached(key, fn) {
-  const cached = getCache(key);
-  if (cached) return cached;
-  const result = await fn();
-  setCache(key, result);
-  return result;
-}
+const { cache } = require("../utils/cache");
 
 
 // List all supervisors
 router.get("/supervisors", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const supervisors = await fetchCached("op-supervisors", async () => {
+    const supervisors = await cache.fetchCached("op-supervisors", async () => {
       const [rows] = await pool.query(`
-        SELECT u.id, u.username, u.username
+        SELECT u.id, u.username
           FROM users u
           JOIN roles r ON u.role_id = r.id
          WHERE r.name = 'supervisor'
@@ -56,10 +36,14 @@ router.get(
   async (req, res) => {
     const supId = req.params.id;
     try {
-      const [supervisor] = await fetchCached(`op-sup-${supId}`, () =>
+      // Fixed: Replace subquery with JOIN for better performance
+      const [supervisor] = await cache.fetchCached(`op-sup-${supId}`, () =>
         pool
           .query(
-            'SELECT id, username FROM users WHERE id = ? AND role_id IN (SELECT id FROM roles WHERE name = "supervisor")',
+            `SELECT u.id, u.username
+             FROM users u
+             JOIN roles r ON u.role_id = r.id
+             WHERE u.id = ? AND r.name = 'supervisor'`,
             [supId],
           )
           .then((r) => r[0]),
@@ -68,9 +52,19 @@ router.get(
         req.flash("error", "Supervisor not found");
         return res.redirect("/operator/supervisors");
       }
-      const employees = await fetchCached(`op-sup-emps-${supId}`, () =>
+      // Fixed: Replace SELECT * with specific columns
+      const employees = await cache.fetchCached(`op-sup-emps-${supId}`, () =>
         pool
-          .query("SELECT * FROM employees WHERE supervisor_id = ?", [supId])
+          .query(
+            `SELECT id, supervisor_id, punching_id, name, designation,
+                    phone_number, aadhar_card_number, salary, salary_type,
+                    allotted_hours, paid_sunday_allowance, pay_sunday,
+                    leave_start_months, date_of_joining, is_active
+             FROM employees
+             WHERE supervisor_id = ?
+             ORDER BY name`,
+            [supId]
+          )
           .then((r) => r[0]),
       );
       res.render("operatorSupervisorEmployees", {
@@ -295,10 +289,14 @@ router.get(
     const supId = req.params.id;
     const date = req.query.date || moment().format("YYYY-MM-DD");
     try {
-      const [supervisor] = await fetchCached(`op-sup-${supId}`, () =>
+      // Fixed: Replace subquery with JOIN
+      const [supervisor] = await cache.fetchCached(`op-sup-${supId}`, () =>
         pool
           .query(
-            'SELECT id, username FROM users WHERE id = ? AND role_id IN (SELECT id FROM roles WHERE name = "supervisor")',
+            `SELECT u.id, u.username
+             FROM users u
+             JOIN roles r ON u.role_id = r.id
+             WHERE u.id = ? AND r.name = 'supervisor'`,
             [supId],
           )
           .then((r) => r[0]),
@@ -346,67 +344,90 @@ router.post(
     if (!Array.isArray(empIds)) empIds = [empIds];
     if (!Array.isArray(punchIns)) punchIns = [punchIns];
     if (!Array.isArray(punchOuts)) punchOuts = [punchOuts];
+
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+
       const [employees] = await conn.query(
-        "SELECT id, supervisor_id, salary_type, salary, pay_sunday, allotted_hours FROM employees WHERE id IN (?)",
-        [empIds],
+        "SELECT id, supervisor_id FROM employees WHERE id IN (?) AND supervisor_id = ?",
+        [empIds, supId],
       );
-      const empMap = new Map();
-      employees.forEach((e) => {
-        if (e.supervisor_id == supId) empMap.set(e.id.toString(), e);
-      });
+      const validEmpIds = employees.map(e => e.id);
+
+      if (validEmpIds.length === 0) {
+        await conn.rollback();
+        conn.release();
+        req.flash("error", "No valid employees found");
+        return res.redirect("back");
+      }
+
       const [attRows] = await conn.query(
         "SELECT id, employee_id, punch_in, punch_out FROM employee_attendance WHERE date = ? AND employee_id IN (?)",
-        [date, empIds],
+        [date, validEmpIds],
       );
       const attMap = new Map();
       attRows.forEach((a) => attMap.set(a.employee_id.toString(), a));
+
+      // Fixed: Batch INSERT/UPDATE operations instead of loop
+      const updatePromises = [];
+      const insertAttendance = [];
+      const insertLogs = [];
       const month = moment(date).format("YYYY-MM");
+
       for (let i = 0; i < empIds.length; i++) {
         const empId = empIds[i];
-        const emp = empMap.get(empId.toString());
-        if (!emp) continue;
+        if (!validEmpIds.includes(parseInt(empId))) continue;
+
         const punch_in = punchIns[i] || null;
         const punch_out = punchOuts[i] || null;
         const att = attMap.get(empId.toString());
         const newStatus =
-          punch_in && punch_out
-            ? "present"
-            : punch_in || punch_out
-              ? "one punch only"
-              : "absent";
-        if (att) {
-          await conn.query(
-            "UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?",
-            [punch_in, punch_out, newStatus, att.id],
-          );
-          await conn.query(
-            "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-              empId,
-              date,
-              att.punch_in,
-              att.punch_out,
-              punch_in,
-              punch_out,
-              req.session.user.id,
-            ],
-          );
-        } else {
-          await conn.query(
-            "INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES (?, ?, ?, ?, ?)",
-            [empId, date, punch_in, punch_out, newStatus],
-          );
-          await conn.query(
-            "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [empId, date, null, null, punch_in, punch_out, req.session.user.id],
-          );
-        }
+          punch_in && punch_out ? "present"
+            : punch_in || punch_out ? "one punch only"
+            : "absent";
 
+        if (att) {
+          updatePromises.push(
+            conn.query(
+              "UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?",
+              [punch_in, punch_out, newStatus, att.id]
+            )
+          );
+          insertLogs.push([empId, date, att.punch_in, att.punch_out, punch_in, punch_out, req.session.user.id]);
+        } else {
+          insertAttendance.push([empId, date, punch_in, punch_out, newStatus]);
+          insertLogs.push([empId, date, null, null, punch_in, punch_out, req.session.user.id]);
+        }
+      }
+
+      // Execute all updates in parallel
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+      }
+
+      // Batch insert new attendance records
+      if (insertAttendance.length > 0) {
+        await conn.query(
+          "INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES ?",
+          [insertAttendance]
+        );
+      }
+
+      // Batch insert all logs
+      if (insertLogs.length > 0) {
+        await conn.query(
+          "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES ?",
+          [insertLogs]
+        );
+      }
+
+      // Calculate salary for all affected employees
+      // Note: This still needs to be sequential per employee but is unavoidable
+      for (const empId of validEmpIds) {
         await calculateSalaryForMonth(conn, empId, month);
       }
+
       await conn.commit();
       conn.release();
       req.flash("success", "Attendance updated");
@@ -486,19 +507,22 @@ router.post(
     if (!Array.isArray(dates)) dates = [dates];
     if (!Array.isArray(punchIns)) punchIns = [punchIns];
     if (!Array.isArray(punchOuts)) punchOuts = [punchOuts];
+
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+
       const [[emp]] = await conn.query(
-        "SELECT supervisor_id, salary_type, salary, pay_sunday, allotted_hours FROM employees WHERE id = ?",
+        "SELECT supervisor_id FROM employees WHERE id = ?",
         [empId],
       );
       if (!emp) {
         await conn.rollback();
-        req.flash("error", "Employee not found");
         conn.release();
+        req.flash("error", "Employee not found");
         return res.redirect("/operator/supervisors");
       }
+
       const [attRows] = await conn.query(
         "SELECT id, date, punch_in, punch_out FROM employee_attendance WHERE employee_id = ? AND date IN (?)",
         [empId, dates],
@@ -507,46 +531,60 @@ router.post(
       attRows.forEach((r) =>
         attMap.set(moment(r.date).format("YYYY-MM-DD"), r),
       );
+
+      // Fixed: Batch INSERT/UPDATE operations
+      const updatePromises = [];
+      const insertAttendance = [];
+      const insertLogs = [];
+
       for (let i = 0; i < dates.length; i++) {
         const date = dates[i];
         const punch_in = punchIns[i] || null;
         const punch_out = punchOuts[i] || null;
         const att = attMap.get(moment(date).format("YYYY-MM-DD"));
         const newStatus =
-          punch_in && punch_out
-            ? "present"
-            : punch_in || punch_out
-              ? "one punch only"
-              : "absent";
+          punch_in && punch_out ? "present"
+            : punch_in || punch_out ? "one punch only"
+            : "absent";
+
         if (att) {
-          await conn.query(
-            "UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?",
-            [punch_in, punch_out, newStatus, att.id],
+          updatePromises.push(
+            conn.query(
+              "UPDATE employee_attendance SET punch_in = ?, punch_out = ?, status = ? WHERE id = ?",
+              [punch_in, punch_out, newStatus, att.id]
+            )
           );
-          await conn.query(
-            "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-              empId,
-              date,
-              att.punch_in,
-              att.punch_out,
-              punch_in,
-              punch_out,
-              req.session.user.id,
-            ],
-          );
+          insertLogs.push([empId, date, att.punch_in, att.punch_out, punch_in, punch_out, req.session.user.id]);
         } else {
-          await conn.query(
-            "INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES (?, ?, ?, ?, ?)",
-            [empId, date, punch_in, punch_out, newStatus],
-          );
-          await conn.query(
-            "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [empId, date, null, null, punch_in, punch_out, req.session.user.id],
-          );
+          insertAttendance.push([empId, date, punch_in, punch_out, newStatus]);
+          insertLogs.push([empId, date, null, null, punch_in, punch_out, req.session.user.id]);
         }
       }
+
+      // Execute all updates in parallel
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+      }
+
+      // Batch insert new attendance records
+      if (insertAttendance.length > 0) {
+        await conn.query(
+          "INSERT INTO employee_attendance (employee_id, date, punch_in, punch_out, status) VALUES ?",
+          [insertAttendance]
+        );
+      }
+
+      // Batch insert all logs
+      if (insertLogs.length > 0) {
+        await conn.query(
+          "INSERT INTO attendance_edit_logs (employee_id, attendance_date, old_punch_in, old_punch_out, new_punch_in, new_punch_out, operator_id) VALUES ?",
+          [insertLogs]
+        );
+      }
+
+      // Calculate salary once after all updates
       await calculateSalaryForMonth(conn, empId, month);
+
       await conn.commit();
       conn.release();
       req.flash("success", "Attendance updated");
