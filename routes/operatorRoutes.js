@@ -1681,6 +1681,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     } else {
       // 7) Render HTML
       return res.render("operatorPICReport", {
+        user: req.user,
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
       });
@@ -2088,6 +2089,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       res.end();
     } else {
       return res.render("operatorSizeReport", {
+        user: req.user,
         filters: { lotType, department, status, dateFilter, startDate, endDate },
         rows: finalData
       });

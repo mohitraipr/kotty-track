@@ -1,82 +1,227 @@
-<%- include('partials/header', {
-  pageTitle: 'Size PIC Report',
-  additionalCSS: [],
-  inlineStyles: ''
-}) %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Size PIC Report - Kotty Track</title>
 
-<%- include('partials/navbar', {
-  currentUser: user,
-  showNotifications: true
-}) %>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<%- include('partials/sidebar', {
-  currentRole: user.role_name || 'operator',
-  currentPath: '/operator/dashboard/pic-size-report'
-}) %>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-<!-- Main Content -->
-<main class="main-content">
-  <div class="page-header">
-    <div>
-      <h1 class="page-title">
-        <i class="bi bi-file-earmark-spreadsheet me-2"></i>
-        Size-Wise PIC Report
-      </h1>
-      <p class="page-subtitle">Production In Count Report with Size Breakdown</p>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8f9fa;
+      padding: 24px;
+    }
+
+    .container-custom {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .page-header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .page-header p {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      color: #2563eb;
+      text-decoration: none;
+      margin-bottom: 16px;
+    }
+
+    .back-link:hover {
+      color: #1d4ed8;
+    }
+
+    .card-custom {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+
+    .form-select, .form-control {
+      height: 38px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-select:focus, .form-control:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-secondary {
+      background: #64748b;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .table {
+      font-size: 14px;
+    }
+
+    .table thead th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 12px;
+    }
+
+    .table tbody td {
+      padding: 12px;
+      vertical-align: middle;
+    }
+
+    .badge {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    #overlaySpinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .spinner-content {
+      background: white;
+      padding: 32px;
+      border-radius: 8px;
+      text-align: center;
+      min-width: 280px;
+    }
+
+    .spinner-content h5 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .spinner-content p {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+
+      .page-header, .card-custom {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container-custom">
+    <a href="/operator/dashboard" class="back-link">
+      <i class="bi bi-arrow-left"></i>
+      Back to Dashboard
+    </a>
+
+    <div class="page-header">
+      <h1>Size-Wise PIC Report</h1>
+      <p>Production In Count Report with Size Breakdown</p>
     </div>
-    <div class="page-actions">
-      <a href="/operator/dashboard" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-      </a>
-      <a href="/operator/dashboard/pic-report" class="btn btn-outline-primary">
-        <i class="bi bi-file-earmark-check me-2"></i>Regular PIC Report
-      </a>
-    </div>
-  </div>
 
-  <!-- Instructions Card -->
-  <div class="content-card mb-4">
-    <div class="card-body">
-      <div class="d-flex align-items-start">
-        <div class="text-primary me-3">
-          <i class="bi bi-info-circle-fill fs-3"></i>
-        </div>
-        <div>
-          <h5 class="mb-2">About Size-Wise Report</h5>
-          <p class="mb-0">
-            This report provides detailed size breakdown for each production lot. Select your filters below and click
-            <strong>Download Report</strong> to generate an Excel file with size-specific data across all departments.
-            This is particularly useful for inventory planning and size distribution analysis.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
+    <div class="card-custom">
+      <h2 class="card-title">Report Filters</h2>
 
-  <!-- Filter Form -->
-  <div class="content-card">
-    <div class="card-header">
-      <h2 class="card-title">
-        <i class="bi bi-funnel me-2"></i>
-        Report Filters
-      </h2>
-    </div>
-    <div class="card-body">
       <form id="filterForm">
         <div class="row g-3">
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">Lot Type</label>
+            <label class="form-label">Lot Type</label>
             <select name="lotType" class="form-select">
-              <option value="all" <%= filters.lotType === 'all' ? 'selected' : '' %>>All Types</option>
+              <option value="all" <%= filters.lotType === 'all' ? 'selected' : '' %>>All</option>
               <option value="denim" <%= filters.lotType === 'denim' ? 'selected' : '' %>>Denim</option>
               <option value="hosiery" <%= filters.lotType === 'hosiery' ? 'selected' : '' %>>Hosiery</option>
             </select>
           </div>
 
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">Department</label>
+            <label class="form-label">Department</label>
             <select name="department" class="form-select">
-              <option value="all" <%= filters.department === 'all' ? 'selected' : '' %>>All Departments</option>
+              <option value="all" <%= filters.department === 'all' ? 'selected' : '' %>>All</option>
               <option value="cutting" <%= filters.department === 'cutting' ? 'selected' : '' %>>Cutting</option>
               <option value="stitching" <%= filters.department === 'stitching' ? 'selected' : '' %>>Stitching</option>
               <option value="assembly" <%= filters.department === 'assembly' ? 'selected' : '' %>>Assembly</option>
@@ -87,9 +232,9 @@
           </div>
 
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">Status</label>
+            <label class="form-label">Status</label>
             <select name="status" class="form-select">
-              <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All Statuses</option>
+              <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All</option>
               <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
               <option value="inline" <%= filters.status === 'inline' ? 'selected' : '' %>>In-Line</option>
               <option value="completed" <%= filters.status === 'completed' ? 'selected' : '' %>>Completed</option>
@@ -99,7 +244,7 @@
           </div>
 
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">Date Filter</label>
+            <label class="form-label">Date Filter</label>
             <select name="dateFilter" class="form-select">
               <option value="createdAt" <%= filters.dateFilter === 'createdAt' ? 'selected' : '' %>>Created At</option>
               <option value="assignedOn" <%= filters.dateFilter === 'assignedOn' ? 'selected' : '' %>>Assigned On</option>
@@ -107,55 +252,32 @@
           </div>
 
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">Start Date</label>
-            <input
-              type="date"
-              name="startDate"
-              class="form-control"
-              value="<%= filters.startDate || '' %>"
-            />
+            <label class="form-label">Start Date</label>
+            <input type="date" name="startDate" class="form-control" value="<%= filters.startDate || '' %>">
           </div>
 
           <div class="col-md-4 col-lg-2">
-            <label class="form-label fw-medium">End Date</label>
-            <input
-              type="date"
-              name="endDate"
-              class="form-control"
-              value="<%= filters.endDate || '' %>"
-            />
+            <label class="form-label">End Date</label>
+            <input type="date" name="endDate" class="form-control" value="<%= filters.endDate || '' %>">
           </div>
         </div>
 
         <div class="mt-4 d-flex gap-2">
-          <button type="button" class="btn btn-success btn-lg" onclick="downloadReport()">
-            <i class="bi bi-download me-2"></i>
-            Download Size Report
+          <button type="button" class="btn btn-primary" onclick="downloadReport()">
+            <i class="bi bi-download me-2"></i>Download Report
           </button>
-          <button type="reset" class="btn btn-outline-secondary btn-lg">
-            <i class="bi bi-arrow-clockwise me-2"></i>
-            Reset Filters
+          <button type="reset" class="btn btn-secondary">
+            <i class="bi bi-arrow-clockwise me-2"></i>Reset
           </button>
         </div>
       </form>
     </div>
-  </div>
 
-  <!-- Data Preview (if rows exist) -->
-  <% if (typeof rows !== 'undefined' && rows.length > 0) { %>
-  <div class="content-card mt-4">
-    <div class="card-header">
-      <h2 class="card-title">
-        <i class="bi bi-table me-2"></i>
-        Size Breakdown Preview
-      </h2>
-      <div class="text-muted">
-        Showing <%= rows.length %> record<%= rows.length !== 1 ? 's' : '' %> with size details
-      </div>
-    </div>
-    <div class="card-body p-0">
+    <% if (typeof rows !== 'undefined' && rows.length > 0) { %>
+    <div class="card-custom">
+      <h2 class="card-title">Data Preview (<%= rows.length %> records with size breakdown)</h2>
       <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
+        <table class="table table-hover">
           <thead>
             <tr>
               <th>Lot No</th>
@@ -169,22 +291,22 @@
           <tbody>
             <% rows.slice(0, 15).forEach(row => { %>
             <tr>
-              <td><span class="fw-medium"><%= row.lot_no %></span></td>
+              <td><strong><%= row.lot_no %></strong></td>
               <td><%= row.sku %></td>
               <td><span class="badge bg-secondary"><%= row.size_label || 'N/A' %></span></td>
               <td><%= row.pieces || 0 %></td>
               <td><%= row.department || 'N/A' %></td>
               <td>
                 <% if (row.status === 'completed') { %>
-                  <span class="badge bg-success-subtle text-success">Completed</span>
+                  <span class="badge bg-success">Completed</span>
                 <% } else if (row.status === 'pending') { %>
-                  <span class="badge bg-warning-subtle text-warning">Pending</span>
+                  <span class="badge bg-warning">Pending</span>
                 <% } else if (row.status === 'inline') { %>
-                  <span class="badge bg-info-subtle text-info">In-Line</span>
+                  <span class="badge bg-info">In-Line</span>
                 <% } else if (row.status === 'denied') { %>
-                  <span class="badge bg-danger-subtle text-danger">Denied</span>
+                  <span class="badge bg-danger">Denied</span>
                 <% } else { %>
-                  <span class="badge bg-secondary-subtle text-secondary"><%= row.status %></span>
+                  <span class="badge bg-secondary"><%= row.status %></span>
                 <% } %>
               </td>
             </tr>
@@ -193,145 +315,64 @@
         </table>
       </div>
       <% if (rows.length > 15) { %>
-      <div class="card-body">
-        <p class="text-muted mb-0">
-          <i class="bi bi-info-circle me-1"></i>
-          Showing first 15 records. Download the full report to see all <%= rows.length %> records with complete size breakdown.
-        </p>
-      </div>
+      <p class="text-muted mb-0" style="font-size: 14px;">
+        Showing first 15 of <%= rows.length %> records. Download the full report to see all data.
+      </p>
       <% } %>
     </div>
+    <% } %>
   </div>
-  <% } %>
 
-  <!-- Size Information Card -->
-  <div class="content-card mt-4">
-    <div class="card-header">
-      <h2 class="card-title">
-        <i class="bi bi-rulers me-2"></i>
-        Size Information
-      </h2>
-    </div>
-    <div class="card-body">
-      <div class="row g-3">
-        <div class="col-md-6">
-          <h6 class="fw-semibold mb-2">What's included in the Size Report:</h6>
-          <ul class="mb-0">
-            <li>Individual size breakdown for each lot</li>
-            <li>Piece count per size across departments</li>
-            <li>Size-specific status tracking</li>
-            <li>Department-wise size distribution</li>
-          </ul>
-        </div>
-        <div class="col-md-6">
-          <h6 class="fw-semibold mb-2">Common Size Labels:</h6>
-          <div class="d-flex flex-wrap gap-2">
-            <span class="badge bg-secondary">28</span>
-            <span class="badge bg-secondary">30</span>
-            <span class="badge bg-secondary">32</span>
-            <span class="badge bg-secondary">34</span>
-            <span class="badge bg-secondary">36</span>
-            <span class="badge bg-secondary">38</span>
-            <span class="badge bg-secondary">40</span>
-            <span class="badge bg-secondary">S</span>
-            <span class="badge bg-secondary">M</span>
-            <span class="badge bg-secondary">L</span>
-            <span class="badge bg-secondary">XL</span>
-            <span class="badge bg-secondary">XXL</span>
-          </div>
-        </div>
-      </div>
+  <div id="overlaySpinner">
+    <div class="spinner-content">
+      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+      <h5>Generating Size Report</h5>
+      <p>Please wait...</p>
     </div>
   </div>
 
-</main>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Processing Overlay -->
-<div id="overlaySpinner" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 9999;">
-  <div class="bg-white rounded-3 shadow-lg p-4 text-center" style="min-width: 300px;">
-    <div class="mb-3">
-      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
-    <h5 class="mb-2">Generating Size Report</h5>
-    <p class="text-muted mb-0">Processing size data for all lots...</p>
-  </div>
-</div>
-
-<!-- Page-specific scripts -->
-<script>
-  // Show the overlay spinner
-  function showSpinner() {
-    document.getElementById("overlaySpinner").style.display = "flex";
-  }
-
-  // Hide the overlay spinner
-  function hideSpinner() {
-    document.getElementById("overlaySpinner").style.display = "none";
-  }
-
-  // Download report function
-  async function downloadReport() {
-    try {
-      // 1. Collect form data
-      const form = document.getElementById("filterForm");
-      const formData = new FormData(form);
-      const params = new URLSearchParams();
-
-      for (const [key, val] of formData.entries()) {
-        if (val) params.append(key, val);
-      }
-      // Add download=1 to trigger Excel output
-      params.set("download", "1");
-
-      // 2. Show spinner
-      showSpinner();
-
-      // 3. Fetch the Excel file
-      const url = "/operator/dashboard/pic-size-report?" + params.toString();
-      const response = await fetch(url, { method: "GET" });
-
-      if (!response.ok) {
-        throw new Error("Server responded with status " + response.status);
-      }
-
-      // 4. Convert response to Blob
-      const blob = await response.blob();
-
-      // 5. Force download
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-
-      // Generate filename with current date
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      a.download = `PICReport-BySize-${dateStr}.xlsx`;
-
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-
-      // Show success message
-      KottyTrack.showToast('Size report downloaded successfully!', 'success');
-    } catch (err) {
-      console.error('Download error:', err);
-      KottyTrack.showToast('Error downloading report: ' + err.message, 'danger');
-    } finally {
-      // 6. Hide spinner
-      hideSpinner();
+  <script>
+    function showSpinner() {
+      document.getElementById('overlaySpinner').style.display = 'flex';
     }
-  }
 
-  // Auto-download if coming from direct link with download=1
-  document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('download') === '1') {
-      downloadReport();
+    function hideSpinner() {
+      document.getElementById('overlaySpinner').style.display = 'none';
     }
-  });
-</script>
 
-<%- include('partials/footer') %>
+    async function downloadReport() {
+      try {
+        const form = document.getElementById('filterForm');
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+
+        for (const [key, val] of formData.entries()) {
+          if (val) params.append(key, val);
+        }
+        params.set('download', '1');
+
+        showSpinner();
+
+        const response = await fetch('/operator/dashboard/pic-size-report?' + params.toString());
+        if (!response.ok) throw new Error('Server error');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'PICReport-BySize-' + new Date().toISOString().split('T')[0] + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Error downloading report: ' + err.message);
+      } finally {
+        hideSpinner();
+      }
+    }
+  </script>
+</body>
+</html>
