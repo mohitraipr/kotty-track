@@ -17,19 +17,19 @@
 -- ====================================================================
 
 -- Index for lot number lookups and joins (most frequently used)
-CREATE INDEX IF NOT EXISTS idx_cutting_lots_lot_no
+CREATE INDEX idx_cutting_lots_lot_no
   ON cutting_lots(lot_no);
 
 -- Index for SKU searches
-CREATE INDEX IF NOT EXISTS idx_cutting_lots_sku
+CREATE INDEX idx_cutting_lots_sku
   ON cutting_lots(sku);
 
 -- Index for date range filtering in analytics
-CREATE INDEX IF NOT EXISTS idx_cutting_lots_created_at
+CREATE INDEX idx_cutting_lots_created_at
   ON cutting_lots(created_at);
 
 -- Composite index for common filtering patterns
-CREATE INDEX IF NOT EXISTS idx_cutting_lots_sku_created
+CREATE INDEX idx_cutting_lots_sku_created
   ON cutting_lots(sku, created_at);
 
 -- ====================================================================
@@ -37,23 +37,23 @@ CREATE INDEX IF NOT EXISTS idx_cutting_lots_sku_created
 -- ====================================================================
 
 -- Index for lot number joins
-CREATE INDEX IF NOT EXISTS idx_stitching_data_lot_no
+CREATE INDEX idx_stitching_data_lot_no
   ON stitching_data(lot_no);
 
 -- Index for user-specific queries
-CREATE INDEX IF NOT EXISTS idx_stitching_data_user_id
+CREATE INDEX idx_stitching_data_user_id
   ON stitching_data(user_id);
 
 -- Composite index for user + lot queries
-CREATE INDEX IF NOT EXISTS idx_stitching_data_user_lot
+CREATE INDEX idx_stitching_data_user_lot
   ON stitching_data(user_id, lot_no);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_stitching_data_created_at
+CREATE INDEX idx_stitching_data_created_at
   ON stitching_data(created_at);
 
 -- Index for SKU searches
-CREATE INDEX IF NOT EXISTS idx_stitching_data_sku
+CREATE INDEX idx_stitching_data_sku
   ON stitching_data(sku);
 
 -- ====================================================================
@@ -61,27 +61,27 @@ CREATE INDEX IF NOT EXISTS idx_stitching_data_sku
 -- ====================================================================
 
 -- Index for user assignment queries
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_user_id
+CREATE INDEX idx_stitching_assignments_user_id
   ON stitching_assignments(user_id);
 
 -- Index for approval status filtering
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_isApproved
+CREATE INDEX idx_stitching_assignments_isApproved
   ON stitching_assignments(isApproved);
 
 -- Composite index for user + approval status (very common pattern)
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_user_approved
+CREATE INDEX idx_stitching_assignments_user_approved
   ON stitching_assignments(user_id, isApproved);
 
 -- Index for cutting lot lookups
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_cutting_lot_id
+CREATE INDEX idx_stitching_assignments_cutting_lot_id
   ON stitching_assignments(cutting_lot_id);
 
 -- Index for assigned date sorting
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_assigned_on
+CREATE INDEX idx_stitching_assignments_assigned_on
   ON stitching_assignments(assigned_on);
 
 -- Index for approved date filtering
-CREATE INDEX IF NOT EXISTS idx_stitching_assignments_approved_on
+CREATE INDEX idx_stitching_assignments_approved_on
   ON stitching_assignments(approved_on);
 
 -- ====================================================================
@@ -89,23 +89,23 @@ CREATE INDEX IF NOT EXISTS idx_stitching_assignments_approved_on
 -- ====================================================================
 
 -- Index for lot number joins
-CREATE INDEX IF NOT EXISTS idx_washing_data_lot_no
+CREATE INDEX idx_washing_data_lot_no
   ON washing_data(lot_no);
 
 -- Index for user-specific queries
-CREATE INDEX IF NOT EXISTS idx_washing_data_user_id
+CREATE INDEX idx_washing_data_user_id
   ON washing_data(user_id);
 
 -- Composite index for user + lot queries
-CREATE INDEX IF NOT EXISTS idx_washing_data_user_lot
+CREATE INDEX idx_washing_data_user_lot
   ON washing_data(user_id, lot_no);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_washing_data_created_at
+CREATE INDEX idx_washing_data_created_at
   ON washing_data(created_at);
 
 -- Index for SKU searches
-CREATE INDEX IF NOT EXISTS idx_washing_data_sku
+CREATE INDEX idx_washing_data_sku
   ON washing_data(sku);
 
 -- ====================================================================
@@ -113,27 +113,27 @@ CREATE INDEX IF NOT EXISTS idx_washing_data_sku
 -- ====================================================================
 
 -- Index for user assignment queries
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_user_id
+CREATE INDEX idx_washing_assignments_user_id
   ON washing_assignments(user_id);
 
 -- Index for approval status filtering
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_is_approved
+CREATE INDEX idx_washing_assignments_is_approved
   ON washing_assignments(is_approved);
 
 -- Composite index for user + approval status
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_user_approved
+CREATE INDEX idx_washing_assignments_user_approved
   ON washing_assignments(user_id, is_approved);
 
 -- Index for jeans assembly assignment lookups
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_jeans_assembly_id
+CREATE INDEX idx_washing_assignments_jeans_assembly_id
   ON washing_assignments(jeans_assembly_assignment_id);
 
 -- Index for assigned date sorting
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_assigned_on
+CREATE INDEX idx_washing_assignments_assigned_on
   ON washing_assignments(assigned_on);
 
 -- Index for approved date filtering (used in washer activity queries)
-CREATE INDEX IF NOT EXISTS idx_washing_assignments_approved_on
+CREATE INDEX idx_washing_assignments_approved_on
   ON washing_assignments(approved_on);
 
 -- ====================================================================
@@ -141,19 +141,19 @@ CREATE INDEX IF NOT EXISTS idx_washing_assignments_approved_on
 -- ====================================================================
 
 -- Index for lot number joins
-CREATE INDEX IF NOT EXISTS idx_washing_in_data_lot_no
+CREATE INDEX idx_washing_in_data_lot_no
   ON washing_in_data(lot_no);
 
 -- Index for user-specific queries
-CREATE INDEX IF NOT EXISTS idx_washing_in_data_user_id
+CREATE INDEX idx_washing_in_data_user_id
   ON washing_in_data(user_id);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_washing_in_data_created_at
+CREATE INDEX idx_washing_in_data_created_at
   ON washing_in_data(created_at);
 
 -- Index for SKU searches
-CREATE INDEX IF NOT EXISTS idx_washing_in_data_sku
+CREATE INDEX idx_washing_in_data_sku
   ON washing_in_data(sku);
 
 -- ====================================================================
@@ -161,23 +161,23 @@ CREATE INDEX IF NOT EXISTS idx_washing_in_data_sku
 -- ====================================================================
 
 -- Index for user assignment queries
-CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_user_id
+CREATE INDEX idx_washing_in_assignments_user_id
   ON washing_in_assignments(user_id);
 
 -- Index for approval status filtering
-CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_is_approved
+CREATE INDEX idx_washing_in_assignments_is_approved
   ON washing_in_assignments(is_approved);
 
 -- Composite index for user + approval status
-CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_user_approved
+CREATE INDEX idx_washing_in_assignments_user_approved
   ON washing_in_assignments(user_id, is_approved);
 
 -- Index for washing data lookups
-CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_washing_data_id
+CREATE INDEX idx_washing_in_assignments_washing_data_id
   ON washing_in_assignments(washing_data_id);
 
 -- Index for assigned date sorting
-CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_assigned_on
+CREATE INDEX idx_washing_in_assignments_assigned_on
   ON washing_in_assignments(assigned_on);
 
 -- ====================================================================
@@ -185,23 +185,23 @@ CREATE INDEX IF NOT EXISTS idx_washing_in_assignments_assigned_on
 -- ====================================================================
 
 -- Index for lot number joins
-CREATE INDEX IF NOT EXISTS idx_finishing_data_lot_no
+CREATE INDEX idx_finishing_data_lot_no
   ON finishing_data(lot_no);
 
 -- Index for user-specific queries
-CREATE INDEX IF NOT EXISTS idx_finishing_data_user_id
+CREATE INDEX idx_finishing_data_user_id
   ON finishing_data(user_id);
 
 -- Composite index for user + lot queries
-CREATE INDEX IF NOT EXISTS idx_finishing_data_user_lot
+CREATE INDEX idx_finishing_data_user_lot
   ON finishing_data(user_id, lot_no);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_finishing_data_created_at
+CREATE INDEX idx_finishing_data_created_at
   ON finishing_data(created_at);
 
 -- Index for SKU searches
-CREATE INDEX IF NOT EXISTS idx_finishing_data_sku
+CREATE INDEX idx_finishing_data_sku
   ON finishing_data(sku);
 
 -- ====================================================================
@@ -209,27 +209,27 @@ CREATE INDEX IF NOT EXISTS idx_finishing_data_sku
 -- ====================================================================
 
 -- Index for user assignment queries
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_user_id
+CREATE INDEX idx_finishing_assignments_user_id
   ON finishing_assignments(user_id);
 
 -- Index for approval status filtering
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_is_approved
+CREATE INDEX idx_finishing_assignments_is_approved
   ON finishing_assignments(is_approved);
 
 -- Composite index for user + approval status
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_user_approved
+CREATE INDEX idx_finishing_assignments_user_approved
   ON finishing_assignments(user_id, is_approved);
 
 -- Index for stitching assignment lookups
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_stitching_id
+CREATE INDEX idx_finishing_assignments_stitching_id
   ON finishing_assignments(stitching_assignment_id);
 
 -- Index for washing in data lookups
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_washing_in_id
+CREATE INDEX idx_finishing_assignments_washing_in_id
   ON finishing_assignments(washing_in_data_id);
 
 -- Index for assigned date sorting
-CREATE INDEX IF NOT EXISTS idx_finishing_assignments_assigned_on
+CREATE INDEX idx_finishing_assignments_assigned_on
   ON finishing_assignments(assigned_on);
 
 -- ====================================================================
@@ -237,15 +237,15 @@ CREATE INDEX IF NOT EXISTS idx_finishing_assignments_assigned_on
 -- ====================================================================
 
 -- Index for lot number joins
-CREATE INDEX IF NOT EXISTS idx_jeans_assembly_data_lot_no
+CREATE INDEX idx_jeans_assembly_data_lot_no
   ON jeans_assembly_data(lot_no);
 
 -- Index for user-specific queries
-CREATE INDEX IF NOT EXISTS idx_jeans_assembly_data_user_id
+CREATE INDEX idx_jeans_assembly_data_user_id
   ON jeans_assembly_data(user_id);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_jeans_assembly_data_created_at
+CREATE INDEX idx_jeans_assembly_data_created_at
   ON jeans_assembly_data(created_at);
 
 -- ====================================================================
@@ -253,19 +253,19 @@ CREATE INDEX IF NOT EXISTS idx_jeans_assembly_data_created_at
 -- ====================================================================
 
 -- Index for supervisor queries
-CREATE INDEX IF NOT EXISTS idx_employees_supervisor_id
+CREATE INDEX idx_employees_supervisor_id
   ON employees(supervisor_id);
 
 -- Index for punching ID lookups
-CREATE INDEX IF NOT EXISTS idx_employees_punching_id
+CREATE INDEX idx_employees_punching_id
   ON employees(punching_id);
 
 -- Index for active employee filtering
-CREATE INDEX IF NOT EXISTS idx_employees_is_active
+CREATE INDEX idx_employees_is_active
   ON employees(is_active);
 
 -- Composite index for supervisor + active employees
-CREATE INDEX IF NOT EXISTS idx_employees_supervisor_active
+CREATE INDEX idx_employees_supervisor_active
   ON employees(supervisor_id, is_active);
 
 -- ====================================================================
@@ -273,19 +273,19 @@ CREATE INDEX IF NOT EXISTS idx_employees_supervisor_active
 -- ====================================================================
 
 -- Composite index for employee + date (most common query pattern)
-CREATE INDEX IF NOT EXISTS idx_employee_attendance_emp_date
+CREATE INDEX idx_employee_attendance_emp_date
   ON employee_attendance(employee_id, date);
 
 -- Index for date range queries
-CREATE INDEX IF NOT EXISTS idx_employee_attendance_date
+CREATE INDEX idx_employee_attendance_date
   ON employee_attendance(date);
 
 -- Index for employee lookups
-CREATE INDEX IF NOT EXISTS idx_employee_attendance_employee_id
+CREATE INDEX idx_employee_attendance_employee_id
   ON employee_attendance(employee_id);
 
 -- Index for status filtering
-CREATE INDEX IF NOT EXISTS idx_employee_attendance_status
+CREATE INDEX idx_employee_attendance_status
   ON employee_attendance(status);
 
 -- ====================================================================
@@ -293,15 +293,15 @@ CREATE INDEX IF NOT EXISTS idx_employee_attendance_status
 -- ====================================================================
 
 -- Index for employee edit history
-CREATE INDEX IF NOT EXISTS idx_attendance_edit_logs_employee_id
+CREATE INDEX idx_attendance_edit_logs_employee_id
   ON attendance_edit_logs(employee_id);
 
 -- Index for operator tracking
-CREATE INDEX IF NOT EXISTS idx_attendance_edit_logs_operator_id
+CREATE INDEX idx_attendance_edit_logs_operator_id
   ON attendance_edit_logs(operator_id);
 
 -- Index for date filtering
-CREATE INDEX IF NOT EXISTS idx_attendance_edit_logs_attendance_date
+CREATE INDEX idx_attendance_edit_logs_attendance_date
   ON attendance_edit_logs(attendance_date);
 
 -- ====================================================================
@@ -309,11 +309,11 @@ CREATE INDEX IF NOT EXISTS idx_attendance_edit_logs_attendance_date
 -- ====================================================================
 
 -- Index for role-based queries
-CREATE INDEX IF NOT EXISTS idx_users_role_id
+CREATE INDEX idx_users_role_id
   ON users(role_id);
 
 -- Index for username lookups (if not already unique)
-CREATE INDEX IF NOT EXISTS idx_users_username
+CREATE INDEX idx_users_username
   ON users(username);
 
 -- ====================================================================
@@ -321,7 +321,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username
 -- ====================================================================
 
 -- Index for role name lookups (used in subqueries)
-CREATE INDEX IF NOT EXISTS idx_roles_name
+CREATE INDEX idx_roles_name
   ON roles(name);
 
 -- ====================================================================
@@ -329,11 +329,11 @@ CREATE INDEX IF NOT EXISTS idx_roles_name
 -- ====================================================================
 
 -- Composite index for finishing data + size lookups
-CREATE INDEX IF NOT EXISTS idx_finishing_data_sizes_fd_size
+CREATE INDEX idx_finishing_data_sizes_fd_size
   ON finishing_data_sizes(finishing_data_id, size_label);
 
 -- Index for finishing data lookups
-CREATE INDEX IF NOT EXISTS idx_finishing_data_sizes_fd_id
+CREATE INDEX idx_finishing_data_sizes_fd_id
   ON finishing_data_sizes(finishing_data_id);
 
 -- ====================================================================
@@ -341,11 +341,11 @@ CREATE INDEX IF NOT EXISTS idx_finishing_data_sizes_fd_id
 -- ====================================================================
 
 -- Composite index for dispatch queries
-CREATE INDEX IF NOT EXISTS idx_finishing_dispatches_fd_size
+CREATE INDEX idx_finishing_dispatches_fd_size
   ON finishing_dispatches(finishing_data_id, size_label);
 
 -- Index for finishing data lookups
-CREATE INDEX IF NOT EXISTS idx_finishing_dispatches_fd_id
+CREATE INDEX idx_finishing_dispatches_fd_id
   ON finishing_dispatches(finishing_data_id);
 
 -- ====================================================================
@@ -353,7 +353,7 @@ CREATE INDEX IF NOT EXISTS idx_finishing_dispatches_fd_id
 -- ====================================================================
 
 -- Index for stitching data lookups
-CREATE INDEX IF NOT EXISTS idx_stitching_data_sizes_sd_id
+CREATE INDEX idx_stitching_data_sizes_sd_id
   ON stitching_data_sizes(stitching_data_id);
 
 -- ====================================================================
@@ -361,7 +361,7 @@ CREATE INDEX IF NOT EXISTS idx_stitching_data_sizes_sd_id
 -- ====================================================================
 
 -- Index for washing in data lookups
-CREATE INDEX IF NOT EXISTS idx_washing_in_data_sizes_wd_id
+CREATE INDEX idx_washing_in_data_sizes_wd_id
   ON washing_in_data_sizes(washing_in_data_id);
 
 -- ====================================================================
@@ -369,7 +369,7 @@ CREATE INDEX IF NOT EXISTS idx_washing_in_data_sizes_wd_id
 -- ====================================================================
 
 -- Index for cutting lot lookups (used to avoid N+1)
-CREATE INDEX IF NOT EXISTS idx_cutting_lot_sizes_lot_id
+CREATE INDEX idx_cutting_lot_sizes_lot_id
   ON cutting_lot_sizes(cutting_lot_id);
 
 -- ====================================================================

@@ -5,7 +5,8 @@
       "Bash(git commit:*)",
       "Bash(git add:*)",
       "Bash(node batch-update-views.js:*)",
-      "Bash(node update-ui-carefully.js:*)"
+      "Bash(node update-ui-carefully.js:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
