@@ -17,15 +17,37 @@
       font-family: 'Inter', sans-serif;
       background: #f8f9fa;
       color: #1e293b;
+      padding-top: 70px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .dark-mode {
+      background-color: #1e293b;
+      color: #f1f5f9;
+    }
+
+    .dark-mode .action-card,
+    .dark-mode .stat-card,
+    .dark-mode .card-panel {
+      background: #334155;
+      border-color: #475569;
+    }
+
+    .dark-mode .top-nav {
+      background: #0f172a;
+      border-bottom-color: #334155;
     }
 
     .top-nav {
       background: white;
       border-bottom: 1px solid #e2e8f0;
       padding: 16px 24px;
-      position: sticky;
+      position: fixed;
       top: 0;
+      left: 0;
+      right: 0;
       z-index: 1000;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
     .nav-brand {
@@ -34,8 +56,12 @@
       color: #1e293b;
     }
 
+    .dark-mode .nav-brand {
+      color: #f1f5f9;
+    }
+
     .container-main {
-      max-width: 1400px;
+      max-width: 1600px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -47,16 +73,29 @@
       margin-bottom: 8px;
     }
 
+    .dark-mode .page-title {
+      color: #f1f5f9;
+    }
+
     .page-subtitle {
       font-size: 14px;
       color: #64748b;
       margin-bottom: 24px;
     }
 
+    .alert-info {
+      background: #e0f2fe;
+      border: 1px solid #7dd3fc;
+      color: #075985;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+
     .quick-actions {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
       margin-bottom: 32px;
     }
 
@@ -64,34 +103,55 @@
       background: white;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
-      padding: 20px;
+      padding: 16px 12px;
       text-align: center;
       text-decoration: none;
       color: #1e293b;
       transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
     }
 
     .action-card:hover {
       border-color: #2563eb;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
       transform: translateY(-2px);
+      color: #2563eb;
+    }
+
+    .dark-mode .action-card:hover {
+      background: #475569;
+      border-color: #3b82f6;
     }
 
     .action-card i {
-      font-size: 28px;
+      font-size: 24px;
       color: #2563eb;
-      margin-bottom: 8px;
+    }
+
+    .action-card:hover i {
+      color: #1d4ed8;
     }
 
     .action-card-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       color: #1e293b;
     }
 
+    .dark-mode .action-card-title {
+      color: #f1f5f9;
+    }
+
+    .action-card:hover .action-card-title {
+      color: #2563eb;
+    }
+
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -107,12 +167,19 @@
       font-size: 13px;
       color: #64748b;
       margin-bottom: 8px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .stat-value {
       font-size: 32px;
-      font-weight: 600;
-      color: #1e293b;
+      font-weight: 700;
+      color: #2563eb;
+    }
+
+    .dark-mode .stat-value {
+      color: #3b82f6;
     }
 
     .card-panel {
@@ -120,39 +187,136 @@
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       margin-bottom: 24px;
+      overflow: hidden;
     }
 
     .card-header {
-      padding: 20px;
+      padding: 16px 20px;
       border-bottom: 1px solid #e2e8f0;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dark-mode .card-header {
+      background: #1e293b;
+      border-bottom-color: #475569;
     }
 
     .card-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
       color: #1e293b;
       margin: 0;
+    }
+
+    .dark-mode .card-title {
+      color: #f1f5f9;
     }
 
     .card-body {
       padding: 20px;
     }
 
-    .table { font-size: 14px; }
+    .table {
+      font-size: 14px;
+    }
+
     .table thead th {
       background: #f8f9fa;
       font-weight: 600;
       color: #475569;
       border-bottom: 2px solid #e2e8f0;
       padding: 12px;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
     }
 
-    .tabulator { border: none; }
-    .tabulator .tabulator-header { background: #f8f9fa; font-weight: 600; }
+    .table tbody td {
+      padding: 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .table tbody tr:hover {
+      background: #f8f9fa;
+    }
+
+    .tabulator {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tabulator .tabulator-header {
+      background: #f8f9fa;
+      font-weight: 600;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .tabulator-row:hover {
+      background: #f8f9fa !important;
+    }
+
+    #toggleDarkMode {
+      cursor: pointer;
+      transition: all 0.2s;
+      background: transparent;
+      border: 1px solid #e2e8f0;
+      color: #64748b;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    #toggleDarkMode:hover {
+      background: #f8f9fa;
+      border-color: #cbd5e1;
+    }
+
+    .dark-mode #toggleDarkMode {
+      border-color: #475569;
+      color: #cbd5e1;
+    }
+
+    .dark-mode #toggleDarkMode:hover {
+      background: #475569;
+    }
+
+    #backToTop {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #2563eb;
+      color: white;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      transition: all 0.3s;
+      z-index: 999;
+    }
+
+    #backToTop:hover {
+      background: #1d4ed8;
+      transform: translateY(-4px);
+    }
 
     @media (max-width: 768px) {
-      .quick-actions { grid-template-columns: repeat(2, 1fr); }
-      .stats-grid { grid-template-columns: 1fr; }
+      .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .container-main {
+        padding: 16px;
+      }
     }
   </style>
   <link rel="stylesheet" href="/css/professional.css">
@@ -161,33 +325,50 @@
   <nav class="top-nav">
     <div class="d-flex justify-content-between align-items-center">
       <div class="nav-brand">Kotty Track</div>
-      <a href="/logout" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-box-arrow-right me-1"></i>Logout
-      </a>
+      <div class="d-flex gap-2">
+        <button id="toggleDarkMode" class="btn btn-sm">
+          <i class="bi bi-moon"></i> Dark Mode
+        </button>
+        <a href="/logout" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-box-arrow-right me-1"></i>Logout
+        </a>
+      </div>
     </div>
   </nav>
 
   <div class="container-main">
     <h1 class="page-title">Operator Dashboard</h1>
-    <p class="page-subtitle">Production Management Overview</p>
+    <p class="page-subtitle">Enhanced Production Overview</p>
 
-    <!-- Quick Actions -->
+    <!-- Quick Actions - All 17 Cards -->
     <div class="quick-actions">
+      <a href="/operator/dashboard" class="action-card">
+        <i class="bi bi-speedometer2"></i>
+        <div class="action-card-title">Dashboard</div>
+      </a>
       <a href="/operator/editcuttinglots" class="action-card">
         <i class="bi bi-scissors"></i>
-        <div class="action-card-title">Edit Cutting Lots</div>
+        <div class="action-card-title">Edit Lots</div>
+      </a>
+      <a href="/operator/dashboard/download-all-lots" class="action-card">
+        <i class="bi bi-download"></i>
+        <div class="action-card-title">Export All</div>
       </a>
       <a href="/search-dashboard" class="action-card">
         <i class="bi bi-search"></i>
         <div class="action-card-title">Search</div>
       </a>
+      <a href="/easyecom/stock-market" class="action-card">
+        <i class="bi bi-graph-up-arrow"></i>
+        <div class="action-card-title">Stock Market</div>
+      </a>
       <a href="/assign-to-washing" class="action-card">
         <i class="bi bi-droplet"></i>
-        <div class="action-card-title">Assign Washing</div>
+        <div class="action-card-title">Washing</div>
       </a>
       <a href="/operator/editwashingassignments" class="action-card">
         <i class="bi bi-pencil-square"></i>
-        <div class="action-card-title">Edit Washing</div>
+        <div class="action-card-title">Edit Wash</div>
       </a>
       <a href="/operator/dashboard/pic-report" class="action-card">
         <i class="bi bi-file-earmark-check"></i>
@@ -205,43 +386,318 @@
         <i class="bi bi-clock"></i>
         <div class="action-card-title">Attendance</div>
       </a>
-      <a href="/easyecom/stock-market" class="action-card">
-        <i class="bi bi-graph-up-arrow"></i>
-        <div class="action-card-title">Stock Market</div>
+      <a href="/operator/dashboard/employees/download" class="action-card">
+        <i class="bi bi-file-earmark-excel"></i>
+        <div class="action-card-title">Employee Excel</div>
       </a>
-      <a href="/operator/dashboard/download-all-lots" class="action-card">
-        <i class="bi bi-download"></i>
-        <div class="action-card-title">Export All</div>
+      <a href="/operator/dashboard/lot-departments/download" class="action-card">
+        <i class="bi bi-exclamation-diamond"></i>
+        <div class="action-card-title">Lot Dept Counts</div>
       </a>
+      <a href="/operator/dashboard/washing-summary/download" class="action-card">
+        <i class="bi bi-calendar-range"></i>
+        <div class="action-card-title">Wash Monthly</div>
+      </a>
+      <a href="/operator/stitching-tat" class="action-card">
+        <i class="bi bi-hourglass-split"></i>
+        <div class="action-card-title">Stitching TAT</div>
+      </a>
+      <a href="/webhook/logs" class="action-card">
+        <i class="bi bi-plug"></i>
+        <div class="action-card-title">Hooks</div>
+      </a>
+      <a href="/stitchingdashboard/payments/rates" class="action-card">
+        <i class="bi bi-currency-rupee"></i>
+        <div class="action-card-title">Rates</div>
+      </a>
+    </div>
+
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      Need to update stitching rates? Use the <strong>Rates</strong> card above to download the template and upload your pricing.
     </div>
 
     <!-- Stats -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">Total Lots</div>
-        <div class="stat-value" id="totalLots">-</div>
+        <div class="stat-label">Total Kits</div>
+        <div class="stat-value"><%= lotCount %></div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">In Production</div>
-        <div class="stat-value" id="inProduction">-</div>
+        <div class="stat-label">Cut Pieces</div>
+        <div class="stat-value"><%= totalPiecesCut %></div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Completed Today</div>
-        <div class="stat-value" id="completedToday">-</div>
+        <div class="stat-label">Finished</div>
+        <div class="stat-value"><%= totalFinished %></div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Pending Approval</div>
-        <div class="stat-value" id="pendingApproval">-</div>
+        <div class="stat-label">Users</div>
+        <div class="stat-value"><%= userCount %></div>
       </div>
     </div>
 
-    <!-- Pendency Table -->
+    <!-- SKU Insights Panel -->
     <div class="card-panel">
       <div class="card-header">
-        <h2 class="card-title">Department Pendencies</h2>
+        <h2 class="card-title"><i class="bi bi-bar-chart-line me-2"></i>SKU Insights</h2>
+        <form method="GET" action="/operator/dashboard" class="d-flex gap-2">
+          <input type="date" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>" style="width: auto;">
+          <input type="date" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>" style="width: auto;">
+          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        </form>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <h6 class="text-success"><i class="bi bi-arrow-up-square me-1"></i>Top 10 SKUs</h6>
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Pieces</th>
+                    <th>% Cut Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% advancedAnalytics.top10SKUs.forEach(item => {
+                       const pct = advancedAnalytics.totalCut > 0
+                         ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                         : "0.00";
+                  %>
+                  <tr>
+                    <td><strong><%= item.sku %></strong></td>
+                    <td><%= item.total %></td>
+                    <td><span class="badge bg-success"><%= pct %>%</span></td>
+                  </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col-md-6 mb-3">
+            <h6 class="text-warning"><i class="bi bi-arrow-down-square me-1"></i>Bottom 10 SKUs</h6>
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Pieces</th>
+                    <th>% Cut Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% advancedAnalytics.bottom10SKUs.forEach(item => {
+                       const pct = advancedAnalytics.totalCut > 0
+                         ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                         : "0.00";
+                  %>
+                  <tr>
+                    <td><strong><%= item.sku %></strong></td>
+                    <td><%= item.total %></td>
+                    <td><span class="badge bg-warning"><%= pct %>%</span></td>
+                  </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Analytics Panel -->
+    <div class="card-panel">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-graph-up-arrow me-2"></i>Advanced Stats</h2>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Cut → Stitch</div>
+              <div class="stat-value"><%= advancedAnalytics.cutToStitchingPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Cut → Assembly</div>
+              <div class="stat-value"><%= advancedAnalytics.cutToAssemblyPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Cut → Washing</div>
+              <div class="stat-value"><%= advancedAnalytics.cutToWashingPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Cut → Washing In</div>
+              <div class="stat-value"><%= advancedAnalytics.cutToWashingInPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Cut → Finishing</div>
+              <div class="stat-value"><%= advancedAnalytics.cutToFinishingPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Wash → Finishing</div>
+              <div class="stat-value"><%= advancedAnalytics.washToFinishingPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Stitch → Finish</div>
+              <div class="stat-value"><%= advancedAnalytics.stitchToFinishPct %>%</div>
+            </div>
+          </div>
+          <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card">
+              <div class="stat-label">Overall Efficiency</div>
+              <div class="stat-value"><%= advancedAnalytics.overallConvPct %>%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Washer Approvals vs Completions -->
+    <div class="card-panel">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-droplet me-2"></i>Washer Approvals vs Completions</h2>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Washer</th>
+                <th>Approved Pieces</th>
+                <th>Completed Pieces</th>
+                <th>Pending</th>
+                <th>Completion %</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% washingCompletionData.forEach(row => {
+                   const completionPct = row.approvedPieces > 0
+                     ? ((row.completedPieces / row.approvedPieces) * 100).toFixed(2)
+                     : "0.00";
+                   const pending = row.approvedPieces - row.completedPieces;
+              %>
+              <tr>
+                <td><strong><%= row.username %></strong></td>
+                <td><%= row.approvedPieces %></td>
+                <td><%= row.completedPieces %></td>
+                <td><%= pending %></td>
+                <td>
+                  <% if (parseFloat(completionPct) >= 80) { %>
+                    <span class="badge bg-success"><%= completionPct %>%</span>
+                  <% } else if (parseFloat(completionPct) >= 50) { %>
+                    <span class="badge bg-warning"><%= completionPct %>%</span>
+                  <% } else { %>
+                    <span class="badge bg-danger"><%= completionPct %>%</span>
+                  <% } %>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Operator Performance -->
+    <% if (operatorPerformance && operatorPerformance.length > 0) { %>
+    <div class="card-panel">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-people me-2"></i>Operator Performance</h2>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Approved Pieces</th>
+                <th>Completed Pieces</th>
+                <th>Pending</th>
+                <th>Completion %</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% operatorPerformance.forEach(row => {
+                   const completionPct = row.approvedPieces > 0
+                     ? ((row.completedPieces / row.approvedPieces) * 100).toFixed(2)
+                     : "0.00";
+                   const pending = row.approvedPieces - row.completedPieces;
+              %>
+              <tr>
+                <td><strong><%= row.username %></strong></td>
+                <td><%= row.approvedPieces %></td>
+                <td><%= row.completedPieces %></td>
+                <td><%= pending %></td>
+                <td>
+                  <% if (parseFloat(completionPct) >= 80) { %>
+                    <span class="badge bg-success"><%= completionPct %>%</span>
+                  <% } else if (parseFloat(completionPct) >= 50) { %>
+                    <span class="badge bg-warning"><%= completionPct %>%</span>
+                  <% } else { %>
+                    <span class="badge bg-danger"><%= completionPct %>%</span>
+                  <% } %>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Pendency -->
+    <div class="card-panel">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-hourglass-split me-2"></i>Pendency</h2>
+        <select id="deptFilter" class="form-select form-select-sm" style="width: auto;">
+          <option value="all">All Departments</option>
+          <option value="stitching">Stitching</option>
+          <option value="assembly">Assembly</option>
+          <option value="washing">Washing</option>
+          <option value="washing_in">Washing In</option>
+          <option value="finishing">Finishing</option>
+        </select>
       </div>
       <div class="card-body">
         <div id="pendencyTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Back to Top Button -->
+  <div id="backToTop">
+    <i class="bi bi-arrow-up"></i>
+  </div>
+
+  <!-- Lot Details Modal -->
+  <div class="modal fade" id="lotModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Lot Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="lotModalBody">
+          <div class="text-center">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2">Loading...</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -250,31 +706,118 @@
   <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
 
   <script>
-    // Load stats
-    fetch('/operator/dashboard/api/stats')
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('totalLots').textContent = data.totalLots || 0;
-        document.getElementById('inProduction').textContent = data.inProduction || 0;
-        document.getElementById('completedToday').textContent = data.completedToday || 0;
-        document.getElementById('pendingApproval').textContent = data.pendingApproval || 0;
-      })
-      .catch(() => {});
+    const body = document.body;
+    const toggleBtn = document.getElementById('toggleDarkMode');
+    const backToTopBtn = document.getElementById('backToTop');
+
+    // Dark mode toggle
+    if (localStorage.getItem('kottyDarkMode') === 'true') {
+      body.classList.add('dark-mode');
+      toggleBtn.innerHTML = '<i class="bi bi-sun"></i> Light Mode';
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      body.classList.toggle('dark-mode');
+      const isDark = body.classList.contains('dark-mode');
+      localStorage.setItem('kottyDarkMode', isDark);
+      toggleBtn.innerHTML = isDark
+        ? '<i class="bi bi-sun"></i> Light Mode'
+        : '<i class="bi bi-moon"></i> Dark Mode';
+    });
+
+    // Back to top button
+    window.addEventListener('scroll', () => {
+      if (window.pageYOffset > 300) {
+        backToTopBtn.style.display = 'flex';
+      } else {
+        backToTopBtn.style.display = 'none';
+      }
+    });
+
+    backToTopBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
 
     // Pendency table
-    var table = new Tabulator("#pendencyTable", {
+    const deptFilter = document.getElementById('deptFilter');
+    const table = new Tabulator("#pendencyTable", {
       layout: "fitColumns",
       pagination: "local",
-      paginationSize: 10,
+      paginationSize: 50,
       ajaxURL: "/operator/dashboard/api/pendency?dept=all",
+      placeholder: "No pendency data available",
       columns: [
-        { title: "Lot No", field: "lot_no", width: 150 },
+        {
+          title: "Lot No",
+          field: "lot_no",
+          width: 150,
+          formatter: function(cell) {
+            const lotNo = cell.getValue();
+            return `<a href="#" class="text-primary" onclick="showLotDetails('${lotNo}'); return false;"><strong>${lotNo}</strong></a>`;
+          }
+        },
         { title: "Username", field: "username", width: 150 },
         { title: "Assigned", field: "assigned", width: 120 },
         { title: "Completed", field: "completed", width: 120 },
-        { title: "Pending", field: "pending", width: 120 }
+        {
+          title: "Pending",
+          field: "pending",
+          width: 120,
+          formatter: function(cell) {
+            const val = cell.getValue();
+            if (val > 100) return `<span class="badge bg-danger">${val}</span>`;
+            if (val > 50) return `<span class="badge bg-warning">${val}</span>`;
+            return `<span class="badge bg-success">${val}</span>`;
+          }
+        }
       ]
     });
+
+    deptFilter.addEventListener('change', (e) => {
+      const dept = e.target.value;
+      table.setData(`/operator/dashboard/api/pendency?dept=${dept}`);
+    });
+
+    // Show lot details in modal
+    function showLotDetails(lotNo) {
+      const modal = new bootstrap.Modal(document.getElementById('lotModal'));
+      const modalBody = document.getElementById('lotModalBody');
+
+      modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Loading...</p></div>';
+      modal.show();
+
+      fetch(`/operator/dashboard/api/lot?lotNo=${lotNo}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+          }
+
+          let html = `
+            <div class="row">
+              <div class="col-md-6">
+                <p><strong>Lot No:</strong> ${data.lot_no}</p>
+                <p><strong>SKU:</strong> ${data.sku || 'N/A'}</p>
+                <p><strong>Total Pieces:</strong> ${data.total_pieces}</p>
+                <p><strong>Type:</strong> ${data.lot_type || 'N/A'}</p>
+              </div>
+              <div class="col-md-6">
+                <p><strong>Status:</strong> <span class="badge bg-info">${data.status || 'N/A'}</span></p>
+                <p><strong>Created:</strong> ${data.created_at ? new Date(data.created_at).toLocaleDateString() : 'N/A'}</p>
+                <p><strong>Department:</strong> ${data.current_department || 'N/A'}</p>
+              </div>
+            </div>
+          `;
+
+          modalBody.innerHTML = html;
+        })
+        .catch(err => {
+          modalBody.innerHTML = `<div class="alert alert-danger">Error loading lot details</div>`;
+        });
+    }
+
+    window.showLotDetails = showLotDetails;
   </script>
 </body>
 </html>
