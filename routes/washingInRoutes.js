@@ -208,7 +208,7 @@ router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res)
 
     // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(`
-      SELECT id, user_id, lot_no, sku, total_pieces, image_path, created_at
+      SELECT id, user_id, lot_no, sku, total_pieces, created_at
       FROM washing_in_data
       WHERE user_id = ?
         AND (lot_no LIKE ? OR sku LIKE ?)
