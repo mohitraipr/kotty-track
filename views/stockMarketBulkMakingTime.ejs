@@ -12,7 +12,21 @@
     textarea { font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
   </style>
 </head>
-<body>
+
+  <nav class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
+      <div>
+        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
+          <i class="bi bi-house me-1"></i>Home
+        </a>
+        <a href="/logout" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-box-arrow-right me-1"></i>Logout
+        </a>
+      </div>
+    </div>
+  </nav>
+
   <div class="container py-4">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h3 class="fw-bold mb-0">Bulk set making time</h3>
@@ -51,5 +65,5 @@
       </div>
     </div>
   </div>
-</body>
+
 </html>
