@@ -22,14 +22,16 @@ router.get('/dashboard', isPOCreator, async (req, res) => {
 // Inward - Entry form page
 router.get('/inward', isPOCreator, async (req, res) => {
   try {
-    // Fetch brand codes and categories
+    // Fetch brand codes, categories, and panel names
     const [brandCodes] = await pool.query('SELECT code FROM sku_brand_codes WHERE is_active = 1 ORDER BY code');
     const [categories] = await pool.query('SELECT name FROM sku_categories WHERE is_active = 1 ORDER BY name');
+    const [panelNames] = await pool.query('SELECT name, prefix FROM panel_names WHERE is_active = 1 ORDER BY name');
 
     res.render('po-creator/inward', {
       user: req.session.user,
       brandCodes,
-      categories
+      categories,
+      panelNames
     });
   } catch (error) {
     console.error('Error loading inward form:', error);
@@ -44,22 +46,32 @@ router.post('/api/inward', isPOCreator, async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { carton_number, panel_name, date_of_packing, packed_by, skus } = req.body;
+    const { panel_name, date_of_packing, packed_by, skus } = req.body;
 
     // Validate required fields
-    if (!carton_number || !panel_name || !date_of_packing || !packed_by || !skus || skus.length === 0) {
+    if (!panel_name || !date_of_packing || !packed_by || !skus || skus.length === 0) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Check if carton number already exists
-    const [existing] = await connection.query(
-      'SELECT id FROM cartons WHERE carton_number = ?',
-      [carton_number]
+    // Get panel info and generate carton number
+    const [panelInfo] = await connection.query(
+      'SELECT prefix, current_number FROM panel_names WHERE name = ? FOR UPDATE',
+      [panel_name]
     );
 
-    if (existing.length > 0) {
-      return res.status(400).json({ error: 'Carton number already exists' });
+    if (panelInfo.length === 0) {
+      return res.status(400).json({ error: 'Invalid panel name' });
     }
+
+    const prefix = panelInfo[0].prefix;
+    const nextNumber = panelInfo[0].current_number + 1;
+    const carton_number = `${prefix}${nextNumber}`;
+
+    // Update current_number in panel_names
+    await connection.query(
+      'UPDATE panel_names SET current_number = ? WHERE name = ?',
+      [nextNumber, panel_name]
+    );
 
     // Insert carton
     const [cartonResult] = await connection.query(
@@ -235,6 +247,7 @@ router.get('/download/inward-excel', isPOCreator, async (req, res) => {
     data.forEach(row => {
       worksheet.addRow({
         carton_number: row.carton_number,
+        panel_name: row.panel_name,
         date_of_packing: row.date_of_packing,
         packed_by: row.packed_by,
         brand_code: row.brand_code,
@@ -310,10 +323,13 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
         cs.full_sku,
         cs.size,
         cs.quantity,
+        CASE WHEN co.id IS NOT NULL THEN 'Dispatched' ELSE 'Not Dispatched' END as dispatch_status,
+        co.po_number,
         c.created_at
       FROM cartons c
       LEFT JOIN carton_skus cs ON c.id = cs.carton_id
       LEFT JOIN users u ON c.creator_user_id = u.id
+      LEFT JOIN carton_outward co ON c.id = co.carton_id
       ORDER BY c.created_at DESC, c.carton_number, cs.id
     `);
 
@@ -334,6 +350,8 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
       { header: 'Full SKU', key: 'full_sku', width: 30 },
       { header: 'Size', key: 'size', width: 10 },
       { header: 'Quantity', key: 'quantity', width: 10 },
+      { header: 'Dispatch Status', key: 'dispatch_status', width: 18 },
+      { header: 'PO Number', key: 'po_number', width: 20 },
       { header: 'Created At', key: 'created_at', width: 20 }
     ];
 

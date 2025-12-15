@@ -194,6 +194,7 @@
   <script>
     const brandCodes = <%- JSON.stringify(brandCodes.map(b => b.code)) %>;
     const categories = <%- JSON.stringify(categories.map(c => c.name)) %>;
+    const panelNames = <%- JSON.stringify(panelNames) %>;
     let cartonCounter = 0;
     let skuCounters = {};
 
@@ -289,19 +290,19 @@
         </div>
 
         <div class="row mb-4">
-          <div class="col-md-3 mb-3">
-            <label class="form-label">Carton Number *</label>
-            <input type="text" class="form-control" id="cartonNumber_${cartonId}" required>
-          </div>
-          <div class="col-md-3 mb-3">
+          <div class="col-md-4 mb-3">
             <label class="form-label">Panel Name *</label>
-            <input type="text" class="form-control" id="panelName_${cartonId}" required>
+            <select class="form-select" id="panelName_${cartonId}" required>
+              <option value="">Select Panel</option>
+              ${panelNames.map(panel => \`<option value="\${panel.name}">\${panel.name}</option>\`).join('')}
+            </select>
+            <small class="text-muted">Carton number will be auto-generated based on panel</small>
           </div>
-          <div class="col-md-3 mb-3">
+          <div class="col-md-4 mb-3">
             <label class="form-label">Date of Packing *</label>
             <input type="date" class="form-control" id="dateOfPacking_${cartonId}" required>
           </div>
-          <div class="col-md-3 mb-3">
+          <div class="col-md-4 mb-3">
             <label class="form-label">Packed By *</label>
             <input type="text" class="form-control" id="packedBy_${cartonId}" required>
           </div>
@@ -345,7 +346,6 @@
 
       cartonSections.forEach(section => {
         const cartonId = section.id.split('_')[1];
-        const cartonNumber = document.getElementById(`cartonNumber_${cartonId}`).value;
         const panelName = document.getElementById(`panelName_${cartonId}`).value;
         const dateOfPacking = document.getElementById(`dateOfPacking_${cartonId}`).value;
         const packedBy = document.getElementById(`packedBy_${cartonId}`).value;
@@ -372,9 +372,8 @@
           }
         });
 
-        if (cartonNumber && panelName && dateOfPacking && packedBy && skus.length > 0) {
+        if (panelName && dateOfPacking && packedBy && skus.length > 0) {
           cartons.push({
-            carton_number: cartonNumber,
             panel_name: panelName,
             date_of_packing: dateOfPacking,
             packed_by: packedBy,
