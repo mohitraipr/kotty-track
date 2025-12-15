@@ -7,14 +7,19 @@ CREATE TABLE IF NOT EXISTS cartons (
   carton_number VARCHAR(100) NOT NULL UNIQUE,
   date_of_packing DATE NOT NULL,
   packed_by VARCHAR(255) NOT NULL,
+  panel_name VARCHAR(255) NOT NULL,
   creator_user_id INT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_cartons_creator FOREIGN KEY (creator_user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_carton_number (carton_number),
   INDEX idx_creator_user_id (creator_user_id),
-  INDEX idx_date_of_packing (date_of_packing)
+  INDEX idx_date_of_packing (date_of_packing),
+  INDEX idx_panel_name (panel_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration: Add panel_name column to existing cartons table
+ALTER TABLE cartons ADD COLUMN IF NOT EXISTS panel_name VARCHAR(255) DEFAULT '' AFTER packed_by;
 
 -- Table to store SKU details for each carton
 CREATE TABLE IF NOT EXISTS carton_skus (

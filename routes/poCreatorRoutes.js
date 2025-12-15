@@ -44,10 +44,10 @@ router.post('/api/inward', isPOCreator, async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { carton_number, date_of_packing, packed_by, skus } = req.body;
+    const { carton_number, panel_name, date_of_packing, packed_by, skus } = req.body;
 
     // Validate required fields
-    if (!carton_number || !date_of_packing || !packed_by || !skus || skus.length === 0) {
+    if (!carton_number || !panel_name || !date_of_packing || !packed_by || !skus || skus.length === 0) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
@@ -63,8 +63,8 @@ router.post('/api/inward', isPOCreator, async (req, res) => {
 
     // Insert carton
     const [cartonResult] = await connection.query(
-      'INSERT INTO cartons (carton_number, date_of_packing, packed_by, creator_user_id) VALUES (?, ?, ?, ?)',
-      [carton_number, date_of_packing, packed_by, req.session.user.id]
+      'INSERT INTO cartons (carton_number, panel_name, date_of_packing, packed_by, creator_user_id) VALUES (?, ?, ?, ?, ?)',
+      [carton_number, panel_name, date_of_packing, packed_by, req.session.user.id]
     );
 
     const cartonId = cartonResult.insertId;
@@ -99,6 +99,7 @@ router.get('/inward/view', isPOCreator, async (req, res) => {
       SELECT
         c.id,
         c.carton_number,
+        c.panel_name,
         c.date_of_packing,
         c.packed_by,
         c.created_at,
@@ -186,6 +187,7 @@ router.get('/download/inward-excel', isPOCreator, async (req, res) => {
     const [data] = await pool.query(`
       SELECT
         c.carton_number,
+        c.panel_name,
         c.date_of_packing,
         c.packed_by,
         cs.brand_code,
@@ -208,6 +210,7 @@ router.get('/download/inward-excel', isPOCreator, async (req, res) => {
     // Add headers
     worksheet.columns = [
       { header: 'Carton Number', key: 'carton_number', width: 20 },
+      { header: 'Panel Name', key: 'panel_name', width: 20 },
       { header: 'Date of Packing', key: 'date_of_packing', width: 15 },
       { header: 'Packed By', key: 'packed_by', width: 20 },
       { header: 'Brand Code', key: 'brand_code', width: 12 },
@@ -266,6 +269,7 @@ router.get('/operator/view-all', isOperator, async (req, res) => {
       SELECT
         c.id,
         c.carton_number,
+        c.panel_name,
         c.date_of_packing,
         c.packed_by,
         c.created_at,
@@ -297,6 +301,7 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
       SELECT
         u.username as creator_username,
         c.carton_number,
+        c.panel_name,
         c.date_of_packing,
         c.packed_by,
         cs.brand_code,
@@ -320,6 +325,7 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
     worksheet.columns = [
       { header: 'Creator', key: 'creator_username', width: 20 },
       { header: 'Carton Number', key: 'carton_number', width: 20 },
+      { header: 'Panel Name', key: 'panel_name', width: 20 },
       { header: 'Date of Packing', key: 'date_of_packing', width: 15 },
       { header: 'Packed By', key: 'packed_by', width: 20 },
       { header: 'Brand Code', key: 'brand_code', width: 12 },
