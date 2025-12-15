@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inward Entry - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      padding: 20px;
+    }
+    .form-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .sku-row {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      position: relative;
+    }
+    .remove-sku-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+    .add-sku-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .submit-btn {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      border: none;
+      color: white;
+      padding: 12px 30px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+    .back-btn {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    .sku-preview {
+      background: #e9ecef;
+      padding: 8px 12px;
+      border-radius: 5px;
+      font-weight: 600;
+      margin-top: 5px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="bi bi-box-arrow-in-down"></i> Inward Entry</h2>
+      <a href="/po-creator/dashboard" class="back-btn">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+      </a>
+    </div>
+
+    <%- include('../partials/flashMessages') %>
+
+    <form id="inwardForm">
+      <!-- Carton Information -->
+      <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Carton Information</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Carton Number *</label>
+              <input type="text" class="form-control" id="cartonNumber" required>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Date of Packing *</label>
+              <input type="date" class="form-control" id="dateOfPacking" required>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Packed By *</label>
+              <input type="text" class="form-control" id="packedBy" required>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SKU Information -->
+      <div class="card mb-4">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">SKU Details</h5>
+          <button type="button" class="btn btn-light btn-sm" onclick="addSKURow()">
+            <i class="bi bi-plus-circle"></i> Add SKU
+          </button>
+        </div>
+        <div class="card-body" id="skuContainer">
+          <!-- SKU rows will be added here -->
+        </div>
+      </div>
+
+      <div class="text-center">
+        <button type="submit" class="submit-btn">
+          <i class="bi bi-check-circle"></i> Submit Inward Entry
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const brandCodes = <%- JSON.stringify(brandCodes.map(b => b.code)) %>;
+    const categories = <%- JSON.stringify(categories.map(c => c.name)) %>;
+    let skuCounter = 0;
+
+    function generateSKUPreview(rowId) {
+      const brandCode = document.getElementById(`brandCode_${rowId}`).value;
+      const category = document.getElementById(`category_${rowId}`).value;
+      const skuCode = document.getElementById(`skuCode_${rowId}`).value;
+
+      let preview = '';
+      if (brandCode) preview += brandCode;
+      if (category) preview += (preview ? '-' : '') + category;
+      if (skuCode) preview += (preview ? '-' : '') + skuCode;
+
+      document.getElementById(`skuPreview_${rowId}`).textContent = preview || 'SKU Preview';
+    }
+
+    function addSKURow() {
+      skuCounter++;
+      const rowId = skuCounter;
+
+      const skuRow = document.createElement('div');
+      skuRow.className = 'sku-row';
+      skuRow.id = `skuRow_${rowId}`;
+      skuRow.innerHTML = `
+        <button type="button" class="btn btn-danger btn-sm remove-sku-btn" onclick="removeSKURow(${rowId})">
+          <i class="bi bi-trash"></i>
+        </button>
+        <div class="row">
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Brand Code *</label>
+            <select class="form-select" id="brandCode_${rowId}" onchange="generateSKUPreview(${rowId})" required>
+              <option value="">Select</option>
+              ${brandCodes.map(code => `<option value="${code}">${code}</option>`).join('')}
+            </select>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Category *</label>
+            <select class="form-select" id="category_${rowId}" onchange="generateSKUPreview(${rowId})" required>
+              <option value="">Select</option>
+              ${categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+            </select>
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">SKU Code *</label>
+            <input type="text" class="form-control" id="skuCode_${rowId}" onkeyup="generateSKUPreview(${rowId})" required>
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Size *</label>
+            <input type="text" class="form-control" id="size_${rowId}" required>
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Quantity *</label>
+            <input type="number" class="form-control" id="quantity_${rowId}" min="1" required>
+          </div>
+          <div class="col-md-12">
+            <strong>Full SKU: </strong>
+            <span class="sku-preview" id="skuPreview_${rowId}">SKU Preview</span>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('skuContainer').appendChild(skuRow);
+    }
+
+    function removeSKURow(rowId) {
+      const row = document.getElementById(`skuRow_${rowId}`);
+      if (row) {
+        row.remove();
+      }
+    }
+
+    // Add first SKU row on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      addSKURow();
+    });
+
+    // Form submission
+    document.getElementById('inwardForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const cartonNumber = document.getElementById('cartonNumber').value;
+      const dateOfPacking = document.getElementById('dateOfPacking').value;
+      const packedBy = document.getElementById('packedBy').value;
+
+      const skus = [];
+      const skuRows = document.querySelectorAll('.sku-row');
+
+      skuRows.forEach(row => {
+        const rowId = row.id.split('_')[1];
+        const brandCode = document.getElementById(`brandCode_${rowId}`).value;
+        const category = document.getElementById(`category_${rowId}`).value;
+        const skuCode = document.getElementById(`skuCode_${rowId}`).value;
+        const size = document.getElementById(`size_${rowId}`).value;
+        const quantity = document.getElementById(`quantity_${rowId}`).value;
+
+        if (brandCode && category && skuCode && size && quantity) {
+          skus.push({
+            brand_code: brandCode,
+            category: category,
+            sku_code: skuCode,
+            size: size,
+            quantity: parseInt(quantity)
+          });
+        }
+      });
+
+      if (skus.length === 0) {
+        alert('Please add at least one SKU');
+        return;
+      }
+
+      try {
+        const response = await fetch('/po-creator/api/inward', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            carton_number: cartonNumber,
+            date_of_packing: dateOfPacking,
+            packed_by: packedBy,
+            skus: skus
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Inward entry saved successfully!');
+          window.location.href = '/po-creator/inward/view';
+        } else {
+          alert('Error: ' + (data.error || 'Failed to save inward entry'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error submitting form');
+      }
+    });
+  </script>
+</body>
+</html>

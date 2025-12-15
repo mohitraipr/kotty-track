@@ -156,6 +156,10 @@ function isOnlyMohitOperator(req, res, next) {
   return res.redirect('/');
 }
 
+function isPOCreator(req, res, next) {
+  return hasRole('po_creator')(req, res, next);
+}
+
 // ---------------------------------------------------------------------------
 // Helper to restrict routes to specific user ids
 function allowUserIds(ids) {
@@ -210,6 +214,7 @@ module.exports = {
     isStoreManager,
     isMohitOperator,
     isOnlyMohitOperator,
+    isPOCreator,
     allowUserIds,
     allowRoles
 };

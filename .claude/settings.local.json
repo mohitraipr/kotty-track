@@ -6,7 +6,8 @@
       "Bash(git add:*)",
       "Bash(node batch-update-views.js:*)",
       "Bash(node update-ui-carefully.js:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(mysql:*)"
     ],
     "deny": [],
     "ask": []

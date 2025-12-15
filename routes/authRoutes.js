@@ -100,6 +100,9 @@ router.post('/login', async (req, res) => {
       case 'accounts':
         res.redirect('/purchase');
         break;
+      case 'po_creator':
+        res.redirect('/po-creator/dashboard');
+        break;
       case 'checking':
       case 'quality_assurance':
         res.redirect('/department/dashboard');
