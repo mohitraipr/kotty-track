@@ -426,6 +426,38 @@ router.post('/api/outward', isPOCreator, async (req, res) => {
   }
 });
 
+// Operator - Main Dashboard
+router.get('/operator/dashboard', isOperator, async (req, res) => {
+  try {
+    res.render('po-operator-dashboard', {
+      user: req.session.user
+    });
+  } catch (error) {
+    console.error('Error loading PO Operator dashboard:', error);
+    req.flash('error', 'Error loading dashboard');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Operator - Stats API
+router.get('/operator/api/stats', isOperator, async (req, res) => {
+  try {
+    const [cartonStats] = await pool.query('SELECT COUNT(*) as totalCartons FROM cartons');
+    const [skuStats] = await pool.query('SELECT COUNT(DISTINCT full_sku) as totalSKUs, SUM(quantity) as totalQty FROM carton_skus');
+    const [creatorStats] = await pool.query('SELECT COUNT(DISTINCT creator_user_id) as totalCreators FROM cartons');
+
+    res.json({
+      totalCartons: cartonStats[0].totalCartons,
+      totalSKUs: skuStats[0].totalSKUs,
+      totalQty: skuStats[0].totalQty,
+      totalCreators: creatorStats[0].totalCreators
+    });
+  } catch (error) {
+    console.error('Error loading stats:', error);
+    res.status(500).json({ error: 'Error loading stats' });
+  }
+});
+
 // Operator - Manage Brand Codes
 router.get('/operator/manage-brands', isOperator, async (req, res) => {
   try {

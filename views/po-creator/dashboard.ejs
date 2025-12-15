@@ -9,156 +9,65 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f8f9fa;
-      color: #1e293b;
-      padding-top: 70px;
-    }
-
-    .top-nav {
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 16px 24px;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
-
-    .nav-brand {
-      font-size: 20px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .container-main {
-      max-width: 1600px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .page-title {
-      font-size: 28px;
-      font-weight: 600;
-      color: #1e293b;
-      margin-bottom: 8px;
-    }
-
-    .page-subtitle {
-      font-size: 14px;
-      color: #64748b;
-      margin-bottom: 24px;
-    }
-
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-      margin-top: 32px;
-    }
-
-    .action-card {
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 24px;
-      text-align: center;
-      text-decoration: none;
-      color: #1e293b;
-      transition: all 0.2s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .action-card:hover {
-      border-color: #2563eb;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-      transform: translateY(-2px);
-      color: #2563eb;
-    }
-
-    .action-card i {
-      font-size: 36px;
-      color: #2563eb;
-    }
-
-    .action-card.success i { color: #10b981; }
-    .action-card.danger i { color: #ef4444; }
-    .action-card.info i { color: #3b82f6; }
-
-    .action-card-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .action-card-desc {
-      font-size: 13px;
-      color: #64748b;
-    }
-
-    .btn-logout {
-      background: #ef4444;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .btn-logout:hover {
-      background: #dc2626;
-    }
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; }
+    .top-nav { background: white; border-bottom: 2px solid #e2e8f0; padding: 16px 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 24px; }
+    .nav-brand { font-size: 20px; font-weight: 700; color: #1e293b; }
+    .container-main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #64748b; margin-bottom: 32px; }
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .action-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; text-decoration: none; color: #1e293b; transition: all 0.2s; display: block; }
+    .action-card:hover { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); transform: translateY(-2px); }
+    .action-card-icon { font-size: 32px; margin-bottom: 16px; }
+    .action-card-icon.primary { color: #2563eb; }
+    .action-card-icon.success { color: #10b981; }
+    .action-card-icon.danger { color: #ef4444; }
+    .action-card-icon.info { color: #3b82f6; }
+    .action-card-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #1e293b; }
+    .action-card-desc { font-size: 14px; color: #64748b; }
+    .btn-logout { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; }
+    .btn-logout:hover { background: #dc2626; }
   </style>
 </head>
 <body>
   <nav class="top-nav">
     <div class="d-flex justify-content-between align-items-center">
-      <span class="nav-brand">Kotty Track - PO Creator</span>
+      <span class="nav-brand">PO Creator Dashboard</span>
       <form action="/logout" method="POST">
-        <button type="submit" class="btn-logout">
-          <i class="bi bi-box-arrow-right"></i> Logout
-        </button>
+        <button type="submit" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Logout</button>
       </form>
     </div>
   </nav>
 
   <div class="container-main">
-    <h1 class="page-title">PO Creator Dashboard</h1>
-    <p class="page-subtitle">Welcome, <%= user.username %></p>
+    <h1 class="page-title">Welcome, <%= user.username %></h1>
+    <p class="page-subtitle">Manage your cartons, SKUs, and outward entries</p>
 
     <%- include('../partials/flashMessages') %>
 
-    <div class="quick-actions">
+    <div class="action-grid">
       <a href="/po-creator/inward" class="action-card">
-        <i class="bi bi-box-arrow-in-down"></i>
+        <div class="action-card-icon primary"><i class="bi bi-box-arrow-in-down"></i></div>
         <div class="action-card-title">Inward Entry</div>
-        <div class="action-card-desc">Fill carton and SKU data</div>
+        <div class="action-card-desc">Create new carton entries with multiple SKUs</div>
       </a>
 
-      <a href="/po-creator/inward/view" class="action-card info">
-        <i class="bi bi-list-ul"></i>
+      <a href="/po-creator/inward/view" class="action-card">
+        <div class="action-card-icon info"><i class="bi bi-list-ul"></i></div>
         <div class="action-card-title">View Inward Data</div>
-        <div class="action-card-desc">See all your entries</div>
+        <div class="action-card-desc">See all your carton and SKU entries</div>
       </a>
 
-      <a href="/po-creator/outward" class="action-card danger">
-        <i class="bi bi-box-arrow-up"></i>
+      <a href="/po-creator/outward" class="action-card">
+        <div class="action-card-icon danger"><i class="bi bi-box-arrow-up"></i></div>
         <div class="action-card-title">Outward Entry</div>
-        <div class="action-card-desc">Create PO and dispatch</div>
+        <div class="action-card-desc">Create PO and dispatch entries for your cartons</div>
       </a>
 
-      <a href="/po-creator/download/inward-excel" class="action-card success">
-        <i class="bi bi-file-earmark-spreadsheet"></i>
+      <a href="/po-creator/download/inward-excel" class="action-card">
+        <div class="action-card-icon success"><i class="bi bi-file-earmark-spreadsheet"></i></div>
         <div class="action-card-title">Download Excel</div>
-        <div class="action-card-desc">Export your data</div>
+        <div class="action-card-desc">Export your complete inward data</div>
       </a>
     </div>
   </div>
