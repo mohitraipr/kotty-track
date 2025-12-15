@@ -6,75 +6,37 @@
   <title>View Inward Data - Kotty Track</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f8f9fa;
-      padding: 20px;
-    }
-    .container-fluid {
-      max-width: 1400px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 15px;
-      padding: 30px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    }
-    .back-btn, .download-btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      text-decoration: none;
-      border: none;
-    }
-    .back-btn {
-      background: #6c757d;
-      color: white;
-    }
-    .download-btn {
-      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-      color: white;
-    }
-    .table-responsive {
-      margin-top: 20px;
-    }
-    .carton-card {
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 10px;
-      padding: 15px;
-      margin-bottom: 15px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-    .carton-card:hover {
-      background: #e9ecef;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .modal-body table {
-      font-size: 0.9rem;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
+    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+    .container-fluid { max-width: 1400px; margin: 0 auto; }
+    .back-btn, .download-btn { padding: 10px 20px; border-radius: 6px; text-decoration: none; border: none; font-size: 14px; cursor: pointer; }
+    .back-btn { background: #6c757d; color: white; }
+    .download-btn { background: #10b981; color: white; }
+    .download-btn:hover { background: #059669; }
+    .carton-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 15px; cursor: pointer; transition: all 0.2s; }
+    .carton-card:hover { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
+    .badge { padding: 5px 10px; border-radius: 5px; font-size: 12px; }
+    .badge-blue { background: #2563eb; color: white; }
+    .badge-green { background: #10b981; color: white; }
   </style>
 </head>
 <body>
-  <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2><i class="bi bi-list-ul"></i> Inward Data</h2>
+  <div class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <h4 class="mb-0"><i class="bi bi-list-ul"></i> Inward Data</h4>
       <div>
-        <a href="/po-creator/download/inward-excel" class="download-btn me-2">
-          <i class="bi bi-download"></i> Download Excel
-        </a>
-        <a href="/po-creator/dashboard" class="back-btn">
-          <i class="bi bi-arrow-left"></i> Back
-        </a>
+        <a href="/po-creator/download/inward-excel" class="download-btn me-2"><i class="bi bi-download"></i> Download Excel</a>
+        <a href="/po-creator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
       </div>
     </div>
-
+  </div>
+  <div class="container-fluid">
     <%- include('../partials/flashMessages') %>
-
     <% if (cartons.length === 0) { %>
-      <div class="alert alert-info">
-        <i class="bi bi-info-circle"></i> No inward entries found. <a href="/po-creator/inward">Create your first entry</a>
-      </div>
+      <div class="alert alert-info"><i class="bi bi-info-circle"></i> No inward entries found. <a href="/po-creator/inward">Create your first entry</a></div>
     <% } else { %>
       <div class="row">
         <% cartons.forEach(carton => { %>
@@ -82,25 +44,20 @@
             <div class="carton-card" onclick="viewCartonDetails(<%= carton.id %>)">
               <h5><i class="bi bi-box"></i> <%= carton.carton_number %></h5>
               <hr>
-              <div class="d-flex justify-content-between">
+              <div class="d-flex justify-content-between mb-2">
                 <small><strong>Packed:</strong> <%= new Date(carton.date_of_packing).toLocaleDateString() %></small>
                 <small><strong>By:</strong> <%= carton.packed_by %></small>
               </div>
-              <div class="d-flex justify-content-between mt-2">
-                <small><strong>SKUs:</strong> <%= carton.sku_count %></small>
-                <small><strong>Total Qty:</strong> <%= carton.total_quantity %></small>
+              <div class="d-flex justify-content-between">
+                <span class="badge badge-blue">SKUs: <%= carton.sku_count %></span>
+                <span class="badge badge-green">Qty: <%= carton.total_quantity %></span>
               </div>
-              <small class="text-muted d-block mt-2">
-                <i class="bi bi-clock"></i> Created: <%= new Date(carton.created_at).toLocaleString() %>
-              </small>
             </div>
           </div>
         <% }) %>
       </div>
     <% } %>
   </div>
-
-  <!-- Modal for Carton Details -->
   <div class="modal fade" id="cartonModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
@@ -108,85 +65,24 @@
           <h5 class="modal-title">Carton Details</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" id="modalContent">
-          <!-- Content will be loaded here -->
-        </div>
+        <div class="modal-body" id="modalContent"></div>
       </div>
     </div>
   </div>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     async function viewCartonDetails(cartonId) {
       try {
-        const response = await fetch(`/po-creator/api/carton/${cartonId}`);
+        const response = await fetch(\`/po-creator/api/carton/\${cartonId}\`);
         const data = await response.json();
-
         if (response.ok) {
-          let html = `
-            <div class="mb-3">
-              <h6>Carton Information</h6>
-              <table class="table table-bordered">
-                <tr>
-                  <th>Carton Number</th>
-                  <td>${data.carton.carton_number}</td>
-                </tr>
-                <tr>
-                  <th>Date of Packing</th>
-                  <td>${new Date(data.carton.date_of_packing).toLocaleDateString()}</td>
-                </tr>
-                <tr>
-                  <th>Packed By</th>
-                  <td>${data.carton.packed_by}</td>
-                </tr>
-              </table>
-            </div>
-
-            <div>
-              <h6>SKU Details</h6>
-              <table class="table table-striped table-bordered">
-                <thead>
-                  <tr>
-                    <th>Brand</th>
-                    <th>Category</th>
-                    <th>SKU Code</th>
-                    <th>Full SKU</th>
-                    <th>Size</th>
-                    <th>Quantity</th>
-                  </tr>
-                </thead>
-                <tbody>
-          `;
-
-          data.skus.forEach(sku => {
-            html += `
-              <tr>
-                <td>${sku.brand_code}</td>
-                <td>${sku.category}</td>
-                <td>${sku.sku_code}</td>
-                <td><strong>${sku.full_sku}</strong></td>
-                <td>${sku.size}</td>
-                <td>${sku.quantity}</td>
-              </tr>
-            `;
-          });
-
-          html += `
-                </tbody>
-              </table>
-            </div>
-          `;
-
+          let html = \`<div class="mb-3"><h6>Carton Information</h6><table class="table table-bordered"><tr><th>Carton Number</th><td>\${data.carton.carton_number}</td></tr><tr><th>Date of Packing</th><td>\${new Date(data.carton.date_of_packing).toLocaleDateString()}</td></tr><tr><th>Packed By</th><td>\${data.carton.packed_by}</td></tr></table></div><div><h6>SKU Details</h6><table class="table table-striped table-bordered"><thead><tr><th>Brand</th><th>Category</th><th>SKU Code</th><th>Full SKU</th><th>Size</th><th>Quantity</th></tr></thead><tbody>\`;
+          data.skus.forEach(sku => { html += \`<tr><td>\${sku.brand_code}</td><td>\${sku.category}</td><td>\${sku.sku_code}</td><td><strong>\${sku.full_sku}</strong></td><td>\${sku.size}</td><td>\${sku.quantity}</td></tr>\`; });
+          html += \`</tbody></table></div>\`;
           document.getElementById('modalContent').innerHTML = html;
-          const modal = new bootstrap.Modal(document.getElementById('cartonModal'));
-          modal.show();
-        } else {
-          alert('Error loading carton details');
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error loading carton details');
-      }
+          new bootstrap.Modal(document.getElementById('cartonModal')).show();
+        } else { alert('Error loading carton details'); }
+      } catch (error) { alert('Error loading carton details'); }
     }
   </script>
 </body>

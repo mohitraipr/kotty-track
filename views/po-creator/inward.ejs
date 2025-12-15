@@ -6,118 +6,185 @@
   <title>Inward Entry - Kotty Track</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: 'Inter', sans-serif;
       background: #f8f9fa;
+      color: #1e293b;
       padding: 20px;
     }
-    .form-container {
-      max-width: 1000px;
-      margin: 0 auto;
+
+    .top-nav {
       background: white;
-      border-radius: 15px;
-      padding: 30px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 24px;
+      margin: -20px -20px 20px -20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
+
+    .form-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .carton-section {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .carton-header {
+      background: #2563eb;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .sku-row {
       background: #f8f9fa;
       padding: 20px;
-      border-radius: 10px;
+      border-radius: 8px;
       margin-bottom: 15px;
+      border: 1px solid #e2e8f0;
       position: relative;
     }
-    .remove-sku-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-    }
-    .add-sku-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
+
+    .remove-btn {
+      background: #ef4444;
       color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .remove-btn:hover {
+      background: #dc2626;
+    }
+
+    .add-btn {
+      background: #10b981;
+      color: white;
+      border: none;
       padding: 10px 20px;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
     }
+
+    .add-btn:hover {
+      background: #059669;
+    }
+
     .submit-btn {
-      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-      border: none;
+      background: #2563eb;
       color: white;
-      padding: 12px 30px;
-      border-radius: 8px;
-      font-size: 1.1rem;
+      border: none;
+      padding: 12px 40px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
       cursor: pointer;
     }
+
+    .submit-btn:hover {
+      background: #1d4ed8;
+    }
+
     .back-btn {
       background: #6c757d;
       color: white;
-      border: none;
       padding: 10px 20px;
-      border-radius: 8px;
+      border-radius: 6px;
       text-decoration: none;
-    }
-    .sku-preview {
-      background: #e9ecef;
-      padding: 8px 12px;
-      border-radius: 5px;
-      font-weight: 600;
-      margin-top: 5px;
       display: inline-block;
+    }
+
+    .back-btn:hover {
+      background: #5c636a;
+      color: white;
+    }
+
+    .sku-preview {
+      background: #2563eb;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      display: inline-block;
+      margin-top: 8px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    .form-control, .form-select {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .success-msg {
+      background: #10b981;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="form-container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2><i class="bi bi-box-arrow-in-down"></i> Inward Entry</h2>
+  <div class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <h4 class="mb-0"><i class="bi bi-box-arrow-in-down"></i> Inward Entry</h4>
       <a href="/po-creator/dashboard" class="back-btn">
-        <i class="bi bi-arrow-left"></i> Back to Dashboard
+        <i class="bi bi-arrow-left"></i> Back
       </a>
     </div>
+  </div>
 
+  <div class="form-container">
     <%- include('../partials/flashMessages') %>
 
+    <div class="success-msg" id="successMsg">
+      <i class="bi bi-check-circle"></i> <span id="successText"></span>
+    </div>
+
     <form id="inwardForm">
-      <!-- Carton Information -->
-      <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-          <h5 class="mb-0">Carton Information</h5>
-        </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-4 mb-3">
-              <label class="form-label">Carton Number *</label>
-              <input type="text" class="form-control" id="cartonNumber" required>
-            </div>
-            <div class="col-md-4 mb-3">
-              <label class="form-label">Date of Packing *</label>
-              <input type="date" class="form-control" id="dateOfPacking" required>
-            </div>
-            <div class="col-md-4 mb-3">
-              <label class="form-label">Packed By *</label>
-              <input type="text" class="form-control" id="packedBy" required>
-            </div>
-          </div>
-        </div>
+      <div id="cartonsContainer">
+        <!-- Cartons will be added here -->
       </div>
 
-      <!-- SKU Information -->
-      <div class="card mb-4">
-        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">SKU Details</h5>
-          <button type="button" class="btn btn-light btn-sm" onclick="addSKURow()">
-            <i class="bi bi-plus-circle"></i> Add SKU
-          </button>
-        </div>
-        <div class="card-body" id="skuContainer">
-          <!-- SKU rows will be added here -->
-        </div>
+      <div class="text-center mb-4">
+        <button type="button" class="add-btn" onclick="addCartonSection()">
+          <i class="bi bi-plus-circle"></i> Add Another Carton
+        </button>
       </div>
 
       <div class="text-center">
         <button type="submit" class="submit-btn">
-          <i class="bi bi-check-circle"></i> Submit Inward Entry
+          <i class="bi bi-check-circle"></i> Submit All Cartons
         </button>
       </div>
     </form>
@@ -127,137 +194,226 @@
   <script>
     const brandCodes = <%- JSON.stringify(brandCodes.map(b => b.code)) %>;
     const categories = <%- JSON.stringify(categories.map(c => c.name)) %>;
-    let skuCounter = 0;
+    let cartonCounter = 0;
+    let skuCounters = {};
 
-    function generateSKUPreview(rowId) {
-      const brandCode = document.getElementById(`brandCode_${rowId}`).value;
-      const category = document.getElementById(`category_${rowId}`).value;
-      const skuCode = document.getElementById(`skuCode_${rowId}`).value;
+    function generateSKUPreview(cartonId, skuId) {
+      const brandCode = document.getElementById(`brandCode_${cartonId}_${skuId}`).value;
+      const category = document.getElementById(`category_${cartonId}_${skuId}`).value;
+      const skuCode = document.getElementById(`skuCode_${cartonId}_${skuId}`).value;
 
       let preview = '';
-      if (brandCode) preview += brandCode;
-      if (category) preview += (preview ? '-' : '') + category;
-      if (skuCode) preview += (preview ? '-' : '') + skuCode;
+      if (brandCode && category && skuCode) {
+        preview = brandCode + category + skuCode;
+      } else {
+        preview = 'SKU Preview';
+      }
 
-      document.getElementById(`skuPreview_${rowId}`).textContent = preview || 'SKU Preview';
+      document.getElementById(`skuPreview_${cartonId}_${skuId}`).textContent = preview;
     }
 
-    function addSKURow() {
-      skuCounter++;
-      const rowId = skuCounter;
+    function addSKURow(cartonId) {
+      if (!skuCounters[cartonId]) {
+        skuCounters[cartonId] = 0;
+      }
+      skuCounters[cartonId]++;
+      const skuId = skuCounters[cartonId];
 
       const skuRow = document.createElement('div');
       skuRow.className = 'sku-row';
-      skuRow.id = `skuRow_${rowId}`;
+      skuRow.id = `skuRow_${cartonId}_${skuId}`;
       skuRow.innerHTML = `
-        <button type="button" class="btn btn-danger btn-sm remove-sku-btn" onclick="removeSKURow(${rowId})">
-          <i class="bi bi-trash"></i>
-        </button>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <strong>SKU #${skuId}</strong>
+          <button type="button" class="remove-btn" onclick="removeSKURow(${cartonId}, ${skuId})">
+            <i class="bi bi-trash"></i> Remove
+          </button>
+        </div>
         <div class="row">
           <div class="col-md-2 mb-3">
             <label class="form-label">Brand Code *</label>
-            <select class="form-select" id="brandCode_${rowId}" onchange="generateSKUPreview(${rowId})" required>
+            <select class="form-select" id="brandCode_${cartonId}_${skuId}" onchange="generateSKUPreview(${cartonId}, ${skuId})" required>
               <option value="">Select</option>
               ${brandCodes.map(code => `<option value="${code}">${code}</option>`).join('')}
             </select>
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">Category *</label>
-            <select class="form-select" id="category_${rowId}" onchange="generateSKUPreview(${rowId})" required>
+            <select class="form-select" id="category_${cartonId}_${skuId}" onchange="generateSKUPreview(${cartonId}, ${skuId})" required>
               <option value="">Select</option>
               ${categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
             </select>
           </div>
           <div class="col-md-2 mb-3">
             <label class="form-label">SKU Code *</label>
-            <input type="text" class="form-control" id="skuCode_${rowId}" onkeyup="generateSKUPreview(${rowId})" required>
+            <input type="text" class="form-control" id="skuCode_${cartonId}_${skuId}" onkeyup="generateSKUPreview(${cartonId}, ${skuId})" required>
           </div>
           <div class="col-md-2 mb-3">
             <label class="form-label">Size *</label>
-            <input type="text" class="form-control" id="size_${rowId}" required>
+            <input type="text" class="form-control" id="size_${cartonId}_${skuId}" required>
           </div>
           <div class="col-md-2 mb-3">
             <label class="form-label">Quantity *</label>
-            <input type="number" class="form-control" id="quantity_${rowId}" min="1" required>
+            <input type="number" class="form-control" id="quantity_${cartonId}_${skuId}" min="1" required>
           </div>
           <div class="col-md-12">
             <strong>Full SKU: </strong>
-            <span class="sku-preview" id="skuPreview_${rowId}">SKU Preview</span>
+            <span class="sku-preview" id="skuPreview_${cartonId}_${skuId}">SKU Preview</span>
           </div>
         </div>
       `;
 
-      document.getElementById('skuContainer').appendChild(skuRow);
+      document.getElementById(`skuContainer_${cartonId}`).appendChild(skuRow);
     }
 
-    function removeSKURow(rowId) {
-      const row = document.getElementById(`skuRow_${rowId}`);
+    function removeSKURow(cartonId, skuId) {
+      const row = document.getElementById(`skuRow_${cartonId}_${skuId}`);
       if (row) {
         row.remove();
       }
     }
 
-    // Add first SKU row on page load
+    function addCartonSection() {
+      cartonCounter++;
+      const cartonId = cartonCounter;
+
+      const cartonSection = document.createElement('div');
+      cartonSection.className = 'carton-section';
+      cartonSection.id = `cartonSection_${cartonId}`;
+      cartonSection.innerHTML = `
+        <div class="carton-header">
+          <h5 class="mb-0">Carton #${cartonId}</h5>
+          <button type="button" class="remove-btn" onclick="removeCartonSection(${cartonId})">
+            <i class="bi bi-trash"></i> Remove Carton
+          </button>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Carton Number *</label>
+            <input type="text" class="form-control" id="cartonNumber_${cartonId}" required>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Date of Packing *</label>
+            <input type="date" class="form-control" id="dateOfPacking_${cartonId}" required>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Packed By *</label>
+            <input type="text" class="form-control" id="packedBy_${cartonId}" required>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6>SKU Details</h6>
+            <button type="button" class="add-btn btn-sm" onclick="addSKURow(${cartonId})">
+              <i class="bi bi-plus"></i> Add SKU
+            </button>
+          </div>
+          <div id="skuContainer_${cartonId}">
+            <!-- SKU rows will be added here -->
+          </div>
+        </div>
+      `;
+
+      document.getElementById('cartonsContainer').appendChild(cartonSection);
+      addSKURow(cartonId); // Add first SKU row automatically
+    }
+
+    function removeCartonSection(cartonId) {
+      const section = document.getElementById(`cartonSection_${cartonId}`);
+      if (section) {
+        section.remove();
+      }
+    }
+
+    // Add first carton on page load
     window.addEventListener('DOMContentLoaded', () => {
-      addSKURow();
+      addCartonSection();
     });
 
     // Form submission
     document.getElementById('inwardForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const cartonNumber = document.getElementById('cartonNumber').value;
-      const dateOfPacking = document.getElementById('dateOfPacking').value;
-      const packedBy = document.getElementById('packedBy').value;
+      const cartons = [];
+      const cartonSections = document.querySelectorAll('.carton-section');
 
-      const skus = [];
-      const skuRows = document.querySelectorAll('.sku-row');
+      cartonSections.forEach(section => {
+        const cartonId = section.id.split('_')[1];
+        const cartonNumber = document.getElementById(`cartonNumber_${cartonId}`).value;
+        const dateOfPacking = document.getElementById(`dateOfPacking_${cartonId}`).value;
+        const packedBy = document.getElementById(`packedBy_${cartonId}`).value;
 
-      skuRows.forEach(row => {
-        const rowId = row.id.split('_')[1];
-        const brandCode = document.getElementById(`brandCode_${rowId}`).value;
-        const category = document.getElementById(`category_${rowId}`).value;
-        const skuCode = document.getElementById(`skuCode_${rowId}`).value;
-        const size = document.getElementById(`size_${rowId}`).value;
-        const quantity = document.getElementById(`quantity_${rowId}`).value;
+        const skus = [];
+        const skuRows = section.querySelectorAll('.sku-row');
 
-        if (brandCode && category && skuCode && size && quantity) {
-          skus.push({
-            brand_code: brandCode,
-            category: category,
-            sku_code: skuCode,
-            size: size,
-            quantity: parseInt(quantity)
-          });
-        }
-      });
+        skuRows.forEach(row => {
+          const skuId = row.id.split('_')[2];
+          const brandCode = document.getElementById(`brandCode_${cartonId}_${skuId}`).value;
+          const category = document.getElementById(`category_${cartonId}_${skuId}`).value;
+          const skuCode = document.getElementById(`skuCode_${cartonId}_${skuId}`).value;
+          const size = document.getElementById(`size_${cartonId}_${skuId}`).value;
+          const quantity = document.getElementById(`quantity_${cartonId}_${skuId}`).value;
 
-      if (skus.length === 0) {
-        alert('Please add at least one SKU');
-        return;
-      }
+          if (brandCode && category && skuCode && size && quantity) {
+            skus.push({
+              brand_code: brandCode,
+              category: category,
+              sku_code: skuCode,
+              size: size,
+              quantity: parseInt(quantity)
+            });
+          }
+        });
 
-      try {
-        const response = await fetch('/po-creator/api/inward', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+        if (cartonNumber && dateOfPacking && packedBy && skus.length > 0) {
+          cartons.push({
             carton_number: cartonNumber,
             date_of_packing: dateOfPacking,
             packed_by: packedBy,
             skus: skus
-          })
-        });
+          });
+        }
+      });
 
-        const data = await response.json();
+      if (cartons.length === 0) {
+        alert('Please add at least one carton with SKUs');
+        return;
+      }
 
-        if (response.ok) {
-          alert('Inward entry saved successfully!');
-          window.location.href = '/po-creator/inward/view';
+      try {
+        let successCount = 0;
+        let failedCount = 0;
+
+        for (const carton of cartons) {
+          const response = await fetch('/po-creator/api/inward', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(carton)
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failedCount++;
+            const data = await response.json();
+            console.error('Failed to save carton:', carton.carton_number, data.error);
+          }
+        }
+
+        if (successCount > 0) {
+          document.getElementById('successMsg').style.display = 'block';
+          document.getElementById('successText').textContent =
+            `Successfully saved ${successCount} carton(s)!${failedCount > 0 ? ` ${failedCount} failed.` : ''}`;
+
+          setTimeout(() => {
+            window.location.href = '/po-creator/inward/view';
+          }, 2000);
         } else {
-          alert('Error: ' + (data.error || 'Failed to save inward entry'));
+          alert('Failed to save any cartons. Please check the data and try again.');
         }
       } catch (error) {
         console.error('Error:', error);

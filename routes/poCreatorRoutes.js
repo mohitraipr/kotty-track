@@ -71,7 +71,7 @@ router.post('/api/inward', isPOCreator, async (req, res) => {
 
     // Insert SKUs
     for (const sku of skus) {
-      const fullSKU = `${sku.brand_code}-${sku.category}-${sku.sku_code}`;
+      const fullSKU = `${sku.brand_code}${sku.category}${sku.sku_code}`;
 
       await connection.query(
         `INSERT INTO carton_skus (carton_id, brand_code, category, sku_code, full_sku, size, quantity)
@@ -356,6 +356,207 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error generating Excel:', error);
     req.flash('error', 'Error generating Excel file');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Outward - Entry form page (only creator can create outward for their cartons)
+router.get('/outward', isPOCreator, async (req, res) => {
+  try {
+    // Fetch user's cartons that haven't been dispatched yet
+    const [cartons] = await pool.query(`
+      SELECT c.id, c.carton_number, c.date_of_packing, c.packed_by
+      FROM cartons c
+      LEFT JOIN carton_outward co ON c.id = co.carton_id
+      WHERE c.creator_user_id = ? AND co.id IS NULL
+      ORDER BY c.created_at DESC
+    `, [req.session.user.id]);
+
+    res.render('po-creator/outward', {
+      user: req.session.user,
+      cartons
+    });
+  } catch (error) {
+    console.error('Error loading outward form:', error);
+    req.flash('error', 'Error loading outward form');
+    res.redirect('/po-creator/dashboard');
+  }
+});
+
+// API endpoint to submit outward data
+router.post('/api/outward', isPOCreator, async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const { carton_ids, po_number, dispatch_date, panel_name } = req.body;
+
+    if (!carton_ids || carton_ids.length === 0 || !po_number || !dispatch_date || !panel_name) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Verify all cartons belong to the user
+    const [cartons] = await connection.query(
+      `SELECT id FROM cartons WHERE id IN (?) AND creator_user_id = ?`,
+      [carton_ids, req.session.user.id]
+    );
+
+    if (cartons.length !== carton_ids.length) {
+      return res.status(403).json({ error: 'You can only create outward for your own cartons' });
+    }
+
+    // Insert outward records
+    for (const cartonId of carton_ids) {
+      await connection.query(
+        `INSERT INTO carton_outward (carton_id, po_number, dispatch_date, panel_name, creator_user_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [cartonId, po_number, dispatch_date, panel_name, req.session.user.id]
+      );
+    }
+
+    await connection.commit();
+    res.json({ success: true, message: 'Outward entry saved successfully' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error saving outward data:', error);
+    res.status(500).json({ error: 'Error saving outward data' });
+  } finally {
+    connection.release();
+  }
+});
+
+// Operator - Manage Brand Codes
+router.get('/operator/manage-brands', isOperator, async (req, res) => {
+  try {
+    const [brandCodes] = await pool.query('SELECT * FROM sku_brand_codes ORDER BY code');
+
+    res.render('po-creator/operator-manage-brands', {
+      user: req.session.user,
+      brandCodes
+    });
+  } catch (error) {
+    console.error('Error loading brands:', error);
+    req.flash('error', 'Error loading brands');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Operator - Add Brand Code
+router.post('/operator/api/add-brand', isOperator, async (req, res) => {
+  try {
+    const { code, description } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: 'Brand code is required' });
+    }
+
+    await pool.query(
+      'INSERT INTO sku_brand_codes (code, description) VALUES (?, ?)',
+      [code.toUpperCase(), description || '']
+    );
+
+    res.json({ success: true, message: 'Brand code added successfully' });
+  } catch (error) {
+    console.error('Error adding brand code:', error);
+    res.status(500).json({ error: 'Error adding brand code' });
+  }
+});
+
+// Operator - Manage Categories
+router.get('/operator/manage-categories', isOperator, async (req, res) => {
+  try {
+    const [categories] = await pool.query('SELECT * FROM sku_categories ORDER BY name');
+
+    res.render('po-creator/operator-manage-categories', {
+      user: req.session.user,
+      categories
+    });
+  } catch (error) {
+    console.error('Error loading categories:', error);
+    req.flash('error', 'Error loading categories');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Operator - Add Category
+router.post('/operator/api/add-category', isOperator, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+
+    await pool.query(
+      'INSERT INTO sku_categories (name, description) VALUES (?, ?)',
+      [name.toUpperCase(), description || '']
+    );
+
+    res.json({ success: true, message: 'Category added successfully' });
+  } catch (error) {
+    console.error('Error adding category:', error);
+    res.status(500).json({ error: 'Error adding category' });
+  }
+});
+
+// Operator - SKU-wise view
+router.get('/operator/view-sku-wise', isOperator, async (req, res) => {
+  try {
+    const [skuData] = await pool.query(`
+      SELECT
+        cs.full_sku,
+        cs.brand_code,
+        cs.category,
+        cs.sku_code,
+        cs.size,
+        SUM(cs.quantity) as total_quantity,
+        COUNT(DISTINCT c.id) as carton_count,
+        GROUP_CONCAT(DISTINCT u.username) as creators
+      FROM carton_skus cs
+      JOIN cartons c ON cs.carton_id = c.id
+      JOIN users u ON c.creator_user_id = u.id
+      GROUP BY cs.full_sku, cs.size
+      ORDER BY cs.full_sku, cs.size
+    `);
+
+    res.render('po-creator/operator-view-sku-wise', {
+      user: req.session.user,
+      skuData
+    });
+  } catch (error) {
+    console.error('Error loading SKU-wise view:', error);
+    req.flash('error', 'Error loading SKU-wise view');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Operator - Panel-wise view
+router.get('/operator/view-panel-wise', isOperator, async (req, res) => {
+  try {
+    const [panelData] = await pool.query(`
+      SELECT
+        co.panel_name,
+        co.po_number,
+        co.dispatch_date,
+        COUNT(DISTINCT co.carton_id) as carton_count,
+        SUM(cs.quantity) as total_quantity,
+        u.username as creator
+      FROM carton_outward co
+      JOIN cartons c ON co.carton_id = c.id
+      JOIN users u ON c.creator_user_id = u.id
+      LEFT JOIN carton_skus cs ON c.id = cs.carton_id
+      GROUP BY co.panel_name, co.po_number, co.dispatch_date, u.username
+      ORDER BY co.dispatch_date DESC
+    `);
+
+    res.render('po-creator/operator-view-panel-wise', {
+      user: req.session.user,
+      panelData
+    });
+  } catch (error) {
+    console.error('Error loading panel-wise view:', error);
+    req.flash('error', 'Error loading panel-wise view');
     res.redirect('/operator/dashboard');
   }
 });
