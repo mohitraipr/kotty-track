@@ -294,7 +294,7 @@
             <label class="form-label">Panel Name *</label>
             <select class="form-select" id="panelName_${cartonId}" required>
               <option value="">Select Panel</option>
-              ${panelNames.map(panel => \`<option value="\${panel.name}">\${panel.name}</option>\`).join('')}
+              ${panelNames.map(panel => `<option value="${panel.name}">${panel.name}</option>`).join('')}
             </select>
             <small class="text-muted">Carton number will be auto-generated based on panel</small>
           </div>
