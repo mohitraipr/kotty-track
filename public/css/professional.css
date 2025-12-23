@@ -181,6 +181,71 @@ p {
   color: var(--primary-color);
 }
 
+/* Accounts Challan UI Enhancements */
+.accounts-challan-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.accounts-challan-hero {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.accounts-challan-hero p {
+  margin-bottom: 0;
+}
+
+.accounts-challan-tabs {
+  margin: 20px 0 24px;
+}
+
+.accounts-challan-tabs .nav-link {
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  font-weight: 500;
+  padding: 0.5rem 0.9rem;
+}
+
+.accounts-challan-tabs .nav-link.active,
+.accounts-challan-tabs .nav-link:hover {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.accounts-challan-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.accounts-challan-card .card-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+}
+
+.accounts-badge-soft {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--primary-color);
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.accounts-muted {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 /* Stats Grid */
 .stats-grid {
   display: grid;

@@ -13,8 +13,11 @@
     body {
       background-color: #f8f9fa;
     }
-    .card {
-      margin-top: 20px;
+    .page-actions {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
     }
   </style>
 </head>
@@ -33,7 +36,7 @@
     </div>
   </nav>
 
-  <div class="container">
+  <div class="accounts-challan-shell">
     <% if (error && error.length) { %>
       <div class="alert alert-danger mt-3">
         <% error.forEach(msg => { %>
@@ -49,18 +52,45 @@
       </div>
     <% } %>
 
-    <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap">
-      <h2 class="mb-0">DC Challan List</h2>
-      <form method="GET" action="/accounts-challan/list" class="form-inline my-3">
-        <input type="text" class="form-control mr-2" name="search" placeholder="Challan no or lot" value="<%= search %>">
-        <button class="btn btn-outline-primary" type="submit">Search</button>
+    <div class="accounts-challan-hero">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h2 class="mb-1">DC Challan List</h2>
+          <div class="accounts-muted">Track every challan and open detailed views.</div>
+        </div>
+        <a href="/accounts-challan" class="btn btn-outline-primary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+
+    <ul class="nav nav-pills gap-2 accounts-challan-tabs">
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link active" href="/accounts-challan/list">Challan List</a></li>
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan/gst">GST Master</a></li>
+      <li class="nav-item"><a class="nav-link" href="/purchase">Purchase</a></li>
+    </ul>
+
+    <div class="page-actions mb-3">
+      <form method="GET" action="/accounts-challan/list" class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Search challans</label>
+          <input type="text" class="form-control" name="search" placeholder="Challan no or lot" value="<%= search %>">
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-outline-primary w-100" type="submit">Search</button>
+        </div>
       </form>
     </div>
 
-    <div class="card">
+    <div class="accounts-challan-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Recent challans</span>
+        <span class="accounts-muted">Click view to open the challan PDF.</span>
+      </div>
       <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table table-striped mb-0">
+          <table class="table table-striped table-hover mb-0">
             <thead class="thead-light">
               <tr>
                 <th>#</th>
