@@ -4,14 +4,6 @@
   <meta charset="UTF-8">
   <title>Accounts DC Challan Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    integrity="sha512-buD2vAa2mW1yj78BzFzM/6kWTHpveG62CmG0cy8bcS9A7cdsI1hD2eiGeBv1rCR3dOfh1JvHS5hLSG/T0YX1ZA=="
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,19 +12,10 @@
     body {
       background-color: #f8f9fa;
     }
-    .navbrand-icon {
-      margin-right: 8px;
-    }
     .action-btns {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-    }
-    .search-container {
-      margin-top: 20px;
-    }
-    .load-more-container {
-      margin: 15px 0;
     }
     .qty-input {
       width: 110px;
@@ -41,163 +24,198 @@
     .search-controls {
       background: #fff;
       border-radius: 12px;
-      padding: 16px;
+      padding: 20px;
       border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .hero-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+    }
+    .stat-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    .icon-btn {
+      transition: all 0.2s;
+    }
+    .icon-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
   </style>
 </head>
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <a class="navbar-brand" href="#">
-      <i class="fas fa-file-invoice navbrand-icon"></i>
-      ACCOUNTS DC CHALLAN
-    </a>
-    <button
-      class="navbar-toggler"
-      type="button"
-      data-toggle="collapse"
-      data-target="#navbarNav"
-      aria-controls="navbarNav"
-      aria-expanded="false"
-      aria-label="Toggle navigation"
-    >
-      <span class="navbar-toggler-icon"></span>
-    </button>
-
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav mr-auto"></ul>
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan">
-            <i class="fas fa-tachometer-alt"></i> Dashboard
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan/list">
-            <i class="fas fa-list"></i> Challan List
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan/gst">
-            <i class="fas fa-receipt"></i> GST Master
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/logout" class="btn btn-sm btn-danger ml-2">
-            <i class="fas fa-sign-out-alt"></i> Logout
-          </a>
-        </li>
-      </ul>
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-file-earmark-text me-2"></i>Accounts DC Challan
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/purchase">
+              <i class="bi bi-cart-fill"></i> Purchase
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/accounts-challan">
+              <i class="bi bi-file-earmark-text"></i> DC Challan
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/accounts-challan/list">
+              <i class="bi bi-list-ul"></i> Challan List
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/accounts-challan/gst">
+              <i class="bi bi-receipt"></i> GST Master
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="/logout" class="btn btn-outline-light btn-sm ms-2">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+          </li>
+        </ul>
+      </div>
     </div>
   </nav>
 
-  <div class="accounts-challan-shell">
+  <div class="container my-4">
     <% if (error && error.length) { %>
-      <div class="alert alert-danger mt-3">
+      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
         <% error.forEach(msg => { %>
-          <p><%= msg %></p>
+          <div><%= msg %></div>
         <% }); %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
     <% } %>
     <% if (success && success.length) { %>
-      <div class="alert alert-success mt-3">
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
         <% success.forEach(msg => { %>
-          <p><%= msg %></p>
+          <div><%= msg %></div>
         <% }); %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
     <% } %>
 
-    <div class="accounts-challan-hero">
-      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-        <div>
-          <h2 class="mb-1">
-            <i class="fas fa-tachometer-alt"></i> Accounts DC Challan
-          </h2>
-          <div class="accounts-muted">Select lots with remaining pieces, enter quantities, and generate challans.</div>
-        </div>
-        <div class="action-btns">
-          <button id="selectAllBtn" class="btn btn-outline-primary">
-            <i class="fas fa-check-double"></i> Select All
-          </button>
-          <button id="generateChallanBtn" class="btn btn-primary" disabled>
-            <i class="fas fa-file-invoice"></i> Generate Challan
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <ul class="nav nav-pills gap-2 accounts-challan-tabs">
+    <!-- Tab Navigation -->
+    <ul class="nav nav-pills mb-4 gap-2">
+      <li class="nav-item">
+        <a class="nav-link" href="/purchase">
+          <i class="bi bi-cart-fill"></i> Purchase
+        </a>
+      </li>
       <li class="nav-item">
         <a class="nav-link active" href="/accounts-challan">
-          <i class="fas fa-tachometer-alt"></i> Dashboard
+          <i class="bi bi-file-earmark-text"></i> DC Challan
         </a>
       </li>
       <li class="nav-item">
         <a class="nav-link" href="/accounts-challan/list">
-          <i class="fas fa-list"></i> Challan List
+          <i class="bi bi-list-ul"></i> Challan List
         </a>
       </li>
       <li class="nav-item">
         <a class="nav-link" href="/accounts-challan/gst">
-          <i class="fas fa-receipt"></i> GST Master
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/purchase">
-          <i class="fas fa-cart-shopping"></i> Purchase
+          <i class="bi bi-receipt"></i> GST Master
         </a>
       </li>
     </ul>
 
-    <div class="search-controls">
-      <div class="row align-items-center g-3">
-        <div class="col-md-6">
-          <label class="form-label fw-semibold mb-1">Search lots</label>
-          <input
-            type="text"
-            id="searchInput"
-            class="form-control"
-            placeholder="Search by SKU, Lot No, or Cutting Remark"
-            value="<%= search %>"
-          />
+    <!-- Hero Section -->
+    <div class="hero-section">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h2 class="mb-2">
+            <i class="bi bi-file-earmark-text me-2"></i>DC Challan Dashboard
+          </h2>
+          <p class="mb-3 opacity-90">Select lots with remaining pieces, enter quantities, and generate delivery challans.</p>
+          <div class="stat-badge">
+            <i class="bi bi-info-circle me-2"></i>Only lots with remaining pieces are shown
+          </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label fw-semibold mb-1 d-block">&nbsp;</label>
-          <button class="btn btn-outline-secondary w-100" id="searchBtn">
-            <i class="fas fa-search"></i> Search
+        <div class="action-btns">
+          <button id="selectAllBtn" class="btn btn-light icon-btn" data-bs-toggle="tooltip" title="Select or deselect all visible lots">
+            <i class="bi bi-check-all me-1"></i> Select All
           </button>
-        </div>
-        <div class="col-md-3 text-md-right">
-          <label class="form-label fw-semibold mb-1 d-block">&nbsp;</label>
-          <span class="accounts-badge-soft">Only lots with remaining pieces are shown</span>
+          <button id="generateChallanBtn" class="btn btn-success icon-btn" disabled data-bs-toggle="tooltip" title="Generate challan for selected lots">
+            <i class="bi bi-file-earmark-plus me-1"></i> Generate Challan
+          </button>
         </div>
       </div>
     </div>
 
-    <div class="accounts-challan-card mt-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Lots awaiting challan</span>
-        <span class="accounts-muted">Pick lots and set challan pieces.</span>
+    <!-- Search Controls -->
+    <div class="search-controls mb-4">
+      <div class="row align-items-end g-3">
+        <div class="col-md-8">
+          <label class="form-label fw-semibold mb-2">
+            <i class="bi bi-search me-2"></i>Search Lots
+          </label>
+          <input
+            type="text"
+            id="searchInput"
+            class="form-control form-control-lg"
+            placeholder="Search by SKU, Lot No, or Cutting Remark..."
+            value="<%= search %>"
+            data-bs-toggle="tooltip"
+            title="Type to search lots by SKU, lot number, or remarks"
+          />
+        </div>
+        <div class="col-md-4">
+          <button class="btn btn-primary btn-lg w-100 icon-btn" id="searchBtn">
+            <i class="bi bi-search me-2"></i> Search
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lots Table Card -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">
+            <i class="bi bi-box-seam me-2"></i>Lots Awaiting Challan
+          </h5>
+          <small class="text-muted">
+            <i class="bi bi-info-circle me-1"></i>Pick lots and set challan pieces
+          </small>
+        </div>
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-striped table-hover mb-0" id="assignmentsTable">
-            <thead class="thead-light">
+            <thead class="table-light">
               <tr>
-                <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
-                <th>ID</th>
-                <th>Lot No</th>
-                <th>SKU</th>
-                <th>Total Pieces</th>
-                <th>Issued Pieces</th>
-                <th>Remaining</th>
-                <th>Challan Pieces</th>
-                <th>Assembly Remark</th>
-                <th>Cutting Remark</th>
-                <th>Target Day</th>
-                <th>Assigned On</th>
-                <th>Washer</th>
-                <th>Master</th>
+                <th style="width: 40px;">
+                  <input type="checkbox" id="selectAllCheckbox" data-bs-toggle="tooltip" title="Select/Deselect all">
+                </th>
+                <th><i class="bi bi-hash me-1"></i>ID</th>
+                <th><i class="bi bi-tag me-1"></i>Lot No</th>
+                <th><i class="bi bi-upc me-1"></i>SKU</th>
+                <th><i class="bi bi-box me-1"></i>Total Pieces</th>
+                <th><i class="bi bi-send me-1"></i>Issued</th>
+                <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
+                <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
+                <th><i class="bi bi-chat-left-text me-1"></i>Assembly Remark</th>
+                <th><i class="bi bi-scissors me-1"></i>Cutting Remark</th>
+                <th><i class="bi bi-calendar-event me-1"></i>Target Day</th>
+                <th><i class="bi bi-clock me-1"></i>Assigned On</th>
+                <th><i class="bi bi-person me-1"></i>Washer</th>
+                <th><i class="bi bi-person-badge me-1"></i>Master</th>
               </tr>
             </thead>
             <tbody>
@@ -245,8 +263,10 @@
       </div>
     </div>
 
-    <div class="load-more-container text-center">
-      <button class="btn btn-outline-secondary" id="loadMoreBtn">Load More</button>
+    <div class="text-center my-4">
+      <button class="btn btn-outline-primary btn-lg icon-btn" id="loadMoreBtn" data-bs-toggle="tooltip" title="Load more lots">
+        <i class="bi bi-arrow-down-circle me-2"></i>Load More
+      </button>
     </div>
 
     <form id="generateForm" action="/accounts-challan/generate" method="POST" class="d-none">
@@ -254,8 +274,7 @@
     </form>
   </div>
 
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let currentOffset = 0;
     let currentSearchQuery = '<%= search %>';
@@ -394,6 +413,12 @@
     });
 
     attachRowListeners();
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
   </script>
 </body>
 </html>

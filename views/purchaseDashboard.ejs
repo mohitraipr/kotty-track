@@ -6,133 +6,311 @@
   <title>Purchase Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/professional.css">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .section-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px 8px 0 0;
+      margin-bottom: 0;
+    }
+    .card-custom {
+      border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+    .table-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .icon-btn {
+      transition: all 0.2s;
+    }
+    .icon-btn:hover {
+      transform: translateY(-2px);
+    }
+  </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container-fluid">
-    <a class="navbar-brand" href="#">Purchase</a>
-    <div class="ms-auto">
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    <a class="navbar-brand" href="#">
+      <i class="bi bi-cart-fill me-2"></i>Purchase Management
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link active" href="/purchase">
+            <i class="bi bi-cart-fill"></i> Purchase
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan">
+            <i class="bi bi-file-earmark-text"></i> DC Challan
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/list">
+            <i class="bi bi-list-ul"></i> Challan List
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/gst">
+            <i class="bi bi-receipt"></i> GST Master
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/logout" class="btn btn-outline-light btn-sm ms-2">
+            <i class="bi bi-box-arrow-right"></i> Logout
+          </a>
+        </li>
+      </ul>
     </div>
   </div>
 </nav>
 <div class="container my-4">
   <%- include('partials/flashMessages') %>
 
-  <h2>Parties</h2>
-  <% if (user.roleName === 'accounts') { %>
-  <div class="mb-4">
-    <h5>Bulk Upload</h5>
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      <a href="/purchase/parties/template" class="btn btn-outline-secondary btn-sm" data-bs-toggle="tooltip" data-bs-placement="top" title="Download Excel template with columns: Name, GST Number, State, Pincode, Due Payment Days">
-        <i class="fas fa-file-download me-1"></i>Template
+  <!-- Tab Navigation -->
+  <ul class="nav nav-pills mb-4 gap-2">
+    <li class="nav-item">
+      <a class="nav-link active" href="/purchase">
+        <i class="bi bi-cart-fill"></i> Purchase
       </a>
-      <form method="post" action="/purchase/parties/bulk" enctype="multipart/form-data" class="d-flex gap-2">
-        <input type="file" name="excelFile" accept=".xlsx" required class="form-control form-control-sm" data-bs-toggle="tooltip" data-bs-placement="top" title="Upload .xlsx file containing parties data">
-        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-upload me-1"></i>Upload</button>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="/accounts-challan">
+        <i class="bi bi-file-earmark-text"></i> DC Challan
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="/accounts-challan/list">
+        <i class="bi bi-list-ul"></i> Challan List
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="/accounts-challan/gst">
+        <i class="bi bi-receipt"></i> GST Master
+      </a>
+    </li>
+  </ul>
+
+  <!-- Parties Section -->
+  <div class="card-custom">
+    <div class="section-header">
+      <h4 class="mb-0">
+        <i class="bi bi-people-fill me-2"></i>Parties Management
+      </h4>
+      <small>Manage suppliers and vendors</small>
+    </div>
+    <div class="card-body">
+      <% if (user.roleName === 'accounts') { %>
+      <!-- Bulk Upload Section -->
+      <div class="alert alert-info border-0 mb-4">
+        <h6 class="alert-heading">
+          <i class="bi bi-cloud-upload me-2"></i>Bulk Upload
+        </h6>
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+          <a href="/purchase/parties/template" class="btn btn-outline-secondary btn-sm icon-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Download Excel template with columns: Name, GST Number, State, Pincode, Due Payment Days">
+            <i class="bi bi-download me-1"></i>Download Template
+          </a>
+          <form method="post" action="/purchase/parties/bulk" enctype="multipart/form-data" class="d-flex gap-2">
+            <input type="file" name="excelFile" accept=".xlsx" required class="form-control form-control-sm" data-bs-toggle="tooltip" data-bs-placement="top" title="Upload .xlsx file containing parties data">
+            <button type="submit" class="btn btn-primary btn-sm icon-btn">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Add Party Form -->
+      <form method="post" action="/purchase/parties" class="row g-3 mb-4 p-3 bg-light rounded">
+        <div class="col-12">
+          <h6 class="mb-3">
+            <i class="bi bi-plus-circle me-2"></i>Add New Party
+          </h6>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Party Name <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control" placeholder="Enter party name" required data-bs-toggle="tooltip" title="Full name of the party/vendor">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">GST Number</label>
+          <input type="text" name="gst_number" class="form-control" placeholder="GST Number" data-bs-toggle="tooltip" title="15-digit GSTIN">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">State</label>
+          <input type="text" name="state" class="form-control" placeholder="State" data-bs-toggle="tooltip" title="State name">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Pincode</label>
+          <input type="text" name="pincode" class="form-control" placeholder="Pincode" data-bs-toggle="tooltip" title="6-digit pincode">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Due Days</label>
+          <input type="number" name="due_payment_days" class="form-control" placeholder="Days" data-bs-toggle="tooltip" title="Payment due days">
+        </div>
+        <div class="col-md-1 d-grid">
+          <label class="form-label small">&nbsp;</label>
+          <button type="submit" class="btn btn-primary icon-btn">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        </div>
       </form>
+      <% } %>
+
+      <!-- Parties Table -->
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th><i class="bi bi-person me-2"></i>Name</th>
+              <th><i class="bi bi-hash me-2"></i>GST Number</th>
+              <th><i class="bi bi-geo-alt me-2"></i>State</th>
+              <th><i class="bi bi-mailbox me-2"></i>Pincode</th>
+              <th><i class="bi bi-calendar-check me-2"></i>Due Days</th>
+              <% if (user.roleName === 'accounts') { %><th><i class="bi bi-gear me-2"></i>Action</th><% } %>
+            </tr>
+          </thead>
+          <tbody>
+          <% if (parties && parties.length > 0) { %>
+            <% parties.forEach(p => { %>
+              <tr>
+                <form method="post" action="/purchase/parties/<%= p.id %>">
+                  <td>
+                    <input type="text" name="name" value="<%= p.name %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit party name">
+                  </td>
+                  <td>
+                    <input type="text" name="gst_number" value="<%= p.gst_number %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit GST number">
+                  </td>
+                  <td>
+                    <input type="text" name="state" value="<%= p.state %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit state">
+                  </td>
+                  <td>
+                    <input type="text" name="pincode" value="<%= p.pincode %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit pincode">
+                  </td>
+                  <td>
+                    <input type="number" name="due_payment_days" value="<%= p.due_payment_days %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit due payment days">
+                  </td>
+                  <% if (user.roleName === 'accounts') { %>
+                  <td>
+                    <button type="submit" class="btn btn-sm btn-primary icon-btn" data-bs-toggle="tooltip" title="Save changes">
+                      <i class="bi bi-check-lg me-1"></i>Update
+                    </button>
+                  </td>
+                  <% } %>
+                </form>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                No parties found. Add your first party above.
+              </td>
+            </tr>
+          <% } %>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-  <form method="post" action="/purchase/parties" class="row g-2 mb-3">
-    <div class="col-md-3">
-      <input type="text" name="name" class="form-control" placeholder="Party Name" required>
-    </div>
-    <div class="col-md-2">
-      <input type="text" name="gst_number" class="form-control" placeholder="GST Number">
-    </div>
-    <div class="col-md-2">
-      <input type="text" name="state" class="form-control" placeholder="State">
-    </div>
-    <div class="col-md-2">
-      <input type="text" name="pincode" class="form-control" placeholder="Pincode">
-    </div>
-    <div class="col-md-2">
-      <input type="number" name="due_payment_days" class="form-control" placeholder="Due Days">
-    </div>
-    <div class="col-md-1 d-grid">
-      <button type="submit" class="btn btn-primary">Add</button>
-    </div>
-  </form>
-  <% } %>
 
-  <div class="table-responsive mb-5">
-  <table class="table table-bordered table-sm align-middle">
-    <thead class="table-light">
-      <tr>
-        <th>Name</th>
-        <th>GST Number</th>
-        <th>State</th>
-        <th>Pincode</th>
-        <th>Due Days</th>
-        <% if (user.roleName === 'accounts') { %><th>Action</th><% } %>
-      </tr>
-    </thead>
-    <tbody>
-    <% parties.forEach(p => { %>
-      <tr>
-        <form method="post" action="/purchase/parties/<%= p.id %>">
-          <td><input type="text" name="name" value="<%= p.name %>" class="form-control form-control-sm"></td>
-          <td><input type="text" name="gst_number" value="<%= p.gst_number %>" class="form-control form-control-sm"></td>
-          <td><input type="text" name="state" value="<%= p.state %>" class="form-control form-control-sm"></td>
-          <td><input type="text" name="pincode" value="<%= p.pincode %>" class="form-control form-control-sm"></td>
-          <td><input type="number" name="due_payment_days" value="<%= p.due_payment_days %>" class="form-control form-control-sm"></td>
-          <% if (user.roleName === 'accounts') { %>
-          <td><button type="submit" class="btn btn-sm btn-primary">Update</button></td>
+  <!-- Factories Section -->
+  <div class="card-custom">
+    <div class="section-header">
+      <h4 class="mb-0">
+        <i class="bi bi-building me-2"></i>Factories Management
+      </h4>
+      <small>Manage manufacturing units and factories</small>
+    </div>
+    <div class="card-body">
+      <% if (user.roleName === 'accounts') { %>
+      <!-- Add Factory Form -->
+      <form method="post" action="/purchase/factories" class="row g-3 mb-4 p-3 bg-light rounded">
+        <div class="col-12">
+          <h6 class="mb-3">
+            <i class="bi bi-plus-circle me-2"></i>Add New Factory
+          </h6>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">Factory Name <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control" placeholder="Enter factory name" required data-bs-toggle="tooltip" title="Full name of the factory">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">GST Number</label>
+          <input type="text" name="gst_number" class="form-control" placeholder="GST Number" data-bs-toggle="tooltip" title="15-digit GSTIN">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">State</label>
+          <input type="text" name="state" class="form-control" placeholder="State" data-bs-toggle="tooltip" title="State name">
+        </div>
+        <div class="col-md-1 d-grid">
+          <label class="form-label small">&nbsp;</label>
+          <button type="submit" class="btn btn-primary icon-btn">
+            <i class="bi bi-plus-lg"></i> Add
+          </button>
+        </div>
+      </form>
+      <% } %>
+
+      <!-- Factories Table -->
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th><i class="bi bi-building me-2"></i>Name</th>
+              <th><i class="bi bi-hash me-2"></i>GST Number</th>
+              <th><i class="bi bi-geo-alt me-2"></i>State</th>
+              <% if (user.roleName === 'accounts') { %><th><i class="bi bi-gear me-2"></i>Action</th><% } %>
+            </tr>
+          </thead>
+          <tbody>
+          <% if (factories && factories.length > 0) { %>
+            <% factories.forEach(f => { %>
+              <tr>
+                <form method="post" action="/purchase/factories/<%= f.id %>">
+                  <td>
+                    <input type="text" name="name" value="<%= f.name %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit factory name">
+                  </td>
+                  <td>
+                    <input type="text" name="gst_number" value="<%= f.gst_number %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit GST number">
+                  </td>
+                  <td>
+                    <input type="text" name="state" value="<%= f.state %>" class="form-control form-control-sm" data-bs-toggle="tooltip" title="Edit state">
+                  </td>
+                  <% if (user.roleName === 'accounts') { %>
+                  <td>
+                    <button type="submit" class="btn btn-sm btn-primary icon-btn" data-bs-toggle="tooltip" title="Save changes">
+                      <i class="bi bi-check-lg me-1"></i>Update
+                    </button>
+                  </td>
+                  <% } %>
+                </form>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="4" class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                No factories found. Add your first factory above.
+              </td>
+            </tr>
           <% } %>
-        </form>
-      </tr>
-    <% }) %>
-    </tbody>
-  </table>
-  </div>
-
-  <h2>Factories</h2>
-  <% if (user.roleName === 'accounts') { %>
-  <form method="post" action="/purchase/factories" class="row g-2 mb-3">
-    <div class="col-md-4">
-      <input type="text" name="name" class="form-control" placeholder="Factory Name" required>
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="col-md-4">
-      <input type="text" name="gst_number" class="form-control" placeholder="GST Number">
-    </div>
-    <div class="col-md-3">
-      <input type="text" name="state" class="form-control" placeholder="State">
-    </div>
-    <div class="col-md-1 d-grid">
-      <button type="submit" class="btn btn-primary">Add</button>
-    </div>
-  </form>
-  <% } %>
-
-  <div class="table-responsive">
-  <table class="table table-bordered table-sm align-middle">
-    <thead class="table-light">
-      <tr>
-        <th>Name</th>
-        <th>GST Number</th>
-        <th>State</th>
-        <% if (user.roleName === 'accounts') { %><th>Action</th><% } %>
-      </tr>
-    </thead>
-    <tbody>
-    <% factories.forEach(f => { %>
-      <tr>
-        <form method="post" action="/purchase/factories/<%= f.id %>">
-          <td><input type="text" name="name" value="<%= f.name %>" class="form-control form-control-sm"></td>
-          <td><input type="text" name="gst_number" value="<%= f.gst_number %>" class="form-control form-control-sm"></td>
-          <td><input type="text" name="state" value="<%= f.state %>" class="form-control form-control-sm"></td>
-          <% if (user.roleName === 'accounts') { %>
-          <td><button type="submit" class="btn btn-sm btn-primary">Update</button></td>
-          <% } %>
-        </form>
-      </tr>
-    <% }) %>
-    </tbody>
-  </table>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
