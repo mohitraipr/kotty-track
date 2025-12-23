@@ -103,6 +103,9 @@ router.post('/login', async (req, res) => {
       case 'po_creator':
         res.redirect('/po-creator/dashboard');
         break;
+      case 'nowipoorganization':
+        res.redirect('/nowi-po/dashboard');
+        break;
       case 'checking':
       case 'quality_assurance':
         res.redirect('/department/dashboard');
