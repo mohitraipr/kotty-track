@@ -160,6 +160,10 @@ function isPOCreator(req, res, next) {
   return hasRole('po_creator')(req, res, next);
 }
 
+function isNowIPOOrganization(req, res, next) {
+  return hasRole('nowipoorganization')(req, res, next);
+}
+
 // ---------------------------------------------------------------------------
 // Helper to restrict routes to specific user ids
 function allowUserIds(ids) {
@@ -215,6 +219,7 @@ module.exports = {
     isMohitOperator,
     isOnlyMohitOperator,
     isPOCreator,
+    isNowIPOOrganization,
     allowUserIds,
     allowRoles
 };

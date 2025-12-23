@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO Organization Dashboard - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; }
+    .top-nav { background: white; border-bottom: 2px solid #e2e8f0; padding: 16px 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 24px; }
+    .nav-brand { font-size: 20px; font-weight: 700; color: #1e293b; }
+    .btn-logout { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; }
+    .btn-logout:hover { background: #dc2626; }
+    .container-main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #64748b; margin-bottom: 32px; }
+    .card { border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05); }
+    .card-title { font-weight: 600; color: #1e293b; }
+    .form-text { color: #64748b; }
+    .badge-soft { background: #eff6ff; color: #2563eb; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="nav-brand">PO Organization Dashboard</span>
+      <form action="/logout" method="POST">
+        <button type="submit" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Logout</button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <h1 class="page-title">Welcome, <%= user.username %></h1>
+    <p class="page-subtitle">Upload SKU mappings, generate vendor-wise POs, and track batches.</p>
+
+    <%- include('../partials/flashMessages') %>
+
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title mb-3"><i class="bi bi-cloud-upload"></i> Upload SKU Mappings</h5>
+            <p class="form-text mb-3">Required columns: <strong>vendor_code</strong>, <strong>sku</strong>. Optional: color, link, image, weight.</p>
+            <form action="/po-organization/mappings/upload" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <input type="file" class="form-control" name="mappingFile" accept=".xlsx,.xls" required>
+              </div>
+              <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Upload Mapping</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title mb-3"><i class="bi bi-file-earmark-plus"></i> Upload SKU Size & Quantity</h5>
+            <p class="form-text mb-3">Required columns: <strong>sku</strong>, <strong>size</strong>, <strong>quantity</strong>. Generates vendor-wise POs.</p>
+            <form action="/po-organization/po/upload" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <input type="file" class="form-control" name="poFile" accept=".xlsx,.xls" required>
+              </div>
+              <button type="submit" class="btn btn-success"><i class="bi bi-lightning-charge"></i> Generate PO</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-3"><i class="bi bi-clock-history"></i> Recent PO Batches</h5>
+        <% if (!batches.length) { %>
+          <p class="text-muted mb-0">No batches created yet.</p>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Batch ID</th>
+                  <th>Created By</th>
+                  <th>Created At</th>
+                  <th>Vendors</th>
+                  <th>Total Quantity</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% batches.forEach(batch => { %>
+                  <tr>
+                    <td><span class="badge badge-soft">#<%= batch.id %></span></td>
+                    <td><%= batch.created_by || 'N/A' %></td>
+                    <td><%= new Date(batch.created_at).toLocaleString('en-IN') %></td>
+                    <td><%= batch.vendor_count %></td>
+                    <td><%= batch.total_quantity %></td>
+                    <td class="text-end">
+                      <a href="/po-organization/batch/<%= batch.id %>" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
