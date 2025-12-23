@@ -44,7 +44,7 @@
             <thead>
               <tr>
                 <th>PO Number</th>
-                <th>Vendor Code</th>
+                <th>Vendor Name</th>
                 <th>Created By</th>
                 <th>Created At</th>
                 <th>Lines</th>
@@ -61,7 +61,7 @@
               <% poRows.forEach(po => { %>
                 <tr>
                   <td><%= po.po_number || ('NOWI-PO-' + po.id) %></td>
-                  <td><%= po.vendor_code %></td>
+                  <td><%= po.vendor_name %></td>
                   <td><%= po.username || 'N/A' %></td>
                   <td><%= new Date(po.created_at).toLocaleDateString('en-IN') %></td>
                   <td><%= po.line_count %></td>

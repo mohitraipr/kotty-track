@@ -71,13 +71,13 @@ router.post('/login', async (req, res) => {
         res.redirect('/supervisor/employees');
         break;
       case 'finishing':
-        res.redirect('/finishingDashboard');
+        res.redirect('/finishingdashboard');
         break;
       case 'washing':
           res.redirect('/washingdashboard');
           break;
         case 'catalogUpload':
-            res.redirect('/catalogUpload');
+            res.redirect('/catalogupload');
             break;
       case 'jeans_assembly':
           res.redirect('/jeansassemblydashboard');
