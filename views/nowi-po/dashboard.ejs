@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nowi PO Dashboard - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; }
+    .top-nav { background: white; border-bottom: 2px solid #e2e8f0; padding: 16px 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .nav-brand { font-size: 20px; font-weight: 700; color: #1e293b; }
+    .container-main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .page-title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+    .page-subtitle { font-size: 14px; color: #64748b; margin-bottom: 24px; }
+    .stat-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: white; }
+    .stat-card h3 { font-size: 14px; color: #64748b; margin-bottom: 8px; }
+    .stat-card .stat-value { font-size: 20px; font-weight: 700; }
+    .card { border: 1px solid #e2e8f0; border-radius: 10px; }
+    .card-title { font-weight: 600; }
+    .table-responsive { max-height: 320px; }
+    .btn-logout { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; }
+    .btn-logout:hover { background: #dc2626; }
+  </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="nav-brand">Nowi PO Dashboard</span>
+      <form action="/logout" method="POST">
+        <button type="submit" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Logout</button>
+      </form>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <h1 class="page-title">Welcome, <%= user.username %></h1>
+    <p class="page-subtitle">Upload SKU mappings and generate vendor PO sheets.</p>
+
+    <%- include('../partials/flashMessages') %>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-6">
+        <div class="stat-card">
+          <h3>SKU Mappings</h3>
+          <div class="stat-value"><%= mappingCount %> entries</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="stat-card">
+          <h3>Vendor POs</h3>
+          <div class="stat-value"><%= poCount %> created</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card p-4 h-100">
+          <h5 class="card-title mb-3"><i class="bi bi-cloud-upload"></i> Upload SKU Mapping Sheet</h5>
+          <p class="text-muted mb-3">Required columns: SKU, Vendor Code. Optional: Color, Link, Image, Weight.</p>
+          <form action="/nowi-po/mappings/upload" method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+              <input class="form-control" type="file" name="mappingFile" accept=".xlsx,.xls" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload Mapping</button>
+          </form>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card p-4 h-100">
+          <h5 class="card-title mb-3"><i class="bi bi-file-earmark-plus"></i> Upload SKU/Size/Quantity Sheet</h5>
+          <p class="text-muted mb-3">Required columns: SKU, Size, Quantity. This will generate vendor POs.</p>
+          <form action="/nowi-po/po/upload" method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+              <input class="form-control" type="file" name="poFile" accept=".xlsx,.xls" required>
+            </div>
+            <button type="submit" class="btn btn-success">Generate Vendor POs</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title mb-0">Recent Vendor POs</h5>
+          <a href="/nowi-po/po" class="btn btn-outline-secondary btn-sm">View All</a>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>PO Number</th>
+                <th>Vendor Code</th>
+                <th>Created At</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (recentPos.length === 0) { %>
+                <tr>
+                  <td colspan="4" class="text-center text-muted">No POs created yet.</td>
+                </tr>
+              <% } %>
+              <% recentPos.forEach(po => { %>
+                <tr>
+                  <td><%= po.po_number || ('NOWI-PO-' + po.id) %></td>
+                  <td><%= po.vendor_code %></td>
+                  <td><%= new Date(po.created_at).toLocaleDateString('en-IN') %></td>
+                  <td class="text-end"><a href="/nowi-po/po/<%= po.id %>" class="btn btn-sm btn-outline-primary">View</a></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
