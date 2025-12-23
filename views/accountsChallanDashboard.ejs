@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Accounts DC Challan Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    integrity="sha512-buD2vAa2mW1yj78BzFzM/6kWTHpveG62CmG0cy8bcS9A7cdsI1hD2eiGeBv1rCR3dOfh1JvHS5hLSG/T0YX1ZA=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/professional.css">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .navbrand-icon {
+      margin-right: 8px;
+    }
+    .action-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .search-container {
+      margin-top: 20px;
+    }
+    .card {
+      margin-top: 20px;
+    }
+    .table-responsive {
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .load-more-container {
+      margin: 15px 0;
+    }
+    .badge-soft {
+      background: rgba(13, 110, 253, 0.12);
+      color: #0d6efd;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .qty-input {
+      width: 110px;
+      min-width: 110px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <a class="navbar-brand" href="#">
+      <i class="fas fa-file-invoice navbrand-icon"></i>
+      ACCOUNTS DC CHALLAN
+    </a>
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-toggle="collapse"
+      data-target="#navbarNav"
+      aria-controls="navbarNav"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav mr-auto"></ul>
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/list">
+            <i class="fas fa-list"></i> Challan List
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/gst">
+            <i class="fas fa-receipt"></i> GST Master
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/logout" class="btn btn-sm btn-danger ml-2">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger mt-3">
+        <% error.forEach(msg => { %>
+          <p><%= msg %></p>
+        <% }); %>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success mt-3">
+        <% success.forEach(msg => { %>
+          <p><%= msg %></p>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <header class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-3">
+      <div>
+        <h2 class="mb-1">
+          <i class="fas fa-tachometer-alt"></i> Accounts DC Challan
+        </h2>
+        <div class="text-muted">Select lots with remaining pieces, enter quantities, and generate challans.</div>
+      </div>
+      <div class="action-btns">
+        <button id="selectAllBtn" class="btn btn-outline-primary">
+          <i class="fas fa-check-double"></i> Select All
+        </button>
+        <button id="generateChallanBtn" class="btn btn-primary" disabled>
+          <i class="fas fa-file-invoice"></i> Generate Challan
+        </button>
+      </div>
+    </header>
+
+    <div class="row search-container align-items-center">
+      <div class="col-md-6 mt-3">
+        <input
+          type="text"
+          id="searchInput"
+          class="form-control"
+          placeholder="Search by SKU, Lot No, or Cutting Remark"
+          value="<%= search %>"
+        />
+      </div>
+      <div class="col-md-3 mt-3">
+        <button class="btn btn-outline-secondary" id="searchBtn">
+          <i class="fas fa-search"></i> Search
+        </button>
+      </div>
+      <div class="col-md-3 mt-3 text-md-right">
+        <span class="badge-soft">Only lots with remaining pieces are shown</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered mb-0" id="assignmentsTable">
+            <thead class="thead-light">
+              <tr>
+                <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
+                <th>ID</th>
+                <th>Lot No</th>
+                <th>SKU</th>
+                <th>Total Pieces</th>
+                <th>Issued Pieces</th>
+                <th>Remaining</th>
+                <th>Challan Pieces</th>
+                <th>Assembly Remark</th>
+                <th>Cutting Remark</th>
+                <th>Target Day</th>
+                <th>Assigned On</th>
+                <th>Washer</th>
+                <th>Master</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (assignments && assignments.length) { %>
+                <% assignments.forEach(a => { %>
+                  <tr
+                    data-id="<%= a.washing_id %>"
+                    data-lot="<%= a.lot_no %>"
+                    data-sku="<%= a.sku %>"
+                    data-total="<%= a.total_pieces %>"
+                    data-remaining="<%= a.remaining_pieces %>"
+                  >
+                    <td><input type="checkbox" class="rowCheckbox"></td>
+                    <td><%= a.washing_id %></td>
+                    <td><%= a.lot_no %></td>
+                    <td><%= a.sku %></td>
+                    <td><%= a.total_pieces %></td>
+                    <td><%= a.issued_pieces %></td>
+                    <td><span class="badge badge-info"><%= a.remaining_pieces %></span></td>
+                    <td>
+                      <input
+                        type="number"
+                        class="form-control form-control-sm qty-input challan-qty"
+                        min="1"
+                        max="<%= a.remaining_pieces %>"
+                        value="<%= a.remaining_pieces %>"
+                      />
+                    </td>
+                    <td><%= a.assembly_remark %></td>
+                    <td><%= a.cutting_remark %></td>
+                    <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
+                    <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
+                    <td><%= a.washer_username %></td>
+                    <td><%= a.master_username %></td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr id="noRecordsRow">
+                  <td colspan="14" class="text-center">No records found.</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="load-more-container text-center">
+      <button class="btn btn-outline-secondary" id="loadMoreBtn">Load More</button>
+    </div>
+
+    <form id="generateForm" action="/accounts-challan/generate" method="POST" class="d-none">
+      <input type="hidden" name="selectedRows" id="selectedRowsInput">
+    </form>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let currentOffset = 0;
+    let currentSearchQuery = '<%= search %>';
+
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const generateChallanBtn = document.getElementById('generateChallanBtn');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchInput = document.getElementById('searchInput');
+
+    function updateGenerateButton() {
+      const anyChecked = document.querySelectorAll('.rowCheckbox:checked').length > 0;
+      generateChallanBtn.disabled = !anyChecked;
+    }
+
+    function attachRowListeners() {
+      document.querySelectorAll('.rowCheckbox').forEach(cb => {
+        cb.addEventListener('change', updateGenerateButton);
+      });
+    }
+
+    function renderRows(assignments, append = false) {
+      const tbody = document.querySelector('#assignmentsTable tbody');
+      if (!append) {
+        tbody.innerHTML = '';
+      }
+      if (!assignments.length && !append) {
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center">No records found.</td></tr>';
+        return;
+      }
+
+      assignments.forEach(a => {
+        const row = document.createElement('tr');
+        row.dataset.id = a.washing_id;
+        row.dataset.lot = a.lot_no;
+        row.dataset.sku = a.sku;
+        row.dataset.total = a.total_pieces;
+        row.dataset.remaining = a.remaining_pieces;
+        row.innerHTML = `
+          <td><input type="checkbox" class="rowCheckbox"></td>
+          <td>${a.washing_id}</td>
+          <td>${a.lot_no}</td>
+          <td>${a.sku}</td>
+          <td>${a.total_pieces}</td>
+          <td>${a.issued_pieces}</td>
+          <td><span class="badge badge-info">${a.remaining_pieces}</span></td>
+          <td>
+            <input
+              type="number"
+              class="form-control form-control-sm qty-input challan-qty"
+              min="1"
+              max="${a.remaining_pieces}"
+              value="${a.remaining_pieces}"
+            />
+          </td>
+          <td>${a.assembly_remark || ''}</td>
+          <td>${a.cutting_remark || ''}</td>
+          <td>${a.target_day ? new Date(a.target_day).toLocaleDateString() : ''}</td>
+          <td>${a.assigned_on ? new Date(a.assigned_on).toLocaleString() : ''}</td>
+          <td>${a.washer_username}</td>
+          <td>${a.master_username}</td>
+        `;
+        tbody.appendChild(row);
+      });
+      attachRowListeners();
+      updateGenerateButton();
+    }
+
+    selectAllBtn.addEventListener('click', () => {
+      const checkboxes = document.querySelectorAll('.rowCheckbox');
+      const shouldSelectAll = !selectAllCheckbox.checked;
+      selectAllCheckbox.checked = shouldSelectAll;
+      checkboxes.forEach(cb => cb.checked = shouldSelectAll);
+      updateGenerateButton();
+    });
+
+    selectAllCheckbox.addEventListener('change', () => {
+      const checkboxes = document.querySelectorAll('.rowCheckbox');
+      checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+      updateGenerateButton();
+    });
+
+    searchBtn.addEventListener('click', async () => {
+      currentOffset = 0;
+      currentSearchQuery = searchInput.value.trim();
+      const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      renderRows(data.assignments || [], false);
+    });
+
+    loadMoreBtn.addEventListener('click', async () => {
+      currentOffset += 50;
+      const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      renderRows(data.assignments || [], true);
+    });
+
+    generateChallanBtn.addEventListener('click', () => {
+      const selected = [];
+      let hasInvalid = false;
+      const rows = document.querySelectorAll('#assignmentsTable tbody tr');
+      rows.forEach(row => {
+        const checkbox = row.querySelector('.rowCheckbox');
+        if (!checkbox || !checkbox.checked) return;
+
+        const remaining = parseInt(row.dataset.remaining, 10);
+        const qtyInput = row.querySelector('.challan-qty');
+        const qty = parseInt(qtyInput.value, 10);
+        if (!qty || qty <= 0 || qty > remaining) {
+          alert(`Invalid challan pieces for lot ${row.dataset.lot}.`);
+          hasInvalid = true;
+          return;
+        }
+        selected.push({
+          washing_id: row.dataset.id,
+          lot_no: row.dataset.lot,
+          sku: row.dataset.sku,
+          total_pieces: row.dataset.total,
+          challan_pieces: qty
+        });
+      });
+
+      if (hasInvalid) {
+        return;
+      }
+      if (!selected.length) {
+        alert('Please select at least one lot.');
+        return;
+      }
+
+      document.getElementById('selectedRowsInput').value = JSON.stringify(selected);
+      document.getElementById('generateForm').submit();
+    });
+
+    attachRowListeners();
+  </script>
+</body>
+</html>

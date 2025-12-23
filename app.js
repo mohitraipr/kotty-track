@@ -134,6 +134,8 @@ app.use('/flipkart', flipkartReturnRoutes);
 app.use('/flipkart', flipkartIssueStatusRoutes);
 app.use('/webhook', inventoryWebhook);
 app.use('/purchase', purchaseRoutes);
+const accountsChallanRoutes = require('./routes/accountsChallanRoutes');
+app.use('/accounts-challan', accountsChallanRoutes);
 app.use('/', skuRoutes);
 app.use('/api', apiAuthRoutes);
 app.use('/api', apiRoutes);
