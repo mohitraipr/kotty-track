@@ -8,13 +8,14 @@ const { isAuthenticated, isNowiPOOrganization } = require('../middlewares/auth')
 const router = express.Router();
 const upload = multer();
 
-const REQUIRED_MAPPING_FIELDS = ['sku', 'vendor_code'];
+const REQUIRED_MAPPING_FIELDS = ['sku', 'vendor_name', 'product_code'];
 const OPTIONAL_MAPPING_FIELDS = ['color', 'link', 'image', 'weight'];
 const REQUIRED_PO_FIELDS = ['sku', 'size', 'quantity'];
 
 const headerAliases = {
   sku: ['sku'],
-  vendor_code: ['vendorcode', 'vendor_code', 'vendor code'],
+  vendor_name: ['vendorname', 'vendor_name', 'vendor name'],
+  product_code: ['productcode', 'product_code', 'product code'],
   color: ['color', 'colour'],
   link: ['link', 'url'],
   image: ['image', 'imageurl', 'image url'],
@@ -73,7 +74,7 @@ router.get('/dashboard', isAuthenticated, isNowiPOOrganization, async (req, res)
     );
     const [[poCount]] = await pool.query('SELECT COUNT(*) AS count FROM nowi_po_headers');
     const [recentPos] = await pool.query(
-      `SELECT id, po_number, vendor_code, created_at
+      `SELECT id, po_number, vendor_name, created_at
        FROM nowi_po_headers
        ORDER BY created_at DESC
        LIMIT 5`
@@ -133,15 +134,16 @@ router.post(
 
       const rowNumber = idx + 2;
       const sku = String(row[indexMap.sku] || '').trim();
-      const vendorCode = String(row[indexMap.vendor_code] || '').trim();
+      const vendorName = String(row[indexMap.vendor_name] || '').trim();
+      const productCode = String(row[indexMap.product_code] || '').trim();
       const color = String(row[indexMap.color] || '').trim();
       const link = String(row[indexMap.link] || '').trim();
       const image = String(row[indexMap.image] || '').trim();
       const weightRaw = String(row[indexMap.weight] || '').trim();
       const weight = weightRaw ? Number(weightRaw) : null;
 
-      if (!sku || !vendorCode) {
-        errors.push(`Row ${rowNumber}: SKU and Vendor Code are required.`);
+      if (!sku || !vendorName || !productCode) {
+        errors.push(`Row ${rowNumber}: SKU, Vendor Name, and Product Code are required.`);
         return;
       }
 
@@ -152,7 +154,8 @@ router.post(
 
       mappingValues.push([
         sku,
-        vendorCode,
+        vendorName,
+        productCode,
         color || null,
         link || null,
         image || null,
@@ -173,10 +176,11 @@ router.post(
     try {
       await pool.query(
         `INSERT INTO nowi_po_sku_mappings
-          (sku, vendor_code, color, link, image, weight)
+          (sku, vendor_name, product_code, color, link, image, weight)
          VALUES ?
          ON DUPLICATE KEY UPDATE
-          vendor_code = VALUES(vendor_code),
+          vendor_name = VALUES(vendor_name),
+          product_code = VALUES(product_code),
           color = VALUES(color),
           link = VALUES(link),
           image = VALUES(image),
@@ -261,7 +265,7 @@ router.post(
 
     try {
       const [mappingRows] = await pool.query(
-        'SELECT sku, vendor_code, color, link, image, weight FROM nowi_po_sku_mappings WHERE sku IN (?)',
+        'SELECT sku, vendor_name, product_code, color, link, image, weight FROM nowi_po_sku_mappings WHERE sku IN (?)',
         [uniqueSkus]
       );
 
@@ -278,17 +282,18 @@ router.post(
 
       const groupedByVendor = poRows.reduce((acc, row) => {
         const mapping = mappingMap.get(row.sku);
-        const vendorCode = mapping.vendor_code;
-        if (!acc[vendorCode]) {
-          acc[vendorCode] = [];
+        const vendorName = mapping.vendor_name;
+        if (!acc[vendorName]) {
+          acc[vendorName] = [];
         }
-        acc[vendorCode].push({
+        acc[vendorName].push({
           ...row,
           color: mapping.color,
           link: mapping.link,
           image: mapping.image,
           weight: mapping.weight,
-          vendor_code: vendorCode
+          vendor_name: vendorName,
+          product_code: mapping.product_code
         });
         return acc;
       }, {});
@@ -299,10 +304,10 @@ router.post(
       try {
         await connection.beginTransaction();
 
-        for (const [vendorCode, lines] of Object.entries(groupedByVendor)) {
+        for (const [vendorName, lines] of Object.entries(groupedByVendor)) {
           const [headerResult] = await connection.query(
-            'INSERT INTO nowi_po_headers (vendor_code, created_by) VALUES (?, ?)',
-            [vendorCode, req.session.user.id]
+            'INSERT INTO nowi_po_headers (vendor_name, created_by) VALUES (?, ?)',
+            [vendorName, req.session.user.id]
           );
 
           const poId = headerResult.insertId;
@@ -315,18 +320,19 @@ router.post(
           const lineValues = lines.map(line => [
             poId,
             line.sku,
+            line.product_code,
             line.size,
             line.quantity,
             line.color || null,
             line.image || null,
             line.link || null,
             line.weight ?? null,
-            vendorCode
+            vendorName
           ]);
 
           await connection.query(
             `INSERT INTO nowi_po_lines
-              (po_id, sku, size, quantity, color, image, link, weight, vendor_code)
+              (po_id, sku, product_code, size, quantity, color, image, link, weight, vendor_name)
              VALUES ?`,
             [lineValues]
           );
@@ -358,7 +364,7 @@ router.post(
 router.get('/po', isAuthenticated, isNowiPOOrganization, async (req, res) => {
   try {
     const [poRows] = await pool.query(
-      `SELECT h.id, h.po_number, h.vendor_code, h.created_at, u.username,
+      `SELECT h.id, h.po_number, h.vendor_name, h.created_at, u.username,
               COUNT(l.id) AS line_count, COALESCE(SUM(l.quantity), 0) AS total_quantity
          FROM nowi_po_headers h
          LEFT JOIN users u ON h.created_by = u.id
@@ -386,7 +392,7 @@ router.get('/po/:id', isAuthenticated, isNowiPOOrganization, async (req, res) =>
     const { id } = req.params;
 
     const [[header]] = await pool.query(
-      `SELECT h.id, h.po_number, h.vendor_code, h.created_at, u.username
+      `SELECT h.id, h.po_number, h.vendor_name, h.created_at, u.username
          FROM nowi_po_headers h
          LEFT JOIN users u ON h.created_by = u.id
         WHERE h.id = ?`,
@@ -399,7 +405,7 @@ router.get('/po/:id', isAuthenticated, isNowiPOOrganization, async (req, res) =>
     }
 
     const [lines] = await pool.query(
-      `SELECT sku, size, quantity, color, image, link, weight, vendor_code
+      `SELECT sku, product_code, size, quantity, color, image, link, weight, vendor_name
          FROM nowi_po_lines
         WHERE po_id = ?
         ORDER BY id ASC`,

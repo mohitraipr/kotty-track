@@ -38,7 +38,7 @@
         <h1 class="h3 mb-1"><%= header.po_number %></h1>
         <p class="text-muted mb-0">Created by <%= header.username || 'N/A' %> on <%= new Date(header.created_at).toLocaleDateString('en-IN') %></p>
       </div>
-      <span class="badge badge-vendor text-white px-3 py-2">Vendor: <%= header.vendor_code %></span>
+      <span class="badge badge-vendor text-white px-3 py-2">Vendor: <%= header.vendor_name %></span>
     </div>
 
     <div class="card">
@@ -47,10 +47,11 @@
           <table class="table table-striped align-middle">
             <thead>
               <tr>
-                <th>Vendor Code</th>
+                <th>Vendor Name</th>
                 <th>Image</th>
                 <th>Color</th>
                 <th>SKU</th>
+                <th>Product Code</th>
                 <th>Product Size</th>
                 <th>Quantity</th>
                 <th>Weight</th>
@@ -60,12 +61,12 @@
             <tbody>
               <% if (lines.length === 0) { %>
                 <tr>
-                  <td colspan="8" class="text-center text-muted">No line items found.</td>
+                  <td colspan="9" class="text-center text-muted">No line items found.</td>
                 </tr>
               <% } %>
               <% lines.forEach(line => { %>
                 <tr>
-                  <td><%= line.vendor_code %></td>
+                  <td><%= line.vendor_name %></td>
                   <td>
                     <% if (line.image) { %>
                       <img src="<%= line.image %>" alt="SKU Image" class="image-preview">
@@ -75,6 +76,7 @@
                   </td>
                   <td><%= line.color || 'N/A' %></td>
                   <td><%= line.sku %></td>
+                  <td><%= line.product_code %></td>
                   <td><%= line.size %></td>
                   <td><%= line.quantity %></td>
                   <td><%= line.weight ?? 'N/A' %></td>
