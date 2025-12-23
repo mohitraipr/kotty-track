@@ -13,10 +13,6 @@
     body {
       background-color: #f8f9fa;
     }
-    .card {
-      margin-top: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
     .badge-type {
       font-size: 0.75rem;
       font-weight: 600;
@@ -48,7 +44,7 @@
     </div>
   </nav>
 
-  <div class="container">
+  <div class="accounts-challan-shell">
     <% if (error && error.length) { %>
       <div class="alert alert-danger mt-3">
         <% error.forEach(msg => { %>
@@ -64,9 +60,28 @@
       </div>
     <% } %>
 
+    <div class="accounts-challan-hero">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h2 class="mb-1">GST Master</h2>
+          <div class="accounts-muted">Manage sender and consignee GST profiles used in challans.</div>
+        </div>
+        <a href="/accounts-challan" class="btn btn-outline-primary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+
+    <ul class="nav nav-pills gap-2 accounts-challan-tabs">
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan/list">Challan List</a></li>
+      <li class="nav-item"><a class="nav-link active" href="/accounts-challan/gst">GST Master</a></li>
+      <li class="nav-item"><a class="nav-link" href="/purchase">Purchase</a></li>
+    </ul>
+
     <div class="row">
       <div class="col-lg-4">
-        <div class="card">
+        <div class="accounts-challan-card mb-3">
           <div class="card-body">
             <h5 class="card-title">Add GST Party</h5>
             <form action="/accounts-challan/gst" method="POST">
@@ -116,9 +131,12 @@
       </div>
 
       <div class="col-lg-8">
-        <div class="card">
+        <div class="accounts-challan-card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>GST Party List</span>
+            <span class="accounts-muted">Edit details to keep challan data current.</span>
+          </div>
           <div class="card-body">
-            <h5 class="card-title">GST Party List</h5>
             <div class="table-responsive">
               <table class="table table-striped">
                 <thead>

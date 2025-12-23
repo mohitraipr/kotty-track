@@ -13,12 +13,6 @@
     body {
       background-color: #f6f8fb;
     }
-    .page-header {
-      margin: 20px 0;
-    }
-    .card {
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
     .table-responsive {
       border-radius: 8px;
       overflow: hidden;
@@ -40,7 +34,7 @@
     </div>
   </nav>
 
-  <div class="container">
+  <div class="accounts-challan-shell">
     <% if (error && error.length) { %>
       <div class="alert alert-danger mt-3">
         <% error.forEach(msg => { %>
@@ -56,17 +50,31 @@
       </div>
     <% } %>
 
-    <div class="page-header">
-      <h2 class="mb-1">Finalize DC Challan</h2>
-      <p class="text-muted">Review selected lots, choose GST parties, and generate the challan.</p>
+    <div class="accounts-challan-hero">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h2 class="mb-1">Finalize DC Challan</h2>
+          <div class="accounts-muted">Review selected lots, choose GST parties, and generate the challan.</div>
+        </div>
+        <a href="/accounts-challan" class="btn btn-outline-primary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
     </div>
+
+    <ul class="nav nav-pills gap-2 accounts-challan-tabs">
+      <li class="nav-item"><a class="nav-link active" href="/accounts-challan">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan/list">Challan List</a></li>
+      <li class="nav-item"><a class="nav-link" href="/accounts-challan/gst">GST Master</a></li>
+      <li class="nav-item"><a class="nav-link" href="/purchase">Purchase</a></li>
+    </ul>
 
     <form action="/accounts-challan/create" method="POST">
       <input type="hidden" name="selectedRows" value='<%- JSON.stringify(selectedRows) %>'>
 
       <div class="row">
         <div class="col-lg-4">
-          <div class="card mb-3">
+          <div class="accounts-challan-card mb-3">
             <div class="card-body">
               <h5 class="card-title">Challan Details</h5>
               <div class="form-group">
@@ -111,9 +119,12 @@
         </div>
 
         <div class="col-lg-8">
-          <div class="card mb-3">
+          <div class="accounts-challan-card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>Selected Lots</span>
+              <span class="accounts-muted">Quantities are locked from the dashboard.</span>
+            </div>
             <div class="card-body">
-              <h5 class="card-title">Selected Lots</h5>
               <div class="table-responsive">
                 <table class="table table-striped">
                   <thead class="thead-light">
