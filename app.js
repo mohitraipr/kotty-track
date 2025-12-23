@@ -103,6 +103,7 @@ const easyecomUiRoutes = require('./routes/easyecomRoutes');
 const featuresRoutes = require('./routes/featuresRoutes');
 const indentRoutes = require('./routes/indentRoutes');
 const poCreatorRoutes = require('./routes/poCreatorRoutes');
+const poOrganizationRoutes = require('./routes/poOrganizationRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -146,6 +147,7 @@ app.use('/easyecom', easyecomUiRoutes);
 app.use('/', featuresRoutes);
 app.use('/indent', indentRoutes);
 app.use('/po-creator', poCreatorRoutes);
+app.use('/po-organization', poOrganizationRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
