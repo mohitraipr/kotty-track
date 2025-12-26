@@ -14,6 +14,23 @@ const {
   saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
 
+const WAREHOUSE_LABELS = {
+  173983: 'Faridabad',
+  176318: 'Delhi',
+};
+
+function getWarehouseLabel(warehouseId) {
+  if (warehouseId === null || warehouseId === undefined) return 'N/A';
+  return WAREHOUSE_LABELS[warehouseId] || String(warehouseId);
+}
+
+function decorateWithWarehouseLabel(rows = []) {
+  return rows.map((row) => ({
+    ...row,
+    warehouse_label: getWarehouseLabel(row.warehouse_id),
+  }));
+}
+
 const PERIOD_KEYS = new Set(Object.keys(PERIOD_PRESETS));
 function normalizePeriod(period) {
   if (PERIOD_KEYS.has(period)) return period;
@@ -76,10 +93,13 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
 router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
-    const [inventory, orders] = await Promise.all([
+    const [inventoryRaw, ordersRaw] = await Promise.all([
       getInventoryRunway(pool),
       getMomentumWithGrowth(pool, { periodKey }),
     ]);
+
+    const inventory = decorateWithWarehouseLabel(inventoryRaw);
+    const orders = decorateWithWarehouseLabel(ordersRaw);
 
     res.render('stockMarket', {
       user: req.session?.user || null,
@@ -99,10 +119,12 @@ router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req,
 router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
-    const [inventory, orders] = await Promise.all([
+    const [inventoryRaw, ordersRaw] = await Promise.all([
       getInventoryRunway(pool),
       getMomentumWithGrowth(pool, { periodKey }),
     ]);
+    const inventory = decorateWithWarehouseLabel(inventoryRaw);
+    const orders = decorateWithWarehouseLabel(ordersRaw);
 
     res.json({
       inventory,
@@ -118,17 +140,19 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
 router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const periodKey = normalizePeriod(req.query.period);
-    const [inventory, orders] = await Promise.all([
+    const [inventoryRaw, ordersRaw] = await Promise.all([
       getInventoryRunway(pool),
       getMomentumWithGrowth(pool, { periodKey }),
     ]);
+    const inventory = decorateWithWarehouseLabel(inventoryRaw);
+    const orders = decorateWithWarehouseLabel(ordersRaw);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Kotty Track';
     const inventorySheet = workbook.addWorksheet('Inventory Runway');
     inventorySheet.columns = [
       { header: 'SKU', key: 'sku', width: 20 },
-      { header: 'Warehouse', key: 'warehouse_id', width: 16 },
+      { header: 'Warehouse', key: 'warehouse_label', width: 16 },
       { header: 'Inventory', key: 'inventory', width: 14 },
       { header: 'Making time (days)', key: 'making_time_days', width: 18 },
       { header: 'Yesterday orders', key: 'yesterday_orders', width: 18 },
@@ -144,7 +168,7 @@ router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, as
     const periodLabel = resolvePeriod(periodKey).label;
     ordersSheet.columns = [
       { header: 'SKU', key: 'sku', width: 20 },
-      { header: 'Warehouse', key: 'warehouse_id', width: 16 },
+      { header: 'Warehouse', key: 'warehouse_label', width: 16 },
       { header: `Orders (${periodLabel})`, key: 'orders', width: 18 },
       { header: 'Previous window', key: 'previous_orders', width: 18 },
       { header: 'Growth %', key: 'growth', width: 12 },
