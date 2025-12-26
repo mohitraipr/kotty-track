@@ -767,10 +767,10 @@
               <tbody>
                 <% inventory.forEach(item => { %>
                   <% const infinite = !Number.isFinite(item.days_left); %>
-                  <tr data-filter="<%= `${item.sku} ${item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
+                  <tr data-filter="<%= `${item.sku} ${item.warehouse_label ?? item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
                     <td data-label="SKU" class="sku-text"><%= item.sku %></td>
                     <td data-label="Warehouse">
-                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_id ?? 'N/A' %></span>
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_label ?? item.warehouse_id ?? 'N/A' %></span>
                     </td>
                     <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
                     <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
@@ -823,10 +823,10 @@
                 <% orders.forEach(order => { %>
                   <% const growth = Number(order.growth || 0); %>
                   <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
-                  <tr data-filter="<%= `${order.sku} ${order.warehouse_id ?? ''}`.toLowerCase() %>">
+                  <tr data-filter="<%= `${order.sku} ${order.warehouse_label ?? order.warehouse_id ?? ''}`.toLowerCase() %>">
                     <td data-label="SKU" class="sku-text"><%= order.sku %></td>
                     <td data-label="Warehouse">
-                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_id ?? 'N/A' %></span>
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_label ?? order.warehouse_id ?? 'N/A' %></span>
                     </td>
                     <td data-label="Orders" class="text-end"><%= order.orders %></td>
                     <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
@@ -927,10 +927,11 @@
     tbody.innerHTML = rows.map((item) => {
       const infinite = !Number.isFinite(item.days_left);
       const label = statusLabel(item.status);
+      const warehouse = item.warehouse_label ?? item.warehouse_id ?? 'N/A';
       return `
-        <tr data-filter="${(item.sku + ' ' + (item.warehouse_id || '')).toLowerCase()}" class="${label.row}">
+        <tr data-filter="${(item.sku + ' ' + warehouse).toLowerCase()}" class="${label.row}">
           <td data-label="SKU" class="sku-text">${item.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${item.warehouse_id ?? 'N/A'}</span></td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${warehouse}</span></td>
           <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
           <td data-label="Making time" class="text-end">${item.making_time_days}</td>
           <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
@@ -952,10 +953,11 @@
         : growth < 0
           ? 'bi-arrow-down-right text-danger'
           : 'bi-dash text-secondary';
+      const warehouse = order.warehouse_label ?? order.warehouse_id ?? 'N/A';
       return `
-        <tr data-filter="${(order.sku + ' ' + (order.warehouse_id || '')).toLowerCase()}">
+        <tr data-filter="${(order.sku + ' ' + warehouse).toLowerCase()}">
           <td data-label="SKU" class="sku-text">${order.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_id ?? 'N/A'}</span></td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${warehouse}</span></td>
           <td data-label="Orders" class="text-end">${order.orders}</td>
           <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
           <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
