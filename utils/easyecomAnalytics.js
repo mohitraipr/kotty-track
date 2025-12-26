@@ -52,6 +52,12 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
     FROM ee_suborders es
     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
     WHERE eo.import_date >= ?
+      AND EXISTS (
+        SELECT 1 FROM ee_replenishment_rules r
+        WHERE r.sku = es.sku
+          AND (r.warehouse_id IS NULL OR r.warehouse_id = eo.warehouse_id)
+          AND r.making_time_days IS NOT NULL
+      )
   `;
 
   if (sku) {
@@ -95,6 +101,7 @@ async function getReplenishmentRule(pool, sku, warehouseId) {
       `SELECT sku, warehouse_id, threshold, making_time_days
        FROM ee_replenishment_rules
        WHERE sku = ? AND (warehouse_id IS NULL OR warehouse_id = ?)
+         AND making_time_days IS NOT NULL
        ORDER BY warehouse_id IS NULL DESC
        LIMIT 1`,
       [sku, warehouseId]
@@ -105,6 +112,9 @@ async function getReplenishmentRule(pool, sku, warehouseId) {
 
 async function refreshInventoryHealth(pool, { sku, warehouseId, inventory, periodKey = '7d' }) {
   const rule = await getReplenishmentRule(pool, sku, warehouseId);
+  if (!rule) {
+    return null;
+  }
   const drrInfo = await getDrrForSku(pool, { sku, warehouseId, periodKey });
   const drrOrders = drrInfo?.drr_orders || 0;
   const drrPerDay = drrInfo?.drr_per_day || 0;
@@ -189,9 +199,18 @@ async function saveReplenishmentRule(pool, { sku, warehouse_id, threshold, makin
 
 async function getInventoryAlerts(pool, { warehouseId } = {}) {
   const params = [];
-  let sql = `SELECT * FROM ee_inventory_health WHERE threshold_breached = 1 OR drr_breached = 1`;
+  let sql = `
+    SELECT * FROM ee_inventory_health h
+    WHERE (threshold_breached = 1 OR drr_breached = 1)
+      AND EXISTS (
+        SELECT 1 FROM ee_replenishment_rules r
+        WHERE r.sku = h.sku
+          AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
+          AND r.making_time_days IS NOT NULL
+      )
+  `;
   if (warehouseId) {
-    sql += ' AND warehouse_id = ?';
+    sql += ' AND h.warehouse_id = ?';
     params.push(warehouseId);
   }
   sql += ' ORDER BY status ASC, updated_at DESC';
@@ -201,9 +220,17 @@ async function getInventoryAlerts(pool, { warehouseId } = {}) {
 
 async function getInventoryStatuses(pool, { warehouseId, status }) {
   const params = [];
-  let sql = 'SELECT * FROM ee_inventory_health WHERE 1=1';
+  let sql = `
+    SELECT * FROM ee_inventory_health h
+    WHERE EXISTS (
+      SELECT 1 FROM ee_replenishment_rules r
+      WHERE r.sku = h.sku
+        AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
+        AND r.making_time_days IS NOT NULL
+    )
+  `;
   if (warehouseId) {
-    sql += ' AND warehouse_id = ?';
+    sql += ' AND h.warehouse_id = ?';
     params.push(warehouseId);
   }
   if (status) {
@@ -243,6 +270,12 @@ async function getYesterdayOrdersBySku(pool) {
      FROM ee_suborders es
      INNER JOIN ee_orders eo ON es.order_id = eo.order_id
      WHERE eo.order_date >= ? AND eo.order_date < ?
+       AND EXISTS (
+         SELECT 1 FROM ee_replenishment_rules r
+         WHERE r.sku = es.sku
+           AND (r.warehouse_id IS NULL OR r.warehouse_id = eo.warehouse_id)
+           AND r.making_time_days IS NOT NULL
+       )
      GROUP BY es.sku, eo.warehouse_id`,
     [start, end]
   );
@@ -257,9 +290,24 @@ async function getYesterdayOrdersBySku(pool) {
 
 async function getInventoryRunway(pool) {
   const [healthRows, ruleRows] = await Promise.all([
-    pool.query('SELECT sku, warehouse_id, inventory FROM ee_inventory_health').then((r) => r[0]),
     pool
-      .query('SELECT sku, warehouse_id, making_time_days FROM ee_replenishment_rules')
+      .query(
+        `SELECT h.sku, h.warehouse_id, h.inventory
+         FROM ee_inventory_health h
+         WHERE EXISTS (
+           SELECT 1 FROM ee_replenishment_rules r
+           WHERE r.sku = h.sku
+             AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
+             AND r.making_time_days IS NOT NULL
+         )`
+      )
+      .then((r) => r[0]),
+    pool
+      .query(
+        `SELECT sku, warehouse_id, making_time_days
+         FROM ee_replenishment_rules
+         WHERE making_time_days IS NOT NULL`
+      )
       .then((r) => r[0]),
   ]);
 
@@ -270,6 +318,7 @@ async function getInventoryRunway(pool) {
   const rows = healthRows.map((row) => {
     const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
     const rule = specific.get(key) || defaults.get(row.sku);
+    if (!rule) return null;
     const makingTimeDays = rule?.making_time_days ? Number(rule.making_time_days) : 0;
     const orders = yesterdayOrders.get(key) || 0;
 
@@ -300,7 +349,7 @@ async function getInventoryRunway(pool) {
       status,
       status_sort: statusOrder[status] ?? 3,
     };
-  });
+  }).filter(Boolean);
 
   return rows.sort((a, b) => {
     if (a.status_sort !== b.status_sort) return a.status_sort - b.status_sort;
@@ -314,6 +363,12 @@ async function getAggregateForWindow(pool, start, end) {
      FROM ee_suborders es
      INNER JOIN ee_orders eo ON es.order_id = eo.order_id
      WHERE eo.order_date >= ? AND eo.order_date < ?
+       AND EXISTS (
+         SELECT 1 FROM ee_replenishment_rules r
+         WHERE r.sku = es.sku
+           AND (r.warehouse_id IS NULL OR r.warehouse_id = eo.warehouse_id)
+           AND r.making_time_days IS NOT NULL
+       )
      GROUP BY es.sku, eo.warehouse_id`,
     [start, end]
   );

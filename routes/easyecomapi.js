@@ -96,6 +96,9 @@ router.post('/inventory/refresh', async (req, res) => {
       inventory: Number(inventory),
       periodKey: normalizePeriod(period),
     });
+    if (!health) {
+      return res.status(400).json({ error: 'SKU is not in the bulk making-time list' });
+    }
     res.json({ ok: true, health });
   } catch (err) {
     console.error('Failed to refresh inventory health', err);

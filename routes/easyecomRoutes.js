@@ -153,10 +153,14 @@ router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, as
       ordersSheet.addRow({ ...row, growth: Number(row.growth || 0).toFixed(1) });
     });
 
+    const fileName = `stock-market-${periodKey}.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
+    const outputBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=\"stock-market-${periodKey}.xlsx\"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Disposition', `attachment; filename=\"${fileName}\"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.setHeader('Content-Length', outputBuffer.length);
+    res.send(outputBuffer);
   } catch (err) {
     console.error('Failed to download stock market Excel:', err);
     res.status(500).json({ error: 'Unable to download Excel' });

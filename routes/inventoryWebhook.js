@@ -48,8 +48,8 @@ async function getMakingTimeSkus() {
   return skus;
 }
 
-async function persistInventorySnapshots(inventoryData = []) {
-  if (!Array.isArray(inventoryData) || !inventoryData.length) return [];
+async function persistInventorySnapshots(inventoryData = [], allowedSkus = new Set()) {
+  if (!Array.isArray(inventoryData) || !inventoryData.length || !allowedSkus.size) return [];
 
   const preparedRows = [];
   const healthUpdates = new Map();
@@ -66,6 +66,7 @@ async function persistInventorySnapshots(inventoryData = []) {
       location_key: item.location_key || null,
       raw: JSON.stringify(item),
     };
+    if (!allowedSkus.has(payload.sku)) continue;
     preparedRows.push(payload);
     if (payload.inventory !== null && payload.warehouse_id !== null) {
       const key = `${payload.sku}:${payload.warehouse_id}`;
@@ -118,7 +119,7 @@ async function persistInventorySnapshots(inventoryData = []) {
 }
 
 async function persistOrders(orders = [], allowedSkus = new Set()) {
-  if (!Array.isArray(orders) || !orders.length) return [];
+  if (!Array.isArray(orders) || !orders.length || !allowedSkus.size) return [];
 
   const orderRows = [];
   const subOrderRows = [];
@@ -172,7 +173,7 @@ async function persistOrders(orders = [], allowedSkus = new Set()) {
           marketplace_id: orderPayload.marketplace_id,
           order_date: orderPayload.order_date,
         }))
-        .filter((sub) => !allowedSkus.size || allowedSkus.has(sub.sku));
+        .filter((sub) => allowedSkus.has(sub.sku));
 
       if (!filteredSubs.length) {
         // Skip storing the order if none of its suborders belong to the making-time list
@@ -344,7 +345,11 @@ router.post(
     if (logs.length > 50) logs.shift();
 
     try {
-      const snapshots = await persistInventorySnapshots(data.inventoryData);
+      const allowedSkus = await getMakingTimeSkus();
+      if (!allowedSkus.size) {
+        console.warn('Skipping inventory payload: no making-time SKUs configured');
+      }
+      const snapshots = await persistInventorySnapshots(data.inventoryData, allowedSkus);
       res.status(200).json({ ok: true, saved: snapshots.length });
     } catch (err) {
       console.error('Inventory webhook processing failed:', err);
@@ -378,6 +383,9 @@ router.post(
     if (orderLogs.length > 50) orderLogs.shift();
     try {
       const allowedSkus = await getMakingTimeSkus();
+      if (!allowedSkus.size) {
+        console.warn('Skipping order payload: no making-time SKUs configured');
+      }
       const saved = await persistOrders(data.orders, allowedSkus);
       res.status(200).json({ ok: true, saved: saved.length });
     } catch (err) {
