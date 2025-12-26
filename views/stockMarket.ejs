@@ -78,6 +78,13 @@
       box-shadow: var(--shadow-soft);
     }
 
+    .nav-actions { flex-wrap: wrap; }
+
+    .search-group {
+      width: 100%;
+      max-width: 420px;
+    }
+
     .nav-pills .nav-link {
       color: var(--color-text-secondary);
       border-radius: 10px;
@@ -220,10 +227,73 @@
       box-shadow: 0 10px 18px rgba(15, 82, 186, 0.14);
     }
 
+    .stack-table { width: 100%; }
+
+    @media (max-width: 1200px) {
+      .page-lede .lede-wrap {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .page-lede .lede-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .legend-pills {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
     @media (max-width: 768px) {
       .card-body { padding: 1.25rem; }
       h3 { font-size: 1.5rem; }
       body { font-size: 17px; }
+      .navbar { padding: 0.85rem 0; }
+      .nav-actions { width: 100%; justify-content: space-between; }
+      .nav-actions .btn { flex: 1; justify-content: center; }
+      .page-lede { padding: 1.25rem; }
+      .nav-pills { width: 100%; }
+      .nav-pills .nav-link { width: 100%; text-align: center; }
+      .card-body.d-flex { flex-direction: column; align-items: flex-start !important; }
+      .search-group { width: 100%; max-width: none; }
+      .legend-pills { width: 100%; }
+    }
+
+    @media (max-width: 992px) {
+      .table-responsive { overflow: visible; }
+      .table.stack-table { display: block; }
+      .table.stack-table thead { display: none; }
+      .table.stack-table tbody { display: block; }
+      .table.stack-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35rem 0.75rem;
+        padding: 1rem 1rem 0.75rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        background: var(--color-surface);
+        box-shadow: var(--shadow-soft);
+      }
+      .table.stack-table tbody td {
+        padding: 0.35rem 0;
+        text-align: left !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .table.stack-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        margin-right: 0.75rem;
+        flex: 1;
+        max-width: 160px;
+      }
+      .table.stack-table tbody td:last-child { grid-column: 1 / -1; }
+      .table.stack-table tbody tr.row-critical,
+      .table.stack-table tbody tr.row-warning { background-image: none; }
     }
 
     @media print {
@@ -243,7 +313,7 @@
     <span class="navbar-brand">
       <i class="bi bi-graph-up-arrow me-2"></i>Stock Market View
     </span>
-    <div class="ms-auto d-flex align-items-center gap-3">
+    <div class="ms-auto d-flex align-items-center gap-3 nav-actions">
       <% if (user) { %>
         <span class="text-secondary small">
           Hi, <strong><%= user.username || user.name %></strong>
@@ -257,9 +327,9 @@
 </nav>
 
 <div class="container py-4">
-  <div class="page-lede mb-4">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-      <div>
+      <div class="page-lede mb-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 lede-wrap">
+      <div class="flex-grow-1">
         <h3 class="fw-bold mb-2">Inventory runway & order momentum</h3>
         <p class="text-faint mb-0">
           A calm, light view for fast decisions. Red rows mean critical stockout risk; purple rows mark SKUs on watch.
@@ -269,7 +339,7 @@
           Critical red items need immediate action.
         </div>
       </div>
-        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
+        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end lede-actions">
         <% if (isMohitOperator) { %>
           <a class="btn btn-outline-primary d-flex align-items-center gap-2" href="/easyecom/stock-market/making-time">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
@@ -356,7 +426,7 @@
             <span class="status-pill status-purple">Watch</span>
             <span class="status-pill status-green">Healthy</span>
           </div>
-          <div class="input-group" style="max-width: 360px;">
+          <div class="input-group search-group">
             <span class="input-group-text">
               <i class="bi bi-search"></i>
             </span>
@@ -370,7 +440,7 @@
         </div>
       </div>
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="inventory-table">
+        <table class="table table-hover align-middle mb-0 stack-table" id="inventory-table">
           <thead>
             <tr>
               <th>SKU</th>
@@ -386,13 +456,13 @@
             <% inventory.forEach(item => { %>
               <% const infinite = !Number.isFinite(item.days_left); %>
               <tr data-filter="<%= `${item.sku} ${item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
-                <td class="fw-semibold"><%= item.sku %></td>
-                <td class="text-faint"><%= item.warehouse_id ?? 'N/A' %></td>
-                <td class="text-end"><%= item.inventory.toLocaleString() %></td>
-                <td class="text-end"><%= item.making_time_days %></td>
-                <td class="text-end"><%= item.yesterday_orders %></td>
-                <td class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
-                <td>
+                <td data-label="SKU" class="fw-semibold"><%= item.sku %></td>
+                <td data-label="Warehouse" class="text-faint"><%= item.warehouse_id ?? 'N/A' %></td>
+                <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
+                <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
+                <td data-label="Yesterday orders" class="text-end"><%= item.yesterday_orders %></td>
+                <td data-label="Days left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
+                <td data-label="Status">
                   <% if (item.status === 'red') { %>
                     <span class="status-pill status-red">Critical</span>
                   <% } else if (item.status === 'purple') { %>
@@ -417,7 +487,7 @@
             </div>
             <div class="text-faint">Growth compares to the immediately previous window.</div>
           </div>
-          <div class="input-group" style="max-width: 360px;">
+          <div class="input-group search-group">
             <span class="input-group-text">
               <i class="bi bi-search"></i>
             </span>
@@ -431,7 +501,7 @@
         </div>
       </div>
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="orders-table">
+        <table class="table table-hover align-middle mb-0 stack-table" id="orders-table">
           <thead>
             <tr>
               <th>SKU</th>
@@ -446,11 +516,11 @@
               <% const growth = Number(order.growth || 0); %>
               <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
               <tr data-filter="<%= `${order.sku} ${order.warehouse_id ?? ''}`.toLowerCase() %>">
-                <td class="fw-semibold"><%= order.sku %></td>
-                <td class="text-faint"><%= order.warehouse_id ?? 'N/A' %></td>
-                <td class="text-end"><%= order.orders %></td>
-                <td class="text-end text-faint"><%= order.previous_orders %></td>
-                <td class="text-end">
+                <td data-label="SKU" class="fw-semibold"><%= order.sku %></td>
+                <td data-label="Warehouse" class="text-faint"><%= order.warehouse_id ?? 'N/A' %></td>
+                <td data-label="Orders" class="text-end"><%= order.orders %></td>
+                <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
+                <td data-label="Growth" class="text-end">
                   <i class="bi <%= arrow %> me-1"></i>
                   <%= growth.toFixed(1) %>%
                 </td>
@@ -527,13 +597,13 @@
       const label = statusLabel(item.status);
       return `
         <tr data-filter="${(item.sku + ' ' + (item.warehouse_id || '')).toLowerCase()}" class="${label.row}">
-          <td class="fw-semibold">${item.sku}</td>
-          <td class="text-faint">${item.warehouse_id ?? 'N/A'}</td>
-          <td class="text-end">${formatNumber(item.inventory)}</td>
-          <td class="text-end">${item.making_time_days}</td>
-          <td class="text-end">${item.yesterday_orders}</td>
-          <td class="text-end">${infinite ? '∞' : Number(item.days_left).toFixed(1)}</td>
-          <td><span class="status-pill ${label.className}">${label.text}</span></td>
+          <td data-label="SKU" class="fw-semibold">${item.sku}</td>
+          <td data-label="Warehouse" class="text-faint">${item.warehouse_id ?? 'N/A'}</td>
+          <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
+          <td data-label="Making time" class="text-end">${item.making_time_days}</td>
+          <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
+          <td data-label="Days left" class="text-end">${infinite ? '∞' : Number(item.days_left).toFixed(1)}</td>
+          <td data-label="Status"><span class="status-pill ${label.className}">${label.text}</span></td>
         </tr>`;
     }).join('');
     applyFilter(document.getElementById('inventory-table'), searchTerm);
@@ -552,11 +622,11 @@
           : 'bi-dash text-secondary';
       return `
         <tr data-filter="${(order.sku + ' ' + (order.warehouse_id || '')).toLowerCase()}">
-          <td class="fw-semibold">${order.sku}</td>
-          <td class="text-faint">${order.warehouse_id ?? 'N/A'}</td>
-          <td class="text-end">${order.orders}</td>
-          <td class="text-end text-faint">${order.previous_orders}</td>
-          <td class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
+          <td data-label="SKU" class="fw-semibold">${order.sku}</td>
+          <td data-label="Warehouse" class="text-faint">${order.warehouse_id ?? 'N/A'}</td>
+          <td data-label="Orders" class="text-end">${order.orders}</td>
+          <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
+          <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
         </tr>`;
     }).join('');
     document.getElementById('orders-period-label').textContent = periodLabel;
