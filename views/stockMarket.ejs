@@ -96,7 +96,7 @@
       background: linear-gradient(145deg, rgba(15, 82, 186, 0.12), rgba(15, 82, 186, 0.03));
       border: 1px solid rgba(15, 82, 186, 0.12);
       border-radius: 18px;
-      padding: 1.4rem 1.25rem;
+      padding: 1.4rem 1.15rem;
       box-shadow: var(--shadow-soft);
       display: grid;
       gap: 1rem;
@@ -293,6 +293,29 @@
       font-weight: 600;
     }
 
+    .soft-btn {
+      background: rgba(15, 82, 186, 0.06);
+      border: 1px solid rgba(15, 82, 186, 0.18);
+      color: var(--color-accent);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .soft-btn:hover {
+      background: rgba(15, 82, 186, 0.12);
+      color: var(--color-accent);
+    }
+
+    .soft-btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .btn .spinner-border {
+      width: 1rem;
+      height: 1rem;
+      border-width: 2px;
+    }
+
     .input-group-text {
       border-color: var(--color-border);
       background: var(--color-accent-soft);
@@ -318,12 +341,13 @@
     .table.stack-table tbody tr {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.45rem 0.75rem;
-      padding: 0.9rem 0.85rem 0.65rem;
-      border: 1px solid var(--color-border);
-      border-radius: 12px;
-      background: var(--color-surface);
-      box-shadow: var(--shadow-soft);
+      gap: 0.55rem 0.75rem;
+      padding: 1rem 0.95rem 0.75rem;
+      border: 1px solid rgba(15, 82, 186, 0.12);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow-md);
+      position: relative;
     }
 
     .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(214, 0, 54, 0.06), rgba(214, 0, 54, 0.01)); }
@@ -333,9 +357,9 @@
       padding: 0.35rem 0;
       text-align: left !important;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 0.75rem;
+      gap: 0.65rem;
       width: 100%;
     }
 
@@ -343,12 +367,16 @@
       content: attr(data-label);
       font-weight: 700;
       color: var(--color-text-secondary);
-      margin-right: 0.75rem;
+      margin-right: 0.5rem;
       flex: 1;
-      max-width: 180px;
+      max-width: 160px;
     }
 
-    .table.stack-table tbody td:last-child { grid-column: 1 / -1; }
+    .table.stack-table tbody td:last-child {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+      align-items: center;
+    }
 
     .sku-text {
       font-weight: 800;
@@ -369,6 +397,13 @@
       color: var(--color-text-secondary);
       font-weight: 700;
       border: 1px solid rgba(15, 82, 186, 0.12);
+    }
+
+    .table.stack-table tbody tr .warehouse-pill {
+      background: #eef3ff;
+      border-color: rgba(15, 82, 186, 0.25);
+      color: var(--color-text-primary);
+      font-weight: 700;
     }
 
     .metric-label { color: var(--color-text-secondary); font-weight: 700; font-size: 0.95rem; }
@@ -403,6 +438,12 @@
       .table.stack-table tbody td:last-child { grid-column: auto; }
       .tab-nav { grid-template-columns: repeat(2, max-content); width: fit-content; }
       .tab-nav .nav-link { padding-inline: 1.5rem; }
+    }
+
+    @media (max-width: 575.98px) {
+      .hero-card { padding: 1.15rem 0.9rem; }
+      .table.stack-table tbody tr { padding: 0.95rem 0.75rem 0.7rem; }
+      .table.stack-table tbody td::before { max-width: none; flex: 0 0 48%; }
     }
 
     @media print {
@@ -455,6 +496,12 @@
     </div>
     <div class="hero-actions">
       <div class="action-row">
+        <button class="btn soft-btn d-flex align-items-center justify-content-center gap-2" id="refresh-view" type="button">
+          <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+          <i class="bi bi-arrow-clockwise"></i>
+          <span class="d-none d-sm-inline">Refresh view</span>
+          <span class="d-sm-none">Refresh</span>
+        </button>
         <% if (isMohitOperator) { %>
           <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
@@ -668,6 +715,16 @@
   const inventorySearch = document.getElementById('inventory-search');
   const ordersSearch = document.getElementById('orders-search');
   const downloadBtn = document.getElementById('download-excel');
+  const refreshBtn = document.getElementById('refresh-view');
+
+  function toggleRefreshState(isLoading) {
+    if (!refreshBtn) return;
+    const spinner = refreshBtn.querySelector('.spinner-border');
+    const icon = refreshBtn.querySelector('.bi-arrow-clockwise');
+    refreshBtn.disabled = isLoading;
+    spinner?.classList.toggle('d-none', !isLoading);
+    icon?.classList.toggle('d-none', isLoading);
+  }
 
   function formatNumber(value) {
     if (value === null || value === undefined) return '0';
@@ -757,7 +814,8 @@
     applyFilter(document.getElementById('orders-table'), searchTerm);
   }
 
-  async function refreshData() {
+  async function refreshData(triggeredByButton = false) {
+    toggleRefreshState(triggeredByButton);
     const period = periodSelect?.value || initialData.periodKey;
     const params = new URLSearchParams({ period });
     try {
@@ -768,12 +826,15 @@
       renderOrders(payload.orders || [], payload.period.label);
     } catch (err) {
       console.error('Refresh failed:', err);
+    } finally {
+      toggleRefreshState(false);
     }
   }
 
   attachSearch(inventorySearch, 'inventory-table');
   attachSearch(ordersSearch, 'orders-table');
   periodSelect?.addEventListener('change', () => refreshData());
+  refreshBtn?.addEventListener('click', () => refreshData(true));
   downloadBtn?.addEventListener('click', () => {
     const period = periodSelect?.value || initialData.periodKey;
     const params = new URLSearchParams({ period });
