@@ -4,9 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Inventory Stock Market</title>
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/kotty-theme.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/professional.css">
+
   <style>
     :root {
       --color-bg-primary: #f5f7fb;
@@ -27,6 +31,7 @@
       --shadow-soft: 0 8px 16px rgba(15, 82, 186, 0.04);
     }
 
+    /* ✅ IMPORTANT: remove safe-area padding from body (it makes sticky huge in webviews) */
     body {
       background: #f6f7fb;
       color: var(--color-text-primary);
@@ -34,10 +39,11 @@
       font-size: 15px;
       line-height: 1.55;
       min-height: 100vh;
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(env(safe-area-inset-bottom) + 12px) env(safe-area-inset-left);
+      padding: 0; /* ✅ */
       -webkit-text-size-adjust: 100%;
     }
 
+    /* ✅ Sticky topbar compact + safe-area only here */
     .topbar {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
@@ -45,10 +51,12 @@
       position: sticky;
       top: 0;
       z-index: 50;
+      padding-top: env(safe-area-inset-top); /* ✅ */
     }
 
     .topbar .container-fluid {
       padding: 0.85rem 1.25rem;
+      flex-wrap: nowrap; /* ✅ no wrap explosion */
     }
 
     .brand {
@@ -59,6 +67,8 @@
       letter-spacing: -0.01em;
       color: var(--color-text-primary);
       text-decoration: none;
+      flex: 1 1 auto;   /* ✅ */
+      min-width: 0;     /* ✅ */
     }
 
     .brand .logo-mark {
@@ -71,9 +81,34 @@
       color: #fff;
       box-shadow: 0 10px 24px rgba(15, 82, 186, 0.22);
       font-size: 1.15rem;
+      flex: 0 0 auto;
     }
 
-    .brand small { color: var(--color-text-muted); font-weight: 600; }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      line-height: 1.15;
+    }
+
+    .brand-title {
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .brand-subtitle {
+      color: var(--color-text-muted);
+      font-weight: 600;
+    }
+
+    .topbar-actions {
+      flex: 0 0 auto;
+      min-width: 0;
+    }
 
     .user-chip {
       display: inline-flex;
@@ -85,15 +120,25 @@
       color: var(--color-text-secondary);
       font-weight: 600;
       border: 1px solid rgba(15, 82, 186, 0.12);
+      max-width: 220px;
     }
 
     .user-chip i { color: var(--color-accent); }
 
+    .user-chip .user-name {
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: inline-block;
+    }
+
+    /* ✅ Mobile-first shell padding + safe-area bottom only here */
     .stock-shell {
       max-width: 1140px;
       margin: 0 auto;
-      padding: clamp(0.75rem, 2vw, 1.25rem) clamp(0.75rem, 2vw, 1.25rem) 2.25rem;
       width: min(1140px, 100%);
+      padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); /* ✅ */
     }
 
     .hero-card {
@@ -143,6 +188,7 @@
       gap: 0.35rem;
       color: var(--color-danger);
       font-weight: 700;
+      flex-wrap: wrap;
     }
 
     .hero-actions {
@@ -174,6 +220,7 @@
       color: var(--color-text-secondary);
       margin: 0;
       font-size: 0.9rem;
+      white-space: nowrap;
     }
 
     .control-chip select {
@@ -214,6 +261,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 0.5rem;
+      text-decoration: none;
     }
 
     .action-card:hover {
@@ -447,10 +495,52 @@
       .tab-nav .nav-link { padding-inline: 1.5rem; }
     }
 
+    /* ✅ MOBILE: compact sticky + single column actions */
     @media (max-width: 575.98px) {
-      .hero-card { padding: 1.15rem 0.9rem; }
-      .table.stack-table tbody tr { padding: 0.95rem 0.75rem 0.7rem; }
+      .topbar .container-fluid {
+        padding: 0.55rem 0.75rem;
+        gap: 0.5rem !important;
+      }
+
+      .brand { gap: 0.5rem; }
+      .brand .logo-mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        font-size: 0.95rem;
+      }
+
+      .brand-title { font-size: 0.98rem; }
+      .user-chip {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.9rem;
+        gap: 0.4rem;
+        max-width: 180px;
+      }
+      .user-chip .user-name { max-width: 110px; }
+
+      .hero-card { padding: 1rem 0.9rem; gap: 0.75rem; }
+      .eyebrow { font-size: 0.78rem; }
+      h1.page-title { font-size: 1.2rem; }
+      .lede-text { font-size: 0.95rem; }
+
+      .action-row { grid-template-columns: 1fr !important; }
+      .action-row .btn { min-height: 44px; }
+
+      .control-chip { padding: 0.5rem 0.6rem; border-radius: 12px; }
+      .control-chip label { font-size: 0.85rem; }
+      .control-chip select { min-height: 42px; font-size: 0.95rem; }
+
+      .search-input { padding: 0.75rem 0.85rem; }
+      .input-group-text { padding: 0.75rem 0.85rem; }
+
+      .table.stack-table tbody tr { padding: 0.9rem 0.75rem 0.65rem; }
       .table.stack-table tbody td::before { max-width: none; flex: 0 0 48%; }
+    }
+
+    /* ✅ Ultra-small phones: hide username text */
+    @media (max-width: 380px) {
+      .user-chip .user-name { display: none; }
     }
 
     @media print {
@@ -460,9 +550,8 @@
       .table tbody tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
 </head>
+
 <body>
 <% const isMohitOperator = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
 
@@ -470,21 +559,24 @@
   <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
     <a class="brand" href="/dashboard">
       <span class="logo-mark">SM</span>
-      <span>
-        Stock Market View
-        <small class="d-block">Mobile-first insight board</small>
+      <span class="brand-text">
+        <span class="brand-title">Stock Market View</span>
+        <small class="brand-subtitle d-none d-sm-block">Mobile-first insight board</small>
       </span>
     </a>
-    <div class="d-flex align-items-center gap-2">
+
+    <div class="d-flex align-items-center gap-2 topbar-actions">
       <% if (user) { %>
         <span class="user-chip">
           <i class="bi bi-person-circle"></i>
-          <span><%= user.username || user.name %></span>
+          <span class="user-name"><%= user.username || user.name %></span>
         </span>
       <% } %>
+
       <a href="/logout" class="btn btn-light btn-sm d-inline-flex d-sm-none align-items-center gap-1">
         <i class="bi bi-box-arrow-right"></i>
       </a>
+
       <a href="/logout" class="btn btn-outline-secondary btn-sm d-none d-sm-inline-flex align-items-center gap-2">
         <i class="bi bi-box-arrow-right"></i>
         Logout
@@ -501,6 +593,7 @@
       <p class="lede-text mb-1">Built to stay crisp inside embedded views — SKU chips, smart stacking, and fast filters.</p>
       <div class="note-inline"><i class="bi bi-exclamation-triangle-fill"></i>Red means critical; purple is on watch.</div>
     </div>
+
     <div class="hero-actions">
       <div class="action-row">
         <button class="btn soft-btn d-flex align-items-center justify-content-center gap-2" id="refresh-view" type="button">
@@ -509,16 +602,19 @@
           <span class="d-none d-sm-inline">Refresh view</span>
           <span class="d-sm-none">Refresh</span>
         </button>
+
         <% if (isMohitOperator) { %>
           <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
           </a>
         <% } %>
+
         <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button">
           <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
           <i class="bi bi-file-earmark-excel"></i><span>Download Excel</span>
         </button>
       </div>
+
       <div class="action-row">
         <div class="control-chip w-100">
           <label for="period-select">Period</label>
@@ -605,14 +701,10 @@
               <span class="input-group-text">
                 <i class="bi bi-search"></i>
               </span>
-              <input
-                type="search"
-                id="inventory-search"
-                class="form-control search-input"
-                placeholder="Search SKU or warehouse..."
-              >
+              <input type="search" id="inventory-search" class="form-control search-input" placeholder="Search SKU or warehouse...">
             </div>
           </div>
+
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 stack-table" id="inventory-table">
               <thead>
@@ -629,10 +721,10 @@
               <tbody>
                 <% inventory.forEach(item => { %>
                   <% const infinite = !Number.isFinite(item.days_left); %>
-                  <tr data-filter="<%= `${item.sku} ${item.warehouse_label ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
+                  <tr data-filter="<%= `${item.sku} ${item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
                     <td data-label="SKU" class="sku-text"><%= item.sku %></td>
                     <td data-label="Warehouse">
-                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_label ?? 'N/A' %></span>
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_id ?? 'N/A' %></span>
                     </td>
                     <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
                     <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
@@ -666,14 +758,10 @@
               <span class="input-group-text">
                 <i class="bi bi-search"></i>
               </span>
-              <input
-                type="search"
-                id="orders-search"
-                class="form-control search-input"
-                placeholder="Search SKU or warehouse..."
-              >
+              <input type="search" id="orders-search" class="form-control search-input" placeholder="Search SKU or warehouse...">
             </div>
           </div>
+
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 stack-table" id="orders-table">
               <thead>
@@ -689,10 +777,10 @@
                 <% orders.forEach(order => { %>
                   <% const growth = Number(order.growth || 0); %>
                   <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
-                  <tr data-filter="<%= `${order.sku} ${order.warehouse_label ?? ''}`.toLowerCase() %>">
+                  <tr data-filter="<%= `${order.sku} ${order.warehouse_id ?? ''}`.toLowerCase() %>">
                     <td data-label="SKU" class="sku-text"><%= order.sku %></td>
                     <td data-label="Warehouse">
-                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_label ?? 'N/A' %></span>
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_id ?? 'N/A' %></span>
                     </td>
                     <td data-label="Orders" class="text-end"><%= order.orders %></td>
                     <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
@@ -794,9 +882,9 @@
       const infinite = !Number.isFinite(item.days_left);
       const label = statusLabel(item.status);
       return `
-        <tr data-filter="${(item.sku + ' ' + (item.warehouse_label || '')).toLowerCase()}" class="${label.row}">
+        <tr data-filter="${(item.sku + ' ' + (item.warehouse_id || '')).toLowerCase()}" class="${label.row}">
           <td data-label="SKU" class="sku-text">${item.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${item.warehouse_label ?? 'N/A'}</span></td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${item.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
           <td data-label="Making time" class="text-end">${item.making_time_days}</td>
           <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
@@ -819,9 +907,9 @@
           ? 'bi-arrow-down-right text-danger'
           : 'bi-dash text-secondary';
       return `
-        <tr data-filter="${(order.sku + ' ' + (order.warehouse_label || '')).toLowerCase()}">
+        <tr data-filter="${(order.sku + ' ' + (order.warehouse_id || '')).toLowerCase()}">
           <td data-label="SKU" class="sku-text">${order.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_label ?? 'N/A'}</span></td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Orders" class="text-end">${order.orders}</td>
           <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
           <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
@@ -864,9 +952,7 @@
       const period = periodSelect?.value || initialData.periodKey;
       const params = new URLSearchParams({ period });
       const response = await fetch(`${window.location.pathname}/download?${params.toString()}`, {
-        headers: {
-          Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        },
+        headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
       });
       if (!response.ok) throw new Error('Failed to download Excel');
 
@@ -891,7 +977,6 @@
     }
   });
 
-  // Hydrate from initial payload so formatting is consistent
   renderInventory(initialData.inventory || []);
   renderOrders(initialData.orders || [], document.getElementById('orders-period-label').textContent);
 
