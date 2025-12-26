@@ -6,13 +6,15 @@
   <title>Inventory Stock Market</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/kotty-theme.css">
   <style>
     :root {
-      --color-bg-primary: #f7f9fb;
+      --color-bg-primary: #f5f7fb;
       --color-surface: #ffffff;
+      --color-surface-alt: #f0f4ff;
       --color-border: #dce4ed;
-      --color-text-primary: #1b2838;
-      --color-text-secondary: #4b5563;
+      --color-text-primary: #0f172a;
+      --color-text-secondary: #475569;
       --color-text-muted: #6b7280;
       --color-accent: #0f52ba;
       --color-accent-soft: #e9f0ff;
@@ -21,97 +23,249 @@
       --color-warning: #7c3aed;
       --color-warning-soft: #f1e9ff;
       --color-success: #0f9d58;
-      --shadow-md: 0 14px 24px rgba(15, 82, 186, 0.06);
-      --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 12px 20px rgba(15, 82, 186, 0.08);
+      --shadow-soft: 0 8px 16px rgba(15, 82, 186, 0.04);
     }
 
     body {
-      background: var(--color-bg-primary);
+      background: linear-gradient(180deg, #eef2ff 0%, #f5f7fb 36%, #f5f7fb 100%);
       color: var(--color-text-primary);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 18px;
-      line-height: 1.65;
+      font-size: 16px;
+      line-height: 1.6;
     }
 
-    .navbar {
-      background: var(--color-surface) !important;
-      border-bottom: 1px solid var(--color-border);
-      box-shadow: var(--shadow-soft);
-      padding: 1rem 0;
+    .topbar {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(220, 228, 237, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
 
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.4rem;
+    .topbar .container-fluid {
+      padding: 0.85rem 1.25rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-weight: 800;
       letter-spacing: -0.01em;
-      color: var(--color-text-primary) !important;
+      color: var(--color-text-primary);
+      text-decoration: none;
     }
 
-    .navbar-brand i {
+    .brand .logo-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0f52ba, #2563eb);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(15, 82, 186, 0.22);
+      font-size: 1.15rem;
+    }
+
+    .brand small { color: var(--color-text-muted); font-weight: 600; }
+
+    .user-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 0.95rem;
+      border-radius: 999px;
+      background: var(--color-surface-alt);
+      color: var(--color-text-secondary);
+      font-weight: 600;
+      border: 1px solid rgba(15, 82, 186, 0.12);
+    }
+
+    .user-chip i { color: var(--color-accent); }
+
+    .stock-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.25rem 1rem 3rem;
+    }
+
+    .hero-card {
+      background: linear-gradient(145deg, rgba(15, 82, 186, 0.12), rgba(15, 82, 186, 0.03));
+      border: 1px solid rgba(15, 82, 186, 0.12);
+      border-radius: 18px;
+      padding: 1.4rem 1.25rem;
+      box-shadow: var(--shadow-soft);
+      display: grid;
+      gap: 1rem;
+    }
+
+    .hero-heading {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-weight: 700;
       color: var(--color-accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.85rem;
     }
 
-    .page-lede {
-      background: linear-gradient(135deg, rgba(15, 82, 186, 0.08), rgba(15, 82, 186, 0.02));
-      border: 1px solid var(--color-border);
-      border-radius: 16px;
-      padding: 1.5rem 1.75rem;
+    h1.page-title {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      font-size: clamp(1.4rem, 4vw, 2.15rem);
+      margin: 0;
+    }
+
+    .lede-text {
+      color: var(--color-text-secondary);
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .note-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--color-danger);
+      font-weight: 700;
+    }
+
+    .hero-actions {
+      display: grid;
+      gap: 0.65rem;
+      width: 100%;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .control-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 12px;
+      background: var(--color-surface);
+      border: 1px solid rgba(15, 82, 186, 0.12);
       box-shadow: var(--shadow-soft);
     }
 
-    .card {
+    .control-chip label {
+      font-weight: 700;
+      color: var(--color-text-secondary);
+      margin: 0;
+      font-size: 0.95rem;
+    }
+
+    .control-chip select {
+      border-radius: 10px;
       border: 1px solid var(--color-border);
+      padding: 0.55rem 0.75rem;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .hero-actions .btn { width: 100%; }
+
+    .stat-card {
+      border-radius: 16px;
+      border: 1px solid rgba(15, 82, 186, 0.08);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-md);
+      padding: 1rem 1.1rem;
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .stat-label { color: var(--color-text-muted); font-weight: 700; font-size: 0.95rem; }
+    .stat-value { font-size: clamp(1.7rem, 5vw, 2.1rem); font-weight: 800; letter-spacing: -0.02em; }
+    .stat-subtle { color: var(--color-text-secondary); font-weight: 600; font-size: 0.95rem; }
+
+    .action-card {
+      border: 1px dashed rgba(15, 82, 186, 0.22);
+      border-radius: 14px;
+      background: rgba(15, 82, 186, 0.06);
+      color: var(--color-accent);
+      box-shadow: var(--shadow-soft);
+      padding: 1rem 1.1rem;
+      height: 100%;
+      font-size: 1rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .action-card:hover {
+      border-color: var(--color-accent);
+      text-decoration: none;
+      box-shadow: 0 14px 24px rgba(15, 82, 186, 0.14);
+    }
+
+    .card-pane {
+      background: var(--color-surface);
+      border: 1px solid rgba(15, 82, 186, 0.08);
       border-radius: 16px;
       box-shadow: var(--shadow-md);
     }
 
-    .card-body {
-      padding: 1.75rem;
+    .card-pane .card-body {
+      padding: 1.25rem 1.1rem;
     }
 
-    .nav-pills {
-      gap: 0.5rem;
-      padding: 0.35rem;
+    .tab-nav {
       background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(15, 82, 186, 0.08);
+      padding: 0.35rem;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem;
       box-shadow: var(--shadow-soft);
     }
 
-    .nav-actions { flex-wrap: wrap; }
-
-    .search-group {
+    .tab-nav .nav-link {
       width: 100%;
-      max-width: 420px;
-    }
-
-    .nav-pills .nav-link {
+      text-align: center;
+      padding: 0.8rem 0.9rem;
+      font-weight: 700;
       color: var(--color-text-secondary);
-      border-radius: 10px;
-      padding: 0.8rem 1.4rem;
-      font-size: 1.05rem;
-      font-weight: 600;
+      border-radius: 12px;
       border: 1px solid transparent;
     }
 
-    .nav-pills .nav-link.active {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
+    .tab-nav .nav-link.active {
+      background: linear-gradient(135deg, #0f52ba, #2563eb);
       color: #fff;
       box-shadow: 0 10px 18px rgba(15, 82, 186, 0.25);
+      border-color: rgba(15, 82, 186, 0.18);
     }
 
     .status-pill {
-      padding: 0.45rem 0.8rem;
+      padding: 0.4rem 0.75rem;
       border-radius: 999px;
-      font-weight: 700;
-      font-size: 1.05rem;
-      letter-spacing: 0.01em;
+      font-weight: 800;
+      font-size: 0.92rem;
       display: inline-flex;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.4rem;
       border: 1px solid transparent;
       text-transform: uppercase;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
     }
 
     .status-pill::before {
@@ -123,182 +277,137 @@
       box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.04);
     }
 
-    .status-red {
-      background: var(--color-danger-soft);
-      color: var(--color-danger);
-      border-color: rgba(214, 0, 54, 0.32);
-      box-shadow: 0 0 0 2px rgba(214, 0, 54, 0.14);
-    }
+    .status-red { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgba(214, 0, 54, 0.24); }
+    .status-purple { background: var(--color-warning-soft); color: var(--color-warning); border-color: rgba(124, 58, 237, 0.22); }
+    .status-green { background: #e8f5ef; color: var(--color-success); border-color: rgba(15, 157, 88, 0.2); }
 
-    .status-purple {
-      background: var(--color-warning-soft);
-      color: var(--color-warning);
-      border-color: rgba(124, 58, 237, 0.28);
-    }
+    .legend-pills { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 
-    .status-green {
-      background: #e8f5ef;
-      color: var(--color-success);
-      border-color: rgba(15, 157, 88, 0.28);
-    }
-
-    .table { color: var(--color-text-primary); font-size: 1.05rem; }
-
-    .table thead th {
-      background: #f0f4f9;
-      color: var(--color-text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 1rem;
-      border-bottom: 1px solid var(--color-border);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .table tbody tr.row-critical {
-      background: linear-gradient(90deg, rgba(214, 0, 54, 0.08), rgba(214, 0, 54, 0.02));
-    }
-
-    .table tbody tr.row-warning {
-      background: linear-gradient(90deg, rgba(124, 58, 237, 0.05), rgba(124, 58, 237, 0.01));
-    }
-
-    .table tbody td {
-      padding: 1rem 0.85rem;
-      vertical-align: middle;
-    }
+    .search-group { width: 100%; }
 
     .search-input {
       border: 1px solid var(--color-border);
-      border-radius: 10px;
-      padding: 0.9rem 1.1rem;
-      font-size: 1.05rem;
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      font-size: 1rem;
+      font-weight: 600;
     }
 
     .input-group-text {
       border-color: var(--color-border);
       background: var(--color-accent-soft);
       color: var(--color-accent);
-      border-radius: 10px 0 0 10px !important;
+      border-radius: 12px 0 0 12px !important;
     }
 
-    h3 { font-weight: 800; letter-spacing: -0.02em; font-size: 2rem; }
-    .text-faint { color: var(--color-text-muted); }
-    .metric-label { color: var(--color-text-secondary); font-weight: 700; font-size: 1.05rem; }
+    .table { color: var(--color-text-primary); font-size: 1rem; width: 100%; }
+    .table thead { display: none; }
+    .table thead th {
+      background: #f0f4f9;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--color-border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
 
-    .legend-pills { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .table.stack-table tbody { display: grid; gap: 0.85rem; }
+    .table.stack-table tbody tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem 0.75rem;
+      padding: 0.9rem 0.85rem 0.65rem;
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      background: var(--color-surface);
+      box-shadow: var(--shadow-soft);
+    }
 
-    .alert-note {
-      color: var(--color-danger);
+    .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(214, 0, 54, 0.06), rgba(214, 0, 54, 0.01)); }
+    .table.stack-table tbody tr.row-warning { background: linear-gradient(180deg, rgba(124, 58, 237, 0.05), rgba(124, 58, 237, 0.01)); }
+
+    .table.stack-table tbody td {
+      padding: 0.35rem 0;
+      text-align: left !important;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+    }
+
+    .table.stack-table tbody td::before {
+      content: attr(data-label);
       font-weight: 700;
+      color: var(--color-text-secondary);
+      margin-right: 0.75rem;
+      flex: 1;
+      max-width: 180px;
+    }
+
+    .table.stack-table tbody td:last-child { grid-column: 1 / -1; }
+
+    .sku-text {
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .sku-text small { color: var(--color-text-muted); font-weight: 600; display: block; }
+
+    .warehouse-pill {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
+      padding: 0.4rem 0.7rem;
+      border-radius: 10px;
+      background: var(--color-surface-alt);
+      color: var(--color-text-secondary);
+      font-weight: 700;
+      border: 1px solid rgba(15, 82, 186, 0.12);
     }
 
-    .stat-card {
-      border-radius: 14px;
-      border: 1px solid var(--color-border);
-      background: var(--color-surface);
-      box-shadow: var(--shadow-md);
-      padding: 1.25rem 1.5rem;
-    }
+    .metric-label { color: var(--color-text-secondary); font-weight: 700; font-size: 0.95rem; }
+    .text-faint { color: var(--color-text-muted); }
 
-    .stat-label { color: var(--color-text-muted); font-weight: 700; font-size: 1.1rem; }
-    .stat-value { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; }
-    .stat-subtle { color: var(--color-text-secondary); font-weight: 700; font-size: 1.05rem; }
+    .table-responsive { overflow: visible; }
 
-    .action-card {
-      border: 1px dashed var(--color-border);
-      border-radius: 14px;
-      background: var(--color-accent-soft);
-      color: var(--color-accent);
-      box-shadow: var(--shadow-soft);
-      padding: 1.25rem 1.5rem;
-      height: 100%;
-      font-size: 1.05rem;
-    }
-
-    .action-card:hover {
-      border-color: var(--color-accent);
-      color: var(--color-accent);
-      text-decoration: none;
-      box-shadow: 0 10px 18px rgba(15, 82, 186, 0.14);
-    }
-
-    .stack-table { width: 100%; }
-
-    @media (max-width: 1200px) {
-      .page-lede .lede-wrap {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .page-lede .lede-actions {
-        width: 100%;
-        justify-content: flex-start;
-      }
-      .legend-pills {
-        width: 100%;
-        justify-content: flex-start;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .card-body { padding: 1.25rem; }
-      h3 { font-size: 1.5rem; }
+    @media (min-width: 768px) {
       body { font-size: 17px; }
-      .navbar { padding: 0.85rem 0; }
-      .nav-actions { width: 100%; justify-content: space-between; }
-      .nav-actions .btn { flex: 1; justify-content: center; }
-      .page-lede { padding: 1.25rem; }
-      .nav-pills { width: 100%; }
-      .nav-pills .nav-link { width: 100%; text-align: center; }
-      .card-body.d-flex { flex-direction: column; align-items: flex-start !important; }
-      .search-group { width: 100%; max-width: none; }
-      .legend-pills { width: 100%; }
+      .hero-card { padding: 1.6rem; grid-template-columns: 1.2fr 1fr; align-items: center; }
+      .hero-actions .btn { width: auto; }
+      .search-group { max-width: 480px; }
     }
 
-    @media (max-width: 992px) {
-      .table-responsive { overflow: visible; }
-      .table.stack-table { display: block; }
-      .table.stack-table thead { display: none; }
-      .table.stack-table tbody { display: block; }
-      .table.stack-table tbody tr {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.35rem 0.75rem;
-        padding: 1rem 1rem 0.75rem;
-        margin-bottom: 1rem;
-        border: 1px solid var(--color-border);
-        border-radius: 12px;
-        background: var(--color-surface);
-        box-shadow: var(--shadow-soft);
-      }
+    @media (min-width: 992px) {
+      .card-pane .card-body { padding: 1.4rem 1.35rem; }
+      .table-responsive { overflow-x: auto; }
+      .table { font-size: 1rem; }
+      .table thead { display: table-header-group; }
+      .table.stack-table { display: table; }
+      .table.stack-table tbody { display: table-row-group; }
+      .table.stack-table tbody tr { display: table-row; box-shadow: none; border: none; border-radius: 0; background: transparent; }
       .table.stack-table tbody td {
-        padding: 0.35rem 0;
-        text-align: left !important;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
+        display: table-cell;
+        padding: 0.85rem 0.7rem;
+        vertical-align: middle;
+        text-align: right !important;
       }
-      .table.stack-table tbody td::before {
-        content: attr(data-label);
-        font-weight: 700;
-        color: var(--color-text-secondary);
-        margin-right: 0.75rem;
-        flex: 1;
-        max-width: 160px;
-      }
-      .table.stack-table tbody td:last-child { grid-column: 1 / -1; }
-      .table.stack-table tbody tr.row-critical,
-      .table.stack-table tbody tr.row-warning { background-image: none; }
+      .table.stack-table tbody td:first-child,
+      .table.stack-table tbody td:nth-child(2) { text-align: left !important; }
+      .table.stack-table tbody td::before { display: none; }
+      .table.stack-table tbody td:last-child { grid-column: auto; }
+      .tab-nav { grid-template-columns: repeat(2, max-content); width: fit-content; }
+      .tab-nav .nav-link { padding-inline: 1.5rem; }
     }
 
     @media print {
       body { background: #fff; }
-      .navbar, .page-lede, .nav, .input-group { display: none !important; }
+      .topbar, .tab-nav, .input-group, .hero-card, .action-card { display: none !important; }
       .status-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .table tbody tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
@@ -308,87 +417,84 @@
 </head>
 <body>
 <% const isMohitOperator = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
-<nav class="navbar navbar-expand-lg">
-  <div class="container-fluid">
-    <span class="navbar-brand">
-      <i class="bi bi-graph-up-arrow me-2"></i>Stock Market View
-    </span>
-    <div class="ms-auto d-flex align-items-center gap-3 nav-actions">
+
+<div class="topbar">
+  <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
+    <a class="brand" href="/dashboard">
+      <span class="logo-mark">SM</span>
+      <span>
+        Stock Market View
+        <small class="d-block">Mobile-first insight board</small>
+      </span>
+    </a>
+    <div class="d-flex align-items-center gap-2">
       <% if (user) { %>
-        <span class="text-secondary small">
-          Hi, <strong><%= user.username || user.name %></strong>
+        <span class="user-chip">
+          <i class="bi bi-person-circle"></i>
+          <span><%= user.username || user.name %></span>
         </span>
       <% } %>
-      <a href="/logout" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-box-arrow-right me-1"></i>Logout
+      <a href="/logout" class="btn btn-light btn-sm d-inline-flex d-sm-none align-items-center gap-1">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
+      <a href="/logout" class="btn btn-outline-secondary btn-sm d-none d-sm-inline-flex align-items-center gap-2">
+        <i class="bi bi-box-arrow-right"></i>
+        Logout
       </a>
     </div>
   </div>
-</nav>
+</div>
 
-<div class="container py-4">
-      <div class="page-lede mb-4">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 lede-wrap">
-      <div class="flex-grow-1">
-        <h3 class="fw-bold mb-2">Inventory runway & order momentum</h3>
-        <p class="text-faint mb-0">
-          A calm, light view for fast decisions. Red rows mean critical stockout risk; purple rows mark SKUs on watch.
-        </p>
-        <div class="alert-note mt-2">
-          <i class="bi bi-exclamation-triangle-fill"></i>
-          Critical red items need immediate action.
-        </div>
-      </div>
-        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end lede-actions">
+<div class="stock-shell">
+  <div class="hero-card mb-3">
+    <div class="hero-heading">
+      <span class="eyebrow"><i class="bi bi-activity"></i> Live runway</span>
+      <h1 class="page-title">Inventory runway & order momentum</h1>
+      <p class="lede-text mb-1">Built to stay crisp inside embedded views — SKU chips, smart stacking, and fast filters.</p>
+      <div class="note-inline"><i class="bi bi-exclamation-triangle-fill"></i>Red means critical; purple is on watch.</div>
+    </div>
+    <div class="hero-actions">
+      <div class="action-row">
         <% if (isMohitOperator) { %>
-          <a class="btn btn-outline-primary d-flex align-items-center gap-2" href="/easyecom/stock-market/making-time">
+          <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
           </a>
         <% } %>
-        <button class="btn btn-success d-flex align-items-center gap-2" id="download-excel" type="button">
+        <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button">
           <i class="bi bi-file-earmark-excel"></i><span>Download Excel</span>
         </button>
-        <label class="text-faint fw-semibold" for="period-select">Period</label>
-        <select class="form-select" id="period-select" name="period">
-          <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
-            <option value="<%= key %>" <%= key === periodKey ? 'selected' : '' %>>
-              <%= preset.label %>
-            </option>
-          <% }); %>
-        </select>
+      </div>
+      <div class="action-row">
+        <div class="control-chip w-100">
+          <label for="period-select">Period</label>
+          <select class="form-select" id="period-select" name="period">
+            <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
+              <option value="<%= key %>" <%= key === periodKey ? 'selected' : '' %>>
+                <%= preset.label %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
       </div>
     </div>
   </div>
 
-  <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="inventory-tab" data-bs-toggle="pill" data-bs-target="#inventory" type="button" role="tab">
-        <i class="bi bi-box-seam me-2"></i>Inventory
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="orders-tab" data-bs-toggle="pill" data-bs-target="#orders" type="button" role="tab">
-        <i class="bi bi-cart-check me-2"></i>Orders
-      </button>
-    </li>
-  </ul>
-
-  <div class="row g-3 mb-4">
-    <div class="col-md-4">
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
       <div class="stat-card">
         <div class="stat-label">Critical SKUs</div>
         <div class="stat-value" id="metric-critical">0</div>
         <div class="stat-subtle">Need replenishment now</div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-12 col-md-4">
       <div class="stat-card">
         <div class="stat-label">On watch</div>
         <div class="stat-value" id="metric-watch">0</div>
         <div class="stat-subtle">Monitor before they slip</div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-12 col-md-4">
       <div class="stat-card">
         <div class="stat-label">Avg. runway</div>
         <div class="stat-value" id="metric-runway">0d</div>
@@ -398,9 +504,9 @@
   </div>
 
   <% if (isMohitOperator) { %>
-    <div class="row g-3 mb-4">
-      <div class="col-md-6">
-        <a class="action-card d-flex align-items-center justify-content-between" href="/easyecom/stock-market/making-time">
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-6">
+        <a class="action-card" href="/easyecom/stock-market/making-time">
           <div>
             <div class="fw-semibold">Bulk making time</div>
             <div class="small text-faint">Upload rows to refresh replenishment rules quickly.</div>
@@ -408,126 +514,143 @@
           <i class="bi bi-arrow-up-right fs-4"></i>
         </a>
       </div>
-      <div class="col-md-6">
+      <div class="col-12 col-md-6">
         <div class="action-card">
           <div class="fw-semibold mb-1">Operator tips</div>
-          <div class="small">Sort by warehouse or search SKUs to zero in on risk. Use the Orders tab to confirm demand before you raise POs.</div>
+          <div class="small">Search by SKU/warehouse, then confirm demand in Orders before you raise POs.</div>
         </div>
       </div>
     </div>
   <% } %>
 
-  <div class="tab-content" id="pills-tabContent">
-    <div class="tab-pane fade show active" id="inventory" role="tabpanel">
-      <div class="card mb-4">
-        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
-          <div class="legend-pills">
-            <span class="status-pill status-red">Critical</span>
-            <span class="status-pill status-purple">Watch</span>
-            <span class="status-pill status-green">Healthy</span>
-          </div>
-          <div class="input-group search-group">
-            <span class="input-group-text">
-              <i class="bi bi-search"></i>
-            </span>
-            <input
-              type="search"
-              id="inventory-search"
-              class="form-control search-input"
-              placeholder="Search SKU or warehouse..."
-            >
-          </div>
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 stack-table" id="inventory-table">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Warehouse</th>
-              <th class="text-end">Inventory</th>
-              <th class="text-end">Making time (days)</th>
-              <th class="text-end">Yesterday orders</th>
-              <th class="text-end">Days left</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% inventory.forEach(item => { %>
-              <% const infinite = !Number.isFinite(item.days_left); %>
-              <tr data-filter="<%= `${item.sku} ${item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
-                <td data-label="SKU" class="fw-semibold"><%= item.sku %></td>
-                <td data-label="Warehouse" class="text-faint"><%= item.warehouse_id ?? 'N/A' %></td>
-                <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
-                <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
-                <td data-label="Yesterday orders" class="text-end"><%= item.yesterday_orders %></td>
-                <td data-label="Days left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
-                <td data-label="Status">
-                  <% if (item.status === 'red') { %>
-                    <span class="status-pill status-red">Critical</span>
-                  <% } else if (item.status === 'purple') { %>
-                    <span class="status-pill status-purple">Watch</span>
-                  <% } else { %>
-                    <span class="status-pill status-green">Healthy</span>
-                  <% } %>
-                </td>
-              </tr>
-            <% }); %>
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <div class="card-pane">
+    <div class="card-body">
+      <ul class="nav nav-pills tab-nav mb-3" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="inventory-tab" data-bs-toggle="pill" data-bs-target="#inventory" type="button" role="tab">
+            <i class="bi bi-box-seam me-2"></i>Inventory
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="orders-tab" data-bs-toggle="pill" data-bs-target="#orders" type="button" role="tab">
+            <i class="bi bi-cart-check me-2"></i>Orders
+          </button>
+        </li>
+      </ul>
 
-    <div class="tab-pane fade" id="orders" role="tabpanel">
-      <div class="card mb-4">
-        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
-          <div>
-            <div class="metric-label">
-              Orders ranked by volume for <strong id="orders-period-label"><%= period.label %></strong>
+      <div class="tab-content" id="pills-tabContent">
+        <div class="tab-pane fade show active" id="inventory" role="tabpanel">
+          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
+            <div class="legend-pills">
+              <span class="status-pill status-red">Critical</span>
+              <span class="status-pill status-purple">Watch</span>
+              <span class="status-pill status-green">Healthy</span>
             </div>
-            <div class="text-faint">Growth compares to the immediately previous window.</div>
+            <div class="input-group search-group">
+              <span class="input-group-text">
+                <i class="bi bi-search"></i>
+              </span>
+              <input
+                type="search"
+                id="inventory-search"
+                class="form-control search-input"
+                placeholder="Search SKU or warehouse..."
+              >
+            </div>
           </div>
-          <div class="input-group search-group">
-            <span class="input-group-text">
-              <i class="bi bi-search"></i>
-            </span>
-            <input
-              type="search"
-              id="orders-search"
-              class="form-control search-input"
-              placeholder="Search SKU or warehouse..."
-            >
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 stack-table" id="inventory-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th class="text-end">Inventory</th>
+                  <th class="text-end">Making time (days)</th>
+                  <th class="text-end">Yesterday orders</th>
+                  <th class="text-end">Days left</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% inventory.forEach(item => { %>
+                  <% const infinite = !Number.isFinite(item.days_left); %>
+                  <tr data-filter="<%= `${item.sku} ${item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
+                    <td data-label="SKU" class="sku-text"><%= item.sku %></td>
+                    <td data-label="Warehouse">
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_id ?? 'N/A' %></span>
+                    </td>
+                    <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
+                    <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
+                    <td data-label="Yesterday orders" class="text-end"><%= item.yesterday_orders %></td>
+                    <td data-label="Days left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
+                    <td data-label="Status">
+                      <% if (item.status === 'red') { %>
+                        <span class="status-pill status-red">Critical</span>
+                      <% } else if (item.status === 'purple') { %>
+                        <span class="status-pill status-purple">Watch</span>
+                      <% } else { %>
+                        <span class="status-pill status-green">Healthy</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 stack-table" id="orders-table">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Warehouse</th>
-              <th class="text-end">Orders (<span class="period-inline"><%= period.label %></span>)</th>
-              <th class="text-end">Prev window</th>
-              <th class="text-end">Growth</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% orders.forEach(order => { %>
-              <% const growth = Number(order.growth || 0); %>
-              <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
-              <tr data-filter="<%= `${order.sku} ${order.warehouse_id ?? ''}`.toLowerCase() %>">
-                <td data-label="SKU" class="fw-semibold"><%= order.sku %></td>
-                <td data-label="Warehouse" class="text-faint"><%= order.warehouse_id ?? 'N/A' %></td>
-                <td data-label="Orders" class="text-end"><%= order.orders %></td>
-                <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
-                <td data-label="Growth" class="text-end">
-                  <i class="bi <%= arrow %> me-1"></i>
-                  <%= growth.toFixed(1) %>%
-                </td>
-              </tr>
-            <% }); %>
-          </tbody>
-        </table>
+
+        <div class="tab-pane fade" id="orders" role="tabpanel">
+          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
+            <div>
+              <div class="metric-label">
+                Orders ranked by volume for <strong id="orders-period-label"><%= period.label %></strong>
+              </div>
+              <div class="text-faint">Growth compares to the immediately previous window.</div>
+            </div>
+            <div class="input-group search-group">
+              <span class="input-group-text">
+                <i class="bi bi-search"></i>
+              </span>
+              <input
+                type="search"
+                id="orders-search"
+                class="form-control search-input"
+                placeholder="Search SKU or warehouse..."
+              >
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 stack-table" id="orders-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th class="text-end">Orders (<span class="period-inline"><%= period.label %></span>)</th>
+                  <th class="text-end">Prev window</th>
+                  <th class="text-end">Growth</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% orders.forEach(order => { %>
+                  <% const growth = Number(order.growth || 0); %>
+                  <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
+                  <tr data-filter="<%= `${order.sku} ${order.warehouse_id ?? ''}`.toLowerCase() %>">
+                    <td data-label="SKU" class="sku-text"><%= order.sku %></td>
+                    <td data-label="Warehouse">
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_id ?? 'N/A' %></span>
+                    </td>
+                    <td data-label="Orders" class="text-end"><%= order.orders %></td>
+                    <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
+                    <td data-label="Growth" class="text-end">
+                      <i class="bi <%= arrow %> me-1"></i>
+                      <%= growth.toFixed(1) %>%
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -597,8 +720,8 @@
       const label = statusLabel(item.status);
       return `
         <tr data-filter="${(item.sku + ' ' + (item.warehouse_id || '')).toLowerCase()}" class="${label.row}">
-          <td data-label="SKU" class="fw-semibold">${item.sku}</td>
-          <td data-label="Warehouse" class="text-faint">${item.warehouse_id ?? 'N/A'}</td>
+          <td data-label="SKU" class="sku-text">${item.sku}</td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${item.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
           <td data-label="Making time" class="text-end">${item.making_time_days}</td>
           <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
@@ -622,8 +745,8 @@
           : 'bi-dash text-secondary';
       return `
         <tr data-filter="${(order.sku + ' ' + (order.warehouse_id || '')).toLowerCase()}">
-          <td data-label="SKU" class="fw-semibold">${order.sku}</td>
-          <td data-label="Warehouse" class="text-faint">${order.warehouse_id ?? 'N/A'}</td>
+          <td data-label="SKU" class="sku-text">${order.sku}</td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Orders" class="text-end">${order.orders}</td>
           <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
           <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
