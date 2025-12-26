@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isOnlyMohitOperator } = require('../middlewares/auth');
+const ExcelJS = require('exceljs');
 const {
   PERIOD_PRESETS,
   resolvePeriod,
@@ -23,7 +24,12 @@ function allowStockMarketAccess(req, res, next) {
   const username = req.session?.user?.username?.toLowerCase();
   const role = req.session?.user?.roleName;
 
-  if (username === 'mohitoperator' || role === 'inventory_operator' || role === 'operator') {
+  if (
+    username === 'mohitoperator' ||
+    role === 'inventory_operator' ||
+    role === 'operator' ||
+    role === 'outofstock'
+  ) {
     return next();
   }
 
@@ -106,6 +112,54 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
   } catch (err) {
     console.error('Failed to fetch stock market data:', err);
     res.status(500).json({ error: 'Unable to refresh data' });
+  }
+});
+
+router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, async (req, res) => {
+  try {
+    const periodKey = normalizePeriod(req.query.period);
+    const [inventory, orders] = await Promise.all([
+      getInventoryRunway(pool),
+      getMomentumWithGrowth(pool, { periodKey }),
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Kotty Track';
+    const inventorySheet = workbook.addWorksheet('Inventory Runway');
+    inventorySheet.columns = [
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Warehouse', key: 'warehouse_id', width: 16 },
+      { header: 'Inventory', key: 'inventory', width: 14 },
+      { header: 'Making time (days)', key: 'making_time_days', width: 18 },
+      { header: 'Yesterday orders', key: 'yesterday_orders', width: 18 },
+      { header: 'Days left', key: 'days_left', width: 12 },
+      { header: 'Status', key: 'status', width: 12 },
+    ];
+    inventory.forEach((row) => {
+      const daysLeft = Number.isFinite(row.days_left) ? Number(row.days_left).toFixed(1) : '∞';
+      inventorySheet.addRow({ ...row, days_left: daysLeft });
+    });
+
+    const ordersSheet = workbook.addWorksheet('Order Momentum');
+    const periodLabel = resolvePeriod(periodKey).label;
+    ordersSheet.columns = [
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Warehouse', key: 'warehouse_id', width: 16 },
+      { header: `Orders (${periodLabel})`, key: 'orders', width: 18 },
+      { header: 'Previous window', key: 'previous_orders', width: 18 },
+      { header: 'Growth %', key: 'growth', width: 12 },
+    ];
+    orders.forEach((row) => {
+      ordersSheet.addRow({ ...row, growth: Number(row.growth || 0).toFixed(1) });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=\"stock-market-${periodKey}.xlsx\"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Failed to download stock market Excel:', err);
+    res.status(500).json({ error: 'Unable to download Excel' });
   }
 });
 

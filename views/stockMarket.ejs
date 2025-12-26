@@ -269,12 +269,15 @@
           Critical red items need immediate action.
         </div>
       </div>
-      <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
+        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
         <% if (isMohitOperator) { %>
           <a class="btn btn-outline-primary d-flex align-items-center gap-2" href="/easyecom/stock-market/making-time">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
           </a>
         <% } %>
+        <button class="btn btn-success d-flex align-items-center gap-2" id="download-excel" type="button">
+          <i class="bi bi-file-earmark-excel"></i><span>Download Excel</span>
+        </button>
         <label class="text-faint fw-semibold" for="period-select">Period</label>
         <select class="form-select" id="period-select" name="period">
           <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
@@ -471,6 +474,7 @@
   const periodSelect = document.getElementById('period-select');
   const inventorySearch = document.getElementById('inventory-search');
   const ordersSearch = document.getElementById('orders-search');
+  const downloadBtn = document.getElementById('download-excel');
 
   function formatNumber(value) {
     if (value === null || value === undefined) return '0';
@@ -577,6 +581,11 @@
   attachSearch(inventorySearch, 'inventory-table');
   attachSearch(ordersSearch, 'orders-table');
   periodSelect?.addEventListener('change', () => refreshData());
+  downloadBtn?.addEventListener('click', () => {
+    const period = periodSelect?.value || initialData.periodKey;
+    const params = new URLSearchParams({ period });
+    window.location.href = `${window.location.pathname}/download?${params.toString()}`;
+  });
 
   // Hydrate from initial payload so formatting is consistent
   renderInventory(initialData.inventory || []);

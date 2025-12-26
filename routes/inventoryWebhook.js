@@ -3,9 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
-const {
-  refreshInventoryHealth,
-} = require('../utils/easyecomAnalytics');
+const { refreshInventoryHealth } = require('../utils/easyecomAnalytics');
 
 // Access token used to authenticate incoming EasyEcom webhooks
 const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
@@ -25,6 +23,30 @@ function verifyAccessToken(req, res, next) {
 // In-memory store for recent webhook requests
 const logs = [];
 const orderLogs = [];
+
+const MAKING_TIME_CACHE_MS = 5 * 60 * 1000;
+let makingTimeSkuCache = { skus: new Set(), fetchedAt: 0 };
+
+async function getMakingTimeSkus() {
+  const now = Date.now();
+  if (now - makingTimeSkuCache.fetchedAt < MAKING_TIME_CACHE_MS) {
+    return makingTimeSkuCache.skus;
+  }
+
+  const [rows] = await pool.query(
+    'SELECT DISTINCT sku FROM ee_replenishment_rules WHERE making_time_days IS NOT NULL'
+  );
+
+  const skus = new Set();
+  for (const row of rows) {
+    if (row?.sku) {
+      skus.add(String(row.sku).toUpperCase());
+    }
+  }
+
+  makingTimeSkuCache = { skus, fetchedAt: now };
+  return skus;
+}
 
 async function persistInventorySnapshots(inventoryData = []) {
   if (!Array.isArray(inventoryData) || !inventoryData.length) return [];
@@ -95,7 +117,7 @@ async function persistInventorySnapshots(inventoryData = []) {
   return preparedRows;
 }
 
-async function persistOrders(orders = []) {
+async function persistOrders(orders = [], allowedSkus = new Set()) {
   if (!Array.isArray(orders) || !orders.length) return [];
 
   const orderRows = [];
@@ -127,11 +149,9 @@ async function persistOrders(orders = []) {
       raw: JSON.stringify(order),
     };
 
-    orderRows.push(orderPayload);
-
     if (Array.isArray(order.suborders)) {
-      for (const sub of order.suborders) {
-        subOrderRows.push({
+      const filteredSubs = order.suborders
+        .map((sub) => ({
           order_id: orderPayload.order_id,
           suborder_id: sub.suborder_id,
           sku: (sub.sku || '').toUpperCase(),
@@ -151,8 +171,16 @@ async function persistOrders(orders = []) {
           warehouse_id: orderPayload.warehouse_id,
           marketplace_id: orderPayload.marketplace_id,
           order_date: orderPayload.order_date,
-        });
+        }))
+        .filter((sub) => !allowedSkus.size || allowedSkus.has(sub.sku));
+
+      if (!filteredSubs.length) {
+        // Skip storing the order if none of its suborders belong to the making-time list
+        continue;
       }
+
+      orderRows.push(orderPayload);
+      subOrderRows.push(...filteredSubs);
     }
   }
 
@@ -349,7 +377,8 @@ router.post(
     orderLogs.push(entry);
     if (orderLogs.length > 50) orderLogs.shift();
     try {
-      const saved = await persistOrders(data.orders);
+      const allowedSkus = await getMakingTimeSkus();
+      const saved = await persistOrders(data.orders, allowedSkus);
       res.status(200).json({ ok: true, saved: saved.length });
     } catch (err) {
       console.error('Order webhook processing failed:', err);

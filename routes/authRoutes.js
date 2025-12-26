@@ -67,6 +67,9 @@ router.post('/login', async (req, res) => {
       case 'inventory_operator':
         res.redirect('/easyecom/stock-market');
         break;
+      case 'outofstock':
+        res.redirect('/easyecom/stock-market');
+        break;
       case 'supervisor':
         res.redirect('/supervisor/employees');
         break;
