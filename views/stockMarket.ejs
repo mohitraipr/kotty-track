@@ -41,6 +41,7 @@
       min-height: 100vh;
       padding: 0; /* ✅ */
       -webkit-text-size-adjust: 100%;
+      overflow-x: hidden; /* ✅ prevent any horizontal bleed */
     }
 
     /* ✅ Sticky topbar compact + safe-area only here */
@@ -321,6 +322,9 @@
       text-transform: uppercase;
       letter-spacing: 0.01em;
       white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .status-pill::before {
@@ -330,6 +334,7 @@
       border-radius: 50%;
       background: currentColor;
       box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.04);
+      flex: 0 0 auto;
     }
 
     .status-red { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgba(214, 0, 54, 0.24); }
@@ -403,6 +408,7 @@
       background: #fff;
       box-shadow: var(--shadow-md);
       position: relative;
+      overflow: hidden; /* ✅ stop any internal overflow */
     }
 
     .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(214, 0, 54, 0.06), rgba(214, 0, 54, 0.01)); }
@@ -416,6 +422,7 @@
       justify-content: space-between;
       gap: 0.65rem;
       width: 100%;
+      min-width: 0; /* ✅ critical */
     }
 
     .table.stack-table tbody td::before {
@@ -425,6 +432,7 @@
       margin-right: 0.5rem;
       flex: 1;
       max-width: 160px;
+      min-width: 0;
     }
 
     .table.stack-table tbody td:last-child {
@@ -437,10 +445,10 @@
       font-weight: 800;
       letter-spacing: -0.01em;
       word-break: break-word;
+      overflow-wrap: anywhere; /* ✅ long SKU never breaks layout */
       line-height: 1.4;
+      min-width: 0;
     }
-
-    .sku-text small { color: var(--color-text-muted); font-weight: 600; display: block; }
 
     .warehouse-pill {
       display: inline-flex;
@@ -452,6 +460,12 @@
       color: var(--color-text-secondary);
       font-weight: 700;
       border: 1px solid rgba(15, 82, 186, 0.12);
+
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
     }
 
     .table.stack-table tbody tr .warehouse-pill {
@@ -480,7 +494,7 @@
       .table thead { display: table-header-group; }
       .table.stack-table { display: table; }
       .table.stack-table tbody { display: table-row-group; }
-      .table.stack-table tbody tr { display: table-row; box-shadow: none; border: none; border-radius: 0; background: transparent; }
+      .table.stack-table tbody tr { display: table-row; box-shadow: none; border: none; border-radius: 0; background: transparent; overflow: visible; }
       .table.stack-table tbody td {
         display: table-cell;
         padding: 0.85rem 0.7rem;
@@ -534,8 +548,40 @@
       .search-input { padding: 0.75rem 0.85rem; }
       .input-group-text { padding: 0.75rem 0.85rem; }
 
-      .table.stack-table tbody tr { padding: 0.9rem 0.75rem 0.65rem; }
-      .table.stack-table tbody td::before { max-width: none; flex: 0 0 48%; }
+      /* =========================================================
+         ✅ BIG FIX: Mobile table cards become single-column
+         so nothing is packed / overflowing
+         ========================================================= */
+      .table.stack-table tbody tr{
+        grid-template-columns: 1fr !important;
+        gap: 0.6rem !important;
+        padding: 0.95rem 0.85rem 0.8rem !important;
+      }
+
+      .table.stack-table tbody td{
+        display: block !important;
+        padding: 0.55rem 0 !important;
+        text-align: left !important;
+      }
+
+      .table.stack-table tbody td::before{
+        display: block !important;
+        max-width: none !important;
+        margin: 0 0 0.25rem 0 !important;
+        font-size: 0.88rem;
+        opacity: 0.9;
+      }
+
+      .table.stack-table tbody td:last-child{
+        grid-column: auto !important;
+        justify-content: flex-start !important;
+        align-items: flex-start !important;
+      }
+
+      .status-pill{
+        font-size: 0.85rem !important;
+        padding: 0.35rem 0.65rem !important;
+      }
     }
 
     /* ✅ Ultra-small phones: hide username text */
