@@ -483,9 +483,9 @@ async function getSlowMovers(pool, { warehouseIds } = {}) {
     })
     .filter(Boolean)
     .sort((a, b) => {
+      if (a.inventory !== b.inventory) return b.inventory - a.inventory;
       if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
       if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
-      if (a.inventory !== b.inventory) return b.inventory - a.inventory;
       return a.sku.localeCompare(b.sku);
     });
 
