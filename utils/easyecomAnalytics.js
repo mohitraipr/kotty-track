@@ -13,6 +13,12 @@ const PERIOD_PRESETS = {
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const cache = new Map();
 
+function sanitizeWarehouseIds(warehouseIds) {
+  return (warehouseIds || [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isFinite(id));
+}
+
 async function memoize(key, ttlMs, fetcher) {
   const entry = cache.get(key);
   const now = Date.now();
@@ -263,21 +269,24 @@ function buildRuleMaps(ruleRows = []) {
   return { specific, defaults };
 }
 
-async function getYesterdayOrdersBySku(pool) {
+async function getYesterdayOrdersBySku(pool, { warehouseIds } = {}) {
+  const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
+  const hasWarehouseFilter = allowedWarehouses.length > 0;
   const { start, end } = getYesterdayBounds();
   const [rows] = await pool.query(
     `SELECT es.sku, eo.warehouse_id, COUNT(*) AS orders
      FROM ee_suborders es
      INNER JOIN ee_orders eo ON es.order_id = eo.order_id
-     WHERE eo.order_date >= ? AND eo.order_date < ?
+      WHERE eo.order_date >= ? AND eo.order_date < ?
        AND EXISTS (
          SELECT 1 FROM ee_replenishment_rules r
          WHERE r.sku = es.sku
            AND (r.warehouse_id IS NULL OR r.warehouse_id = eo.warehouse_id)
-           AND r.making_time_days IS NOT NULL
+            AND r.making_time_days IS NOT NULL
        )
+       ${hasWarehouseFilter ? 'AND eo.warehouse_id IN (?)' : ''}
      GROUP BY es.sku, eo.warehouse_id`,
-    [start, end]
+    hasWarehouseFilter ? [start, end, allowedWarehouses] : [start, end]
   );
 
   const map = new Map();
@@ -288,7 +297,9 @@ async function getYesterdayOrdersBySku(pool) {
   return map;
 }
 
-async function getInventoryRunway(pool) {
+async function getInventoryRunway(pool, { warehouseIds } = {}) {
+  const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
+  const hasWarehouseFilter = allowedWarehouses.length > 0;
   const [healthRows, ruleRows] = await Promise.all([
     pool
       .query(
@@ -299,8 +310,9 @@ async function getInventoryRunway(pool) {
            WHERE r.sku = h.sku
              AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
              AND r.making_time_days IS NOT NULL
-         )`
-      )
+         )
+         ${hasWarehouseFilter ? 'AND h.warehouse_id IN (?)' : ''}`
+      , hasWarehouseFilter ? [allowedWarehouses] : [])
       .then((r) => r[0]),
     pool
       .query(
@@ -311,7 +323,7 @@ async function getInventoryRunway(pool) {
       .then((r) => r[0]),
   ]);
 
-  const yesterdayOrders = await getYesterdayOrdersBySku(pool);
+  const yesterdayOrders = await getYesterdayOrdersBySku(pool, { warehouseIds: allowedWarehouses });
   const { specific, defaults } = buildRuleMaps(ruleRows);
   const statusOrder = { red: 0, purple: 1, green: 2 };
 
@@ -357,7 +369,9 @@ async function getInventoryRunway(pool) {
   });
 }
 
-async function getAggregateForWindow(pool, start, end) {
+async function getAggregateForWindow(pool, start, end, { warehouseIds } = {}) {
+  const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
+  const hasWarehouseFilter = allowedWarehouses.length > 0;
   const [rows] = await pool.query(
     `SELECT es.sku, eo.warehouse_id, COUNT(*) AS order_count
      FROM ee_suborders es
@@ -369,20 +383,21 @@ async function getAggregateForWindow(pool, start, end) {
            AND (r.warehouse_id IS NULL OR r.warehouse_id = eo.warehouse_id)
            AND r.making_time_days IS NOT NULL
        )
+       ${hasWarehouseFilter ? 'AND eo.warehouse_id IN (?)' : ''}
      GROUP BY es.sku, eo.warehouse_id`,
-    [start, end]
+    hasWarehouseFilter ? [start, end, allowedWarehouses] : [start, end]
   );
   return rows;
 }
 
-async function getMomentumWithGrowth(pool, { periodKey = '1d' } = {}) {
+async function getMomentumWithGrowth(pool, { periodKey = '1d', warehouseIds } = {}) {
   const period = resolvePeriod(periodKey);
   const prevEnd = period.start;
   const prevStart = new Date(prevEnd.getTime() - period.hours * 60 * 60 * 1000);
 
   const [currentRows, prevRows] = await Promise.all([
-    getAggregateForWindow(pool, period.start, period.end),
-    getAggregateForWindow(pool, prevStart, prevEnd),
+    getAggregateForWindow(pool, period.start, period.end, { warehouseIds }),
+    getAggregateForWindow(pool, prevStart, prevEnd, { warehouseIds }),
   ]);
 
   const prevMap = new Map();
@@ -413,6 +428,68 @@ async function getMomentumWithGrowth(pool, { periodKey = '1d' } = {}) {
   return combined;
 }
 
+async function getSlowMovers(pool, { warehouseIds } = {}) {
+  const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
+  const hasWarehouseFilter = allowedWarehouses.length > 0;
+
+  const [healthRows] = await pool.query(
+    `SELECT h.sku, h.warehouse_id
+     FROM ee_inventory_health h
+     WHERE EXISTS (
+       SELECT 1 FROM ee_replenishment_rules r
+       WHERE r.sku = h.sku
+         AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
+         AND r.making_time_days IS NOT NULL
+     )
+     ${hasWarehouseFilter ? 'AND h.warehouse_id IN (?)' : ''}
+     GROUP BY h.sku, h.warehouse_id`,
+    hasWarehouseFilter ? [allowedWarehouses] : []
+  );
+
+  const end = new Date();
+  const start7 = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const start30 = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [orders7, orders30] = await Promise.all([
+    getAggregateForWindow(pool, start7, end, { warehouseIds: allowedWarehouses }),
+    getAggregateForWindow(pool, start30, end, { warehouseIds: allowedWarehouses }),
+  ]);
+
+  const map7 = new Map();
+  const map30 = new Map();
+  for (const row of orders7) {
+    map7.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
+  }
+  for (const row of orders30) {
+    map30.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
+  }
+
+  const slowMovers = healthRows
+    .map((row) => {
+      const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
+      const count7 = map7.get(key) || 0;
+      const count30 = map30.get(key) || 0;
+
+      if (count7 <= 10 && count30 <= 10) {
+        return {
+          sku: row.sku,
+          warehouse_id: row.warehouse_id,
+          orders_7d: count7,
+          orders_30d: count30,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
+      if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
+      return a.sku.localeCompare(b.sku);
+    });
+
+  return slowMovers;
+}
+
 module.exports = {
   PERIOD_PRESETS,
   resolvePeriod,
@@ -424,4 +501,5 @@ module.exports = {
   getInventoryStatuses,
   getInventoryRunway,
   getMomentumWithGrowth,
+  getSlowMovers,
 };
