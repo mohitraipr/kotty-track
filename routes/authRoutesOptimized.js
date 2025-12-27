@@ -63,6 +63,7 @@ router.post('/login', async (req, res) => {
       id: user.id,
       username: user.username,
       roleName: user.roleName,
+      role: user.roleName,
     };
 
     const roleRedirectMap = {
@@ -83,6 +84,7 @@ router.post('/login', async (req, res) => {
       checking: '/department/dashboard',
       quality_assurance: '/department/dashboard',
       nowipoorganization: '/nowi-po/dashboard',
+      vendorfiles: '/vendor-files',
     };
 
     const redirectPath = roleRedirectMap[user.roleName] || '/';

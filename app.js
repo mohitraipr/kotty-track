@@ -104,6 +104,7 @@ const featuresRoutes = require('./routes/featuresRoutes');
 const indentRoutes = require('./routes/indentRoutes');
 const poCreatorRoutes = require('./routes/poCreatorRoutes');
 const nowiPoRoutes = require('./routes/nowiPoRoutes');
+const vendorFilesRoutes = require('./routes/vendorFilesRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -148,6 +149,7 @@ app.use('/', featuresRoutes);
 app.use('/indent', indentRoutes);
 app.use('/po-creator', poCreatorRoutes);
 app.use('/nowi-po', nowiPoRoutes);
+app.use('/vendor-files', vendorFilesRoutes);
 
 // Home Route
 app.get('/', (req, res) => {

@@ -260,6 +260,21 @@
       </ul>
     </div>
 
+  <% } else if (userRole === 'vendorfiles') { %>
+
+    <!-- VENDOR FILES NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Vendor Files</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/vendor-files" class="sidebar-link <%= isActive('/vendor-files') %>">
+            <i class="sidebar-icon bi bi-folder2-open"></i>
+            <span class="sidebar-text">S3 Workspace</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
   <% } else if (userRole === 'fabric_manager') { %>
 
     <!-- FABRIC MANAGER NAVIGATION -->
