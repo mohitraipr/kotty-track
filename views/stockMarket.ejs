@@ -13,26 +13,26 @@
 
   <style>
     :root {
-      --color-bg-primary: #f4f6fb;
+      --color-bg-primary: #f3f6fb;
       --color-surface: #ffffff;
-      --color-surface-alt: #eef2ff;
-      --color-border: #d8e0ec;
-      --color-text-primary: #0f172a;
-      --color-text-secondary: #475569;
-      --color-text-muted: #6b7280;
-      --color-accent: #1d4ed8;
-      --color-accent-soft: #e6edff;
-      --color-danger: #d60036;
-      --color-danger-soft: #ffe5ec;
-      --color-warning: #7c3aed;
-      --color-warning-soft: #f1e9ff;
+      --color-surface-alt: #eef2f7;
+      --color-border: #d0d7e2;
+      --color-text-primary: #0b122a;
+      --color-text-secondary: #1f2a3d;
+      --color-text-muted: #4b5563;
+      --color-accent: #0b5ad0;
+      --color-accent-soft: #e6efff;
+      --color-danger: #c1121f;
+      --color-danger-soft: #ffe6ea;
+      --color-warning: #2563eb;
+      --color-warning-soft: #e6efff;
       --color-success: #0f9d58;
-      --shadow-md: 0 12px 24px rgba(29, 78, 216, 0.08);
-      --shadow-soft: 0 8px 18px rgba(15, 82, 186, 0.05);
+      --shadow-md: 0 12px 24px rgba(11, 90, 208, 0.08);
+      --shadow-soft: 0 8px 18px rgba(11, 90, 208, 0.06);
     }
 
     body {
-      background: linear-gradient(180deg, #f7f9fd 0%, #f4f6fb 100%);
+      background: linear-gradient(180deg, #f9fbff 0%, var(--color-bg-primary) 100%);
       color: var(--color-text-primary);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       font-size: 15px;
@@ -46,7 +46,7 @@
     .topbar {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(220, 228, 237, 0.7);
+      border-bottom: 1px solid rgba(208, 215, 226, 0.85);
       position: sticky;
       top: 0;
       z-index: 50;
@@ -74,11 +74,11 @@
       width: 38px;
       height: 38px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      background: linear-gradient(135deg, #0b122a, #0b5ad0);
       display: grid;
       place-items: center;
       color: #fff;
-      box-shadow: 0 10px 24px rgba(29, 78, 216, 0.18);
+      box-shadow: 0 10px 24px rgba(11, 90, 208, 0.2);
       font-size: 1.15rem;
       flex: 0 0 auto;
     }
@@ -118,7 +118,7 @@
       background: var(--color-surface-alt);
       color: var(--color-text-secondary);
       font-weight: 600;
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.14);
       max-width: 220px;
     }
 
@@ -141,10 +141,10 @@
 
     .hero-card {
       background: #ffffff;
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.12);
       border-radius: 18px;
       padding: 1.3rem 1.15rem;
-      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+      box-shadow: 0 10px 26px rgba(11, 26, 66, 0.06);
       display: grid;
       gap: 1.1rem;
       position: relative;
@@ -156,8 +156,8 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: radial-gradient(circle at 16% 18%, rgba(29, 78, 216, 0.08), transparent 32%),
-                  radial-gradient(circle at 82% 10%, rgba(37, 99, 235, 0.08), transparent 26%);
+      background: radial-gradient(circle at 16% 18%, rgba(11, 90, 208, 0.07), transparent 32%),
+                  radial-gradient(circle at 82% 10%, rgba(15, 157, 88, 0.06), transparent 26%);
     }
 
     .hero-heading {
@@ -211,8 +211,8 @@
       gap: 0.5rem;
       padding: 0.65rem 0.8rem;
       border-radius: 12px;
-      border: 1px solid rgba(29, 78, 216, 0.12);
-      background: #f8fbff;
+      border: 1px solid rgba(11, 90, 208, 0.12);
+      background: #f4f7fb;
       color: var(--color-text-secondary);
       font-weight: 600;
     }
@@ -254,7 +254,7 @@
       padding: 0.55rem 0.75rem;
       border-radius: 14px;
       background: var(--color-surface);
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.12);
       box-shadow: var(--shadow-soft);
     }
 
@@ -280,7 +280,7 @@
 
     .stat-card {
       border-radius: 16px;
-      border: 1px solid rgba(29, 78, 216, 0.08);
+      border: 1px solid rgba(11, 90, 208, 0.08);
       background: var(--color-surface);
       box-shadow: var(--shadow-soft);
       padding: 0.95rem 1rem;
@@ -306,7 +306,7 @@
 
     .card-pane {
       background: var(--color-surface);
-      border: 1px solid rgba(29, 78, 216, 0.09);
+      border: 1px solid rgba(11, 90, 208, 0.1);
       border-radius: 18px;
       box-shadow: var(--shadow-md);
     }
@@ -327,7 +327,7 @@
     .tab-nav {
       background: var(--color-surface);
       border-radius: 14px;
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.14);
       padding: 0.35rem;
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -342,8 +342,8 @@
       font-weight: 700;
       color: var(--color-text-secondary);
       border-radius: 12px;
-      border: 1px solid rgba(29, 78, 216, 0);
-      background: linear-gradient(180deg, #f8fafc, #f5f7fb);
+      border: 1px solid rgba(11, 90, 208, 0);
+      background: linear-gradient(180deg, #f9fbff, #f3f6fb);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -351,10 +351,10 @@
     }
 
     .tab-nav .nav-link.active {
-      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      background: linear-gradient(135deg, #0b122a, #0b5ad0);
       color: #fff;
-      box-shadow: 0 10px 18px rgba(29, 78, 216, 0.28);
-      border-color: rgba(29, 78, 216, 0.22);
+      box-shadow: 0 10px 18px rgba(11, 90, 208, 0.25);
+      border-color: rgba(11, 90, 208, 0.22);
     }
 
     .status-pill {
@@ -392,8 +392,8 @@
     }
 
     .soft-btn {
-      background: rgba(15, 82, 186, 0.06);
-      border: 1px solid rgba(15, 82, 186, 0.18);
+      background: rgba(11, 90, 208, 0.08);
+      border: 1px solid rgba(11, 90, 208, 0.18);
       color: var(--color-accent);
       box-shadow: var(--shadow-soft);
       min-height: 48px;
@@ -401,7 +401,7 @@
     }
 
     .soft-btn:hover {
-      background: rgba(15, 82, 186, 0.12);
+      background: rgba(11, 90, 208, 0.14);
       color: var(--color-accent);
     }
 
@@ -443,7 +443,7 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.55rem 0.75rem;
       padding: 1rem 0.95rem 0.75rem;
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.12);
       border-radius: 16px;
       background: #fff;
       box-shadow: var(--shadow-md);
@@ -451,8 +451,8 @@
       overflow: hidden;
     }
 
-    .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(214, 0, 54, 0.06), rgba(214, 0, 54, 0.01)); }
-    .table.stack-table tbody tr.row-warning { background: linear-gradient(180deg, rgba(124, 58, 237, 0.05), rgba(124, 58, 237, 0.01)); }
+    .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(193, 18, 31, 0.06), rgba(193, 18, 31, 0.01)); }
+    .table.stack-table tbody tr.row-warning { background: linear-gradient(180deg, rgba(11, 90, 208, 0.05), rgba(11, 90, 208, 0.01)); }
 
     .table.stack-table tbody td {
       padding: 0.35rem 0;
@@ -499,7 +499,7 @@
       background: var(--color-surface-alt);
       color: var(--color-text-secondary);
       font-weight: 700;
-      border: 1px solid rgba(29, 78, 216, 0.12);
+      border: 1px solid rgba(11, 90, 208, 0.12);
 
       max-width: 100%;
       overflow: hidden;
@@ -509,8 +509,8 @@
     }
 
     .table.stack-table tbody tr .warehouse-pill {
-      background: #eef3ff;
-      border-color: rgba(29, 78, 216, 0.25);
+      background: #e6efff;
+      border-color: rgba(11, 90, 208, 0.22);
       color: var(--color-text-primary);
       font-weight: 700;
     }
@@ -930,7 +930,7 @@
               <div>
                 <div class="metric-label d-flex align-items-center gap-2">
                   <span>High inventory, low sales</span>
-                  <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by lowest 30d orders, then 7d orders, then highest on-hand inventory."></i>
+                  <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by highest on-hand inventory first, then by lowest 30d and 7d orders."></i>
                 </div>
                 <div class="text-faint">Shows SKUs (with making time set) that sold 10 or fewer units in both 7d and 30d windows.</div>
               </div>
@@ -1130,9 +1130,12 @@
 
   function rankSlowMovers(rows = []) {
     return [...rows].sort((a, b) => {
+      const invA = Number(a.inventory) || 0;
+      const invB = Number(b.inventory) || 0;
+      if (invA !== invB) return invB - invA;
       if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
       if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
-      return (Number(b.inventory) || 0) - (Number(a.inventory) || 0);
+      return (a.sku || '').localeCompare(b.sku || '');
     });
   }
 
