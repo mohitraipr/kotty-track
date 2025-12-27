@@ -13,38 +13,36 @@
 
   <style>
     :root {
-      --color-bg-primary: #f5f7fb;
+      --color-bg-primary: #f4f6fb;
       --color-surface: #ffffff;
-      --color-surface-alt: #f0f4ff;
-      --color-border: #dce4ed;
+      --color-surface-alt: #eef2ff;
+      --color-border: #d8e0ec;
       --color-text-primary: #0f172a;
       --color-text-secondary: #475569;
       --color-text-muted: #6b7280;
-      --color-accent: #0f52ba;
-      --color-accent-soft: #e9f0ff;
+      --color-accent: #1d4ed8;
+      --color-accent-soft: #e6edff;
       --color-danger: #d60036;
       --color-danger-soft: #ffe5ec;
       --color-warning: #7c3aed;
       --color-warning-soft: #f1e9ff;
       --color-success: #0f9d58;
-      --shadow-md: 0 12px 20px rgba(15, 82, 186, 0.08);
-      --shadow-soft: 0 8px 16px rgba(15, 82, 186, 0.04);
+      --shadow-md: 0 12px 24px rgba(29, 78, 216, 0.08);
+      --shadow-soft: 0 8px 18px rgba(15, 82, 186, 0.05);
     }
 
-    /* ✅ IMPORTANT: remove safe-area padding from body (it makes sticky huge in webviews) */
     body {
-      background: #f6f7fb;
+      background: linear-gradient(180deg, #f7f9fd 0%, #f4f6fb 100%);
       color: var(--color-text-primary);
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       font-size: 15px;
       line-height: 1.55;
       min-height: 100vh;
-      padding: 0; /* ✅ */
+      padding: 0;
       -webkit-text-size-adjust: 100%;
-      overflow-x: hidden; /* ✅ prevent any horizontal bleed */
+      overflow-x: hidden;
     }
 
-    /* ✅ Sticky topbar compact + safe-area only here */
     .topbar {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(12px);
@@ -52,12 +50,12 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      padding-top: env(safe-area-inset-top); /* ✅ */
+      padding-top: env(safe-area-inset-top);
     }
 
     .topbar .container-fluid {
       padding: 0.85rem 1.25rem;
-      flex-wrap: nowrap; /* ✅ no wrap explosion */
+      flex-wrap: nowrap;
     }
 
     .brand {
@@ -68,19 +66,19 @@
       letter-spacing: -0.01em;
       color: var(--color-text-primary);
       text-decoration: none;
-      flex: 1 1 auto;   /* ✅ */
-      min-width: 0;     /* ✅ */
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     .brand .logo-mark {
       width: 38px;
       height: 38px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #0f52ba, #2563eb);
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
       display: grid;
       place-items: center;
       color: #fff;
-      box-shadow: 0 10px 24px rgba(15, 82, 186, 0.22);
+      box-shadow: 0 10px 24px rgba(29, 78, 216, 0.18);
       font-size: 1.15rem;
       flex: 0 0 auto;
     }
@@ -120,7 +118,7 @@
       background: var(--color-surface-alt);
       color: var(--color-text-secondary);
       font-weight: 600;
-      border: 1px solid rgba(15, 82, 186, 0.12);
+      border: 1px solid rgba(29, 78, 216, 0.12);
       max-width: 220px;
     }
 
@@ -134,28 +132,40 @@
       display: inline-block;
     }
 
-    /* ✅ Mobile-first shell padding + safe-area bottom only here */
     .stock-shell {
       max-width: 1140px;
       margin: 0 auto;
       width: min(1140px, 100%);
-      padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); /* ✅ */
+      padding: 14px 12px calc(16px + env(safe-area-inset-bottom));
     }
 
     .hero-card {
       background: #ffffff;
-      border: 1px solid rgba(15, 82, 186, 0.1);
-      border-radius: 16px;
-      padding: 1.15rem 1rem;
-      box-shadow: 0 6px 16px rgba(15, 82, 186, 0.06);
+      border: 1px solid rgba(29, 78, 216, 0.12);
+      border-radius: 18px;
+      padding: 1.3rem 1.15rem;
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
       display: grid;
-      gap: 0.85rem;
+      gap: 1.1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 16% 18%, rgba(29, 78, 216, 0.08), transparent 32%),
+                  radial-gradient(circle at 82% 10%, rgba(37, 99, 235, 0.08), transparent 26%);
     }
 
     .hero-heading {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.35rem;
+      position: relative;
+      z-index: 1;
     }
 
     .eyebrow {
@@ -167,12 +177,16 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
       font-size: 0.85rem;
+      background: var(--color-accent-soft);
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      width: fit-content;
     }
 
     h1.page-title {
       font-weight: 800;
       letter-spacing: -0.02em;
-      font-size: clamp(1.25rem, 3.3vw, 1.8rem);
+      font-size: clamp(1.25rem, 3.3vw, 1.9rem);
       margin: 0;
     }
 
@@ -182,6 +196,28 @@
       margin: 0;
       line-height: 1.5;
     }
+
+    .hero-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.65rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .meta-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 0.8rem;
+      border-radius: 12px;
+      border: 1px solid rgba(29, 78, 216, 0.12);
+      background: #f8fbff;
+      color: var(--color-text-secondary);
+      font-weight: 600;
+    }
+
+    .meta-chip i { color: var(--color-accent); }
 
     .status-helper {
       display: inline-flex;
@@ -198,13 +234,15 @@
 
     .hero-actions {
       display: grid;
-      gap: 0.5rem;
+      gap: 0.75rem;
       width: 100%;
+      position: relative;
+      z-index: 1;
     }
 
     .action-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 0.5rem;
       align-items: center;
     }
@@ -214,9 +252,9 @@
       align-items: center;
       gap: 0.6rem;
       padding: 0.55rem 0.75rem;
-      border-radius: 12px;
+      border-radius: 14px;
       background: var(--color-surface);
-      border: 1px solid rgba(15, 82, 186, 0.12);
+      border: 1px solid rgba(29, 78, 216, 0.12);
       box-shadow: var(--shadow-soft);
     }
 
@@ -241,58 +279,58 @@
     .hero-actions .btn { width: 100%; }
 
     .stat-card {
-      border-radius: 14px;
-      border: 1px solid rgba(15, 82, 186, 0.08);
+      border-radius: 16px;
+      border: 1px solid rgba(29, 78, 216, 0.08);
       background: var(--color-surface);
       box-shadow: var(--shadow-soft);
-      padding: 0.9rem 0.95rem;
+      padding: 0.95rem 1rem;
       display: grid;
-      gap: 0.15rem;
+      gap: 0.3rem;
     }
 
-    .stat-label { color: var(--color-text-muted); font-weight: 700; font-size: 0.9rem; }
-    .stat-value { font-size: clamp(1.4rem, 4vw, 1.8rem); font-weight: 800; letter-spacing: -0.02em; }
-    .stat-subtle { color: var(--color-text-secondary); font-weight: 600; font-size: 0.9rem; }
-
-    .action-card {
-      border: 1px dashed rgba(15, 82, 186, 0.2);
-      border-radius: 14px;
-      background: rgba(15, 82, 186, 0.04);
+    .stat-card .stat-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--color-accent-soft);
       color: var(--color-accent);
-      box-shadow: var(--shadow-soft);
-      padding: 0.85rem 0.95rem;
-      font-size: 0.95rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.5rem;
-      text-decoration: none;
+      display: grid;
+      place-items: center;
+      margin-bottom: 0.25rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
     }
 
-    .action-card:hover {
-      border-color: var(--color-accent);
-      text-decoration: none;
-      box-shadow: 0 14px 24px rgba(15, 82, 186, 0.14);
-    }
+    .stat-label { color: var(--color-text-muted); font-weight: 700; font-size: 0.9rem; letter-spacing: 0.01em; }
+    .stat-value { font-size: clamp(1.4rem, 4vw, 1.9rem); font-weight: 800; letter-spacing: -0.02em; }
+    .stat-subtle { color: var(--color-text-secondary); font-weight: 600; font-size: 0.9rem; }
 
     .card-pane {
       background: var(--color-surface);
-      border: 1px solid rgba(15, 82, 186, 0.08);
-      border-radius: 16px;
+      border: 1px solid rgba(29, 78, 216, 0.09);
+      border-radius: 18px;
       box-shadow: var(--shadow-md);
     }
 
     .card-pane .card-body {
-      padding: 1.25rem 1.1rem;
+      padding: 1.35rem 1.15rem;
+    }
+
+    .tab-shell {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
     }
 
     .tab-nav {
       background: var(--color-surface);
       border-radius: 14px;
-      border: 1px solid rgba(15, 82, 186, 0.08);
+      border: 1px solid rgba(29, 78, 216, 0.12);
       padding: 0.35rem;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 0.35rem;
       box-shadow: var(--shadow-soft);
     }
@@ -300,30 +338,34 @@
     .tab-nav .nav-link {
       width: 100%;
       text-align: center;
-      padding: 0.8rem 0.9rem;
+      padding: 0.9rem 1rem;
       font-weight: 700;
       color: var(--color-text-secondary);
       border-radius: 12px;
-      border: 1px solid transparent;
+      border: 1px solid rgba(29, 78, 216, 0);
+      background: linear-gradient(180deg, #f8fafc, #f5f7fb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
     }
 
     .tab-nav .nav-link.active {
-      background: linear-gradient(135deg, #0f52ba, #2563eb);
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
       color: #fff;
-      box-shadow: 0 10px 18px rgba(15, 82, 186, 0.25);
-      border-color: rgba(15, 82, 186, 0.18);
+      box-shadow: 0 10px 18px rgba(29, 78, 216, 0.28);
+      border-color: rgba(29, 78, 216, 0.22);
     }
 
     .status-pill {
-      padding: 0.4rem 0.75rem;
-      border-radius: 999px;
+      padding: 0.32rem 0.75rem;
+      border-radius: 12px;
       font-weight: 800;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
       border: 1px solid transparent;
-      text-transform: uppercase;
       letter-spacing: 0.01em;
       white-space: nowrap;
       max-width: 100%;
@@ -331,19 +373,13 @@
       text-overflow: ellipsis;
     }
 
-    .status-pill::before {
-      content: '';
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: currentColor;
-      box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.04);
-      flex: 0 0 auto;
+    .status-pill i {
+      font-size: 0.9rem;
     }
 
-    .status-red { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgba(214, 0, 54, 0.24); }
-    .status-purple { background: var(--color-warning-soft); color: var(--color-warning); border-color: rgba(124, 58, 237, 0.22); }
-    .status-green { background: #e8f5ef; color: var(--color-success); border-color: rgba(15, 157, 88, 0.2); }
+    .status-red { background: #fff1f4; color: #b42318; border-color: rgba(212, 70, 70, 0.15); }
+    .status-purple { background: #f4edff; color: #6b21a8; border-color: rgba(124, 58, 237, 0.18); }
+    .status-green { background: #e8f5ef; color: #0f9d58; border-color: rgba(15, 157, 88, 0.2); }
 
     .search-group { width: 100%; }
 
@@ -360,6 +396,8 @@
       border: 1px solid rgba(15, 82, 186, 0.18);
       color: var(--color-accent);
       box-shadow: var(--shadow-soft);
+      min-height: 48px;
+      font-weight: 700;
     }
 
     .soft-btn:hover {
@@ -405,12 +443,12 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.55rem 0.75rem;
       padding: 1rem 0.95rem 0.75rem;
-      border: 1px solid rgba(15, 82, 186, 0.12);
+      border: 1px solid rgba(29, 78, 216, 0.12);
       border-radius: 16px;
       background: #fff;
       box-shadow: var(--shadow-md);
       position: relative;
-      overflow: hidden; /* ✅ stop any internal overflow */
+      overflow: hidden;
     }
 
     .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(214, 0, 54, 0.06), rgba(214, 0, 54, 0.01)); }
@@ -424,7 +462,7 @@
       justify-content: space-between;
       gap: 0.65rem;
       width: 100%;
-      min-width: 0; /* ✅ critical */
+      min-width: 0;
     }
 
     .table.stack-table tbody td::before {
@@ -447,7 +485,7 @@
       font-weight: 800;
       letter-spacing: -0.01em;
       word-break: break-word;
-      overflow-wrap: anywhere; /* ✅ long SKU never breaks layout */
+      overflow-wrap: anywhere;
       line-height: 1.4;
       min-width: 0;
     }
@@ -461,7 +499,7 @@
       background: var(--color-surface-alt);
       color: var(--color-text-secondary);
       font-weight: 700;
-      border: 1px solid rgba(15, 82, 186, 0.12);
+      border: 1px solid rgba(29, 78, 216, 0.12);
 
       max-width: 100%;
       overflow: hidden;
@@ -472,7 +510,7 @@
 
     .table.stack-table tbody tr .warehouse-pill {
       background: #eef3ff;
-      border-color: rgba(15, 82, 186, 0.25);
+      border-color: rgba(29, 78, 216, 0.25);
       color: var(--color-text-primary);
       font-weight: 700;
     }
@@ -482,11 +520,37 @@
 
     .table-responsive { overflow: visible; }
 
+    .filter-bar {
+      width: 100%;
+      background: #f8fafc;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      padding: 0.75rem;
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .filter-bar .stacked-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .filter-bar .label {
+      font-weight: 700;
+      color: var(--color-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
     @media (min-width: 768px) {
       body { font-size: 17px; }
-      .hero-card { padding: 1.6rem; grid-template-columns: 1.2fr 1fr; align-items: center; }
+      .hero-card { padding: 1.65rem; grid-template-columns: 1.2fr 1fr; align-items: center; }
       .hero-actions .btn { width: auto; }
       .search-group { max-width: 480px; }
+      .filter-bar { padding: 0.9rem 1rem; }
     }
 
     @media (min-width: 992px) {
@@ -507,11 +571,10 @@
       .table.stack-table tbody td:nth-child(2) { text-align: left !important; }
       .table.stack-table tbody td::before { display: none; }
       .table.stack-table tbody td:last-child { grid-column: auto; }
-      .tab-nav { grid-template-columns: repeat(2, max-content); width: fit-content; }
-      .tab-nav .nav-link { padding-inline: 1.5rem; }
+      .tab-nav { grid-template-columns: repeat(3, max-content); width: fit-content; }
+      .tab-nav .nav-link { padding-inline: 1.35rem; }
     }
 
-    /* ✅ MOBILE: compact sticky + single column actions */
     @media (max-width: 575.98px) {
       .topbar .container-fluid {
         padding: 0.55rem 0.75rem;
@@ -550,10 +613,6 @@
       .search-input { padding: 0.75rem 0.85rem; }
       .input-group-text { padding: 0.75rem 0.85rem; }
 
-      /* =========================================================
-         ✅ BIG FIX: Mobile table cards become single-column
-         so nothing is packed / overflowing
-         ========================================================= */
       .table.stack-table tbody tr{
         grid-template-columns: 1fr !important;
         gap: 0.6rem !important;
@@ -586,14 +645,13 @@
       }
     }
 
-    /* ✅ Ultra-small phones: hide username text */
     @media (max-width: 380px) {
       .user-chip .user-name { display: none; }
     }
 
     @media print {
       body { background: #fff; }
-      .topbar, .tab-nav, .input-group, .hero-card, .action-card { display: none !important; }
+      .topbar, .tab-nav, .input-group, .hero-card { display: none !important; }
       .status-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .table tbody tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
@@ -638,8 +696,13 @@
   <div class="hero-card mb-3">
     <div class="hero-heading">
       <span class="eyebrow"><i class="bi bi-activity"></i> Live runway</span>
-      <h1 class="page-title">Out-of-stock coverage with warehouse focus</h1>
-      <p class="lede-text mb-1">Trimmed down to the essentials so you can spot gaps faster.</p>
+      <h1 class="page-title">Inventory health with warehouse focus</h1>
+      <p class="lede-text mb-1">Inventory, orders, and slow movers in one control board.</p>
+    </div>
+
+    <div class="hero-meta">
+      <div class="meta-chip"><i class="bi bi-clock-history"></i>Auto-refresh every 15s</div>
+      <div class="meta-chip"><i class="bi bi-bezier2"></i>Linked inventory + demand signals</div>
     </div>
 
     <div class="hero-actions">
@@ -696,6 +759,7 @@
   <div class="row g-3 mb-3">
     <div class="col-12 col-md-4">
       <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs that will run out first based on yesterday's orders">
+        <div class="stat-icon"><i class="bi bi-thermometer-half"></i></div>
         <div class="stat-label">Critical SKUs</div>
         <div class="stat-value" id="metric-critical">0</div>
         <div class="stat-subtle">Need replenishment now</div>
@@ -703,6 +767,7 @@
     </div>
     <div class="col-12 col-md-4">
       <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs trending towards risk but not yet critical">
+        <div class="stat-icon"><i class="bi bi-eye"></i></div>
         <div class="stat-label">On watch</div>
         <div class="stat-value" id="metric-watch">0</div>
         <div class="stat-subtle">Monitor before they slip</div>
@@ -710,6 +775,7 @@
     </div>
     <div class="col-12 col-md-4">
       <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="Median days left based on current run rate">
+        <div class="stat-icon"><i class="bi bi-speedometer"></i></div>
         <div class="stat-label">Median runway</div>
         <div class="stat-value" id="metric-runway">0d</div>
         <div class="stat-subtle">Across SKUs in view</div>
@@ -719,46 +785,54 @@
 
   <div class="card-pane">
     <div class="card-body">
-      <ul class="nav nav-pills tab-nav mb-3" id="pills-tab" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="inventory-tab" data-bs-toggle="pill" data-bs-target="#inventory" type="button" role="tab">
-            <i class="bi bi-box-seam me-2"></i>Inventory
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="orders-tab" data-bs-toggle="pill" data-bs-target="#orders" type="button" role="tab">
-            <i class="bi bi-cart-check me-2"></i>Orders
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="slow-tab" data-bs-toggle="pill" data-bs-target="#slow" type="button" role="tab">
-            <i class="bi bi-hourglass-split me-2"></i>Slow movers
-          </button>
-        </li>
-      </ul>
+      <div class="tab-shell">
+        <ul class="nav nav-pills tab-nav mb-0" id="pills-tab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="inventory-tab" data-bs-toggle="pill" data-bs-target="#inventory" type="button" role="tab">
+              <i class="bi bi-box-seam"></i><span>Inventory</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="orders-tab" data-bs-toggle="pill" data-bs-target="#orders" type="button" role="tab">
+              <i class="bi bi-cart-check"></i><span>Orders</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="slow-tab" data-bs-toggle="pill" data-bs-target="#slow" type="button" role="tab">
+              <i class="bi bi-hourglass-split"></i><span>Slow movers</span>
+            </button>
+          </li>
+        </ul>
+        <div class="d-flex align-items-center gap-2 text-secondary fw-semibold">
+          <i class="bi bi-arrow-repeat text-primary"></i>
+          <span>Live sync view</span>
+        </div>
+      </div>
 
       <div class="tab-content" id="pills-tabContent">
         <div class="tab-pane fade show active" id="inventory" role="tabpanel">
-          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
-            <div class="status-helper" data-bs-toggle="tooltip" data-bs-title="Use the filters to show only critical, watch, or healthy SKUs. Colors match the runway calculation.">
-              <i class="bi bi-info-circle tooltip-icon"></i>
-              <span>Status filters guide what shows up here.</span>
-            </div>
-            <div class="btn-group status-filters" role="group" aria-label="Filter by status">
-              <input type="radio" class="btn-check" name="status-filter" id="status-all" autocomplete="off" value="all" checked>
-              <label class="btn btn-outline-secondary" for="status-all">All</label>
-              <input type="radio" class="btn-check" name="status-filter" id="status-critical" autocomplete="off" value="red">
-              <label class="btn btn-outline-danger" for="status-critical">Critical</label>
-              <input type="radio" class="btn-check" name="status-filter" id="status-watch" autocomplete="off" value="purple">
-              <label class="btn btn-outline-warning" for="status-watch">Watch</label>
-              <input type="radio" class="btn-check" name="status-filter" id="status-healthy" autocomplete="off" value="green">
-              <label class="btn btn-outline-success" for="status-healthy">Healthy</label>
-            </div>
-            <div class="input-group search-group">
-              <span class="input-group-text">
-                <i class="bi bi-search"></i>
-              </span>
-              <input type="search" id="inventory-search" class="form-control search-input" placeholder="Search SKU...">
+          <div class="filter-bar mb-3">
+            <div class="stacked-row">
+              <div class="label" data-bs-toggle="tooltip" data-bs-title="Use the filters to show only critical, watch, or healthy SKUs. Colors match the runway calculation.">
+                <i class="bi bi-filter"></i>
+                Status view
+              </div>
+              <div class="btn-group status-filters" role="group" aria-label="Filter by status">
+                <input type="radio" class="btn-check" name="status-filter" id="status-all" autocomplete="off" value="all" checked>
+                <label class="btn btn-outline-secondary" for="status-all">All</label>
+                <input type="radio" class="btn-check" name="status-filter" id="status-critical" autocomplete="off" value="red">
+                <label class="btn btn-outline-danger" for="status-critical">Critical</label>
+                <input type="radio" class="btn-check" name="status-filter" id="status-watch" autocomplete="off" value="purple">
+                <label class="btn btn-outline-warning" for="status-watch">Watch</label>
+                <input type="radio" class="btn-check" name="status-filter" id="status-healthy" autocomplete="off" value="green">
+                <label class="btn btn-outline-success" for="status-healthy">Healthy</label>
+              </div>
+              <div class="input-group search-group">
+                <span class="input-group-text">
+                  <i class="bi bi-search"></i>
+                </span>
+                <input type="search" id="inventory-search" class="form-control search-input" placeholder="Search SKU...">
+              </div>
             </div>
           </div>
 
@@ -785,11 +859,11 @@
                     <td data-label="Days left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
                     <td data-label="Status">
                       <% if (item.status === 'red') { %>
-                        <span class="status-pill status-red">Critical</span>
+                        <span class="status-pill status-red"><i class="bi bi-exclamation-octagon-fill"></i>Critical</span>
                       <% } else if (item.status === 'purple') { %>
-                        <span class="status-pill status-purple">Watch</span>
+                        <span class="status-pill status-purple"><i class="bi bi-exclamation-circle-fill"></i>Watch</span>
                       <% } else { %>
-                        <span class="status-pill status-green">Healthy</span>
+                        <span class="status-pill status-green"><i class="bi bi-check-circle-fill"></i>Healthy</span>
                       <% } %>
                     </td>
                   </tr>
@@ -800,18 +874,20 @@
         </div>
 
         <div class="tab-pane fade" id="orders" role="tabpanel">
-          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
-            <div>
-              <div class="metric-label">
-                Orders ranked by volume for <strong id="orders-period-label"><%= period.label %></strong>
+          <div class="filter-bar mb-3">
+            <div class="stacked-row">
+              <div>
+                <div class="metric-label">
+                  Orders ranked by volume for <strong id="orders-period-label"><%= period.label %></strong>
+                </div>
+                <div class="text-faint">Growth compares to the immediately previous window.</div>
               </div>
-              <div class="text-faint">Growth compares to the immediately previous window.</div>
-            </div>
-            <div class="input-group search-group">
-              <span class="input-group-text">
-                <i class="bi bi-search"></i>
-              </span>
-              <input type="search" id="orders-search" class="form-control search-input" placeholder="Search SKU...">
+              <div class="input-group search-group">
+                <span class="input-group-text">
+                  <i class="bi bi-search"></i>
+                </span>
+                <input type="search" id="orders-search" class="form-control search-input" placeholder="Search SKU...">
+              </div>
             </div>
           </div>
 
@@ -849,19 +925,21 @@
         </div>
 
         <div class="tab-pane fade" id="slow" role="tabpanel">
-          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
-            <div>
-              <div class="metric-label d-flex align-items-center gap-2">
-                <span>High inventory, low sales</span>
-                <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by lowest 30d orders, then 7d orders, then highest on-hand inventory."></i>
+          <div class="filter-bar mb-3">
+            <div class="stacked-row">
+              <div>
+                <div class="metric-label d-flex align-items-center gap-2">
+                  <span>High inventory, low sales</span>
+                  <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by lowest 30d orders, then 7d orders, then highest on-hand inventory."></i>
+                </div>
+                <div class="text-faint">Shows SKUs (with making time set) that sold 10 or fewer units in both 7d and 30d windows.</div>
               </div>
-              <div class="text-faint">Shows SKUs (with making time set) that sold 10 or fewer units in both 7d and 30d windows.</div>
-            </div>
-            <div class="input-group search-group">
-              <span class="input-group-text">
-                <i class="bi bi-search"></i>
-              </span>
-              <input type="search" id="slow-search" class="form-control search-input" placeholder="Search SKU...">
+              <div class="input-group search-group">
+                <span class="input-group-text">
+                  <i class="bi bi-search"></i>
+                </span>
+                <input type="search" id="slow-search" class="form-control search-input" placeholder="Search SKU...">
+              </div>
             </div>
           </div>
 
@@ -946,9 +1024,9 @@
   }
 
   function statusLabel(status) {
-    if (status === 'red') return { text: 'Critical', className: 'status-red', row: 'row-critical' };
-    if (status === 'purple') return { text: 'Watch', className: 'status-purple', row: 'row-warning' };
-    return { text: 'Healthy', className: 'status-green', row: '' };
+    if (status === 'red') return { text: 'Critical', className: 'status-red', row: 'row-critical', icon: 'bi-exclamation-octagon-fill' };
+    if (status === 'purple') return { text: 'Watch', className: 'status-purple', row: 'row-warning', icon: 'bi-exclamation-circle-fill' };
+    return { text: 'Healthy', className: 'status-green', row: '', icon: 'bi-check-circle-fill' };
   }
 
   function attachSearch(input, tableId) {
@@ -1001,7 +1079,7 @@
           <td data-label="Making time" class="text-end">${item.making_time_days}</td>
           <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
           <td data-label="Days left" class="text-end">${infinite ? '∞' : Number(item.days_left).toFixed(1)}</td>
-          <td data-label="Status"><span class="status-pill ${label.className}">${label.text}</span></td>
+          <td data-label="Status"><span class="status-pill ${label.className}"><i class="bi ${label.icon}"></i>${label.text}</span></td>
         </tr>`;
     }).join('');
     applyFilter(document.getElementById('inventory-table'), searchTerm);
