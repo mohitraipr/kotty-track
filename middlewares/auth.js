@@ -164,6 +164,10 @@ function isNowiPOOrganization(req, res, next) {
   return hasRole('nowipoorganization')(req, res, next);
 }
 
+function isVendorFiles(req, res, next) {
+  return hasRole('vendorfiles')(req, res, next);
+}
+
 // ---------------------------------------------------------------------------
 // Helper to restrict routes to specific user ids
 function allowUserIds(ids) {
@@ -220,6 +224,7 @@ module.exports = {
     isOnlyMohitOperator,
     isPOCreator,
     isNowiPOOrganization,
+    isVendorFiles,
     allowUserIds,
     allowRoles
 };

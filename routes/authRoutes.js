@@ -44,7 +44,8 @@ router.post('/login', async (req, res) => {
     req.session.user = {
       id: user.id,
       username: user.username,
-      roleName: user.roleName
+      roleName: user.roleName,
+      role: user.roleName
     };
 
     // Redirect based on role
@@ -108,6 +109,9 @@ router.post('/login', async (req, res) => {
         break;
       case 'nowipoorganization':
         res.redirect('/nowi-po/dashboard');
+        break;
+      case 'vendorfiles':
+        res.redirect('/vendor-files');
         break;
       case 'checking':
       case 'quality_assurance':

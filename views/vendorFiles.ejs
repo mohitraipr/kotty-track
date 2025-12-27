@@ -1,0 +1,255 @@
+<%- include('partials/header', {
+  pageTitle: 'Vendor Files',
+  additionalCSS: [],
+  inlineStyles: `
+    .stat-chip { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 600; }
+    .file-pill { padding: 0.35rem 0.65rem; border-radius: 10px; font-size: 0.85rem; }
+    .file-pill.image { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+    .file-pill.zip { background: rgba(16, 185, 129, 0.12); color: #059669; }
+    .file-pill.excel { background: rgba(234, 179, 8, 0.16); color: #b45309; }
+    .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .image-card { border: 1px solid var(--border-light); border-radius: 12px; padding: 0.85rem; background: var(--bg-secondary); }
+    .image-card h6 { font-size: 0.95rem; margin: 0; word-break: break-word; }
+    .section-title { font-weight: 700; font-size: 1.1rem; }
+  `
+}) %>
+
+<%- include('partials/navbar', { user }) %>
+<%- include('partials/sidebar', { user, req }) %>
+
+<main class="kotty-main">
+  <div class="content-wrapper">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Vendor Files</h1>
+        <p class="page-subtitle mb-0">Upload ZIPs, Excel sheets, and images to S3 by date and generate SKU-linked downloads.</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <span class="stat-chip"><i class="bi bi-calendar3"></i> <%= selectedDate %></span>
+        <span class="stat-chip"><i class="bi bi-folder"></i> <%= selectedFolder || 'No folder selected' %></span>
+      </div>
+    </div>
+
+    <%- include('partials/flashMessages') %>
+
+    <div class="row g-4">
+      <div class="col-xl-5">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Workspace</h5>
+            <form class="row g-3" method="get" action="/vendor-files">
+              <div class="col-md-6">
+                <label for="selectedDate" class="form-label">Date</label>
+                <input type="date" id="selectedDate" name="date" class="form-control" value="<%= selectedDate %>">
+              </div>
+              <div class="col-md-6">
+                <label for="folderSelect" class="form-label">Folder</label>
+                <select id="folderSelect" name="folder" class="form-select" <%= folders.length === 0 ? 'disabled' : '' %>>
+                  <% if (folders.length === 0) { %>
+                    <option value="">No folders yet</option>
+                  <% } else { %>
+                    <% folders.forEach(f => { %>
+                      <option value="<%= f %>" <%= f === selectedFolder ? 'selected' : '' %>><%= f %></option>
+                    <% }) %>
+                  <% } %>
+                </select>
+              </div>
+              <div class="col-12 d-flex justify-content-between align-items-center">
+                <div class="text-muted small">Everything stays organized behind date folders in S3.</div>
+                <button class="btn btn-primary" type="submit">
+                  <i class="bi bi-arrow-repeat me-2"></i>Load
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Create Folder</h5>
+            <form method="post" action="/vendor-files/folders" class="row g-3">
+              <input type="hidden" name="date" value="<%= selectedDate %>">
+              <div class="col-12">
+                <label class="form-label" for="folderName">Folder name</label>
+                <input type="text" id="folderName" name="folderName" class="form-control" placeholder="e.g. VendorA" required>
+              </div>
+              <div class="col-12 d-flex justify-content-end">
+                <button class="btn btn-outline-primary" type="submit">
+                  <i class="bi bi-folder-plus me-2"></i>Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-7">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+              <div>
+                <h5 class="card-title mb-1">Upload Files</h5>
+                <p class="text-muted small mb-0">Allowed: ZIP archives, Excel/CSV sheets, and images. Uploads stay inside the selected date & folder.</p>
+              </div>
+              <div class="d-flex gap-2">
+                <span class="file-pill image">Images: <%= stats.images %></span>
+                <span class="file-pill zip">ZIP: <%= stats.zips %></span>
+                <span class="file-pill excel">Excel: <%= stats.excel %></span>
+              </div>
+            </div>
+            <form method="post" action="/vendor-files/upload" enctype="multipart/form-data" class="row g-3">
+              <input type="hidden" name="date" value="<%= selectedDate %>">
+              <div class="col-md-6">
+                <label class="form-label" for="uploadFolder">Folder</label>
+                <select id="uploadFolder" name="folder" class="form-select" <%= folders.length === 0 ? 'disabled' : '' %> required>
+                  <% if (folders.length === 0) { %>
+                    <option value="">Create a folder first</option>
+                  <% } else { %>
+                    <% folders.forEach(f => { %>
+                      <option value="<%= f %>" <%= f === selectedFolder ? 'selected' : '' %>><%= f %></option>
+                    <% }) %>
+                  <% } %>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="vendorFile">Choose file</label>
+                <input class="form-control" type="file" id="vendorFile" name="vendorFile" accept=".zip,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.webp" required <%= folders.length === 0 ? 'disabled' : '' %>>
+              </div>
+              <div class="col-12 d-flex justify-content-end">
+                <button class="btn btn-primary" type="submit" <%= folders.length === 0 ? 'disabled' : '' %>>
+                  <i class="bi bi-cloud-arrow-up me-2"></i>Upload to S3
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div>
+            <h5 class="card-title mb-1">Files in <%= selectedFolder || 'this date' %></h5>
+            <p class="text-muted small mb-0">Total files: <strong><%= stats.total %></strong>. Downloads stream directly from S3.</p>
+          </div>
+        </div>
+        <% if (files.length === 0) { %>
+          <div class="alert alert-light border">No files yet for this date/folder. Create a folder and upload to get started.</div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Size</th>
+                  <th>Last Modified</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% files.forEach(file => { %>
+                  <tr>
+                    <td><%= file.name %></td>
+                    <td>
+                      <% if (file.type === 'image') { %>
+                        <span class="file-pill image">Image</span>
+                      <% } else if (file.type === 'zip') { %>
+                        <span class="file-pill zip">ZIP</span>
+                      <% } else if (file.type === 'excel') { %>
+                        <span class="file-pill excel">Excel</span>
+                      <% } else { %>
+                        <span class="badge bg-secondary-subtle text-secondary">File</span>
+                      <% } %>
+                    </td>
+                    <td><%= file.sizeLabel %></td>
+                    <td><%= file.lastModifiedLabel %></td>
+                    <td class="text-end">
+                      <a class="btn btn-sm btn-outline-primary" href="<%= file.downloadPath %>">
+                        <i class="bi bi-download me-1"></i>Download
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <h5 class="card-title mb-1">Excel Download from Images</h5>
+            <p class="text-muted small mb-0">Select any images in this folder to build an Excel sheet with SKU in column A and image links across numbered columns.</p>
+            <p class="text-muted small mb-0">Use file names like <code>SKU (1).jpg</code>, <code>SKU (2).jpg</code> to map sequence positions.</p>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="selectAllImages">
+            <label class="form-check-label" for="selectAllImages">Select all</label>
+          </div>
+        </div>
+
+        <% if (imageFiles.length === 0) { %>
+          <div class="alert alert-light border mb-0">No images detected for this folder.</div>
+        <% } else { %>
+          <form id="excelExportForm" method="post" action="/vendor-files/export-excel">
+            <input type="hidden" name="date" value="<%= selectedDate %>">
+            <input type="hidden" name="folder" value="<%= selectedFolder %>">
+            <input type="hidden" name="selectedKeys" id="selectedKeys">
+            <div class="file-grid mb-3">
+              <% imageFiles.forEach(img => { %>
+                <label class="image-card form-check d-flex align-items-start gap-3">
+                  <input class="form-check-input image-checkbox mt-1" type="checkbox" value="<%= img.key %>">
+                  <div>
+                    <h6><%= img.name %></h6>
+                    <div class="text-muted small">Updated <%= img.lastModifiedLabel %></div>
+                  </div>
+                </label>
+              <% }) %>
+            </div>
+            <div class="d-flex justify-content-end">
+              <button class="btn btn-success" type="submit">
+                <i class="bi bi-file-earmark-spreadsheet me-2"></i>Download Excel
+              </button>
+            </div>
+          </form>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer', {
+  additionalJS: [],
+  inlineJS: `
+    document.addEventListener('DOMContentLoaded', function() {
+      const dateInput = document.getElementById('selectedDate');
+      const folderSelect = document.getElementById('folderSelect');
+      const selectAll = document.getElementById('selectAllImages');
+      const imageCheckboxes = Array.from(document.querySelectorAll('.image-checkbox'));
+      const exportForm = document.getElementById('excelExportForm');
+      const selectedKeysInput = document.getElementById('selectedKeys');
+
+      dateInput?.addEventListener('change', () => dateInput.form.submit());
+      folderSelect?.addEventListener('change', () => folderSelect.form.submit());
+
+      selectAll?.addEventListener('change', () => {
+        imageCheckboxes.forEach(cb => { cb.checked = selectAll.checked; });
+      });
+
+      exportForm?.addEventListener('submit', (e) => {
+        const chosen = imageCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
+        if (!chosen.length) {
+          e.preventDefault();
+          alert('Please select at least one image to export.');
+          return;
+        }
+        selectedKeysInput.value = JSON.stringify(chosen);
+      });
+    });
+  `
+}) %>
