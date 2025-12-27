@@ -196,8 +196,8 @@ router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req,
       periodPresets: PERIOD_PRESETS,
     });
   } catch (err) {
-    console.error('Failed to render stock market view:', err);
-    req.flash('error', 'Could not load stock market view');
+    console.error('Failed to render out-of-stock view:', err);
+    req.flash('error', 'Could not load out-of-stock view');
     res.redirect('/');
   }
 });
@@ -235,7 +235,7 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
       period: resolvePeriod(periodKey),
     });
   } catch (err) {
-    console.error('Failed to fetch stock market data:', err);
+    console.error('Failed to fetch out-of-stock data:', err);
     res.status(500).json({ error: 'Unable to refresh data' });
   }
 });
@@ -294,7 +294,7 @@ router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, as
       ordersSheet.addRow({ ...row, growth: Number(row.growth || 0).toFixed(1) });
     });
 
-    const fileName = `stock-market-${periodKey}.xlsx`;
+    const fileName = `out-of-stock-${periodKey}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer();
     const outputBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -303,7 +303,7 @@ router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, as
     res.setHeader('Content-Length', outputBuffer.length);
     res.send(outputBuffer);
   } catch (err) {
-    console.error('Failed to download stock market Excel:', err);
+    console.error('Failed to download out-of-stock Excel:', err);
     res.status(500).json({ error: 'Unable to download Excel' });
   }
 });
