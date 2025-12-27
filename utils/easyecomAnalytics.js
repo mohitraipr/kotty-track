@@ -433,7 +433,7 @@ async function getSlowMovers(pool, { warehouseIds } = {}) {
   const hasWarehouseFilter = allowedWarehouses.length > 0;
 
   const [healthRows] = await pool.query(
-    `SELECT h.sku, h.warehouse_id
+    `SELECT h.sku, h.warehouse_id, h.inventory
      FROM ee_inventory_health h
      WHERE EXISTS (
        SELECT 1 FROM ee_replenishment_rules r
@@ -476,14 +476,16 @@ async function getSlowMovers(pool, { warehouseIds } = {}) {
           warehouse_id: row.warehouse_id,
           orders_7d: count7,
           orders_30d: count30,
+          inventory: Number(row.inventory) || 0,
         };
       }
       return null;
     })
     .filter(Boolean)
     .sort((a, b) => {
-      if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
       if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
+      if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
+      if (a.inventory !== b.inventory) return b.inventory - a.inventory;
       return a.sku.localeCompare(b.sku);
     });
 

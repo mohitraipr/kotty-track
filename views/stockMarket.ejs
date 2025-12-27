@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventory Stock Market</title>
+  <title>Out-of-Stock Control</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -183,13 +183,17 @@
       line-height: 1.5;
     }
 
-    .note-inline {
+    .status-helper {
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
-      color: var(--color-danger);
+      gap: 0.4rem;
+      color: var(--color-text-muted);
       font-weight: 700;
-      flex-wrap: wrap;
+    }
+
+    .tooltip-icon {
+      color: var(--color-text-secondary);
+      cursor: help;
     }
 
     .hero-actions {
@@ -340,8 +344,6 @@
     .status-red { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgba(214, 0, 54, 0.24); }
     .status-purple { background: var(--color-warning-soft); color: var(--color-warning); border-color: rgba(124, 58, 237, 0.22); }
     .status-green { background: #e8f5ef; color: var(--color-success); border-color: rgba(15, 157, 88, 0.2); }
-
-    .legend-pills { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 
     .search-group { width: 100%; }
 
@@ -605,10 +607,10 @@
 <div class="topbar">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
     <a class="brand" href="/dashboard">
-      <span class="logo-mark">SM</span>
+      <span class="logo-mark">OS</span>
       <span class="brand-text">
-        <span class="brand-title">Stock Market View</span>
-        <small class="brand-subtitle d-none d-sm-block">Mobile-first insight board</small>
+        <span class="brand-title">Out-of-stock control</span>
+        <small class="brand-subtitle d-none d-sm-block">Warehouses, runway, and gaps</small>
       </span>
     </a>
 
@@ -636,14 +638,13 @@
   <div class="hero-card mb-3">
     <div class="hero-heading">
       <span class="eyebrow"><i class="bi bi-activity"></i> Live runway</span>
-      <h1 class="page-title">Inventory runway & order momentum</h1>
-      <p class="lede-text mb-1">Built to stay crisp inside embedded views — SKU chips, smart stacking, and fast filters.</p>
-      <div class="note-inline"><i class="bi bi-exclamation-triangle-fill"></i>Red means critical; purple is on watch.</div>
+      <h1 class="page-title">Out-of-stock coverage with warehouse focus</h1>
+      <p class="lede-text mb-1">Trimmed down to the essentials so you can spot gaps faster.</p>
     </div>
 
     <div class="hero-actions">
       <div class="action-row">
-        <button class="btn soft-btn d-flex align-items-center justify-content-center gap-2" id="refresh-view" type="button">
+        <button class="btn soft-btn d-flex align-items-center justify-content-center gap-2" id="refresh-view" type="button" data-bs-toggle="tooltip" data-bs-title="Pull the latest inventory, orders, and slow movers">
           <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
           <i class="bi bi-arrow-clockwise"></i>
           <span class="d-none d-sm-inline">Refresh view</span>
@@ -651,12 +652,15 @@
         </button>
 
         <% if (isMohitOperator) { %>
-          <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time">
+          <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time" data-bs-toggle="tooltip" data-bs-title="Upload making time rows for out-of-stock SKUs">
             <i class="bi bi-upload"></i><span>Bulk making time</span>
+          </a>
+          <a class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2" href="/easyecom/warehouse-access" data-bs-toggle="tooltip" data-bs-title="Grant warehouse visibility to Out-of-Stock users">
+            <i class="bi bi-building-gear"></i><span>Warehouse access</span>
           </a>
         <% } %>
 
-        <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button">
+        <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button" data-bs-toggle="tooltip" data-bs-title="Export the current filters as Excel">
           <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
           <i class="bi bi-file-earmark-excel"></i><span>Download Excel</span>
         </button>
@@ -676,7 +680,7 @@
         <% if (hasWarehouseChoice) { %>
           <div class="control-chip w-100">
             <label for="warehouse-select">Warehouse</label>
-            <select class="form-select" id="warehouse-select" name="warehouseId">
+            <select class="form-select" id="warehouse-select" name="warehouseId" data-bs-toggle="tooltip" data-bs-title="Switch warehouses to see out-of-stock gaps per site">
               <% accessibleWarehouses.forEach((wh) => { %>
                 <option value="<%= wh.id %>" <%= Number(selectedWarehouseId) === Number(wh.id) ? 'selected' : '' %>>
                   <%= wh.label %>
@@ -691,47 +695,27 @@
 
   <div class="row g-3 mb-3">
     <div class="col-12 col-md-4">
-      <div class="stat-card">
+      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs that will run out first based on yesterday's orders">
         <div class="stat-label">Critical SKUs</div>
         <div class="stat-value" id="metric-critical">0</div>
         <div class="stat-subtle">Need replenishment now</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="stat-card">
+      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs trending towards risk but not yet critical">
         <div class="stat-label">On watch</div>
         <div class="stat-value" id="metric-watch">0</div>
         <div class="stat-subtle">Monitor before they slip</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="stat-card">
-        <div class="stat-label">Avg. runway</div>
+      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="Median days left based on current run rate">
+        <div class="stat-label">Median runway</div>
         <div class="stat-value" id="metric-runway">0d</div>
-        <div class="stat-subtle">Median days left across SKUs</div>
+        <div class="stat-subtle">Across SKUs in view</div>
       </div>
     </div>
   </div>
-
-  <% if (isMohitOperator) { %>
-    <div class="row g-3 mb-3">
-      <div class="col-12 col-md-6">
-        <a class="action-card" href="/easyecom/stock-market/making-time">
-          <div>
-          <div class="fw-semibold">Bulk making time</div>
-          <div class="small text-faint">Upload rows to refresh replenishment rules quickly.</div>
-        </div>
-        <i class="bi bi-arrow-up-right fs-4"></i>
-      </a>
-      </div>
-      <div class="col-12 col-md-6">
-        <div class="action-card">
-          <div class="fw-semibold mb-1">Operator tips</div>
-          <div class="small">Search by SKU, then confirm demand in Orders before you raise POs.</div>
-        </div>
-      </div>
-    </div>
-  <% } %>
 
   <div class="card-pane">
     <div class="card-body">
@@ -756,10 +740,9 @@
       <div class="tab-content" id="pills-tabContent">
         <div class="tab-pane fade show active" id="inventory" role="tabpanel">
           <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
-            <div class="legend-pills">
-              <span class="status-pill status-red">Critical</span>
-              <span class="status-pill status-purple">Watch</span>
-              <span class="status-pill status-green">Healthy</span>
+            <div class="status-helper" data-bs-toggle="tooltip" data-bs-title="Use the filters to show only critical, watch, or healthy SKUs. Colors match the runway calculation.">
+              <i class="bi bi-info-circle tooltip-icon"></i>
+              <span>Status filters guide what shows up here.</span>
             </div>
             <div class="btn-group status-filters" role="group" aria-label="Filter by status">
               <input type="radio" class="btn-check" name="status-filter" id="status-all" autocomplete="off" value="all" checked>
@@ -868,10 +851,11 @@
         <div class="tab-pane fade" id="slow" role="tabpanel">
           <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
             <div>
-              <div class="metric-label">
-                SKUs with 0-10 orders in the last 7 and 30 days (with making time set)
+              <div class="metric-label d-flex align-items-center gap-2">
+                <span>High inventory, low sales</span>
+                <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by lowest 30d orders, then 7d orders, then highest on-hand inventory."></i>
               </div>
-              <div class="text-faint">Use this list to spot items that are moving slowly.</div>
+              <div class="text-faint">Shows SKUs (with making time set) that sold 10 or fewer units in both 7d and 30d windows.</div>
             </div>
             <div class="input-group search-group">
               <span class="input-group-text">
@@ -886,6 +870,8 @@
               <thead>
                 <tr>
                   <th>SKU</th>
+                  <th>Warehouse</th>
+                  <th class="text-end">Inventory</th>
                   <th class="text-end">Orders (7d)</th>
                   <th class="text-end">Orders (30d)</th>
                 </tr>
@@ -894,6 +880,8 @@
                 <% slowMovers.forEach((row) => { %>
                   <tr data-filter="<%= `${row.sku}`.toLowerCase() %>">
                     <td data-label="SKU" class="sku-text"><%= row.sku %></td>
+                    <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= row.warehouse_label ?? row.warehouse_id ?? 'N/A' %></span></td>
+                    <td data-label="Inventory" class="text-end"><%= (Number(row.inventory) || 0).toLocaleString() %></td>
                     <td data-label="Orders (7d)" class="text-end"><%= row.orders_7d %></td>
                     <td data-label="Orders (30d)" class="text-end"><%= row.orders_30d %></td>
                   </tr>
@@ -924,6 +912,9 @@
   const refreshBtn = document.getElementById('refresh-view');
   const warehouseSelect = document.getElementById('warehouse-select');
   const statusFilterInputs = document.querySelectorAll('input[name="status-filter"]');
+
+  const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.forEach((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
 
   let inventoryRows = initialData.inventory || [];
   let orderRows = initialData.orders || [];
@@ -1044,14 +1035,27 @@
   function renderSlowMovers(rows) {
     const tbody = document.querySelector('#slow-table tbody');
     const searchTerm = slowSearch?.value || '';
-    tbody.innerHTML = rows.map((row) => `
-      <tr data-filter="${(row.sku).toLowerCase()}">
-        <td data-label="SKU" class="sku-text">${row.sku}</td>
-        <td data-label="Orders (7d)" class="text-end">${row.orders_7d}</td>
-        <td data-label="Orders (30d)" class="text-end">${row.orders_30d}</td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = rows.map((row) => {
+      const warehouseText = row.warehouse_label ?? row.warehouse_id ?? 'N/A';
+      return `
+        <tr data-filter="${`${row.sku} ${warehouseText}`.toLowerCase()}">
+          <td data-label="SKU" class="sku-text">${row.sku}</td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${warehouseText}</span></td>
+          <td data-label="Inventory" class="text-end">${formatNumber(row.inventory)}</td>
+          <td data-label="Orders (7d)" class="text-end">${row.orders_7d}</td>
+          <td data-label="Orders (30d)" class="text-end">${row.orders_30d}</td>
+        </tr>
+      `;
+    }).join('');
     applyFilter(document.getElementById('slow-table'), searchTerm);
+  }
+
+  function rankSlowMovers(rows = []) {
+    return [...rows].sort((a, b) => {
+      if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
+      if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
+      return (Number(b.inventory) || 0) - (Number(a.inventory) || 0);
+    });
   }
 
   async function refreshData(triggeredByButton = false) {
@@ -1065,7 +1069,7 @@
       const payload = await response.json();
       inventoryRows = payload.inventory || [];
       orderRows = payload.orders || [];
-      slowMoverRows = payload.slowMovers || [];
+      slowMoverRows = rankSlowMovers(payload.slowMovers || []);
       renderInventory(getFilteredInventoryRows());
       renderOrders(orderRows, payload.period.label);
       renderSlowMovers(slowMoverRows);
@@ -1110,7 +1114,7 @@
       if (!response.ok) throw new Error('Failed to download Excel');
 
       const blob = await response.blob();
-      const filename = parseFilenameFromHeader(response.headers.get('content-disposition')) || `stock-market-${period}.xlsx`;
+      const filename = parseFilenameFromHeader(response.headers.get('content-disposition')) || `out-of-stock-${period}.xlsx`;
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = filename;
@@ -1130,6 +1134,7 @@
     }
   });
 
+  slowMoverRows = rankSlowMovers(slowMoverRows);
   renderInventory(getFilteredInventoryRows());
   renderOrders(orderRows, document.getElementById('orders-period-label').textContent);
   renderSlowMovers(slowMoverRows);
