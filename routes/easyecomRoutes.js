@@ -11,6 +11,7 @@ const {
   getInventoryStatuses,
   getInventoryRunway,
   getMomentumWithGrowth,
+  getSlowMovers,
   saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
 
@@ -18,6 +19,11 @@ const WAREHOUSE_LABELS = {
   173983: 'Faridabad',
   176318: 'Delhi',
 };
+const ALLOWED_WAREHOUSES = [
+  { id: 176318, label: 'Delhi' },
+  { id: 173983, label: 'Faridabad' },
+];
+const ALLOWED_WAREHOUSE_IDS = ALLOWED_WAREHOUSES.map((w) => w.id);
 
 function getWarehouseLabel(warehouseId) {
   if (warehouseId === null || warehouseId === undefined) return 'N/A';
@@ -52,6 +58,67 @@ function allowStockMarketAccess(req, res, next) {
 
   req.flash('error', 'You do not have permission to view this page.');
   return res.redirect('/');
+}
+
+async function getAssignedWarehouseIds(userId) {
+  const [rows] = await pool.query(
+    'SELECT warehouse_id FROM ee_user_warehouses WHERE user_id = ? ORDER BY warehouse_id ASC',
+    [userId]
+  );
+  return rows.map((r) => Number(r.warehouse_id)).filter((id) => ALLOWED_WAREHOUSE_IDS.includes(id));
+}
+
+async function getAccessibleWarehouses(user) {
+  if (!user) return ALLOWED_WAREHOUSES;
+  if (user.roleName === 'outofstock') {
+    const assigned = await getAssignedWarehouseIds(user.id);
+    const wh = ALLOWED_WAREHOUSES.filter((w) => assigned.length === 0 || assigned.includes(w.id));
+    return wh.length ? wh : ALLOWED_WAREHOUSES;
+  }
+  return ALLOWED_WAREHOUSES;
+}
+
+function pickSelectedWarehouse(accessibleWarehouses, requestedWarehouseId, forceSelection = false) {
+  const allowedIds = accessibleWarehouses.map((w) => w.id);
+  const requested = requestedWarehouseId ? Number(requestedWarehouseId) : null;
+  if (requested && allowedIds.includes(requested)) return requested;
+  if (forceSelection && allowedIds.length) return allowedIds[0];
+  if (allowedIds.length === 1) return allowedIds[0];
+  return null;
+}
+
+async function getOutofstockUsers() {
+  const [rows] = await pool.query(
+    `SELECT u.id, u.username
+     FROM users u
+     INNER JOIN roles r ON u.role_id = r.id
+     WHERE r.name = 'outofstock' AND u.is_active = TRUE
+     ORDER BY u.username ASC`
+  );
+  return rows;
+}
+
+async function getWarehouseAssignmentsForUsers(userIds = []) {
+  if (!userIds.length) return new Map();
+  const [rows] = await pool.query(
+    `SELECT user_id, warehouse_id FROM ee_user_warehouses WHERE user_id IN (?)`,
+    [userIds]
+  );
+  const map = new Map();
+  rows.forEach((row) => {
+    const list = map.get(row.user_id) || [];
+    list.push(Number(row.warehouse_id));
+    map.set(row.user_id, list);
+  });
+  return map;
+}
+
+async function saveWarehouseAssignments(userId, warehouseIds = []) {
+  const allowed = warehouseIds.filter((id) => ALLOWED_WAREHOUSE_IDS.includes(Number(id)));
+  await pool.query('DELETE FROM ee_user_warehouses WHERE user_id = ?', [userId]);
+  if (!allowed.length) return;
+  const values = allowed.map((id) => [userId, Number(id)]);
+  await pool.query('INSERT INTO ee_user_warehouses (user_id, warehouse_id) VALUES ?', [values]);
 }
 
 router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
@@ -92,19 +159,38 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
 
 router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
+    const user = req.session?.user || null;
+    const accessibleWarehouses = await getAccessibleWarehouses(user);
+    const forceSingleWarehouse = user?.roleName === 'outofstock';
+    const selectedWarehouseId = pickSelectedWarehouse(
+      accessibleWarehouses,
+      req.query.warehouseId,
+      forceSingleWarehouse
+    );
+    const warehouseFilter = selectedWarehouseId
+      ? [selectedWarehouseId]
+      : forceSingleWarehouse
+        ? accessibleWarehouses.map((w) => w.id)
+        : undefined;
+
     const periodKey = normalizePeriod(req.query.period);
-    const [inventoryRaw, ordersRaw] = await Promise.all([
-      getInventoryRunway(pool),
-      getMomentumWithGrowth(pool, { periodKey }),
+    const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
+      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
+      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
+      getSlowMovers(pool, { warehouseIds: warehouseFilter }),
     ]);
 
     const inventory = decorateWithWarehouseLabel(inventoryRaw);
     const orders = decorateWithWarehouseLabel(ordersRaw);
+    const slowMovers = decorateWithWarehouseLabel(slowMoversRaw);
 
     res.render('stockMarket', {
-      user: req.session?.user || null,
+      user,
+      accessibleWarehouses,
+      selectedWarehouseId,
       inventory,
       orders,
+      slowMovers,
       periodKey,
       period: resolvePeriod(periodKey),
       periodPresets: PERIOD_PRESETS,
@@ -118,17 +204,34 @@ router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req,
 
 router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
+    const user = req.session?.user || null;
+    const accessibleWarehouses = await getAccessibleWarehouses(user);
+    const forceSingleWarehouse = user?.roleName === 'outofstock';
+    const selectedWarehouseId = pickSelectedWarehouse(
+      accessibleWarehouses,
+      req.query.warehouseId,
+      forceSingleWarehouse
+    );
+    const warehouseFilter = selectedWarehouseId
+      ? [selectedWarehouseId]
+      : forceSingleWarehouse
+        ? accessibleWarehouses.map((w) => w.id)
+        : undefined;
+
     const periodKey = normalizePeriod(req.query.period);
-    const [inventoryRaw, ordersRaw] = await Promise.all([
-      getInventoryRunway(pool),
-      getMomentumWithGrowth(pool, { periodKey }),
+    const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
+      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
+      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
+      getSlowMovers(pool, { warehouseIds: warehouseFilter }),
     ]);
     const inventory = decorateWithWarehouseLabel(inventoryRaw);
     const orders = decorateWithWarehouseLabel(ordersRaw);
+    const slowMovers = decorateWithWarehouseLabel(slowMoversRaw);
 
     res.json({
       inventory,
       orders,
+      slowMovers,
       period: resolvePeriod(periodKey),
     });
   } catch (err) {
@@ -139,10 +242,24 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
 
 router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
+    const user = req.session?.user || null;
+    const accessibleWarehouses = await getAccessibleWarehouses(user);
+    const forceSingleWarehouse = user?.roleName === 'outofstock';
+    const selectedWarehouseId = pickSelectedWarehouse(
+      accessibleWarehouses,
+      req.query.warehouseId,
+      forceSingleWarehouse
+    );
+    const warehouseFilter = selectedWarehouseId
+      ? [selectedWarehouseId]
+      : forceSingleWarehouse
+        ? accessibleWarehouses.map((w) => w.id)
+        : undefined;
+
     const periodKey = normalizePeriod(req.query.period);
     const [inventoryRaw, ordersRaw] = await Promise.all([
-      getInventoryRunway(pool),
-      getMomentumWithGrowth(pool, { periodKey }),
+      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
+      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
     ]);
     const inventory = decorateWithWarehouseLabel(inventoryRaw);
     const orders = decorateWithWarehouseLabel(ordersRaw);
@@ -243,5 +360,60 @@ router.post('/stock-market/making-time', isAuthenticated, isOnlyMohitOperator, a
     result: { errors, success },
   });
 });
+
+router.get(
+  '/warehouse-access',
+  isAuthenticated,
+  isOnlyMohitOperator,
+  async (req, res) => {
+    try {
+      const users = await getOutofstockUsers();
+      const assignmentsMap = await getWarehouseAssignmentsForUsers(users.map((u) => u.id));
+
+      res.render('warehouseAccess', {
+        user: req.session?.user || null,
+        users,
+        warehouses: ALLOWED_WAREHOUSES,
+        assignments: Object.fromEntries(assignmentsMap),
+      });
+    } catch (err) {
+      console.error('Failed to load warehouse access page:', err);
+      req.flash('error', 'Could not load warehouse access page');
+      res.redirect('/easyecom/stock-market');
+    }
+  }
+);
+
+router.post(
+  '/warehouse-access',
+  isAuthenticated,
+  isOnlyMohitOperator,
+  async (req, res) => {
+    const { userId } = req.body;
+    let { warehouses } = req.body;
+    try {
+      const [validUser] = await pool.query(
+        `SELECT u.id FROM users u INNER JOIN roles r ON u.role_id = r.id WHERE u.id = ? AND r.name = 'outofstock'`,
+        [userId]
+      );
+      if (!validUser.length) {
+        req.flash('error', 'Select a valid Out of Stock user');
+        return res.redirect('/easyecom/warehouse-access');
+      }
+
+      if (!Array.isArray(warehouses)) {
+        warehouses = warehouses ? [warehouses] : [];
+      }
+      await saveWarehouseAssignments(userId, warehouses.map((w) => Number(w)));
+
+      req.flash('success', 'Warehouse access updated');
+      return res.redirect('/easyecom/warehouse-access');
+    } catch (err) {
+      console.error('Failed to save warehouse access:', err);
+      req.flash('error', 'Could not save warehouse access');
+      return res.redirect('/easyecom/warehouse-access');
+    }
+  }
+);
 
 module.exports = router;

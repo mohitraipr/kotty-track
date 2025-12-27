@@ -600,6 +600,7 @@
 
 <body>
 <% const isMohitOperator = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
+<% const hasWarehouseChoice = (accessibleWarehouses || []).length > 1; %>
 
 <div class="topbar">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
@@ -672,6 +673,18 @@
             <% }); %>
           </select>
         </div>
+        <% if (hasWarehouseChoice) { %>
+          <div class="control-chip w-100">
+            <label for="warehouse-select">Warehouse</label>
+            <select class="form-select" id="warehouse-select" name="warehouseId">
+              <% accessibleWarehouses.forEach((wh) => { %>
+                <option value="<%= wh.id %>" <%= Number(selectedWarehouseId) === Number(wh.id) ? 'selected' : '' %>>
+                  <%= wh.label %>
+                </option>
+              <% }); %>
+            </select>
+          </div>
+        <% } %>
       </div>
     </div>
   </div>
@@ -705,16 +718,16 @@
       <div class="col-12 col-md-6">
         <a class="action-card" href="/easyecom/stock-market/making-time">
           <div>
-            <div class="fw-semibold">Bulk making time</div>
-            <div class="small text-faint">Upload rows to refresh replenishment rules quickly.</div>
-          </div>
-          <i class="bi bi-arrow-up-right fs-4"></i>
-        </a>
+          <div class="fw-semibold">Bulk making time</div>
+          <div class="small text-faint">Upload rows to refresh replenishment rules quickly.</div>
+        </div>
+        <i class="bi bi-arrow-up-right fs-4"></i>
+      </a>
       </div>
       <div class="col-12 col-md-6">
         <div class="action-card">
           <div class="fw-semibold mb-1">Operator tips</div>
-          <div class="small">Search by SKU/warehouse, then confirm demand in Orders before you raise POs.</div>
+          <div class="small">Search by SKU, then confirm demand in Orders before you raise POs.</div>
         </div>
       </div>
     </div>
@@ -733,6 +746,11 @@
             <i class="bi bi-cart-check me-2"></i>Orders
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="slow-tab" data-bs-toggle="pill" data-bs-target="#slow" type="button" role="tab">
+            <i class="bi bi-hourglass-split me-2"></i>Slow movers
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content" id="pills-tabContent">
@@ -743,11 +761,21 @@
               <span class="status-pill status-purple">Watch</span>
               <span class="status-pill status-green">Healthy</span>
             </div>
+            <div class="btn-group status-filters" role="group" aria-label="Filter by status">
+              <input type="radio" class="btn-check" name="status-filter" id="status-all" autocomplete="off" value="all" checked>
+              <label class="btn btn-outline-secondary" for="status-all">All</label>
+              <input type="radio" class="btn-check" name="status-filter" id="status-critical" autocomplete="off" value="red">
+              <label class="btn btn-outline-danger" for="status-critical">Critical</label>
+              <input type="radio" class="btn-check" name="status-filter" id="status-watch" autocomplete="off" value="purple">
+              <label class="btn btn-outline-warning" for="status-watch">Watch</label>
+              <input type="radio" class="btn-check" name="status-filter" id="status-healthy" autocomplete="off" value="green">
+              <label class="btn btn-outline-success" for="status-healthy">Healthy</label>
+            </div>
             <div class="input-group search-group">
               <span class="input-group-text">
                 <i class="bi bi-search"></i>
               </span>
-              <input type="search" id="inventory-search" class="form-control search-input" placeholder="Search SKU or warehouse...">
+              <input type="search" id="inventory-search" class="form-control search-input" placeholder="Search SKU...">
             </div>
           </div>
 
@@ -756,7 +784,6 @@
               <thead>
                 <tr>
                   <th>SKU</th>
-                  <th>Warehouse</th>
                   <th class="text-end">Inventory</th>
                   <th class="text-end">Making time (days)</th>
                   <th class="text-end">Yesterday orders</th>
@@ -767,11 +794,8 @@
               <tbody>
                 <% inventory.forEach(item => { %>
                   <% const infinite = !Number.isFinite(item.days_left); %>
-                  <tr data-filter="<%= `${item.sku} ${item.warehouse_label ?? item.warehouse_id ?? ''}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
+                  <tr data-filter="<%= `${item.sku}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
                     <td data-label="SKU" class="sku-text"><%= item.sku %></td>
-                    <td data-label="Warehouse">
-                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= item.warehouse_label ?? item.warehouse_id ?? 'N/A' %></span>
-                    </td>
                     <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
                     <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
                     <td data-label="Yesterday orders" class="text-end"><%= item.yesterday_orders %></td>
@@ -804,7 +828,7 @@
               <span class="input-group-text">
                 <i class="bi bi-search"></i>
               </span>
-              <input type="search" id="orders-search" class="form-control search-input" placeholder="Search SKU or warehouse...">
+              <input type="search" id="orders-search" class="form-control search-input" placeholder="Search SKU...">
             </div>
           </div>
 
@@ -823,7 +847,7 @@
                 <% orders.forEach(order => { %>
                   <% const growth = Number(order.growth || 0); %>
                   <% const arrow = growth > 0 ? 'bi-arrow-up-right text-success' : (growth < 0 ? 'bi-arrow-down-right text-danger' : 'bi-dash text-secondary'); %>
-                  <tr data-filter="<%= `${order.sku} ${order.warehouse_label ?? order.warehouse_id ?? ''}`.toLowerCase() %>">
+                  <tr data-filter="<%= `${order.sku}`.toLowerCase() %>">
                     <td data-label="SKU" class="sku-text"><%= order.sku %></td>
                     <td data-label="Warehouse">
                       <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_label ?? order.warehouse_id ?? 'N/A' %></span>
@@ -840,6 +864,44 @@
             </table>
           </div>
         </div>
+
+        <div class="tab-pane fade" id="slow" role="tabpanel">
+          <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3 mb-3">
+            <div>
+              <div class="metric-label">
+                SKUs with 0-10 orders in the last 7 and 30 days (with making time set)
+              </div>
+              <div class="text-faint">Use this list to spot items that are moving slowly.</div>
+            </div>
+            <div class="input-group search-group">
+              <span class="input-group-text">
+                <i class="bi bi-search"></i>
+              </span>
+              <input type="search" id="slow-search" class="form-control search-input" placeholder="Search SKU...">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 stack-table" id="slow-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th class="text-end">Orders (7d)</th>
+                  <th class="text-end">Orders (30d)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% slowMovers.forEach((row) => { %>
+                  <tr data-filter="<%= `${row.sku}`.toLowerCase() %>">
+                    <td data-label="SKU" class="sku-text"><%= row.sku %></td>
+                    <td data-label="Orders (7d)" class="text-end"><%= row.orders_7d %></td>
+                    <td data-label="Orders (30d)" class="text-end"><%= row.orders_30d %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -850,14 +912,23 @@
   const initialData = {
     inventory: <%- JSON.stringify(inventory) %>,
     orders: <%- JSON.stringify(orders) %>,
+    slowMovers: <%- JSON.stringify(slowMovers) %>,
     periodKey: '<%= periodKey %>',
   };
 
   const periodSelect = document.getElementById('period-select');
   const inventorySearch = document.getElementById('inventory-search');
   const ordersSearch = document.getElementById('orders-search');
+  const slowSearch = document.getElementById('slow-search');
   const downloadBtn = document.getElementById('download-excel');
   const refreshBtn = document.getElementById('refresh-view');
+  const warehouseSelect = document.getElementById('warehouse-select');
+  const statusFilterInputs = document.querySelectorAll('input[name="status-filter"]');
+
+  let inventoryRows = initialData.inventory || [];
+  let orderRows = initialData.orders || [];
+  let slowMoverRows = initialData.slowMovers || [];
+  let activeStatus = 'all';
 
   function toggleRefreshState(isLoading) {
     if (!refreshBtn) return;
@@ -921,17 +992,20 @@
     if (runwayEl) runwayEl.textContent = `${Number(midpoint || 0).toFixed(1)}d`;
   }
 
+  function getFilteredInventoryRows() {
+    if (activeStatus === 'all') return inventoryRows;
+    return inventoryRows.filter((row) => row.status === activeStatus);
+  }
+
   function renderInventory(rows) {
     const tbody = document.querySelector('#inventory-table tbody');
     const searchTerm = inventorySearch?.value || '';
     tbody.innerHTML = rows.map((item) => {
       const infinite = !Number.isFinite(item.days_left);
       const label = statusLabel(item.status);
-      const warehouse = item.warehouse_label ?? item.warehouse_id ?? 'N/A';
       return `
-        <tr data-filter="${(item.sku + ' ' + warehouse).toLowerCase()}" class="${label.row}">
+        <tr data-filter="${(item.sku).toLowerCase()}" class="${label.row}">
           <td data-label="SKU" class="sku-text">${item.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${warehouse}</span></td>
           <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
           <td data-label="Making time" class="text-end">${item.making_time_days}</td>
           <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
@@ -953,11 +1027,10 @@
         : growth < 0
           ? 'bi-arrow-down-right text-danger'
           : 'bi-dash text-secondary';
-      const warehouse = order.warehouse_label ?? order.warehouse_id ?? 'N/A';
       return `
-        <tr data-filter="${(order.sku + ' ' + warehouse).toLowerCase()}">
+        <tr data-filter="${(order.sku).toLowerCase()}">
           <td data-label="SKU" class="sku-text">${order.sku}</td>
-          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${warehouse}</span></td>
+          <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_label ?? order.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Orders" class="text-end">${order.orders}</td>
           <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
           <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
@@ -968,16 +1041,34 @@
     applyFilter(document.getElementById('orders-table'), searchTerm);
   }
 
+  function renderSlowMovers(rows) {
+    const tbody = document.querySelector('#slow-table tbody');
+    const searchTerm = slowSearch?.value || '';
+    tbody.innerHTML = rows.map((row) => `
+      <tr data-filter="${(row.sku).toLowerCase()}">
+        <td data-label="SKU" class="sku-text">${row.sku}</td>
+        <td data-label="Orders (7d)" class="text-end">${row.orders_7d}</td>
+        <td data-label="Orders (30d)" class="text-end">${row.orders_30d}</td>
+      </tr>
+    `).join('');
+    applyFilter(document.getElementById('slow-table'), searchTerm);
+  }
+
   async function refreshData(triggeredByButton = false) {
     toggleRefreshState(triggeredByButton);
     const period = periodSelect?.value || initialData.periodKey;
     const params = new URLSearchParams({ period });
+    if (warehouseSelect?.value) params.set('warehouseId', warehouseSelect.value);
     try {
       const response = await fetch(`${window.location.pathname}/data?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch latest data');
       const payload = await response.json();
-      renderInventory(payload.inventory || []);
-      renderOrders(payload.orders || [], payload.period.label);
+      inventoryRows = payload.inventory || [];
+      orderRows = payload.orders || [];
+      slowMoverRows = payload.slowMovers || [];
+      renderInventory(getFilteredInventoryRows());
+      renderOrders(orderRows, payload.period.label);
+      renderSlowMovers(slowMoverRows);
     } catch (err) {
       console.error('Refresh failed:', err);
     } finally {
@@ -987,8 +1078,21 @@
 
   attachSearch(inventorySearch, 'inventory-table');
   attachSearch(ordersSearch, 'orders-table');
+  attachSearch(slowSearch, 'slow-table');
   periodSelect?.addEventListener('change', () => refreshData());
   refreshBtn?.addEventListener('click', () => refreshData(true));
+  warehouseSelect?.addEventListener('change', () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('warehouseId', warehouseSelect.value);
+    if (periodSelect?.value) params.set('period', periodSelect.value);
+    window.location.href = `${window.location.pathname}?${params.toString()}`;
+  });
+  statusFilterInputs?.forEach((input) => {
+    input.addEventListener('change', (event) => {
+      activeStatus = event.target.value || 'all';
+      renderInventory(getFilteredInventoryRows());
+    });
+  });
   downloadBtn?.addEventListener('click', async () => {
     const spinner = downloadBtn.querySelector('.spinner-border');
     const icon = downloadBtn.querySelector('.bi-file-earmark-excel');
@@ -999,6 +1103,7 @@
     try {
       const period = periodSelect?.value || initialData.periodKey;
       const params = new URLSearchParams({ period });
+      if (warehouseSelect?.value) params.set('warehouseId', warehouseSelect.value);
       const response = await fetch(`${window.location.pathname}/download?${params.toString()}`, {
         headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
       });
@@ -1025,8 +1130,9 @@
     }
   });
 
-  renderInventory(initialData.inventory || []);
-  renderOrders(initialData.orders || [], document.getElementById('orders-period-label').textContent);
+  renderInventory(getFilteredInventoryRows());
+  renderOrders(orderRows, document.getElementById('orders-period-label').textContent);
+  renderSlowMovers(slowMoverRows);
 
   setInterval(refreshData, 15000);
 </script>

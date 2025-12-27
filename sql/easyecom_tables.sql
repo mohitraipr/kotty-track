@@ -100,3 +100,14 @@ CREATE TABLE IF NOT EXISTS ee_inventory_health (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (sku, warehouse_id)
 );
+
+-- Link EasyEcom users to the warehouses they are allowed to view/operate
+CREATE TABLE IF NOT EXISTS ee_user_warehouses (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    warehouse_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_warehouse (user_id, warehouse_id),
+    INDEX idx_user_warehouse_user (user_id),
+    CONSTRAINT fk_ee_user_warehouses_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
