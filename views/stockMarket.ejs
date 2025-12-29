@@ -661,6 +661,7 @@
 <body>
 <% const isMohitOperator = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
 <% const hasWarehouseChoice = (accessibleWarehouses || []).length > 1; %>
+<% const isAllWarehousesSelected = String(selectedWarehouseId) === 'all'; %>
 
 <div class="topbar">
   <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
@@ -744,6 +745,7 @@
           <div class="control-chip w-100">
             <label for="warehouse-select">Warehouse</label>
             <select class="form-select" id="warehouse-select" name="warehouseId" data-bs-toggle="tooltip" data-bs-title="Switch warehouses to see out-of-stock gaps per site">
+              <option value="all" <%= isAllWarehousesSelected ? 'selected' : '' %>>All warehouses</option>
               <% accessibleWarehouses.forEach((wh) => { %>
                 <option value="<%= wh.id %>" <%= Number(selectedWarehouseId) === Number(wh.id) ? 'selected' : '' %>>
                   <%= wh.label %>
