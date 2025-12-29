@@ -78,13 +78,35 @@ async function getAccessibleWarehouses(user) {
   return ALLOWED_WAREHOUSES;
 }
 
-function pickSelectedWarehouse(accessibleWarehouses, requestedWarehouseId, forceSelection = false) {
+async function buildWarehouseContext(user, requestedWarehouseId) {
+  const accessibleWarehouses = await getAccessibleWarehouses(user);
   const allowedIds = accessibleWarehouses.map((w) => w.id);
-  const requested = requestedWarehouseId ? Number(requestedWarehouseId) : null;
-  if (requested && allowedIds.includes(requested)) return requested;
-  if (forceSelection && allowedIds.length) return allowedIds[0];
-  if (allowedIds.length === 1) return allowedIds[0];
-  return null;
+  const hasMultipleWarehouses = allowedIds.length > 1;
+  const enforceSingleWarehouse = user?.roleName === 'outofstock' && !hasMultipleWarehouses;
+
+  const wantsAllWarehouses = hasMultipleWarehouses && requestedWarehouseId === 'all';
+  const requestedId = requestedWarehouseId ? Number(requestedWarehouseId) : null;
+  const hasValidRequestedWarehouse = Number.isFinite(requestedId) && allowedIds.includes(requestedId);
+
+  let selectedWarehouseId = null;
+  if (wantsAllWarehouses) {
+    selectedWarehouseId = 'all';
+  } else if (hasValidRequestedWarehouse) {
+    selectedWarehouseId = requestedId;
+  } else if (hasMultipleWarehouses && !enforceSingleWarehouse) {
+    selectedWarehouseId = 'all';
+  } else if (allowedIds.length) {
+    selectedWarehouseId = allowedIds[0];
+  }
+
+  const warehouseFilter =
+    selectedWarehouseId === 'all'
+      ? allowedIds
+      : Number.isFinite(selectedWarehouseId)
+        ? [selectedWarehouseId]
+        : undefined;
+
+  return { accessibleWarehouses, selectedWarehouseId, warehouseFilter };
 }
 
 async function getOutofstockUsers() {
@@ -160,18 +182,10 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
 router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const user = req.session?.user || null;
-    const accessibleWarehouses = await getAccessibleWarehouses(user);
-    const forceSingleWarehouse = user?.roleName === 'outofstock';
-    const selectedWarehouseId = pickSelectedWarehouse(
-      accessibleWarehouses,
-      req.query.warehouseId,
-      forceSingleWarehouse
+    const { accessibleWarehouses, selectedWarehouseId, warehouseFilter } = await buildWarehouseContext(
+      user,
+      req.query.warehouseId
     );
-    const warehouseFilter = selectedWarehouseId
-      ? [selectedWarehouseId]
-      : forceSingleWarehouse
-        ? accessibleWarehouses.map((w) => w.id)
-        : undefined;
 
     const periodKey = normalizePeriod(req.query.period);
     const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
@@ -205,18 +219,7 @@ router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req,
 router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const user = req.session?.user || null;
-    const accessibleWarehouses = await getAccessibleWarehouses(user);
-    const forceSingleWarehouse = user?.roleName === 'outofstock';
-    const selectedWarehouseId = pickSelectedWarehouse(
-      accessibleWarehouses,
-      req.query.warehouseId,
-      forceSingleWarehouse
-    );
-    const warehouseFilter = selectedWarehouseId
-      ? [selectedWarehouseId]
-      : forceSingleWarehouse
-        ? accessibleWarehouses.map((w) => w.id)
-        : undefined;
+    const { warehouseFilter } = await buildWarehouseContext(user, req.query.warehouseId);
 
     const periodKey = normalizePeriod(req.query.period);
     const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
@@ -243,18 +246,7 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
 router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const user = req.session?.user || null;
-    const accessibleWarehouses = await getAccessibleWarehouses(user);
-    const forceSingleWarehouse = user?.roleName === 'outofstock';
-    const selectedWarehouseId = pickSelectedWarehouse(
-      accessibleWarehouses,
-      req.query.warehouseId,
-      forceSingleWarehouse
-    );
-    const warehouseFilter = selectedWarehouseId
-      ? [selectedWarehouseId]
-      : forceSingleWarehouse
-        ? accessibleWarehouses.map((w) => w.id)
-        : undefined;
+    const { warehouseFilter } = await buildWarehouseContext(user, req.query.warehouseId);
 
     const periodKey = normalizePeriod(req.query.period);
     const [inventoryRaw, ordersRaw] = await Promise.all([
