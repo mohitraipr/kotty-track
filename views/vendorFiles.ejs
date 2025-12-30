@@ -359,6 +359,7 @@
     const assignmentItem = document.getElementById('assignmentItem');
     const assignmentFolder = document.getElementById('assignmentFolder');
     const assignmentAlert = document.getElementById('assignmentAlert');
+    const DIRECT_MAX_BYTES = 5 * 1024 * 1024 * 1024; // mirror server limit for direct PUT uploads
 
     const formatBytes = (bytes) => {
       if (!bytes && bytes !== 0) return '0 B';
@@ -380,6 +381,45 @@
       progressBar.textContent = `${percent}%`;
       progressPercent.textContent = `${percent}%`;
       progressMeta.textContent = `Uploaded ${formatBytes(uploaded)} of ${formatBytes(total)} (${currentFileIndex}/${totalFiles} files)`;
+    };
+
+    const uploadViaProxy = async (files, folder, isFolderUpload) => {
+      const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
+      toggleProgress(true);
+      updateProgress(0, totalSize || 1, 0, files.length || 1);
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/vendor-files/proxy-upload');
+        xhr.upload.onprogress = (evt) => {
+          updateProgress(evt.loaded || 0, evt.total || totalSize || 1, files.length, files.length || 1);
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            updateProgress(totalSize || 1, totalSize || 1, files.length, files.length || 1);
+            resolve();
+          } else {
+            let message = '';
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              message = parsed.error;
+            } catch (e) {
+              message = '';
+            }
+            reject(new Error(message || 'Server-side upload failed.'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error while proxying upload.'));
+        const formData = new FormData();
+        formData.append('date', selectedDate);
+        formData.append('folder', folder);
+        formData.append('folderUpload', isFolderUpload ? 'true' : 'false');
+        files.forEach(file => {
+          const nameForServer = file.webkitRelativePath || file.name;
+          formData.append('vendorFile', file, nameForServer);
+        });
+        xhr.send(formData);
+      });
     };
 
     const requestUploadPlan = async (files, folder, isFolderUpload) => {
@@ -513,14 +553,32 @@
           return;
         }
         const isFolderUpload = files.some(f => (f.webkitRelativePath || '').includes('/'));
+        const proxyOnly = files.some(f => (f.size || 0) > DIRECT_MAX_BYTES);
         try {
-          const plan = await requestUploadPlan(files, folder, isFolderUpload);
-          await uploadWithProgress(plan, files, folder, isFolderUpload);
+          if (proxyOnly) {
+            progressMeta.textContent = 'File is larger than 5GB; using server proxy upload to avoid CORS.';
+            await uploadViaProxy(files, folder, isFolderUpload);
+          } else {
+            const plan = await requestUploadPlan(files, folder, isFolderUpload);
+            if (plan.requiresProxy) {
+              progressMeta.textContent = 'Direct PUT not available for this batch; switching to server proxy.';
+              await uploadViaProxy(files, folder, isFolderUpload);
+            } else {
+              await uploadWithProgress(plan, files, folder, isFolderUpload);
+            }
+          }
           await refreshFileTable(folder);
         } catch (err) {
           console.error(err);
-          progressMeta.textContent = err.message;
+          progressMeta.textContent = `${err.message}. Retrying through server proxy…`;
           toggleProgress(true);
+          try {
+            await uploadViaProxy(files, folder, isFolderUpload);
+            await refreshFileTable(folder);
+          } catch (proxyErr) {
+            console.error(proxyErr);
+            progressMeta.textContent = proxyErr.message;
+          }
         }
       });
     }

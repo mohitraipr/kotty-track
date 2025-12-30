@@ -40,6 +40,8 @@ const EXCEL_EXTS = new Set(['.xls', '.xlsx', '.csv']);
 
 const FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB to reduce "file too big" issues
 const MAX_DIRECT_UPLOAD_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per S3 PUT
+const PROXY_FILE_SIZE_LIMIT = 1024 * 1024 * 1024 * 1024; // 1 TB upper bound when proxying through the server
+const MAX_PROXY_FILES = 2000; // allow large folder uploads while keeping per-request limits predictable
 
 let assignmentsTableReady;
 async function ensureAssignmentsTable() {
@@ -134,6 +136,26 @@ function extractDateFromKey(key) {
   if (!ensureKeyAllowed(key)) return '';
   const withoutRoot = key.slice(ROOT_PREFIX.length);
   return withoutRoot.split('/')[0];
+}
+
+function buildS3Key({ selectedDate, folder, originalName, uploaderName, includeUploaderSubfolder }) {
+  const ext = path.extname(originalName).toLowerCase();
+  const base = path.basename(originalName, ext).replace(/[^a-zA-Z0-9-_]/g, '-') || 'file';
+  const relative = sanitizePathSegments(originalName);
+  const parts = relative ? relative.split('/').filter(Boolean) : [];
+  const fileName = parts.pop() || `${base}${ext}`;
+  const subFolders = parts;
+
+  if (includeUploaderSubfolder && uploaderName) {
+    subFolders.unshift(sanitizeFolder(uploaderName));
+  }
+
+  const unique = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const safeName = `${unique}-${sanitizeFolder(path.basename(fileName, ext)) || 'file'}${ext}`;
+  const folderPath = subFolders.filter(Boolean).join('/');
+  const prefix = `${datePrefix(selectedDate)}${folder}/`;
+
+  return `${prefix}${folderPath ? `${folderPath}/` : ''}${safeName}`;
 }
 
 async function listDateFolders(date) {
@@ -306,6 +328,52 @@ const upload = multer({
   limits: { fileSize: FILE_SIZE_LIMIT }
 });
 
+const proxyUpload = multer({
+  storage: multerS3({
+    s3,
+    bucket: VENDOR_BUCKET,
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+    metadata: (req, file, cb) => {
+      cb(null, {
+        uploader: req.session?.user?.username || 'uploader',
+        folder: sanitizeFolder(req.body.folder || req.body.selectedFolder || '')
+      });
+    },
+    key: (req, file, cb) => {
+      try {
+        const selectedDate = normalizeDate(req.body.date);
+        const folder = sanitizeFolder(req.body.folder || req.body.selectedFolder);
+        if (!folder) {
+          return cb(new Error('Please create and select a folder first.'));
+        }
+        if (!isAllowedExtension(file.originalname)) {
+          return cb(new Error('Only ZIP files, Excel sheets, and images are allowed.'));
+        }
+        const key = buildS3Key({
+          selectedDate,
+          folder,
+          originalName: file.originalname,
+          uploaderName: req.session?.user?.username || 'uploader',
+          includeUploaderSubfolder: req.body.folderUpload === 'true'
+        });
+        req.uploadContext = { selectedDate, folder };
+        cb(null, key);
+      } catch (err) {
+        cb(err);
+      }
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (IMAGE_EXTS.has(ext) || ZIP_EXTS.has(ext) || EXCEL_EXTS.has(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only ZIP files, Excel sheets, and images are allowed.'));
+    }
+  },
+  limits: { fileSize: PROXY_FILE_SIZE_LIMIT, files: MAX_PROXY_FILES }
+});
+
 router.get('/', isAuthenticated, isVendorFiles, async (req, res) => {
   const selectedDate = normalizeDate(req.query.date);
   const requestedFolder = sanitizeFolder(req.query.folder);
@@ -401,6 +469,42 @@ router.post('/upload', isAuthenticated, isVendorFiles, (req, res) => {
   });
 });
 
+router.post('/proxy-upload', isAuthenticated, isVendorFiles, (req, res) => {
+  proxyUpload.array('vendorFile', MAX_PROXY_FILES)(req, res, err => {
+    const selectedDate = normalizeDate(req.body.date);
+    const folder = sanitizeFolder(req.body.folder || req.body.selectedFolder);
+
+    if (!folder) {
+      return res.status(400).json({ error: 'Folder is required before uploading.' });
+    }
+
+    if (err) {
+      console.error('Proxy upload error:', err);
+      const message = err.message || 'Upload failed.';
+      const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return res.status(status).json({ error: message });
+    }
+
+    const uploaded = (req.files || []).map(file => ({
+      key: file.key,
+      name: file.originalname,
+      size: file.size
+    }));
+
+    if (!uploaded.length) {
+      return res.status(400).json({ error: 'No files received for upload.' });
+    }
+
+    return res.json({
+      success: true,
+      uploadedCount: uploaded.length,
+      folder,
+      date: selectedDate,
+      files: uploaded
+    });
+  });
+});
+
 router.post('/upload-requests', isAuthenticated, isVendorFiles, async (req, res) => {
   const selectedDate = normalizeDate(req.body.date);
   const folder = sanitizeFolder(req.body.folder || req.body.selectedFolder);
@@ -416,6 +520,7 @@ router.post('/upload-requests', isAuthenticated, isVendorFiles, async (req, res)
   }
 
   try {
+    let requiresProxy = false;
     const uploads = [];
     for (const entry of entries) {
       const { name, size, type, relativePath } = entry || {};
@@ -423,7 +528,8 @@ router.post('/upload-requests', isAuthenticated, isVendorFiles, async (req, res)
         return res.status(400).json({ error: `File ${name || ''} is not allowed.` });
       }
       if (size && size > MAX_DIRECT_UPLOAD_SIZE) {
-        return res.status(400).json({ error: `${name} exceeds the 5GB direct upload limit.` });
+        requiresProxy = true;
+        break;
       }
 
       const ext = path.extname(name).toLowerCase();
@@ -464,11 +570,16 @@ router.post('/upload-requests', isAuthenticated, isVendorFiles, async (req, res)
       });
     }
 
-    return res.json({
-      uploads,
-      folder,
-      date: selectedDate
-    });
+    if (requiresProxy) {
+      return res.json({
+        requiresProxy: true,
+        maxDirectUploadSize: MAX_DIRECT_UPLOAD_SIZE,
+        folder,
+        date: selectedDate
+      });
+    }
+
+    return res.json({ uploads, folder, date: selectedDate });
   } catch (err) {
     console.error('Error preparing signed uploads:', err);
     return res.status(500).json({ error: 'Could not prepare uploads.' });
