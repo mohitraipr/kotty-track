@@ -1,8 +1,10 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const ExcelJS = require('exceljs');
+const archiver = require('archiver');
 const {
   S3Client,
   ListObjectsV2Command,
@@ -10,6 +12,7 @@ const {
   GetObjectCommand
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { pool } = require('../config/db');
 const { isAuthenticated, isVendorFiles } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -35,7 +38,33 @@ const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const ZIP_EXTS = new Set(['.zip']);
 const EXCEL_EXTS = new Set(['.xls', '.xlsx', '.csv']);
 
-const FILE_SIZE_LIMIT = 50 * 1024 * 1024; // 50 MB
+const FILE_SIZE_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB to reduce "file too big" issues
+const MAX_DIRECT_UPLOAD_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB per S3 PUT
+
+let assignmentsTableReady;
+async function ensureAssignmentsTable() {
+  if (assignmentsTableReady) return assignmentsTableReady;
+  assignmentsTableReady = pool.query(`
+    CREATE TABLE IF NOT EXISTS vendor_file_assignments (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      s3_key VARCHAR(512) NOT NULL,
+      item_type ENUM('file','folder') NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
+      date_key DATE NOT NULL,
+      folder_name VARCHAR(255) NOT NULL,
+      assigned_user_id BIGINT NOT NULL,
+      assigned_role VARCHAR(100) NOT NULL,
+      assigned_by BIGINT NOT NULL,
+      assigned_by_name VARCHAR(191) NOT NULL,
+      uploader_name VARCHAR(191) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_user_key (assigned_user_id, s3_key),
+      INDEX idx_assigned_user_date (assigned_user_id, date_key),
+      INDEX idx_folder_date (folder_name, date_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+  return assignmentsTableReady;
+}
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -58,6 +87,15 @@ function sanitizeFolder(folder) {
     .replace(/[^a-zA-Z0-9-_]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function sanitizePathSegments(relativePath) {
+  if (!relativePath || typeof relativePath !== 'string') return '';
+  const cleaned = relativePath.replace(/^\.+/g, '');
+  const segments = cleaned.split(/[\\/]/).filter(Boolean);
+  return segments
+    .map(seg => sanitizeFolder(seg) || 'folder')
+    .join('/');
 }
 
 function detectType(key) {
@@ -136,7 +174,6 @@ async function listFiles(date, folder) {
       new ListObjectsV2Command({
         Bucket: VENDOR_BUCKET,
         Prefix: prefix,
-        Delimiter: '/',
         ContinuationToken: continuationToken
       })
     );
@@ -200,11 +237,46 @@ function groupImagesBySku(keys) {
   return { grouped, maxIndex };
 }
 
+async function getAssignableUsers() {
+  const [rows] = await pool.query(
+    `SELECT u.id, u.username, r.name AS roleName
+     FROM users u
+     JOIN roles r ON u.role_id = r.id
+     ORDER BY u.username`
+  );
+  return rows;
+}
+
+async function getAssignmentsForUser(userId) {
+  await ensureAssignmentsTable();
+  const [rows] = await pool.query(
+    `SELECT id, s3_key AS s3Key, item_type AS itemType, item_name AS itemName, date_key AS dateKey, folder_name AS folderName,
+            assigned_role AS assignedRole, assigned_by_name AS assignedByName, uploader_name AS uploaderName, created_at AS createdAt
+     FROM vendor_file_assignments
+     WHERE assigned_user_id = ?
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+  return rows;
+}
+
+function isAllowedExtension(name) {
+  const ext = path.extname(name).toLowerCase();
+  return IMAGE_EXTS.has(ext) || ZIP_EXTS.has(ext) || EXCEL_EXTS.has(ext);
+}
+
 const upload = multer({
   storage: multerS3({
     s3,
     bucket: VENDOR_BUCKET,
     contentType: multerS3.AUTO_CONTENT_TYPE,
+    metadata: (req, file, cb) => {
+      cb(null, {
+        uploader: req.session?.user?.username || 'uploader',
+        folder: sanitizeFolder(req.body.folder || req.body.selectedFolder || '')
+      });
+    },
     key: (req, file, cb) => {
       try {
         const selectedDate = normalizeDate(req.body.date);
@@ -240,6 +312,14 @@ router.get('/', isAuthenticated, isVendorFiles, async (req, res) => {
   const user = { ...req.session.user, role: req.session.user.roleName };
 
   try {
+    await ensureAssignmentsTable();
+    const assignableUsers = await getAssignableUsers();
+    const roles = [...new Set(assignableUsers.map(u => u.roleName))].sort();
+    const assignmentsRaw = await getAssignmentsForUser(user.id);
+    const myAssignments = assignmentsRaw.map(item => ({
+      ...item,
+      dateKey: typeof item.dateKey === 'string' ? item.dateKey : item.dateKey?.toISOString?.().slice(0, 10) || ''
+    }));
     const folders = await listDateFolders(selectedDate);
     const selectedFolder = requestedFolder && folders.includes(requestedFolder)
       ? requestedFolder
@@ -261,7 +341,10 @@ router.get('/', isAuthenticated, isVendorFiles, async (req, res) => {
       selectedFolder,
       files,
       imageFiles,
-      stats
+      stats,
+      assignableUsers,
+      roles,
+      myAssignments
     });
   } catch (err) {
     console.error('Error loading vendor files:', err);
@@ -285,7 +368,11 @@ router.post('/folders', isAuthenticated, isVendorFiles, async (req, res) => {
       new PutObjectCommand({
         Bucket: VENDOR_BUCKET,
         Key: key,
-        Body: ''
+        Body: '',
+        Metadata: {
+          uploader: req.session?.user?.username || 'unknown',
+          createdby: req.session?.user?.username || 'unknown'
+        }
       })
     );
     req.flash('success', `Folder "${folder}" created for ${selectedDate}.`);
@@ -312,6 +399,80 @@ router.post('/upload', isAuthenticated, isVendorFiles, (req, res) => {
     req.flash('success', 'File uploaded successfully.');
     return res.redirect(redirectUrl);
   });
+});
+
+router.post('/upload-requests', isAuthenticated, isVendorFiles, async (req, res) => {
+  const selectedDate = normalizeDate(req.body.date);
+  const folder = sanitizeFolder(req.body.folder || req.body.selectedFolder);
+  const entries = Array.isArray(req.body.entries) ? req.body.entries : [];
+  const isFolderUpload = Boolean(req.body.folderUpload);
+  const uploaderName = req.session?.user?.username || 'uploader';
+
+  if (!folder) {
+    return res.status(400).json({ error: 'Folder is required before uploading.' });
+  }
+  if (!entries.length) {
+    return res.status(400).json({ error: 'No files received for upload.' });
+  }
+
+  try {
+    const uploads = [];
+    for (const entry of entries) {
+      const { name, size, type, relativePath } = entry || {};
+      if (!name || !isAllowedExtension(name)) {
+        return res.status(400).json({ error: `File ${name || ''} is not allowed.` });
+      }
+      if (size && size > MAX_DIRECT_UPLOAD_SIZE) {
+        return res.status(400).json({ error: `${name} exceeds the 5GB direct upload limit.` });
+      }
+
+      const ext = path.extname(name).toLowerCase();
+      const base = path.basename(name, ext).replace(/[^a-zA-Z0-9-_]/g, '-') || 'file';
+      const relative = sanitizePathSegments(relativePath && relativePath !== name ? relativePath : '');
+      const subFolders = [];
+
+      if (isFolderUpload) {
+        subFolders.push(sanitizeFolder(uploaderName));
+      }
+
+      if (relative) {
+        const parts = relative.split('/');
+        if (parts.length > 1) {
+          subFolders.push(...parts.slice(0, -1));
+        }
+      }
+
+      const unique = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const key = `${datePrefix(selectedDate)}${folder}/${subFolders.length ? `${subFolders.join('/')}/` : ''}${unique}-${base}${ext}`;
+      const command = new PutObjectCommand({
+        Bucket: VENDOR_BUCKET,
+        Key: key,
+        ContentType: type || 'application/octet-stream',
+        Metadata: {
+          uploader: uploaderName,
+          folder,
+          date: selectedDate
+        }
+      });
+      const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 * 15 });
+      uploads.push({
+        key,
+        uploadUrl,
+        contentType: command.input.ContentType,
+        size: size || 0,
+        name
+      });
+    }
+
+    return res.json({
+      uploads,
+      folder,
+      date: selectedDate
+    });
+  } catch (err) {
+    console.error('Error preparing signed uploads:', err);
+    return res.status(500).json({ error: 'Could not prepare uploads.' });
+  }
 });
 
 router.get('/download', isAuthenticated, isVendorFiles, async (req, res) => {
@@ -347,6 +508,67 @@ router.get('/download', isAuthenticated, isVendorFiles, async (req, res) => {
     console.error('Download failed:', err);
     req.flash('error', 'Could not download the requested file.');
     res.redirect(`/vendor-files?date=${selectedDate}`);
+  }
+});
+
+router.get('/download-folder', isAuthenticated, isVendorFiles, async (req, res) => {
+  const selectedDate = normalizeDate(req.query.date);
+  const folder = sanitizeFolder(req.query.folder);
+  const prefix = `${datePrefix(selectedDate)}${folder ? `${folder}/` : ''}`;
+
+  if (!folder) {
+    req.flash('error', 'Folder is required to download a bundle.');
+    return res.redirect(`/vendor-files?date=${selectedDate}`);
+  }
+
+  try {
+    res.setHeader('Content-Disposition', `attachment; filename="${folder}-${selectedDate}.zip"`);
+    res.setHeader('Content-Type', 'application/zip');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', err => {
+      console.error('Archive error:', err);
+      res.status(500).end('Could not create archive');
+    });
+    archive.pipe(res);
+
+    let continuationToken;
+    do {
+      const resp = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: VENDOR_BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken
+        })
+      );
+
+      for (const obj of resp.Contents || []) {
+        if (obj.Key === prefix) continue;
+        const streamResp = await s3.send(new GetObjectCommand({ Bucket: VENDOR_BUCKET, Key: obj.Key }));
+        const relativeName = obj.Key.startsWith(prefix) ? obj.Key.slice(prefix.length) : obj.Key;
+        archive.append(streamResp.Body, { name: relativeName || path.basename(obj.Key) });
+      }
+
+      continuationToken = resp.NextContinuationToken;
+    } while (continuationToken);
+
+    archive.finalize();
+  } catch (err) {
+    console.error('Folder download failed:', err);
+    req.flash('error', 'Could not download that folder.');
+    res.redirect(`/vendor-files?date=${selectedDate}`);
+  }
+});
+
+router.get('/list', isAuthenticated, isVendorFiles, async (req, res) => {
+  const selectedDate = normalizeDate(req.query.date);
+  const folder = sanitizeFolder(req.query.folder);
+
+  try {
+    const files = folder ? await listFiles(selectedDate, folder) : [];
+    res.json({ files });
+  } catch (err) {
+    console.error('Error listing files for JSON:', err);
+    res.status(500).json({ error: 'Could not fetch files.' });
   }
 });
 
@@ -414,6 +636,77 @@ router.post('/export-excel', isAuthenticated, isVendorFiles, async (req, res) =>
     console.error('Error creating Excel export:', err);
     req.flash('error', 'Could not generate Excel export.');
     res.redirect(redirectUrl);
+  }
+});
+
+router.post('/assign', isAuthenticated, isVendorFiles, async (req, res) => {
+  await ensureAssignmentsTable();
+  const selectedDate = normalizeDate(req.body.date);
+  const folder = sanitizeFolder(req.body.folder);
+  const itemType = req.body.itemType === 'folder' ? 'folder' : 'file';
+  const assignedUserId = Number(req.body.assignedUserId);
+  const providedKey = req.body.s3Key;
+  const itemName = req.body.itemName || folder;
+
+  if (!assignedUserId || !folder) {
+    return res.status(400).json({ error: 'Folder, item, and target user are required.' });
+  }
+
+  try {
+    const [[targetUser]] = await pool.query(
+      `SELECT u.id, u.username, r.name AS roleName
+       FROM users u
+       JOIN roles r ON u.role_id = r.id
+       WHERE u.id = ?
+       LIMIT 1`,
+      [assignedUserId]
+    );
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found.' });
+    }
+
+    const key = itemType === 'folder'
+      ? `${datePrefix(selectedDate)}${folder}/`
+      : decodeURIComponent(providedKey || '');
+
+    if (!ensureKeyAllowed(key)) {
+      return res.status(400).json({ error: 'Invalid item path.' });
+    }
+
+    await pool.query(
+      `INSERT INTO vendor_file_assignments
+       (s3_key, item_type, item_name, date_key, folder_name, assigned_user_id, assigned_role, assigned_by, assigned_by_name, uploader_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE assigned_role = VALUES(assigned_role), assigned_by = VALUES(assigned_by), assigned_by_name = VALUES(assigned_by_name), uploader_name = VALUES(uploader_name)`,
+      [
+        key,
+        itemType,
+        itemName,
+        selectedDate,
+        folder,
+        targetUser.id,
+        targetUser.roleName,
+        req.session.user.id,
+        req.session.user.username || 'user',
+        req.session.user.username || 'user'
+      ]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving assignment:', err);
+    return res.status(500).json({ error: 'Could not save assignment.' });
+  }
+});
+
+router.get('/assignments', isAuthenticated, isVendorFiles, async (req, res) => {
+  try {
+    const rows = await getAssignmentsForUser(req.session.user.id);
+    res.json({ assignments: rows });
+  } catch (err) {
+    console.error('Error fetching assignments:', err);
+    res.status(500).json({ error: 'Could not fetch assignments.' });
   }
 });
 

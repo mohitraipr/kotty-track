@@ -11,6 +11,8 @@
     .image-card { border: 1px solid var(--border-light); border-radius: 12px; padding: 0.85rem; background: var(--bg-secondary); }
     .image-card h6 { font-size: 0.95rem; margin: 0; word-break: break-word; }
     .section-title { font-weight: 700; font-size: 1.1rem; }
+    .progress-wrapper { border: 1px dashed var(--border-light); padding: 0.75rem; border-radius: 12px; background: var(--bg-secondary); }
+    .progress-meta { font-size: 0.85rem; color: var(--text-secondary); }
   `
 }) %>
 
@@ -92,12 +94,12 @@
                 <p class="text-muted small mb-0">Allowed: ZIP archives, Excel/CSV sheets, and images. Uploads stay inside the selected date & folder.</p>
               </div>
               <div class="d-flex gap-2">
-                <span class="file-pill image">Images: <%= stats.images %></span>
-                <span class="file-pill zip">ZIP: <%= stats.zips %></span>
-                <span class="file-pill excel">Excel: <%= stats.excel %></span>
+                <span class="file-pill image">Images: <span id="statImages"><%= stats.images %></span></span>
+                <span class="file-pill zip">ZIP: <span id="statZips"><%= stats.zips %></span></span>
+                <span class="file-pill excel">Excel: <span id="statExcel"><%= stats.excel %></span></span>
               </div>
             </div>
-            <form method="post" action="/vendor-files/upload" enctype="multipart/form-data" class="row g-3">
+            <form method="post" action="/vendor-files/upload" enctype="multipart/form-data" class="row g-3" id="vendorUploadForm">
               <input type="hidden" name="date" value="<%= selectedDate %>">
               <div class="col-md-6">
                 <label class="form-label" for="uploadFolder">Folder</label>
@@ -112,13 +114,25 @@
                 </select>
               </div>
               <div class="col-md-6">
-                <label class="form-label" for="vendorFile">Choose file</label>
-                <input class="form-control" type="file" id="vendorFile" name="vendorFile" accept=".zip,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.webp" required <%= folders.length === 0 ? 'disabled' : '' %>>
+                <label class="form-label" for="vendorFile">Choose files or a folder</label>
+                <input class="form-control" type="file" id="vendorFile" name="vendorFile" accept=".zip,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.webp" required <%= folders.length === 0 ? 'disabled' : '' %> multiple webkitdirectory>
+                <div class="form-text">Select multiple files or an entire folder. Uploads stream directly to S3 with live progress.</div>
               </div>
               <div class="col-12 d-flex justify-content-end">
                 <button class="btn btn-primary" type="submit" <%= folders.length === 0 ? 'disabled' : '' %>>
                   <i class="bi bi-cloud-arrow-up me-2"></i>Upload to S3
                 </button>
+              </div>
+              <div class="col-12">
+                <div id="uploadProgressContainer" class="progress-wrapper d-none">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="progress flex-grow-1" style="height: 12px;">
+                      <div id="uploadProgressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    <span class="progress-meta" id="uploadPercent">0%</span>
+                  </div>
+                  <div class="progress-meta mt-2" id="uploadMeta">Waiting to start…</div>
+                </div>
               </div>
             </form>
           </div>
@@ -131,24 +145,33 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <div>
             <h5 class="card-title mb-1">Files in <%= selectedFolder || 'this date' %></h5>
-            <p class="text-muted small mb-0">Total files: <strong><%= stats.total %></strong>. Downloads stream directly from S3.</p>
+            <p class="text-muted small mb-0">Total files: <strong id="statTotal"><%= stats.total %></strong>. Downloads stream directly from S3.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <% if (selectedFolder) { %>
+              <a class="btn btn-outline-secondary" href="/vendor-files/download-folder?date=<%= selectedDate %>&folder=<%= encodeURIComponent(selectedFolder) %>">
+                <i class="bi bi-folder-symlink me-1"></i>Download folder
+              </a>
+            <% } %>
           </div>
         </div>
-        <% if (files.length === 0) { %>
-          <div class="alert alert-light border">No files yet for this date/folder. Create a folder and upload to get started.</div>
-        <% } else { %>
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead>
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody">
+              <% if (files.length === 0) { %>
                 <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Last Modified</th>
-                  <th class="text-end">Actions</th>
+                  <td colspan="5" class="text-center text-muted">No files yet for this date/folder. Create a folder and upload to get started.</td>
                 </tr>
-              </thead>
-              <tbody>
+              <% } else { %>
                 <% files.forEach(file => { %>
                   <tr>
                     <td><%= file.name %></td>
@@ -172,10 +195,100 @@
                     </td>
                   </tr>
                 <% }) %>
-              </tbody>
-            </table>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <h5 class="card-title mb-1">Assignments</h5>
+            <p class="text-muted small mb-0">Share a folder or a specific file with another role/user. Assignees will see the item in their own "Assigned to you" list.</p>
           </div>
-        <% } %>
+          <div class="text-muted small">Uploader name is tagged automatically for folder uploads.</div>
+        </div>
+        <form class="row g-3" id="assignmentForm">
+          <input type="hidden" name="date" value="<%= selectedDate %>">
+          <div class="col-md-4">
+            <label class="form-label" for="assignmentFolder">Folder</label>
+            <select id="assignmentFolder" name="folder" class="form-select" required>
+              <% if (folders.length === 0) { %>
+                <option value="">No folders yet</option>
+              <% } else { %>
+                <% folders.forEach(f => { %>
+                  <option value="<%= f %>" <%= f === selectedFolder ? 'selected' : '' %>><%= f %></option>
+                <% }) %>
+              <% } %>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="assignmentItem">What to assign</label>
+            <select id="assignmentItem" name="itemType" class="form-select" required>
+              <option value="folder|">Entire folder</option>
+              <% files.forEach(file => { %>
+                <option value="file|<%= encodeURIComponent(file.key) %>" data-label="<%= file.name %>">File: <%= file.name %></option>
+              <% }) %>
+            </select>
+            <div class="form-text">Pick the folder or any file (image/Excel/ZIP) inside it.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="assignmentRole">Role filter</label>
+            <select id="assignmentRole" class="form-select">
+              <option value="">Any role</option>
+              <% roles.forEach(role => { %>
+                <option value="<%= role %>"><%= role %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label" for="assignmentUser">Assign to user</label>
+            <select id="assignmentUser" name="assignedUserId" class="form-select" required>
+              <% assignableUsers.forEach(u => { %>
+                <option value="<%= u.id %>" data-role="<%= u.roleName %>"><%= u.username %> (<%= u.roleName %>)</option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-4 d-flex align-items-end justify-content-end">
+            <button class="btn btn-success w-100" type="submit" <%= folders.length === 0 ? 'disabled' : '' %>>
+              <i class="bi bi-person-plus me-2"></i>Share
+            </button>
+          </div>
+          <div class="col-12">
+            <div id="assignmentAlert" class="alert d-none mb-0" role="alert"></div>
+          </div>
+        </form>
+        <div class="mt-4">
+          <h6 class="mb-2">Assigned to you</h6>
+          <% if (myAssignments.length === 0) { %>
+            <div class="alert alert-light border mb-0">Nothing assigned to you yet.</div>
+          <% } else { %>
+            <div class="list-group">
+              <% myAssignments.forEach(item => { %>
+                <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2">
+                  <div>
+                    <div class="fw-semibold"><%= item.itemName %> <span class="badge bg-light text-dark text-uppercase ms-2"><%= item.itemType %></span></div>
+                    <div class="text-muted small">Folder: <%= item.folderName %> | Date: <%= item.dateKey %> | Assigned by: <%= item.assignedByName %></div>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <% if (item.itemType === 'folder') { %>
+                      <a class="btn btn-sm btn-outline-primary" href="/vendor-files/download-folder?date=<%= item.dateKey %>&folder=<%= encodeURIComponent(item.folderName) %>">
+                        <i class="bi bi-download me-1"></i>Download
+                      </a>
+                    <% } else { %>
+                      <a class="btn btn-sm btn-outline-primary" href="/vendor-files/download?key=<%= encodeURIComponent(item.s3Key) %>&date=<%= item.dateKey %>">
+                        <i class="bi bi-download me-1"></i>Download
+                      </a>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
       </div>
     </div>
 
@@ -222,6 +335,268 @@
     </div>
   </div>
 </main>
+
+<script>
+  (() => {
+    const uploadForm = document.getElementById('vendorUploadForm');
+    const fileInput = document.getElementById('vendorFile');
+    const uploadFolder = document.getElementById('uploadFolder');
+    const selectedDate = '<%= selectedDate %>';
+    const selectedFolder = '<%= selectedFolder %>';
+    const uploaderName = '<%= user.username %>';
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const progressPercent = document.getElementById('uploadPercent');
+    const progressMeta = document.getElementById('uploadMeta');
+    const fileTableBody = document.getElementById('fileTableBody');
+    const statTotal = document.getElementById('statTotal');
+    const statImages = document.getElementById('statImages');
+    const statZips = document.getElementById('statZips');
+    const statExcel = document.getElementById('statExcel');
+    const assignmentForm = document.getElementById('assignmentForm');
+    const assignmentRole = document.getElementById('assignmentRole');
+    const assignmentUser = document.getElementById('assignmentUser');
+    const assignmentItem = document.getElementById('assignmentItem');
+    const assignmentFolder = document.getElementById('assignmentFolder');
+    const assignmentAlert = document.getElementById('assignmentAlert');
+
+    const formatBytes = (bytes) => {
+      if (!bytes && bytes !== 0) return '0 B';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    };
+
+    const toggleProgress = (visible) => {
+      if (!progressContainer) return;
+      progressContainer.classList.toggle('d-none', !visible);
+    };
+
+    const updateProgress = (uploaded, total, currentFileIndex, totalFiles) => {
+      if (!progressBar || !progressPercent || !progressMeta) return;
+      const percent = total ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
+      progressBar.style.width = `${percent}%`;
+      progressBar.textContent = `${percent}%`;
+      progressPercent.textContent = `${percent}%`;
+      progressMeta.textContent = `Uploaded ${formatBytes(uploaded)} of ${formatBytes(total)} (${currentFileIndex}/${totalFiles} files)`;
+    };
+
+    const requestUploadPlan = async (files, folder, isFolderUpload) => {
+      const entries = files.map(file => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        relativePath: file.webkitRelativePath || file.name
+      }));
+
+      const resp = await fetch('/vendor-files/upload-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          folder,
+          entries,
+          folderUpload: isFolderUpload
+        })
+      });
+
+      if (!resp.ok) {
+        const error = await resp.json().catch(() => ({}));
+        throw new Error(error.error || 'Could not prepare upload.');
+      }
+
+      return resp.json();
+    };
+
+    const uploadWithProgress = async (plan, files, folder, isFolderUpload) => {
+      if (!plan.uploads || !plan.uploads.length) throw new Error('No uploads prepared.');
+      const uploads = plan.uploads;
+      const totalSize = uploads.reduce((sum, u, idx) => sum + (u.size || files[idx]?.size || 0), 0);
+      let uploaded = 0;
+      toggleProgress(true);
+      updateProgress(0, totalSize, 0, uploads.length);
+
+      for (let i = 0; i < uploads.length; i += 1) {
+        const upload = uploads[i];
+        const file = files[i];
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', upload.uploadUrl);
+          xhr.setRequestHeader('Content-Type', upload.contentType || 'application/octet-stream');
+          xhr.setRequestHeader('x-amz-meta-uploader', uploaderName);
+          xhr.setRequestHeader('x-amz-meta-folder', folder);
+          xhr.setRequestHeader('x-amz-meta-date', selectedDate);
+          xhr.upload.onprogress = (evt) => {
+            const current = uploaded + (evt.loaded || 0);
+            updateProgress(current, totalSize, i + 1, uploads.length);
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              uploaded += file?.size || upload.size || 0;
+              updateProgress(uploaded, totalSize, i + 1, uploads.length);
+              resolve();
+            } else {
+              reject(new Error(`Upload failed for ${file?.name || upload.name}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error(`Network error for ${file?.name || upload.name}`));
+          xhr.send(file);
+        });
+      }
+
+      progressMeta.textContent = `Finished ${uploads.length} file(s).`;
+      setTimeout(() => toggleProgress(false), 1500);
+    };
+
+    const refreshFileTable = async (folder) => {
+      if (!fileTableBody || !folder) return;
+      const resp = await fetch(`/vendor-files/list?date=${selectedDate}&folder=${encodeURIComponent(folder)}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const files = data.files || [];
+
+      fileTableBody.innerHTML = files.length === 0
+        ? '<tr><td colspan="5" class="text-center text-muted">No files yet for this date/folder. Create a folder and upload to get started.</td></tr>'
+        : files.map(file => `
+          <tr>
+            <td>${file.name}</td>
+            <td>
+              ${file.type === 'image' ? '<span class="file-pill image">Image</span>' : ''}
+              ${file.type === 'zip' ? '<span class="file-pill zip">ZIP</span>' : ''}
+              ${file.type === 'excel' ? '<span class="file-pill excel">Excel</span>' : ''}
+              ${!['image','zip','excel'].includes(file.type) ? '<span class="badge bg-secondary-subtle text-secondary">File</span>' : ''}
+            </td>
+            <td>${file.sizeLabel}</td>
+            <td>${file.lastModifiedLabel}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" href="${file.downloadPath}">
+                <i class="bi bi-download me-1"></i>Download
+              </a>
+            </td>
+          </tr>
+        `).join('');
+
+      const images = files.filter(f => f.type === 'image').length;
+      const zips = files.filter(f => f.type === 'zip').length;
+      const excels = files.filter(f => f.type === 'excel').length;
+
+      if (statTotal) statTotal.textContent = files.length;
+      if (statImages) statImages.textContent = images;
+      if (statZips) statZips.textContent = zips;
+      if (statExcel) statExcel.textContent = excels;
+
+      // Also refresh assignment item list so new uploads can be shared immediately.
+      if (assignmentItem) {
+        assignmentItem.innerHTML = '<option value="folder|">Entire folder</option>';
+        files.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = `file|${encodeURIComponent(f.key)}`;
+          opt.dataset.label = f.name;
+          opt.textContent = `File: ${f.name}`;
+          assignmentItem.appendChild(opt);
+        });
+      }
+    };
+
+    if (uploadForm) {
+      uploadForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const folder = uploadFolder?.value;
+        const files = Array.from(fileInput?.files || []);
+        if (!folder) {
+          alert('Please pick a folder first.');
+          return;
+        }
+        if (!files.length) {
+          alert('Please select at least one file or folder.');
+          return;
+        }
+        const isFolderUpload = files.some(f => (f.webkitRelativePath || '').includes('/'));
+        try {
+          const plan = await requestUploadPlan(files, folder, isFolderUpload);
+          await uploadWithProgress(plan, files, folder, isFolderUpload);
+          await refreshFileTable(folder);
+        } catch (err) {
+          console.error(err);
+          progressMeta.textContent = err.message;
+          toggleProgress(true);
+        }
+      });
+    }
+
+    const filterUsersByRole = (role) => {
+      if (!assignmentUser) return;
+      const options = Array.from(assignmentUser.options);
+      options.forEach(opt => {
+        const match = !role || opt.dataset.role === role;
+        opt.hidden = !match;
+      });
+      const firstVisible = options.find(opt => !opt.hidden);
+      if (firstVisible) assignmentUser.value = firstVisible.value;
+    };
+
+    if (assignmentRole) {
+      assignmentRole.addEventListener('change', (e) => {
+        filterUsersByRole(e.target.value);
+      });
+    }
+
+    const setAssignmentAlert = (message, variant = 'success') => {
+      if (!assignmentAlert) return;
+      assignmentAlert.textContent = message;
+      assignmentAlert.className = `alert alert-${variant}`;
+      assignmentAlert.classList.remove('d-none');
+    };
+
+    if (assignmentForm) {
+      assignmentForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const folder = assignmentFolder?.value;
+        const selection = assignmentItem?.value || '';
+        const [itemType, encodedKey] = selection.split('|');
+        const assignedUserId = assignmentUser?.value;
+        const itemName = assignmentItem?.selectedOptions?.[0]?.dataset?.label || folder;
+
+        if (!folder || !assignedUserId || !itemType) {
+          setAssignmentAlert('Please fill in all assignment details.', 'danger');
+          return;
+        }
+
+        try {
+          const resp = await fetch('/vendor-files/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+              date: selectedDate,
+              folder,
+              itemType,
+              assignedUserId,
+              s3Key: itemType === 'file' ? decodeURIComponent(encodedKey || '') : undefined,
+              itemName
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error || 'Could not save assignment.');
+          }
+          setAssignmentAlert('Assignment saved.', 'success');
+        } catch (err) {
+          console.error(err);
+          setAssignmentAlert(err.message, 'danger');
+        }
+      });
+    }
+
+    if (assignmentFolder) {
+      assignmentFolder.addEventListener('change', async (event) => {
+        const folder = event.target.value;
+        await refreshFileTable(folder);
+      });
+    }
+  })();
+</script>
 
 <%- include('partials/footer', {
   additionalJS: [],
