@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
+const { closeSessionLog } = require('../middlewares/sessionActivity');
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -47,6 +48,22 @@ router.post('/login', async (req, res) => {
       roleName: user.roleName,
       role: user.roleName
     };
+
+    // Create a session log for usage tracking
+    try {
+      const [sessionLogResult] = await pool.query(
+        `
+          INSERT INTO user_session_logs
+            (user_id, username, session_id, login_time, last_activity_time)
+          VALUES (?, ?, ?, NOW(), NOW())
+        `,
+        [user.id, user.username, req.sessionID]
+      );
+      req.session.sessionLogId = sessionLogResult.insertId;
+      req.session.lastActivityUpdate = Date.now();
+    } catch (logErr) {
+      console.error('Error creating session log:', logErr);
+    }
 
     // Redirect based on role
     switch (user.roleName) {
@@ -128,7 +145,13 @@ router.post('/login', async (req, res) => {
 });
 
 // GET /logout
-router.get('/logout', (req, res) => {
+router.get('/logout', async (req, res) => {
+  const sessionLogId = req.session?.sessionLogId;
+
+  if (sessionLogId) {
+    await closeSessionLog(sessionLogId);
+  }
+
   req.session.destroy(err => {
     if (err) {
       console.error('Error destroying session during logout:', err);

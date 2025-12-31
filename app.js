@@ -4,6 +4,7 @@ const express = require('express');
 const session = require('express-session');
 const flash = require('connect-flash');
 const path = require('path');
+const { markSessionActivity } = require('./middlewares/sessionActivity');
 
 // Load environment variables securely using secure-env
 const secureEnv = require('secure-env');
@@ -61,6 +62,9 @@ app.use((req, res, next) => {
     res.locals.vapidPublicKey = global.env.VAPID_PUBLIC_KEY || '';
     next();
 });
+
+// Track session activity for usage analytics
+app.use(markSessionActivity);
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
