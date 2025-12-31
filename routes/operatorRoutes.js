@@ -15,7 +15,7 @@
 const express = require("express");
 const router = express.Router();
 const { pool } = require("../config/db");
-const { isAuthenticated, isOperator } = require("../middlewares/auth");
+const { isAuthenticated, isOperator, isMohitOperator } = require("../middlewares/auth");
 const ExcelJS = require("exceljs");
 const { PRIVILEGED_OPERATOR_ID } = require("../utils/operators");
 const { cache } = require("../utils/cache");
@@ -254,6 +254,52 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
 });
 
 /**************************************************
+ * Mohit-only: Session usage analytics
+ **************************************************/
+router.get(
+  "/dashboard/api/session-usage",
+  isAuthenticated,
+  isMohitOperator,
+  async (req, res) => {
+    try {
+      const days = Math.min(
+        Math.max(parseInt(req.query.days, 10) || 7, 1),
+        90
+      );
+
+      const [rows] = await pool.query(
+        `
+          SELECT
+            u.username,
+            DATE(usl.login_time) AS loginDate,
+            COUNT(*) AS sessionCount,
+            SUM(
+              TIMESTAMPDIFF(
+                SECOND,
+                usl.login_time,
+                COALESCE(usl.logout_time, usl.last_activity_time, NOW())
+              )
+            ) AS totalSeconds,
+            MAX(usl.login_time) AS lastLoginAt,
+            MAX(usl.last_activity_time) AS lastActivityAt
+          FROM user_session_logs usl
+          JOIN users u ON u.id = usl.user_id
+         WHERE usl.login_time >= DATE_SUB(NOW(), INTERVAL ? DAY)
+         GROUP BY u.id, loginDate
+         ORDER BY loginDate DESC, u.username ASC
+        `,
+        [days]
+      );
+
+      return res.json({ data: rows });
+    } catch (err) {
+      console.error("Error fetching session usage:", err);
+      return res.status(500).json({ error: "Unable to fetch session usage" });
+    }
+  }
+);
+
+/**************************************************
  * 3) /operator/dashboard – must define lotCount etc.
  **************************************************/
 router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
@@ -291,6 +337,7 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
       userCount: totals.userCount,
       advancedAnalytics,
       operatorPerformance,
+      user: req.session.user,
       query: { search, startDate, endDate, sortField, sortOrder, category },
       lotDetails: {}
     });

@@ -322,6 +322,7 @@
   <link rel="stylesheet" href="/css/professional.css">
 </head>
 <body>
+  <% const isMohit = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
   <nav class="top-nav">
     <div class="d-flex justify-content-between align-items-center">
       <div class="nav-brand">Kotty Track</div>
@@ -414,6 +415,12 @@
         <i class="bi bi-box-seam"></i>
         <div class="action-card-title">PO Management</div>
       </a>
+      <% if (isMohit) { %>
+        <a href="#session-usage" class="action-card">
+          <i class="bi bi-stopwatch"></i>
+          <div class="action-card-title">Account Usage</div>
+        </a>
+      <% } %>
     </div>
 
     <div class="alert alert-info">
@@ -440,6 +447,45 @@
         <div class="stat-value"><%= userCount %></div>
       </div>
     </div>
+
+    <% if (isMohit) { %>
+      <div class="card-panel" id="session-usage">
+        <div class="card-header">
+          <h2 class="card-title"><i class="bi bi-stopwatch me-2"></i>Account usage overview</h2>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <label for="sessionRange" class="text-muted small mb-0">Range</label>
+            <select id="sessionRange" class="form-select form-select-sm" style="width: auto;">
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn btn-sm btn-primary" type="button" id="refreshSessionUsage">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle" id="sessionUsageTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>User</th>
+                  <th>Sessions</th>
+                  <th>Time used</th>
+                  <th>Last active</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div id="sessionUsageEmpty" class="text-muted small">No account usage logged for the selected range.</div>
+          </div>
+          <p class="text-muted small mb-0 mt-2">
+            Time used counts activity from login until logout or the most recent page view.
+          </p>
+        </div>
+      </div>
+    <% } %>
 
     <!-- SKU Insights Panel -->
     <div class="card-panel">
@@ -560,6 +606,10 @@
     const body = document.body;
     const toggleBtn = document.getElementById('toggleDarkMode');
     const backToTopBtn = document.getElementById('backToTop');
+    const sessionRange = document.getElementById('sessionRange');
+    const refreshSessionUsage = document.getElementById('refreshSessionUsage');
+    const sessionUsageTableBody = document.querySelector('#sessionUsageTable tbody');
+    const sessionUsageEmpty = document.getElementById('sessionUsageEmpty');
 
     // Dark mode toggle
     if (localStorage.getItem('kottyDarkMode') === 'true') {
@@ -588,6 +638,78 @@
     backToTopBtn.addEventListener('click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // Account usage table (Mohit only)
+    function formatDuration(seconds) {
+      if (seconds === undefined || seconds === null) return '—';
+      const totalSeconds = Math.max(0, Math.round(seconds));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      if (hours === 0 && minutes === 0) return `${Math.max(1, Math.ceil(totalSeconds / 60))}m`;
+      if (hours === 0) return `${minutes}m`;
+      return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+    }
+
+    function formatDate(dateValue) {
+      if (!dateValue) return '—';
+      return new Date(dateValue).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+    }
+
+    function formatDateTime(dateValue) {
+      if (!dateValue) return '—';
+      return new Date(dateValue).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+      });
+    }
+
+    async function loadSessionUsage() {
+      if (!sessionRange || !sessionUsageTableBody) return;
+      sessionUsageEmpty?.classList.add('d-none');
+      sessionUsageTableBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="text-center text-muted">Loading usage…</td>
+        </tr>
+      `;
+      try {
+        const days = sessionRange.value;
+        const response = await fetch(`/operator/dashboard/api/session-usage?days=${days}`);
+        const payload = await response.json();
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+
+        if (!rows.length) {
+          sessionUsageTableBody.innerHTML = '';
+          sessionUsageEmpty?.classList.remove('d-none');
+          return;
+        }
+
+        sessionUsageTableBody.innerHTML = rows.map((row) => {
+          return `
+            <tr>
+              <td>${formatDate(row.loginDate)}</td>
+              <td><strong>${row.username}</strong></td>
+              <td>${row.sessionCount}</td>
+              <td>${formatDuration(row.totalSeconds)}</td>
+              <td>${formatDateTime(row.lastActivityAt)}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (error) {
+        console.error('Unable to load session usage:', error);
+        sessionUsageTableBody.innerHTML = `
+          <tr>
+            <td colspan="5" class="text-danger text-center">Unable to load account usage right now.</td>
+          </tr>
+        `;
+      }
+    }
+
+    if (sessionRange) {
+      loadSessionUsage();
+      sessionRange.addEventListener('change', loadSessionUsage);
+    }
+
+    refreshSessionUsage?.addEventListener('click', loadSessionUsage);
 
     // Pendency table
     const deptFilter = document.getElementById('deptFilter');
