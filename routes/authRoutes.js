@@ -147,9 +147,8 @@ router.post('/login', async (req, res) => {
 // GET /logout
 router.get('/logout', async (req, res) => {
   const sessionLogId = req.session?.sessionLogId;
-
   if (sessionLogId) {
-    await closeSessionLog(sessionLogId);
+    await closeSessionLog(sessionLogId, req.session?.lastActivityUpdate);
   }
 
   req.session.destroy(err => {

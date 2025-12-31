@@ -38,6 +38,7 @@ app.use(session({
     secret: global.env.SESSION_SECRET || 'your_session_secret',
     resave: false,
     saveUninitialized: false,
+    rolling: true, // refresh expiry on each request so active users are not logged out unexpectedly
     cookie: {
         secure: false,           // <— force false while using http://13.203.180.77
         httpOnly: true,
