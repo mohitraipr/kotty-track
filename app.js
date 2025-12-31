@@ -4,11 +4,12 @@ const express = require('express');
 const session = require('express-session');
 const flash = require('connect-flash');
 const path = require('path');
-const { markSessionActivity } = require('./middlewares/sessionActivity');
 
-// Load environment variables securely using secure-env
+// Load environment variables securely using secure-env before loading modules that depend on them
 const secureEnv = require('secure-env');
 global.env = secureEnv({ secret: 'mySecretPassword' }); // Replace with your actual secret
+
+const { markSessionActivity } = require('./middlewares/sessionActivity');
 
 // Ensure the application runs in IST regardless of server settings
 process.env.TZ = 'Asia/Kolkata';
