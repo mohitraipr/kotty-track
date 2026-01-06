@@ -200,6 +200,23 @@ function allowRoles(roles) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Restrict access to specific usernames (case-insensitive)
+function allowUsernames(usernames) {
+  return function (req, res, next) {
+    const username = req.session?.user?.username;
+    if (username && usernames.map((u) => u.toLowerCase()).includes(username.toLowerCase())) {
+      return next();
+    }
+
+    if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+      return res.status(403).json({ error: 'You do not have permission to view this resource.' });
+    }
+    req.flash('error', 'You do not have permission to view this page.');
+    return res.redirect('/');
+  };
+}
+
 module.exports = {
     isAuthenticated,
     isAdmin,
@@ -226,5 +243,6 @@ module.exports = {
     isNowiPOOrganization,
     isVendorFiles,
     allowUserIds,
-    allowRoles
+    allowRoles,
+    allowUsernames
 };

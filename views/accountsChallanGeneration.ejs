@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/css/professional.css">
 </head>
 <body>
+  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
   <nav class="navbar navbar-expand-lg navbar-light app-navbar">
     <div class="container-fluid">
       <a class="navbar-brand" href="#">
@@ -20,11 +21,13 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="/purchase">
-              <i class="bi bi-cart-fill"></i> Purchase
-            </a>
-          </li>
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/purchase">
+                <i class="bi bi-cart-fill"></i> Purchase
+              </a>
+            </li>
+          <% } %>
           <li class="nav-item">
             <a class="nav-link active" href="/accounts-challan">
               <i class="bi bi-file-earmark-text"></i> DC Challan
@@ -35,11 +38,13 @@
               <i class="bi bi-list-ul"></i> Challan List
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan/gst">
-              <i class="bi bi-receipt"></i> GST Master
-            </a>
-          </li>
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/accounts-challan/gst">
+                <i class="bi bi-receipt"></i> GST Master
+              </a>
+            </li>
+          <% } %>
           <li class="nav-item">
             <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
               <i class="bi bi-box-arrow-right"></i> Logout
@@ -72,11 +77,13 @@
 
     <!-- Tab Navigation -->
     <ul class="nav nav-pills app-tabs mb-4">
-      <li class="nav-item">
-        <a class="nav-link" href="/purchase">
-          <i class="bi bi-cart-fill"></i> Purchase
-        </a>
-      </li>
+      <% if (isSapna) { %>
+        <li class="nav-item">
+          <a class="nav-link" href="/purchase">
+            <i class="bi bi-cart-fill"></i> Purchase
+          </a>
+        </li>
+      <% } %>
       <li class="nav-item">
         <a class="nav-link active" href="/accounts-challan">
           <i class="bi bi-file-earmark-text"></i> DC Challan
@@ -87,11 +94,13 @@
           <i class="bi bi-list-ul"></i> Challan List
         </a>
       </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan/gst">
-          <i class="bi bi-receipt"></i> GST Master
-        </a>
-      </li>
+      <% if (isSapna) { %>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/gst">
+            <i class="bi bi-receipt"></i> GST Master
+          </a>
+        </li>
+      <% } %>
     </ul>
 
     <!-- Hero Section -->
@@ -189,60 +198,230 @@
             <div class="card-body">
               <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th><i class="bi bi-hash me-1"></i>#</th>
-                      <th><i class="bi bi-tag me-1"></i>Lot No</th>
-                      <th><i class="bi bi-upc me-1"></i>SKU</th>
-                      <th><i class="bi bi-box me-1"></i>Total Pieces</th>
-                      <th><i class="bi bi-check-circle me-1"></i>Challan Pieces</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% if (selectedRows && selectedRows.length > 0) { %>
-                      <% selectedRows.forEach((row, index) => { %>
-                        <tr>
-                          <td><span class="badge bg-secondary"><%= index + 1 %></span></td>
-                          <td><strong><%= row.lot_no %></strong></td>
-                          <td><code><%= row.sku %></code></td>
-                          <td><%= row.total_pieces %></td>
-                          <td><span class="badge bg-success fs-6"><%= row.challan_pieces %></span></td>
-                        </tr>
-                      <% }); %>
-                      <tr class="table-light">
-                        <td colspan="4" class="text-end fw-bold">
-                          <i class="bi bi-calculator me-2"></i>Total Challan Pieces:
-                        </td>
-                        <td>
-                          <span class="badge bg-primary fs-6">
-                            <%= selectedRows.reduce((sum, row) => sum + parseInt(row.challan_pieces || 0), 0) %>
-                          </span>
-                        </td>
-                      </tr>
-                    <% } else { %>
-                      <tr>
-                        <td colspan="5" class="text-center text-muted py-4">
-                          <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                          No lots selected
-                        </td>
-                      </tr>
-                    <% } %>
-                  </tbody>
-                </table>
+              <thead class="table-light">
+                <tr>
+                  <th><i class="bi bi-hash me-1"></i>#</th>
+                  <th><i class="bi bi-tag me-1"></i>Lot No</th>
+                  <th><i class="bi bi-upc me-1"></i>SKU</th>
+                  <th><i class="bi bi-box me-1"></i>Total Pieces</th>
+                  <th><i class="bi bi-shuffle me-1"></i>Type</th>
+                  <th><i class="bi bi-check-circle me-1"></i>Challan Pieces</th>
+                </tr>
+              </thead>
+              <tbody id="selectedLotsBody"></tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-end mt-3">
+            <div class="fw-bold">
+              <i class="bi bi-calculator me-2"></i>Total Pieces:
+              <span class="badge bg-primary fs-6" id="totalPiecesBadge">0</span>
+            </div>
+          </div>
+          <div class="alert alert-info border-0 mt-4 mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Note:</strong> Challan quantities stay locked to the dashboard selections. You can switch items between Normal/Rewash here and add Mix rows below.
+          </div>
+          <div class="form-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">
+                <i class="bi bi-diagram-3 me-2"></i>Mix Entries
+              </h5>
+              <span class="text-muted small">Use for manual mix/additional items</span>
+            </div>
+            <div class="row g-3 align-items-end">
+              <div class="col-md-5">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-pencil-square me-2"></i>Description
+                </label>
+                <input type="text" id="mixLabel" class="form-control" placeholder="Enter description">
               </div>
-              <div class="alert alert-info border-0 mt-4 mb-0">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>Note:</strong> Challan quantities are locked from the dashboard selection. To edit quantities, go back to the dashboard and adjust the amounts.
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-123 me-2"></i>Quantity
+                </label>
+                <input type="number" id="mixQty" class="form-control" min="1" placeholder="0">
               </div>
+              <div class="col-md-3">
+                <label class="form-label fw-semibold">
+                  <i class="bi bi-upc-scan me-2"></i>SKU (optional)
+                </label>
+                <input type="text" id="mixSku" class="form-control" placeholder="SKU / identifier">
+              </div>
+              <div class="col-md-1 d-grid">
+                <button type="button" class="btn btn-primary" id="addMixBtn">
+                  <i class="bi bi-plus-lg"></i>
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive mt-3">
+              <table class="table table-sm table-striped mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>#</th>
+                    <th>Description</th>
+                    <th>SKU</th>
+                    <th>Quantity</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="mixItemsBody">
+                  <tr id="mixEmptyRow">
+                    <td colspan="5" class="text-center text-muted">No mix entries added yet</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
+    </div>
     </form>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    const selectedLotsBody = document.getElementById('selectedLotsBody');
+    const mixItemsBody = document.getElementById('mixItemsBody');
+    const mixEmptyRow = document.getElementById('mixEmptyRow');
+    const totalPiecesBadge = document.getElementById('totalPiecesBadge');
+    const selectedRowsInput = document.querySelector('input[name="selectedRows"]');
+
+    const selectedLots = (<%- JSON.stringify(selectedRows || []) %>).map((row) => {
+      const entryType = (row.entryType || row.itemType || 'normal').toString().toLowerCase();
+      return {
+        ...row,
+        entryType,
+        challan_pieces: parseInt(row.challan_pieces, 10) || 0
+      };
+    });
+    const mixItems = [];
+
+    function renderSelectedLots() {
+      selectedLotsBody.innerHTML = '';
+      if (!selectedLots.length) {
+        selectedLotsBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-muted py-3">
+              <i class="bi bi-inbox me-2"></i>No lots selected
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      selectedLots.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        const safeType = row.entryType === 'rewash' ? 'rewash' : 'normal';
+        tr.innerHTML = `
+          <td><span class="badge bg-secondary">${index + 1}</span></td>
+          <td><strong>${row.lot_no || ''}</strong></td>
+          <td><code>${row.sku || ''}</code></td>
+          <td>${row.total_pieces || ''}</td>
+          <td>
+            <select class="form-select form-select-sm lot-type">
+              <option value="normal" ${safeType === 'normal' ? 'selected' : ''}>Normal</option>
+              <option value="rewash" ${safeType === 'rewash' ? 'selected' : ''}>Rewash</option>
+            </select>
+          </td>
+          <td><span class="badge bg-success fs-6">${row.challan_pieces}</span></td>
+        `;
+        tr.querySelector('.lot-type').addEventListener('change', (e) => {
+          row.entryType = e.target.value;
+          updatePayload();
+        });
+        selectedLotsBody.appendChild(tr);
+      });
+    }
+
+    function renderMixItems() {
+      mixItemsBody.innerHTML = '';
+      if (!mixItems.length) {
+        mixItemsBody.appendChild(mixEmptyRow);
+        return;
+      }
+      mixItems.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${item.customLabel}</td>
+          <td>${item.sku || ''}</td>
+          <td>${item.challan_pieces}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-danger remove-mix" data-idx="${idx}">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        `;
+        mixItemsBody.appendChild(tr);
+      });
+
+      document.querySelectorAll('.remove-mix').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.dataset.idx, 10);
+          if (!Number.isNaN(idx)) {
+            mixItems.splice(idx, 1);
+            renderMixItems();
+            updatePayload();
+          }
+        });
+      });
+    }
+
+    function computeTotalPieces() {
+      const lotsTotal = selectedLots.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
+      const mixTotal = mixItems.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
+      return lotsTotal + mixTotal;
+    }
+
+    function updatePayload() {
+      const payload = [
+        ...selectedLots.map((row) => ({
+          ...row,
+          entryType: row.entryType || 'normal',
+          itemType: row.entryType || 'normal'
+        })),
+        ...mixItems
+      ];
+      selectedRowsInput.value = JSON.stringify(payload);
+      totalPiecesBadge.textContent = computeTotalPieces();
+    }
+
+    document.getElementById('addMixBtn').addEventListener('click', () => {
+      const label = document.getElementById('mixLabel').value.trim();
+      const qty = parseInt(document.getElementById('mixQty').value, 10);
+      const sku = document.getElementById('mixSku').value.trim();
+      if (!label) {
+        alert('Please enter a description for the mix item.');
+        return;
+      }
+      if (!qty || qty <= 0) {
+        alert('Please enter a valid quantity for the mix item.');
+        return;
+      }
+      mixItems.push({
+        entryType: 'mix',
+        itemType: 'mix',
+        customLabel: label,
+        lot_no: label,
+        sku,
+        sku_override: sku,
+        challan_pieces: qty
+      });
+      document.getElementById('mixLabel').value = '';
+      document.getElementById('mixQty').value = '';
+      document.getElementById('mixSku').value = '';
+      renderMixItems();
+      updatePayload();
+    });
+
+    document.querySelector('form').addEventListener('submit', () => {
+      updatePayload();
+    });
+
+    renderSelectedLots();
+    renderMixItems();
+    updatePayload();
+
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {

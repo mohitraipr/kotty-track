@@ -354,24 +354,38 @@
       </thead>
       <tbody>
         <% challan.items.forEach((item, index) => { %>
+          <%
+            const typeLabel = (item.entryType || '').toUpperCase() || 'NORMAL';
+            const itemLabel = item.entryType === 'mix'
+              ? (item.customLabel || item.lot_no || 'Mix Item')
+              : `Lot: ${item.lot_no || '-'}`;
+            const skuLabel = item.sku || item.sku_override || '';
+            const qtyVal = parseFloat(item.total_pieces || 0);
+            const rateVal = parseFloat(item.rate || 200);
+            const taxableVal = parseFloat(item.taxableValue || (qtyVal * rateVal));
+          %>
           <tr>
             <td class="text-left">
-              <%= index + 1 %>. lot no-<%= item.lot_no %>, sku-<%= item.sku %>
+              <div><strong><%= index + 1 %>. <%= typeLabel %></strong></div>
+              <div><%= itemLabel %></div>
+              <% if (skuLabel) { %>
+                <div class="text-muted">SKU: <%= skuLabel %></div>
+              <% } %>
             </td>
-            <td class="text-center">62034200</td>
+            <td class="text-center"><%= item.hsnSac || '62034200' %></td>
             <td class="text-right">
-              <%= parseFloat(item.total_pieces).toLocaleString('en-IN') %> PCS
+              <%= qtyVal.toLocaleString('en-IN') %> PCS
             </td>
-            <td class="text-right">200.00</td>
+            <td class="text-right"><%= rateVal.toFixed(2) %></td>
             <td class="text-right">
-              <%= parseFloat(item.taxableValue).toLocaleString('en-IN') %>
+              <%= taxableVal.toLocaleString('en-IN') %>
             </td>
             <td class="text-center">0.00 @0.00%</td>
             <td class="text-center">0.00 @0.00%</td>
             <td class="text-center">0.00 @0.00%</td>
             <td class="text-right">0.00</td>
             <td class="text-right">
-              <%= parseFloat(item.taxableValue).toLocaleString('en-IN') %>
+              <%= taxableVal.toLocaleString('en-IN') %>
             </td>
           </tr>
         <% }); %>

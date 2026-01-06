@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { isAuthenticated, isAccountsAdmin } = require('../middlewares/auth');
+const { isAuthenticated, isAccountsAdmin, allowUsernames } = require('../middlewares/auth');
 const multer = require('multer');
 const path = require('path');
 const ExcelJS = require('exceljs');
@@ -19,8 +19,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+const sapnaOnly = [isAuthenticated, allowUsernames(['sapna']), isAccountsAdmin];
+
 // GET /purchase - render dashboard for accounts role
-router.get('/', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.get('/', sapnaOnly, async (req, res) => {
   try {
     // Fetch parties and factories concurrently to speed up dashboard load
     const [[parties], [factories]] = await Promise.all([
@@ -45,7 +47,7 @@ router.get('/', isAuthenticated, isAccountsAdmin, async (req, res) => {
 });
 
 // POST /purchase/parties - create a new party
-router.post('/parties', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post('/parties', sapnaOnly, async (req, res) => {
   const { name, gst_number, state, pincode, due_payment_days } = req.body;
   if (!name) {
     req.flash('error', 'Party name is required');
@@ -68,7 +70,7 @@ router.post('/parties', isAuthenticated, isAccountsAdmin, async (req, res) => {
 
 // POST /purchase/parties/:id - update an existing party
 // Restrict :id to digits only so that routes like /parties/bulk don't match
-router.post('/parties/:id(\\d+)', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post('/parties/:id(\\d+)', sapnaOnly, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { name, gst_number, state, pincode, due_payment_days } = req.body;
 
@@ -94,7 +96,7 @@ router.post('/parties/:id(\\d+)', isAuthenticated, isAccountsAdmin, async (req, 
 });
 
 // POST /purchase/factories - create a new factory
-router.post('/factories', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post('/factories', sapnaOnly, async (req, res) => {
   const { name, gst_number, state } = req.body;
   if (!name) {
     req.flash('error', 'Factory name is required');
@@ -115,7 +117,7 @@ router.post('/factories', isAuthenticated, isAccountsAdmin, async (req, res) => 
 });
 
 // POST /purchase/factories/:id - update factory
-router.post('/factories/:id', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post('/factories/:id', sapnaOnly, async (req, res) => {
   const id = req.params.id;
   const { name, gst_number, state } = req.body;
   try {
@@ -133,7 +135,7 @@ router.post('/factories/:id', isAuthenticated, isAccountsAdmin, async (req, res)
 });
 
 // GET /purchase/parties/template - download Excel template for bulk upload
-router.get('/parties/template', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.get('/parties/template', sapnaOnly, async (req, res) => {
   try {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Parties');
@@ -163,7 +165,7 @@ router.get('/parties/template', isAuthenticated, isAccountsAdmin, async (req, re
 });
 
 // POST /purchase/parties/bulk - upload parties from Excel
-router.post('/parties/bulk', isAuthenticated, isAccountsAdmin, upload.single('excelFile'), async (req, res) => {
+router.post('/parties/bulk', sapnaOnly, upload.single('excelFile'), async (req, res) => {
   const file = req.file;
   if (!file) {
     req.flash('error', 'No file uploaded');
