@@ -30,11 +30,15 @@ CREATE TABLE IF NOT EXISTS dc_challan_counters (
 CREATE TABLE IF NOT EXISTS dc_challan_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   challan_id INT NOT NULL,
-  washing_id INT NOT NULL,
+  washing_id INT NULL,
   lot_no VARCHAR(64),
   sku VARCHAR(64),
-  total_pieces INT NOT NULL,
+  total_pieces INT,
   issued_pieces INT NOT NULL,
+  item_type ENUM('normal','rewash','mix') NOT NULL DEFAULT 'normal',
+  -- mix entries can set washing_id to NULL and use the custom label + sku override fields
+  custom_label VARCHAR(255),
+  sku_override VARCHAR(64),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_dc_challan_items_washing (washing_id),
   CONSTRAINT fk_dc_items_challan FOREIGN KEY (challan_id)

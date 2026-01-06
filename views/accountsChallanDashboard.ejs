@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/css/professional.css">
 </head>
 <body>
+  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
   <nav class="navbar navbar-expand-lg navbar-light app-navbar">
     <div class="container-fluid">
       <a class="navbar-brand" href="#">
@@ -20,11 +21,13 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="/purchase">
-              <i class="bi bi-cart-fill"></i> Purchase
-            </a>
-          </li>
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/purchase">
+                <i class="bi bi-cart-fill"></i> Purchase
+              </a>
+            </li>
+          <% } %>
           <li class="nav-item">
             <a class="nav-link active" href="/accounts-challan">
               <i class="bi bi-file-earmark-text"></i> DC Challan
@@ -35,11 +38,13 @@
               <i class="bi bi-list-ul"></i> Challan List
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan/gst">
-              <i class="bi bi-receipt"></i> GST Master
-            </a>
-          </li>
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/accounts-challan/gst">
+                <i class="bi bi-receipt"></i> GST Master
+              </a>
+            </li>
+          <% } %>
           <li class="nav-item">
             <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
               <i class="bi bi-box-arrow-right"></i> Logout
@@ -72,11 +77,13 @@
 
     <!-- Tab Navigation -->
     <ul class="nav nav-pills app-tabs mb-4">
-      <li class="nav-item">
-        <a class="nav-link" href="/purchase">
-          <i class="bi bi-cart-fill"></i> Purchase
-        </a>
-      </li>
+      <% if (isSapna) { %>
+        <li class="nav-item">
+          <a class="nav-link" href="/purchase">
+            <i class="bi bi-cart-fill"></i> Purchase
+          </a>
+        </li>
+      <% } %>
       <li class="nav-item">
         <a class="nav-link active" href="/accounts-challan">
           <i class="bi bi-file-earmark-text"></i> DC Challan
@@ -87,11 +94,13 @@
           <i class="bi bi-list-ul"></i> Challan List
         </a>
       </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan/gst">
-          <i class="bi bi-receipt"></i> GST Master
-        </a>
-      </li>
+      <% if (isSapna) { %>
+        <li class="nav-item">
+          <a class="nav-link" href="/accounts-challan/gst">
+            <i class="bi bi-receipt"></i> GST Master
+          </a>
+        </li>
+      <% } %>
     </ul>
 
     <!-- Hero Section -->
@@ -165,10 +174,11 @@
                 <th><i class="bi bi-hash me-1"></i>ID</th>
                 <th><i class="bi bi-tag me-1"></i>Lot No</th>
                 <th><i class="bi bi-upc me-1"></i>SKU</th>
-                <th><i class="bi bi-box me-1"></i>Total Pieces</th>
-                <th><i class="bi bi-send me-1"></i>Issued</th>
-                <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
-                <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
+            <th><i class="bi bi-box me-1"></i>Total Pieces</th>
+            <th><i class="bi bi-send me-1"></i>Issued (Normal)</th>
+            <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
+            <th><i class="bi bi-shuffle me-1"></i>Type</th>
+            <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
                 <th><i class="bi bi-chat-left-text me-1"></i>Assembly Remark</th>
                 <th><i class="bi bi-scissors me-1"></i>Cutting Remark</th>
                 <th><i class="bi bi-calendar-event me-1"></i>Target Day</th>
@@ -195,12 +205,19 @@
                     <td><%= a.issued_pieces %></td>
                     <td><span class="badge badge-info"><%= a.remaining_pieces %></span></td>
                     <td>
+                      <select class="form-select form-select-sm challan-type">
+                        <option value="normal" <%= a.remaining_pieces > 0 ? 'selected' : '' %>>Normal</option>
+                        <option value="rewash" <%= a.remaining_pieces <= 0 ? 'selected' : '' %>>Rewash</option>
+                      </select>
+                      <small class="text-muted">Rewash allows repeated lots</small>
+                    </td>
+                    <td>
                       <input
                         type="number"
                         class="form-control form-control-sm qty-input challan-qty"
                         min="1"
-                        max="<%= a.remaining_pieces %>"
-                        value="<%= a.remaining_pieces %>"
+                        max="<%= a.total_pieces %>"
+                        value="<%= a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces %>"
                       />
                     </td>
                     <td><%= a.assembly_remark %></td>
@@ -213,7 +230,7 @@
                 <% }); %>
               <% } else { %>
                 <tr id="noRecordsRow">
-                  <td colspan="14" class="text-center">No records found.</td>
+                  <td colspan="15" class="text-center">No records found.</td>
                 </tr>
               <% } %>
             </tbody>
@@ -262,7 +279,7 @@
         tbody.innerHTML = '';
       }
       if (!assignments.length && !append) {
-        tbody.innerHTML = '<tr><td colspan="14" class="text-center">No records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15" class="text-center">No records found.</td></tr>';
         return;
       }
 
@@ -282,12 +299,19 @@
           <td>${a.issued_pieces}</td>
           <td><span class="badge badge-info">${a.remaining_pieces}</span></td>
           <td>
+            <select class="form-select form-select-sm challan-type">
+              <option value="normal" ${a.remaining_pieces > 0 ? 'selected' : ''}>Normal</option>
+              <option value="rewash" ${a.remaining_pieces <= 0 ? 'selected' : ''}>Rewash</option>
+            </select>
+            <small class="text-muted">Rewash allows repeated lots</small>
+          </td>
+          <td>
             <input
               type="number"
               class="form-control form-control-sm qty-input challan-qty"
               min="1"
-              max="${a.remaining_pieces}"
-              value="${a.remaining_pieces}"
+              max="${a.total_pieces}"
+              value="${a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces}"
             />
           </td>
           <td>${a.assembly_remark || ''}</td>
@@ -344,8 +368,11 @@
 
         const remaining = parseInt(row.dataset.remaining, 10);
         const qtyInput = row.querySelector('.challan-qty');
+        const totalPieces = parseInt(row.dataset.total, 10);
+        const itemType = row.querySelector('.challan-type')?.value || 'normal';
+        const maxAllowed = itemType === 'rewash' ? totalPieces : remaining;
         const qty = parseInt(qtyInput.value, 10);
-        if (!qty || qty <= 0 || qty > remaining) {
+        if (!qty || qty <= 0 || qty > maxAllowed) {
           alert(`Invalid challan pieces for lot ${row.dataset.lot}.`);
           hasInvalid = true;
           return;
@@ -355,7 +382,9 @@
           lot_no: row.dataset.lot,
           sku: row.dataset.sku,
           total_pieces: row.dataset.total,
-          challan_pieces: qty
+          challan_pieces: qty,
+          entryType: itemType,
+          itemType
         });
       });
 

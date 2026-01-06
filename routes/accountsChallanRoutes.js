@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { isAuthenticated, isAccountsAdmin } = require('../middlewares/auth');
+const { isAuthenticated, isAccountsAdmin, allowUsernames } = require('../middlewares/auth');
 
 const FISCAL_YEAR = '25-26';
 const RATE = 200;
@@ -87,16 +87,15 @@ function buildAssignmentsQuery({ search, limit, offset }) {
       u.username AS washer_username,
       m.username AS master_username,
       IFNULL(SUM(dci.issued_pieces), 0) AS issued_pieces,
-      (jd.total_pieces - IFNULL(SUM(dci.issued_pieces), 0)) AS remaining_pieces
+      GREATEST(jd.total_pieces - IFNULL(SUM(dci.issued_pieces), 0), 0) AS remaining_pieces
     FROM washing_assignments wa
     JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
     JOIN cutting_lots c ON jd.lot_no = c.lot_no
     JOIN users u ON wa.user_id = u.id
     JOIN users m ON wa.jeans_assembly_master_id = m.id
-    LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id
+    LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id AND COALESCE(dci.item_type, 'normal') = 'normal'
     ${whereClause}
     GROUP BY wa.id
-    HAVING remaining_pieces > 0
     ORDER BY wa.assigned_on DESC
     LIMIT ? OFFSET ?`;
 
@@ -164,15 +163,24 @@ router.post('/generate', isAuthenticated, isAccountsAdmin, async (req, res) => {
         ORDER BY name`
     );
 
+    const isSapnaUser =
+      (req.session?.user?.username || '').toString().toLowerCase() === 'sapna';
+
     if (!senders.length || !consignees.length) {
-      req.flash('error', 'Please configure sender and consignee GST details first.');
-      return res.redirect('/accounts-challan/gst');
+      req.flash(
+        'error',
+        isSapnaUser
+          ? 'Please configure sender and consignee GST details first.'
+          : 'GST details are missing. Please ask SAPNA to configure GST Master.'
+      );
+      return res.redirect(isSapnaUser ? '/accounts-challan/gst' : '/accounts-challan');
     }
 
     res.render('accountsChallanGeneration', {
       selectedRows,
       senders,
       consignees,
+      user: req.session.user,
       error: req.flash('error'),
       success: req.flash('success')
     });
@@ -203,6 +211,11 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       return res.redirect('/accounts-challan');
     }
 
+    const normalizedItems = itemsInput.map((item) => {
+      const entryType = (item.entryType || item.itemType || 'normal').toString().toLowerCase();
+      return { ...item, entryType };
+    });
+
     const senderIDNum = parseInt(senderId, 10);
     const consigneeIDNum = parseInt(consigneeId, 10);
 
@@ -225,12 +238,14 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       return res.redirect('/accounts-challan');
     }
 
-    const washingIds = itemsInput.map((item) => parseInt(item.washing_id, 10));
-    if (!washingIds.length) {
-      req.flash('error', 'No valid washing items found');
-      conn.release();
-      return res.redirect('/accounts-challan');
-    }
+    const washingIds = Array.from(
+      new Set(
+        normalizedItems
+          .filter((item) => item.entryType !== 'mix')
+          .map((item) => parseInt(item.washing_id, 10))
+          .filter((id) => !Number.isNaN(id))
+      )
+    );
 
     const [assignmentRows] = await conn.query(
       `SELECT
@@ -241,13 +256,13 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
          IFNULL(SUM(dci.issued_pieces), 0) AS issued_pieces
        FROM washing_assignments wa
        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-       LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id
+       LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id AND COALESCE(dci.item_type, 'normal') = 'normal'
        WHERE wa.id IN (?) AND wa.is_approved = 1
        GROUP BY wa.id`,
-      [washingIds]
+      [washingIds.length ? washingIds : [0]]
     );
 
-    if (assignmentRows.length !== washingIds.length) {
+    if (washingIds.length && assignmentRows.length !== washingIds.length) {
       req.flash('error', 'Some selected lots are not approved or missing');
       conn.release();
       return res.redirect('/accounts-challan');
@@ -260,7 +275,45 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
     const items = [];
     let totalTaxableValue = 0;
 
-    for (const input of itemsInput) {
+    for (const input of normalizedItems) {
+      const entryType = input.entryType || 'normal';
+
+      if (entryType === 'mix') {
+        const customLabel = (input.customLabel || input.description || input.lot_no || '').trim();
+        const mixSku = (input.sku || input.sku_override || '').trim();
+        const requestedPieces = parseInt(input.challan_pieces, 10);
+
+        if (!customLabel) {
+          req.flash('error', 'Custom description is required for mix entries');
+          conn.release();
+          return res.redirect('/accounts-challan');
+        }
+        if (!requestedPieces || requestedPieces <= 0) {
+          req.flash('error', `Invalid quantity for mix entry "${customLabel}"`);
+          conn.release();
+          return res.redirect('/accounts-challan');
+        }
+
+        const taxableValue = requestedPieces * RATE;
+        totalTaxableValue += taxableValue;
+
+        items.push({
+          entryType: 'mix',
+          washing_id: null,
+          lot_no: customLabel,
+          customLabel,
+          sku: mixSku,
+          total_pieces: requestedPieces,
+          lot_total_pieces: null,
+          hsnSac: '62034200',
+          rate: RATE,
+          discount: 0,
+          taxableValue,
+          quantityFormatted: `${requestedPieces} PCS`
+        });
+        continue;
+      }
+
       const washingId = parseInt(input.washing_id, 10);
       const requestedPieces = parseInt(input.challan_pieces, 10);
       const assignment = assignmentById.get(washingId);
@@ -272,8 +325,21 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       }
 
       const remaining = assignment.total_pieces - assignment.issued_pieces;
-      if (!requestedPieces || requestedPieces <= 0 || requestedPieces > remaining) {
-        req.flash('error', `Invalid challan quantity for lot ${assignment.lot_no}`);
+
+      if (entryType === 'normal') {
+        if (!remaining || remaining <= 0 || !requestedPieces || requestedPieces <= 0 || requestedPieces > remaining) {
+          req.flash('error', `Invalid challan quantity for lot ${assignment.lot_no}`);
+          conn.release();
+          return res.redirect('/accounts-challan');
+        }
+      } else if (entryType === 'rewash') {
+        if (!requestedPieces || requestedPieces <= 0 || requestedPieces > assignment.total_pieces) {
+          req.flash('error', `Invalid rewash quantity for lot ${assignment.lot_no}`);
+          conn.release();
+          return res.redirect('/accounts-challan');
+        }
+      } else {
+        req.flash('error', 'Unsupported challan item type');
         conn.release();
         return res.redirect('/accounts-challan');
       }
@@ -282,6 +348,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       totalTaxableValue += taxableValue;
 
       items.push({
+        entryType,
         washing_id: washingId,
         lot_no: assignment.lot_no,
         sku: assignment.sku,
@@ -339,16 +406,19 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
     const challanId = resInsert.insertId;
     const insertItemValues = items.map((item) => [
       challanId,
-      item.washing_id,
-      item.lot_no,
+      item.entryType === 'mix' ? null : item.washing_id,
+      item.entryType === 'mix' ? item.customLabel : item.lot_no,
       item.sku,
-      item.lot_total_pieces,
-      item.total_pieces
+      item.entryType === 'mix' ? item.total_pieces : item.lot_total_pieces,
+      item.total_pieces,
+      item.entryType || 'normal',
+      item.entryType === 'mix' ? item.customLabel : null,
+      item.entryType === 'mix' ? item.sku || null : null
     ]);
 
     await conn.query(
       `INSERT INTO dc_challan_items
-        (challan_id, washing_id, lot_no, sku, total_pieces, issued_pieces)
+        (challan_id, washing_id, lot_no, sku, total_pieces, issued_pieces, item_type, custom_label, sku_override)
        VALUES ?`,
       [insertItemValues]
     );
@@ -441,6 +511,7 @@ router.get('/list', isAuthenticated, isAccountsAdmin, async (req, res) => {
     res.render('accountsChallanList', {
       challans: rows,
       search,
+      user: req.session.user,
       error: req.flash('error'),
       success: req.flash('success')
     });
@@ -451,7 +522,12 @@ router.get('/list', isAuthenticated, isAccountsAdmin, async (req, res) => {
   }
 });
 
-router.get('/gst', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.get(
+  '/gst',
+  isAuthenticated,
+  isAccountsAdmin,
+  allowUsernames(['sapna']),
+  async (req, res) => {
   try {
     const [parties] = await pool.query(
       `SELECT * FROM dc_gst_parties ORDER BY party_type, name`
@@ -459,6 +535,7 @@ router.get('/gst', isAuthenticated, isAccountsAdmin, async (req, res) => {
 
     res.render('accountsChallanGst', {
       parties,
+      user: req.session.user,
       error: req.flash('error'),
       success: req.flash('success')
     });
@@ -467,9 +544,10 @@ router.get('/gst', isAuthenticated, isAccountsAdmin, async (req, res) => {
     req.flash('error', 'Could not load GST configuration');
     res.redirect('/accounts-challan');
   }
-});
+  }
+);
 
-router.post('/gst', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post('/gst', isAuthenticated, isAccountsAdmin, allowUsernames(['sapna']), async (req, res) => {
   try {
     const {
       party_type,
@@ -514,7 +592,12 @@ router.post('/gst', isAuthenticated, isAccountsAdmin, async (req, res) => {
   }
 });
 
-router.post('/gst/:id(\\d+)', isAuthenticated, isAccountsAdmin, async (req, res) => {
+router.post(
+  '/gst/:id(\\d+)',
+  isAuthenticated,
+  isAccountsAdmin,
+  allowUsernames(['sapna']),
+  async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const {
@@ -555,6 +638,7 @@ router.post('/gst/:id(\\d+)', isAuthenticated, isAccountsAdmin, async (req, res)
     req.flash('error', 'Failed to update GST party');
     res.redirect('/accounts-challan/gst');
   }
-});
+  }
+);
 
 module.exports = router;
