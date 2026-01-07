@@ -152,6 +152,59 @@
       margin-bottom: 20px;
       display: none;
     }
+
+    .bulk-upload-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bulk-upload-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .bulk-upload-actions .form-control {
+      min-width: 240px;
+    }
+
+    .template-btn {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .template-btn:hover {
+      background: #0284c7;
+      color: white;
+    }
+
+    .upload-btn {
+      background: #16a34a;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+    }
+
+    .upload-btn:hover {
+      background: #15803d;
+    }
   </style>
 </head>
 <body>
@@ -169,6 +222,24 @@
 
     <div class="success-msg" id="successMsg">
       <i class="bi bi-check-circle"></i> <span id="successText"></span>
+    </div>
+
+    <div class="bulk-upload-card" id="bulk-upload">
+      <div>
+        <h5 class="mb-1"><i class="bi bi-upload"></i> Bulk Upload via Excel</h5>
+        <div class="text-muted">Download the template, fill in carton + SKU rows, and upload to create entries in bulk.</div>
+      </div>
+      <div class="bulk-upload-actions">
+        <a class="template-btn" href="/po-creator/inward/template">
+          <i class="bi bi-file-earmark-arrow-down"></i> Download Template
+        </a>
+        <form action="/po-creator/inward/bulk-upload" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+          <input type="file" name="inwardFile" class="form-control" accept=".xlsx" required>
+          <button type="submit" class="upload-btn">
+            <i class="bi bi-cloud-arrow-up"></i> Upload Excel
+          </button>
+        </form>
+      </div>
     </div>
 
     <form id="inwardForm">
