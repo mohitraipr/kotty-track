@@ -7,6 +7,7 @@ const ExcelJS = require('exceljs');
 const multer = require('multer');
 const fs = require('fs');
 const {
+  API_MARKETPLACE_CONFIG,
   MARKETPLACE_MATCH_RULES,
   ensurePoAdminSetup,
   fetchMarketplaces,
@@ -102,6 +103,23 @@ router.get('/dashboard', isAuthenticated, allowRoles(['poadmins', 'poadmin']), a
     console.error('Error loading PO Admin dashboard:', error);
     req.flash('error', 'Unable to load PO Admin dashboard.');
     res.redirect('/');
+  }
+});
+
+router.get('/api-dashboard', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  try {
+    await ensurePoAdminSetup();
+    const marketplaces = await fetchMarketplaces();
+
+    res.render('po-admin/api-dashboard', {
+      user: req.session.user,
+      marketplaces,
+      apiMarketplaceConfig: API_MARKETPLACE_CONFIG
+    });
+  } catch (error) {
+    console.error('Error loading PO Admin API dashboard:', error);
+    req.flash('error', 'Unable to load PO Admin API dashboard.');
+    res.redirect('/po-admin/dashboard');
   }
 });
 
