@@ -125,6 +125,12 @@ const DEFAULT_MARKETPLACES = [
   }
 ];
 
+const MARKETPLACE_MATCH_RULES = {
+  Amazon: { masterKey: 'ASIN', poKey: 'ASIN' },
+  Myntra: { masterKey: 'STYLECODE', poKey: 'Style Id' },
+  Flipkart: { masterKey: 'FSN', poKey: 'FSN' }
+};
+
 function getCellText(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') {
@@ -140,12 +146,39 @@ function normalizeHeader(header) {
   return String(header || '').trim().toLowerCase();
 }
 
+function getValueByHeader(rowData, headerName) {
+  const target = normalizeHeader(headerName);
+  for (const [key, value] of Object.entries(rowData || {})) {
+    if (normalizeHeader(key) === target) {
+      return String(value || '').trim();
+    }
+  }
+  return '';
+}
+
 function buildSearchBlob(rowData) {
   return Object.values(rowData)
     .map(value => String(value || '').trim())
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+function applyPoUpdatesToMaster(masterData, poData) {
+  const updatedData = { ...masterData };
+  const changes = [];
+
+  Object.keys(masterData || {}).forEach(masterKey => {
+    const poValue = getValueByHeader(poData, masterKey);
+    if (!poValue) return;
+    const masterValue = String(masterData[masterKey] || '').trim();
+    if (masterValue !== poValue) {
+      updatedData[masterKey] = poValue;
+      changes.push({ field: masterKey, from: masterValue, to: poValue });
+    }
+  });
+
+  return { updatedData, changes };
 }
 
 async function ensurePoAdminSetup() {
@@ -383,6 +416,14 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
   try {
     await ensurePoAdminSetup();
 
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(400).json({ error: 'Marketplace not found.' });
+    }
+
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(req.file.path);
     const worksheet = workbook.worksheets[0];
@@ -396,7 +437,7 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
       headers[colNumber - 1] = getCellText(cell.value);
     });
 
-    const insertValues = [];
+    const poRows = [];
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
       const rowData = {};
@@ -411,12 +452,60 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
         return;
       }
 
-      insertValues.push([
-        marketplaceId,
-        JSON.stringify(rowData),
-        buildSearchBlob(rowData)
-      ]);
+      poRows.push({
+        data: rowData,
+        searchBlob: buildSearchBlob(rowData)
+      });
     });
+
+    let updatedCount = 0;
+    const missingIdentifiers = new Set();
+    const changeSummaries = [];
+    const matchRule = MARKETPLACE_MATCH_RULES[marketplaceRow.name];
+
+    if (matchRule) {
+      const [masterRows] = await pool.query(
+        'SELECT id, data FROM po_admin_master_data WHERE marketplace_id = ?',
+        [marketplaceId]
+      );
+      const masterMap = new Map();
+
+      masterRows.forEach(row => {
+        const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data;
+        const identifier = getValueByHeader(data, matchRule.masterKey).toUpperCase();
+        if (identifier) {
+          masterMap.set(identifier, { id: row.id, data });
+        }
+      });
+
+      for (const poRow of poRows) {
+        const identifierRaw = getValueByHeader(poRow.data, matchRule.poKey);
+        const identifier = identifierRaw.toUpperCase();
+        if (!identifier) continue;
+
+        const masterEntry = masterMap.get(identifier);
+        if (!masterEntry) {
+          missingIdentifiers.add(identifierRaw);
+          continue;
+        }
+
+        const { updatedData, changes } = applyPoUpdatesToMaster(masterEntry.data, poRow.data);
+        if (changes.length > 0) {
+          updatedCount += 1;
+          changeSummaries.push({ identifier: identifierRaw, changes });
+          await pool.query(
+            'UPDATE po_admin_master_data SET data = ?, search_blob = ? WHERE id = ?',
+            [JSON.stringify(updatedData), buildSearchBlob(updatedData), masterEntry.id]
+          );
+        }
+      }
+    }
+
+    const insertValues = poRows.map(row => ([
+      marketplaceId,
+      JSON.stringify(row.data),
+      row.searchBlob
+    ]));
 
     if (insertValues.length) {
       await pool.query(
@@ -425,7 +514,16 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
       );
     }
 
-    res.json({ insertedCount: insertValues.length });
+    const maxChanges = 50;
+    const trimmedChanges = changeSummaries.slice(0, maxChanges);
+
+    res.json({
+      insertedCount: insertValues.length,
+      updatedCount,
+      missingIdentifiers: Array.from(missingIdentifiers),
+      changeSummaries: trimmedChanges,
+      changesTruncated: changeSummaries.length > maxChanges
+    });
   } catch (error) {
     console.error('Error uploading PO data:', error);
     res.status(500).json({ error: 'Unable to upload PO data.' });

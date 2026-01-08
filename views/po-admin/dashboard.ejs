@@ -31,6 +31,9 @@
     .stat-pill { background: #f1f5f9; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 12px; color: #475569; }
     .tab-pane { padding-top: 18px; }
     .column-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .validation-list { max-height: 160px; overflow: auto; border: 1px dashed #cbd5f5; border-radius: 10px; padding: 10px; background: #f8fafc; }
+    .validation-list li { font-size: 12px; color: #1e293b; margin-bottom: 6px; }
+    .validation-list li:last-child { margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -152,6 +155,18 @@
                   <div class="progress-bar" id="poProgress" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div class="upload-status mt-2" id="poStatus">Awaiting upload.</div>
+              </div>
+              <div class="mb-3">
+                <div class="form-label">PO Validation Summary</div>
+                <div class="upload-status" id="poValidationSummary">No validation run yet.</div>
+                <div class="mt-2">
+                  <div class="section-subtitle">Missing in master data</div>
+                  <ul class="list-unstyled validation-list mb-2" id="poMissingList"></ul>
+                </div>
+                <div>
+                  <div class="section-subtitle">Updated master data values</div>
+                  <ul class="list-unstyled validation-list" id="poChangedList"></ul>
+                </div>
               </div>
               <div>
                 <div class="form-label">Expected Columns</div>
@@ -359,6 +374,42 @@
       request.send(formData);
     }
 
+    function renderValidationList(target, items, emptyMessage) {
+      target.innerHTML = '';
+      if (!items || items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = emptyMessage;
+        target.appendChild(li);
+        return;
+      }
+      items.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        target.appendChild(li);
+      });
+    }
+
+    function updatePoValidationSummary(response, marketplaceName) {
+      const updatedCount = response.updatedCount || 0;
+      const missingCount = response.missingIdentifiers?.length || 0;
+      const summary = `${marketplaceName}: ${updatedCount} master records updated. ${missingCount} identifiers missing in master data.`;
+      document.getElementById('poValidationSummary').textContent = summary;
+
+      const missingItems = (response.missingIdentifiers || []).map(item => `${item}`);
+      renderValidationList(document.getElementById('poMissingList'), missingItems, 'No missing identifiers detected.');
+
+      const changedItems = (response.changeSummaries || []).map(change => {
+        const changeText = change.changes
+          .map(item => `${item.field}: "${item.from || '-'}" → "${item.to || '-'}"`)
+          .join('; ');
+        return `${change.identifier}: ${changeText}`;
+      });
+      if (response.changesTruncated) {
+        changedItems.push('Additional changes are available but truncated in this summary.');
+      }
+      renderValidationList(document.getElementById('poChangedList'), changedItems, 'No master data updates were required.');
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       const masterMarketplace = document.getElementById('masterMarketplace');
       const poMarketplace = document.getElementById('poMarketplace');
@@ -368,6 +419,8 @@
       updateColumnDisplays();
       loadMasterData();
       loadPoData();
+      renderValidationList(document.getElementById('poMissingList'), [], 'No validation run yet.');
+      renderValidationList(document.getElementById('poChangedList'), [], 'No validation run yet.');
 
       masterMarketplace.addEventListener('change', () => {
         masterState.page = 1;
@@ -406,6 +459,8 @@
           endpoint: '/po-admin/upload-po',
           onSuccess: (response) => {
             document.getElementById('poStatus').textContent = `Inserted ${response.insertedCount || 0} rows.`;
+            const marketplaceName = getMarketplaceById(poMarketplace.value)?.name || 'Marketplace';
+            updatePoValidationSummary(response, marketplaceName);
             loadPoData();
           }
         });
