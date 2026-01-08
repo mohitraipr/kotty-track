@@ -100,30 +100,79 @@ router.get('/lot-entry', isPOCreator, async (req, res) => {
 // Lot entry - Submit data
 router.post('/lot-entry', isPOCreator, async (req, res) => {
   try {
-    const { lot_code, sku, size, quantity } = req.body;
+    const { lot_code, sku, size, quantity, size_values, size_quantities } = req.body;
 
-    if (!lot_code || !sku || !quantity) {
-      req.flash('error', 'Lot code, SKU, and quantity are required.');
+    if (!lot_code || !sku) {
+      req.flash('error', 'Lot code and SKU are required.');
       return res.redirect('/po-creator/lot-entry');
     }
 
-    const parsedQuantity = Number(quantity);
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      req.flash('error', 'Quantity must be a positive number.');
-      return res.redirect('/po-creator/lot-entry');
-    }
+    const normalizedSizes = String(size || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+    const sizes = Array.isArray(size_values)
+      ? size_values.map(item => String(item).trim()).filter(Boolean)
+      : normalizedSizes;
 
-    await pool.query(
-      `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        req.session.user.id,
-        String(lot_code).trim(),
-        String(sku).trim(),
-        size ? String(size).trim() : null,
-        parsedQuantity
-      ]
-    );
+    if (sizes.length > 0) {
+      const quantityList = Array.isArray(size_quantities) ? size_quantities : [size_quantities];
+      if (!quantityList || quantityList.length !== sizes.length) {
+        req.flash('error', 'Please provide quantities for each size.');
+        return res.redirect('/po-creator/lot-entry');
+      }
+
+      const insertRows = sizes.map((sizeValue, index) => {
+        const parsedQuantity = Number(quantityList[index]);
+        return {
+          sizeValue,
+          parsedQuantity
+        };
+      });
+
+      const invalidQuantity = insertRows.find(row => !Number.isFinite(row.parsedQuantity) || row.parsedQuantity <= 0);
+      if (invalidQuantity) {
+        req.flash('error', 'Each size must have a positive quantity.');
+        return res.redirect('/po-creator/lot-entry');
+      }
+
+      await pool.query(
+        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
+         VALUES ?`,
+        [
+          insertRows.map(row => [
+            req.session.user.id,
+            String(lot_code).trim(),
+            String(sku).trim(),
+            row.sizeValue,
+            row.parsedQuantity
+          ])
+        ]
+      );
+    } else {
+      if (!quantity) {
+        req.flash('error', 'Quantity is required.');
+        return res.redirect('/po-creator/lot-entry');
+      }
+
+      const parsedQuantity = Number(quantity);
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        req.flash('error', 'Quantity must be a positive number.');
+        return res.redirect('/po-creator/lot-entry');
+      }
+
+      await pool.query(
+        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          req.session.user.id,
+          String(lot_code).trim(),
+          String(sku).trim(),
+          null,
+          parsedQuantity
+        ]
+      );
+    }
 
     req.flash('success', 'Lot entry saved successfully.');
     res.redirect('/po-creator/lot-entry');
