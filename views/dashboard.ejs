@@ -27,12 +27,16 @@
   <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
       <div class="container-fluid">
-        <span class="navbar-brand">Dashboard: <%= tableName %></span>
+        <span class="navbar-brand">
+          Dashboard<% if (tableName) { %>: <%= tableName %><% } %>
+        </span>
         <div class="ms-auto">
           <span class="navbar-text me-3">
             Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
           </span>
-          <a href="/dashboard" class="btn btn-outline-light me-2">Back</a>
+          <% if (tableName) { %>
+            <a href="/dashboard" class="btn btn-outline-light me-2">Back</a>
+          <% } %>
           <a href="/logout" class="btn btn-outline-light">Logout</a>
         </div>
       </div>
@@ -54,153 +58,172 @@
         </div>
       <% } %>
 
-      <!-- Title + Search + Download + Print -->
-      <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-        <div class="d-flex align-items-center">
-          <h2 class="mb-0 me-4">Data in <%= tableName %></h2>
-          <form class="d-flex" method="GET" action="/dashboard/view">
-            <input type="hidden" name="table" value="<%= tableName %>" />
-            <input
-              type="text"
-              name="search"
-              class="form-control form-control-sm me-2"
-              placeholder="Search..."
-              value="<%= searchTerm %>"
-            />
-            <button type="submit" class="btn btn-sm btn-primary">Search</button>
-          </form>
+      <% if (tableName) { %>
+        <!-- Title + Search + Download + Print -->
+        <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+          <div class="d-flex align-items-center">
+            <h2 class="mb-0 me-4">Data in <%= tableName %></h2>
+            <form class="d-flex" method="GET" action="/dashboard/view">
+              <input type="hidden" name="table" value="<%= tableName %>" />
+              <input
+                type="text"
+                name="search"
+                class="form-control form-control-sm me-2"
+                placeholder="Search..."
+                value="<%= searchTerm %>"
+              />
+              <button type="submit" class="btn btn-sm btn-primary">Search</button>
+            </form>
+          </div>
+          <div>
+            <a
+              href="/dashboard/download-excel?table=<%= tableName %>&search=<%= searchTerm %>"
+              class="btn btn-success btn-sm me-2"
+            >
+              Download Excel
+            </a>
+            <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+              Print
+            </button>
+          </div>
         </div>
-        <div>
-          <a
-            href="/dashboard/download-excel?table=<%= tableName %>&search=<%= searchTerm %>"
-            class="btn btn-success btn-sm me-2"
-          >
-            Download Excel
-          </a>
-          <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
-            Print
-          </button>
-        </div>
-      </div>
 
-      <div class="table-scroll mb-4">
-        <table class="table table-bordered" id="dataTable">
-          <thead class="table-dark">
-            <% if (rows.length > 0) { %>
-              <tr>
-                <% Object.keys(rows[0]).forEach((col) => { %>
-                  <th><%= col %></th>
-                <% }) %>
-              </tr>
-            <% } else { %>
-              <tr>
-                <% columns.forEach((c) => { %>
-                  <th><%= c.Field %></th>
-                <% }) %>
-              </tr>
-            <% } %>
-          </thead>
-          <tbody>
-            <% rows.forEach((r) => { %>
-              <tr>
-                <% columns.forEach((c) => { %>
-                  <td><%= (r[c.Field] !== undefined) ? r[c.Field] : '' %></td>
-                <% }) %>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination if more than 25 rows total -->
-      <% if (totalPages && totalPages > 1) { %>
-        <nav class="no-print">
-          <ul class="pagination">
-            <li class="page-item <%= (currentPage <= 1) ? 'disabled' : '' %>">
-              <a
-                class="page-link"
-                href="/dashboard/view?table=<%= tableName %>&search=<%= searchTerm %>&page=<%= currentPage - 1 %>"
-              >Previous</a>
-            </li>
-            <li class="page-item disabled">
-              <span class="page-link">
-                Page <%= currentPage %> of <%= totalPages %>
-              </span>
-            </li>
-            <li class="page-item <%= (currentPage >= totalPages) ? 'disabled' : '' %>">
-              <a
-                class="page-link"
-                href="/dashboard/view?table=<%= tableName %>&search=<%= searchTerm %>&page=<%= currentPage + 1 %>"
-              >Next</a>
-            </li>
-          </ul>
-        </nav>
-      <% } %>
-
-      <% if (canUpdate) { %>
-        <hr />
-        <h3>Insert New Data</h3>
-        <form
-          method="POST"
-          action="/dashboard/insert/<%= tableName %>"
-          class="card p-4"
-        >
-          <% columns.forEach((col) => {
-               if (col.Key === 'PRI') { return; }
-               let inputType = 'text';
-               if (col.Type.includes('int') || col.Type.includes('decimal')) {
-                 inputType = 'number';
-               } else if (col.Type.includes('date') || col.Type.includes('time')) {
-                 inputType = 'date';
-               }
-          %>
-            <div class="mb-3">
-              <label class="form-label"><%= col.Field %></label>
-
-              <% if (col.Type.includes('enum(')) {
-                   const match = col.Type.match(/\(([^)]+)\)/);
-                   let enumVals = [];
-                   if (match && match[1]) {
-                     enumVals = match[1].split(',').map(v => v.replace(/'/g, '').trim());
-                   }
-              %>
-                <select class="form-select" name="<%= col.Field %>">
-                  <% enumVals.forEach(ev => { %>
-                    <option value="<%= ev %>"><%= ev %></option>
+        <div class="table-scroll mb-4">
+          <table class="table table-bordered" id="dataTable">
+            <thead class="table-dark">
+              <% if (rows.length > 0) { %>
+                <tr>
+                  <% Object.keys(rows[0]).forEach((col) => { %>
+                    <th><%= col %></th>
                   <% }) %>
-                </select>
+                </tr>
               <% } else { %>
-                <input
-                  type="<%= inputType %>"
-                  class="form-control"
-                  name="<%= col.Field %>"
-                  step="0.01"
-                />
+                <tr>
+                  <% columns.forEach((c) => { %>
+                    <th><%= c.Field %></th>
+                  <% }) %>
+                </tr>
               <% } %>
-            </div>
-          <% }) %>
-          <button type="submit" class="btn btn-primary">Insert</button>
-        </form>
-      <% } %>
+            </thead>
+            <tbody>
+              <% rows.forEach((r) => { %>
+                <tr>
+                  <% columns.forEach((c) => { %>
+                    <td><%= (r[c.Field] !== undefined) ? r[c.Field] : '' %></td>
+                  <% }) %>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
 
-      <!-- Bulk Upload if user is fabric_manager on certain tables -->
-      <% if (user.roleName === 'fabric_manager' && (tableName === 'fabric_invoices' || tableName === 'fabric_invoice_rolls')) { %>
-        <hr />
-        <h4>Bulk Upload</h4>
-        <p>You can download the Excel template and upload data in bulk.</p>
-        <a
-          href="/dashboard/download-template?table=<%= tableName %>"
-          class="btn btn-success mb-3"
-        >
-          Download Excel Template
-        </a>
-        <br />
-        <a
-          href="/dashboard/bulk-upload?table=<%= tableName %>"
-          class="btn btn-outline-primary"
-        >
-          Go to Bulk Upload Page
-        </a>
+        <!-- Pagination if more than 25 rows total -->
+        <% if (totalPages && totalPages > 1) { %>
+          <nav class="no-print">
+            <ul class="pagination">
+              <li class="page-item <%= (currentPage <= 1) ? 'disabled' : '' %>">
+                <a
+                  class="page-link"
+                  href="/dashboard/view?table=<%= tableName %>&search=<%= searchTerm %>&page=<%= currentPage - 1 %>"
+                >Previous</a>
+              </li>
+              <li class="page-item disabled">
+                <span class="page-link">
+                  Page <%= currentPage %> of <%= totalPages %>
+                </span>
+              </li>
+              <li class="page-item <%= (currentPage >= totalPages) ? 'disabled' : '' %>">
+                <a
+                  class="page-link"
+                  href="/dashboard/view?table=<%= tableName %>&search=<%= searchTerm %>&page=<%= currentPage + 1 %>"
+                >Next</a>
+              </li>
+            </ul>
+          </nav>
+        <% } %>
+
+        <% if (canUpdate) { %>
+          <hr />
+          <h3>Insert New Data</h3>
+          <form
+            method="POST"
+            action="/dashboard/insert/<%= tableName %>"
+            class="card p-4"
+          >
+            <% columns.forEach((col) => {
+                 if (col.Key === 'PRI') { return; }
+                 let inputType = 'text';
+                 if (col.Type.includes('int') || col.Type.includes('decimal')) {
+                   inputType = 'number';
+                 } else if (col.Type.includes('date') || col.Type.includes('time')) {
+                   inputType = 'date';
+                 }
+            %>
+              <div class="mb-3">
+                <label class="form-label"><%= col.Field %></label>
+
+                <% if (col.Type.includes('enum(')) {
+                     const match = col.Type.match(/\(([^)]+)\)/);
+                     let enumVals = [];
+                     if (match && match[1]) {
+                       enumVals = match[1].split(',').map(v => v.replace(/'/g, '').trim());
+                     }
+                %>
+                  <select class="form-select" name="<%= col.Field %>">
+                    <% enumVals.forEach(ev => { %>
+                      <option value="<%= ev %>"><%= ev %></option>
+                    <% }) %>
+                  </select>
+                <% } else { %>
+                  <input
+                    type="<%= inputType %>"
+                    class="form-control"
+                    name="<%= col.Field %>"
+                    step="0.01"
+                  />
+                <% } %>
+              </div>
+            <% }) %>
+            <button type="submit" class="btn btn-primary">Insert</button>
+          </form>
+        <% } %>
+
+        <!-- Bulk Upload if user is fabric_manager on certain tables -->
+        <% if (user.roleName === 'fabric_manager' && (tableName === 'fabric_invoices' || tableName === 'fabric_invoice_rolls')) { %>
+          <hr />
+          <h4>Bulk Upload</h4>
+          <p>You can download the Excel template and upload data in bulk.</p>
+          <a
+            href="/dashboard/download-template?table=<%= tableName %>"
+            class="btn btn-success mb-3"
+          >
+            Download Excel Template
+          </a>
+          <br />
+          <a
+            href="/dashboard/bulk-upload?table=<%= tableName %>"
+            class="btn btn-outline-primary"
+          >
+            Go to Bulk Upload Page
+          </a>
+        <% } %>
+      <% } else { %>
+        <h2 class="mb-4">Available Dashboards</h2>
+        <% if (dashboards && dashboards.length) { %>
+          <div class="list-group">
+            <% dashboards.forEach((dashboard) => { %>
+              <a
+                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                href="/dashboard/view?table=<%= dashboard.table_name %>"
+              >
+                <span><%= dashboard.name %></span>
+                <small class="text-muted"><%= dashboard.table_name %></small>
+              </a>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <div class="alert alert-info">No dashboards are assigned to your role yet.</div>
+        <% } %>
       <% } %>
     </div>
 
