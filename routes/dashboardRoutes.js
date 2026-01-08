@@ -49,7 +49,8 @@ router.get('/', isAuthenticated, async (req, res) => {
     );
     return res.render('dashboard', {
       user: req.session.user,
-      dashboards
+      dashboards,
+      tableName: null
     });
   } catch (err) {
     console.error('Error listing dashboards:', err);
