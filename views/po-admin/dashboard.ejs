@@ -164,6 +164,12 @@
                 <div class="upload-status mt-2" id="poStatus">Awaiting upload.</div>
               </div>
               <div class="mb-3">
+                <button class="btn btn-outline w-100" data-bs-toggle="modal" data-bs-target="#poDeleteModal">
+                  <i class="bi bi-trash"></i> Delete PO
+                </button>
+                <div class="upload-status mt-2" id="poDeleteStatus">No deletions yet.</div>
+              </div>
+              <div class="mb-3">
                 <div class="form-label">PO Validation Summary</div>
                 <div class="upload-status" id="poValidationSummary">No validation run yet.</div>
                 <div class="mt-2">
@@ -258,12 +264,49 @@
     </div>
   </div>
 
+  <div class="modal fade" id="poDeleteModal" tabindex="-1" aria-labelledby="poDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="poDeleteModalLabel">Delete PO</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="poDeleteNumber" class="form-label">PO Number</label>
+            <input type="text" class="form-control" id="poDeleteNumber" placeholder="Enter PO number">
+          </div>
+          <div class="mb-3">
+            <div class="upload-status" id="poDeleteSummary">Enter a PO number to preview.</div>
+            <div class="d-flex justify-content-between mt-2">
+              <span class="section-subtitle">Total quantity</span>
+              <span class="stat-pill" id="poDeleteTotal">-</span>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+              <span class="section-subtitle">Rows found</span>
+              <span class="stat-pill" id="poDeleteRows">-</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="poDeleteCheckBtn">
+            <i class="bi bi-search"></i> Check PO
+          </button>
+          <button type="button" class="btn btn-danger" id="poDeleteConfirmBtn" disabled>
+            <i class="bi bi-trash"></i> Delete PO
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
     const masterState = { page: 1, search: '' };
     const poState = { page: 1, search: '' };
     const apiKeyState = { keys: [] };
+    const poDeleteState = { rowCount: 0, totalQuantity: 0 };
 
     function populateMarketplaceOptions(selectElement) {
       selectElement.innerHTML = '';
@@ -519,6 +562,87 @@
       renderValidationList(document.getElementById('poChangedList'), changedItems, 'No master data updates were required.');
     }
 
+    function resetPoDeleteSummary() {
+      poDeleteState.rowCount = 0;
+      poDeleteState.totalQuantity = 0;
+      document.getElementById('poDeleteSummary').textContent = 'Enter a PO number to preview.';
+      document.getElementById('poDeleteTotal').textContent = '-';
+      document.getElementById('poDeleteRows').textContent = '-';
+      document.getElementById('poDeleteConfirmBtn').disabled = true;
+    }
+
+    function clearPoDeleteTotals() {
+      poDeleteState.rowCount = 0;
+      poDeleteState.totalQuantity = 0;
+      document.getElementById('poDeleteTotal').textContent = '-';
+      document.getElementById('poDeleteRows').textContent = '-';
+      document.getElementById('poDeleteConfirmBtn').disabled = true;
+    }
+
+    async function loadPoDeleteSummary() {
+      const marketplaceId = document.getElementById('poMarketplace').value;
+      const poNumber = document.getElementById('poDeleteNumber').value.trim();
+      const summary = document.getElementById('poDeleteSummary');
+      if (!marketplaceId || !poNumber) {
+        summary.textContent = 'Please select a marketplace and enter a PO number.';
+        return;
+      }
+
+      summary.textContent = 'Checking PO...';
+      try {
+        const response = await fetch(`/po-admin/api/po-summary?marketplaceId=${marketplaceId}&poNumber=${encodeURIComponent(poNumber)}`);
+        const data = await response.json();
+        if (!response.ok) {
+          summary.textContent = data.error || 'Unable to fetch PO summary.';
+          clearPoDeleteTotals();
+          return;
+        }
+        poDeleteState.rowCount = data.rowCount || 0;
+        poDeleteState.totalQuantity = data.totalQuantity || 0;
+        document.getElementById('poDeleteTotal').textContent = poDeleteState.totalQuantity;
+        document.getElementById('poDeleteRows').textContent = poDeleteState.rowCount;
+        summary.textContent = poDeleteState.rowCount
+          ? 'Review the totals and confirm deletion.'
+          : 'No PO rows found for this number.';
+        document.getElementById('poDeleteConfirmBtn').disabled = poDeleteState.rowCount === 0;
+      } catch (error) {
+        console.error('Failed to load PO summary', error);
+        summary.textContent = 'Unable to fetch PO summary.';
+        clearPoDeleteTotals();
+      }
+    }
+
+    async function deletePo() {
+      const marketplaceId = document.getElementById('poMarketplace').value;
+      const poNumber = document.getElementById('poDeleteNumber').value.trim();
+      const statusTarget = document.getElementById('poDeleteStatus');
+      if (!marketplaceId || !poNumber) {
+        statusTarget.textContent = 'Please select a marketplace and enter a PO number.';
+        return;
+      }
+
+      statusTarget.textContent = 'Deleting PO...';
+      try {
+        const response = await fetch('/po-admin/api/delete-po', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ marketplaceId, poNumber })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          statusTarget.textContent = data.error || 'Unable to delete PO.';
+          return;
+        }
+        statusTarget.textContent = `Deleted ${data.deletedCount || 0} rows. Total qty removed: ${data.totalQuantity || 0}.`;
+        resetPoDeleteSummary();
+        document.getElementById('poDeleteNumber').value = '';
+        loadPoData();
+      } catch (error) {
+        console.error('Failed to delete PO', error);
+        statusTarget.textContent = 'Unable to delete PO.';
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       const masterMarketplace = document.getElementById('masterMarketplace');
       const poMarketplace = document.getElementById('poMarketplace');
@@ -541,6 +665,7 @@
         poState.page = 1;
         updateColumnDisplays();
         loadPoData();
+        resetPoDeleteSummary();
       });
 
       document.getElementById('masterUploadBtn').addEventListener('click', () => {
@@ -567,7 +692,8 @@
           statusTarget: document.getElementById('poStatus'),
           endpoint: '/po-admin/upload-po',
           onSuccess: (response) => {
-            document.getElementById('poStatus').textContent = `Inserted ${response.insertedCount || 0} rows.`;
+            const duplicateCount = response.skippedDuplicateCount || 0;
+            document.getElementById('poStatus').textContent = `Inserted ${response.insertedCount || 0} rows. Skipped ${duplicateCount} duplicate rows.`;
             const marketplaceName = getMarketplaceById(poMarketplace.value)?.name || 'Marketplace';
             updatePoValidationSummary(response, marketplaceName);
             loadPoData();
@@ -611,8 +737,15 @@
         loadPoData();
       });
 
+      document.getElementById('poDeleteCheckBtn').addEventListener('click', loadPoDeleteSummary);
+      document.getElementById('poDeleteConfirmBtn').addEventListener('click', deletePo);
+      document.getElementById('poDeleteNumber').addEventListener('input', () => {
+        resetPoDeleteSummary();
+      });
+
       document.getElementById('apiKeyCreateBtn').addEventListener('click', createApiKey);
       loadApiKeys();
+      resetPoDeleteSummary();
     });
   </script>
 </body>

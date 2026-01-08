@@ -118,9 +118,17 @@ router.post('/lookup', async (req, res) => {
 
     const results = identifiers.map(identifier => {
       const masterData = masterMap.get(identifier) || {};
+      let quantity = quantityMap.get(identifier) || 0;
+      if (marketplaceName === 'Myntra') {
+        const orderQtyRaw = getValueByHeader(masterData, 'order_qty');
+        if (orderQtyRaw) {
+          const orderQty = Number(orderQtyRaw || 0);
+          quantity = Number.isFinite(orderQty) ? orderQty : orderQtyRaw;
+        }
+      }
       return {
         [config.responseKey]: identifier,
-        quantity: quantityMap.get(identifier) || 0,
+        quantity,
         ...masterData
       };
     });

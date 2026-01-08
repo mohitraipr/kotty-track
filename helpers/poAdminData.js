@@ -63,6 +63,7 @@ const DEFAULT_MARKETPLACES = [
       'SKUCODE',
       'STYLECODE',
       'Quantity',
+      'order_qty',
       'Size',
       'Color',
       'Warehouse References',
@@ -208,7 +209,7 @@ async function ensurePoAdminSetup() {
     );
   } else {
     const [rows] = await pool.query(
-      'SELECT id, name, po_columns AS poColumns FROM po_admin_marketplaces'
+      'SELECT id, name, master_columns AS masterColumns, po_columns AS poColumns FROM po_admin_marketplaces'
     );
     const flipkartRow = rows.find(row => row.name === 'Flipkart');
     if (flipkartRow) {
@@ -220,6 +221,19 @@ async function ensurePoAdminSetup() {
         await pool.query(
           'UPDATE po_admin_marketplaces SET po_columns = ? WHERE id = ?',
           [JSON.stringify(currentColumns), flipkartRow.id]
+        );
+      }
+    }
+    const myntraRow = rows.find(row => row.name === 'Myntra');
+    if (myntraRow) {
+      const currentMasterColumns = Array.isArray(myntraRow.masterColumns)
+        ? myntraRow.masterColumns
+        : JSON.parse(myntraRow.masterColumns || '[]');
+      if (!currentMasterColumns.includes('order_qty')) {
+        currentMasterColumns.push('order_qty');
+        await pool.query(
+          'UPDATE po_admin_marketplaces SET master_columns = ? WHERE id = ?',
+          [JSON.stringify(currentMasterColumns), myntraRow.id]
         );
       }
     }

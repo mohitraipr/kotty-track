@@ -61,11 +61,15 @@ function buildSearchBlob(rowData) {
     .toLowerCase();
 }
 
-function applyPoUpdatesToMaster(masterData, poData) {
+function applyPoUpdatesToMaster(masterData, poData, options = {}) {
   const updatedData = { ...masterData };
   const changes = [];
+  const skipHeaders = (options.skipHeaders || []).map(header => normalizeHeader(header));
 
   Object.keys(masterData || {}).forEach(masterKey => {
+    if (skipHeaders.includes(normalizeHeader(masterKey))) {
+      return;
+    }
     const poValue = getValueByHeader(poData, masterKey);
     if (!poValue) return;
     const masterValue = String(masterData[masterKey] || '').trim();
@@ -96,6 +100,11 @@ function getTodayDateString() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function buildJsonPath(columnName) {
+  const safeName = String(columnName || '').replace(/"/g, '\\"');
+  return `$.\"${safeName}\"`;
 }
 
 router.get('/dashboard', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
@@ -458,6 +467,8 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
     });
 
     const poRows = [];
+    const rowSignatures = new Set();
+    const duplicateRows = new Set();
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
       const rowData = {};
@@ -472,6 +483,15 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
         return;
       }
 
+      const signature = headers
+        .map(header => `${normalizeHeader(header)}:${String(rowData[header] || '').trim().toLowerCase()}`)
+        .join('|');
+      if (rowSignatures.has(signature)) {
+        duplicateRows.add(signature);
+        return;
+      }
+      rowSignatures.add(signature);
+
       poRows.push({
         data: rowData,
         searchBlob: buildSearchBlob(rowData)
@@ -482,6 +502,7 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
     const missingIdentifiers = new Set();
     const changeSummaries = [];
     const matchRule = MARKETPLACE_MATCH_RULES[marketplaceRow.name];
+    const marketplaceConfig = API_MARKETPLACE_CONFIG[marketplaceRow.name];
 
     if (matchRule) {
       const [masterRows] = await pool.query(
@@ -509,7 +530,18 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
           continue;
         }
 
-        const { updatedData, changes } = applyPoUpdatesToMaster(masterEntry.data, poRow.data);
+        const skipHeaders = marketplaceRow.name === 'Myntra' ? ['Quantity'] : [];
+        const { updatedData, changes } = applyPoUpdatesToMaster(masterEntry.data, poRow.data, { skipHeaders });
+        if (marketplaceRow.name === 'Myntra') {
+          const poQuantity = getValueByHeader(poRow.data, marketplaceConfig?.quantityKey || 'Quantity');
+          if (poQuantity) {
+            const currentOrderQty = String(masterEntry.data?.order_qty || '').trim();
+            if (currentOrderQty !== poQuantity) {
+              updatedData.order_qty = poQuantity;
+              changes.push({ field: 'order_qty', from: currentOrderQty, to: poQuantity });
+            }
+          }
+        }
         if (changes.length > 0) {
           updatedCount += 1;
           changeSummaries.push({ identifier: identifierRaw, changes });
@@ -542,7 +574,8 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
       updatedCount,
       missingIdentifiers: Array.from(missingIdentifiers),
       changeSummaries: trimmedChanges,
-      changesTruncated: changeSummaries.length > maxChanges
+      changesTruncated: changeSummaries.length > maxChanges,
+      skippedDuplicateCount: duplicateRows.size
     });
   } catch (error) {
     console.error('Error uploading PO data:', error);
@@ -551,6 +584,118 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
     if (req.file?.path) {
       await fsPromises.unlink(req.file.path).catch(() => undefined);
     }
+  }
+});
+
+router.get('/api/po-summary', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.query.marketplaceId);
+  const poNumber = String(req.query.poNumber || '').trim();
+
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+  if (!poNumber) {
+    return res.status(400).json({ error: 'PO number is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    const config = API_MARKETPLACE_CONFIG[marketplaceRow.name];
+    if (!config) {
+      return res.status(400).json({ error: 'Marketplace not supported for PO summary.' });
+    }
+
+    const poNumberPath = buildJsonPath(config.poNumberKey);
+    const [poRows] = await pool.query(
+      `SELECT data FROM po_admin_po_uploads
+       WHERE marketplace_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, ?)) = ?`,
+      [marketplaceId, poNumberPath, poNumber]
+    );
+
+    const totalQuantity = poRows.reduce((sum, row) => {
+      const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data;
+      const qtyRaw = getValueByHeader(data, config.quantityKey);
+      const qty = Number(qtyRaw || 0);
+      return sum + (Number.isFinite(qty) ? qty : 0);
+    }, 0);
+
+    return res.json({
+      poNumber,
+      rowCount: poRows.length,
+      totalQuantity
+    });
+  } catch (error) {
+    console.error('Error fetching PO summary:', error);
+    return res.status(500).json({ error: 'Unable to fetch PO summary.' });
+  }
+});
+
+router.post('/api/delete-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.body.marketplaceId);
+  const poNumber = String(req.body.poNumber || '').trim();
+
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+  if (!poNumber) {
+    return res.status(400).json({ error: 'PO number is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    const config = API_MARKETPLACE_CONFIG[marketplaceRow.name];
+    if (!config) {
+      return res.status(400).json({ error: 'Marketplace not supported for PO deletion.' });
+    }
+
+    const poNumberPath = buildJsonPath(config.poNumberKey);
+    const [poRows] = await pool.query(
+      `SELECT data FROM po_admin_po_uploads
+       WHERE marketplace_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, ?)) = ?`,
+      [marketplaceId, poNumberPath, poNumber]
+    );
+
+    if (!poRows.length) {
+      return res.status(404).json({ error: 'PO number not found.' });
+    }
+
+    const totalQuantity = poRows.reduce((sum, row) => {
+      const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data;
+      const qtyRaw = getValueByHeader(data, config.quantityKey);
+      const qty = Number(qtyRaw || 0);
+      return sum + (Number.isFinite(qty) ? qty : 0);
+    }, 0);
+
+    const [result] = await pool.query(
+      `DELETE FROM po_admin_po_uploads
+       WHERE marketplace_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, ?)) = ?`,
+      [marketplaceId, poNumberPath, poNumber]
+    );
+
+    return res.json({
+      poNumber,
+      deletedCount: result.affectedRows || 0,
+      totalQuantity
+    });
+  } catch (error) {
+    console.error('Error deleting PO data:', error);
+    return res.status(500).json({ error: 'Unable to delete PO data.' });
   }
 });
 
