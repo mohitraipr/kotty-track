@@ -163,4 +163,18 @@ router.get('/logout', async (req, res) => {
   });
 });
 
+router.post('/logout', async (req, res) => {
+  const sessionLogId = req.session?.sessionLogId;
+  if (sessionLogId) {
+    await closeSessionLog(sessionLogId, req.session?.lastActivityUpdate);
+  }
+
+  req.session.destroy(err => {
+    if (err) {
+      console.error('Error destroying session during logout:', err);
+    }
+    res.redirect('/login');
+  });
+});
+
 module.exports = router;

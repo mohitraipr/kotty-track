@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lot Entries - Kotty Track</title>
+  <title>PO Admin Lot Entries - Kotty Track</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,8 +22,8 @@
 <body>
   <div class="top-nav">
     <div class="d-flex justify-content-between align-items-center">
-      <h4 class="mb-0"><i class="bi bi-calendar-range"></i> Lot Entries by Date</h4>
-      <a href="/operator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
+      <h4 class="mb-0"><i class="bi bi-archive"></i> PO Creator Lot Entries</h4>
+      <a href="/po-admin/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
     </div>
   </div>
 
@@ -31,7 +31,7 @@
     <%- include('../partials/flashMessages') %>
 
     <div class="filter-card">
-      <form class="row g-3" method="GET" action="/po-creator/operator/lot-entries">
+      <form class="row g-3" method="GET" action="/po-admin/lot-entries">
         <div class="col-md-3">
           <label class="form-label">Filter by Date</label>
           <input type="date" name="date" class="form-control" value="<%= selectedDate %>">
@@ -40,16 +40,22 @@
           <label class="form-label">Search (Lot or SKU)</label>
           <input type="text" name="search" class="form-control" value="<%= searchTerm %>" placeholder="LOT123 or SKU">
         </div>
-        <div class="col-md-4 d-flex align-items-end">
+        <div class="col-md-5 d-flex align-items-end">
           <button type="submit" class="btn btn-primary me-2"><i class="bi bi-funnel"></i> Apply</button>
-          <a href="/po-creator/operator/lot-entries" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Clear</a>
+          <a href="/po-admin/lot-entries" class="btn btn-outline-secondary me-2"><i class="bi bi-x-circle"></i> Reset</a>
+          <a
+            class="btn btn-outline-success"
+            href="/po-admin/lot-entries/export?<%= new URLSearchParams({ date: selectedDate || '', search: searchTerm || '' }).toString() %>"
+          >
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+          </a>
         </div>
       </form>
     </div>
 
     <div class="table-card">
-      <div class="p-3 border-bottom">
-        <strong>Total Entries:</strong> <%= entries.length %>
+      <div class="p-3 border-bottom d-flex justify-content-between">
+        <strong>Total Entries:</strong> <span><%= entries.length %></span>
       </div>
       <div class="table-responsive">
         <table class="table mb-0">
