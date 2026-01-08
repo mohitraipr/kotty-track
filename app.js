@@ -112,6 +112,7 @@ const poCreatorRoutes = require('./routes/poCreatorRoutes');
 const nowiPoRoutes = require('./routes/nowiPoRoutes');
 const vendorFilesRoutes = require('./routes/vendorFilesRoutes');
 const poAdminRoutes = require('./routes/poAdminRoutes');
+const poAdminApiRoutes = require('./routes/poAdminApiRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -158,6 +159,7 @@ app.use('/po-creator', poCreatorRoutes);
 app.use('/nowi-po', nowiPoRoutes);
 app.use('/vendor-files', vendorFilesRoutes);
 app.use('/po-admin', poAdminRoutes);
+app.use('/api/po-admin', poAdminApiRoutes);
 
 // Home Route
 app.get('/', (req, res) => {
