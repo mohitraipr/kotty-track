@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lot Entries - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
+    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+    .back-btn { background: #6c757d; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; }
+    .back-btn:hover { background: #5c636a; color: white; }
+    .filter-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .table-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .table thead { background: #f8f9fa; }
+    .table thead th { font-weight: 600; color: #1e293b; padding: 14px; border-bottom: 2px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <h4 class="mb-0"><i class="bi bi-calendar-range"></i> Lot Entries by Date</h4>
+      <a href="/operator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <%- include('../partials/flashMessages') %>
+
+    <div class="filter-card">
+      <form class="row g-3" method="GET" action="/po-creator/operator/lot-entries">
+        <div class="col-md-4">
+          <label class="form-label">Filter by Date</label>
+          <input type="date" name="date" class="form-control" value="<%= selectedDate %>">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary me-2"><i class="bi bi-funnel"></i> Apply</button>
+          <a href="/po-creator/operator/lot-entries" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Clear</a>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-card">
+      <div class="p-3 border-bottom">
+        <strong>Total Entries:</strong> <%= entries.length %>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Creator</th>
+              <th>Lot Code</th>
+              <th>SKU</th>
+              <th>Size</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (entries.length === 0) { %>
+              <tr>
+                <td colspan="6" class="text-center py-4">No lot entries found.</td>
+              </tr>
+            <% } else { %>
+              <% entries.forEach(entry => { %>
+                <tr>
+                  <td><%= new Date(entry.created_at).toLocaleDateString() %></td>
+                  <td><%= entry.creator_username %></td>
+                  <td><%= entry.lot_code %></td>
+                  <td><%= entry.sku %></td>
+                  <td><%= entry.size || '-' %></td>
+                  <td><%= entry.quantity %></td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
