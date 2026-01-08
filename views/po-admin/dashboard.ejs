@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO Admin Dashboard - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f1f5f9; color: #0f172a; }
+    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 18px 28px; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
+    .nav-brand { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .container-main { max-width: 1800px; margin: 0 auto; padding: 28px; }
+    .card-surface { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05); }
+    .section-title { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+    .section-subtitle { color: #64748b; font-size: 14px; }
+    .form-label { font-weight: 600; color: #0f172a; margin-bottom: 6px; }
+    .form-control, .form-select { border-radius: 10px; border: 1px solid #cbd5f5; padding: 10px 12px; }
+    .form-control:focus, .form-select:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+    .btn-primary { background: #2563eb; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 600; }
+    .btn-outline { border: 1px solid #cbd5f5; color: #1e293b; padding: 10px 18px; border-radius: 10px; font-weight: 600; background: white; }
+    .badge-soft { background: #e0f2fe; color: #0369a1; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .progress { height: 10px; border-radius: 999px; }
+    .upload-status { font-size: 13px; color: #475569; }
+    .table-wrapper { max-height: 420px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+    table { margin: 0; }
+    thead th { position: sticky; top: 0; background: #f8fafc; font-weight: 600; font-size: 13px; color: #334155; }
+    tbody td { font-size: 13px; color: #0f172a; }
+    .stat-pill { background: #f1f5f9; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 12px; color: #475569; }
+    .tab-pane { padding-top: 18px; }
+    .column-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="nav-brand">PO Admin Dashboard</span>
+      <div>
+        <a href="/dashboard" class="btn btn-outline me-2"><i class="bi bi-grid"></i> Main Dashboard</a>
+        <form action="/logout" method="POST" class="d-inline">
+          <button type="submit" class="btn btn-outline"><i class="bi bi-box-arrow-right"></i> Logout</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <div class="mb-4">
+      <h1 class="section-title">Upload Marketplace Master & PO Data</h1>
+      <p class="section-subtitle">Manage master data and PO uploads with live progress, duplicate control, and full search.</p>
+    </div>
+
+    <ul class="nav nav-tabs" id="poAdminTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="master-tab" data-bs-toggle="tab" data-bs-target="#master" type="button" role="tab">
+          <i class="bi bi-stack"></i> Master Data
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po" type="button" role="tab">
+          <i class="bi bi-receipt"></i> PO Uploads
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="poAdminTabContent">
+      <div class="tab-pane fade show active" id="master" role="tabpanel">
+        <div class="row g-4">
+          <div class="col-lg-4">
+            <div class="card-surface">
+              <div class="mb-3">
+                <div class="section-title">Master Data Upload</div>
+                <div class="section-subtitle">Unique SKU values are enforced per marketplace.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Marketplace</label>
+                <select class="form-select" id="masterMarketplace"></select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Upload Excel (.xlsx)</label>
+                <input type="file" class="form-control" id="masterFile" accept=".xlsx">
+              </div>
+              <div class="mb-3">
+                <button class="btn btn-primary w-100" id="masterUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload Master Data</button>
+              </div>
+              <div class="mb-3">
+                <div class="progress">
+                  <div class="progress-bar" id="masterProgress" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="upload-status mt-2" id="masterStatus">Awaiting upload.</div>
+              </div>
+              <div>
+                <div class="form-label">Expected Columns</div>
+                <div class="column-list" id="masterColumns"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="card-surface">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="section-title">Master Data Library</div>
+                  <div class="section-subtitle">Search and review all stored SKUs.</div>
+                </div>
+                <span class="stat-pill" id="masterCount">0 records</span>
+              </div>
+              <div class="d-flex gap-2 mb-3">
+                <input type="text" class="form-control" id="masterSearch" placeholder="Search by SKU or any column value">
+                <button class="btn btn-outline" id="masterSearchBtn"><i class="bi bi-search"></i></button>
+              </div>
+              <div class="table-wrapper">
+                <table class="table table-sm align-middle">
+                  <thead>
+                    <tr id="masterTableHead"></tr>
+                  </thead>
+                  <tbody id="masterTableBody"></tbody>
+                </table>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <button class="btn btn-outline" id="masterPrev"><i class="bi bi-chevron-left"></i> Prev</button>
+                <span class="section-subtitle" id="masterPage">Page 1</span>
+                <button class="btn btn-outline" id="masterNext">Next <i class="bi bi-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="po" role="tabpanel">
+        <div class="row g-4">
+          <div class="col-lg-4">
+            <div class="card-surface">
+              <div class="mb-3">
+                <div class="section-title">PO Upload</div>
+                <div class="section-subtitle">All rows are stored as uploaded.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Marketplace</label>
+                <select class="form-select" id="poMarketplace"></select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Upload Excel (.xlsx)</label>
+                <input type="file" class="form-control" id="poFile" accept=".xlsx">
+              </div>
+              <div class="mb-3">
+                <button class="btn btn-primary w-100" id="poUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload PO Sheet</button>
+              </div>
+              <div class="mb-3">
+                <div class="progress">
+                  <div class="progress-bar" id="poProgress" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="upload-status mt-2" id="poStatus">Awaiting upload.</div>
+              </div>
+              <div>
+                <div class="form-label">Expected Columns</div>
+                <div class="column-list" id="poColumns"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="card-surface">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="section-title">PO Upload History</div>
+                  <div class="section-subtitle">Search and review all PO rows.</div>
+                </div>
+                <span class="stat-pill" id="poCount">0 records</span>
+              </div>
+              <div class="d-flex gap-2 mb-3">
+                <input type="text" class="form-control" id="poSearch" placeholder="Search by any column value">
+                <button class="btn btn-outline" id="poSearchBtn"><i class="bi bi-search"></i></button>
+              </div>
+              <div class="table-wrapper">
+                <table class="table table-sm align-middle">
+                  <thead>
+                    <tr id="poTableHead"></tr>
+                  </thead>
+                  <tbody id="poTableBody"></tbody>
+                </table>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <button class="btn btn-outline" id="poPrev"><i class="bi bi-chevron-left"></i> Prev</button>
+                <span class="section-subtitle" id="poPage">Page 1</span>
+                <button class="btn btn-outline" id="poNext">Next <i class="bi bi-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
+    const masterState = { page: 1, search: '' };
+    const poState = { page: 1, search: '' };
+
+    function populateMarketplaceOptions(selectElement) {
+      selectElement.innerHTML = '';
+      marketplaces.forEach((marketplace, index) => {
+        const option = document.createElement('option');
+        option.value = marketplace.id;
+        option.textContent = marketplace.name;
+        if (index === 0) option.selected = true;
+        selectElement.appendChild(option);
+      });
+    }
+
+    function renderColumnList(target, columns) {
+      target.innerHTML = '';
+      if (!columns || columns.length === 0) {
+        target.innerHTML = '<span class="section-subtitle">No columns configured.</span>';
+        return;
+      }
+      columns.forEach(column => {
+        const badge = document.createElement('span');
+        badge.className = 'badge-soft';
+        badge.textContent = column;
+        target.appendChild(badge);
+      });
+    }
+
+    function getMarketplaceById(id) {
+      return marketplaces.find(marketplace => marketplace.id === Number(id));
+    }
+
+    function buildTableColumns(baseColumns, rows) {
+      const columnSet = new Set(baseColumns || []);
+      rows.forEach(row => {
+        Object.keys(row.data || {}).forEach(key => columnSet.add(key));
+      });
+      return Array.from(columnSet);
+    }
+
+    function renderTable(headTarget, bodyTarget, columns, rows) {
+      headTarget.innerHTML = '';
+      bodyTarget.innerHTML = '';
+
+      if (!rows.length) {
+        bodyTarget.innerHTML = '<tr><td colspan="100%" class="text-center text-muted py-4">No records found.</td></tr>';
+        return;
+      }
+
+      columns.forEach(column => {
+        const th = document.createElement('th');
+        th.textContent = column;
+        headTarget.appendChild(th);
+      });
+
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        columns.forEach(column => {
+          const td = document.createElement('td');
+          const value = row.data?.[column] ?? '';
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        bodyTarget.appendChild(tr);
+      });
+    }
+
+    async function loadMasterData() {
+      const marketplaceId = document.getElementById('masterMarketplace').value;
+      if (!marketplaceId) return;
+
+      const response = await fetch(`/po-admin/api/master-data?marketplaceId=${marketplaceId}&search=${encodeURIComponent(masterState.search)}&page=${masterState.page}`);
+      if (!response.ok) return;
+      const data = await response.json();
+
+      const marketplace = getMarketplaceById(marketplaceId);
+      const columns = buildTableColumns(marketplace?.masterColumns || [], data.rows || []);
+      renderTable(
+        document.getElementById('masterTableHead'),
+        document.getElementById('masterTableBody'),
+        columns,
+        data.rows || []
+      );
+      document.getElementById('masterCount').textContent = `${data.total || 0} records`;
+      document.getElementById('masterPage').textContent = `Page ${data.page || 1}`;
+    }
+
+    async function loadPoData() {
+      const marketplaceId = document.getElementById('poMarketplace').value;
+      if (!marketplaceId) return;
+
+      const response = await fetch(`/po-admin/api/po-data?marketplaceId=${marketplaceId}&search=${encodeURIComponent(poState.search)}&page=${poState.page}`);
+      if (!response.ok) return;
+      const data = await response.json();
+
+      const marketplace = getMarketplaceById(marketplaceId);
+      const columns = buildTableColumns(marketplace?.poColumns || [], data.rows || []);
+      renderTable(
+        document.getElementById('poTableHead'),
+        document.getElementById('poTableBody'),
+        columns,
+        data.rows || []
+      );
+      document.getElementById('poCount').textContent = `${data.total || 0} records`;
+      document.getElementById('poPage').textContent = `Page ${data.page || 1}`;
+    }
+
+    function updateColumnDisplays() {
+      const masterMarketplace = getMarketplaceById(document.getElementById('masterMarketplace').value);
+      const poMarketplace = getMarketplaceById(document.getElementById('poMarketplace').value);
+      renderColumnList(document.getElementById('masterColumns'), masterMarketplace?.masterColumns || []);
+      renderColumnList(document.getElementById('poColumns'), poMarketplace?.poColumns || []);
+    }
+
+    function uploadFile({ fileInput, marketplaceSelect, progressBar, statusTarget, endpoint, onSuccess }) {
+      const file = fileInput.files[0];
+      if (!file) {
+        statusTarget.textContent = 'Please select an .xlsx file first.';
+        return;
+      }
+
+      const marketplaceId = marketplaceSelect.value;
+      if (!marketplaceId) {
+        statusTarget.textContent = 'Please select a marketplace.';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('marketplaceId', marketplaceId);
+
+      const request = new XMLHttpRequest();
+      request.open('POST', endpoint, true);
+
+      request.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          progressBar.style.width = `${percent}%`;
+          statusTarget.textContent = `Uploading... ${percent}%`;
+        }
+      });
+
+      request.onload = () => {
+        progressBar.style.width = '100%';
+        if (request.status >= 200 && request.status < 300) {
+          const response = JSON.parse(request.responseText || '{}');
+          onSuccess(response);
+        } else {
+          const error = JSON.parse(request.responseText || '{}');
+          statusTarget.textContent = error.error || 'Upload failed.';
+        }
+        setTimeout(() => {
+          progressBar.style.width = '0%';
+        }, 1500);
+      };
+
+      request.onerror = () => {
+        statusTarget.textContent = 'Upload failed. Please try again.';
+        progressBar.style.width = '0%';
+      };
+
+      request.send(formData);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const masterMarketplace = document.getElementById('masterMarketplace');
+      const poMarketplace = document.getElementById('poMarketplace');
+
+      populateMarketplaceOptions(masterMarketplace);
+      populateMarketplaceOptions(poMarketplace);
+      updateColumnDisplays();
+      loadMasterData();
+      loadPoData();
+
+      masterMarketplace.addEventListener('change', () => {
+        masterState.page = 1;
+        updateColumnDisplays();
+        loadMasterData();
+      });
+
+      poMarketplace.addEventListener('change', () => {
+        poState.page = 1;
+        updateColumnDisplays();
+        loadPoData();
+      });
+
+      document.getElementById('masterUploadBtn').addEventListener('click', () => {
+        uploadFile({
+          fileInput: document.getElementById('masterFile'),
+          marketplaceSelect: masterMarketplace,
+          progressBar: document.getElementById('masterProgress'),
+          statusTarget: document.getElementById('masterStatus'),
+          endpoint: '/po-admin/upload-master',
+          onSuccess: (response) => {
+            const duplicateCount = response.skippedDuplicates?.length || 0;
+            const existingCount = response.skippedExisting?.length || 0;
+            document.getElementById('masterStatus').textContent = `Inserted ${response.insertedCount || 0} rows. Skipped ${existingCount} existing SKUs and ${duplicateCount} duplicate SKUs.`;
+            loadMasterData();
+          }
+        });
+      });
+
+      document.getElementById('poUploadBtn').addEventListener('click', () => {
+        uploadFile({
+          fileInput: document.getElementById('poFile'),
+          marketplaceSelect: poMarketplace,
+          progressBar: document.getElementById('poProgress'),
+          statusTarget: document.getElementById('poStatus'),
+          endpoint: '/po-admin/upload-po',
+          onSuccess: (response) => {
+            document.getElementById('poStatus').textContent = `Inserted ${response.insertedCount || 0} rows.`;
+            loadPoData();
+          }
+        });
+      });
+
+      document.getElementById('masterSearchBtn').addEventListener('click', () => {
+        masterState.search = document.getElementById('masterSearch').value.trim();
+        masterState.page = 1;
+        loadMasterData();
+      });
+
+      document.getElementById('poSearchBtn').addEventListener('click', () => {
+        poState.search = document.getElementById('poSearch').value.trim();
+        poState.page = 1;
+        loadPoData();
+      });
+
+      document.getElementById('masterPrev').addEventListener('click', () => {
+        if (masterState.page > 1) {
+          masterState.page -= 1;
+          loadMasterData();
+        }
+      });
+
+      document.getElementById('masterNext').addEventListener('click', () => {
+        masterState.page += 1;
+        loadMasterData();
+      });
+
+      document.getElementById('poPrev').addEventListener('click', () => {
+        if (poState.page > 1) {
+          poState.page -= 1;
+          loadPoData();
+        }
+      });
+
+      document.getElementById('poNext').addEventListener('click', () => {
+        poState.page += 1;
+        loadPoData();
+      });
+    });
+  </script>
+</body>
+</html>
