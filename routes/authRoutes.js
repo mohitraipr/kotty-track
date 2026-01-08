@@ -130,6 +130,10 @@ router.post('/login', async (req, res) => {
       case 'vendorfiles':
         res.redirect('/vendor-files');
         break;
+      case 'poadmin':
+      case 'poadmins':
+        res.redirect('/po-admin/dashboard');
+        break;
       case 'checking':
       case 'quality_assurance':
         res.redirect('/department/dashboard');

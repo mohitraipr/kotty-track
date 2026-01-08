@@ -85,6 +85,8 @@ router.post('/login', async (req, res) => {
       quality_assurance: '/department/dashboard',
       nowipoorganization: '/nowi-po/dashboard',
       vendorfiles: '/vendor-files',
+      poadmin: '/po-admin/dashboard',
+      poadmins: '/po-admin/dashboard',
     };
 
     const redirectPath = roleRedirectMap[user.roleName] || '/';
