@@ -83,6 +83,15 @@ function applyPoUpdatesToMaster(masterData, poData, options = {}) {
   return { updatedData, changes };
 }
 
+function buildRowSignature(headers, rowData) {
+  return headers
+    .map(header => {
+      const value = getValueByHeader(rowData, header);
+      return `${normalizeHeader(header)}:${String(value || '').trim().toLowerCase()}`;
+    })
+    .join('|');
+}
+
 function generateAccessKey() {
   return crypto.randomBytes(24).toString('hex');
 }
@@ -486,9 +495,7 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
         return;
       }
 
-      const signature = headers
-        .map(header => `${normalizeHeader(header)}:${String(rowData[header] || '').trim().toLowerCase()}`)
-        .join('|');
+      const signature = buildRowSignature(headers, rowData);
       if (rowSignatures.has(signature)) {
         duplicateRows.add(signature);
         return;
@@ -497,7 +504,8 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
 
       poRows.push({
         data: rowData,
-        searchBlob: buildSearchBlob(rowData)
+        searchBlob: buildSearchBlob(rowData),
+        signature
       });
     });
 
@@ -556,7 +564,28 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
       }
     }
 
-    const insertValues = poRows.map(row => ([
+    const [existingRows] = await pool.query(
+      'SELECT data FROM po_admin_po_uploads WHERE marketplace_id = ?',
+      [marketplaceId]
+    );
+    const existingSignatures = new Set(
+      existingRows.map(row => {
+        const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data;
+        return buildRowSignature(headers, data);
+      })
+    );
+
+    const rowsToInsert = [];
+    let skippedExistingCount = 0;
+    poRows.forEach(row => {
+      if (existingSignatures.has(row.signature)) {
+        skippedExistingCount += 1;
+        return;
+      }
+      rowsToInsert.push(row);
+    });
+
+    const insertValues = rowsToInsert.map(row => ([
       marketplaceId,
       JSON.stringify(row.data),
       row.searchBlob
@@ -578,7 +607,8 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
       missingIdentifiers: Array.from(missingIdentifiers),
       changeSummaries: trimmedChanges,
       changesTruncated: changeSummaries.length > maxChanges,
-      skippedDuplicateCount: duplicateRows.size
+      skippedDuplicateCount: duplicateRows.size + skippedExistingCount,
+      skippedExistingCount
     });
   } catch (error) {
     console.error('Error uploading PO data:', error);
