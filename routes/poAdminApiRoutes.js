@@ -2,34 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const {
+  API_MARKETPLACE_CONFIG,
   MARKETPLACE_MATCH_RULES,
   ensurePoAdminSetup,
   hashAccessKey
 } = require('../helpers/poAdminData');
-
-const API_MARKETPLACE_CONFIG = {
-  Amazon: {
-    requestField: 'poNumber',
-    requestLabel: 'PO number',
-    poNumberKey: 'PO',
-    quantityKey: 'Quantity Requested',
-    responseKey: 'asin'
-  },
-  Myntra: {
-    requestField: 'poNumber',
-    requestLabel: 'PO number',
-    poNumberKey: 'PO NUMBER',
-    quantityKey: 'Quantity',
-    responseKey: 'styleCode'
-  },
-  Flipkart: {
-    requestField: 'consignmentNumber',
-    requestLabel: 'consignment number',
-    poNumberKey: 'Consignment Number',
-    quantityKey: 'Quantity Sent',
-    responseKey: 'fsn'
-  }
-};
 
 function normalizeHeader(header) {
   return String(header || '').trim().toLowerCase();

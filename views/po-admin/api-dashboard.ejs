@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO Admin API Dashboard - Kotty Track</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f1f5f9; color: #0f172a; }
+    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 18px 28px; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
+    .nav-brand { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .container-main { max-width: 1400px; margin: 0 auto; padding: 28px; }
+    .card-surface { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05); }
+    .section-title { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+    .section-subtitle { color: #64748b; font-size: 14px; }
+    .form-label { font-weight: 600; color: #0f172a; margin-bottom: 6px; }
+    .form-control, .form-select { border-radius: 10px; border: 1px solid #cbd5f5; padding: 10px 12px; }
+    .form-control:focus, .form-select:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+    .btn-primary { background: #2563eb; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 600; }
+    .btn-outline { border: 1px solid #cbd5f5; color: #1e293b; padding: 10px 18px; border-radius: 10px; font-weight: 600; background: white; }
+    .table-wrapper { max-height: 520px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+    table { margin: 0; }
+    thead th { position: sticky; top: 0; background: #f8fafc; font-weight: 600; font-size: 13px; color: #334155; }
+    tbody td { font-size: 13px; color: #0f172a; }
+    .status-pill { background: #f1f5f9; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 12px; color: #475569; }
+    .status-pill.success { background: #dcfce7; color: #166534; }
+    .status-pill.error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="nav-brand">PO Admin API Dashboard</span>
+      <div>
+        <a href="/po-admin/dashboard" class="btn btn-outline me-2"><i class="bi bi-arrow-left"></i> PO Admin Dashboard</a>
+        <a href="/dashboard" class="btn btn-outline me-2"><i class="bi bi-grid"></i> Main Dashboard</a>
+        <form action="/logout" method="POST" class="d-inline">
+          <button type="submit" class="btn btn-outline"><i class="bi bi-box-arrow-right"></i> Logout</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <div class="mb-4">
+      <h1 class="section-title">PO Lookup API Console</h1>
+      <p class="section-subtitle">Test PO lookup requests with live results and a detailed payload preview.</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card-surface">
+          <div class="mb-3">
+            <div class="section-title">Request Builder</div>
+            <div class="section-subtitle">Provide the API key pair and lookup identifier.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Key Name</label>
+            <input type="text" class="form-control" id="apiKeyName" placeholder="e.g. Partner App">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Access Key</label>
+            <input type="password" class="form-control" id="apiAccessKey" placeholder="Paste the access key">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Marketplace</label>
+            <select class="form-select" id="apiMarketplace"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" id="lookupLabel">Lookup identifier</label>
+            <input type="text" class="form-control" id="lookupValue" placeholder="Enter PO number">
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-primary w-100" id="lookupBtn"><i class="bi bi-search"></i> Run Lookup</button>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="status-pill" id="lookupStatus">Awaiting request.</span>
+          </div>
+          <div class="mt-3">
+            <div class="section-subtitle">Payload preview</div>
+            <pre class="mt-2 p-3 bg-light border rounded" style="font-size: 12px;" id="payloadPreview">{
+  "accessKey": "",
+  "keyName": "",
+  "marketplace": "",
+  "identifier": ""
+}</pre>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-8">
+        <div class="card-surface">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <div class="section-title">Lookup Results</div>
+              <div class="section-subtitle">API response data for the selected marketplace.</div>
+            </div>
+            <span class="status-pill" id="resultCount">0 results</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr id="resultTableHead"></tr>
+              </thead>
+              <tbody id="resultTableBody">
+                <tr><td class="text-center text-muted py-4">Run a lookup to see results.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
+    const apiConfig = <%- JSON.stringify(apiMarketplaceConfig || {}) %>;
+
+    function populateMarketplaceOptions(selectElement) {
+      selectElement.innerHTML = '';
+      marketplaces.forEach((marketplace, index) => {
+        const option = document.createElement('option');
+        option.value = marketplace.name;
+        option.textContent = marketplace.name;
+        if (index === 0) option.selected = true;
+        selectElement.appendChild(option);
+      });
+    }
+
+    function getMarketplaceConfig(marketplaceName) {
+      return apiConfig[marketplaceName] || {};
+    }
+
+    function updateLookupField() {
+      const marketplaceName = document.getElementById('apiMarketplace').value;
+      const config = getMarketplaceConfig(marketplaceName);
+      const label = config.requestLabel ? `${config.requestLabel}` : 'Lookup identifier';
+      document.getElementById('lookupLabel').textContent = `Lookup ${label}`;
+      document.getElementById('lookupValue').placeholder = `Enter ${label}`;
+      updatePayloadPreview();
+    }
+
+    function updatePayloadPreview() {
+      const marketplaceName = document.getElementById('apiMarketplace').value;
+      const config = getMarketplaceConfig(marketplaceName);
+      const payload = {
+        accessKey: document.getElementById('apiAccessKey').value.trim(),
+        keyName: document.getElementById('apiKeyName').value.trim(),
+        marketplace: marketplaceName,
+        [config.requestField || 'identifier']: document.getElementById('lookupValue').value.trim()
+      };
+      document.getElementById('payloadPreview').textContent = JSON.stringify(payload, null, 2);
+    }
+
+    function renderResults(rows) {
+      const head = document.getElementById('resultTableHead');
+      const body = document.getElementById('resultTableBody');
+      head.innerHTML = '';
+      body.innerHTML = '';
+
+      if (!rows || rows.length === 0) {
+        body.innerHTML = '<tr><td class="text-center text-muted py-4">No matching records found.</td></tr>';
+        return;
+      }
+
+      const columns = new Set();
+      rows.forEach(row => Object.keys(row || {}).forEach(key => columns.add(key)));
+      const columnList = Array.from(columns);
+
+      columnList.forEach(column => {
+        const th = document.createElement('th');
+        th.textContent = column;
+        head.appendChild(th);
+      });
+
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        columnList.forEach(column => {
+          const td = document.createElement('td');
+          td.textContent = row[column] ?? '';
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+
+    async function runLookup() {
+      const status = document.getElementById('lookupStatus');
+      status.className = 'status-pill';
+      status.textContent = 'Requesting...';
+
+      const marketplaceName = document.getElementById('apiMarketplace').value;
+      const config = getMarketplaceConfig(marketplaceName);
+      const payload = {
+        accessKey: document.getElementById('apiAccessKey').value.trim(),
+        keyName: document.getElementById('apiKeyName').value.trim(),
+        marketplace: marketplaceName,
+        [config.requestField || 'identifier']: document.getElementById('lookupValue').value.trim()
+      };
+
+      updatePayloadPreview();
+
+      try {
+        const response = await fetch('/api/po-admin/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          status.textContent = data.error || 'Lookup failed.';
+          status.classList.add('error');
+          renderResults([]);
+          document.getElementById('resultCount').textContent = '0 results';
+          return;
+        }
+
+        status.textContent = `Success - ${data.marketplace || marketplaceName}`;
+        status.classList.add('success');
+        renderResults(data.results || []);
+        document.getElementById('resultCount').textContent = `${(data.results || []).length} results`;
+      } catch (error) {
+        console.error('Lookup error', error);
+        status.textContent = 'Lookup failed.';
+        status.classList.add('error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const marketplaceSelect = document.getElementById('apiMarketplace');
+      populateMarketplaceOptions(marketplaceSelect);
+      updateLookupField();
+
+      marketplaceSelect.addEventListener('change', updateLookupField);
+      ['apiKeyName', 'apiAccessKey', 'lookupValue'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePayloadPreview);
+      });
+      document.getElementById('lookupBtn').addEventListener('click', runLookup);
+    });
+  </script>
+</body>
+</html>

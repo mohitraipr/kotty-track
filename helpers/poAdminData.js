@@ -113,6 +113,30 @@ const MARKETPLACE_MATCH_RULES = {
   Flipkart: { masterKey: 'FSN', poKey: 'FSN' }
 };
 
+const API_MARKETPLACE_CONFIG = {
+  Amazon: {
+    requestField: 'poNumber',
+    requestLabel: 'PO number',
+    poNumberKey: 'PO',
+    quantityKey: 'Quantity Requested',
+    responseKey: 'asin'
+  },
+  Myntra: {
+    requestField: 'poNumber',
+    requestLabel: 'PO number',
+    poNumberKey: 'PO NUMBER',
+    quantityKey: 'Quantity',
+    responseKey: 'styleCode'
+  },
+  Flipkart: {
+    requestField: 'consignmentNumber',
+    requestLabel: 'consignment number',
+    poNumberKey: 'Consignment Number',
+    quantityKey: 'Quantity Sent',
+    responseKey: 'fsn'
+  }
+};
+
 function hashAccessKey(accessKey) {
   return crypto.createHash('sha256').update(String(accessKey)).digest('hex');
 }
@@ -217,6 +241,7 @@ async function fetchMarketplaces() {
 
 module.exports = {
   DEFAULT_MARKETPLACES,
+  API_MARKETPLACE_CONFIG,
   MARKETPLACE_MATCH_RULES,
   ensurePoAdminSetup,
   fetchMarketplaces,
