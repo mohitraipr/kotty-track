@@ -13,6 +13,7 @@ const {
   fetchMarketplaces,
   hashAccessKey
 } = require('../helpers/poAdminData');
+const { ensurePoCreatorLotEntriesSchema } = require('../helpers/poCreatorData');
 
 const upload = multer({
   dest: 'uploads/',
@@ -166,6 +167,7 @@ router.get('/api/keys', isAuthenticated, allowRoles(['poadmins', 'poadmin']), as
 
 router.get('/lot-entries', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
   try {
+    await ensurePoCreatorLotEntriesSchema();
     const { date, search } = req.query;
     const selectedDate = date || getTodayDateString();
     const filters = [];
@@ -219,6 +221,7 @@ router.get('/lot-entries', isAuthenticated, allowRoles(['poadmins', 'poadmin']),
 
 router.get('/lot-entries/export', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
   try {
+    await ensurePoCreatorLotEntriesSchema();
     const { date, search } = req.query;
     const filters = [];
     const params = [];
