@@ -1,10 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const crypto = require('crypto');
 const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const fs = require('fs');
+const {
+  MARKETPLACE_MATCH_RULES,
+  ensurePoAdminSetup,
+  fetchMarketplaces,
+  hashAccessKey
+} = require('../helpers/poAdminData');
 
 const upload = multer({
   dest: 'uploads/',
@@ -19,117 +26,6 @@ const upload = multer({
 });
 
 const fsPromises = fs.promises;
-
-const DEFAULT_MARKETPLACES = [
-  {
-    name: 'Flipkart',
-    masterColumns: ['FSN', 'TITLE', 'MRP', 'STYLECODE', 'COLOR', 'SIZE', 'GENERIC NAME', 'SKU'],
-    poColumns: [
-      'Product Name',
-      'FSN',
-      'SKU Id',
-      'Brand',
-      'Size',
-      'Style Code',
-      'Color',
-      'Isbn',
-      'Model Id',
-      'Quantity Sent',
-      'Quantity Received',
-      'Inwarded to Store',
-      'QC Fail',
-      'QC In Progress',
-      'QC Passed',
-      'Cost Price',
-      'Length(In cms)',
-      'Breadth(In cms)',
-      'Height(In cms)',
-      'Weight(In kgs)'
-    ]
-  },
-  {
-    name: 'Amazon',
-    masterColumns: ['SKU', 'ASIN', 'SIZE', 'MRP', 'COLOR', 'STYLE ID', 'TITLE', 'GENERIC NAME', 'Condition'],
-    poColumns: [
-      'PO+ASIN',
-      'PO',
-      'Vendor',
-      'Ship to location',
-      'ASIN',
-      'External Id',
-      'External Id Type',
-      'Model Number',
-      'Title',
-      'Availability',
-      'Window Type',
-      'Window start',
-      'Window end',
-      'Expected date',
-      'Quantity Requested',
-      'Accepted quantity',
-      'Quantity received',
-      'Quantity Outstanding',
-      'Unit Cost',
-      'Total cost'
-    ]
-  },
-  {
-    name: 'Myntra',
-    masterColumns: [
-      'SKU',
-      'ARTICLENUMBER',
-      'SKUCODE',
-      'STYLECODE',
-      'Quantity',
-      'Size',
-      'Color',
-      'Warehouse References',
-      'MRP',
-      'Title'
-    ],
-    poColumns: [
-      'PO NUMBER',
-      'SKU Id',
-      'Style Id',
-      'SKU Code',
-      'HSN Code',
-      'Brand',
-      'GTIN',
-      'Vendor Article Number',
-      'Vendor Article Name',
-      'Size',
-      'Colour',
-      'Mrp',
-      'Credit Period',
-      'Margin Type',
-      'Agreed Margin',
-      'Gross Margin',
-      'Quantity',
-      'FOB Amount',
-      'List price(FOB+Transport-Excise)',
-      'Landing Price',
-      'Estimated Delivery Date',
-      'Tax BCD',
-      'Tax BCD Amount',
-      'Buying Tax IGST',
-      'Buying Tax IGST Amount',
-      'Tax SWT',
-      'Tax SWT Amount',
-      'Selling Tax CGST',
-      'Selling Tax CGST Amount',
-      'Selling Tax IGST',
-      'Selling Tax IGST Amount',
-      'Selling Tax SGST',
-      'Selling Tax SGST Amount'
-    ]
-  }
-];
-
-const MARKETPLACE_MATCH_RULES = {
-  Amazon: { masterKey: 'ASIN', poKey: 'ASIN' },
-  Myntra: { masterKey: 'STYLECODE', poKey: 'Style Id' },
-  Flipkart: { masterKey: 'FSN', poKey: 'FSN' }
-};
 
 function getCellText(value) {
   if (value === null || value === undefined) return '';
@@ -181,75 +77,8 @@ function applyPoUpdatesToMaster(masterData, poData) {
   return { updatedData, changes };
 }
 
-async function ensurePoAdminSetup() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS po_admin_marketplaces (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(60) NOT NULL UNIQUE,
-      master_columns JSON NOT NULL,
-      po_columns JSON NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS po_admin_master_data (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      marketplace_id INT NOT NULL,
-      sku VARCHAR(150) NOT NULL,
-      data JSON NOT NULL,
-      search_blob LONGTEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY uniq_marketplace_sku (marketplace_id, sku),
-      INDEX idx_master_marketplace (marketplace_id),
-      CONSTRAINT fk_po_admin_master_marketplace
-        FOREIGN KEY (marketplace_id) REFERENCES po_admin_marketplaces(id)
-        ON DELETE CASCADE
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS po_admin_po_uploads (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      marketplace_id INT NOT NULL,
-      data JSON NOT NULL,
-      search_blob LONGTEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_po_marketplace (marketplace_id),
-      CONSTRAINT fk_po_admin_po_marketplace
-        FOREIGN KEY (marketplace_id) REFERENCES po_admin_marketplaces(id)
-        ON DELETE CASCADE
-    )
-  `);
-
-  const [[marketplaceCount]] = await pool.query(
-    'SELECT COUNT(*) AS count FROM po_admin_marketplaces'
-  );
-
-  if (marketplaceCount.count === 0) {
-    const values = DEFAULT_MARKETPLACES.map(marketplace => [
-      marketplace.name,
-      JSON.stringify(marketplace.masterColumns),
-      JSON.stringify(marketplace.poColumns)
-    ]);
-    await pool.query(
-      'INSERT INTO po_admin_marketplaces (name, master_columns, po_columns) VALUES ?'
-      , [values]
-    );
-  }
-}
-
-async function fetchMarketplaces() {
-  const [rows] = await pool.query(
-    'SELECT id, name, master_columns AS masterColumns, po_columns AS poColumns FROM po_admin_marketplaces ORDER BY name'
-  );
-
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    masterColumns: Array.isArray(row.masterColumns) ? row.masterColumns : JSON.parse(row.masterColumns || '[]'),
-    poColumns: Array.isArray(row.poColumns) ? row.poColumns : JSON.parse(row.poColumns || '[]')
-  }));
+function generateAccessKey() {
+  return crypto.randomBytes(24).toString('hex');
 }
 
 function chunkArray(items, chunkSize = 500) {
@@ -284,6 +113,46 @@ router.get('/api/marketplaces', isAuthenticated, allowRoles(['poadmins', 'poadmi
   } catch (error) {
     console.error('Error fetching marketplaces:', error);
     res.status(500).json({ error: 'Unable to load marketplaces.' });
+  }
+});
+
+router.get('/api/keys', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  try {
+    await ensurePoAdminSetup();
+    const [rows] = await pool.query(
+      'SELECT id, key_name AS keyName, key_prefix AS keyPrefix, created_at AS createdAt FROM po_admin_api_keys ORDER BY created_at DESC'
+    );
+    res.json({ keys: rows });
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    res.status(500).json({ error: 'Unable to load API keys.' });
+  }
+});
+
+router.post('/api/keys', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const keyName = String(req.body.keyName || '').trim();
+  if (!keyName) {
+    return res.status(400).json({ error: 'Key name is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+    const accessKey = generateAccessKey();
+    const keyHash = hashAccessKey(accessKey);
+    const keyPrefix = accessKey.slice(0, 10);
+
+    await pool.query(
+      'INSERT INTO po_admin_api_keys (key_name, key_hash, key_prefix) VALUES (?, ?, ?)',
+      [keyName, keyHash, keyPrefix]
+    );
+
+    res.json({ keyName, accessKey, keyPrefix });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Key name already exists.' });
+    }
+    console.error('Error creating API key:', error);
+    res.status(500).json({ error: 'Unable to create API key.' });
   }
 });
 
