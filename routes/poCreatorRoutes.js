@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isPOCreator, isAuthenticated, isOperator } = require('../middlewares/auth');
+const { ensurePoCreatorLotEntriesSchema } = require('../helpers/poCreatorData');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const fs = require('fs');
@@ -95,6 +96,7 @@ router.get('/dashboard', isPOCreator, async (req, res) => {
 // Lot entry - Entry form page
 router.get('/lot-entry', isPOCreator, async (req, res) => {
   try {
+    await ensurePoCreatorLotEntriesSchema();
     const [entries] = await pool.query(
       `SELECT id, lot_code, sku, size, quantity, entry_date, created_at,
               COALESCE(entry_date, DATE(created_at)) AS display_date
@@ -120,6 +122,7 @@ router.get('/lot-entry', isPOCreator, async (req, res) => {
 // Lot entry - Submit data
 router.post('/lot-entry', isPOCreator, async (req, res) => {
   try {
+    await ensurePoCreatorLotEntriesSchema();
     const { lot_code, sku, size, quantity, size_values, size_quantities, entry_date } = req.body;
     const normalizedEntryDate = normalizeEntryDate(entry_date);
 
@@ -776,6 +779,7 @@ router.get('/operator/view-all', isOperator, async (req, res) => {
 // Operator view - Lot entries by date
 router.get('/operator/lot-entries', isOperator, async (req, res) => {
   try {
+    await ensurePoCreatorLotEntriesSchema();
     const { date, search } = req.query;
     const filters = [];
     const params = [];
