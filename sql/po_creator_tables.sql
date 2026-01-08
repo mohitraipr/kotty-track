@@ -75,6 +75,22 @@ CREATE TABLE IF NOT EXISTS carton_outward (
   INDEX idx_creator_user_id (creator_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Table to store PO creator lot entries
+CREATE TABLE IF NOT EXISTS po_creator_lot_entries (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  creator_user_id INT NOT NULL,
+  lot_code VARCHAR(100) NOT NULL,
+  sku VARCHAR(100) NOT NULL,
+  size VARCHAR(50),
+  quantity INT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_po_creator_lot_entries_user FOREIGN KEY (creator_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_po_creator_lot_entries_creator (creator_user_id),
+  INDEX idx_po_creator_lot_entries_lot_code (lot_code),
+  INDEX idx_po_creator_lot_entries_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Table to store brand codes (hardcoded values)
 CREATE TABLE IF NOT EXISTS sku_brand_codes (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

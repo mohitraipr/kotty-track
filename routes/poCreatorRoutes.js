@@ -74,6 +74,66 @@ router.get('/dashboard', isPOCreator, async (req, res) => {
   }
 });
 
+// Lot entry - Entry form page
+router.get('/lot-entry', isPOCreator, async (req, res) => {
+  try {
+    const [entries] = await pool.query(
+      `SELECT id, lot_code, sku, size, quantity, created_at
+       FROM po_creator_lot_entries
+       WHERE creator_user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [req.session.user.id]
+    );
+
+    res.render('po-creator/lot-entry', {
+      user: req.session.user,
+      entries
+    });
+  } catch (error) {
+    console.error('Error loading lot entry form:', error);
+    req.flash('error', 'Error loading lot entry form');
+    res.redirect('/po-creator/dashboard');
+  }
+});
+
+// Lot entry - Submit data
+router.post('/lot-entry', isPOCreator, async (req, res) => {
+  try {
+    const { lot_code, sku, size, quantity } = req.body;
+
+    if (!lot_code || !sku || !quantity) {
+      req.flash('error', 'Lot code, SKU, and quantity are required.');
+      return res.redirect('/po-creator/lot-entry');
+    }
+
+    const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      req.flash('error', 'Quantity must be a positive number.');
+      return res.redirect('/po-creator/lot-entry');
+    }
+
+    await pool.query(
+      `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        req.session.user.id,
+        String(lot_code).trim(),
+        String(sku).trim(),
+        size ? String(size).trim() : null,
+        parsedQuantity
+      ]
+    );
+
+    req.flash('success', 'Lot entry saved successfully.');
+    res.redirect('/po-creator/lot-entry');
+  } catch (error) {
+    console.error('Error saving lot entry:', error);
+    req.flash('error', 'Error saving lot entry');
+    res.redirect('/po-creator/lot-entry');
+  }
+});
+
 // Inward - Entry form page
 router.get('/inward', isPOCreator, async (req, res) => {
   try {
@@ -637,6 +697,50 @@ router.get('/operator/view-all', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading all inward data:', error);
     req.flash('error', 'Error loading data');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// Operator view - Lot entries by date
+router.get('/operator/lot-entries', isOperator, async (req, res) => {
+  try {
+    const { date } = req.query;
+    const filters = [];
+    const params = [];
+
+    if (date) {
+      filters.push('DATE(le.created_at) = ?');
+      params.push(date);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const [entries] = await pool.query(
+      `
+      SELECT
+        le.id,
+        le.lot_code,
+        le.sku,
+        le.size,
+        le.quantity,
+        le.created_at,
+        u.username AS creator_username
+      FROM po_creator_lot_entries le
+      INNER JOIN users u ON le.creator_user_id = u.id
+      ${whereClause}
+      ORDER BY le.created_at DESC
+      `,
+      params
+    );
+
+    res.render('po-creator/operator-lot-entries', {
+      user: req.session.user,
+      entries,
+      selectedDate: date || ''
+    });
+  } catch (error) {
+    console.error('Error loading lot entries:', error);
+    req.flash('error', 'Error loading lot entries');
     res.redirect('/operator/dashboard');
   }
 });
