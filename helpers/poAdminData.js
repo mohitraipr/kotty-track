@@ -119,7 +119,7 @@ const API_MARKETPLACE_CONFIG = {
     requestField: 'poNumber',
     requestLabel: 'PO number',
     poNumberKey: 'PO',
-    quantityKey: 'Quantity Requested',
+    quantityKey: 'Quantity Outstanding',
     responseKey: 'asin'
   },
   Myntra: {
