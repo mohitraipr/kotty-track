@@ -90,6 +90,14 @@ function chunkArray(items, chunkSize = 500) {
   return chunks;
 }
 
+function getTodayDateString() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 router.get('/dashboard', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
   try {
     await ensurePoAdminSetup();
@@ -144,6 +152,131 @@ router.get('/api/keys', isAuthenticated, allowRoles(['poadmins', 'poadmin']), as
   } catch (error) {
     console.error('Error fetching API keys:', error);
     res.status(500).json({ error: 'Unable to load API keys.' });
+  }
+});
+
+router.get('/lot-entries', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  try {
+    const { date, search } = req.query;
+    const selectedDate = date || getTodayDateString();
+    const filters = [];
+    const params = [];
+
+    if (selectedDate) {
+      filters.push('COALESCE(le.entry_date, DATE(le.created_at)) = ?');
+      params.push(selectedDate);
+    }
+
+    if (search) {
+      filters.push('(le.lot_code LIKE ? OR le.sku LIKE ?)');
+      const term = `%${search}%`;
+      params.push(term, term);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const [entries] = await pool.query(
+      `
+      SELECT
+        le.id,
+        le.lot_code,
+        le.sku,
+        le.size,
+        le.quantity,
+        le.entry_date,
+        le.created_at,
+        COALESCE(le.entry_date, DATE(le.created_at)) AS display_date,
+        u.username AS creator_username
+      FROM po_creator_lot_entries le
+      INNER JOIN users u ON le.creator_user_id = u.id
+      ${whereClause}
+      ORDER BY COALESCE(le.entry_date, DATE(le.created_at)) DESC, le.created_at DESC
+      `,
+      params
+    );
+
+    res.render('po-admin/lot-entries', {
+      user: req.session.user,
+      entries,
+      selectedDate,
+      searchTerm: search || ''
+    });
+  } catch (error) {
+    console.error('Error loading PO Admin lot entries:', error);
+    req.flash('error', 'Unable to load lot entries.');
+    res.redirect('/po-admin/dashboard');
+  }
+});
+
+router.get('/lot-entries/export', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  try {
+    const { date, search } = req.query;
+    const filters = [];
+    const params = [];
+
+    if (date) {
+      filters.push('COALESCE(le.entry_date, DATE(le.created_at)) = ?');
+      params.push(date);
+    }
+
+    if (search) {
+      filters.push('(le.lot_code LIKE ? OR le.sku LIKE ?)');
+      const term = `%${search}%`;
+      params.push(term, term);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const [entries] = await pool.query(
+      `
+      SELECT
+        COALESCE(le.entry_date, DATE(le.created_at)) AS display_date,
+        u.username AS creator_username,
+        le.lot_code,
+        le.sku,
+        le.size,
+        le.quantity,
+        le.created_at
+      FROM po_creator_lot_entries le
+      INNER JOIN users u ON le.creator_user_id = u.id
+      ${whereClause}
+      ORDER BY COALESCE(le.entry_date, DATE(le.created_at)) DESC, le.created_at DESC
+      `,
+      params
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Lot Entries');
+
+    worksheet.columns = [
+      { header: 'Entry Date', key: 'display_date', width: 15 },
+      { header: 'Creator', key: 'creator_username', width: 20 },
+      { header: 'Lot Code', key: 'lot_code', width: 20 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Size', key: 'size', width: 12 },
+      { header: 'Quantity', key: 'quantity', width: 12 },
+      { header: 'Created At', key: 'created_at', width: 22 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+
+    entries.forEach(entry => {
+      worksheet.addRow({
+        ...entry,
+        display_date: entry.display_date,
+        created_at: entry.created_at
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=po-lot-entries-${Date.now()}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error exporting PO Admin lot entries:', error);
+    req.flash('error', 'Unable to export lot entries.');
+    res.redirect('/po-admin/lot-entries');
   }
 });
 

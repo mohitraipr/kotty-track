@@ -43,6 +43,11 @@
             <input type="text" name="lot_code" class="form-control" required>
           </div>
           <div class="col-md-3">
+            <label class="form-label">Entry Date</label>
+            <input type="date" name="entry_date" class="form-control" value="<%= todayDate %>">
+            <small class="text-muted">Defaults to today if left unchanged.</small>
+          </div>
+          <div class="col-md-3">
             <label class="form-label">SKU *</label>
             <input type="text" name="sku" class="form-control" required>
           </div>
@@ -78,7 +83,7 @@
               <th>SKU</th>
               <th>Size</th>
               <th>Quantity</th>
-              <th>Created At</th>
+              <th>Entry Date</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +98,7 @@
                   <td><%= entry.sku %></td>
                   <td><%= entry.size || '-' %></td>
                   <td><%= entry.quantity %></td>
-                  <td><%= new Date(entry.created_at).toLocaleString() %></td>
+                  <td><%= new Date(entry.display_date || entry.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) %></td>
                 </tr>
               <% }) %>
             <% } %>

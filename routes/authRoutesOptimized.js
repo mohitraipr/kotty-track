@@ -107,4 +107,13 @@ router.get('/logout', (req, res) => {
   });
 });
 
+router.post('/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      console.error('Error destroying session during logout:', err);
+    }
+    res.redirect('/login');
+  });
+});
+
 module.exports = router;

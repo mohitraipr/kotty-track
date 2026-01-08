@@ -61,6 +61,24 @@ function parseDateValue(value) {
   return null;
 }
 
+function normalizeEntryDate(dateValue) {
+  if (!dateValue) return null;
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateString() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Dashboard - Main page
 router.get('/dashboard', isPOCreator, async (req, res) => {
   try {
@@ -78,17 +96,19 @@ router.get('/dashboard', isPOCreator, async (req, res) => {
 router.get('/lot-entry', isPOCreator, async (req, res) => {
   try {
     const [entries] = await pool.query(
-      `SELECT id, lot_code, sku, size, quantity, created_at
+      `SELECT id, lot_code, sku, size, quantity, entry_date, created_at,
+              COALESCE(entry_date, DATE(created_at)) AS display_date
        FROM po_creator_lot_entries
        WHERE creator_user_id = ?
-       ORDER BY created_at DESC
+       ORDER BY COALESCE(entry_date, DATE(created_at)) DESC, created_at DESC
        LIMIT 50`,
       [req.session.user.id]
     );
 
     res.render('po-creator/lot-entry', {
       user: req.session.user,
-      entries
+      entries,
+      todayDate: getTodayDateString()
     });
   } catch (error) {
     console.error('Error loading lot entry form:', error);
@@ -100,7 +120,8 @@ router.get('/lot-entry', isPOCreator, async (req, res) => {
 // Lot entry - Submit data
 router.post('/lot-entry', isPOCreator, async (req, res) => {
   try {
-    const { lot_code, sku, size, quantity, size_values, size_quantities } = req.body;
+    const { lot_code, sku, size, quantity, size_values, size_quantities, entry_date } = req.body;
+    const normalizedEntryDate = normalizeEntryDate(entry_date);
 
     if (!lot_code || !sku) {
       req.flash('error', 'Lot code and SKU are required.');
@@ -137,7 +158,7 @@ router.post('/lot-entry', isPOCreator, async (req, res) => {
       }
 
       await pool.query(
-        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
+        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity, entry_date)
          VALUES ?`,
         [
           insertRows.map(row => [
@@ -145,7 +166,8 @@ router.post('/lot-entry', isPOCreator, async (req, res) => {
             String(lot_code).trim(),
             String(sku).trim(),
             row.sizeValue,
-            row.parsedQuantity
+            row.parsedQuantity,
+            normalizedEntryDate
           ])
         ]
       );
@@ -162,14 +184,15 @@ router.post('/lot-entry', isPOCreator, async (req, res) => {
       }
 
       await pool.query(
-        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO po_creator_lot_entries (creator_user_id, lot_code, sku, size, quantity, entry_date)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           req.session.user.id,
           String(lot_code).trim(),
           String(sku).trim(),
           null,
-          parsedQuantity
+          parsedQuantity,
+          normalizedEntryDate
         ]
       );
     }
@@ -753,13 +776,18 @@ router.get('/operator/view-all', isOperator, async (req, res) => {
 // Operator view - Lot entries by date
 router.get('/operator/lot-entries', isOperator, async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, search } = req.query;
     const filters = [];
     const params = [];
 
     if (date) {
-      filters.push('DATE(le.created_at) = ?');
+      filters.push('COALESCE(le.entry_date, DATE(le.created_at)) = ?');
       params.push(date);
+    }
+    if (search) {
+      filters.push('(le.lot_code LIKE ? OR le.sku LIKE ?)');
+      const term = `%${search}%`;
+      params.push(term, term);
     }
 
     const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -773,11 +801,13 @@ router.get('/operator/lot-entries', isOperator, async (req, res) => {
         le.size,
         le.quantity,
         le.created_at,
+        le.entry_date,
+        COALESCE(le.entry_date, DATE(le.created_at)) AS display_date,
         u.username AS creator_username
       FROM po_creator_lot_entries le
       INNER JOIN users u ON le.creator_user_id = u.id
       ${whereClause}
-      ORDER BY le.created_at DESC
+      ORDER BY COALESCE(le.entry_date, DATE(le.created_at)) DESC, le.created_at DESC
       `,
       params
     );
@@ -785,7 +815,8 @@ router.get('/operator/lot-entries', isOperator, async (req, res) => {
     res.render('po-creator/operator-lot-entries', {
       user: req.session.user,
       entries,
-      selectedDate: date || ''
+      selectedDate: date || '',
+      searchTerm: search || ''
     });
   } catch (error) {
     console.error('Error loading lot entries:', error);
