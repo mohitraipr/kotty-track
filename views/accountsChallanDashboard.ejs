@@ -110,9 +110,9 @@
           <h2 class="mb-2">
             <i class="bi bi-file-earmark-text me-2"></i>DC Challan Dashboard
           </h2>
-          <p class="mb-3 opacity-90">Select lots with remaining pieces, enter quantities, and generate delivery challans.</p>
+          <p class="mb-3 opacity-90">Select cutting lots, enter quantities, and generate delivery challans.</p>
           <div class="hero-note">
-            <i class="bi bi-info-circle me-2"></i>Only lots with remaining pieces are shown
+            <i class="bi bi-info-circle me-2"></i>All cutting lots are shown with issued and remaining pieces
           </div>
         </div>
         <div class="hero-actions">
@@ -179,26 +179,22 @@
             <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
             <th><i class="bi bi-shuffle me-1"></i>Type</th>
             <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
-                <th><i class="bi bi-chat-left-text me-1"></i>Assembly Remark</th>
                 <th><i class="bi bi-scissors me-1"></i>Cutting Remark</th>
-                <th><i class="bi bi-calendar-event me-1"></i>Target Day</th>
-                <th><i class="bi bi-clock me-1"></i>Assigned On</th>
-                <th><i class="bi bi-person me-1"></i>Washer</th>
-                <th><i class="bi bi-person-badge me-1"></i>Master</th>
+                <th><i class="bi bi-clock me-1"></i>Created On</th>
               </tr>
             </thead>
             <tbody>
               <% if (assignments && assignments.length) { %>
                 <% assignments.forEach(a => { %>
                   <tr
-                    data-id="<%= a.washing_id %>"
+                    data-id="<%= a.cutting_id %>"
                     data-lot="<%= a.lot_no %>"
                     data-sku="<%= a.sku %>"
                     data-total="<%= a.total_pieces %>"
                     data-remaining="<%= a.remaining_pieces %>"
                   >
                     <td><input type="checkbox" class="rowCheckbox"></td>
-                    <td><%= a.washing_id %></td>
+                    <td><%= a.cutting_id %></td>
                     <td><%= a.lot_no %></td>
                     <td><%= a.sku %></td>
                     <td><%= a.total_pieces %></td>
@@ -220,17 +216,13 @@
                         value="<%= a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces %>"
                       />
                     </td>
-                    <td><%= a.assembly_remark %></td>
                     <td><%= a.cutting_remark %></td>
-                    <td><%= a.target_day ? new Date(a.target_day).toLocaleDateString() : '' %></td>
-                    <td><%= a.assigned_on ? new Date(a.assigned_on).toLocaleString() : '' %></td>
-                    <td><%= a.washer_username %></td>
-                    <td><%= a.master_username %></td>
+                    <td><%= a.created_at ? new Date(a.created_at).toLocaleString() : '' %></td>
                   </tr>
                 <% }); %>
               <% } else { %>
                 <tr id="noRecordsRow">
-                  <td colspan="15" class="text-center">No records found.</td>
+                  <td colspan="10" class="text-center">No records found.</td>
                 </tr>
               <% } %>
             </tbody>
@@ -279,20 +271,20 @@
         tbody.innerHTML = '';
       }
       if (!assignments.length && !append) {
-        tbody.innerHTML = '<tr><td colspan="15" class="text-center">No records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center">No records found.</td></tr>';
         return;
       }
 
       assignments.forEach(a => {
         const row = document.createElement('tr');
-        row.dataset.id = a.washing_id;
+        row.dataset.id = a.cutting_id;
         row.dataset.lot = a.lot_no;
         row.dataset.sku = a.sku;
         row.dataset.total = a.total_pieces;
         row.dataset.remaining = a.remaining_pieces;
         row.innerHTML = `
           <td><input type="checkbox" class="rowCheckbox"></td>
-          <td>${a.washing_id}</td>
+          <td>${a.cutting_id}</td>
           <td>${a.lot_no}</td>
           <td>${a.sku}</td>
           <td>${a.total_pieces}</td>
@@ -314,12 +306,8 @@
               value="${a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces}"
             />
           </td>
-          <td>${a.assembly_remark || ''}</td>
           <td>${a.cutting_remark || ''}</td>
-          <td>${a.target_day ? new Date(a.target_day).toLocaleDateString() : ''}</td>
-          <td>${a.assigned_on ? new Date(a.assigned_on).toLocaleString() : ''}</td>
-          <td>${a.washer_username}</td>
-          <td>${a.master_username}</td>
+          <td>${a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>
         `;
         tbody.appendChild(row);
       });
@@ -378,7 +366,7 @@
           return;
         }
         selected.push({
-          washing_id: row.dataset.id,
+          cutting_id: row.dataset.id,
           lot_no: row.dataset.lot,
           sku: row.dataset.sku,
           total_pieces: row.dataset.total,
