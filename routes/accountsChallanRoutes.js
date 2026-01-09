@@ -48,7 +48,7 @@ async function getNextChallanCounter(consigneeId) {
 
 function buildAssignmentsQuery({ search, limit, offset }) {
   const params = [];
-  let whereClause = 'WHERE wa.is_approved = 1';
+  let whereClause = 'WHERE 1';
 
   if (search) {
     if (search.includes(',')) {
@@ -60,43 +60,34 @@ function buildAssignmentsQuery({ search, limit, offset }) {
         const conds = [];
         for (const term of terms) {
           const like = `%${term}%`;
-          conds.push('(jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)');
+          conds.push('(c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ?)');
           params.push(like, like, like);
         }
         whereClause += ` AND (${conds.join(' OR ')})`;
       }
     } else {
       const like = `%${search}%`;
-      whereClause += ' AND (jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)';
+      whereClause += ' AND (c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ?)';
       params.push(like, like, like);
     }
   }
 
   const sql = `
     SELECT
-      wa.id AS washing_id,
-      jd.lot_no,
-      jd.sku,
-      jd.total_pieces,
-      jd.remark AS assembly_remark,
+      c.id AS cutting_id,
+      c.lot_no,
+      c.sku,
+      c.total_pieces,
       c.remark AS cutting_remark,
-      wa.target_day,
-      wa.assigned_on,
-      wa.is_approved,
-      wa.assignment_remark,
-      u.username AS washer_username,
-      m.username AS master_username,
+      c.created_at,
       IFNULL(SUM(dci.issued_pieces), 0) AS issued_pieces,
-      GREATEST(jd.total_pieces - IFNULL(SUM(dci.issued_pieces), 0), 0) AS remaining_pieces
-    FROM washing_assignments wa
-    JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-    JOIN cutting_lots c ON jd.lot_no = c.lot_no
-    JOIN users u ON wa.user_id = u.id
-    JOIN users m ON wa.jeans_assembly_master_id = m.id
-    LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id AND COALESCE(dci.item_type, 'normal') = 'normal'
+      GREATEST(c.total_pieces - IFNULL(SUM(dci.issued_pieces), 0), 0) AS remaining_pieces
+    FROM cutting_lots c
+    LEFT JOIN dc_challan_items dci
+      ON dci.lot_no = c.lot_no AND COALESCE(dci.item_type, 'normal') = 'normal'
     ${whereClause}
-    GROUP BY wa.id
-    ORDER BY wa.assigned_on DESC
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
     LIMIT ? OFFSET ?`;
 
   params.push(limit, offset);
@@ -238,38 +229,37 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       return res.redirect('/accounts-challan');
     }
 
-    const washingIds = Array.from(
+    const lotNos = Array.from(
       new Set(
         normalizedItems
           .filter((item) => item.entryType !== 'mix')
-          .map((item) => parseInt(item.washing_id, 10))
-          .filter((id) => !Number.isNaN(id))
+          .map((item) => (item.lot_no || '').toString().trim())
+          .filter((lotNo) => lotNo)
       )
     );
 
     const [assignmentRows] = await conn.query(
       `SELECT
-         wa.id AS washing_id,
-         jd.lot_no,
-         jd.sku,
-         jd.total_pieces,
+         c.lot_no,
+         c.sku,
+         c.total_pieces,
          IFNULL(SUM(dci.issued_pieces), 0) AS issued_pieces
-       FROM washing_assignments wa
-       JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-       LEFT JOIN dc_challan_items dci ON dci.washing_id = wa.id AND COALESCE(dci.item_type, 'normal') = 'normal'
-       WHERE wa.id IN (?) AND wa.is_approved = 1
-       GROUP BY wa.id`,
-      [washingIds.length ? washingIds : [0]]
+       FROM cutting_lots c
+       LEFT JOIN dc_challan_items dci
+         ON dci.lot_no = c.lot_no AND COALESCE(dci.item_type, 'normal') = 'normal'
+       WHERE c.lot_no IN (?)
+       GROUP BY c.id`,
+      [lotNos.length ? lotNos : ['']]
     );
 
-    if (washingIds.length && assignmentRows.length !== washingIds.length) {
-      req.flash('error', 'Some selected lots are not approved or missing');
+    if (lotNos.length && assignmentRows.length !== lotNos.length) {
+      req.flash('error', 'Some selected lots are missing');
       conn.release();
       return res.redirect('/accounts-challan');
     }
 
     const assignmentById = new Map(
-      assignmentRows.map((row) => [row.washing_id, row])
+      assignmentRows.map((row) => [row.lot_no, row])
     );
 
     const items = [];
@@ -314,9 +304,9 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
         continue;
       }
 
-      const washingId = parseInt(input.washing_id, 10);
       const requestedPieces = parseInt(input.challan_pieces, 10);
-      const assignment = assignmentById.get(washingId);
+      const lotNo = (input.lot_no || '').toString().trim();
+      const assignment = assignmentById.get(lotNo);
 
       if (!assignment) {
         req.flash('error', 'Invalid lot selection');
@@ -349,7 +339,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
 
       items.push({
         entryType,
-        washing_id: washingId,
+        washing_id: null,
         lot_no: assignment.lot_no,
         sku: assignment.sku,
         total_pieces: requestedPieces,
