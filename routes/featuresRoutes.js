@@ -3,194 +3,148 @@ const router = express.Router();
 
 const featureSections = [
   {
-    id: 'auth',
-    title: 'Authentication & Role Guards',
+    id: 'platform-access',
+    title: 'Platform Access, Sessions & Role Guards',
     description:
-      'Login, session management, and role-aware middleware protect every workflow before a dashboard even loads.',
+      'Login, logout, and session protection keep every dashboard behind hashed credentials, cached lookups, and consistent authorization.',
     highlights: [
-      'Login verifies hashed passwords against active user accounts and captures role metadata before redirecting to the relevant module home.',
-      'Shared guards return JSON for API clients or flash messages for web flows so the same middleware protects HTML pages and REST endpoints.',
-      'Logout tears down session state so privileged dashboards stay inaccessible once a user signs out.'
+      'Username/password login validates hashed records, caches recent lookups, and redirects by role while capturing session metadata.',
+      'Reusable middleware gates each router by role, returning JSON for API callers and flash messaging for browser users.',
+      'Session activity logging closes audit trails on logout so privileged dashboards stay inaccessible once a user signs out.'
     ],
-    modules: ['routes/authRoutes.js', 'middlewares/auth.js']
+    modules: ['routes/authRoutes.js', 'routes/authRoutesOptimized.js', 'middlewares/auth.js', 'middlewares/sessionActivity.js']
   },
   {
-    id: 'admin',
-    title: 'Administration & Governance',
+    id: 'admin-governance',
+    title: 'Administration, Audit & Dynamic Dashboards',
     description:
-      'Admins orchestrate the operating model by managing users, dashboards, audit trails, and dynamic table schemas.',
+      'Admins curate roles, users, dashboards, and database-backed widgets while keeping audit logs and search utilities in sync.',
     highlights: [
-      'Dashboard loads combine role lists, user rosters, existing dashboards, and audit history to keep control room context in one place.',
-      'Schema builder forms create MySQL tables and matching dashboard metadata inside a single transaction with full validation.',
-      'Every structural change records an audit log entry so administrators can trace who changed what and when.'
+      'Admin console lists roles, users, dashboards, and audit history together, letting admins create schemas and dashboards in one flow.',
+      'Dashboard routes hydrate role-aware table views with pagination, search, and Excel export helpers for any configured dataset.',
+      'Search routes cache metadata, build flexible SQL on demand, and stream filtered results to Excel without exposing raw tables.'
     ],
-    modules: ['routes/adminRoutes.js', 'config/db.js']
+    modules: ['routes/adminRoutes.js', 'routes/dashboardRoutes.js', 'routes/searchRoutes.js', 'routes/featuresRoutes.js']
   },
   {
-    id: 'dashboards',
-    title: 'Dynamic Dashboards & Search',
+    id: 'fabric-cutting',
+    title: 'Fabric Intake, Cutting Lots & Department Hand-offs',
     description:
-      'Self-service dashboards let each role explore its authorised tables with pagination, filters, exports, and column-level control.',
+      'Fabric managers onboard invoices and rolls, cutting managers generate lots, and department users confirm work in partial waves.',
     highlights: [
-      'Role-aware listings show only dashboards mapped to the signed-in role and protect tables behind per-user access checks.',
-      'Table views support keyword search across concatenated columns, conditional filtering by ownership, and Excel downloads of the exact slice in view.',
-      'Operator-grade search tooling caches metadata, builds flexible SQL on the fly, and streams massive result sets straight to Excel files.'
+      'Fabric routes normalise spreadsheet uploads, reconcile vendors, and persist roll breakdowns for later consumption.',
+      'Cutting managers generate lot numbers, attach imagery, split quantities by size, and edit lots when specs change.',
+      'Department dashboards let team users mark partial completions so operators can verify and push lots forward.'
     ],
-    modules: ['routes/dashboardRoutes.js', 'routes/searchRoutes.js']
+    modules: ['routes/fabricManagerRoutes.js', 'routes/cuttingManagerRoutes.js', 'routes/editcuttinglots.js', 'routes/departmentRoutes.js']
   },
   {
-    id: 'fabric',
-    title: 'Fabric Procurement & Roll Intake',
+    id: 'stitching-assembly',
+    title: 'Stitching Approvals, Assembly & Reassignments',
     description:
-      'Fabric managers reconcile invoices, capture roll breakdowns, and accelerate bulk onboarding with spreadsheet uploads.',
+      'Stitching masters approve assignments, record piece-wise output, and feed assembly teams who prepare lots for washing.',
     highlights: [
-      'Dashboard views paginate invoices with vendor joins, search filters, and creator context for day-to-day tracking.',
-      'Utility helpers normalise Excel serial dates and cache vendor lookups so imports stay clean and performant.',
-      'Bulk upload endpoints parse XLSX files, upsert vendor references, and insert invoice and roll records inside managed transactions.'
+      'Approval queues and history pages enforce per-size totals, accept photos, and export structured evidence for auditors.',
+      'Assembly dashboards reconcile stitched lots, capture approvals, and surface PDF challans for downstream washing or dispatch.',
+      'Edit flows fix assignment issues and let operators reassign or correct washing links without breaking historical data.'
     ],
-    modules: ['routes/fabricManagerRoutes.js']
+    modules: ['routes/stitchingRoutes.js', 'routes/jeansAssemblyRoutes.js', 'routes/editWashingAssignments.js']
   },
   {
-    id: 'cutting',
-    title: 'Cutting Lots & Assignments',
+    id: 'washing-finishing',
+    title: 'Washing Intake, Rewash & Finishing Dispatch',
     description:
-      'Cutting managers generate lot numbers, attach imagery, track size splits, and push work downstream with full visibility.',
+      'Washing, washing-in, and finishing modules manage approvals, checkpoints, rewash loops, and final dispatch paperwork.',
     highlights: [
-      'Dashboard bootstraps transactional lot numbers per user session, hydrates recent lots, and caches available fabric rolls by fabric type.',
-      'Lot creation stores per-size breakdowns, optional reference photos, and user attribution before surfacing lots to other departments.',
-      'Assignment tooling targets stitching, washing, and QA roles while exposing PDF challan generation for hand-off paperwork.'
+      'Assignment tooling pairs assembly output with washer queues, preventing duplicate submissions and keeping remarks traceable.',
+      'Washing-in routes confirm arrivals, split toward rewash or finishing, and generate Excel summaries and challans.',
+      'Finishing captures proofs, validates totals, and supports edits or revocations before dispatch and document printing.'
     ],
-    modules: ['routes/cuttingManagerRoutes.js', 'routes/editcuttinglots.js']
+    modules: ['routes/assigntowashingRoutes.js', 'routes/washingRoutes.js', 'routes/washingInRoutes.js', 'routes/finishingRoutes.js']
   },
   {
-    id: 'stitching',
-    title: 'Stitching Execution & Records',
+    id: 'operator-oversight',
+    title: 'Operator Command Center & Department Management',
     description:
-      'Stitching masters approve work, capture progress with photos, and export evidence for finance and planning teams.',
+      'Operators monitor flow health, manage departments, and coordinate supervisors with cached analytics and Excel-friendly exports.',
     highlights: [
-      'Approval queues list pending assignments with search filters so supervisors can green-light or reject lots with remarks.',
-      'Data entry screens enforce per-size totals, attach upload evidence, and keep history paginated with incremental loading APIs.',
-      'Excel exports, challan creation, and edit routes help correct mistakes while keeping auditors supplied with structured data.'
+      'Performance widgets aggregate stitched, washed, and finished totals per lot, flagging bottlenecks across denim and non-denim chains.',
+      'Department management assigns supervisors, uploads attendance corrections, and reviews confirmation backlogs per stage.',
+      'Supervisor tooling shows rosters, incentives, and advances with salary recalculation hooks for every attendance adjustment.'
     ],
-    modules: ['routes/stitchingRoutes.js', 'routes/stitchingPaymentRoutes.js']
+    modules: ['routes/operatorRoutes.js', 'routes/departmentMgmtRoutes.js', 'routes/operatorEmployeeRoutes.js']
   },
   {
-    id: 'assembly',
-    title: 'Jeans Assembly & Washing Handovers',
+    id: 'workforce-payroll',
+    title: 'Workforce Rosters, Attendance & Payroll Rules',
     description:
-      'Assembly teams reconcile stitched output, approve inbound lots, and prepare washing assignments without leaving the module.',
+      'Supervisors and HR teams manage employee records, track daily wages, and upload attendance or night-shift data with templates.',
     highlights: [
-      'Controllers fetch pending stitching approvals, enforce role-based checks, and record per-size assembly totals with images.',
-      'Lists show historical assembly records with Excel downloads and PDF challans for downstream washing or dispatch.',
-      'Bulk approval and reassignment flows ensure only validated lots move into washing or rework pipelines.'
+      'Employee routes let supervisors register staff, edit metadata, and download structured rosters for offline updates.',
+      'Daily wage (“dihadi”) routes create attendance entries, enforce validations, and recalculate salaries immediately.',
+      'Shared salary helpers convert punch logs into monthly pay with leave, sandwich-day, and allowance logic baked in.'
     ],
-    modules: ['routes/jeansAssemblyRoutes.js', 'routes/assigntowashingRoutes.js']
+    modules: ['routes/employeeRoutes.js', 'routes/dihadiRoutes.js', 'helpers/salaryCalculator.js']
   },
   {
-    id: 'washing',
-    title: 'Washing Intake, Processing & Payments',
+    id: 'inventory-alerts',
+    title: 'Inventory, Out-of-Stock Alerts & Store Operations',
     description:
-      'Specialised dashboards manage washer approvals, washing-in checkpoints, rewash loops, and payout reconciliation.',
+      'Store admins and inventory operators reconcile goods, dispatch stock, and react to webhook-driven out-of-stock alerts.',
     highlights: [
-      'Washing dashboards surface approved lots, guard against duplicate submissions, and capture per-size washed totals with imagery.',
-      'Washing-in routes confirm inbound loads, split pieces towards finishing or rewash, and emit challans and Excel summaries.',
-      'Payment modules fetch rate cards, calculate invoices per washer, and give operators searchable histories of prior settlements.'
+      'Store admin dashboards maintain the goods master, dispatch history, and Excel exports for quick audits.',
+      'Inventory dashboards handle incoming and outgoing quantities with transactional updates and on-demand Excel downloads.',
+      'Webhook handlers persist threshold breaches, stream alerts via Server-Sent Events, and expose SKU alert history for operators.'
     ],
-    modules: ['routes/washingRoutes.js', 'routes/washingInRoutes.js', 'routes/washingPaymentRoutes.js']
+    modules: ['routes/storeAdminRoutes.js', 'routes/inventoryRoutes.js', 'routes/inventoryWebhook.js', 'routes/skuRoutes.js']
   },
   {
-    id: 'finishing',
-    title: 'Finishing & Dispatch Management',
+    id: 'procurement-po',
+    title: 'Procurement, Indents, Purchase Orders & Vendor Files',
     description:
-      'Finishing teams wrap production by validating quantities, creating challans, and coordinating dispatch readiness.',
+      'Accounts and procurement teams track parties, handle indents, generate POs, and share vendor files securely.',
     highlights: [
-      'Creation flows validate approvals from washing, enforce size-level totals, and support optional proof images before records post.',
-      'Operators can edit or revoke entries, generate department-wise challans, and review paginated histories of every finishing action.',
-      'Dispatch tooling handles partial or full loads, Excel-based bulk uploads, and printable documents for logistics partners.'
+      'Purchase dashboards manage parties and factories, while indent flows log filler requests, status changes, and audit history.',
+      'PO creator routes assemble inward entries with brand codes, panels, and exports, including specialised Nowi PO helpers.',
+      'Vendor file routes upload Excel or image packs to S3, generate signed URLs, and bundle archives for collaborators.'
     ],
-    modules: ['routes/finishingRoutes.js']
+    modules: ['routes/purchaseRoutes.js', 'routes/indentRoutes.js', 'routes/poCreatorRoutes.js', 'routes/nowiPoRoutes.js', 'routes/vendorFilesRoutes.js']
   },
   {
-    id: 'operator',
-    title: 'Operator Command Center & Department Oversight',
+    id: 'catalog-bulk',
+    title: 'Catalog Uploads, Templates & Bulk Automation',
     description:
-      'Operators monitor throughput, manage departments, and coordinate staffing from a single cached analytics hub.',
+      'Excel-driven utilities minimise manual entry for catalog data, washing assignments, and lot updates.',
     highlights: [
-      'Analytics aggregate stitched, washed, and finished totals per operator, highlight pending lots, and surface SKU momentum trends.',
-      'Department management screens assign supervisors, configure departments, and review confirmation backlogs per production stage.',
-      'Operator employee tools track workers, incentives, advances, and washing assignments with Excel exports for payroll teams.'
+      'Catalog upload routes parse marketplace sheets from S3, normalise headers, and cache marketplace metadata.',
+      'Bulk upload dashboards generate templates, validate rows, and insert lots or washing assignments with rollback safety.',
+      'Shared helpers keep date conversions, caching, and file handling consistent across upload-heavy flows.'
     ],
-    modules: [
-      'routes/operatorRoutes.js',
-      'routes/departmentMgmtRoutes.js',
-      'routes/operatorEmployeeRoutes.js'
-    ]
+    modules: ['routes/catalogupload.js', 'routes/bulkUploadRoutes.js']
   },
   {
-    id: 'workforce',
-    title: 'Supervisor & Workforce Tools',
+    id: 'integrations-apis',
+    title: 'Integrations, Analytics & Partner APIs',
     description:
-      'Supervisors and HR partners manage rosters, attendance, and daily wages with targeted utilities.',
+      'External touchpoints sync Flipkart returns, EasyEcom stock analytics, and production data over authenticated APIs.',
     highlights: [
-      'Supervisors review assigned employees, update worker metadata, and download structured rosters for offline use.',
-      'Daily wage (“dihadi”) routes create attendance entries, calculate pay, and support Excel templates for bulk imports.',
-      'Shared helpers keep flash messaging and validation consistent across workforce-facing forms.'
+      'API auth and production routes provide JWT-secured endpoints for lot retrieval, status updates, and metadata exports.',
+      'Flipkart routes reconcile return consignments and issue statuses, while EasyEcom UI charts orders, runway, and momentum.',
+      'Out-of-stock role support and warehouse scoping align EasyEcom analytics with inventory alerts seen in-store.'
     ],
-    modules: ['routes/employeeRoutes.js', 'routes/dihadiRoutes.js']
+    modules: ['routes/apiAuthRoutes.js', 'routes/apiRoutes.js', 'routes/productionApiRoutes.js', 'routes/flipkartReturnRoutes.js', 'routes/flipkartIssueStatusRoutes.js', 'routes/easyecomapi.js', 'routes/easyecomRoutes.js']
   },
   {
-    id: 'inventory',
-    title: 'Inventory & Store Operations',
+    id: 'payments-challans',
+    title: 'Payments, Challans & Documentation',
     description:
-      'Store admins reconcile goods in, goods out, and adjustments while keeping alerts and audit trails in sync.',
+      'Finance and accounts teams configure rates, reconcile payouts, and generate GST-ready challans from washing output.',
     highlights: [
-      'Dashboard joins stock masters with incoming and dispatched movements while caching catalog data for quick load times.',
-      'Stock adjustments run inside transactions to keep quantities balanced and capture who performed each movement.',
-      'Excel exports, SSE alert streams, and webhook log viewers give store teams real-time visibility into stock events.'
+      'Stitching and washing payment routes fetch rate cards, calculate amounts, and export Excel summaries per user or operation.',
+      'Accounts challan routes generate GST challans from approved washing assignments, enforce counters, and render printable PDFs.',
+      'Challan dashboards add vehicle and purpose metadata while keeping history searchable for audits.'
     ],
-    modules: ['routes/inventoryRoutes.js', 'routes/storeAdminRoutes.js', 'routes/inventoryWebhook.js']
-  },
-  {
-    id: 'procurement',
-    title: 'Purchase & Master Data Management',
-    description:
-      'Accounts teams maintain vendor, party, and factory masters alongside procurement utilities.',
-    highlights: [
-      'Purchase routes list parties and factories, support inline CRUD, and provide ready-made Excel templates.',
-      'SKU utilities centralise product definitions so cutting, stitching, and inventory flows stay aligned.',
-      'Data validations and flash messaging keep master data clean without direct database access.'
-    ],
-    modules: ['routes/purchaseRoutes.js', 'routes/skuRoutes.js']
-  },
-  {
-    id: 'integrations',
-    title: 'Integrations, APIs & Webhooks',
-    description:
-      'External touchpoints connect Flipkart services, internal APIs, and real-time webhooks to the production backbone.',
-    highlights: [
-      'Authenticated routes fetch Flipkart return consignments and issue statuses using seller credentials for reconciliation.',
-      'Inventory webhooks accept JSON payloads, persist change logs, and fan out alerts over Server-Sent Events.',
-      'JWT-protected APIs expose inventory summaries and fabric availability for partners and satellite tools.'
-    ],
-    modules: [
-      'routes/flipkartReturnRoutes.js',
-      'routes/flipkartIssueStatusRoutes.js',
-      'routes/apiAuthRoutes.js',
-      'routes/apiRoutes.js',
-      'routes/inventoryWebhook.js'
-    ]
-  },
-  {
-    id: 'bulk-automation',
-    title: 'Bulk Upload & Catalog Automation',
-    description:
-      'Excel-driven utilities reduce manual entry for SKU catalogs, washing assignments, and production updates.',
-    highlights: [
-      'Catalog upload routes parse Excel sheets, normalise headers, and batch insert catalog entries with progress feedback.',
-      'Bulk upload helpers reuse parsing logic to assign lots to washing or update production datasets safely.',
-      'Reusable date conversion and validation helpers keep spreadsheet data consistent across modules.'
-    ],
-    modules: ['routes/catalogupload.js', 'routes/bulkUploadRoutes.js', 'routes/assigntowashingRoutes.js']
+    modules: ['routes/stitchingPaymentRoutes.js', 'routes/washingPaymentRoutes.js', 'routes/accountsChallanRoutes.js', 'routes/challanDashboardRoutes.js']
   }
 ];
 
