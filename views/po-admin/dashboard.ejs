@@ -472,9 +472,10 @@
       return Array.from(columnSet);
     }
 
-    function renderTable(headTarget, bodyTarget, columns, rows) {
+    function renderTable(headTarget, bodyTarget, columns, rows, options = {}) {
       headTarget.innerHTML = '';
       bodyTarget.innerHTML = '';
+      const showDelete = options.showDelete === true;
 
       if (!rows.length) {
         bodyTarget.innerHTML = '<tr><td colspan="100%" class="text-center text-muted py-4">No records found.</td></tr>';
@@ -483,7 +484,23 @@
 
       columns.forEach(column => {
         const th = document.createElement('th');
-        th.textContent = column;
+        const headerWrap = document.createElement('div');
+        headerWrap.className = 'd-flex align-items-center gap-2';
+
+        const label = document.createElement('span');
+        label.textContent = column;
+        headerWrap.appendChild(label);
+
+        if (showDelete) {
+          const deleteButton = document.createElement('button');
+          deleteButton.type = 'button';
+          deleteButton.className = 'btn btn-link btn-sm text-danger p-0 master-delete-column-btn';
+          deleteButton.dataset.column = column;
+          deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+          headerWrap.appendChild(deleteButton);
+        }
+
+        th.appendChild(headerWrap);
         headTarget.appendChild(th);
       });
 
@@ -514,7 +531,8 @@
         document.getElementById('masterTableHead'),
         document.getElementById('masterTableBody'),
         columns,
-        data.rows || []
+        data.rows || [],
+        { showDelete: true }
       );
       document.getElementById('masterCount').textContent = `${data.total || 0} records`;
       document.getElementById('masterPage').textContent = `Page ${data.page || 1}`;
@@ -560,6 +578,22 @@
         }
         select.appendChild(option);
       });
+    }
+
+    function openMasterDeleteModal(columnName) {
+      const statusTarget = document.getElementById('masterDeleteStatus');
+      if (!columnName) {
+        statusTarget.textContent = 'Please select a column to delete.';
+        return;
+      }
+      masterDeleteState.columnName = columnName;
+      const select = document.getElementById('masterDeleteColumn');
+      if (select) {
+        select.value = columnName;
+      }
+      document.getElementById('masterDeleteColumnName').textContent = columnName;
+      const modal = new bootstrap.Modal(document.getElementById('masterDeleteModal'));
+      modal.show();
     }
 
     function uploadFile({ fileInput, marketplaceSelect, progressBar, statusTarget, endpoint, onSuccess }) {
@@ -891,15 +925,13 @@
 
       document.getElementById('masterDeleteBtn').addEventListener('click', () => {
         const columnName = document.getElementById('masterDeleteColumn').value;
-        const statusTarget = document.getElementById('masterDeleteStatus');
-        if (!columnName) {
-          statusTarget.textContent = 'Please select a column to delete.';
-          return;
-        }
-        masterDeleteState.columnName = columnName;
-        document.getElementById('masterDeleteColumnName').textContent = columnName;
-        const modal = new bootstrap.Modal(document.getElementById('masterDeleteModal'));
-        modal.show();
+        openMasterDeleteModal(columnName);
+      });
+
+      document.getElementById('masterTableHead').addEventListener('click', (event) => {
+        const deleteButton = event.target.closest('.master-delete-column-btn');
+        if (!deleteButton) return;
+        openMasterDeleteModal(deleteButton.dataset.column);
       });
 
       document.getElementById('masterDeleteConfirmBtn').addEventListener('click', async () => {
