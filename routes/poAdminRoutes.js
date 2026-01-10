@@ -117,6 +117,11 @@ function buildJsonPath(columnName) {
   return `$.\"${safeName}\"`;
 }
 
+function parseJsonData(row) {
+  if (!row) return {};
+  return typeof row === 'string' ? JSON.parse(row || '{}') : row;
+}
+
 router.get('/dashboard', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
   try {
     await ensurePoAdminSetup();
@@ -437,6 +442,215 @@ router.post('/upload-master', isAuthenticated, allowRoles(['poadmins', 'poadmin'
   } catch (error) {
     console.error('Error uploading master data:', error);
     res.status(500).json({ error: 'Unable to upload master data.' });
+  } finally {
+    if (req.file?.path) {
+      await fsPromises.unlink(req.file.path).catch(() => undefined);
+    }
+  }
+});
+
+router.post('/upload-master-update', isAuthenticated, allowRoles(['poadmins', 'poadmin']), upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Please upload a valid .xlsx file.' });
+  }
+
+  const marketplaceId = Number(req.body.marketplaceId);
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name, master_columns AS masterColumns FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    const masterColumns = Array.isArray(marketplaceRow.masterColumns)
+      ? marketplaceRow.masterColumns
+      : JSON.parse(marketplaceRow.masterColumns || '[]');
+    const matchRule = MARKETPLACE_MATCH_RULES[marketplaceRow.name];
+    const matchKey = matchRule?.masterKey || '';
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(req.file.path);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(400).json({ error: 'No worksheet found in the uploaded file.' });
+    }
+
+    const headerRow = worksheet.getRow(1);
+    const headers = [];
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber - 1] = getCellText(cell.value);
+    });
+
+    const normalizedHeaders = headers.map(header => normalizeHeader(header));
+    const skuIndex = normalizedHeaders.findIndex(header => header === 'sku');
+    const matchKeyIndex = matchKey
+      ? normalizedHeaders.findIndex(header => header === normalizeHeader(matchKey))
+      : -1;
+
+    if (skuIndex === -1 && matchKeyIndex === -1) {
+      return res.status(400).json({ error: 'Update sheet must include a SKU or marketplace identifier column.' });
+    }
+
+    const identifierIndexes = new Set([skuIndex, matchKeyIndex].filter(index => index >= 0));
+    const updateHeaders = headers.filter((header, index) => header && !identifierIndexes.has(index));
+    if (!updateHeaders.length) {
+      return res.status(400).json({ error: 'Update sheet must include at least one editable column.' });
+    }
+
+    const updates = [];
+    const duplicateKeys = new Set();
+    const seenKeys = new Set();
+    let skippedEmpty = 0;
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const rowData = {};
+      headers.forEach((header, index) => {
+        if (header) {
+          rowData[header] = getCellText(row.getCell(index + 1).value);
+        }
+      });
+
+      const skuRaw = skuIndex >= 0 ? rowData[headers[skuIndex]] : '';
+      const sku = String(skuRaw || '').trim().toUpperCase();
+      const matchRaw = matchKeyIndex >= 0 ? rowData[headers[matchKeyIndex]] : '';
+      const matchValue = String(matchRaw || '').trim().toUpperCase();
+
+      if (!sku && !matchValue) {
+        skippedEmpty += 1;
+        return;
+      }
+
+      const updateData = {};
+      let hasUpdates = false;
+      updateHeaders.forEach(header => {
+        const value = rowData[header];
+        if (String(value || '').trim()) {
+          updateData[header] = String(value).trim();
+          hasUpdates = true;
+        }
+      });
+
+      if (!hasUpdates) {
+        skippedEmpty += 1;
+        return;
+      }
+
+      const uniqueKey = sku || matchValue;
+      if (seenKeys.has(uniqueKey)) {
+        duplicateKeys.add(uniqueKey);
+        return;
+      }
+      seenKeys.add(uniqueKey);
+
+      updates.push({
+        sku,
+        matchValue,
+        updateData
+      });
+    });
+
+    if (!updates.length) {
+      return res.json({
+        updatedCount: 0,
+        unchangedCount: 0,
+        skippedEmpty,
+        missingIdentifiers: [],
+        duplicateIdentifiers: Array.from(duplicateKeys)
+      });
+    }
+
+    const skuMap = new Map();
+    const matchMap = new Map();
+    if (updates.some(update => update.sku)) {
+      const skuChunks = chunkArray(updates.map(update => update.sku).filter(Boolean));
+      for (const chunk of skuChunks) {
+        const [rows] = await pool.query(
+          'SELECT id, data, sku FROM po_admin_master_data WHERE marketplace_id = ? AND sku IN (?)',
+          [marketplaceId, chunk]
+        );
+        rows.forEach(row => {
+          if (!row.sku) return;
+          skuMap.set(String(row.sku).toUpperCase(), { id: row.id, data: parseJsonData(row.data) });
+        });
+      }
+    }
+
+    if (matchKey && updates.some(update => update.matchValue)) {
+      const matchChunks = chunkArray(updates.map(update => update.matchValue).filter(Boolean));
+      const matchPath = buildJsonPath(matchKey);
+      for (const chunk of matchChunks) {
+        const [rows] = await pool.query(
+          `SELECT id, data FROM po_admin_master_data
+           WHERE marketplace_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, ?)) IN (?)`,
+          [marketplaceId, matchPath, chunk]
+        );
+        rows.forEach(row => {
+          const data = parseJsonData(row.data);
+          const identifier = getValueByHeader(data, matchKey).toUpperCase();
+          if (identifier) {
+            matchMap.set(identifier, { id: row.id, data });
+          }
+        });
+      }
+    }
+
+    let updatedCount = 0;
+    let unchangedCount = 0;
+    const missingIdentifiers = [];
+
+    for (const update of updates) {
+      const entry =
+        (update.sku && skuMap.get(update.sku)) ||
+        (update.matchValue && matchMap.get(update.matchValue));
+
+      if (!entry) {
+        missingIdentifiers.push(update.sku || update.matchValue);
+        continue;
+      }
+
+      const updatedData = { ...entry.data };
+      let hasChanges = false;
+      Object.entries(update.updateData).forEach(([column, value]) => {
+        const currentValue = String(updatedData[column] || '').trim();
+        if (currentValue !== value) {
+          updatedData[column] = value;
+          hasChanges = true;
+        }
+      });
+
+      if (!hasChanges) {
+        unchangedCount += 1;
+        continue;
+      }
+
+      updatedCount += 1;
+      await pool.query(
+        'UPDATE po_admin_master_data SET data = ?, search_blob = ? WHERE id = ?',
+        [JSON.stringify(updatedData), buildSearchBlob(updatedData), entry.id]
+      );
+    }
+
+    res.json({
+      updatedCount,
+      unchangedCount,
+      skippedEmpty,
+      missingIdentifiers,
+      duplicateIdentifiers: Array.from(duplicateKeys),
+      identifierHint: matchKey || 'SKU',
+      expectedColumns: masterColumns
+    });
+  } catch (error) {
+    console.error('Error updating master data:', error);
+    res.status(500).json({ error: 'Unable to update master data.' });
   } finally {
     if (req.file?.path) {
       await fsPromises.unlink(req.file.path).catch(() => undefined);
@@ -780,6 +994,63 @@ router.get('/api/master-data', isAuthenticated, allowRoles(['poadmins', 'poadmin
   } catch (error) {
     console.error('Error fetching master data:', error);
     res.status(500).json({ error: 'Unable to load master data.' });
+  }
+});
+
+router.get('/download-master', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.query.marketplaceId);
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name, master_columns AS masterColumns FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT sku, data FROM po_admin_master_data WHERE marketplace_id = ? ORDER BY created_at DESC',
+      [marketplaceId]
+    );
+
+    const masterColumns = Array.isArray(marketplaceRow.masterColumns)
+      ? marketplaceRow.masterColumns
+      : JSON.parse(marketplaceRow.masterColumns || '[]');
+    const columnSet = new Set(masterColumns);
+    rows.forEach(row => {
+      const data = parseJsonData(row.data);
+      Object.keys(data || {}).forEach(key => columnSet.add(key));
+    });
+    const columns = Array.from(columnSet);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Master Data');
+    worksheet.columns = columns.map(column => ({ header: column, key: column, width: 20 }));
+
+    rows.forEach(row => {
+      const data = parseJsonData(row.data);
+      const rowData = {};
+      columns.forEach(column => {
+        rowData[column] = data?.[column] ?? '';
+      });
+      worksheet.addRow(rowData);
+    });
+
+    const dateStamp = getTodayDateString();
+    const filename = `MasterData-${marketplaceRow.name}-${dateStamp}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error downloading master data:', error);
+    res.status(500).json({ error: 'Unable to download master data.' });
   }
 });
 

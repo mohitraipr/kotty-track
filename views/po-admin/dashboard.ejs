@@ -79,7 +79,8 @@
       <div class="tab-pane fade show active" id="master" role="tabpanel">
         <div class="row g-4">
           <div class="col-lg-4">
-            <div class="card-surface">
+            <div class="d-flex flex-column gap-4">
+              <div class="card-surface">
               <div class="mb-3">
                 <div class="section-title">Master Data Upload</div>
                 <div class="section-subtitle">Unique SKU values are enforced per marketplace.</div>
@@ -104,6 +105,34 @@
               <div>
                 <div class="form-label">Expected Columns</div>
                 <div class="column-list" id="masterColumns"></div>
+              </div>
+              </div>
+              <div class="card-surface">
+                <div class="mb-3">
+                  <div class="section-title">Master Data Update</div>
+                  <div class="section-subtitle">Upload a sheet with SKU/ASIN and only the fields you want to change.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Upload Excel (.xlsx)</label>
+                  <input type="file" class="form-control" id="masterUpdateFile" accept=".xlsx">
+                </div>
+                <div class="mb-3">
+                  <button class="btn btn-primary w-100" id="masterUpdateBtn">
+                    <i class="bi bi-pencil-square"></i> Update Master Data
+                  </button>
+                </div>
+                <div class="mb-3">
+                  <div class="progress">
+                    <div class="progress-bar" id="masterUpdateProgress" role="progressbar" style="width: 0%"></div>
+                  </div>
+                  <div class="upload-status mt-2" id="masterUpdateStatus">Awaiting update upload.</div>
+                </div>
+                <div class="mb-3">
+                  <button class="btn btn-outline w-100" id="masterDownloadBtn">
+                    <i class="bi bi-download"></i> Download Master Data
+                  </button>
+                  <div class="upload-status mt-2">Exports the full master data for the selected marketplace.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -682,6 +711,29 @@
             loadMasterData();
           }
         });
+      });
+
+      document.getElementById('masterUpdateBtn').addEventListener('click', () => {
+        uploadFile({
+          fileInput: document.getElementById('masterUpdateFile'),
+          marketplaceSelect: masterMarketplace,
+          progressBar: document.getElementById('masterUpdateProgress'),
+          statusTarget: document.getElementById('masterUpdateStatus'),
+          endpoint: '/po-admin/upload-master-update',
+          onSuccess: (response) => {
+            const missingCount = response.missingIdentifiers?.length || 0;
+            const unchangedCount = response.unchangedCount || 0;
+            const skippedEmpty = response.skippedEmpty || 0;
+            document.getElementById('masterUpdateStatus').textContent = `Updated ${response.updatedCount || 0} records. Missing ${missingCount}, unchanged ${unchangedCount}, skipped ${skippedEmpty} empty rows.`;
+            loadMasterData();
+          }
+        });
+      });
+
+      document.getElementById('masterDownloadBtn').addEventListener('click', () => {
+        const marketplaceId = masterMarketplace.value;
+        if (!marketplaceId) return;
+        window.location.href = `/po-admin/download-master?marketplaceId=${marketplaceId}`;
       });
 
       document.getElementById('poUploadBtn').addEventListener('click', () => {
