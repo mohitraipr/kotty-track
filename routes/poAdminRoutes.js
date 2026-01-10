@@ -997,6 +997,86 @@ router.get('/api/master-data', isAuthenticated, allowRoles(['poadmins', 'poadmin
   }
 });
 
+router.post('/api/delete-master-column', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.body.marketplaceId);
+  const columnName = String(req.body.columnName || '').trim();
+
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+
+  if (!columnName) {
+    return res.status(400).json({ error: 'Column name is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name, master_columns AS masterColumns FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    const normalizedTarget = normalizeHeader(columnName);
+    if (normalizedTarget === 'sku') {
+      return res.status(400).json({ error: 'SKU column cannot be deleted.' });
+    }
+
+    const matchRule = MARKETPLACE_MATCH_RULES[marketplaceRow.name];
+    if (matchRule && normalizeHeader(matchRule.masterKey) === normalizedTarget) {
+      return res.status(400).json({ error: `${matchRule.masterKey} column cannot be deleted for ${marketplaceRow.name}.` });
+    }
+
+    const masterColumns = Array.isArray(marketplaceRow.masterColumns)
+      ? marketplaceRow.masterColumns
+      : JSON.parse(marketplaceRow.masterColumns || '[]');
+    const updatedMasterColumns = masterColumns.filter(col => normalizeHeader(col) !== normalizedTarget);
+
+    if (updatedMasterColumns.length !== masterColumns.length) {
+      await pool.query(
+        'UPDATE po_admin_marketplaces SET master_columns = ? WHERE id = ?',
+        [JSON.stringify(updatedMasterColumns), marketplaceId]
+      );
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, data FROM po_admin_master_data WHERE marketplace_id = ?',
+      [marketplaceId]
+    );
+
+    let updatedRows = 0;
+    for (const row of rows) {
+      const rowData = parseJsonData(row.data);
+      let changed = false;
+      Object.keys(rowData).forEach(key => {
+        if (normalizeHeader(key) === normalizedTarget) {
+          delete rowData[key];
+          changed = true;
+        }
+      });
+
+      if (!changed) continue;
+      updatedRows += 1;
+      await pool.query(
+        'UPDATE po_admin_master_data SET data = ?, search_blob = ? WHERE id = ?',
+        [JSON.stringify(rowData), buildSearchBlob(rowData), row.id]
+      );
+    }
+
+    res.json({
+      columnName,
+      updatedRows,
+      masterColumns: updatedMasterColumns
+    });
+  } catch (error) {
+    console.error('Error deleting master column:', error);
+    res.status(500).json({ error: 'Unable to delete master column.' });
+  }
+});
+
 router.get('/download-master', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
   const marketplaceId = Number(req.query.marketplaceId);
   if (!marketplaceId) {

@@ -134,6 +134,25 @@
                   <div class="upload-status mt-2">Exports the full master data for the selected marketplace.</div>
                 </div>
               </div>
+              <div class="card-surface">
+                <div class="mb-3">
+                  <div class="section-title">Delete Master Column</div>
+                  <div class="section-subtitle">Remove a column from every master data row for this marketplace.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Column</label>
+                  <select class="form-select" id="masterDeleteColumn">
+                    <option value="">Select column</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <button class="btn btn-danger w-100" id="masterDeleteBtn">
+                    <i class="bi bi-trash"></i> Delete Column
+                  </button>
+                </div>
+                <div class="upload-status mt-2" id="masterDeleteStatus">No deletions yet.</div>
+                <div class="section-subtitle mt-2">SKU and required identifier columns cannot be deleted.</div>
+              </div>
             </div>
           </div>
           <div class="col-lg-8">
@@ -329,6 +348,27 @@
     </div>
   </div>
 
+  <div class="modal fade" id="masterDeleteModal" tabindex="-1" aria-labelledby="masterDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="masterDeleteModalLabel">Delete Master Column</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">This will permanently remove the column from all master data records.</p>
+          <p class="fw-semibold mb-0">Column: <span id="masterDeleteColumnName">-</span></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="masterDeleteConfirmBtn">
+            <i class="bi bi-trash"></i> Confirm Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
@@ -336,6 +376,7 @@
     const poState = { page: 1, search: '' };
     const apiKeyState = { keys: [] };
     const poDeleteState = { rowCount: 0, totalQuantity: 0 };
+    const masterDeleteState = { columnName: '' };
 
     function populateMarketplaceOptions(selectElement) {
       selectElement.innerHTML = '';
@@ -468,6 +509,7 @@
 
       const marketplace = getMarketplaceById(marketplaceId);
       const columns = buildTableColumns(marketplace?.masterColumns || [], data.rows || []);
+      updateMasterDeleteOptions(columns);
       renderTable(
         document.getElementById('masterTableHead'),
         document.getElementById('masterTableBody'),
@@ -503,6 +545,21 @@
       const poMarketplace = getMarketplaceById(document.getElementById('poMarketplace').value);
       renderColumnList(document.getElementById('masterColumns'), masterMarketplace?.masterColumns || []);
       renderColumnList(document.getElementById('poColumns'), poMarketplace?.poColumns || []);
+    }
+
+    function updateMasterDeleteOptions(columns) {
+      const select = document.getElementById('masterDeleteColumn');
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">Select column</option>';
+      (columns || []).forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column;
+        if (column === currentValue) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
     }
 
     function uploadFile({ fileInput, marketplaceSelect, progressBar, statusTarget, endpoint, onSuccess }) {
@@ -672,6 +729,43 @@
       }
     }
 
+    async function deleteMasterColumn() {
+      const marketplaceId = document.getElementById('masterMarketplace').value;
+      const columnName = masterDeleteState.columnName;
+      const statusTarget = document.getElementById('masterDeleteStatus');
+
+      if (!marketplaceId || !columnName) {
+        statusTarget.textContent = 'Please select a column to delete.';
+        return;
+      }
+
+      statusTarget.textContent = `Deleting column "${columnName}"...`;
+      try {
+        const response = await fetch('/po-admin/api/delete-master-column', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ marketplaceId, columnName })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          statusTarget.textContent = data.error || 'Unable to delete column.';
+          return;
+        }
+
+        const marketplace = getMarketplaceById(marketplaceId);
+        if (marketplace && Array.isArray(data.masterColumns)) {
+          marketplace.masterColumns = data.masterColumns;
+        }
+
+        statusTarget.textContent = `Deleted "${columnName}" from ${data.updatedRows || 0} master records.`;
+        updateColumnDisplays();
+        await loadMasterData();
+      } catch (error) {
+        console.error('Failed to delete master column', error);
+        statusTarget.textContent = 'Unable to delete column.';
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       const masterMarketplace = document.getElementById('masterMarketplace');
       const poMarketplace = document.getElementById('poMarketplace');
@@ -793,6 +887,28 @@
       document.getElementById('poDeleteConfirmBtn').addEventListener('click', deletePo);
       document.getElementById('poDeleteNumber').addEventListener('input', () => {
         resetPoDeleteSummary();
+      });
+
+      document.getElementById('masterDeleteBtn').addEventListener('click', () => {
+        const columnName = document.getElementById('masterDeleteColumn').value;
+        const statusTarget = document.getElementById('masterDeleteStatus');
+        if (!columnName) {
+          statusTarget.textContent = 'Please select a column to delete.';
+          return;
+        }
+        masterDeleteState.columnName = columnName;
+        document.getElementById('masterDeleteColumnName').textContent = columnName;
+        const modal = new bootstrap.Modal(document.getElementById('masterDeleteModal'));
+        modal.show();
+      });
+
+      document.getElementById('masterDeleteConfirmBtn').addEventListener('click', async () => {
+        const modalElement = document.getElementById('masterDeleteModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+        await deleteMasterColumn();
       });
 
       document.getElementById('apiKeyCreateBtn').addEventListener('click', createApiKey);
