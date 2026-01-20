@@ -270,34 +270,37 @@ router.post(
         if (
           Array.isArray(roll_no) &&
           Array.isArray(layers) &&
-          Array.isArray(weight_used)
+          Array.isArray(roll_full_weight) &&
+          Array.isArray(roll_remaining_weight)
         ) {
           for (let i = 0; i < roll_no.length; i++) {
-            if (roll_no[i] && layers[i] && weight_used[i]) {
+            if (roll_no[i] && layers[i] && roll_full_weight[i] && roll_remaining_weight[i]) {
               rolls.push({
                 roll_no: roll_no[i],
                 layers: parseFloat(layers[i]),
-                weight_used: parseFloat(weight_used[i]),
-                full_weight: Array.isArray(roll_full_weight) ? parseFloat(roll_full_weight[i]) : null,
-                remaining_weight: Array.isArray(roll_remaining_weight)
-                  ? parseFloat(roll_remaining_weight[i])
-                  : null,
+                weight_used: Array.isArray(weight_used) ? parseFloat(weight_used[i]) : null,
+                full_weight: parseFloat(roll_full_weight[i]),
+                remaining_weight: parseFloat(roll_remaining_weight[i]),
               });
             }
           }
-        } else if (roll_no && layers && weight_used) {
+        } else if (roll_no && layers && roll_full_weight && roll_remaining_weight) {
           rolls.push({
             roll_no: roll_no,
             layers: parseFloat(layers),
-            weight_used: parseFloat(weight_used),
-            full_weight: roll_full_weight ? parseFloat(roll_full_weight) : null,
-            remaining_weight: roll_remaining_weight ? parseFloat(roll_remaining_weight) : null,
+            weight_used: weight_used ? parseFloat(weight_used) : null,
+            full_weight: parseFloat(roll_full_weight),
+            remaining_weight: parseFloat(roll_remaining_weight),
           });
         }
 
         // Insert rolls and update fabric weights
         const rollRowsClean = rolls.filter(
-          (r) => r.roll_no && !isNaN(r.weight_used) && !isNaN(r.layers)
+          (r) =>
+            r.roll_no &&
+            !isNaN(r.layers) &&
+            !isNaN(r.full_weight) &&
+            !isNaN(r.remaining_weight)
         );
         if (rollRowsClean.length) {
           const rollNos = rollRowsClean.map((r) => r.roll_no);
@@ -317,8 +320,16 @@ router.post(
           for (let r of rollRowsClean) {
             if (fabricRollMap.has(r.roll_no)) {
               const availableWeight = parseFloat(fabricRollMap.get(r.roll_no)) || 0;
-              if (r.weight_used > availableWeight) {
-                throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
+              if (isNaN(r.remaining_weight)) {
+                throw new Error(`Remaining weight is required for roll ${r.roll_no}`);
+              }
+              if (r.remaining_weight > availableWeight) {
+                throw new Error(`Remaining weight cannot exceed full weight for roll ${r.roll_no}`);
+              }
+              r.full_weight = availableWeight;
+              r.weight_used = r.full_weight - r.remaining_weight;
+              if (r.weight_used < 0) {
+                throw new Error(`Weight used cannot be negative for roll ${r.roll_no}`);
               }
               const [update] = await conn.query(
                 `UPDATE fabric_invoice_rolls
@@ -329,18 +340,16 @@ router.post(
               if (update.affectedRows === 0) {
                 throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
               }
-
-              r.full_weight = availableWeight;
-              r.remaining_weight = availableWeight - r.weight_used;
             } else {
               if (isNaN(r.full_weight) || isNaN(r.remaining_weight)) {
                 throw new Error(`Full and remaining weights are required for roll ${r.roll_no}`);
               }
-              if (r.weight_used > r.full_weight) {
-                throw new Error(`Weight used cannot exceed full weight for roll ${r.roll_no}`);
-              }
               if (r.remaining_weight > r.full_weight) {
                 throw new Error(`Remaining weight cannot exceed full weight for roll ${r.roll_no}`);
+              }
+              r.weight_used = r.full_weight - r.remaining_weight;
+              if (r.weight_used < 0) {
+                throw new Error(`Weight used cannot be negative for roll ${r.roll_no}`);
               }
             }
 
