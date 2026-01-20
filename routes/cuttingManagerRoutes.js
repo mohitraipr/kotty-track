@@ -201,6 +201,8 @@ router.post(
       roll_no,
       layers,
       weight_used,
+      roll_full_weight,
+      roll_remaining_weight,
     } = req.body;
     const image = req.file;
 
@@ -276,6 +278,10 @@ router.post(
                 roll_no: roll_no[i],
                 layers: parseFloat(layers[i]),
                 weight_used: parseFloat(weight_used[i]),
+                full_weight: Array.isArray(roll_full_weight) ? parseFloat(roll_full_weight[i]) : null,
+                remaining_weight: Array.isArray(roll_remaining_weight)
+                  ? parseFloat(roll_remaining_weight[i])
+                  : null,
               });
             }
           }
@@ -284,6 +290,8 @@ router.post(
             roll_no: roll_no,
             layers: parseFloat(layers),
             weight_used: parseFloat(weight_used),
+            full_weight: roll_full_weight ? parseFloat(roll_full_weight) : null,
+            remaining_weight: roll_remaining_weight ? parseFloat(roll_remaining_weight) : null,
           });
         }
 
@@ -292,26 +300,62 @@ router.post(
           (r) => r.roll_no && !isNaN(r.weight_used) && !isNaN(r.layers)
         );
         if (rollRowsClean.length) {
-          for (let r of rollRowsClean) {
-            const [update] = await conn.query(
-              `UPDATE fabric_invoice_rolls
-                 SET per_roll_weight = per_roll_weight - ?
-               WHERE roll_no = ? AND per_roll_weight >= ?`,
-              [r.weight_used, r.roll_no, r.weight_used]
-            );
-            if (update.affectedRows === 0) {
-              throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
-            }
-          }
+          const rollNos = rollRowsClean.map((r) => r.roll_no);
+          const [fabricRolls] = await conn.query(
+            `SELECT roll_no, per_roll_weight
+             FROM fabric_invoice_rolls
+             WHERE roll_no IN (?) FOR UPDATE`,
+            [rollNos]
+          );
+          const fabricRollMap = new Map(fabricRolls.map((row) => [row.roll_no, row.per_roll_weight]));
+
           const placeholders = rollRowsClean
-            .map(() => '(?, ?, ?, ?, 0, NOW())')
+            .map(() => '(?, ?, ?, ?, 0, ?, ?, NOW())')
             .join(',');
           const flat = [];
-          rollRowsClean.forEach((r) => {
-            flat.push(cuttingLotId, r.roll_no, r.weight_used, r.layers);
-          });
+
+          for (let r of rollRowsClean) {
+            if (fabricRollMap.has(r.roll_no)) {
+              const availableWeight = parseFloat(fabricRollMap.get(r.roll_no)) || 0;
+              if (r.weight_used > availableWeight) {
+                throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
+              }
+              const [update] = await conn.query(
+                `UPDATE fabric_invoice_rolls
+                   SET per_roll_weight = per_roll_weight - ?
+                 WHERE roll_no = ? AND per_roll_weight >= ?`,
+                [r.weight_used, r.roll_no, r.weight_used]
+              );
+              if (update.affectedRows === 0) {
+                throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
+              }
+
+              r.full_weight = availableWeight;
+              r.remaining_weight = availableWeight - r.weight_used;
+            } else {
+              if (isNaN(r.full_weight) || isNaN(r.remaining_weight)) {
+                throw new Error(`Full and remaining weights are required for roll ${r.roll_no}`);
+              }
+              if (r.weight_used > r.full_weight) {
+                throw new Error(`Weight used cannot exceed full weight for roll ${r.roll_no}`);
+              }
+              if (r.remaining_weight > r.full_weight) {
+                throw new Error(`Remaining weight cannot exceed full weight for roll ${r.roll_no}`);
+              }
+            }
+
+            flat.push(
+              cuttingLotId,
+              r.roll_no,
+              r.weight_used,
+              r.layers,
+              r.full_weight,
+              r.remaining_weight
+            );
+          }
+
           await conn.query(
-            `INSERT INTO cutting_lot_rolls (cutting_lot_id, roll_no, weight_used, layers, total_pieces, created_at)
+            `INSERT INTO cutting_lot_rolls (cutting_lot_id, roll_no, weight_used, layers, total_pieces, full_weight, remaining_weight, created_at)
              VALUES ${placeholders}`,
             flat
           );
