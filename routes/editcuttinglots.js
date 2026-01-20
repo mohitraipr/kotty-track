@@ -412,7 +412,7 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
     const [rollInfo] = await conn.query(
       `SELECT r.id, r.roll_no, r.weight_used, r.layers, fi.per_roll_weight
          FROM cutting_lot_rolls r
-         JOIN fabric_invoice_rolls fi ON r.roll_no = fi.roll_no
+         LEFT JOIN fabric_invoice_rolls fi ON r.roll_no = fi.roll_no
          WHERE r.id IN (${rollPlaceholders}) FOR UPDATE`,
       roll_id
     );
@@ -430,11 +430,13 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
         throw new Error('Invalid roll data.');
       }
       const delta = newWeightUsed - parseFloat(record.weight_used);
-      const availableWeight = parseFloat(record.per_roll_weight);
-      if (delta > 0 && delta > availableWeight) {
-        throw new Error(`Insufficient available weight for Roll No. ${record.roll_no}. Needed additional ${delta}, available ${availableWeight}.`);
+      const availableWeight = record.per_roll_weight === null ? null : parseFloat(record.per_roll_weight);
+      if (availableWeight !== null) {
+        if (delta > 0 && delta > availableWeight) {
+          throw new Error(`Insufficient available weight for Roll No. ${record.roll_no}. Needed additional ${delta}, available ${availableWeight}.`);
+        }
+        await conn.query(`UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`, [delta, record.roll_no]);
       }
-      await conn.query(`UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ? WHERE roll_no = ?`, [delta, record.roll_no]);
       await conn.query(`UPDATE cutting_lot_rolls SET layers = ?, weight_used = ? WHERE id = ?`, [newLayers, newWeightUsed, id]);
       totalLayers += newLayers;
     }

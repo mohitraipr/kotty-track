@@ -606,6 +606,32 @@
           />
         </div>
       </div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-6">
+          <label class="form-label" data-i18n="fullWeightLabel">Full Roll Weight</label>
+          <input
+            type="number"
+            step="0.01"
+            class="form-control fullWeightInput"
+            name="roll_full_weight[]"
+            min="0"
+            required
+            placeholder="Full weight"
+          />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" data-i18n="remainingWeightLabel">Remaining Weight</label>
+          <input
+            type="number"
+            step="0.01"
+            class="form-control remainingWeightInput"
+            name="roll_remaining_weight[]"
+            min="0"
+            required
+            placeholder="Remaining weight"
+          />
+        </div>
+      </div>
       <!-- Progress bar for used vs available -->
       <div class="mb-3">
         <label class="form-label">
@@ -677,7 +703,9 @@
         rollsUsed: "Rolls Used",
         addNewSize: "Add New Size",
         addAnotherRoll: "Add Another Roll",
-        totalPiecesCalc: "Total Pieces (Calculated)"
+        totalPiecesCalc: "Total Pieces (Calculated)",
+        fullWeightLabel: "Full Roll Weight",
+        remainingWeightLabel: "Remaining Weight"
       },
       hi: {
         cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड",
@@ -715,7 +743,9 @@
         rollsUsed: "उपयोग किए गए रोल्स",
         addNewSize: "नया साइज़ जोड़ें",
         addAnotherRoll: "एक और रोल जोड़ें",
-        totalPiecesCalc: "कुल पीस (हिसाब से)"
+        totalPiecesCalc: "कुल पीस (हिसाब से)",
+        fullWeightLabel: "रोल का कुल वज़न",
+        remainingWeightLabel: "बचा हुआ वज़न"
       }
     };
 
@@ -834,6 +864,7 @@
           inputField.setAttribute('aria-expanded', 'false');
         }
 
+        hiddenField.value = '';
         checkRollsCompletion();
       }, 300));
 
@@ -849,6 +880,14 @@
           hiddenField.dispatchEvent(new Event('change'));
 
           checkRollsCompletion();
+        }
+      });
+
+      inputField.addEventListener('blur', () => {
+        const value = inputField.value.trim();
+        if (value && !hiddenField.value) {
+          hiddenField.value = value;
+          hiddenField.dispatchEvent(new Event('change'));
         }
       });
 
@@ -932,6 +971,8 @@
       const rollNoSearch = rollSection.querySelector('.rollNo_search');
       const rollNoOptions = rollSection.querySelector('.autocomplete-items');
       const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
 
       const availableRolls = rollsByFabricType[fabricType] || [];
 
@@ -955,6 +996,11 @@
           availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
           weightUsedInput.max = selectedRoll.per_roll_weight;
           weightUsedInput.placeholder = `Roll ${selectedRoll.roll_no} weight used (${selectedRoll.unit})`;
+          fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
+          fullWeightInput.readOnly = true;
+          remainingWeightInput.readOnly = true;
+          remainingWeightInput.dataset.auto = 'true';
+          updateRemainingWeight(rollSection);
           updateWeightProgress(rollSection);
         } else {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
@@ -962,6 +1008,11 @@
           weightUsedInput.value = '';
           weightUsedInput.removeAttribute('max');
           weightUsedInput.placeholder = `Weight used (${fabricType})...`;
+          fullWeightInput.readOnly = false;
+          remainingWeightInput.readOnly = false;
+          remainingWeightInput.dataset.auto = 'false';
+          fullWeightInput.value = '';
+          remainingWeightInput.value = '';
 
           const progressBar = rollSection.querySelector('.progress-bar');
           progressBar.style.width = '0%';
@@ -973,6 +1024,21 @@
       });
 
       weightUsedInput.addEventListener('input', () => {
+        updateRemainingWeight(rollSection);
+        updateWeightProgress(rollSection);
+        checkRollsCompletion();
+      });
+
+      fullWeightInput.addEventListener('input', () => {
+        const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
+        if (fullWeightInput.value) {
+          availableWeightTxt.textContent = parseFloat(fullWeightInput.value || '0').toFixed(2);
+        }
+        updateWeightProgress(rollSection);
+        checkRollsCompletion();
+      });
+
+      remainingWeightInput.addEventListener('input', () => {
         updateWeightProgress(rollSection);
         checkRollsCompletion();
       });
@@ -1025,6 +1091,19 @@
 
       const weightUsedInput = newRoll.querySelector('.weightUsedInput');
       weightUsedInput.addEventListener('input', () => {
+        updateRemainingWeight(newRoll);
+        updateWeightProgress(newRoll);
+        checkRollsCompletion();
+      });
+
+      const fullWeightInput = newRoll.querySelector('.fullWeightInput');
+      fullWeightInput.addEventListener('input', () => {
+        updateWeightProgress(newRoll);
+        checkRollsCompletion();
+      });
+
+      const remainingWeightInput = newRoll.querySelector('.remainingWeightInput');
+      remainingWeightInput.addEventListener('input', () => {
         updateWeightProgress(newRoll);
         checkRollsCompletion();
       });
@@ -1044,13 +1123,17 @@
       const selectedRollNo = rollNoSel.value;
       const rollData = Object.values(rollsByFabricType).flat().find(r => r.roll_no === selectedRollNo);
 
-      if (!rollData) return;
-
-      const available = parseFloat(rollData.per_roll_weight) || 0;
+      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+      const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
+      const available = rollData ? parseFloat(rollData.per_roll_weight) || 0 : parseFloat(fullWeightInput.value) || 0;
       const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
       const bar = rollSection.querySelector('.progress-bar');
       const ratio = available === 0 ? 0 : (weightUsed / available) * 100;
       const percent = isNaN(ratio) ? 0 : Math.min(Math.max(ratio, 0), 100).toFixed(1);
+
+      if (!rollData) {
+        availableWeightTxt.textContent = available ? available.toFixed(2) : '0';
+      }
 
       bar.style.width = `${percent}%`;
       bar.textContent = `${percent}%`;
@@ -1063,6 +1146,16 @@
         bar.classList.remove('bg-danger');
         bar.classList.add('bg-info');
       }
+    }
+
+    function updateRemainingWeight(rollSection) {
+      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
+      if (remainingWeightInput.dataset.auto !== 'true') return;
+      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+      const fullWeight = parseFloat(fullWeightInput.value) || 0;
+      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
+      const remaining = fullWeight - weightUsed;
+      remainingWeightInput.value = remaining >= 0 ? remaining.toFixed(2) : '0';
     }
 
     // ====== Calculate total pieces (patterns * layers) ======
@@ -1092,6 +1185,8 @@
         const rollNoSearch = rollSection.querySelector('.rollNo_search');
         const rollNoOptions = rollSection.querySelector('.autocomplete-items');
         const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+        const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+        const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
 
         const availableRolls = rollsByFabricType[selectedFabricType] || [];
         const rollData = availableRolls.map(roll => ({
@@ -1109,6 +1204,11 @@
         availableWeightTxt.textContent = '0';
         weightUsedInput.value = '';
         weightUsedInput.removeAttribute('max');
+        fullWeightInput.value = '';
+        remainingWeightInput.value = '';
+        fullWeightInput.readOnly = false;
+        remainingWeightInput.readOnly = false;
+        remainingWeightInput.dataset.auto = 'false';
         const progressBar = rollSection.querySelector('.progress-bar');
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
@@ -1166,8 +1266,10 @@
         const rollNo = roll.querySelector('.rollNoSel').value.trim();
         const layers = roll.querySelector('.layersInput').value.trim();
         const weightUsed = roll.querySelector('.weightUsedInput').value.trim();
+        const fullWeight = roll.querySelector('.fullWeightInput').value.trim();
+        const remainingWeight = roll.querySelector('.remainingWeightInput').value.trim();
 
-        if (!rollNo || !layers || !weightUsed) {
+        if (!rollNo || !layers || !weightUsed || !fullWeight || !remainingWeight) {
           allFilled = false;
         }
       });
