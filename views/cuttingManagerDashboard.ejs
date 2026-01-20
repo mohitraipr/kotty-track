@@ -602,7 +602,8 @@
             name="weight_used[]"
             min="0"
             required
-            placeholder="Weight used"
+            placeholder="Weight used (calculated)"
+            readonly
           />
         </div>
       </div>
@@ -696,7 +697,7 @@
         remove: "Remove",
         rollNumber: "Roll Number",
         layersLabel: "Layers",
-        weightUsedLabel: "Weight Used",
+        weightUsedLabel: "Weight Used (Calculated)",
         weightUsageProgress: "Weight Usage Progress",
         availableLabel: "Available",
         sizesAndPatterns: "Sizes and Patterns",
@@ -736,7 +737,7 @@
         remove: "हटाएं",
         rollNumber: "रोल नंबर",
         layersLabel: "लेयर्स",
-        weightUsedLabel: "उपयोग किया गया वज़न",
+        weightUsedLabel: "उपयोग किया गया वज़न (गणना)",
         weightUsageProgress: "वज़न उपयोग की प्रगति",
         availableLabel: "उपलब्ध",
         sizesAndPatterns: "साइज़ और पैटर्न",
@@ -986,7 +987,7 @@
       initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
 
       rollNoSearch.placeholder = `Search Roll (${fabricType})...`;
-      weightUsedInput.placeholder = `Weight used (${fabricType})...`;
+      weightUsedInput.placeholder = `Weight used (${fabricType}, calculated)...`;
 
       rollNoSel.addEventListener('change', () => {
         const selectedRollNo = rollNoSel.value;
@@ -994,25 +995,23 @@
         if (selectedRoll) {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
           availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
-          weightUsedInput.max = selectedRoll.per_roll_weight;
-          weightUsedInput.placeholder = `Roll ${selectedRoll.roll_no} weight used (${selectedRoll.unit})`;
           fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
           fullWeightInput.readOnly = true;
-          remainingWeightInput.readOnly = true;
-          remainingWeightInput.dataset.auto = 'true';
-          updateRemainingWeight(rollSection);
+          remainingWeightInput.readOnly = false;
+          remainingWeightInput.value = '';
+          remainingWeightInput.max = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
+          updateWeightUsed(rollSection);
           updateWeightProgress(rollSection);
         } else {
           const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
           availableWeightTxt.textContent = '0';
           weightUsedInput.value = '';
-          weightUsedInput.removeAttribute('max');
-          weightUsedInput.placeholder = `Weight used (${fabricType})...`;
+          weightUsedInput.placeholder = `Weight used (${fabricType}, calculated)...`;
           fullWeightInput.readOnly = false;
           remainingWeightInput.readOnly = false;
-          remainingWeightInput.dataset.auto = 'false';
           fullWeightInput.value = '';
           remainingWeightInput.value = '';
+          remainingWeightInput.removeAttribute('max');
 
           const progressBar = rollSection.querySelector('.progress-bar');
           progressBar.style.width = '0%';
@@ -1023,22 +1022,19 @@
         checkRollsCompletion();
       });
 
-      weightUsedInput.addEventListener('input', () => {
-        updateRemainingWeight(rollSection);
-        updateWeightProgress(rollSection);
-        checkRollsCompletion();
-      });
-
       fullWeightInput.addEventListener('input', () => {
         const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
         if (fullWeightInput.value) {
           availableWeightTxt.textContent = parseFloat(fullWeightInput.value || '0').toFixed(2);
         }
+        remainingWeightInput.max = fullWeightInput.value || '';
+        updateWeightUsed(rollSection);
         updateWeightProgress(rollSection);
         checkRollsCompletion();
       });
 
       remainingWeightInput.addEventListener('input', () => {
+        updateWeightUsed(rollSection);
         updateWeightProgress(rollSection);
         checkRollsCompletion();
       });
@@ -1089,21 +1085,18 @@
         checkRollsCompletion();
       });
 
-      const weightUsedInput = newRoll.querySelector('.weightUsedInput');
-      weightUsedInput.addEventListener('input', () => {
-        updateRemainingWeight(newRoll);
-        updateWeightProgress(newRoll);
-        checkRollsCompletion();
-      });
-
       const fullWeightInput = newRoll.querySelector('.fullWeightInput');
       fullWeightInput.addEventListener('input', () => {
+        const remainingWeightInput = newRoll.querySelector('.remainingWeightInput');
+        remainingWeightInput.max = fullWeightInput.value || '';
+        updateWeightUsed(newRoll);
         updateWeightProgress(newRoll);
         checkRollsCompletion();
       });
 
       const remainingWeightInput = newRoll.querySelector('.remainingWeightInput');
       remainingWeightInput.addEventListener('input', () => {
+        updateWeightUsed(newRoll);
         updateWeightProgress(newRoll);
         checkRollsCompletion();
       });
@@ -1114,7 +1107,7 @@
         initializeRollNoAutocomplete(newRoll, currentFabricType);
       } else {
         newRoll.querySelector('.rollNo_search').placeholder = 'Search Roll...';
-        weightUsedInput.placeholder = 'Weight used...';
+        weightUsedInput.placeholder = 'Weight used (calculated)...';
       }
     }
 
@@ -1148,14 +1141,20 @@
       }
     }
 
-    function updateRemainingWeight(rollSection) {
-      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
-      if (remainingWeightInput.dataset.auto !== 'true') return;
+    function updateWeightUsed(rollSection) {
+      const weightUsedInput = rollSection.querySelector('.weightUsedInput');
       const fullWeightInput = rollSection.querySelector('.fullWeightInput');
-      const fullWeight = parseFloat(fullWeightInput.value) || 0;
-      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
-      const remaining = fullWeight - weightUsed;
-      remainingWeightInput.value = remaining >= 0 ? remaining.toFixed(2) : '0';
+      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
+      const fullWeight = parseFloat(fullWeightInput.value);
+      const remainingWeight = parseFloat(remainingWeightInput.value);
+
+      if (isNaN(fullWeight) || isNaN(remainingWeight)) {
+        weightUsedInput.value = '';
+        return;
+      }
+
+      const used = fullWeight - remainingWeight;
+      weightUsedInput.value = used >= 0 ? used.toFixed(2) : '0';
     }
 
     // ====== Calculate total pieces (patterns * layers) ======
@@ -1198,17 +1197,16 @@
 
         initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
         rollNoSearch.placeholder = `Search Roll (${selectedFabricType})...`;
-        weightUsedInput.placeholder = `Weight used (${selectedFabricType})...`;
+        weightUsedInput.placeholder = `Weight used (${selectedFabricType}, calculated)...`;
 
         const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
         availableWeightTxt.textContent = '0';
         weightUsedInput.value = '';
-        weightUsedInput.removeAttribute('max');
         fullWeightInput.value = '';
         remainingWeightInput.value = '';
         fullWeightInput.readOnly = false;
         remainingWeightInput.readOnly = false;
-        remainingWeightInput.dataset.auto = 'false';
+        remainingWeightInput.removeAttribute('max');
         const progressBar = rollSection.querySelector('.progress-bar');
         progressBar.style.width = '0%';
         progressBar.textContent = '0%';
@@ -1265,11 +1263,10 @@
       allRollSections.forEach(roll => {
         const rollNo = roll.querySelector('.rollNoSel').value.trim();
         const layers = roll.querySelector('.layersInput').value.trim();
-        const weightUsed = roll.querySelector('.weightUsedInput').value.trim();
         const fullWeight = roll.querySelector('.fullWeightInput').value.trim();
         const remainingWeight = roll.querySelector('.remainingWeightInput').value.trim();
 
-        if (!rollNo || !layers || !weightUsed || !fullWeight || !remainingWeight) {
+        if (!rollNo || !layers || !fullWeight || !remainingWeight) {
           allFilled = false;
         }
       });
