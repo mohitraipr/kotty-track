@@ -8,8 +8,54 @@ const { closeSessionLog } = require('../middlewares/sessionActivity');
 
 // GET /login
 router.get('/login', (req, res) => {
+  // If user is already logged in, redirect to their dashboard
+  if (req.session && req.session.user) {
+    return res.redirect(getDashboardForRole(req.session.user.roleName));
+  }
   res.render('login');
 });
+
+// Helper function to get dashboard URL for a role
+function getDashboardForRole(roleName) {
+  const dashboards = {
+    'admin': '/admin',
+    'cutting_manager': '/cutting-manager/dashboard',
+    'fabric_manager': '/fabric-manager/dashboard',
+    'stitching_master': '/stitchingdashboard',
+    'operator': '/operator/dashboard',
+    'inventory_operator': '/easyecom/stock-market',
+    'outofstock': '/easyecom/stock-market',
+    'supervisor': '/supervisor/employees',
+    'finishing': '/finishingdashboard',
+    'washing': '/washingdashboard',
+    'washing_master': '/washingdashboard',
+    'catalogUpload': '/catalogupload',
+    'jeans_assembly': '/jeansassemblydashboard',
+    'washing_in': '/washingin',
+    'washing_in_master': '/washingin',
+    'store_admin': '/store-admin/dashboard',
+    'store_employee': '/inventory/dashboard',
+    'indent_filler': '/indent',
+    'store_manager': '/indent/manage',
+    'accounts': '/accounts-challan',
+    'po_creator': '/po-creator/dashboard',
+    'nowipoorganization': '/nowi-po/dashboard',
+    'vendorfiles': '/vendor-files',
+    'poadmin': '/po-admin/dashboard',
+    'poadmins': '/po-admin/dashboard',
+    'checking': '/department/dashboard',
+    'quality_assurance': '/department/dashboard',
+    'challan_dashboard': '/challandashboard',
+  };
+
+  // If role not found, log it for debugging and return a safe default
+  if (!dashboards[roleName]) {
+    console.warn(`Unknown role "${roleName}" - redirecting to /operator/dashboard as fallback`);
+    return '/operator/dashboard';
+  }
+
+  return dashboards[roleName];
+}
 
 // POST /login
 router.post('/login', async (req, res) => {
@@ -65,87 +111,21 @@ router.post('/login', async (req, res) => {
       console.error('Error creating session log:', logErr);
     }
 
-    // Redirect based on role
-    switch (user.roleName) {
-      case 'admin':
-        res.redirect('/admin');
-        break;
-      case 'cutting_manager':
-        res.redirect('/cutting-manager/dashboard');
-        break;
-      case 'fabric_manager':
-        res.redirect('/fabric-manager/dashboard');
-        break;
-      case 'stitching_master':
-        res.redirect('/stitchingdashboard');
-        break;
-      case 'operator':
-        res.redirect('/operator/dashboard');
-        break;
-      case 'inventory_operator':
-        res.redirect('/easyecom/stock-market');
-        break;
-      case 'outofstock':
-        res.redirect('/easyecom/stock-market');
-        break;
-      case 'supervisor':
-        res.redirect('/supervisor/employees');
-        break;
-      case 'finishing':
-        res.redirect('/finishingdashboard');
-        break;
-      case 'washing':
-          res.redirect('/washingdashboard');
-          break;
-        case 'catalogUpload':
-            res.redirect('/catalogupload');
-            break;
-      case 'jeans_assembly':
-          res.redirect('/jeansassemblydashboard');
-          break;
-      case 'washing_in':            // New case for washing in
-        res.redirect('/washingin');
-        break;
-      case 'store_admin':
-        res.redirect('/store-admin/dashboard');
-        break;
-      case 'store_employee':
-        res.redirect('/inventory/dashboard');
-        break;
-      case 'indent_filler':
-        res.redirect('/indent');
-        break;
-      case 'store_manager':
-        res.redirect('/indent/manage');
-        break;
-      case 'accounts':
-        res.redirect('/purchase');
-        break;
-      case 'po_creator':
-        res.redirect('/po-creator/dashboard');
-        break;
-      case 'nowipoorganization':
-        res.redirect('/nowi-po/dashboard');
-        break;
-      case 'vendorfiles':
-        res.redirect('/vendor-files');
-        break;
-      case 'poadmin':
-      case 'poadmins':
-        res.redirect('/po-admin/dashboard');
-        break;
-      case 'checking':
-      case 'quality_assurance':
-        res.redirect('/department/dashboard');
-        break;
-      default:
-        res.redirect('/');
-    }
+    // Redirect based on role using the helper function
+    res.redirect(getDashboardForRole(user.roleName));
   } catch (err) {
     console.error('Error during login:', err);
     req.flash('error', 'An error occurred during login.');
     res.redirect('/login');
   }
+});
+
+// GET /dashboard - Generic dashboard redirect for any logged-in user
+router.get('/dashboard', (req, res) => {
+  if (!req.session || !req.session.user) {
+    return res.redirect('/login');
+  }
+  res.redirect(getDashboardForRole(req.session.user.roleName));
 });
 
 // GET /logout
