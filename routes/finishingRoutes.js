@@ -18,7 +18,10 @@ const storage = multer.diskStorage({
     cb(null, 'finish-' + uniqueSuffix);
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+});
 
 /* =============================================================
    1) FINISHING DASHBOARD (GET /finishingdashboard)

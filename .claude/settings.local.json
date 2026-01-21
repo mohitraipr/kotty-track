@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(xargs ls:*)",
+      "Bash(node -c:*)"
+    ]
+  }
+}

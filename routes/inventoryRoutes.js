@@ -127,7 +127,8 @@ router.get('/download/incoming', isAuthenticated, isStoreEmployee, async (req, r
           `SELECT i.*, g.description_of_goods, g.size, g.unit
              FROM incoming_data i
              JOIN goods_inventory g ON i.goods_id = g.id
-            ORDER BY i.added_at`
+            ORDER BY i.added_at DESC
+            LIMIT 100000`
         )
         .then(r => r[0])
     ]);
@@ -182,7 +183,8 @@ router.get('/download/dispatched', isAuthenticated, isStoreEmployee, async (req,
     const [rows] = await pool.query(`SELECT d.*, g.description_of_goods, g.size, g.unit
                                       FROM dispatched_data d
                                       JOIN goods_inventory g ON d.goods_id = g.id
-                                      ORDER BY d.dispatched_at`);
+                                      ORDER BY d.dispatched_at DESC
+                                      LIMIT 100000`);
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Dispatched');
     sheet.columns = [

@@ -10,6 +10,7 @@ const secureEnv = require('secure-env');
 global.env = secureEnv({ secret: 'mySecretPassword' }); // Replace with your actual secret
 
 const { markSessionActivity } = require('./middlewares/sessionActivity');
+const { initHealthQueue } = require('./utils/healthRefreshQueue');
 
 // Ensure the application runs in IST regardless of server settings
 process.env.TZ = 'Asia/Kolkata';
@@ -160,6 +161,10 @@ app.use('/nowi-po', nowiPoRoutes);
 app.use('/vendor-files', vendorFilesRoutes);
 app.use('/po-admin', poAdminRoutes);
 app.use('/api/po-admin', poAdminApiRoutes);
+
+// Initialize the background health refresh queue with the database pool
+const { pool } = require('./config/db');
+initHealthQueue(pool);
 
 // Home Route
 app.get('/', (req, res) => {

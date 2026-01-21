@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
-const { refreshInventoryHealth } = require('../utils/easyecomAnalytics');
+const { queueHealthRefresh } = require('../utils/healthRefreshQueue');
 
 // Access token used to authenticate incoming EasyEcom webhooks
 const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
@@ -23,6 +23,48 @@ function verifyAccessToken(req, res, next) {
 // In-memory store for recent webhook requests
 const logs = [];
 const orderLogs = [];
+
+// Simple in-memory rate limiter for webhooks
+// Allows 300 requests per minute (5 per second average)
+// EasyEcom will retry on 429 response
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 300; // max requests per window
+const rateLimitStore = {
+  inventory: { count: 0, windowStart: Date.now() },
+  order: { count: 0, windowStart: Date.now() },
+};
+
+function checkRateLimit(type) {
+  const store = rateLimitStore[type];
+  const now = Date.now();
+
+  // Reset window if expired
+  if (now - store.windowStart > RATE_LIMIT_WINDOW_MS) {
+    store.count = 0;
+    store.windowStart = now;
+  }
+
+  store.count++;
+
+  if (store.count > RATE_LIMIT_MAX) {
+    return false; // Rate limited
+  }
+
+  return true; // Allowed
+}
+
+function rateLimitMiddleware(type) {
+  return (req, res, next) => {
+    if (!checkRateLimit(type)) {
+      console.warn(`Rate limit exceeded for ${type} webhook`);
+      return res.status(429).json({
+        error: 'Too many requests',
+        retryAfter: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000),
+      });
+    }
+    next();
+  };
+}
 
 const MAKING_TIME_CACHE_MS = 5 * 60 * 1000;
 let makingTimeSkuCache = { skus: new Set(), fetchedAt: 0 };
@@ -106,13 +148,10 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
     connection.release();
   }
 
-  // Refresh health after committing writes; reuse cached analytics to avoid extra load
+  // Queue health refresh for background processing instead of running synchronously
+  // This drastically reduces DB load during high webhook traffic
   for (const payload of healthUpdates.values()) {
-    await refreshInventoryHealth(pool, {
-      sku: payload.sku,
-      warehouseId: payload.warehouse_id,
-      inventory: payload.inventory,
-    });
+    queueHealthRefresh(payload.sku, payload.warehouse_id, payload.inventory);
   }
 
   return preparedRows;
@@ -322,6 +361,7 @@ function parseBody(raw) {
 // Override global JSON parser: use raw buffer to capture true payload
 router.post(
   '/inventory',
+  rateLimitMiddleware('inventory'),
   verifyAccessToken,
   express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {
@@ -361,6 +401,7 @@ router.post(
 // Endpoint to receive order webhooks
 router.post(
   '/order',
+  rateLimitMiddleware('order'),
   verifyAccessToken,
   express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {

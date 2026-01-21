@@ -16,7 +16,10 @@ const {
 const { validateAttendanceFilename } = require('../helpers/attendanceFilenameValidator');
 const { PRIVILEGED_OPERATOR_ID } = require('../utils/operators');
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max for Excel uploads
+});
 
 // GET /operator/departments - list departments and supervisors
 router.get('/departments', isAuthenticated, isOperator, async (req, res) => {

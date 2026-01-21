@@ -612,6 +612,8 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
 });
 
 async function buildWasherMonthlySummary(prefix) {
+  // Cache the summary for 5 minutes to avoid repeated heavy queries
+  return cache.fetchCached(`washerSummary-${prefix}`, async () => {
   const [assignRows] = await pool.query(
     `SELECT wa.user_id, u.username,
             DATE_FORMAT(wa.assigned_on,'%Y-%m') AS month,
@@ -676,6 +678,7 @@ async function buildWasherMonthlySummary(prefix) {
       ? parseFloat(((r.completed / r.assigned) * 100).toFixed(2))
       : 0
   }));
+  }); // End of cache.fetchCached
 }
 
 router.get("/dashboard/washing-summary/download", isAuthenticated, isOperator, async (req, res) => {
@@ -1443,15 +1446,15 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     if (lotType === "denim") {
       lotTypeClause = `
         AND (
-          UPPER(cl.lot_no) LIKE 'AK%'
-          OR UPPER(cl.lot_no) LIKE 'UM%'
+          cl.lot_no LIKE 'AK%'
+          OR cl.lot_no LIKE 'UM%'
         )
       `;
     } else if (lotType === "hosiery") {
       lotTypeClause = `
         AND (
-          UPPER(cl.lot_no) NOT LIKE 'AK%'
-          AND UPPER(cl.lot_no) NOT LIKE 'UM%'
+          cl.lot_no NOT LIKE 'AK%'
+          AND cl.lot_no NOT LIKE 'UM%'
         )
       `;
     }
@@ -1829,15 +1832,15 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     if (lotType === "denim") {
       lotTypeClause = `
         AND (
-          UPPER(cl.lot_no) LIKE 'AK%'
-          OR UPPER(cl.lot_no) LIKE 'UM%'
+          cl.lot_no LIKE 'AK%'
+          OR cl.lot_no LIKE 'UM%'
         )
       `;
     } else if (lotType === "hosiery") {
       lotTypeClause = `
         AND (
-          UPPER(cl.lot_no) NOT LIKE 'AK%'
-          AND UPPER(cl.lot_no) NOT LIKE 'UM%'
+          cl.lot_no NOT LIKE 'AK%'
+          AND cl.lot_no NOT LIKE 'UM%'
         )
       `;
     }
@@ -2189,7 +2192,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                   sa.isApproved = 1
                   AND (
                     (
-                      (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                      (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')
                       AND NOT EXISTS (
                         SELECT 1
                           FROM jeans_assembly_assignments ja
@@ -2200,7 +2203,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                     )
                     OR
                     (
-                      (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                      (cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
                       AND NOT EXISTS (
                         SELECT 1
                           FROM finishing_assignments fa
@@ -2219,13 +2222,13 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                u.username,
                SUM(CASE WHEN sa.isApproved IS NULL THEN cl.total_pieces ELSE 0 END) AS pendingApproval,
                SUM(CASE WHEN sa.isApproved = 1 AND (
-                     ((UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%') AND NOT EXISTS (
+                     ((cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%') AND NOT EXISTS (
                           SELECT 1 FROM jeans_assembly_assignments ja
                            JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
                           WHERE sd.lot_no = cl.lot_no AND ja.is_approved IS NOT NULL
                      ))
                      OR
-                     ((UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%') AND NOT EXISTS (
+                     ((cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%') AND NOT EXISTS (
                           SELECT 1 FROM finishing_assignments fa
                            JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
                           WHERE sd.lot_no = cl.lot_no AND fa.is_approved IS NOT NULL
@@ -2339,10 +2342,10 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
                 OR (
                      sa.isApproved = 1
                      AND (
-                       ( (UPPER(cl.lot_no) LIKE 'AK%' OR UPPER(cl.lot_no) LIKE 'UM%')
+                       ( (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')
                          AND asm.next_on IS NULL )
                        OR
-                       ( (UPPER(cl.lot_no) NOT LIKE 'AK%' AND UPPER(cl.lot_no) NOT LIKE 'UM%')
+                       ( (cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
                          AND fin.next_on IS NULL )
                      )
                    )

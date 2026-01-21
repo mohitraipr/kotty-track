@@ -23,7 +23,10 @@ const storage = multer.diskStorage({
     cb(null, 'washingIn-' + uniqueSuffix);
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max for images
+});
 
 // ------------------------------------------------------------------
 // Simple in-memory caching utility (expires after a short TTL)

@@ -202,10 +202,13 @@ router.get('/download-excel', isAuthenticated, async (req, res) => {
       }
     }
 
+    // LIMIT to 50,000 rows to prevent memory exhaustion on large tables
+    const MAX_EXPORT_ROWS = 50000;
     const sql = `
       SELECT *
       FROM \`${tableName}\`
       ${whereClause}
+      LIMIT ${MAX_EXPORT_ROWS}
     `;
     const [rows] = await pool.query(sql, whereParams);
 

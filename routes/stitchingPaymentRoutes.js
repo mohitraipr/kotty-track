@@ -7,7 +7,10 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster, isOperator, allowUserIds } = require('../middlewares/auth');
 
 // Multer setup for Excel uploads (memory storage)
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max for Excel uploads
+});
 
 // ---------------------
 // Allowed user ids for payment pages

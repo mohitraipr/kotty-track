@@ -19,7 +19,10 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + path.extname(file.originalname)); // e.g., 1598465759595.jpg
   },
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max for images
+});
 
 // Function to fetch rolls by fabric type from existing tables
 async function getRollsByFabricType() {

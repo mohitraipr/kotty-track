@@ -20,7 +20,10 @@ const storage = multer.diskStorage({
     cb(null, newFileName);
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max for Excel uploads
+});
 
 /* ------------------------------------------------------------
    GET /bulk-upload

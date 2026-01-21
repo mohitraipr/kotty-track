@@ -17,7 +17,10 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max file size
+});
 
 const sapnaOnly = [isAuthenticated, allowUsernames(['sapna']), isAccountsAdmin];
 
