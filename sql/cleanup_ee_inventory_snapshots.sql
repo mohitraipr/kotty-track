@@ -148,6 +148,36 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_performed_at
     ON audit_logs(performed_at);
 
 -- ========================================================================
+-- PART 7: EASYECOM ANALYTICS PERFORMANCE INDEXES
+-- These indexes speed up the stock-market and out-of-stock reports
+
+-- Indexes for ee_orders table
+CREATE INDEX IF NOT EXISTS idx_ee_orders_order_date
+    ON ee_orders(order_date);
+CREATE INDEX IF NOT EXISTS idx_ee_orders_warehouse_id
+    ON ee_orders(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_ee_orders_import_date
+    ON ee_orders(import_date);
+
+-- Indexes for ee_suborders table
+CREATE INDEX IF NOT EXISTS idx_ee_suborders_order_id
+    ON ee_suborders(order_id);
+CREATE INDEX IF NOT EXISTS idx_ee_suborders_sku
+    ON ee_suborders(sku);
+
+-- Index for ee_inventory_health table
+CREATE INDEX IF NOT EXISTS idx_ee_inventory_health_sku
+    ON ee_inventory_health(sku);
+CREATE INDEX IF NOT EXISTS idx_ee_inventory_health_warehouse_id
+    ON ee_inventory_health(warehouse_id);
+
+-- Index for ee_replenishment_rules table
+CREATE INDEX IF NOT EXISTS idx_ee_replenishment_rules_sku
+    ON ee_replenishment_rules(sku);
+CREATE INDEX IF NOT EXISTS idx_ee_replenishment_rules_warehouse_id
+    ON ee_replenishment_rules(warehouse_id);
+
+-- ========================================================================
 -- NOTES:
 --
 -- 1. The 7-day retention period is a balance between:

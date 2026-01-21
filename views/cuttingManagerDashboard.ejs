@@ -865,7 +865,24 @@
           inputField.setAttribute('aria-expanded', 'false');
         }
 
-        hiddenField.value = '';
+        // Check if typed value matches any option
+        const typedValue = inputField.value.trim();
+        const matchingOption = data.find(d =>
+          d.value.toLowerCase() === typedValue.toLowerCase() ||
+          d.displayText.toLowerCase().startsWith(typedValue.toLowerCase())
+        );
+
+        if (matchingOption) {
+          // Exact match found - use its value
+          hiddenField.value = matchingOption.value;
+        } else if (typedValue) {
+          // No match - allow manual entry (for roll numbers not in the list)
+          hiddenField.value = typedValue;
+        } else {
+          hiddenField.value = '';
+        }
+
+        hiddenField.dispatchEvent(new Event('change'));
         checkRollsCompletion();
       }, 300));
 
