@@ -238,6 +238,7 @@
                     <th data-i18n="lotNumberLabel">Lot Number</th>
                     <th data-i18n="skuLabel">SKU</th>
                     <th data-i18n="fabricTypeLabel">Fabric Type</th>
+                    <th data-i18n="tableLengthLabel">Table Length</th>
                     <th data-i18n="remarkLabel">Remark</th>
                     <th data-i18n="imageLabel">Image</th>
                     <th data-i18n="createdByLabel">Created By</th>
@@ -250,7 +251,7 @@
                 <tbody>
                   <% if (cuttingLots.length === 0) { %>
                     <tr>
-                      <td colspan="11" class="text-center" data-i18n="noCuttingLotsAvailable">
+                      <td colspan="12" class="text-center" data-i18n="noCuttingLotsAvailable">
                         No cutting lots available.
                       </td>
                     </tr>
@@ -261,6 +262,7 @@
                         <td><%= lot.lot_no %></td>
                         <td><%= lot.sku %></td>
                         <td><%= lot.fabric_type %></td>
+                        <td><%= lot.table_length ?? 'N/A' %></td>
                         <td><%= lot.remark || 'N/A' %></td>
                         <td>
                           <% if (lot.image_url) { %>
@@ -402,6 +404,23 @@
                     <input type="hidden" id="fabric_type" name="fabric_type" required>
                     <ul class="autocomplete-items list-group d-none" id="fabric_type_options" role="listbox"></ul>
                   </div>
+                </div>
+
+                <!-- Table Length -->
+                <div class="col-md-4">
+                  <label for="table_length" class="form-label">
+                    <i class="bi bi-rulers me-1"></i>
+                    <span data-i18n="tableLengthLabel">Table Length</span>
+                  </label>
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="table_length"
+                    name="table_length"
+                    placeholder="Enter table length"
+                    min="0"
+                    step="0.01"
+                  />
                 </div>
 
                 <!-- Remark -->
@@ -679,6 +698,7 @@
         lotNumberLabel: "Lot Number",
         skuLabel: "SKU",
         fabricTypeLabel: "Fabric Type",
+        tableLengthLabel: "Table Length",
         remarkLabel: "Remark",
         imageLabel: "Image",
         createdByLabel: "Created By",
@@ -719,6 +739,7 @@
         lotNumberLabel: "लॉट नंबर",
         skuLabel: "एसकेयू",
         fabricTypeLabel: "फैब्रिक प्रकार",
+        tableLengthLabel: "टेबल लंबाई",
         remarkLabel: "टिप्पणी",
         imageLabel: "छवि",
         createdByLabel: "बनाने वाले",
