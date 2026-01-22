@@ -49,6 +49,7 @@
       <div class="col-md-6">
         <p><strong>SKU:</strong> <%= lot.sku %></p>
         <p><strong>Fabric Type:</strong> <%= lot.fabric_type %></p>
+        <p><strong>Table Length:</strong> <%= lot.table_length ?? 'N/A' %></p>
         <p><strong>Remark:</strong> <%= lot.remark || 'N/A' %></p>
         <p><strong>Created By:</strong> <%= lot.created_by %></p>
         <p><strong>Created At:</strong> <%= new Date(lot.created_at).toLocaleString() %></p>

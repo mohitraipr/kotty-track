@@ -91,6 +91,7 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
         l.remark,
         l.image_url,
         l.total_pieces,
+        l.table_length,
         l.is_confirmed,
         l.created_at,
         u.username AS created_by
@@ -199,6 +200,7 @@ router.post(
       sku,
       fabric_type,
       remark,
+      table_length,
       size_label,
       pattern_count,
       roll_no,
@@ -228,11 +230,19 @@ router.post(
         const [result] = await conn.query(
           `
           INSERT INTO cutting_lots 
-            (lot_no, sku, fabric_type, remark, image_url, user_id, total_pieces)
+            (lot_no, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces)
           VALUES 
-            (?, ?, ?, ?, ?, ?, 0)
+            (?, ?, ?, ?, ?, ?, ?, 0)
         `,
-          [lot_no, sku, fabric_type, remark || null, image ? image.path : null, userId]
+          [
+            lot_no,
+            sku,
+            fabric_type,
+            remark || null,
+            table_length ? parseFloat(table_length) : null,
+            image ? image.path : null,
+            userId,
+          ]
         );
 
         const cuttingLotId = result.insertId;
@@ -422,7 +432,7 @@ router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async 
     // Fetch lot details, sizes, and rolls concurrently
     const [[lotRows], [sizes], [rolls]] = await Promise.all([
       pool.query(
-        `SELECT l.lot_no, l.sku, l.fabric_type, l.remark, l.total_pieces, u.username AS created_by, l.created_at
+        `SELECT l.lot_no, l.sku, l.fabric_type, l.remark, l.table_length, l.total_pieces, u.username AS created_by, l.created_at
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ?`,
@@ -462,6 +472,7 @@ router.get('/generate-challan/:lotId', isAuthenticated, isCuttingManager, async 
     doc.fontSize(12).text(`Lot No: ${lot.lot_no}`);
     doc.text(`SKU: ${lot.sku}`);
     doc.text(`Fabric Type: ${lot.fabric_type}`);
+    doc.text(`Table Length: ${lot.table_length ?? 'N/A'}`);
     doc.text(`Total Pieces: ${lot.total_pieces}`);
     doc.text(`Created By: ${lot.created_by}`);
     doc.text(`Created At: ${new Date(lot.created_at).toLocaleString()}`);
@@ -508,7 +519,7 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
     // Fetch lot, sizes and rolls concurrently
     const [[lotRows], [sizes], [rolls]] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
+        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.table_length, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ?`,
