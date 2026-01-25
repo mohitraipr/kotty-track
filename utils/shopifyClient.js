@@ -372,34 +372,163 @@ async function getOrderRefunds(orderId) {
 }
 
 /**
- * Create return in Shopify (if using Shopify's return system)
+ * Map line_item_id to fulfillment_line_item_id
+ * Returns array with fulfillment_line_item_id added for each item
+ */
+async function mapLineItemsToFulfillmentItems(orderId, lineItems) {
+  const fulfillments = await getOrderFulfillments(orderId);
+
+  if (!fulfillments || fulfillments.length === 0) {
+    throw new Error('Order has no fulfillments - cannot create return');
+  }
+
+  // Build a map of line_item_id -> fulfillment_line_item_id
+  const lineItemMap = {};
+  for (const fulfillment of fulfillments) {
+    for (const lineItem of fulfillment.line_items || []) {
+      // Store the fulfillment line item ID keyed by both line_item_id and id
+      lineItemMap[lineItem.line_item_id] = lineItem.id;
+      lineItemMap[lineItem.id] = lineItem.id; // In case id is passed directly
+    }
+  }
+
+  // Map the requested line items to fulfillment line items
+  return lineItems.map(item => {
+    const lineItemId = item.line_item_id || item.id;
+    const fulfillmentLineItemId = lineItemMap[lineItemId];
+
+    if (!fulfillmentLineItemId) {
+      console.warn(`[Shopify] Could not find fulfillment_line_item_id for line_item ${lineItemId}`);
+    }
+
+    return {
+      ...item,
+      fulfillment_line_item_id: item.fulfillment_line_item_id || fulfillmentLineItemId
+    };
+  }).filter(item => item.fulfillment_line_item_id); // Only include items with valid fulfillment IDs
+}
+
+/**
+ * Create return in Shopify
+ * @param {number} orderId - Shopify order ID
+ * @param {object} returnData - Return data containing line_items
+ * @param {array} returnData.line_items - Items to return with line_item_id, quantity, return_reason
+ * @param {string} returnData.notify_customer - Whether to notify customer (default true)
+ * @returns {object} - Created return object with id, or throws error
  */
 async function createReturn(orderId, returnData) {
   const api = getApi();
   if (!api) throw new Error('Shopify API not configured');
 
   try {
-    // Note: This uses Shopify's newer Return API
-    // May need to use GraphQL for full return functionality
+    // Map line items to fulfillment line items
+    const mappedItems = await mapLineItemsToFulfillmentItems(orderId, returnData.line_items || []);
+
+    if (mappedItems.length === 0) {
+      throw new Error('No valid line items with fulfillment IDs found for return');
+    }
+
+    // Map return reason to Shopify return reason enum
+    const reasonMap = {
+      'size_issue': 'SIZE_TOO_SMALL', // or SIZE_TOO_LARGE
+      'quality_issue': 'DEFECTIVE',
+      'wrong_product': 'WRONG_ITEM',
+      'not_as_described': 'NOT_AS_DESCRIBED',
+      'damaged_in_transit': 'DAMAGED_IN_TRANSIT',
+      'changed_mind': 'UNWANTED',
+      'other': 'OTHER',
+      'missing_items': 'MISSING_PARTS'
+    };
+
     const payload = {
       return: {
         order_id: orderId,
-        return_line_items: returnData.line_items.map(item => ({
+        return_line_items: mappedItems.map(item => ({
           fulfillment_line_item_id: item.fulfillment_line_item_id,
-          quantity: item.quantity,
-          return_reason: item.return_reason || 'CUSTOMER_CHANGED_MIND',
-          return_reason_note: item.return_reason_note || ''
-        }))
+          quantity: item.quantity || 1,
+          return_reason: reasonMap[item.return_reason] || item.return_reason || 'UNWANTED',
+          return_reason_note: item.return_reason_note || item.notes || ''
+        })),
+        notify_customer: returnData.notify_customer !== false
       }
     };
 
-    // Note: Returns API endpoint structure may vary by Shopify version
+    console.log('[Shopify] Creating return with payload:', JSON.stringify(payload, null, 2));
+
     const { data } = await api.post('/returns.json', payload);
+
+    console.log('[Shopify] Return created successfully:', data.return?.id);
     return data.return;
   } catch (error) {
-    // If return API isn't available, return null
-    console.warn('Shopify Returns API not available or error:', error.message);
-    return null;
+    const errorMessage = error.response?.data?.errors || error.message;
+    console.error('[Shopify] Failed to create return:', errorMessage);
+
+    // Throw with detailed error message
+    throw new Error(`Failed to create Shopify return: ${JSON.stringify(errorMessage)}`);
+  }
+}
+
+/**
+ * Get return by ID from Shopify
+ */
+async function getReturn(returnId) {
+  const api = getApi();
+  if (!api) throw new Error('Shopify API not configured');
+
+  try {
+    const { data } = await api.get(`/returns/${returnId}.json`);
+    return data.return;
+  } catch (error) {
+    if (error.response?.status === 404) {
+      return null;
+    }
+    throw new Error(`Failed to fetch return: ${error.message}`);
+  }
+}
+
+/**
+ * Get all returns for an order
+ */
+async function getOrderReturns(orderId) {
+  const api = getApi();
+  if (!api) throw new Error('Shopify API not configured');
+
+  try {
+    // Shopify doesn't have a direct endpoint for order returns via REST
+    // We need to fetch returns and filter by order_id
+    const { data } = await api.get('/returns.json', {
+      params: { order_id: orderId }
+    });
+    return data.returns || [];
+  } catch (error) {
+    console.warn('[Shopify] Could not fetch returns for order:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get all returns from Shopify (paginated)
+ * @param {object} options - Query options
+ * @param {number} options.limit - Max returns per page (default 50)
+ * @param {string} options.status - Filter by status (open, closed, cancelled)
+ * @param {string} options.created_at_min - Filter by min created date
+ */
+async function getAllReturns(options = {}) {
+  const api = getApi();
+  if (!api) throw new Error('Shopify API not configured');
+
+  try {
+    const params = {
+      limit: options.limit || 50
+    };
+    if (options.status) params.status = options.status;
+    if (options.created_at_min) params.created_at_min = options.created_at_min;
+
+    const { data } = await api.get('/returns.json', { params });
+    return data.returns || [];
+  } catch (error) {
+    console.warn('[Shopify] Could not fetch returns:', error.message);
+    return [];
   }
 }
 
@@ -569,6 +698,10 @@ module.exports = {
 
   // Return operations
   createReturn,
+  getReturn,
+  getOrderReturns,
+  getAllReturns,
+  mapLineItemsToFulfillmentItems,
 
   // Order updates
   addOrderNote,

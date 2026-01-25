@@ -423,6 +423,57 @@
                       placeholder="Please provide any additional details about your return..."></textarea>
           </div>
 
+          <!-- Bank Details Section (for COD orders) -->
+          <div id="bankDetailsSection" class="mb-4" style="display: none;">
+            <div class="alert-warning-custom mb-3">
+              <i class="bi bi-info-circle me-2"></i>
+              <strong>COD Order:</strong> Please provide your bank details for refund.
+            </div>
+
+            <label class="form-label">Refund Method</label>
+            <div class="d-flex gap-3 mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="refundMethod" id="refundUPI" value="upi" checked onchange="toggleRefundMethod()">
+                <label class="form-check-label" for="refundUPI">UPI ID</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="refundMethod" id="refundBank" value="bank" onchange="toggleRefundMethod()">
+                <label class="form-check-label" for="refundBank">Bank Account</label>
+              </div>
+            </div>
+
+            <!-- UPI Section -->
+            <div id="upiSection">
+              <label class="form-label">UPI ID <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="upiId" placeholder="yourname@upi or 9876543210@paytm">
+              <small class="text-muted">Example: name@okicici, name@ybl, 9876543210@paytm</small>
+            </div>
+
+            <!-- Bank Account Section -->
+            <div id="bankSection" style="display: none;">
+              <div class="mb-3">
+                <label class="form-label">Account Holder Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="accountHolderName" placeholder="As per bank records">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Bank Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="bankName" placeholder="e.g., HDFC Bank">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Account Number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="accountNumber" placeholder="Enter account number">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Confirm Account Number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="confirmAccountNumber" placeholder="Re-enter account number">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">IFSC Code <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="ifscCode" placeholder="e.g., HDFC0001234" style="text-transform: uppercase;">
+              </div>
+            </div>
+          </div>
+
           <div class="alert-info-custom mb-4">
             <i class="bi bi-info-circle me-2"></i>
             Refunds are processed within 5-7 business days after we receive your items.
@@ -507,6 +558,9 @@
           desc.textContent = 'Choose which items you want to return and tell us why';
           submitBtn.textContent = 'Submit Return Request';
         }
+
+        // Show bank details section for COD orders
+        updateBankDetailsVisibility();
       }
     }
 
@@ -699,6 +753,88 @@
       }
     }
 
+    // Check if order is COD
+    function isCodOrder(order) {
+      if (!order) return false;
+      // Check order_type field from lookup response
+      if (order.order_type === 'cod') return true;
+      // Check financial_status - pending with fulfilled means COD
+      if (order.financial_status === 'pending' && order.fulfillment_status === 'fulfilled') return true;
+      // Check gateway
+      const codGateways = ['cash_on_delivery', 'cod', 'cash on delivery', 'manual'];
+      const gateway = (order.gateway || '').toLowerCase();
+      return codGateways.some(g => gateway.includes(g));
+    }
+
+    // Show/hide bank details section based on order type
+    function updateBankDetailsVisibility() {
+      const bankSection = document.getElementById('bankDetailsSection');
+      if (selectedOrder && isCodOrder(selectedOrder)) {
+        bankSection.style.display = 'block';
+      } else {
+        bankSection.style.display = 'none';
+      }
+    }
+
+    // Toggle between UPI and Bank account
+    function toggleRefundMethod() {
+      const upiSection = document.getElementById('upiSection');
+      const bankSection = document.getElementById('bankSection');
+      const isUPI = document.getElementById('refundUPI').checked;
+
+      upiSection.style.display = isUPI ? 'block' : 'none';
+      bankSection.style.display = isUPI ? 'none' : 'block';
+    }
+
+    // Validate bank details
+    function validateBankDetails() {
+      if (!selectedOrder || !isCodOrder(selectedOrder)) {
+        return { valid: true, data: null };
+      }
+
+      const isUPI = document.getElementById('refundUPI').checked;
+
+      if (isUPI) {
+        const upiId = document.getElementById('upiId').value.trim();
+        if (!upiId) {
+          return { valid: false, error: 'Please enter your UPI ID' };
+        }
+        // Basic UPI validation
+        if (!upiId.includes('@')) {
+          return { valid: false, error: 'Please enter a valid UPI ID (e.g., name@upi)' };
+        }
+        return { valid: true, data: { type: 'upi', upi_id: upiId } };
+      } else {
+        const accountHolderName = document.getElementById('accountHolderName').value.trim();
+        const bankName = document.getElementById('bankName').value.trim();
+        const accountNumber = document.getElementById('accountNumber').value.trim();
+        const confirmAccountNumber = document.getElementById('confirmAccountNumber').value.trim();
+        const ifscCode = document.getElementById('ifscCode').value.trim().toUpperCase();
+
+        if (!accountHolderName) return { valid: false, error: 'Please enter account holder name' };
+        if (!bankName) return { valid: false, error: 'Please enter bank name' };
+        if (!accountNumber) return { valid: false, error: 'Please enter account number' };
+        if (!confirmAccountNumber) return { valid: false, error: 'Please confirm account number' };
+        if (accountNumber !== confirmAccountNumber) return { valid: false, error: 'Account numbers do not match' };
+        if (!ifscCode) return { valid: false, error: 'Please enter IFSC code' };
+        // Basic IFSC validation (11 characters, alphanumeric)
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+          return { valid: false, error: 'Please enter a valid IFSC code (e.g., HDFC0001234)' };
+        }
+
+        return {
+          valid: true,
+          data: {
+            type: 'bank',
+            account_holder_name: accountHolderName,
+            bank_name: bankName,
+            account_number: accountNumber,
+            ifsc_code: ifscCode
+          }
+        };
+      }
+    }
+
     // Submit return
     async function submitReturn() {
       const submitBtn = document.getElementById('submitBtn');
@@ -712,6 +848,13 @@
 
       if (selectedItems.length === 0) {
         alert('Please select at least one item to return');
+        return;
+      }
+
+      // Validate bank details for COD orders
+      const bankValidation = validateBankDetails();
+      if (!bankValidation.valid) {
+        alert(bankValidation.error);
         return;
       }
 
@@ -739,7 +882,8 @@
             notes: notes,
             selectedItems: selectedItems,
             source: 'customer_form',
-            isIssue: isRaisingIssue
+            isIssue: isRaisingIssue,
+            bankDetails: bankValidation.data // Include bank details for COD
           })
         });
 

@@ -204,6 +204,15 @@
       flex-wrap: wrap;
     }
 
+    .spin {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     .bank-details-box {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
@@ -288,6 +297,13 @@
         <% if (returnData.status === 'refund_pending' && returnData.order_type === 'cod') { %>
           <button class="btn btn-warning" onclick="sendBankLink()">
             <i class="bi bi-link me-1"></i> Send Bank Link
+          </button>
+        <% } %>
+
+        <!-- Sync Status button - always visible for non-terminal statuses -->
+        <% if (!['refunded', 'cancelled', 'rejected'].includes(returnData.status)) { %>
+          <button class="btn btn-outline-secondary" onclick="syncStatus()" id="syncStatusBtn">
+            <i class="bi bi-arrow-repeat me-1"></i> Sync Status
           </button>
         <% } %>
       </div>
@@ -681,6 +697,64 @@
         navigator.clipboard.writeText(data.link);
       } else {
         alert(data.message || 'Failed');
+      }
+    }
+
+    async function syncStatus() {
+      const btn = document.getElementById('syncStatusBtn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Syncing...';
+
+      try {
+        const res = await fetch(`/returns/${returnId}/sync-status`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          let message = data.message + '\n\n';
+
+          // Show Shopify info
+          if (data.data.shopify) {
+            if (data.data.shopify.error) {
+              message += `Shopify: ${data.data.shopify.error}\n`;
+            } else {
+              message += `Shopify: ${data.data.shopify.financial_status || 'N/A'} | Refunds: ${data.data.shopify.refunds}\n`;
+            }
+          }
+
+          // Show EasyEcom info
+          if (data.data.easyecom) {
+            if (data.data.easyecom.error) {
+              message += `EasyEcom: ${data.data.easyecom.error}\n`;
+            } else {
+              message += `EasyEcom: ${data.data.easyecom.status || 'N/A'}`;
+              if (data.data.easyecom.awbUpdated) message += ' (AWB updated!)';
+              message += '\n';
+            }
+          }
+
+          // Show Courier info
+          if (data.data.courier) {
+            if (data.data.courier.error) {
+              message += `Courier: ${data.data.courier.error}\n`;
+            } else {
+              message += `Courier: ${data.data.courier.name} - AWB: ${data.data.courier.awb}\n`;
+            }
+          }
+
+          alert(message);
+
+          if (data.data.statusUpdated) {
+            location.reload();
+          }
+        } else {
+          alert(data.message || 'Failed to sync status');
+        }
+      } catch (error) {
+        alert('Error syncing status: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     }
 

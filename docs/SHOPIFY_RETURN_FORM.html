@@ -347,6 +347,50 @@
       <label class="krf-label">Additional Details (Optional)</label>
       <textarea class="krf-textarea" id="notes" rows="3" placeholder="Any additional details..."></textarea>
 
+      <!-- Bank Details Section (for COD orders) -->
+      <div id="bankDetailsSection" style="display: none; margin-top: 16px;">
+        <div style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: 12px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 16px;">
+          <strong>COD Order:</strong> Please provide your bank details for refund.
+        </div>
+
+        <label class="krf-label">Refund Method</label>
+        <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="refundMethod" id="refundUPI" value="upi" checked onchange="toggleRefundMethod()">
+            UPI ID
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="refundMethod" id="refundBank" value="bank" onchange="toggleRefundMethod()">
+            Bank Account
+          </label>
+        </div>
+
+        <!-- UPI Section -->
+        <div id="upiSection">
+          <label class="krf-label">UPI ID *</label>
+          <input type="text" class="krf-input" id="upiId" placeholder="yourname@upi or 9876543210@paytm">
+          <small style="color: #666; display: block; margin-top: -12px; margin-bottom: 16px;">Example: name@okicici, name@ybl, 9876543210@paytm</small>
+        </div>
+
+        <!-- Bank Account Section -->
+        <div id="bankSection" style="display: none;">
+          <label class="krf-label">Account Holder Name *</label>
+          <input type="text" class="krf-input" id="accountHolderName" placeholder="As per bank records">
+
+          <label class="krf-label">Bank Name *</label>
+          <input type="text" class="krf-input" id="bankName" placeholder="e.g., HDFC Bank">
+
+          <label class="krf-label">Account Number *</label>
+          <input type="text" class="krf-input" id="accountNumber" placeholder="Enter account number">
+
+          <label class="krf-label">Confirm Account Number *</label>
+          <input type="text" class="krf-input" id="confirmAccountNumber" placeholder="Re-enter account number">
+
+          <label class="krf-label">IFSC Code *</label>
+          <input type="text" class="krf-input" id="ifscCode" placeholder="e.g., HDFC0001234" style="text-transform: uppercase;">
+        </div>
+      </div>
+
       <div class="krf-info-box">
         Refunds are processed within 5-7 business days after we receive your items.
       </div>
@@ -418,6 +462,16 @@
       if (i + 1 === step) el.classList.add('active');
     });
     document.getElementById('step' + step).classList.add('active');
+
+    // Show bank details section for COD orders on step 3
+    if (step === 3) {
+      const bankSection = document.getElementById('bankDetailsSection');
+      if (selectedOrder && isCodOrder(selectedOrder)) {
+        bankSection.style.display = 'block';
+      } else {
+        bankSection.style.display = 'none';
+      }
+    }
   }
 
   async function findOrders() {
@@ -542,6 +596,51 @@
     }
   }
 
+  // Check if order is COD
+  function isCodOrder(order) {
+    if (!order) return false;
+    if (order.order_type === 'cod') return true;
+    if (order.financial_status === 'pending' && order.fulfillment_status === 'fulfilled') return true;
+    const codGateways = ['cash_on_delivery', 'cod', 'cash on delivery', 'manual'];
+    const gateway = (order.gateway || '').toLowerCase();
+    return codGateways.some(g => gateway.includes(g));
+  }
+
+  // Toggle between UPI and Bank account
+  window.toggleRefundMethod = function() {
+    const upiSection = document.getElementById('upiSection');
+    const bankSection = document.getElementById('bankSection');
+    const isUPI = document.getElementById('refundUPI').checked;
+    upiSection.style.display = isUPI ? 'block' : 'none';
+    bankSection.style.display = isUPI ? 'none' : 'block';
+  };
+
+  // Validate bank details
+  function validateBankDetails() {
+    if (!selectedOrder || !isCodOrder(selectedOrder)) {
+      return { valid: true, data: null };
+    }
+    const isUPI = document.getElementById('refundUPI').checked;
+    if (isUPI) {
+      const upiId = document.getElementById('upiId').value.trim();
+      if (!upiId) return { valid: false, error: 'Please enter your UPI ID' };
+      if (!upiId.includes('@')) return { valid: false, error: 'Please enter a valid UPI ID (e.g., name@upi)' };
+      return { valid: true, data: { type: 'upi', upi_id: upiId } };
+    } else {
+      const accountHolderName = document.getElementById('accountHolderName').value.trim();
+      const bankName = document.getElementById('bankName').value.trim();
+      const accountNumber = document.getElementById('accountNumber').value.trim();
+      const confirmAccountNumber = document.getElementById('confirmAccountNumber').value.trim();
+      const ifscCode = document.getElementById('ifscCode').value.trim().toUpperCase();
+      if (!accountHolderName) return { valid: false, error: 'Please enter account holder name' };
+      if (!bankName) return { valid: false, error: 'Please enter bank name' };
+      if (!accountNumber) return { valid: false, error: 'Please enter account number' };
+      if (accountNumber !== confirmAccountNumber) return { valid: false, error: 'Account numbers do not match' };
+      if (!ifscCode || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) return { valid: false, error: 'Please enter a valid IFSC code' };
+      return { valid: true, data: { type: 'bank', account_holder_name: accountHolderName, bank_name: bankName, account_number: accountNumber, ifsc_code: ifscCode } };
+    }
+  }
+
   async function submitReturn() {
     const submitBtn = document.getElementById('submitBtn');
     const errorDiv = document.getElementById('step3Error');
@@ -556,6 +655,14 @@
 
     if (selectedItems.length === 0) {
       errorDiv.textContent = 'Please select at least one item to return';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    // Validate bank details for COD orders
+    const bankValidation = validateBankDetails();
+    if (!bankValidation.valid) {
+      errorDiv.textContent = bankValidation.error;
       errorDiv.style.display = 'block';
       return;
     }
@@ -584,7 +691,8 @@
           returnReason: reason,
           notes: notes,
           selectedItems: selectedItems,
-          source: 'shopify_page'
+          source: 'shopify_page',
+          bankDetails: bankValidation.data // Include bank details for COD
         })
       });
 

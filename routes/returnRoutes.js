@@ -165,10 +165,11 @@ router.post('/api/request', async (req, res) => {
       notes,
       source,
       selectedItems,
-      isIssue
+      isIssue,
+      bankDetails // Bank details for COD orders
     } = req.body;
 
-    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, formCustomerName, formCustomerPhone, lookupIdentifier, returnReason, source, isIssue });
+    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, formCustomerName, formCustomerPhone, lookupIdentifier, returnReason, source, isIssue, hasBankDetails: !!bankDetails });
 
     let order = null;
     let orders = [];
@@ -349,6 +350,33 @@ router.post('/api/request', async (req, res) => {
       INSERT INTO return_audit_log (return_id, action, new_status, actor_type, actor_name, ip_address)
       VALUES (?, 'return_requested', 'pending_review', 'customer', ?, ?)
     `, [dbReturnId, email || 'Customer', req.ip]);
+
+    // Save bank details if provided (for COD orders)
+    if (bankDetails && orderType === 'cod') {
+      try {
+        // Generate a token for the bank details link (in case needed later)
+        const crypto = require('crypto');
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 hours
+
+        if (bankDetails.type === 'upi') {
+          await pool.query(`
+            INSERT INTO return_bank_details (return_id, token, upi_id, submitted_at, expires_at)
+            VALUES (?, ?, ?, NOW(), ?)
+          `, [dbReturnId, token, bankDetails.upi_id, expiresAt]);
+          console.log(`[Return Request] Saved UPI details for return ${returnId}`);
+        } else if (bankDetails.type === 'bank') {
+          await pool.query(`
+            INSERT INTO return_bank_details (return_id, token, account_holder_name, bank_name, account_number, ifsc_code, submitted_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+          `, [dbReturnId, token, bankDetails.account_holder_name, bankDetails.bank_name, bankDetails.account_number, bankDetails.ifsc_code, expiresAt]);
+          console.log(`[Return Request] Saved bank details for return ${returnId}`);
+        }
+      } catch (bankError) {
+        console.error('[Return Request] Failed to save bank details:', bankError.message);
+        // Don't fail the request, bank details can be collected later
+      }
+    }
 
     // Check for auto-approval
     const settings = await returnHelpers.getSettings(pool);
@@ -796,17 +824,84 @@ router.post('/:id/approve', isAuthenticated, allowReturnsAccess, async (req, res
       VALUES (?, 'approved', ?, 'approved', 'operator', ?, ?, ?)
     `, [id, returnData.status, user.id, user.username, JSON.stringify({ notes })]);
 
-    // Sync to Shopify - add tag when return is approved
+    // Sync to Shopify - add tag and create Shopify return when return is approved
+    let shopifyReturnId = null;
     if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
       try {
+        // Add tag and note
         await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Approved');
         await shopifyClient.addOrderNote(returnData.shopify_order_id, `Return ${returnData.return_id} approved`);
+
+        // Get return items from database
+        const [returnItems] = await pool.query(
+          'SELECT * FROM return_items WHERE return_id = ?',
+          [id]
+        );
+
+        // Try to create Shopify return if we have items
+        if (returnItems && returnItems.length > 0) {
+          try {
+            const shopifyReturn = await shopifyClient.createReturn(returnData.shopify_order_id, {
+              line_items: returnItems.map(item => ({
+                line_item_id: item.shopify_line_item_id,
+                quantity: item.return_quantity || 1,
+                return_reason: returnData.return_reason || 'changed_mind',
+                return_reason_note: returnData.customer_notes || ''
+              })),
+              notify_customer: true
+            });
+
+            if (shopifyReturn && shopifyReturn.id) {
+              shopifyReturnId = shopifyReturn.id;
+              // Store Shopify return ID
+              await pool.query(
+                'UPDATE returns SET shopify_return_id = ? WHERE id = ?',
+                [shopifyReturnId, id]
+              );
+              console.log(`[Return Approval] Created Shopify return ${shopifyReturnId} for return ${returnData.return_id}`);
+            }
+          } catch (returnError) {
+            // Log but don't fail the approval - Shopify return is optional
+            console.warn('[Return Approval] Could not create Shopify return:', returnError.message);
+          }
+        } else {
+          // No return_items - try using line items from Shopify order directly
+          try {
+            const order = await shopifyClient.getOrder(returnData.shopify_order_id);
+            if (order && order.line_items && order.line_items.length > 0) {
+              const shopifyReturn = await shopifyClient.createReturn(returnData.shopify_order_id, {
+                line_items: order.line_items.map(item => ({
+                  line_item_id: item.id,
+                  quantity: item.quantity,
+                  return_reason: returnData.return_reason || 'changed_mind',
+                  return_reason_note: returnData.customer_notes || ''
+                })),
+                notify_customer: true
+              });
+
+              if (shopifyReturn && shopifyReturn.id) {
+                shopifyReturnId = shopifyReturn.id;
+                await pool.query(
+                  'UPDATE returns SET shopify_return_id = ? WHERE id = ?',
+                  [shopifyReturnId, id]
+                );
+                console.log(`[Return Approval] Created Shopify return ${shopifyReturnId} for return ${returnData.return_id}`);
+              }
+            }
+          } catch (orderReturnError) {
+            console.warn('[Return Approval] Could not create Shopify return from order:', orderReturnError.message);
+          }
+        }
       } catch (shopifyError) {
         console.error('Failed to sync approval to Shopify:', shopifyError.message);
       }
     }
 
-    return res.json({ success: true, message: 'Return approved successfully' });
+    return res.json({
+      success: true,
+      message: 'Return approved successfully',
+      shopifyReturnId: shopifyReturnId
+    });
 
   } catch (error) {
     console.error('Error approving return:', error);
@@ -1360,6 +1455,184 @@ router.post('/:id/update-awb', isAuthenticated, allowReturnsAccess, async (req, 
 });
 
 /**
+ * POST /returns/:id/sync-status
+ * Fetch and sync status from all sources (Shopify, EasyEcom, Courier)
+ */
+router.post('/:id/sync-status', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.session.user;
+
+    const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [id]);
+    if (!returnData) {
+      return res.status(404).json({ success: false, message: 'Return not found' });
+    }
+
+    const syncResults = {
+      shopify: null,
+      easyecom: null,
+      courier: null,
+      statusUpdated: false,
+      previousStatus: returnData.status,
+      newStatus: returnData.status
+    };
+
+    // 1. Fetch from Shopify
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        const order = await shopifyClient.getOrder(returnData.shopify_order_id);
+        if (order) {
+          syncResults.shopify = {
+            financial_status: order.financial_status,
+            fulfillment_status: order.fulfillment_status,
+            tags: order.tags,
+            refunds: order.refunds ? order.refunds.length : 0
+          };
+
+          // Check if refund was processed in Shopify
+          if (order.refunds && order.refunds.length > 0 && returnData.status !== 'refunded') {
+            // Check if there's a refund after return was created
+            const latestRefund = order.refunds.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+            if (new Date(latestRefund.created_at) > new Date(returnData.requested_at)) {
+              syncResults.shopify.refundDetected = true;
+              syncResults.shopify.refundId = latestRefund.id;
+              syncResults.shopify.refundAmount = latestRefund.transactions?.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+            }
+          }
+
+          // Check Shopify return status if we have a return ID
+          if (returnData.shopify_return_id) {
+            try {
+              const shopifyReturn = await shopifyClient.getReturn(returnData.shopify_return_id);
+              if (shopifyReturn) {
+                syncResults.shopify.returnStatus = shopifyReturn.status;
+              }
+            } catch (e) {
+              console.warn('Could not fetch Shopify return:', e.message);
+            }
+          }
+        }
+      } catch (error) {
+        syncResults.shopify = { error: error.message };
+      }
+    }
+
+    // 2. Fetch from EasyEcom
+    if (returnData.easyecom_return_id && easyecomClient.isConfigured()) {
+      try {
+        const easyecomStatus = await easyecomClient.getReturnStatus(returnData.easyecom_return_id);
+        if (easyecomStatus.success) {
+          syncResults.easyecom = {
+            status: easyecomStatus.status,
+            awb_number: easyecomStatus.awb_number,
+            courier_name: easyecomStatus.courier_name,
+            tracking_url: easyecomStatus.tracking_url,
+            pickup_date: easyecomStatus.pickup_date,
+            delivered_date: easyecomStatus.delivered_date
+          };
+
+          // Update AWB if we got one and don't have it
+          if (easyecomStatus.awb_number && !returnData.awb_number) {
+            await pool.query(
+              'UPDATE returns SET awb_number = ?, courier_name = ?, courier_tracking_url = ? WHERE id = ?',
+              [easyecomStatus.awb_number, easyecomStatus.courier_name, easyecomStatus.tracking_url, id]
+            );
+            syncResults.easyecom.awbUpdated = true;
+          }
+
+          // Map EasyEcom status to internal status
+          const mappedStatus = easyecomClient.mapReturnStatus(easyecomStatus.status);
+          if (mappedStatus && mappedStatus !== returnData.status) {
+            if (returnHelpers.isValidTransition(returnData.status, mappedStatus)) {
+              syncResults.newStatus = mappedStatus;
+              syncResults.statusUpdated = true;
+            }
+          }
+        }
+      } catch (error) {
+        syncResults.easyecom = { error: error.message };
+      }
+    }
+
+    // 3. Fetch from Courier (if AWB exists)
+    if (returnData.awb_number) {
+      try {
+        // Determine courier and fetch tracking
+        const courierName = (returnData.courier_name || '').toLowerCase();
+        let trackingInfo = null;
+
+        // Try to get tracking info based on courier
+        // For now, construct tracking URLs - actual API integration would need courier-specific credentials
+        if (courierName.includes('delhivery')) {
+          syncResults.courier = {
+            name: 'Delhivery',
+            awb: returnData.awb_number,
+            tracking_url: `https://www.delhivery.com/track/package/${returnData.awb_number}`,
+            note: 'Visit tracking URL for live status'
+          };
+        } else if (courierName.includes('bluedart')) {
+          syncResults.courier = {
+            name: 'BlueDart',
+            awb: returnData.awb_number,
+            tracking_url: `https://www.bluedart.com/tracking/${returnData.awb_number}`,
+            note: 'Visit tracking URL for live status'
+          };
+        } else if (courierName.includes('xpressbees') || courierName.includes('xpress')) {
+          syncResults.courier = {
+            name: 'XpressBees',
+            awb: returnData.awb_number,
+            tracking_url: `https://www.xpressbees.com/track?awb=${returnData.awb_number}`,
+            note: 'Visit tracking URL for live status'
+          };
+        } else if (courierName.includes('ekart')) {
+          syncResults.courier = {
+            name: 'Ekart',
+            awb: returnData.awb_number,
+            tracking_url: `https://ekartlogistics.com/track/${returnData.awb_number}`,
+            note: 'Visit tracking URL for live status'
+          };
+        } else {
+          syncResults.courier = {
+            name: returnData.courier_name || 'Unknown',
+            awb: returnData.awb_number,
+            tracking_url: returnData.courier_tracking_url,
+            note: 'Courier tracking info available'
+          };
+        }
+      } catch (error) {
+        syncResults.courier = { error: error.message };
+      }
+    }
+
+    // 4. Update status if changed
+    if (syncResults.statusUpdated && syncResults.newStatus !== returnData.status) {
+      await pool.query('UPDATE returns SET status = ? WHERE id = ?', [syncResults.newStatus, id]);
+
+      await pool.query(`
+        INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
+        VALUES (?, 'status_synced', ?, ?, 'system', ?, ?, ?)
+      `, [id, returnData.status, syncResults.newStatus, user.id, user.username, JSON.stringify({ source: 'sync-status', results: syncResults })]);
+    }
+
+    // Log sync attempt
+    await pool.query(`
+      INSERT INTO return_audit_log (return_id, action, actor_type, actor_id, actor_name, details)
+      VALUES (?, 'status_sync_attempted', 'operator', ?, ?, ?)
+    `, [id, user.id, user.username, JSON.stringify(syncResults)]);
+
+    return res.json({
+      success: true,
+      message: syncResults.statusUpdated ? `Status updated to ${syncResults.newStatus}` : 'Status synced (no changes)',
+      data: syncResults
+    });
+
+  } catch (error) {
+    console.error('Error syncing return status:', error);
+    return res.status(500).json({ success: false, message: 'Failed to sync status', error: error.message });
+  }
+});
+
+/**
  * GET /returns/api/search-orders
  * Search Shopify orders for linking (operator only)
  */
@@ -1573,24 +1846,41 @@ router.post('/:id/link-order', isAuthenticated, allowReturnsAccess, async (req, 
  */
 router.get('/export', isAuthenticated, allowReturnsAccess, async (req, res) => {
   try {
-    const { status, from, to } = req.query;
+    const { status, from, to, source, delivery_from, delivery_to } = req.query;
 
     let whereClause = 'WHERE 1=1';
     const params = [];
 
     if (status && status !== 'all') {
-      whereClause += ' AND status = ?';
+      whereClause += ' AND r.status = ?';
       params.push(status);
     }
 
     if (from) {
-      whereClause += ' AND requested_at >= ?';
+      whereClause += ' AND r.requested_at >= ?';
       params.push(from);
     }
 
     if (to) {
-      whereClause += ' AND requested_at <= ?';
+      whereClause += ' AND r.requested_at <= ?';
       params.push(to + ' 23:59:59');
+    }
+
+    // New filter: source (customer_form, shopify_page, shopify, operator)
+    if (source && source !== 'all') {
+      whereClause += ' AND r.source = ?';
+      params.push(source);
+    }
+
+    // New filter: delivery date range
+    if (delivery_from) {
+      whereClause += ' AND r.delivery_date >= ?';
+      params.push(delivery_from);
+    }
+
+    if (delivery_to) {
+      whereClause += ' AND r.delivery_date <= ?';
+      params.push(delivery_to + ' 23:59:59');
     }
 
     const [returns] = await pool.query(`
@@ -1606,25 +1896,54 @@ router.get('/export', isAuthenticated, allowReturnsAccess, async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Returns');
 
+    // Enhanced columns with new fields
     sheet.columns = [
       { header: 'Return ID', key: 'return_id', width: 20 },
+      { header: 'Shopify Return ID', key: 'shopify_return_id', width: 18 },
       { header: 'Order', key: 'shopify_order_name', width: 12 },
       { header: 'Customer', key: 'customer_name', width: 25 },
       { header: 'Phone', key: 'customer_phone', width: 15 },
+      { header: 'Email', key: 'customer_email', width: 25 },
       { header: 'Order Type', key: 'order_type', width: 10 },
       { header: 'Return Type', key: 'return_type', width: 15 },
       { header: 'Status', key: 'status', width: 15 },
+      { header: 'Source', key: 'source', width: 15 },
+      { header: 'Return Reason', key: 'return_reason', width: 20 },
       { header: 'Refund Amount', key: 'refund_amount', width: 15 },
       { header: 'AWB', key: 'awb_number', width: 20 },
+      { header: 'Courier', key: 'courier_name', width: 15 },
+      { header: 'Tracking URL', key: 'courier_tracking_url', width: 30 },
       { header: 'UPI ID', key: 'upi_id', width: 25 },
       { header: 'Bank', key: 'bank_name', width: 20 },
+      { header: 'Account Holder', key: 'account_holder_name', width: 25 },
+      { header: 'Order Date', key: 'order_date', width: 18 },
+      { header: 'Delivery Date', key: 'delivery_date', width: 18 },
       { header: 'Requested', key: 'requested_at', width: 18 },
+      { header: 'Approved', key: 'approved_at', width: 18 },
+      { header: 'Picked', key: 'picked_at', width: 18 },
+      { header: 'Received', key: 'received_at', width: 18 },
       { header: 'Refunded', key: 'refunded_at', width: 18 }
     ];
 
+    // Format dates and add rows
     returns.forEach(r => {
-      sheet.addRow(r);
+      const row = { ...r };
+      // Format dates for Excel
+      ['order_date', 'delivery_date', 'requested_at', 'approved_at', 'picked_at', 'received_at', 'refunded_at'].forEach(field => {
+        if (row[field]) {
+          row[field] = new Date(row[field]).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+        }
+      });
+      sheet.addRow(row);
     });
+
+    // Style header row
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=returns-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -1635,6 +1954,218 @@ router.get('/export', isAuthenticated, allowReturnsAccess, async (req, res) => {
   } catch (error) {
     console.error('Error exporting returns:', error);
     return res.status(500).send('Failed to export');
+  }
+});
+
+// ===============================
+// SHOPIFY SYNC
+// ===============================
+
+/**
+ * GET /returns/sync-from-shopify
+ * Fetch returns created in Shopify and import to ERP
+ * Query params: days (default 7), status (open, closed)
+ */
+router.get('/sync-from-shopify', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { days = 7, status } = req.query;
+    const user = req.session.user;
+
+    if (!shopifyClient.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Shopify not configured'
+      });
+    }
+
+    // Calculate min created date
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() - parseInt(days));
+
+    // Fetch returns from Shopify
+    const shopifyReturns = await shopifyClient.getAllReturns({
+      created_at_min: minDate.toISOString(),
+      status: status || undefined
+    });
+
+    if (!shopifyReturns || shopifyReturns.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No returns found in Shopify for the given period',
+        imported: 0,
+        skipped: 0,
+        returns: []
+      });
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const results = [];
+
+    for (const shopifyReturn of shopifyReturns) {
+      try {
+        // Check if already exists
+        const [existing] = await pool.query(
+          'SELECT id, return_id FROM returns WHERE shopify_return_id = ?',
+          [shopifyReturn.id]
+        );
+
+        if (existing.length > 0) {
+          skipped++;
+          results.push({
+            shopify_return_id: shopifyReturn.id,
+            status: 'skipped',
+            reason: 'Already exists',
+            local_return_id: existing[0].return_id
+          });
+          continue;
+        }
+
+        // Get order details
+        const orderId = shopifyReturn.order_id;
+        const order = await shopifyClient.getOrder(orderId);
+
+        if (!order) {
+          skipped++;
+          results.push({
+            shopify_return_id: shopifyReturn.id,
+            status: 'skipped',
+            reason: 'Order not found'
+          });
+          continue;
+        }
+
+        // Check if order already has a return
+        const [existingOrderReturn] = await pool.query(
+          'SELECT return_id FROM returns WHERE shopify_order_id = ? AND status NOT IN (?, ?)',
+          [orderId, 'rejected', 'cancelled']
+        );
+
+        if (existingOrderReturn.length > 0) {
+          // Update existing return with Shopify return ID
+          await pool.query(
+            'UPDATE returns SET shopify_return_id = ? WHERE shopify_order_id = ?',
+            [shopifyReturn.id, orderId]
+          );
+          skipped++;
+          results.push({
+            shopify_return_id: shopifyReturn.id,
+            status: 'linked',
+            reason: 'Linked to existing return',
+            local_return_id: existingOrderReturn[0].return_id
+          });
+          continue;
+        }
+
+        // Create new return from Shopify data
+        const returnId = returnHelpers.generateReturnId();
+        const orderType = shopifyClient.getOrderPaymentType(order);
+        const deliveryDate = shopifyClient.getDeliveryDate(order);
+
+        // Extract customer info
+        const customerName = order.shipping_address?.name
+          || order.billing_address?.name
+          || `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim()
+          || null;
+        const customerPhone = order.phone
+          || order.shipping_address?.phone
+          || order.billing_address?.phone
+          || order.customer?.phone
+          || null;
+        const customerEmail = order.email || order.customer?.email || null;
+
+        // Map Shopify return status to internal status
+        let internalStatus = 'pending_review';
+        const shopifyStatus = (shopifyReturn.status || '').toLowerCase();
+        if (shopifyStatus === 'open' || shopifyStatus === 'requested') {
+          internalStatus = 'approved';
+        } else if (shopifyStatus === 'closed' || shopifyStatus === 'complete') {
+          internalStatus = 'received';
+        } else if (shopifyStatus === 'cancelled' || shopifyStatus === 'declined') {
+          internalStatus = 'cancelled';
+        }
+
+        // Insert return
+        await pool.query(`
+          INSERT INTO returns (
+            return_id, shopify_order_id, shopify_order_name, shopify_return_id,
+            customer_phone, customer_email, customer_name,
+            order_type, order_date, delivery_date, original_total,
+            return_type, return_reason, status, source
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'shopify')
+        `, [
+          returnId,
+          order.id,
+          order.name,
+          shopifyReturn.id,
+          customerPhone,
+          customerEmail,
+          customerName,
+          orderType,
+          order.created_at,
+          deliveryDate,
+          parseFloat(order.total_price) || 0,
+          'customer_return',
+          'Imported from Shopify',
+          internalStatus
+        ]);
+
+        // Get the inserted return ID
+        const [[{ id: dbReturnId }]] = await pool.query(
+          'SELECT id FROM returns WHERE return_id = ?',
+          [returnId]
+        );
+
+        // Insert return items if available
+        if (shopifyReturn.return_line_items) {
+          for (const item of shopifyReturn.return_line_items) {
+            await pool.query(`
+              INSERT INTO return_items (
+                return_id, product_name, return_quantity, shopify_line_item_id, item_status
+              ) VALUES (?, ?, ?, ?, 'pending')
+            `, [dbReturnId, item.line_item?.title || 'Unknown', item.quantity || 1, item.fulfillment_line_item_id]);
+          }
+        }
+
+        // Log audit
+        await pool.query(`
+          INSERT INTO return_audit_log (return_id, action, new_status, actor_type, actor_id, actor_name, details)
+          VALUES (?, 'imported_from_shopify', ?, 'operator', ?, ?, ?)
+        `, [dbReturnId, internalStatus, user.id, user.username, JSON.stringify({ shopify_return_id: shopifyReturn.id })]);
+
+        imported++;
+        results.push({
+          shopify_return_id: shopifyReturn.id,
+          status: 'imported',
+          local_return_id: returnId
+        });
+
+      } catch (itemError) {
+        console.error('Error processing Shopify return:', itemError.message);
+        results.push({
+          shopify_return_id: shopifyReturn.id,
+          status: 'error',
+          reason: itemError.message
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Imported ${imported} returns, skipped ${skipped}`,
+      imported,
+      skipped,
+      total: shopifyReturns.length,
+      returns: results
+    });
+
+  } catch (error) {
+    console.error('Error syncing from Shopify:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to sync from Shopify',
+      error: error.message
+    });
   }
 });
 
