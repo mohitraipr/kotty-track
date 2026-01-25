@@ -213,7 +213,7 @@ router.post('/api/request', async (req, res) => {
       returnId,
       shopifyOrderId,
       shopifyOrderName,
-      customerPhone || (parsed.type === 'phone' ? parsed.value : null),
+      customerPhone || null,
       email || null,
       customerName || null,
       orderType,
