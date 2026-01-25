@@ -4,7 +4,11 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(xargs ls:*)",
-      "Bash(node -c:*)"
+      "Bash(node -c:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:api-docs.easyecom.io)",
+      "WebFetch(domain:support.easyecom.io)",
+      "WebFetch(domain:shopify.dev)"
     ]
   }
 }

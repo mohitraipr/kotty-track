@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enter Bank Details - Kotty Returns</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .form-container {
+      max-width: 480px;
+      width: 100%;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .form-title {
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .form-subtitle {
+      text-align: center;
+      color: #64748b;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .refund-info {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .refund-info .label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+
+    .refund-info .value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .refund-info .amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .payment-options {
+      margin-bottom: 24px;
+    }
+
+    .payment-option {
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .payment-option:hover {
+      border-color: #2563eb;
+    }
+
+    .payment-option.selected {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .payment-option input[type="radio"] {
+      display: none;
+    }
+
+    .payment-option .icon {
+      width: 48px;
+      height: 48px;
+      background: #f8fafc;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #2563eb;
+    }
+
+    .payment-option .info h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .payment-option .info p {
+      margin: 0;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .form-section {
+      display: none;
+    }
+
+    .form-section.active {
+      display: block;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      padding: 12px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 15px;
+    }
+
+    .form-control:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .submit-btn:hover {
+      background: #1d4ed8;
+    }
+
+    .submit-btn:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .secure-note {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .secure-note i {
+      color: #22c55e;
+    }
+
+    .error-message {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <div class="logo">
+      <span class="logo-text">KOTTY</span>
+    </div>
+
+    <h1 class="form-title">Refund Bank Details</h1>
+    <p class="form-subtitle">Please provide your payment details to receive your refund</p>
+
+    <div class="refund-info">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <div class="label">Return ID</div>
+          <div class="value"><%= returnData.return_id %></div>
+        </div>
+        <div class="text-end">
+          <div class="label">Refund Amount</div>
+          <div class="amount"><%= returnData.refund_amount ? '₹' + parseFloat(returnData.refund_amount).toLocaleString('en-IN') : 'Pending' %></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <form id="bankDetailsForm" action="/returns/bank-details/<%= token %>" method="POST">
+      <div class="payment-options">
+        <label class="payment-option selected" onclick="selectPayment('upi')">
+          <input type="radio" name="payment_method" value="upi" checked>
+          <div class="icon"><i class="bi bi-phone"></i></div>
+          <div class="info">
+            <h4>UPI</h4>
+            <p>Receive refund to your UPI ID (Fastest - Same day)</p>
+          </div>
+        </label>
+
+        <label class="payment-option" onclick="selectPayment('bank')">
+          <input type="radio" name="payment_method" value="bank">
+          <div class="icon"><i class="bi bi-bank"></i></div>
+          <div class="info">
+            <h4>Bank Account</h4>
+            <p>Receive refund via NEFT/IMPS (2-3 business days)</p>
+          </div>
+        </label>
+      </div>
+
+      <!-- UPI Section -->
+      <div class="form-section active" id="upiSection">
+        <div class="mb-3">
+          <label class="form-label">UPI ID *</label>
+          <input type="text" class="form-control" name="upi_id" id="upiId" placeholder="yourname@upi or 9876543210@paytm">
+          <small class="text-muted">Examples: name@okicici, name@ybl, 9876543210@paytm</small>
+        </div>
+      </div>
+
+      <!-- Bank Section -->
+      <div class="form-section" id="bankSection">
+        <div class="mb-3">
+          <label class="form-label">Account Holder Name *</label>
+          <input type="text" class="form-control" name="account_holder_name" placeholder="As per bank records">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Bank Name *</label>
+          <input type="text" class="form-control" name="bank_name" placeholder="e.g., HDFC Bank, SBI">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Account Number *</label>
+          <input type="text" class="form-control" name="account_number" placeholder="Your bank account number" inputmode="numeric">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Confirm Account Number *</label>
+          <input type="text" class="form-control" name="account_number_confirm" placeholder="Re-enter account number" inputmode="numeric">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">IFSC Code *</label>
+          <input type="text" class="form-control" name="ifsc_code" placeholder="e.g., HDFC0001234" style="text-transform: uppercase;">
+        </div>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submitBtn">
+        <i class="bi bi-shield-check me-2"></i>Submit Details
+      </button>
+
+      <p class="secure-note">
+        <i class="bi bi-lock-fill me-1"></i>
+        Your details are securely stored and will only be used for processing this refund.
+      </p>
+    </form>
+  </div>
+
+  <script>
+    function selectPayment(method) {
+      // Update radio buttons
+      document.querySelectorAll('.payment-option').forEach(el => {
+        el.classList.remove('selected');
+        el.querySelector('input').checked = false;
+      });
+      event.currentTarget.classList.add('selected');
+      event.currentTarget.querySelector('input').checked = true;
+
+      // Show/hide sections
+      document.getElementById('upiSection').classList.toggle('active', method === 'upi');
+      document.getElementById('bankSection').classList.toggle('active', method === 'bank');
+    }
+
+    document.getElementById('bankDetailsForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submitBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      const formData = new FormData(this);
+      const data = Object.fromEntries(formData);
+
+      errorMessage.style.display = 'none';
+
+      // Validation
+      if (data.payment_method === 'upi') {
+        if (!data.upi_id || !data.upi_id.includes('@')) {
+          errorMessage.textContent = 'Please enter a valid UPI ID (e.g., name@upi)';
+          errorMessage.style.display = 'block';
+          return;
+        }
+      } else {
+        if (!data.account_holder_name || !data.bank_name || !data.account_number || !data.ifsc_code) {
+          errorMessage.textContent = 'Please fill all bank details';
+          errorMessage.style.display = 'block';
+          return;
+        }
+        if (data.account_number !== data.account_number_confirm) {
+          errorMessage.textContent = 'Account numbers do not match';
+          errorMessage.style.display = 'block';
+          return;
+        }
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(data.ifsc_code)) {
+          errorMessage.textContent = 'Please enter a valid IFSC code';
+          errorMessage.style.display = 'block';
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Submitting...';
+
+      try {
+        const response = await fetch(this.action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          window.location.href = this.action + '/success';
+        } else {
+          errorMessage.textContent = result.message || 'Failed to submit details';
+          errorMessage.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Submit Details';
+        }
+      } catch (error) {
+        errorMessage.textContent = 'Network error. Please try again.';
+        errorMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Submit Details';
+      }
+    });
+  </script>
+</body>
+</html>

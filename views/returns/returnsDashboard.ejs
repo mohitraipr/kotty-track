@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Returns Management - Kotty Track</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8f9fa;
+      color: #1e293b;
+      padding-top: 70px;
+    }
+
+    .top-nav {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 24px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+      text-decoration: none;
+    }
+
+    .nav-links a {
+      color: #64748b;
+      text-decoration: none;
+      margin-left: 24px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .nav-links a:hover { color: #2563eb; }
+    .nav-links a.active { color: #2563eb; }
+
+    .container-main {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #2563eb;
+    }
+
+    .stat-value.warning { color: #f59e0b; }
+    .stat-value.success { color: #22c55e; }
+    .stat-value.danger { color: #ef4444; }
+
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .status-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-tab {
+      padding: 10px 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: #1e293b;
+    }
+
+    .status-tab:hover {
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    .status-tab.active {
+      background: #2563eb;
+      color: white;
+      border-color: #2563eb;
+    }
+
+    .status-tab .count {
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.1);
+      font-size: 12px;
+    }
+
+    .status-tab.active .count {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .filter-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .table-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .badge-status {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .badge-pending_review { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #dbeafe; color: #1d4ed8; }
+    .badge-pickup_scheduled { background: #e0e7ff; color: #4338ca; }
+    .badge-picked_up { background: #c7d2fe; color: #4338ca; }
+    .badge-in_transit { background: #bfdbfe; color: #1e40af; }
+    .badge-received { background: #d1fae5; color: #065f46; }
+    .badge-refund_pending { background: #fef3c7; color: #92400e; }
+    .badge-refunded { background: #dcfce7; color: #166534; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .badge-cancelled { background: #f1f5f9; color: #64748b; }
+
+    .badge-prepaid { background: #dcfce7; color: #166534; }
+    .badge-cod { background: #fef3c7; color: #92400e; }
+
+    .action-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .action-btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .action-btn-success {
+      background: #22c55e;
+      color: white;
+    }
+
+    .action-btn-success:hover {
+      background: #16a34a;
+    }
+
+    .action-btn-warning {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .action-btn-warning:hover {
+      background: #d97706;
+    }
+
+    .action-btn-outline {
+      background: transparent;
+      border: 1px solid #e2e8f0;
+      color: #64748b;
+    }
+
+    .action-btn-outline:hover {
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    #returnsTable {
+      font-size: 13px;
+    }
+
+    .tabulator-row:hover {
+      background: #f8fafc !important;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #64748b;
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .pagination-info {
+      padding: 16px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <a href="/operator/dashboard" class="nav-brand">
+      <i class="bi bi-box-seam me-2"></i>Kotty Track
+    </a>
+    <div class="nav-links">
+      <a href="/operator/dashboard">Dashboard</a>
+      <a href="/returns/dashboard" class="active">Returns</a>
+      <a href="/returns/cash-flow">Cash Flow</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Returns Management</h1>
+        <p class="page-subtitle">Manage customer returns and process refunds</p>
+      </div>
+      <div class="header-actions">
+        <a href="/returns/cash-flow" class="btn btn-outline-primary">
+          <i class="bi bi-cash-stack me-1"></i> Cash Flow
+        </a>
+        <a href="/returns/export?status=<%= activeStatus %>" class="btn btn-outline-secondary">
+          <i class="bi bi-download me-1"></i> Export
+        </a>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.pending_review || 0 %></div>
+        <div class="stat-label">Pending Review</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= (stats.approved || 0) + (stats.pickup_scheduled || 0) %></div>
+        <div class="stat-label">Awaiting Pickup</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.in_transit || 0 %></div>
+        <div class="stat-label">In Transit</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.received || 0 %></div>
+        <div class="stat-label">Received</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value warning"><%= stats.refund_pending || 0 %></div>
+        <div class="stat-label">Refund Pending</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value success"><%= stats.refunded_today || 0 %></div>
+        <div class="stat-label">Refunded Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value warning"><%= formatCurrency(stats.pending_refund_amount || 0) %></div>
+        <div class="stat-label">Pending Amount</div>
+      </div>
+    </div>
+
+    <!-- Status Tabs -->
+    <div class="status-tabs">
+      <a href="/returns/dashboard?status=all" class="status-tab <%= activeStatus === 'all' ? 'active' : '' %>">
+        All <span class="count"><%= stats.total || 0 %></span>
+      </a>
+      <a href="/returns/dashboard?status=pending_review" class="status-tab <%= activeStatus === 'pending_review' ? 'active' : '' %>">
+        Pending Review <span class="count"><%= stats.pending_review || 0 %></span>
+      </a>
+      <a href="/returns/dashboard?status=approved" class="status-tab <%= activeStatus === 'approved' ? 'active' : '' %>">
+        Approved <span class="count"><%= stats.approved || 0 %></span>
+      </a>
+      <a href="/returns/dashboard?status=picked_up" class="status-tab <%= activeStatus === 'picked_up' ? 'active' : '' %>">
+        Picked Up <span class="count"><%= stats.picked_up || 0 %></span>
+      </a>
+      <a href="/returns/dashboard?status=refund_pending" class="status-tab <%= activeStatus === 'refund_pending' ? 'active' : '' %>">
+        Refund Pending <span class="count"><%= stats.refund_pending || 0 %></span>
+      </a>
+      <a href="/returns/dashboard?status=refunded" class="status-tab <%= activeStatus === 'refunded' ? 'active' : '' %>">
+        Refunded <span class="count"><%= stats.refunded || 0 %></span>
+      </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-card">
+      <form method="GET" action="/returns/dashboard" class="row g-3 align-items-end">
+        <input type="hidden" name="status" value="<%= activeStatus %>">
+        <div class="col-md-4">
+          <label class="form-label small text-muted">Search</label>
+          <input type="text" class="form-control" name="search" placeholder="Return ID, Order, Phone..." value="<%= search || '' %>">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i> Search
+          </button>
+        </div>
+        <% if (search) { %>
+        <div class="col-md-2">
+          <a href="/returns/dashboard?status=<%= activeStatus %>" class="btn btn-outline-secondary w-100">Clear</a>
+        </div>
+        <% } %>
+      </form>
+    </div>
+
+    <!-- Returns Table -->
+    <div class="table-card">
+      <% if (returns.length === 0) { %>
+        <div class="empty-state">
+          <i class="bi bi-inbox"></i>
+          <h5>No returns found</h5>
+          <p>No returns match the current filters</p>
+        </div>
+      <% } else { %>
+        <div id="returnsTable"></div>
+        <div class="pagination-info">
+          <span>Showing <%= returns.length %> returns</span>
+          <% if (totalPages > 1) { %>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <% for (let i = 1; i <= totalPages; i++) { %>
+                <li class="page-item <%= currentPage === i ? 'active' : '' %>">
+                  <a class="page-link" href="/returns/dashboard?status=<%= activeStatus %>&page=<%= i %>&search=<%= search || '' %>"><%= i %></a>
+                </li>
+              <% } %>
+            </ul>
+          </nav>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+  <script>
+    const returnsData = <%- JSON.stringify(returns) %>;
+
+    if (returnsData.length > 0) {
+      const table = new Tabulator("#returnsTable", {
+        data: returnsData,
+        layout: "fitColumns",
+        responsiveLayout: "collapse",
+        placeholder: "No returns found",
+        columns: [
+          {
+            title: "Return ID",
+            field: "return_id",
+            width: 150,
+            formatter: function(cell) {
+              const data = cell.getData();
+              return `<a href="/returns/${data.id}" class="text-primary fw-semibold">${cell.getValue()}</a>`;
+            }
+          },
+          {
+            title: "Order",
+            field: "shopify_order_name",
+            width: 100
+          },
+          {
+            title: "Customer",
+            field: "customer_name",
+            width: 150,
+            formatter: function(cell) {
+              const data = cell.getData();
+              const name = cell.getValue() || '-';
+              const phone = data.customer_phone || '';
+              return `<div>${name}</div><small class="text-muted">${phone}</small>`;
+            }
+          },
+          {
+            title: "Type",
+            field: "order_type",
+            width: 80,
+            hozAlign: "center",
+            formatter: function(cell) {
+              const type = cell.getValue();
+              return `<span class="badge-status badge-${type}">${type.toUpperCase()}</span>`;
+            }
+          },
+          {
+            title: "Return Type",
+            field: "return_type",
+            width: 120,
+            formatter: function(cell) {
+              return (cell.getValue() || '').replace(/_/g, ' ');
+            }
+          },
+          {
+            title: "Amount",
+            field: "refund_amount",
+            width: 100,
+            hozAlign: "right",
+            formatter: function(cell) {
+              const val = cell.getValue();
+              return val ? `₹${parseFloat(val).toLocaleString('en-IN')}` : '-';
+            }
+          },
+          {
+            title: "Status",
+            field: "status",
+            width: 130,
+            hozAlign: "center",
+            formatter: function(cell) {
+              const status = cell.getValue();
+              const label = status.replace(/_/g, ' ');
+              return `<span class="badge-status badge-${status}">${label}</span>`;
+            }
+          },
+          {
+            title: "AWB",
+            field: "awb_number",
+            width: 130
+          },
+          {
+            title: "Requested",
+            field: "requested_at",
+            width: 100,
+            formatter: function(cell) {
+              const val = cell.getValue();
+              if (!val) return '-';
+              const d = new Date(val);
+              return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+            }
+          },
+          {
+            title: "Actions",
+            field: "id",
+            width: 180,
+            hozAlign: "center",
+            formatter: function(cell) {
+              const data = cell.getData();
+              let html = '';
+
+              if (data.status === 'pending_review') {
+                html += `<button class="action-btn action-btn-success me-1" onclick="approveReturn(${data.id})">Approve</button>`;
+              }
+              if (data.status === 'approved') {
+                html += `<button class="action-btn action-btn-primary me-1" onclick="initiatePickup(${data.id})">Pickup</button>`;
+              }
+              if (data.status === 'pickup_scheduled') {
+                html += `<button class="action-btn action-btn-primary me-1" onclick="markPicked(${data.id})">Picked</button>`;
+              }
+              if (data.status === 'picked_up' || data.status === 'in_transit') {
+                html += `<button class="action-btn action-btn-primary me-1" onclick="markReceived(${data.id})">Received</button>`;
+              }
+              if (data.status === 'refund_pending') {
+                if (data.order_type === 'cod' && !data.bank_details_submitted) {
+                  html += `<button class="action-btn action-btn-warning me-1" onclick="sendBankLink(${data.id})">Bank Link</button>`;
+                }
+                html += `<button class="action-btn action-btn-success" onclick="processRefund(${data.id})">Refund</button>`;
+              }
+
+              if (!html) {
+                html = `<a href="/returns/${data.id}" class="action-btn action-btn-outline">View</a>`;
+              }
+
+              return html;
+            }
+          }
+        ]
+      });
+    }
+
+    async function approveReturn(id) {
+      if (!confirm('Approve this return request?')) return;
+      const res = await fetch(`/returns/${id}/approve`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed to approve');
+    }
+
+    async function initiatePickup(id) {
+      if (!confirm('Initiate pickup for this return?')) return;
+      const res = await fetch(`/returns/${id}/initiate-pickup`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to initiate pickup');
+      }
+    }
+
+    async function markPicked(id) {
+      if (!confirm('Mark this return as picked up?')) return;
+      const res = await fetch(`/returns/${id}/mark-picked`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed to update');
+    }
+
+    async function markReceived(id) {
+      if (!confirm('Mark this return as received at warehouse?')) return;
+      const res = await fetch(`/returns/${id}/mark-received`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed to update');
+    }
+
+    async function sendBankLink(id) {
+      const res = await fetch(`/returns/${id}/send-bank-link`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const phone = data.phone || '';
+        const link = data.link;
+        const msg = `Bank details link generated!\n\nLink: ${link}\n\nPhone: ${phone}\n\nCopy the link and send to customer via WhatsApp.`;
+        alert(msg);
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(link).then(() => {
+          console.log('Link copied to clipboard');
+        });
+      } else {
+        alert(data.message || 'Failed to generate link');
+      }
+    }
+
+    function processRefund(id) {
+      window.location.href = `/returns/${id}?action=refund`;
+    }
+  </script>
+</body>
+</html>

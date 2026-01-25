@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - Kotty Track</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f8f9fa;
+      padding-top: 70px;
+    }
+
+    .top-nav {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 24px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+      text-decoration: none;
+    }
+
+    .container-main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .back-link {
+      color: #64748b;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .back-link:hover { color: #2563eb; }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    .return-id {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-body { padding: 20px; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .info-item label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .info-item .value {
+      font-size: 15px;
+      font-weight: 500;
+      color: #1e293b;
+    }
+
+    .badge-status {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .badge-pending_review { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #dbeafe; color: #1d4ed8; }
+    .badge-pickup_scheduled { background: #e0e7ff; color: #4338ca; }
+    .badge-picked_up { background: #c7d2fe; color: #4338ca; }
+    .badge-in_transit { background: #bfdbfe; color: #1e40af; }
+    .badge-received { background: #d1fae5; color: #065f46; }
+    .badge-refund_pending { background: #fef3c7; color: #92400e; }
+    .badge-refunded { background: #dcfce7; color: #166534; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+
+    .badge-prepaid { background: #dcfce7; color: #166534; }
+    .badge-cod { background: #fef3c7; color: #92400e; }
+
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #e2e8f0;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-bottom: 20px;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #2563eb;
+      border: 2px solid white;
+    }
+
+    .timeline-item.completed::before { background: #22c55e; }
+    .timeline-item.pending::before { background: #e2e8f0; }
+
+    .timeline-date {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .timeline-action {
+      font-weight: 500;
+      color: #1e293b;
+    }
+
+    .timeline-actor {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .items-table th {
+      text-align: left;
+      padding: 12px;
+      background: #f8fafc;
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .bank-details-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .refund-form {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .eligibility-info {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .eligibility-info.eligible {
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .eligibility-info.not-eligible {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <nav class="top-nav">
+    <a href="/operator/dashboard" class="nav-brand">
+      <i class="bi bi-box-seam me-2"></i>Kotty Track
+    </a>
+    <div>
+      <a href="/returns/dashboard" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Back to Returns
+      </a>
+    </div>
+  </nav>
+
+  <div class="container-main">
+    <a href="/returns/dashboard" class="back-link">
+      <i class="bi bi-arrow-left"></i> Back to Returns Dashboard
+    </a>
+
+    <div class="page-header">
+      <div>
+        <h1 class="return-id"><%= returnData.return_id %></h1>
+        <span class="badge-status badge-<%= returnData.status %>">
+          <%= (returnData.status || '').replace(/_/g, ' ').toUpperCase() %>
+        </span>
+      </div>
+      <div class="action-buttons">
+        <% if (returnData.status === 'pending_review') { %>
+          <button class="btn btn-success" onclick="approveReturn()">
+            <i class="bi bi-check-lg me-1"></i> Approve
+          </button>
+          <button class="btn btn-danger" onclick="rejectReturn()">
+            <i class="bi bi-x-lg me-1"></i> Reject
+          </button>
+        <% } %>
+        <% if (returnData.status === 'approved') { %>
+          <button class="btn btn-primary" onclick="initiatePickup()">
+            <i class="bi bi-truck me-1"></i> Initiate Pickup
+          </button>
+        <% } %>
+        <% if (returnData.status === 'pickup_scheduled') { %>
+          <button class="btn btn-primary" onclick="markPicked()">
+            <i class="bi bi-box-seam me-1"></i> Mark Picked Up
+          </button>
+        <% } %>
+        <% if (['picked_up', 'in_transit'].includes(returnData.status)) { %>
+          <button class="btn btn-primary" onclick="markReceived()">
+            <i class="bi bi-inbox me-1"></i> Mark Received
+          </button>
+        <% } %>
+        <% if (returnData.status === 'refund_pending' && returnData.order_type === 'cod') { %>
+          <button class="btn btn-warning" onclick="sendBankLink()">
+            <i class="bi bi-link me-1"></i> Send Bank Link
+          </button>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-8">
+        <!-- Order Info -->
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-bag me-2"></i>Order Information</span>
+            <span class="badge-status badge-<%= returnData.order_type %>">
+              <%= (returnData.order_type || '').toUpperCase() %>
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Shopify Order</label>
+                <div class="value"><%= returnData.shopify_order_name || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Customer Name</label>
+                <div class="value"><%= returnData.customer_name || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Phone</label>
+                <div class="value"><%= returnData.customer_phone || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Email</label>
+                <div class="value"><%= returnData.customer_email || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Order Date</label>
+                <div class="value"><%= formatDate(returnData.order_date) %></div>
+              </div>
+              <div class="info-item">
+                <label>Delivery Date</label>
+                <div class="value"><%= formatDate(returnData.delivery_date) %></div>
+              </div>
+              <div class="info-item">
+                <label>Original Total</label>
+                <div class="value"><%= formatCurrency(returnData.original_total) %></div>
+              </div>
+              <div class="info-item">
+                <label>Refund Amount</label>
+                <div class="value" style="color: #22c55e; font-size: 18px;">
+                  <%= formatCurrency(returnData.refund_amount) %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Return Details -->
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-arrow-return-left me-2"></i>Return Details</span>
+          </div>
+          <div class="card-body">
+            <div class="info-grid">
+              <div class="info-item">
+                <label>Return Type</label>
+                <div class="value"><%= (returnData.return_type || '').replace(/_/g, ' ') %></div>
+              </div>
+              <div class="info-item">
+                <label>Reason</label>
+                <div class="value"><%= returnData.return_reason || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>AWB Number</label>
+                <div class="value"><%= returnData.awb_number || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Courier</label>
+                <div class="value"><%= returnData.courier_name || '-' %></div>
+              </div>
+              <div class="info-item">
+                <label>Requested On</label>
+                <div class="value"><%= formatDate(returnData.requested_at, 'long') %></div>
+              </div>
+              <div class="info-item">
+                <label>Approved On</label>
+                <div class="value"><%= formatDate(returnData.approved_at, 'long') %></div>
+              </div>
+            </div>
+            <% if (returnData.customer_notes) { %>
+            <div class="mt-3">
+              <label class="form-label text-muted small">Customer Notes</label>
+              <div class="p-3 bg-light rounded"><%= returnData.customer_notes %></div>
+            </div>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Return Items -->
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-box me-2"></i>Return Items (<%= items.length %>)</span>
+          </div>
+          <div class="card-body p-0">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>SKU</th>
+                  <th>Size</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Refund</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% items.forEach(item => { %>
+                <tr>
+                  <td>
+                    <div class="fw-medium"><%= item.product_name || '-' %></div>
+                    <small class="text-muted"><%= item.variant_title || '' %></small>
+                  </td>
+                  <td><%= item.sku %></td>
+                  <td><%= item.size || '-' %></td>
+                  <td><%= item.return_quantity %> / <%= item.ordered_quantity %></td>
+                  <td><%= formatCurrency(item.unit_price) %></td>
+                  <td><%= formatCurrency(item.refund_amount || (item.unit_price * item.return_quantity)) %></td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Refund Processing (if status is refund_pending) -->
+        <% if (returnData.status === 'refund_pending' || returnData.status === 'refund_processing') { %>
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-cash me-2"></i>Process Refund</span>
+          </div>
+          <div class="card-body">
+            <div class="eligibility-info <%= refundEligibility.eligible ? 'eligible' : 'not-eligible' %>">
+              <i class="bi <%= refundEligibility.eligible ? 'bi-check-circle' : 'bi-x-circle' %> me-2"></i>
+              <%= refundEligibility.reason %>
+            </div>
+
+            <% if (refundEligibility.eligible) { %>
+            <form id="refundForm">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Refund Method</label>
+                  <select class="form-select" name="refund_method" id="refundMethod" required>
+                    <% if (returnData.order_type === 'prepaid') { %>
+                    <option value="shopify_refund">Shopify Refund (Original Payment Method)</option>
+                    <% } else { %>
+                    <option value="upi">UPI Transfer</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <% } %>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Amount</label>
+                  <input type="text" class="form-control" value="<%= formatCurrency(returnData.refund_amount) %>" disabled>
+                </div>
+
+                <% if (returnData.order_type === 'cod') { %>
+                <div class="col-md-6">
+                  <label class="form-label">Transaction Reference (UPI Ref / NEFT ID)</label>
+                  <input type="text" class="form-control" name="transaction_reference" placeholder="Enter UPI reference number">
+                </div>
+                <% } %>
+
+                <div class="col-12">
+                  <label class="form-label">Notes (Optional)</label>
+                  <textarea class="form-control" name="notes" rows="2" placeholder="Any notes about this refund"></textarea>
+                </div>
+
+                <div class="col-12">
+                  <button type="submit" class="btn btn-success btn-lg">
+                    <i class="bi bi-check-lg me-2"></i>Process Refund
+                  </button>
+                </div>
+              </div>
+            </form>
+            <% } %>
+          </div>
+        </div>
+        <% } %>
+
+        <!-- Bank Details (if COD and available) -->
+        <% if (returnData.order_type === 'cod' && bankDetails) { %>
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-bank me-2"></i>Bank Details</span>
+            <% if (bankDetails.submitted_at) { %>
+            <span class="badge bg-success">Submitted</span>
+            <% } else { %>
+            <span class="badge bg-warning">Pending</span>
+            <% } %>
+          </div>
+          <div class="card-body">
+            <% if (bankDetails.submitted_at) { %>
+            <div class="bank-details-box">
+              <% if (bankDetails.upi_id) { %>
+              <div class="info-item mb-3">
+                <label>UPI ID</label>
+                <div class="value"><%= bankDetails.upi_id %></div>
+              </div>
+              <% } else { %>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="info-item mb-3">
+                    <label>Account Holder</label>
+                    <div class="value"><%= bankDetails.account_holder_name %></div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="info-item mb-3">
+                    <label>Bank</label>
+                    <div class="value"><%= bankDetails.bank_name %></div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="info-item mb-3">
+                    <label>Account Number</label>
+                    <div class="value"><%= maskAccountNumber(bankDetails.account_number) %></div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="info-item">
+                    <label>IFSC Code</label>
+                    <div class="value"><%= bankDetails.ifsc_code %></div>
+                  </div>
+                </div>
+              </div>
+              <% } %>
+            </div>
+            <% } else { %>
+            <p class="text-muted mb-0">Bank details not yet submitted by customer.</p>
+            <button class="btn btn-outline-warning mt-2" onclick="sendBankLink()">
+              <i class="bi bi-link me-1"></i> Send Bank Details Link
+            </button>
+            <% } %>
+          </div>
+        </div>
+        <% } %>
+      </div>
+
+      <div class="col-lg-4">
+        <!-- Update AWB -->
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-truck me-2"></i>Shipping Info</span>
+          </div>
+          <div class="card-body">
+            <form id="awbForm">
+              <div class="mb-3">
+                <label class="form-label">AWB Number</label>
+                <input type="text" class="form-control" name="awb_number" value="<%= returnData.awb_number || '' %>" placeholder="Enter AWB number">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Courier</label>
+                <input type="text" class="form-control" name="courier_name" value="<%= returnData.courier_name || '' %>" placeholder="e.g., Delhivery">
+              </div>
+              <button type="submit" class="btn btn-outline-primary btn-sm">Update AWB</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Audit Log / Timeline -->
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-clock-history me-2"></i>Activity Log</span>
+          </div>
+          <div class="card-body">
+            <div class="timeline">
+              <% auditLog.forEach(log => { %>
+              <div class="timeline-item completed">
+                <div class="timeline-date"><%= formatDate(log.created_at, 'long') %></div>
+                <div class="timeline-action"><%= (log.action || '').replace(/_/g, ' ') %></div>
+                <div class="timeline-actor">by <%= log.actor_name || log.actor_type %></div>
+              </div>
+              <% }) %>
+              <% if (auditLog.length === 0) { %>
+              <p class="text-muted">No activity recorded</p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <!-- Refund Transactions -->
+        <% if (refunds.length > 0) { %>
+        <div class="card">
+          <div class="card-header">
+            <span><i class="bi bi-receipt me-2"></i>Refund Transactions</span>
+          </div>
+          <div class="card-body">
+            <% refunds.forEach(refund => { %>
+            <div class="mb-3 p-3 bg-light rounded">
+              <div class="d-flex justify-content-between">
+                <span class="fw-medium"><%= formatCurrency(refund.amount) %></span>
+                <span class="badge <%= refund.status === 'completed' ? 'bg-success' : 'bg-warning' %>">
+                  <%= refund.status %>
+                </span>
+              </div>
+              <small class="text-muted">
+                <%= refund.refund_method %> |
+                <%= formatDate(refund.processed_at) %>
+              </small>
+              <% if (refund.transaction_reference) { %>
+              <div class="small text-muted mt-1">Ref: <%= refund.transaction_reference %></div>
+              <% } %>
+            </div>
+            <% }) %>
+          </div>
+        </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const returnId = <%= returnData.id %>;
+
+    async function approveReturn() {
+      if (!confirm('Approve this return request?')) return;
+      const res = await fetch(`/returns/${returnId}/approve`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed to approve');
+    }
+
+    async function rejectReturn() {
+      const reason = prompt('Please enter rejection reason:');
+      if (!reason) return;
+      const res = await fetch(`/returns/${returnId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed to reject');
+    }
+
+    async function initiatePickup() {
+      if (!confirm('Initiate courier pickup for this return?')) return;
+      const res = await fetch(`/returns/${returnId}/initiate-pickup`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        location.reload();
+      } else {
+        alert(data.message || 'Failed');
+      }
+    }
+
+    async function markPicked() {
+      if (!confirm('Mark this return as picked up by courier?')) return;
+      const res = await fetch(`/returns/${returnId}/mark-picked`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed');
+    }
+
+    async function markReceived() {
+      if (!confirm('Mark this return as received at warehouse?')) return;
+      const res = await fetch(`/returns/${returnId}/mark-received`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) location.reload();
+      else alert(data.message || 'Failed');
+    }
+
+    async function sendBankLink() {
+      const res = await fetch(`/returns/${returnId}/send-bank-link`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Bank link generated!\n\n${data.link}\n\nSend to: ${data.phone}`);
+        navigator.clipboard.writeText(data.link);
+      } else {
+        alert(data.message || 'Failed');
+      }
+    }
+
+    // AWB form
+    document.getElementById('awbForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const res = await fetch(`/returns/${returnId}/update-awb`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData))
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('AWB updated');
+        location.reload();
+      } else {
+        alert(data.message || 'Failed');
+      }
+    });
+
+    // Refund form
+    document.getElementById('refundForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!confirm('Process this refund? This action cannot be undone.')) return;
+
+      const formData = new FormData(e.target);
+      const res = await fetch(`/returns/${returnId}/process-refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData))
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Refund processed successfully!');
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to process refund');
+      }
+    });
+  </script>
+</body>
+</html>

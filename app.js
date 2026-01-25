@@ -4,6 +4,7 @@ const express = require('express');
 const session = require('express-session');
 const flash = require('connect-flash');
 const path = require('path');
+const cors = require('cors');
 
 // Load environment variables securely using secure-env before loading modules that depend on them
 const secureEnv = require('secure-env');
@@ -33,6 +34,13 @@ app.set('trust proxy', true);
 // Increase body size limits to handle large JSON and form payloads
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
+
+// CORS configuration for returns API (accessed from Shopify store)
+app.use('/returns/api', cors({
+    origin: ['https://kotty.in', 'https://www.kotty.in', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
 
 // Session Configuration
 app.use(session({
@@ -114,6 +122,7 @@ const nowiPoRoutes = require('./routes/nowiPoRoutes');
 const vendorFilesRoutes = require('./routes/vendorFilesRoutes');
 const poAdminRoutes = require('./routes/poAdminRoutes');
 const poAdminApiRoutes = require('./routes/poAdminApiRoutes');
+const returnRoutes = require('./routes/returnRoutes');
 
 // Use Routes
 app.use('/', authRoutes);
@@ -161,6 +170,7 @@ app.use('/nowi-po', nowiPoRoutes);
 app.use('/vendor-files', vendorFilesRoutes);
 app.use('/po-admin', poAdminRoutes);
 app.use('/api/po-admin', poAdminApiRoutes);
+app.use('/returns', returnRoutes);
 
 // Initialize the background health refresh queue with the database pool
 const { pool } = require('./config/db');
