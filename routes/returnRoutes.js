@@ -160,6 +160,7 @@ router.post('/api/request', async (req, res) => {
       email,
       customerName: formCustomerName,
       customerPhone: formCustomerPhone,
+      lookupIdentifier, // The email or phone customer entered in lookup
       returnReason,
       notes,
       source,
@@ -167,7 +168,7 @@ router.post('/api/request', async (req, res) => {
       isIssue
     } = req.body;
 
-    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, formCustomerName, formCustomerPhone, returnReason, source, isIssue });
+    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, formCustomerName, formCustomerPhone, lookupIdentifier, returnReason, source, isIssue });
 
     let order = null;
     let orders = [];
@@ -225,11 +226,15 @@ router.post('/api/request', async (req, res) => {
     let deliveryDate = null;
     let originalTotal = null;
     let customerName = formCustomerName || null; // Prioritize form data
-    let customerPhone = formCustomerPhone || null; // Prioritize form data
-    let customerEmail = email || null; // Start with form-provided email
     let shopifyOrderId = directOrderId || null;
     let shopifyOrderName = directOrderName || null;
     let returnType = isIssue ? 'customer_issue' : 'customer_return';
+
+    // Use lookupIdentifier (what customer entered) as primary source for contact info
+    // This is reliable because customer verified it by finding their order with it
+    const isLookupEmail = lookupIdentifier && lookupIdentifier.includes('@');
+    let customerEmail = email || (isLookupEmail ? lookupIdentifier : null);
+    let customerPhone = formCustomerPhone || (!isLookupEmail && lookupIdentifier ? lookupIdentifier : null);
 
     if (order) {
       orderType = shopifyClient.getOrderPaymentType(order);

@@ -479,6 +479,7 @@
     let orders = [];
     let selectedOrder = null;
     let selectedItems = [];
+    let lookupIdentifier = null; // Store what customer entered (email or phone)
 
     // Step navigation
     function goToStep(step) {
@@ -531,6 +532,7 @@
 
         if (data.success && data.orders && data.orders.length > 0) {
           orders = data.orders;
+          lookupIdentifier = identifier; // Store what customer entered
           renderOrders();
           goToStep(2);
         } else {
@@ -717,15 +719,22 @@
       submitBtn.innerHTML = '<span class="loading-spinner"></span> Submitting...';
 
       try {
+        // Determine if lookup was email or phone
+        const isEmail = lookupIdentifier && lookupIdentifier.includes('@');
+        const customerEmail = isEmail ? lookupIdentifier : (selectedOrder.email || null);
+        const customerPhone = !isEmail ? lookupIdentifier : (selectedOrder.customer_phone || null);
+        const customerName = selectedOrder.customer_name || selectedOrder.shipping_address?.name || null;
+
         const res = await fetch('/returns/api/request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             shopifyOrderId: selectedOrder.id,
             orderName: selectedOrder.name,
-            email: selectedOrder.email,
-            customerName: selectedOrder.customer_name,
-            customerPhone: selectedOrder.customer_phone,
+            email: customerEmail,
+            customerName: customerName,
+            customerPhone: customerPhone,
+            lookupIdentifier: lookupIdentifier, // Pass what customer entered
             returnReason: reason,
             notes: notes,
             selectedItems: selectedItems,
