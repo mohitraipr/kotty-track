@@ -167,6 +167,7 @@ router.post('/api/request', async (req, res) => {
     let originalTotal = null;
     let customerName = null;
     let customerPhone = null;
+    let customerEmail = email || null; // Start with form-provided email
     let shopifyOrderId = null;
     let shopifyOrderName = null;
 
@@ -175,10 +176,27 @@ router.post('/api/request', async (req, res) => {
       orderDate = order.created_at;
       deliveryDate = shopifyClient.getDeliveryDate(order);
       originalTotal = parseFloat(order.total_price) || 0;
-      customerName = `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim();
-      customerPhone = order.phone || order.customer?.phone || order.shipping_address?.phone;
+
+      // Extract customer name - check shipping address, billing address, then customer object
+      customerName = order.shipping_address?.name
+        || order.billing_address?.name
+        || `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim()
+        || null;
+
+      // Extract customer phone - check all possible locations (phone is always available per user)
+      customerPhone = order.phone
+        || order.shipping_address?.phone
+        || order.billing_address?.phone
+        || order.customer?.phone
+        || null;
+
       shopifyOrderId = order.id;
       shopifyOrderName = order.name;
+
+      // Extract customer email from order if not provided in form
+      if (!customerEmail) {
+        customerEmail = order.email || order.customer?.email || null;
+      }
 
       // Check for duplicate return (prevent multiple returns for same order)
       const [existingReturns] = await pool.query(`
@@ -214,7 +232,7 @@ router.post('/api/request', async (req, res) => {
       shopifyOrderId,
       shopifyOrderName,
       customerPhone || null,
-      email || null,
+      customerEmail,
       customerName || null,
       orderType,
       orderDate,
@@ -709,6 +727,16 @@ router.post('/:id/approve', isAuthenticated, allowReturnsAccess, async (req, res
       VALUES (?, 'approved', ?, 'approved', 'operator', ?, ?, ?)
     `, [id, returnData.status, user.id, user.username, JSON.stringify({ notes })]);
 
+    // Sync to Shopify - add tag when return is approved
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Approved');
+        await shopifyClient.addOrderNote(returnData.shopify_order_id, `Return ${returnData.return_id} approved`);
+      } catch (shopifyError) {
+        console.error('Failed to sync approval to Shopify:', shopifyError.message);
+      }
+    }
+
     return res.json({ success: true, message: 'Return approved successfully' });
 
   } catch (error) {
@@ -795,21 +823,41 @@ router.post('/:id/initiate-pickup', isAuthenticated, allowReturnsAccess, async (
 
     // Create return in EasyEcom
     let easyecomResult = { success: false };
+    let easyecomOrderId = returnData.easyecom_order_id;
 
     if (easyecomClient.isConfigured()) {
-      easyecomResult = await easyecomClient.createReturn({
-        order_id: returnData.easyecom_order_id,
-        return_reason: returnData.return_reason,
-        return_type: returnData.return_type,
-        items: items.map(item => ({
-          sku: item.sku,
-          quantity: item.return_quantity,
-          product_name: item.product_name,
-          reason: returnData.return_reason
-        })),
-        pickup_address: pickupAddress,
-        courier_id: courier_id
-      });
+      // If EasyEcom order ID not set, try to find it by Shopify order name
+      if (!easyecomOrderId && returnData.shopify_order_name) {
+        try {
+          const orderName = returnData.shopify_order_name.replace('#', '').trim();
+          const easyecomOrders = await easyecomClient.searchOrders({ reference_code: orderName });
+          if (easyecomOrders && easyecomOrders.length > 0) {
+            easyecomOrderId = easyecomOrders[0].id || easyecomOrders[0].order_id;
+            // Save the found EasyEcom order ID for future use
+            if (easyecomOrderId) {
+              await pool.query('UPDATE returns SET easyecom_order_id = ? WHERE id = ?', [easyecomOrderId, id]);
+            }
+          }
+        } catch (searchError) {
+          console.error('Failed to search EasyEcom order:', searchError.message);
+        }
+      }
+
+      if (easyecomOrderId) {
+        easyecomResult = await easyecomClient.createReturn({
+          order_id: easyecomOrderId,
+          return_reason: returnData.return_reason,
+          return_type: returnData.return_type,
+          items: items.map(item => ({
+            sku: item.sku,
+            quantity: item.return_quantity,
+            product_name: item.product_name,
+            reason: returnData.return_reason
+          })),
+          pickup_address: pickupAddress,
+          courier_id: courier_id
+        });
+      }
     }
 
     // Update return with AWB info
@@ -843,6 +891,17 @@ router.post('/:id/initiate-pickup', isAuthenticated, allowReturnsAccess, async (
       awb: easyecomResult.awb_number,
       courier: easyecomResult.courier_name
     })]);
+
+    // Sync to Shopify - add tag and note when AWB is generated
+    if (easyecomResult.success && easyecomResult.awb_number && returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Pickup-Scheduled');
+        const noteText = `Return ${returnData.return_id} - Pickup scheduled. AWB: ${easyecomResult.awb_number}${easyecomResult.courier_name ? ` (${easyecomResult.courier_name})` : ''}`;
+        await shopifyClient.addOrderNote(returnData.shopify_order_id, noteText);
+      } catch (shopifyError) {
+        console.error('Failed to sync pickup to Shopify:', shopifyError.message);
+      }
+    }
 
     return res.json({
       success: true,
@@ -932,6 +991,16 @@ router.post('/:id/mark-received', isAuthenticated, allowReturnsAccess, async (re
       INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
       VALUES (?, 'marked_received', ?, 'refund_pending', 'operator', ?, ?, ?)
     `, [id, returnData.status, user.id, user.username, JSON.stringify({ refund_amount: refundAmount })]);
+
+    // Sync to Shopify - add tag when return is received
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Received');
+        await shopifyClient.addOrderNote(returnData.shopify_order_id, `Return ${returnData.return_id} received at warehouse. Refund amount: ₹${refundAmount}`);
+      } catch (shopifyError) {
+        console.error('Failed to sync received status to Shopify:', shopifyError.message);
+      }
+    }
 
     return res.json({ success: true, message: 'Return marked as received. Ready for refund processing.' });
 
@@ -1089,12 +1158,14 @@ router.post('/:id/process-refund', isAuthenticated, allowReturnsAccess, async (r
       transaction_reference
     })]);
 
-    // Add tag to Shopify order
+    // Sync to Shopify - add tag and note when refund is processed
     if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
       try {
-        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'returned-refunded');
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Refunded');
+        const noteText = `Return ${returnData.return_id} refunded. Amount: ₹${refundAmount} via ${refund_method}${shopifyRefundId ? ` (Shopify Refund ID: ${shopifyRefundId})` : ''}`;
+        await shopifyClient.addOrderNote(returnData.shopify_order_id, noteText);
       } catch (e) {
-        console.warn('Failed to add Shopify tag:', e.message);
+        console.warn('Failed to sync refund to Shopify:', e.message);
       }
     }
 
@@ -1150,7 +1221,7 @@ router.post('/:id/update-status', isAuthenticated, allowReturnsAccess, async (re
 
 /**
  * POST /returns/:id/update-awb
- * Update AWB number manually
+ * Update AWB number manually and sync to Shopify
  */
 router.post('/:id/update-awb', isAuthenticated, allowReturnsAccess, async (req, res) => {
   try {
@@ -1160,6 +1231,12 @@ router.post('/:id/update-awb', isAuthenticated, allowReturnsAccess, async (req, 
 
     if (!awb_number) {
       return res.status(400).json({ success: false, message: 'AWB number is required' });
+    }
+
+    // Get return data to find Shopify order
+    const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [id]);
+    if (!returnData) {
+      return res.status(404).json({ success: false, message: 'Return not found' });
     }
 
     await pool.query(
@@ -1172,7 +1249,22 @@ router.post('/:id/update-awb', isAuthenticated, allowReturnsAccess, async (req, 
       VALUES (?, 'awb_updated', 'operator', ?, ?, ?)
     `, [id, user.id, user.username, JSON.stringify({ awb_number, courier_name })]);
 
-    return res.json({ success: true, message: 'AWB updated' });
+    // Sync to Shopify - add tag and note to the order
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        // Add return tag to order
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Pickup-Scheduled');
+
+        // Add note with AWB details
+        const noteText = `Return ${returnData.return_id} - Pickup scheduled. AWB: ${awb_number}${courier_name ? ` (${courier_name})` : ''}`;
+        await shopifyClient.addOrderNote(returnData.shopify_order_id, noteText);
+      } catch (shopifyError) {
+        console.error('Failed to sync AWB to Shopify:', shopifyError.message);
+        // Don't fail the request, just log the error
+      }
+    }
+
+    return res.json({ success: true, message: 'AWB updated and synced to Shopify' });
 
   } catch (error) {
     console.error('Error updating AWB:', error);
