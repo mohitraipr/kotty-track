@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request a Return - Kotty</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .return-container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .brand-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .brand-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .brand-header p {
+      color: #64748b;
+      font-size: 15px;
+    }
+
+    .card {
+      background: white;
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .card-body {
+      padding: 32px;
+    }
+
+    .step-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    .step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      transition: all 0.3s;
+    }
+
+    .step-dot.active {
+      background: #2563eb;
+      width: 32px;
+      border-radius: 5px;
+    }
+
+    .step-dot.completed {
+      background: #22c55e;
+    }
+
+    .step-content {
+      display: none;
+    }
+
+    .step-content.active {
+      display: block;
+    }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .step-desc {
+      color: #64748b;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+
+    .form-control {
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid #e2e8f0;
+      font-size: 15px;
+    }
+
+    .form-control:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-outline-secondary {
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-weight: 500;
+    }
+
+    .order-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .order-card:hover {
+      border-color: #94a3b8;
+    }
+
+    .order-card.selected {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .order-card.ineligible {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .order-number {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .order-date {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .order-summary {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .order-status {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-eligible {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status-ineligible {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .item-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+
+    .item-checkbox {
+      width: 22px;
+      height: 22px;
+      accent-color: #2563eb;
+    }
+
+    .item-image {
+      width: 60px;
+      height: 60px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #94a3b8;
+    }
+
+    .item-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    .item-details {
+      flex: 1;
+    }
+
+    .item-name {
+      font-weight: 500;
+      color: #1e293b;
+      margin-bottom: 2px;
+    }
+
+    .item-variant {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .item-price {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .alert-info-custom {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 14px;
+    }
+
+    .alert-warning-custom {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 14px;
+    }
+
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+
+    .success-icon i {
+      font-size: 40px;
+      color: #22c55e;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .no-orders {
+      text-align: center;
+      padding: 40px 20px;
+      color: #64748b;
+    }
+
+    .no-orders i {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="return-container">
+    <div class="brand-header">
+      <h1>Request a Return</h1>
+      <p>We're here to help with your return request</p>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+          <div class="step-dot active" id="dot1"></div>
+          <div class="step-dot" id="dot2"></div>
+          <div class="step-dot" id="dot3"></div>
+          <div class="step-dot" id="dot4"></div>
+        </div>
+
+        <!-- Step 1: Find Order -->
+        <div class="step-content active" id="step1">
+          <h2 class="step-title">Find Your Order</h2>
+          <p class="step-desc">Enter your email or phone number to look up your orders</p>
+
+          <form id="lookupForm">
+            <div class="mb-4">
+              <label class="form-label">Email or Phone Number</label>
+              <input type="text" class="form-control" id="identifier"
+                     placeholder="e.g., your@email.com or 9876543210" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="lookupBtn">
+              Find My Orders
+            </button>
+          </form>
+
+          <div id="lookupError" class="alert-warning-custom mt-3" style="display: none;"></div>
+        </div>
+
+        <!-- Step 2: Select Order -->
+        <div class="step-content" id="step2">
+          <h2 class="step-title">Select Your Order</h2>
+          <p class="step-desc">Choose the order you want to return</p>
+
+          <div id="ordersContainer"></div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-outline-secondary flex-fill" onclick="goToStep(1)">
+              <i class="bi bi-arrow-left me-1"></i> Back
+            </button>
+            <button class="btn btn-primary flex-fill" id="selectOrderBtn" disabled onclick="goToStep(3)">
+              Continue <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3: Select Items & Reason -->
+        <div class="step-content" id="step3">
+          <h2 class="step-title">Select Items to Return</h2>
+          <p class="step-desc">Choose which items you want to return and tell us why</p>
+
+          <div id="itemsContainer" class="mb-4"></div>
+
+          <div class="mb-4">
+            <label class="form-label">Reason for Return</label>
+            <select class="form-select form-control" id="returnReason" required>
+              <option value="">Select a reason</option>
+              <option value="size_issue">Size doesn't fit</option>
+              <option value="quality_issue">Quality issue / Defect</option>
+              <option value="wrong_product">Received wrong product</option>
+              <option value="not_as_described">Product not as described</option>
+              <option value="damaged_in_transit">Damaged during delivery</option>
+              <option value="changed_mind">Changed my mind</option>
+              <option value="missing_items">Missing items in order</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Additional Details (Optional)</label>
+            <textarea class="form-control" id="notes" rows="3"
+                      placeholder="Please provide any additional details about your return..."></textarea>
+          </div>
+
+          <div class="alert-info-custom mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            Refunds are processed within 5-7 business days after we receive your items.
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary flex-fill" onclick="goToStep(2)">
+              <i class="bi bi-arrow-left me-1"></i> Back
+            </button>
+            <button class="btn btn-primary flex-fill" id="submitBtn" onclick="submitReturn()">
+              Submit Return Request
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 4: Success -->
+        <div class="step-content" id="step4">
+          <div class="text-center">
+            <div class="success-icon">
+              <i class="bi bi-check-lg"></i>
+            </div>
+            <h2 class="step-title">Return Request Submitted</h2>
+            <p class="step-desc mb-4">
+              Your return request has been submitted successfully.
+              We'll review it and get back to you within 24-48 hours.
+            </p>
+
+            <div class="alert-info-custom text-start mb-4">
+              <strong>Return ID:</strong> <span id="successReturnId"></span><br>
+              <strong>Order:</strong> <span id="successOrderName"></span>
+            </div>
+
+            <p class="text-muted small mb-4">
+              You can track your return status using the Return ID.
+            </p>
+
+            <a href="https://kotty.in" class="btn btn-primary">
+              Continue Shopping
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-4">
+      <p class="text-muted small">
+        Need help? Contact us at <a href="mailto:support@kotty.in">support@kotty.in</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let orders = [];
+    let selectedOrder = null;
+    let selectedItems = [];
+
+    // Step navigation
+    function goToStep(step) {
+      document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.step-dot').forEach((el, i) => {
+        el.classList.remove('active', 'completed');
+        if (i + 1 < step) el.classList.add('completed');
+        if (i + 1 === step) el.classList.add('active');
+      });
+      document.getElementById('step' + step).classList.add('active');
+      currentStep = step;
+    }
+
+    // Step 1: Lookup orders
+    document.getElementById('lookupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const identifier = document.getElementById('identifier').value.trim();
+      const lookupBtn = document.getElementById('lookupBtn');
+      const errorDiv = document.getElementById('lookupError');
+
+      lookupBtn.disabled = true;
+      lookupBtn.innerHTML = '<span class="loading-spinner"></span> Searching...';
+      errorDiv.style.display = 'none';
+
+      try {
+        const res = await fetch('/returns/api/lookup-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier })
+        });
+
+        const data = await res.json();
+
+        if (data.success && data.orders && data.orders.length > 0) {
+          orders = data.orders;
+          renderOrders();
+          goToStep(2);
+        } else {
+          errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>' +
+            (data.message || 'No orders found. Please check your email/phone and try again.');
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Something went wrong. Please try again.';
+        errorDiv.style.display = 'block';
+      } finally {
+        lookupBtn.disabled = false;
+        lookupBtn.innerHTML = 'Find My Orders';
+      }
+    });
+
+    // Render orders
+    function renderOrders() {
+      const container = document.getElementById('ordersContainer');
+
+      if (orders.length === 0) {
+        container.innerHTML = `
+          <div class="no-orders">
+            <i class="bi bi-inbox"></i>
+            <p>No orders found</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = orders.map((order, index) => {
+        const eligibility = order.returnEligibility || { eligible: true };
+        const isEligible = eligibility.eligible;
+        const orderDate = new Date(order.created_at).toLocaleDateString('en-IN', {
+          day: 'numeric', month: 'short', year: 'numeric'
+        });
+        const itemCount = order.line_items?.length || 0;
+        const total = parseFloat(order.total_price || 0).toLocaleString('en-IN', {
+          style: 'currency', currency: 'INR', minimumFractionDigits: 0
+        });
+
+        return `
+          <div class="order-card ${isEligible ? '' : 'ineligible'}"
+               data-index="${index}"
+               onclick="${isEligible ? `selectOrder(${index})` : ''}">
+            <div class="order-header">
+              <div>
+                <div class="order-number">Order ${order.name}</div>
+                <div class="order-date">${orderDate}</div>
+              </div>
+              <span class="order-status ${isEligible ? 'status-eligible' : 'status-ineligible'}">
+                ${isEligible ? 'Eligible for return' : eligibility.reason || 'Not eligible'}
+              </span>
+            </div>
+            <div class="order-summary">
+              ${itemCount} item${itemCount !== 1 ? 's' : ''} | ${total}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Select order
+    function selectOrder(index) {
+      selectedOrder = orders[index];
+      document.querySelectorAll('.order-card').forEach(el => el.classList.remove('selected'));
+      document.querySelector(`.order-card[data-index="${index}"]`).classList.add('selected');
+      document.getElementById('selectOrderBtn').disabled = false;
+
+      // Render items
+      renderItems();
+    }
+
+    // Render items
+    function renderItems() {
+      const container = document.getElementById('itemsContainer');
+
+      if (!selectedOrder || !selectedOrder.line_items) {
+        container.innerHTML = '<p class="text-muted">No items found</p>';
+        return;
+      }
+
+      container.innerHTML = selectedOrder.line_items.map((item, index) => {
+        const price = parseFloat(item.price || 0).toLocaleString('en-IN', {
+          style: 'currency', currency: 'INR', minimumFractionDigits: 0
+        });
+        const image = item.image_url || null;
+
+        return `
+          <div class="item-card">
+            <input type="checkbox" class="item-checkbox"
+                   id="item${index}" value="${item.id}"
+                   onchange="toggleItem(${index})" checked>
+            <div class="item-image">
+              ${image ? `<img src="${image}" alt="${item.name}">` : '<i class="bi bi-box"></i>'}
+            </div>
+            <div class="item-details">
+              <div class="item-name">${item.name || item.title}</div>
+              <div class="item-variant">${item.variant_title || ''} ${item.sku ? '| SKU: ' + item.sku : ''}</div>
+            </div>
+            <div class="item-price">${price}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Select all items by default
+      selectedItems = selectedOrder.line_items.map(item => item.id);
+    }
+
+    // Toggle item selection
+    function toggleItem(index) {
+      const itemId = selectedOrder.line_items[index].id;
+      const checkbox = document.getElementById('item' + index);
+
+      if (checkbox.checked) {
+        selectedItems.push(itemId);
+      } else {
+        selectedItems = selectedItems.filter(id => id !== itemId);
+      }
+    }
+
+    // Submit return
+    async function submitReturn() {
+      const submitBtn = document.getElementById('submitBtn');
+      const reason = document.getElementById('returnReason').value;
+      const notes = document.getElementById('notes').value;
+
+      if (!reason) {
+        alert('Please select a reason for return');
+        return;
+      }
+
+      if (selectedItems.length === 0) {
+        alert('Please select at least one item to return');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loading-spinner"></span> Submitting...';
+
+      try {
+        const res = await fetch('/returns/api/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shopifyOrderId: selectedOrder.id,
+            orderName: selectedOrder.name,
+            email: selectedOrder.email,
+            returnReason: reason,
+            notes: notes,
+            selectedItems: selectedItems,
+            source: 'customer_form'
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          document.getElementById('successReturnId').textContent = data.returnId;
+          document.getElementById('successOrderName').textContent = selectedOrder.name;
+          goToStep(4);
+        } else {
+          if (data.existingReturnId) {
+            alert(`A return already exists for this order.\n\nReturn ID: ${data.existingReturnId}\n\nPlease track your existing return or contact support.`);
+          } else {
+            alert(data.message || 'Failed to submit return request. Please try again.');
+          }
+        }
+      } catch (error) {
+        alert('Something went wrong. Please try again.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Submit Return Request';
+      }
+    }
+  </script>
+</body>
+</html>

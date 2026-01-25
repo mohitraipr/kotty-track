@@ -37,38 +37,123 @@ function allowReturnsAccess(req, res, next) {
 // ===============================
 
 /**
+ * GET /returns/request
+ * Render customer return request form
+ */
+router.get('/request', (req, res) => {
+  res.render('returns/customerReturnForm', {
+    title: 'Request a Return'
+  });
+});
+
+/**
+ * POST /returns/api/lookup-orders
+ * Lookup orders by email or phone for customer return form
+ */
+router.post('/api/lookup-orders', async (req, res) => {
+  try {
+    const { identifier } = req.body;
+
+    if (!identifier || identifier.trim().length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email or phone number'
+      });
+    }
+
+    if (!shopifyClient.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Order lookup is temporarily unavailable'
+      });
+    }
+
+    // Get orders by email or phone
+    const orders = await shopifyClient.getOrdersByCustomerIdentifier(identifier.trim());
+
+    if (!orders || orders.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No orders found for this email/phone. Please check and try again.'
+      });
+    }
+
+    // Filter and add eligibility info
+    const ordersWithEligibility = shopifyClient.filterEligibleOrders(orders, 10);
+
+    // Simplify order data for frontend
+    const simplifiedOrders = ordersWithEligibility.map(order => ({
+      id: order.id,
+      name: order.name,
+      email: order.email,
+      created_at: order.created_at,
+      total_price: order.total_price,
+      fulfillment_status: order.fulfillment_status,
+      financial_status: order.financial_status,
+      line_items: order.line_items?.map(item => ({
+        id: item.id,
+        name: item.name || item.title,
+        title: item.title,
+        variant_title: item.variant_title,
+        sku: item.sku,
+        quantity: item.quantity,
+        price: item.price,
+        image_url: item.image_url || null
+      })) || [],
+      returnEligibility: order.returnEligibility
+    }));
+
+    return res.json({
+      success: true,
+      orders: simplifiedOrders
+    });
+
+  } catch (error) {
+    console.error('Error looking up orders:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to lookup orders. Please try again.'
+    });
+  }
+});
+
+/**
  * POST /returns/api/request
  * Customer submits return request (no authentication required)
+ * Supports both legacy (orderIdentifier) and new form (shopifyOrderId) submissions
  */
 router.post('/api/request', async (req, res) => {
   try {
-    const { orderIdentifier, email, returnReason, notes, source } = req.body;
-
-    if (!orderIdentifier) {
-      return res.status(400).json({ success: false, message: 'Order identifier is required' });
-    }
-
-    // Parse the order identifier
-    const parsed = returnHelpers.parseOrderIdentifier(orderIdentifier);
+    const { orderIdentifier, shopifyOrderId: directOrderId, orderName: directOrderName, email, returnReason, notes, source, selectedItems } = req.body;
 
     let order = null;
     let orders = [];
 
-    // Try to find the order in Shopify
-    if (shopifyClient.isConfigured()) {
-      if (parsed.type === 'order_number') {
-        order = await shopifyClient.getOrderByName(parsed.value);
-      } else if (parsed.type === 'phone') {
-        orders = await shopifyClient.searchOrdersByPhone(parsed.value);
-        if (orders.length === 1) {
-          order = orders[0];
-        }
-      } else if (parsed.type === 'email' && email) {
-        orders = await shopifyClient.searchOrdersByEmail(email);
-        if (orders.length === 1) {
-          order = orders[0];
+    // New form submission: directOrderId is provided
+    if (directOrderId && shopifyClient.isConfigured()) {
+      order = await shopifyClient.getOrder(directOrderId);
+    }
+    // Legacy form submission: orderIdentifier is provided
+    else if (orderIdentifier) {
+      const parsed = returnHelpers.parseOrderIdentifier(orderIdentifier);
+
+      if (shopifyClient.isConfigured()) {
+        if (parsed.type === 'order_number') {
+          order = await shopifyClient.getOrderByName(parsed.value);
+        } else if (parsed.type === 'phone') {
+          orders = await shopifyClient.searchOrdersByPhone(parsed.value);
+          if (orders.length === 1) {
+            order = orders[0];
+          }
+        } else if (parsed.type === 'email' && email) {
+          orders = await shopifyClient.searchOrdersByEmail(email);
+          if (orders.length === 1) {
+            order = orders[0];
+          }
         }
       }
+    } else {
+      return res.status(400).json({ success: false, message: 'Order identifier is required' });
     }
 
     // Generate return ID
@@ -93,6 +178,21 @@ router.post('/api/request', async (req, res) => {
       customerPhone = order.phone || order.customer?.phone || order.shipping_address?.phone;
       shopifyOrderId = order.id;
       shopifyOrderName = order.name;
+
+      // Check for duplicate return (prevent multiple returns for same order)
+      const [existingReturns] = await pool.query(`
+        SELECT return_id, status FROM returns
+        WHERE shopify_order_id = ? AND status NOT IN ('rejected', 'cancelled')
+      `, [shopifyOrderId]);
+
+      if (existingReturns.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'A return request already exists for this order.',
+          existingReturnId: existingReturns[0].return_id,
+          existingStatus: existingReturns[0].status
+        });
+      }
     }
 
     // Default return type
@@ -1076,6 +1176,214 @@ router.post('/:id/update-awb', isAuthenticated, allowReturnsAccess, async (req, 
   } catch (error) {
     console.error('Error updating AWB:', error);
     return res.status(500).json({ success: false, message: 'Failed to update AWB' });
+  }
+});
+
+/**
+ * GET /returns/api/search-orders
+ * Search Shopify orders for linking (operator only)
+ */
+router.get('/api/search-orders', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query must be at least 3 characters'
+      });
+    }
+
+    if (!shopifyClient.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Shopify not configured'
+      });
+    }
+
+    const searchTerm = q.trim();
+    let orders = [];
+
+    // Try different search methods
+    if (searchTerm.startsWith('#') || /^\d+$/.test(searchTerm)) {
+      // Search by order number
+      const order = await shopifyClient.getOrderByName(searchTerm.replace('#', ''));
+      if (order) orders = [order];
+    } else if (searchTerm.includes('@')) {
+      // Search by email
+      orders = await shopifyClient.searchOrdersByEmail(searchTerm);
+    } else {
+      // Search by phone or customer identifier
+      orders = await shopifyClient.getOrdersByCustomerIdentifier(searchTerm);
+    }
+
+    // Simplify order data
+    const simplifiedOrders = orders.slice(0, 20).map(order => ({
+      id: order.id,
+      name: order.name,
+      email: order.email,
+      phone: order.phone || order.shipping_address?.phone,
+      created_at: order.created_at,
+      total_price: order.total_price,
+      customer_name: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim(),
+      fulfillment_status: order.fulfillment_status,
+      financial_status: order.financial_status,
+      line_items_count: order.line_items?.length || 0
+    }));
+
+    return res.json({
+      success: true,
+      orders: simplifiedOrders
+    });
+
+  } catch (error) {
+    console.error('Error searching orders:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to search orders'
+    });
+  }
+});
+
+/**
+ * POST /returns/:id/link-order
+ * Link a Shopify order to a return (operator only)
+ */
+router.post('/:id/link-order', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { shopify_order_id } = req.body;
+    const user = req.session.user;
+
+    if (!shopify_order_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Shopify order ID is required'
+      });
+    }
+
+    // Get current return
+    const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [id]);
+
+    if (!returnData) {
+      return res.status(404).json({ success: false, message: 'Return not found' });
+    }
+
+    // Fetch order from Shopify
+    if (!shopifyClient.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        message: 'Shopify not configured'
+      });
+    }
+
+    const order = await shopifyClient.getOrder(shopify_order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shopify order not found'
+      });
+    }
+
+    // Check if order already has a return
+    const [existingReturns] = await pool.query(`
+      SELECT return_id FROM returns
+      WHERE shopify_order_id = ? AND id != ? AND status NOT IN ('rejected', 'cancelled')
+    `, [shopify_order_id, id]);
+
+    if (existingReturns.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `This order already has an active return (${existingReturns[0].return_id})`
+      });
+    }
+
+    // Extract order details
+    const orderType = shopifyClient.getOrderPaymentType(order);
+    const deliveryDate = shopifyClient.getDeliveryDate(order);
+    const customerName = `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim();
+    const customerPhone = order.phone || order.customer?.phone || order.shipping_address?.phone;
+
+    // Update return with order info
+    await pool.query(`
+      UPDATE returns SET
+        shopify_order_id = ?,
+        shopify_order_name = ?,
+        customer_name = COALESCE(customer_name, ?),
+        customer_phone = COALESCE(customer_phone, ?),
+        customer_email = COALESCE(customer_email, ?),
+        order_type = ?,
+        order_date = ?,
+        delivery_date = ?,
+        original_total = ?
+      WHERE id = ?
+    `, [
+      order.id,
+      order.name,
+      customerName || null,
+      customerPhone || null,
+      order.email || null,
+      orderType,
+      order.created_at,
+      deliveryDate,
+      parseFloat(order.total_price) || 0,
+      id
+    ]);
+
+    // Delete existing return items and add new ones
+    await pool.query('DELETE FROM return_items WHERE return_id = ?', [id]);
+
+    // Insert line items
+    if (order.line_items && order.line_items.length > 0) {
+      const lineItems = shopifyClient.extractLineItems(order);
+      for (const item of lineItems) {
+        await pool.query(`
+          INSERT INTO return_items (
+            return_id, sku, product_name, variant_title, size,
+            ordered_quantity, return_quantity, unit_price, tax_amount,
+            discount_amount, shopify_line_item_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          id,
+          item.sku,
+          item.product_name,
+          item.variant_title,
+          item.variant_title,
+          item.quantity,
+          item.quantity,
+          item.unit_price,
+          item.tax_amount,
+          item.discount_amount,
+          item.line_item_id
+        ]);
+      }
+    }
+
+    // Log audit
+    await pool.query(`
+      INSERT INTO return_audit_log (return_id, action, actor_type, actor_id, actor_name, details)
+      VALUES (?, 'order_linked', 'operator', ?, ?, ?)
+    `, [id, user.id, user.username, JSON.stringify({
+      shopify_order_id: order.id,
+      shopify_order_name: order.name
+    })]);
+
+    return res.json({
+      success: true,
+      message: `Order ${order.name} linked successfully`,
+      order: {
+        id: order.id,
+        name: order.name,
+        customer_name: customerName,
+        order_type: orderType,
+        total: order.total_price
+      }
+    });
+
+  } catch (error) {
+    console.error('Error linking order:', error);
+    return res.status(500).json({ success: false, message: 'Failed to link order' });
   }
 });
 

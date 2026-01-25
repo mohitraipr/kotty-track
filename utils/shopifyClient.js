@@ -133,6 +133,120 @@ async function searchOrdersByEmail(email) {
 }
 
 /**
+ * Get orders by customer identifier (email or phone)
+ * Uses Shopify customer search for better accuracy
+ */
+async function getOrdersByCustomerIdentifier(identifier) {
+  const api = getApi();
+  if (!api) throw new Error('Shopify API not configured');
+
+  try {
+    const cleanIdentifier = identifier.trim();
+
+    // If it looks like an email, search orders directly by email (most efficient)
+    if (cleanIdentifier.includes('@')) {
+      const { data } = await api.get('/orders.json', {
+        params: {
+          email: cleanIdentifier.toLowerCase(),
+          status: 'any',
+          limit: 50
+        }
+      });
+      return data.orders || [];
+    }
+
+    // For phone, first search for customer
+    const cleanPhone = cleanIdentifier.replace(/[\s\-\+]/g, '').slice(-10);
+
+    // Search customer by phone
+    const { data: customerData } = await api.get('/customers/search.json', {
+      params: { query: cleanPhone }
+    });
+
+    if (!customerData.customers || customerData.customers.length === 0) {
+      // Fallback: try direct order search
+      return await searchOrdersByPhone(cleanPhone);
+    }
+
+    // Get orders for found customer
+    const customerId = customerData.customers[0].id;
+    const { data: orderData } = await api.get('/orders.json', {
+      params: {
+        customer_id: customerId,
+        status: 'any',
+        limit: 50
+      }
+    });
+
+    return orderData.orders || [];
+  } catch (error) {
+    console.error('Error in getOrdersByCustomerIdentifier:', error.message);
+    throw new Error(`Failed to fetch orders: ${error.message}`);
+  }
+}
+
+/**
+ * Filter orders eligible for return
+ * @param {Array} orders - List of orders from Shopify
+ * @param {number} windowDays - Return window in days (default 10)
+ */
+function filterEligibleOrders(orders, windowDays = 10) {
+  if (!orders || orders.length === 0) return [];
+
+  const now = Date.now();
+
+  return orders.map(order => {
+    // Check fulfillment status
+    const isFulfilled = order.fulfillment_status === 'fulfilled';
+
+    // Calculate days since delivery
+    const deliveryDate = getDeliveryDate(order);
+    let daysSinceDelivery = null;
+    let isWithinWindow = false;
+
+    if (deliveryDate) {
+      daysSinceDelivery = Math.floor((now - new Date(deliveryDate)) / (1000 * 60 * 60 * 24));
+      isWithinWindow = daysSinceDelivery <= windowDays;
+    } else if (isFulfilled) {
+      // If no delivery date but fulfilled, use fulfillment date
+      const fulfillment = order.fulfillments?.[0];
+      if (fulfillment) {
+        const fulfillmentDate = new Date(fulfillment.created_at);
+        daysSinceDelivery = Math.floor((now - fulfillmentDate) / (1000 * 60 * 60 * 24));
+        isWithinWindow = daysSinceDelivery <= windowDays;
+      }
+    }
+
+    // Determine eligibility
+    const eligible = isFulfilled && isWithinWindow;
+
+    // Reason for ineligibility
+    let ineligibleReason = null;
+    if (!isFulfilled) {
+      ineligibleReason = 'Order not yet delivered';
+    } else if (!isWithinWindow) {
+      ineligibleReason = `Return window expired (${daysSinceDelivery} days since delivery)`;
+    }
+
+    return {
+      ...order,
+      returnEligibility: {
+        eligible,
+        reason: ineligibleReason,
+        daysSinceDelivery,
+        windowDays
+      }
+    };
+  }).sort((a, b) => {
+    // Sort eligible orders first, then by date
+    if (a.returnEligibility.eligible !== b.returnEligibility.eligible) {
+      return a.returnEligibility.eligible ? -1 : 1;
+    }
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+}
+
+/**
  * Get fulfillments for an order
  */
 async function getOrderFulfillments(orderId) {
@@ -404,6 +518,8 @@ module.exports = {
   getOrderByName,
   searchOrdersByPhone,
   searchOrdersByEmail,
+  getOrdersByCustomerIdentifier,
+  filterEligibleOrders,
   getOrderFulfillments,
 
   // Refund operations

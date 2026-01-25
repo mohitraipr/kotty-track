@@ -299,11 +299,24 @@
         <div class="card">
           <div class="card-header">
             <span><i class="bi bi-bag me-2"></i>Order Information</span>
-            <span class="badge-status badge-<%= returnData.order_type %>">
-              <%= (returnData.order_type || '').toUpperCase() %>
-            </span>
+            <div>
+              <% if (!returnData.shopify_order_id) { %>
+              <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#linkOrderModal">
+                <i class="bi bi-link-45deg me-1"></i> Link Order
+              </button>
+              <% } %>
+              <span class="badge-status badge-<%= returnData.order_type %>">
+                <%= (returnData.order_type || '').toUpperCase() %>
+              </span>
+            </div>
           </div>
           <div class="card-body">
+            <% if (!returnData.shopify_order_id) { %>
+            <div class="alert alert-warning mb-3">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              No Shopify order linked. Click "Link Order" to connect this return to a Shopify order.
+            </div>
+            <% } %>
             <div class="info-grid">
               <div class="info-item">
                 <label>Shopify Order</label>
@@ -708,6 +721,123 @@
         alert(data.message || 'Failed to process refund');
       }
     });
+
+    // Link Order Modal Search
+    let searchTimeout;
+    const orderSearchInput = document.getElementById('orderSearchInput');
+    const orderSearchResults = document.getElementById('orderSearchResults');
+
+    if (orderSearchInput) {
+      orderSearchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+
+        if (query.length < 3) {
+          orderSearchResults.innerHTML = '<p class="text-muted text-center">Enter at least 3 characters to search</p>';
+          return;
+        }
+
+        orderSearchResults.innerHTML = '<p class="text-center"><span class="spinner-border spinner-border-sm"></span> Searching...</p>';
+
+        searchTimeout = setTimeout(async () => {
+          try {
+            const res = await fetch(`/returns/api/search-orders?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+
+            if (data.success && data.orders.length > 0) {
+              orderSearchResults.innerHTML = data.orders.map(order => `
+                <div class="order-result" onclick="linkOrder('${order.id}')">
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <strong>Order ${order.name}</strong>
+                      <div class="small text-muted">${order.customer_name || order.email || ''}</div>
+                      <div class="small text-muted">${order.phone || ''}</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-bold">${formatPrice(order.total_price)}</div>
+                      <div class="small text-muted">${order.line_items_count} items</div>
+                    </div>
+                  </div>
+                </div>
+              `).join('');
+            } else {
+              orderSearchResults.innerHTML = '<p class="text-muted text-center">No orders found</p>';
+            }
+          } catch (error) {
+            orderSearchResults.innerHTML = '<p class="text-danger text-center">Failed to search orders</p>';
+          }
+        }, 300);
+      });
+    }
+
+    function formatPrice(price) {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0
+      }).format(price || 0);
+    }
+
+    async function linkOrder(orderId) {
+      if (!confirm('Link this order to the return?')) return;
+
+      try {
+        const res = await fetch(`/returns/${returnId}/link-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shopify_order_id: orderId })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to link order');
+        }
+      } catch (error) {
+        alert('Failed to link order');
+      }
+    }
   </script>
+
+  <!-- Link Order Modal -->
+  <div class="modal fade" id="linkOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Link Shopify Order</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">Search for a Shopify order by order number, email, or phone number</p>
+
+          <div class="mb-4">
+            <input type="text" class="form-control form-control-lg" id="orderSearchInput"
+                   placeholder="Enter order #, email, or phone number">
+          </div>
+
+          <div id="orderSearchResults" style="max-height: 400px; overflow-y: auto;">
+            <p class="text-muted text-center">Enter at least 3 characters to search</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .order-result {
+      padding: 12px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .order-result:hover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+  </style>
 </body>
 </html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track Your Return - Kotty</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .tracking-container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .brand-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .brand-header a {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1e293b;
+      text-decoration: none;
+    }
+
+    .card {
+      background: white;
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .card-header-custom {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      padding: 24px;
+    }
+
+    .return-id {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+
+    .order-info {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    .status-pending_review { background: rgba(255,255,255,0.2); }
+    .status-approved { background: rgba(255,255,255,0.2); }
+    .status-pickup_scheduled { background: rgba(255,255,255,0.2); }
+    .status-picked_up { background: rgba(255,255,255,0.2); }
+    .status-in_transit { background: rgba(255,255,255,0.2); }
+    .status-received { background: rgba(255,255,255,0.2); }
+    .status-refund_pending { background: rgba(255,255,255,0.2); }
+    .status-refunded { background: #22c55e; }
+    .status-rejected { background: #ef4444; }
+
+    .card-body {
+      padding: 24px;
+    }
+
+    /* Progress Tracker */
+    .progress-tracker {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .progress-tracker::before {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 24px;
+      right: 24px;
+      height: 3px;
+      background: #e2e8f0;
+      z-index: 1;
+    }
+
+    .progress-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+      flex: 1;
+    }
+
+    .step-circle {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      transition: all 0.3s;
+    }
+
+    .step-circle.active {
+      background: #2563eb;
+      color: white;
+    }
+
+    .step-circle.completed {
+      background: #22c55e;
+      color: white;
+    }
+
+    .step-label {
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+      max-width: 70px;
+    }
+
+    .step-label.active {
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    .step-label.completed {
+      color: #22c55e;
+    }
+
+    /* Timeline */
+    .timeline {
+      margin-bottom: 24px;
+    }
+
+    .timeline-item {
+      display: flex;
+      gap: 16px;
+      padding-bottom: 20px;
+      position: relative;
+    }
+
+    .timeline-item:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 32px;
+      bottom: 0;
+      width: 2px;
+      background: #e2e8f0;
+    }
+
+    .timeline-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .timeline-icon.completed {
+      background: #dcfce7;
+      color: #22c55e;
+    }
+
+    .timeline-icon.active {
+      background: #dbeafe;
+      color: #2563eb;
+    }
+
+    .timeline-icon.pending {
+      background: #f1f5f9;
+      color: #94a3b8;
+    }
+
+    .timeline-content h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      margin: 0 0 4px 0;
+    }
+
+    .timeline-content p {
+      font-size: 13px;
+      color: #64748b;
+      margin: 0;
+    }
+
+    .timeline-content .date {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* AWB Tracking */
+    .awb-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .awb-label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .awb-number {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e293b;
+      font-family: monospace;
+    }
+
+    .track-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #2563eb;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 12px;
+    }
+
+    .track-btn:hover {
+      background: #1d4ed8;
+      color: white;
+    }
+
+    /* Refund Info */
+    .refund-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .refund-label {
+      font-size: 13px;
+      color: #166534;
+      margin-bottom: 4px;
+    }
+
+    .refund-amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #166534;
+    }
+
+    .refund-method {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Help Box */
+    .help-box {
+      text-align: center;
+      padding: 20px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+
+    .help-box p {
+      margin: 0;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .help-box a {
+      color: #2563eb;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="tracking-container">
+    <div class="brand-header">
+      <a href="https://kotty.in">KOTTY</a>
+    </div>
+
+    <div class="card">
+      <div class="card-header-custom">
+        <div class="return-id">Return ID: <%= returnData.return_id %></div>
+        <div class="order-info">
+          Order <%= returnData.shopify_order_name || '#' + returnData.id %>
+          <% if (returnData.original_total) { %>
+          | <%= formatCurrency(returnData.original_total) %>
+          <% } %>
+        </div>
+        <span class="status-badge status-<%= returnData.status %>">
+          <%= statusConfig.label || returnData.status.replace(/_/g, ' ').toUpperCase() %>
+        </span>
+      </div>
+
+      <div class="card-body">
+        <!-- Progress Tracker -->
+        <%
+          const stages = [
+            { key: 'submitted', label: 'Submitted', statuses: ['pending_review'] },
+            { key: 'approved', label: 'Approved', statuses: ['approved', 'pickup_scheduled'] },
+            { key: 'picked', label: 'Picked Up', statuses: ['picked_up', 'in_transit'] },
+            { key: 'received', label: 'Received', statuses: ['received', 'refund_pending', 'refund_processing'] },
+            { key: 'refunded', label: 'Refunded', statuses: ['refunded'] }
+          ];
+
+          const statusOrder = ['pending_review', 'approved', 'pickup_scheduled', 'picked_up', 'in_transit', 'received', 'refund_pending', 'refund_processing', 'refunded'];
+          const currentIndex = statusOrder.indexOf(returnData.status);
+
+          function getStageState(stage) {
+            const stageStatuses = stage.statuses;
+            for (let s of stageStatuses) {
+              if (returnData.status === s) return 'active';
+              if (statusOrder.indexOf(s) < currentIndex) return 'completed';
+            }
+            return 'pending';
+          }
+        %>
+
+        <div class="progress-tracker">
+          <% stages.forEach((stage, idx) => {
+            const state = getStageState(stage);
+          %>
+          <div class="progress-step">
+            <div class="step-circle <%= state %>">
+              <% if (state === 'completed') { %>
+                <i class="bi bi-check"></i>
+              <% } else { %>
+                <%= idx + 1 %>
+              <% } %>
+            </div>
+            <div class="step-label <%= state %>"><%= stage.label %></div>
+          </div>
+          <% }) %>
+        </div>
+
+        <!-- Timeline -->
+        <div class="timeline">
+          <% if (returnData.refunded_at) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon completed"><i class="bi bi-check-lg"></i></div>
+            <div class="timeline-content">
+              <h4>Refund Processed</h4>
+              <p>Your refund has been processed successfully</p>
+              <span class="date"><%= formatDate(returnData.refunded_at, 'long') %></span>
+            </div>
+          </div>
+          <% } else if (['refund_pending', 'refund_processing'].includes(returnData.status)) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon active"><i class="bi bi-hourglass-split"></i></div>
+            <div class="timeline-content">
+              <h4>Refund Processing</h4>
+              <p>Your refund is being processed</p>
+            </div>
+          </div>
+          <% } %>
+
+          <% if (returnData.received_at) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon completed"><i class="bi bi-check-lg"></i></div>
+            <div class="timeline-content">
+              <h4>Package Received</h4>
+              <p>We've received your return at our warehouse</p>
+              <span class="date"><%= formatDate(returnData.received_at, 'long') %></span>
+            </div>
+          </div>
+          <% } %>
+
+          <% if (returnData.picked_at) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon completed"><i class="bi bi-check-lg"></i></div>
+            <div class="timeline-content">
+              <h4>Picked Up</h4>
+              <p>
+                <% if (returnData.courier_name) { %>
+                Picked up by <%= returnData.courier_name %>
+                <% } else { %>
+                Package picked up by courier
+                <% } %>
+              </p>
+              <span class="date"><%= formatDate(returnData.picked_at, 'long') %></span>
+            </div>
+          </div>
+          <% } else if (['pickup_scheduled'].includes(returnData.status)) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon active"><i class="bi bi-truck"></i></div>
+            <div class="timeline-content">
+              <h4>Pickup Scheduled</h4>
+              <p>Courier will pick up your package soon</p>
+            </div>
+          </div>
+          <% } %>
+
+          <% if (returnData.approved_at) { %>
+          <div class="timeline-item">
+            <div class="timeline-icon completed"><i class="bi bi-check-lg"></i></div>
+            <div class="timeline-content">
+              <h4>Return Approved</h4>
+              <p>Your return request has been approved</p>
+              <span class="date"><%= formatDate(returnData.approved_at, 'long') %></span>
+            </div>
+          </div>
+          <% } else if (returnData.status === 'pending_review') { %>
+          <div class="timeline-item">
+            <div class="timeline-icon active"><i class="bi bi-hourglass-split"></i></div>
+            <div class="timeline-content">
+              <h4>Under Review</h4>
+              <p>We're reviewing your return request</p>
+            </div>
+          </div>
+          <% } %>
+
+          <div class="timeline-item">
+            <div class="timeline-icon completed"><i class="bi bi-check-lg"></i></div>
+            <div class="timeline-content">
+              <h4>Return Requested</h4>
+              <p>You submitted a return request</p>
+              <span class="date"><%= formatDate(returnData.requested_at, 'long') %></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AWB Tracking -->
+        <% if (returnData.awb_number) { %>
+        <div class="awb-box">
+          <div class="awb-label">Tracking Number</div>
+          <div class="awb-number"><%= returnData.awb_number %></div>
+          <% if (returnData.courier_name) { %>
+          <div class="awb-label mt-2">Courier: <%= returnData.courier_name %></div>
+          <% } %>
+          <%
+            let trackingUrl = returnData.courier_tracking_url;
+            if (!trackingUrl && returnData.courier_name) {
+              const courier = returnData.courier_name.toLowerCase();
+              if (courier.includes('delhivery')) {
+                trackingUrl = `https://www.delhivery.com/track/package/${returnData.awb_number}`;
+              } else if (courier.includes('bluedart')) {
+                trackingUrl = `https://www.bluedart.com/tracking/${returnData.awb_number}`;
+              } else if (courier.includes('xpressbees')) {
+                trackingUrl = `https://www.xpressbees.com/track/${returnData.awb_number}`;
+              } else if (courier.includes('dtdc')) {
+                trackingUrl = `https://www.dtdc.in/tracking/${returnData.awb_number}`;
+              }
+            }
+          %>
+          <% if (trackingUrl) { %>
+          <a href="<%= trackingUrl %>" target="_blank" class="track-btn">
+            <i class="bi bi-box-arrow-up-right"></i> Track on <%= returnData.courier_name || 'Courier' %>
+          </a>
+          <% } %>
+        </div>
+        <% } %>
+
+        <!-- Refund Info -->
+        <% if (returnData.refund_amount) { %>
+        <div class="refund-box">
+          <div class="refund-label">Refund Amount</div>
+          <div class="refund-amount"><%= formatCurrency(returnData.refund_amount) %></div>
+          <div class="refund-method">
+            <% if (returnData.order_type === 'prepaid') { %>
+            To be refunded to your original payment method
+            <% } else { %>
+            To be refunded via UPI/Bank Transfer
+            <% } %>
+          </div>
+        </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Rejected/Cancelled Status -->
+    <% if (['rejected', 'cancelled'].includes(returnData.status)) { %>
+    <div class="card">
+      <div class="card-body">
+        <div class="text-center">
+          <div style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <i class="bi bi-x-lg" style="font-size: 24px; color: #ef4444;"></i>
+          </div>
+          <h4 style="margin-bottom: 8px;">Return <%= returnData.status === 'rejected' ? 'Rejected' : 'Cancelled' %></h4>
+          <p style="color: #64748b; margin: 0;">
+            <% if (returnData.status === 'rejected') { %>
+            Unfortunately, your return request was not approved.
+            Please contact support for more details.
+            <% } else { %>
+            This return request has been cancelled.
+            <% } %>
+          </p>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Help Box -->
+    <div class="help-box">
+      <p>Need help with your return?</p>
+      <p><a href="mailto:support@kotty.in">support@kotty.in</a></p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,613 @@
+<div id="kotty-return-form">
+  <style>
+    #kotty-return-form {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    #kotty-return-form * {
+      box-sizing: border-box;
+    }
+
+    .krf-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 32px;
+    }
+
+    .krf-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin: 0 0 8px 0;
+      text-align: center;
+    }
+
+    .krf-subtitle {
+      color: #666;
+      text-align: center;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .krf-steps {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    .krf-step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #e0e0e0;
+    }
+
+    .krf-step-dot.active {
+      background: #000;
+      width: 28px;
+      border-radius: 5px;
+    }
+
+    .krf-step-dot.done {
+      background: #22c55e;
+    }
+
+    .krf-step {
+      display: none;
+    }
+
+    .krf-step.active {
+      display: block;
+    }
+
+    .krf-label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .krf-input, .krf-select, .krf-textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .krf-input:focus, .krf-select:focus, .krf-textarea:focus {
+      outline: none;
+      border-color: #000;
+    }
+
+    .krf-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .krf-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .krf-btn-primary {
+      background: #000;
+      color: #fff;
+    }
+
+    .krf-btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+      margin-top: 8px;
+    }
+
+    .krf-error {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .krf-order {
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .krf-order:hover {
+      border-color: #999;
+    }
+
+    .krf-order.selected {
+      border-color: #000;
+      background: #f9f9f9;
+    }
+
+    .krf-order.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .krf-order-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .krf-order-name {
+      font-weight: 600;
+    }
+
+    .krf-order-badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    .krf-badge-eligible {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .krf-badge-expired {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .krf-order-details {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .krf-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .krf-item-check {
+      width: 20px;
+      height: 20px;
+      accent-color: #000;
+    }
+
+    .krf-item-info {
+      flex: 1;
+    }
+
+    .krf-item-name {
+      font-weight: 500;
+    }
+
+    .krf-item-variant {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .krf-item-price {
+      font-weight: 600;
+    }
+
+    .krf-success {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .krf-success-icon {
+      width: 80px;
+      height: 80px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 36px;
+    }
+
+    .krf-success-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .krf-success-id {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    .krf-success-id label {
+      font-size: 12px;
+      color: #666;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .krf-success-id span {
+      font-size: 18px;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .krf-spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: krf-spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes krf-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .krf-info-box {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      color: #0369a1;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .krf-no-orders {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+  </style>
+
+  <div class="krf-card">
+    <!-- Step Indicators -->
+    <div class="krf-steps">
+      <div class="krf-step-dot active" id="dot1"></div>
+      <div class="krf-step-dot" id="dot2"></div>
+      <div class="krf-step-dot" id="dot3"></div>
+      <div class="krf-step-dot" id="dot4"></div>
+    </div>
+
+    <!-- Step 1: Find Order -->
+    <div class="krf-step active" id="step1">
+      <h2 class="krf-title">Request a Return</h2>
+      <p class="krf-subtitle">Enter your email or phone to find your orders</p>
+
+      <div class="krf-error" id="step1Error"></div>
+
+      <label class="krf-label">Email or Phone Number</label>
+      <input type="text" class="krf-input" id="identifier" placeholder="e.g., your@email.com or 9876543210">
+
+      <button class="krf-btn krf-btn-primary" id="findBtn" onclick="findOrders()">
+        Find My Orders
+      </button>
+    </div>
+
+    <!-- Step 2: Select Order -->
+    <div class="krf-step" id="step2">
+      <h2 class="krf-title">Select Order</h2>
+      <p class="krf-subtitle">Choose the order you want to return</p>
+
+      <div id="ordersContainer"></div>
+
+      <button class="krf-btn krf-btn-primary" id="selectBtn" disabled onclick="goToStep(3)">
+        Continue
+      </button>
+      <button class="krf-btn krf-btn-secondary" onclick="goToStep(1)">
+        Back
+      </button>
+    </div>
+
+    <!-- Step 3: Select Items & Reason -->
+    <div class="krf-step" id="step3">
+      <h2 class="krf-title">Return Details</h2>
+      <p class="krf-subtitle">Select items and tell us why</p>
+
+      <div id="itemsContainer"></div>
+
+      <label class="krf-label">Reason for Return</label>
+      <select class="krf-select" id="returnReason">
+        <option value="">Select a reason</option>
+        <option value="size_issue">Size doesn't fit</option>
+        <option value="quality_issue">Quality issue / Defect</option>
+        <option value="wrong_product">Received wrong product</option>
+        <option value="not_as_described">Product not as described</option>
+        <option value="damaged_in_transit">Damaged during delivery</option>
+        <option value="changed_mind">Changed my mind</option>
+        <option value="other">Other</option>
+      </select>
+
+      <label class="krf-label">Additional Details (Optional)</label>
+      <textarea class="krf-textarea" id="notes" rows="3" placeholder="Any additional details..."></textarea>
+
+      <div class="krf-info-box">
+        Refunds are processed within 5-7 business days after we receive your items.
+      </div>
+
+      <div class="krf-error" id="step3Error"></div>
+
+      <button class="krf-btn krf-btn-primary" id="submitBtn" onclick="submitReturn()">
+        Submit Return Request
+      </button>
+      <button class="krf-btn krf-btn-secondary" onclick="goToStep(2)">
+        Back
+      </button>
+    </div>
+
+    <!-- Step 4: Success -->
+    <div class="krf-step" id="step4">
+      <div class="krf-success">
+        <div class="krf-success-icon">&#10003;</div>
+        <h2 class="krf-success-title">Return Request Submitted</h2>
+        <p>We'll review your request and contact you within 24-48 hours.</p>
+
+        <div class="krf-success-id">
+          <label>Your Return ID</label>
+          <span id="successReturnId"></span>
+        </div>
+
+        <p style="font-size: 14px; color: #666;">
+          Track your return at:<br>
+          <a id="trackingLink" href="#" target="_blank" style="color: #000; font-weight: 500;"></a>
+        </p>
+
+        <button class="krf-btn krf-btn-primary" onclick="window.location.href='/'">
+          Continue Shopping
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
+    Need help? <a href="mailto:support@kotty.in" style="color: #000;">support@kotty.in</a>
+  </p>
+</div>
+
+<script>
+(function() {
+  // ============================================
+  // CONFIGURATION - UPDATE THIS URL
+  // ============================================
+  const API_BASE_URL = 'https://erpkotty.in';
+  // ============================================
+
+  let orders = [];
+  let selectedOrder = null;
+  let selectedItems = [];
+
+  // Make functions globally accessible
+  window.findOrders = findOrders;
+  window.selectOrder = selectOrder;
+  window.goToStep = goToStep;
+  window.submitReturn = submitReturn;
+  window.toggleItem = toggleItem;
+
+  function goToStep(step) {
+    document.querySelectorAll('.krf-step').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.krf-step-dot').forEach((el, i) => {
+      el.classList.remove('active', 'done');
+      if (i + 1 < step) el.classList.add('done');
+      if (i + 1 === step) el.classList.add('active');
+    });
+    document.getElementById('step' + step).classList.add('active');
+  }
+
+  async function findOrders() {
+    const identifier = document.getElementById('identifier').value.trim();
+    const findBtn = document.getElementById('findBtn');
+    const errorDiv = document.getElementById('step1Error');
+
+    if (!identifier || identifier.length < 5) {
+      errorDiv.textContent = 'Please enter a valid email or phone number';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    findBtn.disabled = true;
+    findBtn.innerHTML = '<span class="krf-spinner"></span>Searching...';
+    errorDiv.style.display = 'none';
+
+    try {
+      const res = await fetch(API_BASE_URL + '/returns/api/lookup-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier })
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.orders && data.orders.length > 0) {
+        orders = data.orders;
+        renderOrders();
+        goToStep(2);
+      } else {
+        errorDiv.textContent = data.message || 'No orders found. Please check and try again.';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      errorDiv.textContent = 'Something went wrong. Please try again.';
+      errorDiv.style.display = 'block';
+    } finally {
+      findBtn.disabled = false;
+      findBtn.innerHTML = 'Find My Orders';
+    }
+  }
+
+  function renderOrders() {
+    const container = document.getElementById('ordersContainer');
+
+    if (orders.length === 0) {
+      container.innerHTML = '<div class="krf-no-orders">No orders found</div>';
+      return;
+    }
+
+    container.innerHTML = orders.map((order, idx) => {
+      const elig = order.returnEligibility || { eligible: true };
+      const date = new Date(order.created_at).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric'
+      });
+      const total = formatPrice(order.total_price);
+      const itemCount = order.line_items?.length || 0;
+
+      return `
+        <div class="krf-order ${elig.eligible ? '' : 'disabled'}"
+             data-idx="${idx}"
+             onclick="${elig.eligible ? 'selectOrder(' + idx + ')' : ''}">
+          <div class="krf-order-header">
+            <span class="krf-order-name">Order ${order.name}</span>
+            <span class="krf-order-badge ${elig.eligible ? 'krf-badge-eligible' : 'krf-badge-expired'}">
+              ${elig.eligible ? 'Eligible' : elig.reason || 'Not eligible'}
+            </span>
+          </div>
+          <div class="krf-order-details">
+            ${date} | ${itemCount} item${itemCount !== 1 ? 's' : ''} | ${total}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function selectOrder(idx) {
+    selectedOrder = orders[idx];
+    document.querySelectorAll('.krf-order').forEach(el => el.classList.remove('selected'));
+    document.querySelector('.krf-order[data-idx="' + idx + '"]').classList.add('selected');
+    document.getElementById('selectBtn').disabled = false;
+    renderItems();
+  }
+
+  function renderItems() {
+    const container = document.getElementById('itemsContainer');
+
+    if (!selectedOrder || !selectedOrder.line_items) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = selectedOrder.line_items.map((item, idx) => {
+      return `
+        <div class="krf-item">
+          <input type="checkbox" class="krf-item-check"
+                 id="item${idx}" checked onchange="toggleItem(${idx})">
+          <div class="krf-item-info">
+            <div class="krf-item-name">${item.name || item.title}</div>
+            <div class="krf-item-variant">${item.variant_title || ''}</div>
+          </div>
+          <div class="krf-item-price">${formatPrice(item.price)}</div>
+        </div>
+      `;
+    }).join('');
+
+    // Select all items by default
+    selectedItems = selectedOrder.line_items.map(item => item.id);
+  }
+
+  function toggleItem(idx) {
+    const itemId = selectedOrder.line_items[idx].id;
+    const checkbox = document.getElementById('item' + idx);
+
+    if (checkbox.checked) {
+      if (!selectedItems.includes(itemId)) selectedItems.push(itemId);
+    } else {
+      selectedItems = selectedItems.filter(id => id !== itemId);
+    }
+  }
+
+  async function submitReturn() {
+    const submitBtn = document.getElementById('submitBtn');
+    const errorDiv = document.getElementById('step3Error');
+    const reason = document.getElementById('returnReason').value;
+    const notes = document.getElementById('notes').value;
+
+    if (!reason) {
+      errorDiv.textContent = 'Please select a reason for return';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    if (selectedItems.length === 0) {
+      errorDiv.textContent = 'Please select at least one item to return';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="krf-spinner"></span>Submitting...';
+    errorDiv.style.display = 'none';
+
+    try {
+      const res = await fetch(API_BASE_URL + '/returns/api/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shopifyOrderId: selectedOrder.id,
+          orderName: selectedOrder.name,
+          email: selectedOrder.email,
+          returnReason: reason,
+          notes: notes,
+          selectedItems: selectedItems,
+          source: 'shopify_page'
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        document.getElementById('successReturnId').textContent = data.returnId;
+        const trackUrl = API_BASE_URL + '/returns/track/' + data.returnId;
+        document.getElementById('trackingLink').href = trackUrl;
+        document.getElementById('trackingLink').textContent = trackUrl;
+        goToStep(4);
+      } else {
+        if (data.existingReturnId) {
+          errorDiv.innerHTML = 'A return already exists for this order.<br>Return ID: <strong>' +
+            data.existingReturnId + '</strong>';
+        } else {
+          errorDiv.textContent = data.message || 'Failed to submit. Please try again.';
+        }
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      errorDiv.textContent = 'Something went wrong. Please try again.';
+      errorDiv.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Submit Return Request';
+    }
+  }
+
+  function formatPrice(price) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
+    }).format(price || 0);
+  }
+})();
+</script>
