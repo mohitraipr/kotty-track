@@ -201,6 +201,31 @@
       color: #991b1b;
     }
 
+    .status-can-issue {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-in-transit {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .btn-raise-issue {
+      background: #f59e0b;
+      border: none;
+      color: white;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+
+    .btn-raise-issue:hover {
+      background: #d97706;
+      color: white;
+    }
+
     .item-card {
       display: flex;
       align-items: center;
@@ -372,8 +397,8 @@
 
         <!-- Step 3: Select Items & Reason -->
         <div class="step-content" id="step3">
-          <h2 class="step-title">Select Items to Return</h2>
-          <p class="step-desc">Choose which items you want to return and tell us why</p>
+          <h2 class="step-title" id="step3Title">Select Items to Return</h2>
+          <p class="step-desc" id="step3Desc">Choose which items you want to return and tell us why</p>
 
           <div id="itemsContainer" class="mb-4"></div>
 
@@ -419,18 +444,18 @@
             <div class="success-icon">
               <i class="bi bi-check-lg"></i>
             </div>
-            <h2 class="step-title">Return Request Submitted</h2>
-            <p class="step-desc mb-4">
+            <h2 class="step-title" id="successTitle">Return Request Submitted</h2>
+            <p class="step-desc mb-4" id="successDesc">
               Your return request has been submitted successfully.
               We'll review it and get back to you within 24-48 hours.
             </p>
 
             <div class="alert-info-custom text-start mb-4">
-              <strong>Return ID:</strong> <span id="successReturnId"></span><br>
+              <strong id="successIdLabel">Return ID:</strong> <span id="successReturnId"></span><br>
               <strong>Order:</strong> <span id="successOrderName"></span>
             </div>
 
-            <p class="text-muted small mb-4">
+            <p class="text-muted small mb-4" id="successTrackInfo">
               You can track your return status using the Return ID.
             </p>
 
@@ -465,6 +490,23 @@
       });
       document.getElementById('step' + step).classList.add('active');
       currentStep = step;
+
+      // Update step 3 titles based on mode
+      if (step === 3) {
+        const title = document.getElementById('step3Title');
+        const desc = document.getElementById('step3Desc');
+        const submitBtn = document.getElementById('submitBtn');
+
+        if (isRaisingIssue) {
+          title.textContent = 'Raise an Issue';
+          desc.textContent = 'Tell us about the issue with your order';
+          submitBtn.textContent = 'Submit Issue';
+        } else {
+          title.textContent = 'Select Items to Return';
+          desc.textContent = 'Choose which items you want to return and tell us why';
+          submitBtn.textContent = 'Submit Return Request';
+        }
+      }
     }
 
     // Step 1: Lookup orders
@@ -520,8 +562,10 @@
       }
 
       container.innerHTML = orders.map((order, index) => {
-        const eligibility = order.returnEligibility || { eligible: true };
+        const eligibility = order.returnEligibility || { eligible: true, canRaiseIssue: true };
         const isEligible = eligibility.eligible;
+        const canRaiseIssue = eligibility.canRaiseIssue && !isEligible;
+        const status = eligibility.status || 'eligible';
         const orderDate = new Date(order.created_at).toLocaleDateString('en-IN', {
           day: 'numeric', month: 'short', year: 'numeric'
         });
@@ -530,33 +574,76 @@
           style: 'currency', currency: 'INR', minimumFractionDigits: 0
         });
 
+        // Determine status class and text
+        let statusClass = 'status-eligible';
+        let statusText = 'Eligible for return';
+
+        if (!isEligible) {
+          if (status === 'window_expired') {
+            statusClass = 'status-can-issue';
+            statusText = 'Return window expired';
+          } else if (status === 'failed_delivery') {
+            statusClass = 'status-ineligible';
+            statusText = 'Delivery failed';
+          } else if (status === 'in_transit') {
+            statusClass = 'status-in-transit';
+            statusText = 'In transit';
+          } else if (status === 'not_shipped') {
+            statusClass = 'status-in-transit';
+            statusText = 'Not yet shipped';
+          } else {
+            statusClass = 'status-ineligible';
+            statusText = eligibility.reason || 'Not eligible';
+          }
+        }
+
+        // Card click behavior
+        const cardClickable = isEligible || canRaiseIssue;
+        const cardClass = isEligible ? '' : (canRaiseIssue ? '' : 'ineligible');
+
         return `
-          <div class="order-card ${isEligible ? '' : 'ineligible'}"
+          <div class="order-card ${cardClass}"
                data-index="${index}"
-               onclick="${isEligible ? `selectOrder(${index})` : ''}">
+               onclick="${cardClickable ? `selectOrder(${index}, ${!isEligible})` : ''}">
             <div class="order-header">
               <div>
                 <div class="order-number">Order ${order.name}</div>
                 <div class="order-date">${orderDate}</div>
               </div>
-              <span class="order-status ${isEligible ? 'status-eligible' : 'status-ineligible'}">
-                ${isEligible ? 'Eligible for return' : eligibility.reason || 'Not eligible'}
+              <span class="order-status ${statusClass}">
+                ${statusText}
               </span>
             </div>
             <div class="order-summary">
               ${itemCount} item${itemCount !== 1 ? 's' : ''} | ${total}
+              ${order.customer_name ? ` | ${order.customer_name}` : ''}
             </div>
+            ${canRaiseIssue ? `
+              <div class="mt-2">
+                <small class="text-muted">${eligibility.reason}</small>
+              </div>
+            ` : ''}
           </div>
         `;
       }).join('');
     }
 
+    // Track if this is an issue (not return)
+    let isRaisingIssue = false;
+
     // Select order
-    function selectOrder(index) {
+    function selectOrder(index, isIssue = false) {
       selectedOrder = orders[index];
+      isRaisingIssue = isIssue;
       document.querySelectorAll('.order-card').forEach(el => el.classList.remove('selected'));
       document.querySelector(`.order-card[data-index="${index}"]`).classList.add('selected');
       document.getElementById('selectOrderBtn').disabled = false;
+
+      // Update button text based on mode
+      const selectBtn = document.getElementById('selectOrderBtn');
+      selectBtn.innerHTML = isIssue
+        ? 'Raise Issue <i class="bi bi-arrow-right ms-1"></i>'
+        : 'Continue <i class="bi bi-arrow-right ms-1"></i>';
 
       // Render items
       renderItems();
@@ -637,10 +724,13 @@
             shopifyOrderId: selectedOrder.id,
             orderName: selectedOrder.name,
             email: selectedOrder.email,
+            customerName: selectedOrder.customer_name,
+            customerPhone: selectedOrder.customer_phone,
             returnReason: reason,
             notes: notes,
             selectedItems: selectedItems,
-            source: 'customer_form'
+            source: 'customer_form',
+            isIssue: isRaisingIssue
           })
         });
 
@@ -649,6 +739,15 @@
         if (data.success) {
           document.getElementById('successReturnId').textContent = data.returnId;
           document.getElementById('successOrderName').textContent = selectedOrder.name;
+
+          // Update success page based on mode
+          if (isRaisingIssue) {
+            document.getElementById('successTitle').textContent = 'Issue Reported';
+            document.getElementById('successDesc').textContent = 'Your issue has been reported successfully. Our team will review it and get back to you within 24-48 hours.';
+            document.getElementById('successIdLabel').textContent = 'Ticket ID:';
+            document.getElementById('successTrackInfo').textContent = 'You can track your issue status using the Ticket ID.';
+          }
+
           goToStep(4);
         } else {
           if (data.existingReturnId) {

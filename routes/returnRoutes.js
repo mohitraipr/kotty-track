@@ -153,9 +153,21 @@ router.post('/api/lookup-orders', async (req, res) => {
  */
 router.post('/api/request', async (req, res) => {
   try {
-    const { orderIdentifier, shopifyOrderId: directOrderId, orderName: directOrderName, email, returnReason, notes, source, selectedItems } = req.body;
+    const {
+      orderIdentifier,
+      shopifyOrderId: directOrderId,
+      orderName: directOrderName,
+      email,
+      customerName: formCustomerName,
+      customerPhone: formCustomerPhone,
+      returnReason,
+      notes,
+      source,
+      selectedItems,
+      isIssue
+    } = req.body;
 
-    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, returnReason, source });
+    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, formCustomerName, formCustomerPhone, returnReason, source, isIssue });
 
     let order = null;
     let orders = [];
@@ -205,11 +217,12 @@ router.post('/api/request', async (req, res) => {
     let orderDate = null;
     let deliveryDate = null;
     let originalTotal = null;
-    let customerName = null;
-    let customerPhone = null;
+    let customerName = formCustomerName || null; // Prioritize form data
+    let customerPhone = formCustomerPhone || null; // Prioritize form data
     let customerEmail = email || null; // Start with form-provided email
-    let shopifyOrderId = null;
-    let shopifyOrderName = null;
+    let shopifyOrderId = directOrderId || null;
+    let shopifyOrderName = directOrderName || null;
+    let returnType = isIssue ? 'customer_issue' : 'customer_return';
 
     if (order) {
       orderType = shopifyClient.getOrderPaymentType(order);
@@ -217,23 +230,28 @@ router.post('/api/request', async (req, res) => {
       deliveryDate = shopifyClient.getDeliveryDate(order);
       originalTotal = parseFloat(order.total_price) || 0;
 
-      // Extract customer name - check shipping address, billing address, then customer object
-      customerName = order.shipping_address?.name
-        || order.billing_address?.name
-        || `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim()
-        || null;
+      // Extract customer name - prioritize form data, then check order
+      if (!customerName) {
+        customerName = order.shipping_address?.name
+          || order.billing_address?.name
+          || `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim()
+          || null;
+      }
 
-      // Extract customer phone - check all possible locations (phone is always available per user)
-      customerPhone = order.phone
-        || order.shipping_address?.phone
-        || order.billing_address?.phone
-        || order.customer?.phone
-        || null;
+      // Extract customer phone - prioritize form data, then check order
+      if (!customerPhone) {
+        customerPhone = order.phone
+          || order.shipping_address?.phone
+          || order.billing_address?.phone
+          || order.customer?.phone
+          || null;
+      }
 
+      // Use order ID/name from Shopify if fetched
       shopifyOrderId = order.id;
       shopifyOrderName = order.name;
 
-      console.log('[Return Request] Extracted customer data:', { customerName, customerPhone, customerEmail, shopifyOrderId, shopifyOrderName });
+      console.log('[Return Request] Extracted customer data:', { customerName, customerPhone, customerEmail, shopifyOrderId, shopifyOrderName, returnType });
 
       // Extract customer email from order if not provided in form
       if (!customerEmail) {
@@ -256,10 +274,7 @@ router.post('/api/request', async (req, res) => {
       }
     }
 
-    // Default return type
-    const returnType = 'customer_return';
-
-    // Insert return request into database
+    // Insert return request into database (returnType already set based on isIssue flag)
     const insertQuery = `
       INSERT INTO returns (
         return_id, shopify_order_id, shopify_order_name,

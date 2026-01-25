@@ -196,52 +196,92 @@ function filterEligibleOrders(orders, windowDays = 10) {
   const now = Date.now();
 
   return orders.map(order => {
-    // Check fulfillment status
+    // Check fulfillment and delivery status
     const isFulfilled = order.fulfillment_status === 'fulfilled';
+
+    // Check actual delivery status from fulfillments
+    const fulfillment = order.fulfillments?.[0];
+    const shipmentStatus = fulfillment?.shipment_status || null;
+
+    // Determine if actually delivered (not failed, not in transit)
+    const isDelivered = shipmentStatus === 'delivered' ||
+                        shipmentStatus === 'success' ||
+                        (isFulfilled && !shipmentStatus); // Assume delivered if no status but fulfilled
+
+    const isFailedDelivery = shipmentStatus === 'failure' ||
+                             shipmentStatus === 'attempted_delivery';
+
+    const isInTransit = shipmentStatus === 'in_transit' ||
+                        shipmentStatus === 'out_for_delivery';
 
     // Calculate days since delivery
     const deliveryDate = getDeliveryDate(order);
     let daysSinceDelivery = null;
     let isWithinWindow = false;
 
-    if (deliveryDate) {
+    if (deliveryDate && isDelivered) {
       daysSinceDelivery = Math.floor((now - new Date(deliveryDate)) / (1000 * 60 * 60 * 24));
       isWithinWindow = daysSinceDelivery <= windowDays;
-    } else if (isFulfilled) {
-      // If no delivery date but fulfilled, use fulfillment date
-      const fulfillment = order.fulfillments?.[0];
-      if (fulfillment) {
-        const fulfillmentDate = new Date(fulfillment.created_at);
-        daysSinceDelivery = Math.floor((now - fulfillmentDate) / (1000 * 60 * 60 * 24));
-        isWithinWindow = daysSinceDelivery <= windowDays;
-      }
+    } else if (isFulfilled && fulfillment && !isFailedDelivery) {
+      // If no delivery date but fulfilled and not failed, use fulfillment date
+      const fulfillmentDate = new Date(fulfillment.created_at);
+      daysSinceDelivery = Math.floor((now - fulfillmentDate) / (1000 * 60 * 60 * 24));
+      isWithinWindow = daysSinceDelivery <= windowDays;
     }
 
-    // Determine eligibility
-    const eligible = isFulfilled && isWithinWindow;
+    // Determine return eligibility (only delivered within window)
+    const eligible = isDelivered && isWithinWindow;
+
+    // Determine if can raise issue (any order that exists)
+    // Past window orders and failed deliveries can raise issues but not returns
+    const canRaiseIssue = true; // All orders can raise issues
 
     // Reason for ineligibility
     let ineligibleReason = null;
-    if (!isFulfilled) {
-      ineligibleReason = 'Order not yet delivered';
+    let status = 'eligible';
+
+    if (isFailedDelivery) {
+      ineligibleReason = 'Delivery failed - please raise an issue';
+      status = 'failed_delivery';
+    } else if (isInTransit) {
+      ineligibleReason = 'Order is still in transit';
+      status = 'in_transit';
+    } else if (!isFulfilled) {
+      ineligibleReason = 'Order not yet shipped';
+      status = 'not_shipped';
+    } else if (!isDelivered) {
+      ineligibleReason = 'Awaiting delivery confirmation';
+      status = 'awaiting_delivery';
     } else if (!isWithinWindow) {
-      ineligibleReason = `Return window expired (${daysSinceDelivery} days since delivery)`;
+      ineligibleReason = `Return window expired (${daysSinceDelivery} days ago) - you can still raise an issue`;
+      status = 'window_expired';
     }
 
     return {
       ...order,
       returnEligibility: {
         eligible,
+        canRaiseIssue,
+        status,
         reason: ineligibleReason,
         daysSinceDelivery,
-        windowDays
+        windowDays,
+        shipmentStatus,
+        isDelivered,
+        isFailedDelivery
       }
     };
   }).sort((a, b) => {
-    // Sort eligible orders first, then by date
+    // Sort: eligible first, then by status priority, then by date
     if (a.returnEligibility.eligible !== b.returnEligibility.eligible) {
       return a.returnEligibility.eligible ? -1 : 1;
     }
+    // Secondary sort: window_expired before failed_delivery before others
+    const statusPriority = { 'window_expired': 1, 'failed_delivery': 2, 'in_transit': 3, 'not_shipped': 4 };
+    const aPriority = statusPriority[a.returnEligibility.status] || 5;
+    const bPriority = statusPriority[b.returnEligibility.status] || 5;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+
     return new Date(b.created_at) - new Date(a.created_at);
   });
 }
