@@ -488,6 +488,7 @@
           </div>
           <div class="krf-order-details">
             ${date} | ${itemCount} item${itemCount !== 1 ? 's' : ''} | ${total}
+            ${order.customer_name ? ' | ' + order.customer_name : ''}
           </div>
         </div>
       `;
@@ -569,6 +570,8 @@
           shopifyOrderId: selectedOrder.id,
           orderName: selectedOrder.name,
           email: selectedOrder.email,
+          customerName: selectedOrder.customer_name,
+          customerPhone: selectedOrder.customer_phone,
           returnReason: reason,
           notes: notes,
           selectedItems: selectedItems,

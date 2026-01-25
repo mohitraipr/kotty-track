@@ -176,15 +176,22 @@ router.post('/api/request', async (req, res) => {
     if (directOrderId && shopifyClient.isConfigured()) {
       console.log('[Return Request] Fetching Shopify order:', directOrderId);
       order = await shopifyClient.getOrder(directOrderId);
-      console.log('[Return Request] Shopify order fetched:', order ? {
-        id: order.id,
-        name: order.name,
-        email: order.email,
-        phone: order.phone,
-        customer: order.customer ? { first_name: order.customer.first_name, last_name: order.customer.last_name, email: order.customer.email, phone: order.customer.phone } : null,
-        shipping_address: order.shipping_address ? { name: order.shipping_address.name, phone: order.shipping_address.phone } : null,
-        billing_address: order.billing_address ? { name: order.billing_address.name, phone: order.billing_address.phone } : null
-      } : 'NO ORDER FOUND');
+
+      if (order) {
+        // Log full raw data to debug customer data issue
+        console.log('[Return Request] RAW ORDER DATA:', JSON.stringify({
+          id: order.id,
+          name: order.name,
+          email: order.email,
+          phone: order.phone,
+          contact_email: order.contact_email,
+          customer: order.customer,
+          shipping_address: order.shipping_address,
+          billing_address: order.billing_address
+        }, null, 2));
+      } else {
+        console.log('[Return Request] NO ORDER FOUND for ID:', directOrderId);
+      }
     }
     // Legacy form submission: orderIdentifier is provided
     else if (orderIdentifier) {
