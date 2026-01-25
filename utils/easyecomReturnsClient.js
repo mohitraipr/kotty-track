@@ -9,7 +9,7 @@ const axios = require('axios');
 // Uses global.env from secure-env (loaded in app.js) with fallback to process.env
 const EASYECOM_API_BASE = global.env?.EASYECOM_API_BASE || process.env.EASYECOM_API_BASE || 'https://api.easyecom.io';
 const EASYECOM_API_KEY = global.env?.EASYECOM_API_KEY || process.env.EASYECOM_API_KEY || '';
-const EASYECOM_ACCESS_TOKEN = global.env?.EASYEECOM_ACCESS_TOKEN || process.env.EASYEECOM_ACCESS_TOKEN || '';
+const EASYECOM_ACCESS_TOKEN = global.env?.EASYECOM_ACCESS_TOKEN || process.env.EASYECOM_ACCESS_TOKEN || '';
 
 // Create axios instance for EasyEcom API
 const createEasyecomApi = () => {

@@ -81,27 +81,55 @@ router.post('/api/lookup-orders', async (req, res) => {
     // Filter and add eligibility info
     const ordersWithEligibility = shopifyClient.filterEligibleOrders(orders, 10);
 
-    // Simplify order data for frontend
-    const simplifiedOrders = ordersWithEligibility.map(order => ({
-      id: order.id,
-      name: order.name,
-      email: order.email,
-      created_at: order.created_at,
-      total_price: order.total_price,
-      fulfillment_status: order.fulfillment_status,
-      financial_status: order.financial_status,
-      line_items: order.line_items?.map(item => ({
-        id: item.id,
-        name: item.name || item.title,
-        title: item.title,
-        variant_title: item.variant_title,
-        sku: item.sku,
-        quantity: item.quantity,
-        price: item.price,
-        image_url: item.image_url || null
-      })) || [],
-      returnEligibility: order.returnEligibility
-    }));
+    // Simplify order data for frontend (include customer info for display)
+    const simplifiedOrders = ordersWithEligibility.map(order => {
+      // Extract customer name from various sources
+      const customerName = order.shipping_address?.name
+        || order.billing_address?.name
+        || `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim()
+        || null;
+
+      // Extract customer phone from various sources
+      const customerPhone = order.phone
+        || order.shipping_address?.phone
+        || order.billing_address?.phone
+        || order.customer?.phone
+        || null;
+
+      // Extract customer email
+      const customerEmail = order.email || order.customer?.email || null;
+
+      return {
+        id: order.id,
+        name: order.name,
+        email: customerEmail,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        created_at: order.created_at,
+        total_price: order.total_price,
+        fulfillment_status: order.fulfillment_status,
+        financial_status: order.financial_status,
+        shipping_address: order.shipping_address ? {
+          name: order.shipping_address.name,
+          phone: order.shipping_address.phone,
+          address1: order.shipping_address.address1,
+          city: order.shipping_address.city,
+          province: order.shipping_address.province,
+          zip: order.shipping_address.zip
+        } : null,
+        line_items: order.line_items?.map(item => ({
+          id: item.id,
+          name: item.name || item.title,
+          title: item.title,
+          variant_title: item.variant_title,
+          sku: item.sku,
+          quantity: item.quantity,
+          price: item.price,
+          image_url: item.image_url || null
+        })) || [],
+        returnEligibility: order.returnEligibility
+      };
+    });
 
     return res.json({
       success: true,
@@ -127,12 +155,24 @@ router.post('/api/request', async (req, res) => {
   try {
     const { orderIdentifier, shopifyOrderId: directOrderId, orderName: directOrderName, email, returnReason, notes, source, selectedItems } = req.body;
 
+    console.log('[Return Request] Received:', { directOrderId, directOrderName, email, returnReason, source });
+
     let order = null;
     let orders = [];
 
     // New form submission: directOrderId is provided
     if (directOrderId && shopifyClient.isConfigured()) {
+      console.log('[Return Request] Fetching Shopify order:', directOrderId);
       order = await shopifyClient.getOrder(directOrderId);
+      console.log('[Return Request] Shopify order fetched:', order ? {
+        id: order.id,
+        name: order.name,
+        email: order.email,
+        phone: order.phone,
+        customer: order.customer ? { first_name: order.customer.first_name, last_name: order.customer.last_name, email: order.customer.email, phone: order.customer.phone } : null,
+        shipping_address: order.shipping_address ? { name: order.shipping_address.name, phone: order.shipping_address.phone } : null,
+        billing_address: order.billing_address ? { name: order.billing_address.name, phone: order.billing_address.phone } : null
+      } : 'NO ORDER FOUND');
     }
     // Legacy form submission: orderIdentifier is provided
     else if (orderIdentifier) {
@@ -192,6 +232,8 @@ router.post('/api/request', async (req, res) => {
 
       shopifyOrderId = order.id;
       shopifyOrderName = order.name;
+
+      console.log('[Return Request] Extracted customer data:', { customerName, customerPhone, customerEmail, shopifyOrderId, shopifyOrderName });
 
       // Extract customer email from order if not provided in form
       if (!customerEmail) {
@@ -825,25 +867,38 @@ router.post('/:id/initiate-pickup', isAuthenticated, allowReturnsAccess, async (
     let easyecomResult = { success: false };
     let easyecomOrderId = returnData.easyecom_order_id;
 
+    console.log('[Initiate Pickup] Starting EasyEcom flow:', {
+      returnId: returnData.return_id,
+      shopifyOrderName: returnData.shopify_order_name,
+      existingEasyecomOrderId: easyecomOrderId,
+      easyecomConfigured: easyecomClient.isConfigured()
+    });
+
     if (easyecomClient.isConfigured()) {
       // If EasyEcom order ID not set, try to find it by Shopify order name
       if (!easyecomOrderId && returnData.shopify_order_name) {
         try {
           const orderName = returnData.shopify_order_name.replace('#', '').trim();
+          console.log('[Initiate Pickup] Searching EasyEcom for order:', orderName);
           const easyecomOrders = await easyecomClient.searchOrders({ reference_code: orderName });
+          console.log('[Initiate Pickup] EasyEcom search result:', easyecomOrders);
           if (easyecomOrders && easyecomOrders.length > 0) {
             easyecomOrderId = easyecomOrders[0].id || easyecomOrders[0].order_id;
+            console.log('[Initiate Pickup] Found EasyEcom order ID:', easyecomOrderId);
             // Save the found EasyEcom order ID for future use
             if (easyecomOrderId) {
               await pool.query('UPDATE returns SET easyecom_order_id = ? WHERE id = ?', [easyecomOrderId, id]);
             }
+          } else {
+            console.log('[Initiate Pickup] No EasyEcom order found for:', orderName);
           }
         } catch (searchError) {
-          console.error('Failed to search EasyEcom order:', searchError.message);
+          console.error('[Initiate Pickup] Failed to search EasyEcom order:', searchError.message);
         }
       }
 
       if (easyecomOrderId) {
+        console.log('[Initiate Pickup] Creating return in EasyEcom with order ID:', easyecomOrderId);
         easyecomResult = await easyecomClient.createReturn({
           order_id: easyecomOrderId,
           return_reason: returnData.return_reason,
@@ -857,7 +912,12 @@ router.post('/:id/initiate-pickup', isAuthenticated, allowReturnsAccess, async (
           pickup_address: pickupAddress,
           courier_id: courier_id
         });
+        console.log('[Initiate Pickup] EasyEcom createReturn result:', easyecomResult);
+      } else {
+        console.log('[Initiate Pickup] No EasyEcom order ID - skipping EasyEcom return creation');
       }
+    } else {
+      console.log('[Initiate Pickup] EasyEcom not configured');
     }
 
     // Update return with AWB info
