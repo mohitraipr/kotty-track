@@ -109,10 +109,11 @@ router.post('/api/lookup-orders', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error looking up orders:', error);
+    console.error('Error looking up orders:', error.message, error.stack);
     return res.status(500).json({
       success: false,
-      message: 'Failed to lookup orders. Please try again.'
+      message: 'Failed to lookup orders. Please try again.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

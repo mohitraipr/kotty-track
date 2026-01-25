@@ -37,9 +37,31 @@ app.use(express.json({ limit: '10mb' }));
 
 // CORS configuration for returns API (accessed from Shopify store)
 app.use('/returns/api', cors({
-    origin: ['https://kotty.in', 'https://www.kotty.in', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    credentials: true
+    origin: function(origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        // Allowed origins
+        const allowedOrigins = [
+            'https://kotty.in',
+            'https://www.kotty.in',
+            'http://localhost:3000'
+        ];
+
+        // Check if origin is in allowed list or is a Shopify domain
+        if (allowedOrigins.includes(origin) ||
+            origin.endsWith('.myshopify.com') ||
+            origin.includes('shopify')) {
+            return callback(null, true);
+        }
+
+        // For development/testing, also allow the origin
+        console.log('CORS request from origin:', origin);
+        return callback(null, true); // Allow all origins for public return form
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Session Configuration
