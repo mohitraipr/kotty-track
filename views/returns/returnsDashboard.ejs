@@ -273,6 +273,28 @@
       font-size: 14px;
       color: #64748b;
     }
+
+    .bulk-actions-bar {
+      background: #1e293b;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      animation: slideDown 0.2s ease;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .tabulator-row.tabulator-selected {
+      background: #eff6ff !important;
+    }
+
+    .tabulator-row.tabulator-selected:hover {
+      background: #dbeafe !important;
+    }
   </style>
 </head>
 <body>
@@ -349,6 +371,9 @@
       <a href="/returns/dashboard?status=approved" class="status-tab <%= activeStatus === 'approved' ? 'active' : '' %>">
         Approved <span class="count"><%= stats.approved || 0 %></span>
       </a>
+      <a href="/returns/dashboard?status=pickup_scheduled" class="status-tab <%= activeStatus === 'pickup_scheduled' ? 'active' : '' %>">
+        Pickup Scheduled <span class="count"><%= stats.pickup_scheduled || 0 %></span>
+      </a>
       <a href="/returns/dashboard?status=picked_up" class="status-tab <%= activeStatus === 'picked_up' ? 'active' : '' %>">
         Picked Up <span class="count"><%= stats.picked_up || 0 %></span>
       </a>
@@ -358,6 +383,29 @@
       <a href="/returns/dashboard?status=refunded" class="status-tab <%= activeStatus === 'refunded' ? 'active' : '' %>">
         Refunded <span class="count"><%= stats.refunded || 0 %></span>
       </a>
+    </div>
+
+    <!-- Bulk Actions Bar -->
+    <div id="bulkActionsBar" class="bulk-actions-bar" style="display: none;">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <span id="selectedCount">0</span> returns selected
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm" onclick="bulkApprove()">
+            <i class="bi bi-check-lg me-1"></i> Approve All
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="bulkMarkPicked()">
+            <i class="bi bi-box-seam me-1"></i> Mark Picked
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="bulkMarkReceived()">
+            <i class="bi bi-inbox me-1"></i> Mark Received
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">
+            <i class="bi bi-x me-1"></i> Clear
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -414,6 +462,18 @@
 
   <script>
     const returnsData = <%- JSON.stringify(returns) %>;
+    let selectedReturns = [];
+
+    function updateBulkBar() {
+      const bar = document.getElementById('bulkActionsBar');
+      const countEl = document.getElementById('selectedCount');
+      if (selectedReturns.length > 0) {
+        bar.style.display = 'block';
+        countEl.textContent = selectedReturns.length;
+      } else {
+        bar.style.display = 'none';
+      }
+    }
 
     if (returnsData.length > 0) {
       const table = new Tabulator("#returnsTable", {
@@ -421,7 +481,16 @@
         layout: "fitColumns",
         responsiveLayout: "collapse",
         placeholder: "No returns found",
+        selectable: true,
+        selectableRangeMode: "click",
         columns: [
+          {
+            formatter: "rowSelection",
+            titleFormatter: "rowSelection",
+            hozAlign: "center",
+            headerSort: false,
+            width: 40
+          },
           {
             title: "Return ID",
             field: "return_id",
@@ -505,76 +574,221 @@
           {
             title: "Actions",
             field: "id",
-            width: 180,
+            width: 200,
             hozAlign: "center",
             formatter: function(cell) {
               const data = cell.getData();
               let html = '';
 
               if (data.status === 'pending_review') {
-                html += `<button class="action-btn action-btn-success me-1" onclick="approveReturn(${data.id})">Approve</button>`;
+                html += `<button class="action-btn action-btn-success me-1" onclick="approveReturn(${data.id})" title="Quick Approve with optional AWB">Approve</button>`;
               }
               if (data.status === 'approved') {
-                html += `<button class="action-btn action-btn-primary me-1" onclick="initiatePickup(${data.id})">Pickup</button>`;
+                html += `<button class="action-btn action-btn-primary me-1" onclick="initiatePickup(${data.id})" title="Add AWB & Schedule">+AWB</button>`;
+                html += `<button class="action-btn action-btn-outline me-1" onclick="markPicked(${data.id})" title="Skip to Picked">Picked</button>`;
               }
               if (data.status === 'pickup_scheduled') {
                 html += `<button class="action-btn action-btn-primary me-1" onclick="markPicked(${data.id})">Picked</button>`;
+                html += `<button class="action-btn action-btn-outline me-1" onclick="markReceived(${data.id})" title="Skip to Received">Rcvd</button>`;
               }
               if (data.status === 'picked_up' || data.status === 'in_transit') {
                 html += `<button class="action-btn action-btn-primary me-1" onclick="markReceived(${data.id})">Received</button>`;
               }
               if (data.status === 'refund_pending') {
-                if (data.order_type === 'cod' && !data.bank_details_submitted) {
-                  html += `<button class="action-btn action-btn-warning me-1" onclick="sendBankLink(${data.id})">Bank Link</button>`;
+                if (data.order_type === 'cod') {
+                  html += `<button class="action-btn action-btn-warning me-1" onclick="sendBankLink(${data.id})" title="Send bank details link">Bank</button>`;
                 }
                 html += `<button class="action-btn action-btn-success" onclick="processRefund(${data.id})">Refund</button>`;
               }
 
-              if (!html) {
-                html = `<a href="/returns/${data.id}" class="action-btn action-btn-outline">View</a>`;
-              }
+              // Always show View link
+              html += `<a href="/returns/${data.id}" class="action-btn action-btn-outline" title="View Details">View</a>`;
 
               return html;
             }
           }
         ]
       });
+
+      // Handle row selection change
+      table.on("rowSelectionChanged", function(data, rows) {
+        selectedReturns = data.map(row => row.id);
+        updateBulkBar();
+      });
     }
 
+    function clearSelection() {
+      if (typeof table !== 'undefined') {
+        table.deselectRow();
+      }
+      selectedReturns = [];
+      updateBulkBar();
+    }
+
+    async function bulkApprove() {
+      if (selectedReturns.length === 0) return;
+      if (!confirm(`Approve ${selectedReturns.length} returns?`)) return;
+
+      try {
+        const res = await fetch('/returns/bulk-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            return_ids: selectedReturns,
+            action: 'approve'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`${data.results.success.length} approved, ${data.results.failed.length} failed`);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function bulkMarkPicked() {
+      if (selectedReturns.length === 0) return;
+      if (!confirm(`Mark ${selectedReturns.length} returns as picked up?`)) return;
+
+      try {
+        const res = await fetch('/returns/bulk-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            return_ids: selectedReturns,
+            action: 'mark_picked'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`${data.results.success.length} updated, ${data.results.failed.length} failed`);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function bulkMarkReceived() {
+      if (selectedReturns.length === 0) return;
+      if (!confirm(`Mark ${selectedReturns.length} returns as received?`)) return;
+
+      try {
+        const res = await fetch('/returns/bulk-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            return_ids: selectedReturns,
+            action: 'mark_received'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`${data.results.success.length} updated, ${data.results.failed.length} failed`);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // Quick approve with optional AWB prompt
     async function approveReturn(id) {
-      if (!confirm('Approve this return request?')) return;
-      const res = await fetch(`/returns/${id}/approve`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed to approve');
+      const awb = prompt('Enter AWB number (leave empty to approve without AWB):');
+      let courier = null;
+
+      if (awb) {
+        courier = prompt('Enter courier name (Delhivery, BlueDart, XpressBees, Ekart):') || null;
+      }
+
+      try {
+        const res = await fetch(`/returns/${id}/quick-approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            awb_number: awb || null,
+            courier_name: courier
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to approve');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
     }
 
+    // Quick transition for pickup
     async function initiatePickup(id) {
-      if (!confirm('Initiate pickup for this return?')) return;
-      const res = await fetch(`/returns/${id}/initiate-pickup`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message);
-        location.reload();
-      } else {
-        alert(data.message || 'Failed to initiate pickup');
+      const awb = prompt('Enter AWB number:');
+      if (!awb) {
+        alert('AWB number is required');
+        return;
+      }
+      const courier = prompt('Enter courier name (Delhivery, BlueDart, XpressBees, Ekart):') || null;
+
+      try {
+        const res = await fetch(`/returns/${id}/quick-transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_status: 'pickup_scheduled',
+            awb_number: awb,
+            courier_name: courier
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to schedule pickup');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
       }
     }
 
     async function markPicked(id) {
       if (!confirm('Mark this return as picked up?')) return;
-      const res = await fetch(`/returns/${id}/mark-picked`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed to update');
+      try {
+        const res = await fetch(`/returns/${id}/quick-transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_status: 'picked_up' })
+        });
+        const data = await res.json();
+        if (data.success) location.reload();
+        else alert(data.message || 'Failed to update');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
     }
 
     async function markReceived(id) {
       if (!confirm('Mark this return as received at warehouse?')) return;
-      const res = await fetch(`/returns/${id}/mark-received`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed to update');
+      try {
+        const res = await fetch(`/returns/${id}/quick-transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_status: 'received' })
+        });
+        const data = await res.json();
+        if (data.success) location.reload();
+        else alert(data.message || 'Failed to update');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
     }
 
     async function sendBankLink(id) {

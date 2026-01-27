@@ -1604,14 +1604,62 @@ router.post('/:id/sync-status', isAuthenticated, allowReturnsAccess, async (req,
       }
     }
 
-    // 4. Update status if changed
+    // 4. Auto-transition logic based on synced data
+    // Smart status transitions based on what we found
+    const currentStatus = returnData.status;
+    let suggestedTransitions = [];
+
+    // If Shopify shows refund processed and we're not yet refunded
+    if (syncResults.shopify?.refundDetected && !['refunded', 'cancelled', 'rejected'].includes(currentStatus)) {
+      syncResults.newStatus = 'refunded';
+      syncResults.statusUpdated = true;
+      syncResults.autoTransitionReason = 'Shopify refund detected';
+    }
+
+    // If we have AWB and in approved status, suggest moving to pickup_scheduled
+    if (returnData.awb_number && currentStatus === 'approved') {
+      suggestedTransitions.push({
+        status: 'pickup_scheduled',
+        reason: 'AWB already assigned'
+      });
+    }
+
+    // If status is pickup_scheduled for more than 3 days, suggest moving to picked_up
+    if (currentStatus === 'pickup_scheduled' && returnData.approved_at) {
+      const daysSinceApproval = Math.floor((Date.now() - new Date(returnData.approved_at)) / 86400000);
+      if (daysSinceApproval >= 3) {
+        suggestedTransitions.push({
+          status: 'picked_up',
+          reason: `${daysSinceApproval} days since pickup scheduled`
+        });
+      }
+    }
+
+    // If status is picked_up for more than 5 days, suggest moving to received
+    if (currentStatus === 'picked_up' && returnData.picked_at) {
+      const daysSincePicked = Math.floor((Date.now() - new Date(returnData.picked_at)) / 86400000);
+      if (daysSincePicked >= 5) {
+        suggestedTransitions.push({
+          status: 'received',
+          reason: `${daysSincePicked} days since pickup`
+        });
+      }
+    }
+
+    syncResults.suggestedTransitions = suggestedTransitions;
+
+    // 5. Update status if changed
     if (syncResults.statusUpdated && syncResults.newStatus !== returnData.status) {
       await pool.query('UPDATE returns SET status = ? WHERE id = ?', [syncResults.newStatus, id]);
 
       await pool.query(`
         INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
-        VALUES (?, 'status_synced', ?, ?, 'system', ?, ?, ?)
-      `, [id, returnData.status, syncResults.newStatus, user.id, user.username, JSON.stringify({ source: 'sync-status', results: syncResults })]);
+        VALUES (?, 'status_auto_synced', ?, ?, 'system', ?, ?, ?)
+      `, [id, returnData.status, syncResults.newStatus, user.id, user.username, JSON.stringify({
+        source: 'sync-status',
+        reason: syncResults.autoTransitionReason,
+        results: syncResults
+      })]);
     }
 
     // Log sync attempt
@@ -1620,10 +1668,22 @@ router.post('/:id/sync-status', isAuthenticated, allowReturnsAccess, async (req,
       VALUES (?, 'status_sync_attempted', 'operator', ?, ?, ?)
     `, [id, user.id, user.username, JSON.stringify(syncResults)]);
 
+    let message = syncResults.statusUpdated
+      ? `Status updated to ${syncResults.newStatus.replace(/_/g, ' ')}`
+      : 'Status synced (no changes)';
+
+    if (syncResults.suggestedTransitions && syncResults.suggestedTransitions.length > 0) {
+      message += '\n\nSuggested actions:\n';
+      syncResults.suggestedTransitions.forEach(t => {
+        message += `- Move to ${t.status.replace(/_/g, ' ')}: ${t.reason}\n`;
+      });
+    }
+
     return res.json({
       success: true,
-      message: syncResults.statusUpdated ? `Status updated to ${syncResults.newStatus}` : 'Status synced (no changes)',
-      data: syncResults
+      message,
+      data: syncResults,
+      suggestedTransitions: syncResults.suggestedTransitions || []
     });
 
   } catch (error) {
@@ -2166,6 +2226,393 @@ router.get('/sync-from-shopify', isAuthenticated, allowReturnsAccess, async (req
       message: 'Failed to sync from Shopify',
       error: error.message
     });
+  }
+});
+
+// ===============================
+// SIMPLIFIED WORKFLOW ENDPOINTS
+// ===============================
+
+/**
+ * POST /returns/:id/quick-approve
+ * One-click approve with AWB - combines approve + schedule pickup in one step
+ * This is the simplified workflow that works without EasyEcom
+ */
+router.post('/:id/quick-approve', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { awb_number, courier_name } = req.body;
+    const user = req.session.user;
+
+    const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [id]);
+
+    if (!returnData) {
+      return res.status(404).json({ success: false, message: 'Return not found' });
+    }
+
+    if (returnData.status !== 'pending_review') {
+      return res.status(400).json({ success: false, message: 'Return is not pending review' });
+    }
+
+    // Determine final status based on whether AWB is provided
+    const finalStatus = awb_number ? 'pickup_scheduled' : 'approved';
+
+    // Update return with approval + AWB in one go
+    const updateFields = {
+      status: finalStatus,
+      approved_at: 'NOW()',
+      assigned_operator_id: user.id
+    };
+
+    if (awb_number) {
+      updateFields.awb_number = awb_number;
+      updateFields.courier_name = courier_name || null;
+      // Build tracking URL based on courier
+      const courierLower = (courier_name || '').toLowerCase();
+      if (courierLower.includes('delhivery')) {
+        updateFields.courier_tracking_url = `https://www.delhivery.com/track/package/${awb_number}`;
+      } else if (courierLower.includes('bluedart')) {
+        updateFields.courier_tracking_url = `https://www.bluedart.com/tracking/${awb_number}`;
+      } else if (courierLower.includes('xpressbees') || courierLower.includes('xpress')) {
+        updateFields.courier_tracking_url = `https://www.xpressbees.com/track?awb=${awb_number}`;
+      } else if (courierLower.includes('ekart')) {
+        updateFields.courier_tracking_url = `https://ekartlogistics.com/track/${awb_number}`;
+      }
+    }
+
+    await pool.query(
+      `UPDATE returns SET
+        status = ?,
+        approved_at = NOW(),
+        assigned_operator_id = ?,
+        awb_number = COALESCE(?, awb_number),
+        courier_name = COALESCE(?, courier_name),
+        courier_tracking_url = COALESCE(?, courier_tracking_url)
+      WHERE id = ?`,
+      [finalStatus, user.id, awb_number || null, courier_name || null, updateFields.courier_tracking_url || null, id]
+    );
+
+    // Log audit with detailed info
+    await pool.query(`
+      INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
+      VALUES (?, 'quick_approved', ?, ?, 'operator', ?, ?, ?)
+    `, [id, returnData.status, finalStatus, user.id, user.username, JSON.stringify({
+      awb_number,
+      courier_name,
+      workflow: 'quick_approve'
+    })]);
+
+    // Sync to Shopify - add tags
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Approved');
+        if (awb_number) {
+          await shopifyClient.addOrderTag(returnData.shopify_order_id, 'Return-Pickup-Scheduled');
+          await shopifyClient.addOrderNote(returnData.shopify_order_id,
+            `Return ${returnData.return_id} approved and pickup scheduled. AWB: ${awb_number}${courier_name ? ` (${courier_name})` : ''}`
+          );
+        } else {
+          await shopifyClient.addOrderNote(returnData.shopify_order_id, `Return ${returnData.return_id} approved`);
+        }
+      } catch (shopifyError) {
+        // Log error to audit but don't fail
+        await pool.query(`
+          INSERT INTO return_audit_log (return_id, action, actor_type, actor_name, details)
+          VALUES (?, 'shopify_sync_failed', 'system', 'system', ?)
+        `, [id, JSON.stringify({ error: shopifyError.message, action: 'quick_approve' })]);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: awb_number
+        ? `Return approved and pickup scheduled with AWB: ${awb_number}`
+        : 'Return approved. You can add AWB later.',
+      status: finalStatus
+    });
+
+  } catch (error) {
+    console.error('Error in quick-approve:', error);
+    return res.status(500).json({ success: false, message: 'Failed to approve return' });
+  }
+});
+
+/**
+ * POST /returns/:id/quick-transition
+ * Direct status transition without external API calls
+ * For fast manual processing when EasyEcom is not configured
+ */
+router.post('/:id/quick-transition', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { target_status, awb_number, courier_name, notes } = req.body;
+    const user = req.session.user;
+
+    const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [id]);
+
+    if (!returnData) {
+      return res.status(404).json({ success: false, message: 'Return not found' });
+    }
+
+    // Define allowed transitions for quick workflow
+    const allowedTransitions = {
+      'pending_review': ['approved', 'pickup_scheduled', 'rejected'],
+      'approved': ['pickup_scheduled', 'picked_up', 'rejected'],
+      'pickup_scheduled': ['picked_up', 'received', 'cancelled'],
+      'picked_up': ['in_transit', 'received'],
+      'in_transit': ['received'],
+      'received': ['refund_pending'],
+      'refund_pending': ['refund_processing', 'refunded']
+    };
+
+    const allowed = allowedTransitions[returnData.status] || [];
+    if (!allowed.includes(target_status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot transition from ${returnData.status} to ${target_status}. Allowed: ${allowed.join(', ')}`
+      });
+    }
+
+    // Build update query based on target status
+    const updates = ['status = ?'];
+    const params = [target_status];
+
+    if (awb_number) {
+      updates.push('awb_number = ?');
+      params.push(awb_number);
+    }
+    if (courier_name) {
+      updates.push('courier_name = ?');
+      params.push(courier_name);
+    }
+
+    // Add timestamp fields based on status
+    if (target_status === 'approved') {
+      updates.push('approved_at = NOW()');
+      updates.push('assigned_operator_id = ?');
+      params.push(user.id);
+    } else if (target_status === 'picked_up') {
+      updates.push('picked_at = NOW()');
+    } else if (target_status === 'received') {
+      updates.push('received_at = NOW()');
+      // Calculate refund amount
+      const [items] = await pool.query('SELECT * FROM return_items WHERE return_id = ?', [id]);
+      if (items.length > 0) {
+        const refundAmount = returnHelpers.calculateRefundAmount(items);
+        updates.push('refund_amount = ?');
+        params.push(refundAmount);
+      }
+    } else if (target_status === 'refund_pending') {
+      updates.push('status = ?');
+      params[0] = 'refund_pending';
+    }
+
+    params.push(id);
+    await pool.query(`UPDATE returns SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    // Log audit
+    await pool.query(`
+      INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
+      VALUES (?, 'quick_transition', ?, ?, 'operator', ?, ?, ?)
+    `, [id, returnData.status, target_status, user.id, user.username, JSON.stringify({ notes, awb_number, courier_name })]);
+
+    // Sync tags to Shopify
+    if (returnData.shopify_order_id && shopifyClient.isConfigured()) {
+      try {
+        const statusTagMap = {
+          'approved': 'Return-Approved',
+          'pickup_scheduled': 'Return-Pickup-Scheduled',
+          'picked_up': 'Return-Picked-Up',
+          'received': 'Return-Received',
+          'refunded': 'Return-Refunded'
+        };
+        if (statusTagMap[target_status]) {
+          await shopifyClient.addOrderTag(returnData.shopify_order_id, statusTagMap[target_status]);
+        }
+      } catch (shopifyError) {
+        // Log but don't fail
+        await pool.query(`
+          INSERT INTO return_audit_log (return_id, action, actor_type, actor_name, details)
+          VALUES (?, 'shopify_sync_failed', 'system', 'system', ?)
+        `, [id, JSON.stringify({ error: shopifyError.message })]);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Status changed to ${target_status.replace(/_/g, ' ')}`,
+      newStatus: target_status
+    });
+
+  } catch (error) {
+    console.error('Error in quick-transition:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update status' });
+  }
+});
+
+/**
+ * POST /returns/bulk-action
+ * Process multiple returns at once
+ */
+router.post('/bulk-action', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const { return_ids, action, target_status, awb_prefix, courier_name } = req.body;
+    const user = req.session.user;
+
+    if (!return_ids || !Array.isArray(return_ids) || return_ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No returns selected' });
+    }
+
+    if (return_ids.length > 50) {
+      return res.status(400).json({ success: false, message: 'Maximum 50 returns at a time' });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const returnId of return_ids) {
+      try {
+        const [[returnData]] = await pool.query('SELECT * FROM returns WHERE id = ?', [returnId]);
+
+        if (!returnData) {
+          results.failed.push({ id: returnId, error: 'Not found' });
+          continue;
+        }
+
+        let updateQuery = '';
+        let updateParams = [];
+        let auditAction = '';
+
+        switch (action) {
+          case 'approve':
+            if (returnData.status !== 'pending_review') {
+              results.failed.push({ id: returnId, return_id: returnData.return_id, error: 'Not pending review' });
+              continue;
+            }
+            updateQuery = 'UPDATE returns SET status = ?, approved_at = NOW(), assigned_operator_id = ? WHERE id = ?';
+            updateParams = ['approved', user.id, returnId];
+            auditAction = 'bulk_approved';
+            break;
+
+          case 'transition':
+            if (!target_status) {
+              results.failed.push({ id: returnId, return_id: returnData.return_id, error: 'No target status' });
+              continue;
+            }
+            updateQuery = 'UPDATE returns SET status = ? WHERE id = ?';
+            updateParams = [target_status, returnId];
+            auditAction = 'bulk_transition';
+            break;
+
+          case 'mark_picked':
+            if (!['approved', 'pickup_scheduled'].includes(returnData.status)) {
+              results.failed.push({ id: returnId, return_id: returnData.return_id, error: 'Cannot mark picked from ' + returnData.status });
+              continue;
+            }
+            updateQuery = 'UPDATE returns SET status = ?, picked_at = NOW() WHERE id = ?';
+            updateParams = ['picked_up', returnId];
+            auditAction = 'bulk_marked_picked';
+            break;
+
+          case 'mark_received':
+            if (!['picked_up', 'in_transit', 'pickup_scheduled'].includes(returnData.status)) {
+              results.failed.push({ id: returnId, return_id: returnData.return_id, error: 'Cannot mark received from ' + returnData.status });
+              continue;
+            }
+            // Calculate refund amount
+            const [items] = await pool.query('SELECT * FROM return_items WHERE return_id = ?', [returnId]);
+            const refundAmount = items.length > 0 ? returnHelpers.calculateRefundAmount(items) : returnData.refund_amount;
+            updateQuery = 'UPDATE returns SET status = ?, received_at = NOW(), refund_amount = ? WHERE id = ?';
+            updateParams = ['refund_pending', refundAmount, returnId];
+            auditAction = 'bulk_marked_received';
+            break;
+
+          default:
+            results.failed.push({ id: returnId, return_id: returnData.return_id, error: 'Unknown action' });
+            continue;
+        }
+
+        await pool.query(updateQuery, updateParams);
+
+        // Log audit
+        await pool.query(`
+          INSERT INTO return_audit_log (return_id, action, old_status, new_status, actor_type, actor_id, actor_name, details)
+          VALUES (?, ?, ?, ?, 'operator', ?, ?, ?)
+        `, [returnId, auditAction, returnData.status, updateParams[0], user.id, user.username, JSON.stringify({ bulk: true })]);
+
+        results.success.push({ id: returnId, return_id: returnData.return_id, newStatus: updateParams[0] });
+
+      } catch (itemError) {
+        results.failed.push({ id: returnId, error: itemError.message });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Processed ${results.success.length} returns, ${results.failed.length} failed`,
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in bulk-action:', error);
+    return res.status(500).json({ success: false, message: 'Failed to process bulk action' });
+  }
+});
+
+/**
+ * GET /returns/pending-actions
+ * Get count of returns needing action at each stage
+ */
+router.get('/pending-actions', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  try {
+    const [counts] = await pool.query(`
+      SELECT
+        status,
+        COUNT(*) as count,
+        SUM(CASE WHEN order_type = 'cod' THEN 1 ELSE 0 END) as cod_count,
+        SUM(CASE WHEN order_type = 'prepaid' THEN 1 ELSE 0 END) as prepaid_count
+      FROM returns
+      WHERE status NOT IN ('refunded', 'rejected', 'cancelled')
+      GROUP BY status
+    `);
+
+    // Get returns needing bank details
+    const [[needingBank]] = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM returns r
+      LEFT JOIN return_bank_details bd ON bd.return_id = r.id
+      WHERE r.order_type = 'cod'
+        AND r.status IN ('refund_pending', 'refund_processing')
+        AND (bd.upi_id IS NULL AND bd.account_number IS NULL)
+    `);
+
+    // Get returns with AWB but no pickup status update for > 2 days
+    const [[stalePickups]] = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM returns
+      WHERE status = 'pickup_scheduled'
+        AND awb_number IS NOT NULL
+        AND approved_at < DATE_SUB(NOW(), INTERVAL 2 DAY)
+    `);
+
+    return res.json({
+      success: true,
+      statusCounts: counts,
+      needingBankDetails: needingBank.count,
+      stalePickups: stalePickups.count,
+      actions: [
+        { label: 'Pending Review', status: 'pending_review', count: counts.find(c => c.status === 'pending_review')?.count || 0 },
+        { label: 'Ready for Pickup', status: 'approved', count: counts.find(c => c.status === 'approved')?.count || 0 },
+        { label: 'Awaiting Pickup', status: 'pickup_scheduled', count: counts.find(c => c.status === 'pickup_scheduled')?.count || 0 },
+        { label: 'Ready for Refund', status: 'refund_pending', count: counts.find(c => c.status === 'refund_pending')?.count || 0 }
+      ]
+    });
+
+  } catch (error) {
+    console.error('Error getting pending actions:', error);
+    return res.status(500).json({ success: false, message: 'Failed to get pending actions' });
   }
 });
 

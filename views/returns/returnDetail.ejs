@@ -272,39 +272,63 @@
       </div>
       <div class="action-buttons">
         <% if (returnData.status === 'pending_review') { %>
-          <button class="btn btn-success" onclick="approveReturn()">
-            <i class="bi bi-check-lg me-1"></i> Approve
+          <!-- Quick Approve with AWB option -->
+          <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#quickApproveModal">
+            <i class="bi bi-lightning me-1"></i> Quick Approve
           </button>
-          <button class="btn btn-danger" onclick="rejectReturn()">
+          <button class="btn btn-outline-danger" onclick="rejectReturn()">
             <i class="bi bi-x-lg me-1"></i> Reject
           </button>
         <% } %>
         <% if (returnData.status === 'approved') { %>
-          <button class="btn btn-primary" onclick="initiatePickup()">
-            <i class="bi bi-truck me-1"></i> Initiate Pickup
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAwbModal">
+            <i class="bi bi-truck me-1"></i> Add AWB & Schedule
+          </button>
+          <button class="btn btn-outline-primary" onclick="quickTransition('picked_up')">
+            <i class="bi bi-fast-forward me-1"></i> Skip to Picked
           </button>
         <% } %>
         <% if (returnData.status === 'pickup_scheduled') { %>
-          <button class="btn btn-primary" onclick="markPicked()">
+          <button class="btn btn-primary" onclick="quickTransition('picked_up')">
             <i class="bi bi-box-seam me-1"></i> Mark Picked Up
+          </button>
+          <button class="btn btn-outline-primary" onclick="quickTransition('received')">
+            <i class="bi bi-fast-forward me-1"></i> Skip to Received
           </button>
         <% } %>
         <% if (['picked_up', 'in_transit'].includes(returnData.status)) { %>
-          <button class="btn btn-primary" onclick="markReceived()">
+          <button class="btn btn-primary" onclick="quickTransition('received')">
             <i class="bi bi-inbox me-1"></i> Mark Received
           </button>
         <% } %>
-        <% if (returnData.status === 'refund_pending' && returnData.order_type === 'cod') { %>
+        <% if (returnData.status === 'refund_pending') { %>
+          <% if (returnData.order_type === 'cod') { %>
           <button class="btn btn-warning" onclick="sendBankLink()">
             <i class="bi bi-link me-1"></i> Send Bank Link
           </button>
+          <% } %>
         <% } %>
 
-        <!-- Sync Status button - always visible for non-terminal statuses -->
-        <% if (!['refunded', 'cancelled', 'rejected'].includes(returnData.status)) { %>
-          <button class="btn btn-outline-secondary" onclick="syncStatus()" id="syncStatusBtn">
-            <i class="bi bi-arrow-repeat me-1"></i> Sync Status
+        <!-- Quick Actions dropdown for other transitions -->
+        <% if (!['refunded', 'cancelled', 'rejected', 'pending_review'].includes(returnData.status)) { %>
+        <div class="dropdown d-inline-block">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-three-dots me-1"></i> More
           </button>
+          <ul class="dropdown-menu">
+            <% if (returnData.status === 'approved') { %>
+            <li><a class="dropdown-item" href="#" onclick="quickTransition('pickup_scheduled'); return false;"><i class="bi bi-truck me-2"></i>Mark Pickup Scheduled</a></li>
+            <% } %>
+            <% if (['pickup_scheduled', 'picked_up'].includes(returnData.status)) { %>
+            <li><a class="dropdown-item" href="#" onclick="quickTransition('in_transit'); return false;"><i class="bi bi-arrow-right me-2"></i>Mark In Transit</a></li>
+            <% } %>
+            <% if (returnData.status === 'received' || returnData.status === 'refund_pending') { %>
+            <li><a class="dropdown-item" href="#" onclick="quickTransition('refund_processing'); return false;"><i class="bi bi-cash me-2"></i>Mark Processing</a></li>
+            <% } %>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="#" onclick="quickTransition('cancelled'); return false;"><i class="bi bi-x-circle me-2"></i>Cancel Return</a></li>
+          </ul>
+        </div>
         <% } %>
       </div>
     </div>
@@ -640,6 +664,105 @@
   <script>
     const returnId = <%= returnData.id %>;
 
+    // ==================
+    // QUICK WORKFLOW FUNCTIONS
+    // ==================
+
+    async function submitQuickApprove() {
+      const awb = document.getElementById('quickApproveAwb').value.trim();
+      const courier = document.getElementById('quickApproveCourier').value;
+
+      try {
+        const res = await fetch(`/returns/${returnId}/quick-approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            awb_number: awb || null,
+            courier_name: courier || null
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          // Close modal
+          bootstrap.Modal.getInstance(document.getElementById('quickApproveModal')).hide();
+          alert(data.message);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to approve');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function submitAddAwb() {
+      const awb = document.getElementById('addAwbNumber').value.trim();
+      const courier = document.getElementById('addAwbCourier').value;
+
+      if (!awb) {
+        alert('Please enter AWB number');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/returns/${returnId}/quick-transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_status: 'pickup_scheduled',
+            awb_number: awb,
+            courier_name: courier
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          bootstrap.Modal.getInstance(document.getElementById('addAwbModal')).hide();
+          alert(`Pickup scheduled. AWB: ${awb}`);
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to schedule pickup');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function quickTransition(targetStatus) {
+      const statusLabels = {
+        'approved': 'Approved',
+        'pickup_scheduled': 'Pickup Scheduled',
+        'picked_up': 'Picked Up',
+        'in_transit': 'In Transit',
+        'received': 'Received',
+        'refund_pending': 'Refund Pending',
+        'refund_processing': 'Processing Refund',
+        'refunded': 'Refunded',
+        'cancelled': 'Cancelled'
+      };
+
+      if (!confirm(`Change status to "${statusLabels[targetStatus] || targetStatus}"?`)) return;
+
+      try {
+        const res = await fetch(`/returns/${returnId}/quick-transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_status: targetStatus })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.message || 'Failed to update status');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // Legacy functions kept for compatibility
     async function approveReturn() {
       if (!confirm('Approve this return request?')) return;
       const res = await fetch(`/returns/${returnId}/approve`, { method: 'POST' });
@@ -674,19 +797,11 @@
     }
 
     async function markPicked() {
-      if (!confirm('Mark this return as picked up by courier?')) return;
-      const res = await fetch(`/returns/${returnId}/mark-picked`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed');
+      quickTransition('picked_up');
     }
 
     async function markReceived() {
-      if (!confirm('Mark this return as received at warehouse?')) return;
-      const res = await fetch(`/returns/${returnId}/mark-received`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed');
+      quickTransition('received');
     }
 
     async function sendBankLink() {
@@ -702,6 +817,7 @@
 
     async function syncStatus() {
       const btn = document.getElementById('syncStatusBtn');
+      if (!btn) return;
       const originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Syncing...';
@@ -711,41 +827,55 @@
         const data = await res.json();
 
         if (data.success) {
-          let message = data.message + '\n\n';
+          let message = data.message + '\n';
 
           // Show Shopify info
           if (data.data.shopify) {
             if (data.data.shopify.error) {
-              message += `Shopify: ${data.data.shopify.error}\n`;
+              message += `\nShopify: ${data.data.shopify.error}`;
             } else {
-              message += `Shopify: ${data.data.shopify.financial_status || 'N/A'} | Refunds: ${data.data.shopify.refunds}\n`;
+              message += `\nShopify: ${data.data.shopify.financial_status || 'N/A'} | Refunds: ${data.data.shopify.refunds}`;
+              if (data.data.shopify.refundDetected) {
+                message += ' (Refund detected!)';
+              }
             }
           }
 
           // Show EasyEcom info
           if (data.data.easyecom) {
             if (data.data.easyecom.error) {
-              message += `EasyEcom: ${data.data.easyecom.error}\n`;
+              message += `\nEasyEcom: ${data.data.easyecom.error}`;
             } else {
-              message += `EasyEcom: ${data.data.easyecom.status || 'N/A'}`;
+              message += `\nEasyEcom: ${data.data.easyecom.status || 'N/A'}`;
               if (data.data.easyecom.awbUpdated) message += ' (AWB updated!)';
-              message += '\n';
             }
           }
 
           // Show Courier info
           if (data.data.courier) {
-            if (data.data.courier.error) {
-              message += `Courier: ${data.data.courier.error}\n`;
-            } else {
-              message += `Courier: ${data.data.courier.name} - AWB: ${data.data.courier.awb}\n`;
-            }
+            message += `\nCourier: ${data.data.courier.name} - AWB: ${data.data.courier.awb}`;
           }
 
-          alert(message);
-
+          // If status was auto-updated
           if (data.data.statusUpdated) {
+            alert(message);
             location.reload();
+            return;
+          }
+
+          // Handle suggested transitions
+          if (data.suggestedTransitions && data.suggestedTransitions.length > 0) {
+            const suggestion = data.suggestedTransitions[0];
+            const shouldTransition = confirm(
+              message + `\n\nSuggestion: Move to "${suggestion.status.replace(/_/g, ' ')}"?\nReason: ${suggestion.reason}`
+            );
+
+            if (shouldTransition) {
+              await quickTransition(suggestion.status);
+              return;
+            }
+          } else {
+            alert(message);
           }
         } else {
           alert(data.message || 'Failed to sync status');
@@ -874,6 +1004,83 @@
       }
     }
   </script>
+
+  <!-- Quick Approve Modal -->
+  <div class="modal fade" id="quickApproveModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-lightning me-2"></i>Quick Approve</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">Approve this return and optionally add AWB to schedule pickup immediately.</p>
+
+          <div class="mb-3">
+            <label class="form-label">AWB Number <span class="text-muted">(optional)</span></label>
+            <input type="text" class="form-control" id="quickApproveAwb" placeholder="Enter AWB number">
+            <small class="text-muted">Leave empty to approve without scheduling pickup</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Courier</label>
+            <select class="form-select" id="quickApproveCourier">
+              <option value="">Select courier</option>
+              <option value="Delhivery">Delhivery</option>
+              <option value="BlueDart">BlueDart</option>
+              <option value="XpressBees">XpressBees</option>
+              <option value="Ekart">Ekart</option>
+              <option value="DTDC">DTDC</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success" onclick="submitQuickApprove()">
+            <i class="bi bi-check-lg me-1"></i> Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add AWB Modal -->
+  <div class="modal fade" id="addAwbModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Add AWB & Schedule Pickup</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">AWB Number <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="addAwbNumber" placeholder="Enter AWB number" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Courier <span class="text-danger">*</span></label>
+            <select class="form-select" id="addAwbCourier" required>
+              <option value="">Select courier</option>
+              <option value="Delhivery">Delhivery</option>
+              <option value="BlueDart">BlueDart</option>
+              <option value="XpressBees">XpressBees</option>
+              <option value="Ekart">Ekart</option>
+              <option value="DTDC">DTDC</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="submitAddAwb()">
+            <i class="bi bi-truck me-1"></i> Schedule Pickup
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Link Order Modal -->
   <div class="modal fade" id="linkOrderModal" tabindex="-1">
