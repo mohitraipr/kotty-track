@@ -110,7 +110,7 @@ const DEFAULT_MARKETPLACES = [
 
 const MARKETPLACE_MATCH_RULES = {
   Amazon: { masterKey: 'ASIN', poKey: 'ASIN' },
-  Myntra: { masterKey: 'STYLECODE', poKey: 'Style Id' },
+  Myntra: { masterKey: 'SKUCODE', poKey: 'SKU Code' },
   Flipkart: { masterKey: 'FSN', poKey: 'FSN' }
 };
 
@@ -127,7 +127,7 @@ const API_MARKETPLACE_CONFIG = {
     requestLabel: 'PO number',
     poNumberKey: 'PO NUMBER',
     quantityKey: 'Quantity',
-    responseKey: 'styleCode'
+    responseKey: 'skuCode'
   },
   Flipkart: {
     requestField: 'consignmentNumber',
