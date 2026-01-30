@@ -116,19 +116,41 @@ router.post('/lookup', async (req, res) => {
       masterMap.set(identifier, data);
     });
 
-    const results = identifiers.map(identifier => {
-      const masterData = masterMap.get(identifier) || {};
+    const results = [];
+    identifiers.forEach(identifier => {
+      const masterData = masterMap.get(identifier);
+
+      // Skip if no master data found (required for lookup)
+      if (!masterData) return;
+
+      // Skip if SKU is missing in master data
+      const sku = getValueByHeader(masterData, 'SKU');
+      if (!sku) return;
+
       const quantity = quantityMap.get(identifier) || 0;
       const result = {
         [config.responseKey]: identifier,
         quantity,
         ...masterData
       };
-      // For Myntra, include PO quantity as order_qty
+
+      // For Myntra, include PO quantity as order_qty and normalize column names
       if (marketplaceName === 'Myntra') {
         result.order_qty = quantity;
+        // Normalize Title to product if Title exists
+        if (masterData.Title && !result.product) {
+          result.product = masterData.Title;
+        }
+        // Ensure Warehouse Refrences is included (handle typo variations)
+        const warehouseRef = getValueByHeader(masterData, 'Warehouse Refrences') ||
+                            getValueByHeader(masterData, 'Warehouse References') ||
+                            getValueByHeader(masterData, 'warehouseRefrences');
+        if (warehouseRef) {
+          result['Warehouse Refrences'] = warehouseRef;
+        }
       }
-      return result;
+
+      results.push(result);
     });
 
     return res.json({ marketplace: marketplaceName, results });
