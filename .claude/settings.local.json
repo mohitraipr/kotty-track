@@ -9,7 +9,9 @@
       "WebFetch(domain:api-docs.easyecom.io)",
       "WebFetch(domain:support.easyecom.io)",
       "WebFetch(domain:shopify.dev)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

@@ -729,7 +729,10 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
     const matchRule = MARKETPLACE_MATCH_RULES[marketplaceRow.name];
     const marketplaceConfig = API_MARKETPLACE_CONFIG[marketplaceRow.name];
 
-    if (matchRule) {
+    // Skip master data updates for Myntra - only insert PO rows
+    const skipMasterUpdate = marketplaceRow.name === 'Myntra';
+
+    if (matchRule && !skipMasterUpdate) {
       const [masterRows] = await pool.query(
         'SELECT id, data FROM po_admin_master_data WHERE marketplace_id = ?',
         [marketplaceId]
@@ -755,18 +758,8 @@ router.post('/upload-po', isAuthenticated, allowRoles(['poadmins', 'poadmin']), 
           continue;
         }
 
-        const skipHeaders = marketplaceRow.name === 'Myntra' ? ['Quantity'] : [];
+        const skipHeaders = [];
         const { updatedData, changes } = applyPoUpdatesToMaster(masterEntry.data, poRow.data, { skipHeaders });
-        if (marketplaceRow.name === 'Myntra') {
-          const poQuantity = getValueByHeader(poRow.data, marketplaceConfig?.quantityKey || 'Quantity');
-          if (poQuantity) {
-            const currentOrderQty = String(masterEntry.data?.order_qty || '').trim();
-            if (currentOrderQty !== poQuantity) {
-              updatedData.order_qty = poQuantity;
-              changes.push({ field: 'order_qty', from: currentOrderQty, to: poQuantity });
-            }
-          }
-        }
         if (changes.length > 0) {
           updatedCount += 1;
           changeSummaries.push({ identifier: identifierRaw, changes });

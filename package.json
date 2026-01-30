@@ -12,11 +12,11 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
     "@aws-sdk/s3-request-presigner": "^3.958.0",
-    "cors": "^2.8.5",
     "axios": "^1.10.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "connect-flash": "^0.1.1",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "exceljs": "^4.4.0",
