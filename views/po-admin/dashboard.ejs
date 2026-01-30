@@ -153,6 +153,17 @@
                 <div class="upload-status mt-2" id="masterDeleteStatus">No deletions yet.</div>
                 <div class="section-subtitle mt-2">SKU and required identifier columns cannot be deleted.</div>
               </div>
+              <div class="card-surface">
+                <div class="mb-3">
+                  <div class="section-title text-danger">Delete All Master Data</div>
+                  <div class="section-subtitle">Permanently remove ALL master data for this marketplace.</div>
+                </div>
+                <div class="mb-3">
+                  <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllMasterModal">
+                    <i class="bi bi-exclamation-triangle"></i> Delete All Master Data
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="col-lg-8">
@@ -216,6 +227,11 @@
                   <i class="bi bi-trash"></i> Delete PO
                 </button>
                 <div class="upload-status mt-2" id="poDeleteStatus">No deletions yet.</div>
+              </div>
+              <div class="mb-3">
+                <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllPosModal">
+                  <i class="bi bi-exclamation-triangle"></i> Delete All POs
+                </button>
               </div>
               <div class="mb-3">
                 <div class="form-label">PO Validation Summary</div>
@@ -363,6 +379,58 @@
           <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
           <button type="button" class="btn btn-danger" id="masterDeleteConfirmBtn">
             <i class="bi bi-trash"></i> Confirm Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="deleteAllMasterModal" tabindex="-1" aria-labelledby="deleteAllMasterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="deleteAllMasterModalLabel"><i class="bi bi-exclamation-triangle"></i> Delete All Master Data</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3 text-danger fw-semibold">This will permanently delete ALL master data for the selected marketplace. This action cannot be undone!</p>
+          <p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllMasterMarketplaceName">-</span></p>
+          <p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllMasterCount">-</span></p>
+          <div class="mb-3">
+            <label class="form-label">Type the marketplace name to confirm:</label>
+            <input type="text" class="form-control" id="deleteAllMasterConfirmInput" placeholder="Type marketplace name">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="deleteAllMasterConfirmBtn" disabled>
+            <i class="bi bi-trash"></i> Delete All Master Data
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="deleteAllPosModal" tabindex="-1" aria-labelledby="deleteAllPosModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="deleteAllPosModalLabel"><i class="bi bi-exclamation-triangle"></i> Delete All POs</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3 text-danger fw-semibold">This will permanently delete ALL PO uploads for the selected marketplace. This action cannot be undone!</p>
+          <p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllPosMarketplaceName">-</span></p>
+          <p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllPosCount">-</span></p>
+          <div class="mb-3">
+            <label class="form-label">Type the marketplace name to confirm:</label>
+            <input type="text" class="form-control" id="deleteAllPosConfirmInput" placeholder="Type marketplace name">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="deleteAllPosConfirmBtn" disabled>
+            <i class="bi bi-trash"></i> Delete All POs
           </button>
         </div>
       </div>
@@ -946,6 +1014,118 @@
       document.getElementById('apiKeyCreateBtn').addEventListener('click', createApiKey);
       loadApiKeys();
       resetPoDeleteSummary();
+
+      // Delete All Master Data Modal
+      const deleteAllMasterModal = document.getElementById('deleteAllMasterModal');
+      const deleteAllMasterConfirmInput = document.getElementById('deleteAllMasterConfirmInput');
+      const deleteAllMasterConfirmBtn = document.getElementById('deleteAllMasterConfirmBtn');
+
+      deleteAllMasterModal.addEventListener('show.bs.modal', async () => {
+        const marketplaceId = document.getElementById('masterMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        document.getElementById('deleteAllMasterMarketplaceName').textContent = marketplace?.name || '-';
+        deleteAllMasterConfirmInput.value = '';
+        deleteAllMasterConfirmBtn.disabled = true;
+
+        try {
+          const res = await fetch(`/po-admin/api/master-data?marketplaceId=${marketplaceId}&page=1`);
+          const data = await res.json();
+          document.getElementById('deleteAllMasterCount').textContent = data.total || 0;
+        } catch (error) {
+          document.getElementById('deleteAllMasterCount').textContent = 'Error loading count';
+        }
+      });
+
+      deleteAllMasterConfirmInput.addEventListener('input', () => {
+        const marketplaceId = document.getElementById('masterMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        const inputValue = deleteAllMasterConfirmInput.value.trim().toLowerCase();
+        deleteAllMasterConfirmBtn.disabled = inputValue !== (marketplace?.name || '').toLowerCase();
+      });
+
+      deleteAllMasterConfirmBtn.addEventListener('click', async () => {
+        const marketplaceId = document.getElementById('masterMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        deleteAllMasterConfirmBtn.disabled = true;
+        deleteAllMasterConfirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
+
+        try {
+          const res = await fetch('/po-admin/api/delete-all-master', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ marketplaceId, confirmName: marketplace?.name })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || 'Failed to delete master data');
+          } else {
+            alert(`Deleted ${data.deletedCount} master data records for ${data.marketplace}`);
+            loadMasterData();
+          }
+        } catch (error) {
+          alert('Failed to delete master data');
+        }
+
+        deleteAllMasterConfirmBtn.innerHTML = '<i class="bi bi-trash"></i> Delete All Master Data';
+        const modalInstance = bootstrap.Modal.getInstance(deleteAllMasterModal);
+        if (modalInstance) modalInstance.hide();
+      });
+
+      // Delete All POs Modal
+      const deleteAllPosModal = document.getElementById('deleteAllPosModal');
+      const deleteAllPosConfirmInput = document.getElementById('deleteAllPosConfirmInput');
+      const deleteAllPosConfirmBtn = document.getElementById('deleteAllPosConfirmBtn');
+
+      deleteAllPosModal.addEventListener('show.bs.modal', async () => {
+        const marketplaceId = document.getElementById('poMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        document.getElementById('deleteAllPosMarketplaceName').textContent = marketplace?.name || '-';
+        deleteAllPosConfirmInput.value = '';
+        deleteAllPosConfirmBtn.disabled = true;
+
+        try {
+          const res = await fetch(`/po-admin/api/po-data?marketplaceId=${marketplaceId}&page=1`);
+          const data = await res.json();
+          document.getElementById('deleteAllPosCount').textContent = data.total || 0;
+        } catch (error) {
+          document.getElementById('deleteAllPosCount').textContent = 'Error loading count';
+        }
+      });
+
+      deleteAllPosConfirmInput.addEventListener('input', () => {
+        const marketplaceId = document.getElementById('poMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        const inputValue = deleteAllPosConfirmInput.value.trim().toLowerCase();
+        deleteAllPosConfirmBtn.disabled = inputValue !== (marketplace?.name || '').toLowerCase();
+      });
+
+      deleteAllPosConfirmBtn.addEventListener('click', async () => {
+        const marketplaceId = document.getElementById('poMarketplace').value;
+        const marketplace = getMarketplaceById(marketplaceId);
+        deleteAllPosConfirmBtn.disabled = true;
+        deleteAllPosConfirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
+
+        try {
+          const res = await fetch('/po-admin/api/delete-all-pos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ marketplaceId, confirmName: marketplace?.name })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || 'Failed to delete PO data');
+          } else {
+            alert(`Deleted ${data.deletedCount} PO records for ${data.marketplace}`);
+            loadPoData();
+          }
+        } catch (error) {
+          alert('Failed to delete PO data');
+        }
+
+        deleteAllPosConfirmBtn.innerHTML = '<i class="bi bi-trash"></i> Delete All POs';
+        const modalInstance = bootstrap.Modal.getInstance(deleteAllPosModal);
+        if (modalInstance) modalInstance.hide();
+      });
     });
   </script>
 </body>

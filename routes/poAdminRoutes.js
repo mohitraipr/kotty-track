@@ -1180,4 +1180,84 @@ router.get('/api/po-data', isAuthenticated, allowRoles(['poadmins', 'poadmin']),
   }
 });
 
+// Delete all master data for a marketplace
+router.post('/api/delete-all-master', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.body.marketplaceId);
+  const confirmName = String(req.body.confirmName || '').trim();
+
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    // Require confirmation by typing marketplace name
+    if (confirmName.toLowerCase() !== marketplaceRow.name.toLowerCase()) {
+      return res.status(400).json({ error: `Please type "${marketplaceRow.name}" to confirm deletion.` });
+    }
+
+    const [result] = await pool.query(
+      'DELETE FROM po_admin_master_data WHERE marketplace_id = ?',
+      [marketplaceId]
+    );
+
+    return res.json({
+      marketplace: marketplaceRow.name,
+      deletedCount: result.affectedRows || 0
+    });
+  } catch (error) {
+    console.error('Error deleting all master data:', error);
+    return res.status(500).json({ error: 'Unable to delete master data.' });
+  }
+});
+
+// Delete all PO uploads for a marketplace
+router.post('/api/delete-all-pos', isAuthenticated, allowRoles(['poadmins', 'poadmin']), async (req, res) => {
+  const marketplaceId = Number(req.body.marketplaceId);
+  const confirmName = String(req.body.confirmName || '').trim();
+
+  if (!marketplaceId) {
+    return res.status(400).json({ error: 'Marketplace is required.' });
+  }
+
+  try {
+    await ensurePoAdminSetup();
+
+    const [[marketplaceRow]] = await pool.query(
+      'SELECT name FROM po_admin_marketplaces WHERE id = ? LIMIT 1',
+      [marketplaceId]
+    );
+    if (!marketplaceRow) {
+      return res.status(404).json({ error: 'Marketplace not found.' });
+    }
+
+    // Require confirmation by typing marketplace name
+    if (confirmName.toLowerCase() !== marketplaceRow.name.toLowerCase()) {
+      return res.status(400).json({ error: `Please type "${marketplaceRow.name}" to confirm deletion.` });
+    }
+
+    const [result] = await pool.query(
+      'DELETE FROM po_admin_po_uploads WHERE marketplace_id = ?',
+      [marketplaceId]
+    );
+
+    return res.json({
+      marketplace: marketplaceRow.name,
+      deletedCount: result.affectedRows || 0
+    });
+  } catch (error) {
+    console.error('Error deleting all PO data:', error);
+    return res.status(500).json({ error: 'Unable to delete PO data.' });
+  }
+});
+
 module.exports = router;
