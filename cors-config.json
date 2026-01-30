@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://erpkotty.in", "https://*.myshopify.com"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Content-Disposition", "Content-Length", "x-goog-meta-*"],
+    "maxAgeSeconds": 3600
+  }
+]
