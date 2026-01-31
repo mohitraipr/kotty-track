@@ -66,7 +66,7 @@ const DEFAULT_MARKETPLACES = [
       'order_qty',
       'Size',
       'Color',
-      'Warehouse References',
+      'Warehouse Refrences',
       'MRP',
       'Title'
     ],

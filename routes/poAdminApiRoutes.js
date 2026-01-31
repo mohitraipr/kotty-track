@@ -142,9 +142,11 @@ router.post('/lookup', async (req, res) => {
           result.product = masterData.Title;
         }
         // Ensure Warehouse Refrences is included (handle typo variations)
-        const warehouseRef = getValueByHeader(masterData, 'Warehouse Refrences') ||
-                            getValueByHeader(masterData, 'Warehouse References') ||
-                            getValueByHeader(masterData, 'warehouseRefrences');
+        // Check direct property access first, then use getValueByHeader for case-insensitive search
+        const warehouseRef = masterData['Warehouse Refrences'] ||
+                            masterData['Warehouse References'] ||
+                            getValueByHeader(masterData, 'Warehouse Refrences') ||
+                            getValueByHeader(masterData, 'Warehouse References');
         if (warehouseRef) {
           result['Warehouse Refrences'] = warehouseRef;
         }
