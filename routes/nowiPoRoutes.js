@@ -424,4 +424,119 @@ router.get('/po/:id', isAuthenticated, isNowiPOOrganization, async (req, res) =>
   }
 });
 
+// Delete all SKU mappings
+router.post('/mappings/delete-all', isAuthenticated, isNowiPOOrganization, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM nowi_po_sku_mappings');
+    req.flash('success', 'All SKU mappings deleted successfully.');
+    return res.redirect('/nowi-po/dashboard');
+  } catch (error) {
+    console.error('Error deleting SKU mappings:', error);
+    req.flash('error', 'Failed to delete SKU mappings.');
+    return res.redirect('/nowi-po/dashboard');
+  }
+});
+
+// Delete a specific PO
+router.post('/po/:id/delete', isAuthenticated, isNowiPOOrganization, async (req, res) => {
+  const { id } = req.params;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Delete PO lines first (foreign key constraint)
+    await connection.query('DELETE FROM nowi_po_lines WHERE po_id = ?', [id]);
+
+    // Delete PO header
+    const [result] = await connection.query('DELETE FROM nowi_po_headers WHERE id = ?', [id]);
+
+    await connection.commit();
+
+    if (result.affectedRows === 0) {
+      req.flash('error', 'PO not found.');
+    } else {
+      req.flash('success', 'PO deleted successfully.');
+    }
+    return res.redirect('/nowi-po/po');
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error deleting PO:', error);
+    req.flash('error', 'Failed to delete PO.');
+    return res.redirect('/nowi-po/po');
+  } finally {
+    connection.release();
+  }
+});
+
+router.get('/po/:id/download', isAuthenticated, isNowiPOOrganization, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [[header]] = await pool.query(
+      `SELECT h.id, h.po_number, h.vendor_name, h.created_at, u.username
+         FROM nowi_po_headers h
+         LEFT JOIN users u ON h.created_by = u.id
+        WHERE h.id = ?`,
+      [id]
+    );
+
+    if (!header) {
+      return res.status(404).json({ error: 'PO not found.' });
+    }
+
+    const [lines] = await pool.query(
+      `SELECT vendor_name, image, color, sku, product_code, size, quantity, weight, link
+         FROM nowi_po_lines
+        WHERE po_id = ?
+        ORDER BY id ASC`,
+      [id]
+    );
+
+    // Format data for Excel
+    const excelData = lines.map(line => ({
+      'Vendor Name': line.vendor_name || '',
+      'Image': line.image || '',
+      'Color': line.color || '',
+      'SKU': line.sku || '',
+      'Product Code': line.product_code || '',
+      'Product Size': line.size || '',
+      'Quantity': line.quantity || 0,
+      'Weight': line.weight ?? '',
+      'Link': line.link || ''
+    }));
+
+    // Create workbook
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.json_to_sheet(excelData);
+
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 15 }, // Vendor Name
+      { wch: 40 }, // Image
+      { wch: 12 }, // Color
+      { wch: 25 }, // SKU
+      { wch: 20 }, // Product Code
+      { wch: 12 }, // Product Size
+      { wch: 10 }, // Quantity
+      { wch: 10 }, // Weight
+      { wch: 40 }  // Link
+    ];
+
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'PO Lines');
+
+    // Generate buffer
+    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Set headers for download
+    const filename = `${header.po_number}-${header.vendor_name}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error downloading PO:', error);
+    res.status(500).json({ error: 'Unable to download PO.' });
+  }
+});
+
 module.exports = router;
