@@ -33,8 +33,8 @@ COPY --chown=nodejs:nodejs . .
 # Remove development files
 RUN rm -rf .git .gitignore .env* docs/*.md tests
 
-# Create logs directory
-RUN mkdir -p logs && chown nodejs:nodejs logs
+# Create logs and uploads directories
+RUN mkdir -p logs uploads && chown -R nodejs:nodejs logs uploads
 
 # Switch to non-root user
 USER nodejs

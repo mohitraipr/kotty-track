@@ -6,9 +6,19 @@ const flash = require('connect-flash');
 const path = require('path');
 const cors = require('cors');
 
-// Load environment variables securely using secure-env before loading modules that depend on them
-const secureEnv = require('secure-env');
-global.env = secureEnv({ secret: 'mySecretPassword' }); // Replace with your actual secret
+// Load environment variables
+// In Cloud Run, env vars are injected directly via --set-env-vars and --set-secrets
+// For local development, use secure-env with encrypted .env.enc file
+if (process.env.K_SERVICE || process.env.NODE_ENV === 'production') {
+    // Running in Cloud Run or production - use process.env directly
+    global.env = process.env;
+    console.log('Running in Cloud Run mode - using process.env');
+} else {
+    // Local development - use secure-env
+    const secureEnv = require('secure-env');
+    global.env = secureEnv({ secret: 'mySecretPassword' });
+    console.log('Running in local mode - using secure-env');
+}
 
 const { markSessionActivity } = require('./middlewares/sessionActivity');
 const { initHealthQueue } = require('./utils/healthRefreshQueue');
@@ -145,8 +155,11 @@ const vendorFilesRoutes = require('./routes/vendorFilesRoutes');
 const poAdminRoutes = require('./routes/poAdminRoutes');
 const poAdminApiRoutes = require('./routes/poAdminApiRoutes');
 const returnRoutes = require('./routes/returnRoutes');
+const healthRoutes = require('./routes/healthRoutes');
 
 // Use Routes
+// Health check for Cloud Run (must be before auth middleware)
+app.use('/health', healthRoutes);
 app.use('/', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/dashboard', dashboardRoutes);
@@ -235,7 +248,8 @@ app.use((req, res) => {
 });
 
 // Start Server (ALB terminates SSL; your app listens over HTTP)
-const PORT = global.env.PORT || 3000;
+// Cloud Run sets process.env.PORT, global.env is for secure-env
+const PORT = process.env.PORT || global.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

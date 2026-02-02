@@ -1,29 +1,36 @@
-// routes/catalogUploadRoutes.js
+/**
+ * Catalog Upload Routes - GCP Cloud Storage Version
+ */
 
 const express = require('express');
-const router  = express.Router();
-const multer  = require('multer');
-const multerS3 = require('multer-s3');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const path    = require('path');
-const XLSX    = require('xlsx');
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const XLSX = require('xlsx');
 const { pool } = require('../config/db');
+const {
+  bucket,
+  BUCKET_NAME,
+  getObject,
+  createGCSStorage,
+  streamToBuffer
+} = require('../utils/gcsClient');
 const {
   isAuthenticated,
   isCatalogUpload,
   isAdmin
 } = require('../middlewares/auth');
 
-const s3     = new S3Client({ region: 'ap-south-1' });
-const BUCKET = 'my-app-uploads-kotty';
+const BUCKET = BUCKET_NAME;
 
 // In memory cache for searches { key: { data, ts } }
 const searchCache = new Map();
-const SEARCH_TTL  = 10 * 60 * 1000; // 10 minutes
+const SEARCH_TTL = 10 * 60 * 1000; // 10 minutes
 
-// Simple in-memory cache for marketplaces to avoid hitting DB on every request
+// Simple in-memory cache for marketplaces
 let marketCache = { data: null, ts: 0 };
 const MARKET_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function getMarketplaces() {
   const now = Date.now();
   if (!marketCache.data || (now - marketCache.ts) > MARKET_TTL) {
@@ -33,18 +40,17 @@ async function getMarketplaces() {
   return marketCache.data;
 }
 
-// Multer-S3 setup
+// GCS Multer setup
 const upload = multer({
-  storage: multerS3({
-    s3,
+  storage: createGCSStorage({
     bucket: BUCKET,
-    contentType: multerS3.AUTO_CONTENT_TYPE,
+    contentType: (req, file) => file.mimetype,
     key: (req, file, cb) => {
-      const uid       = req.session.user.id;
-      const mkt       = req.body.marketplace;
+      const uid = req.session.user.id;
+      const mkt = req.body.marketplace;
       const timestamp = Date.now();
-      const ext       = path.extname(file.originalname);
-      const base      = path.basename(file.originalname, ext);
+      const ext = path.extname(file.originalname);
+      const base = path.basename(file.originalname, ext);
       cb(null, `user_${uid}/mkt_${mkt}/${timestamp}-${base}${ext}`);
     }
   }),
@@ -56,7 +62,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// Build SQL + params for listing (joins marketplaces)
+// Build SQL + params for listing
 function listSql(userId, marketplaceId, lastId) {
   let sql = `
     SELECT
@@ -98,25 +104,31 @@ async function searchFiles(userId, marketplaceId, term) {
   );
 
   const matches = [];
-  const batch = 5; // limit concurrent S3 fetches
+  const batch = 5; // limit concurrent GCS fetches
+
   for (let i = 0; i < rows.length; i += batch) {
     const slice = rows.slice(i, i + batch);
     const results = await Promise.all(slice.map(async r => {
-      const data = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: r.filename }));
-      if (r.filename.toLowerCase().endsWith('.csv')) {
-        for await (const chunk of data.Body) {
-          if (chunk.toString('utf8').toLowerCase().includes(term)) return r;
+      try {
+        const data = await getObject(r.filename);
+
+        if (r.filename.toLowerCase().endsWith('.csv')) {
+          const buffer = await streamToBuffer(data.Body);
+          if (buffer.toString('utf8').toLowerCase().includes(term)) return r;
+          return null;
+        }
+
+        const buffer = await streamToBuffer(data.Body);
+        const wb = XLSX.read(buffer, { type: 'buffer' });
+        for (const sn of wb.SheetNames) {
+          const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
+          if (JSON.stringify(j).toLowerCase().includes(term)) return r;
         }
         return null;
+      } catch (err) {
+        console.error('Search file error:', err);
+        return null;
       }
-      const chunks = [];
-      for await (const c of data.Body) chunks.push(c);
-      const wb = XLSX.read(Buffer.concat(chunks), { type: 'buffer' });
-      for (const sn of wb.SheetNames) {
-        const j = XLSX.utils.sheet_to_json(wb.Sheets[sn], { raw: false });
-        if (JSON.stringify(j).toLowerCase().includes(term)) return r;
-      }
-      return null;
     }));
     results.forEach(r => { if (r) matches.push(r); });
   }
@@ -127,15 +139,15 @@ async function searchFiles(userId, marketplaceId, term) {
 
 // GET /catalogUpload — main page with initial batch
 router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
-  const userId        = req.session.user.id;
+  const userId = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10) || null;
-  const limit         = 20;
+  const limit = 20;
 
   try {
     const markets = await getMarketplaces();
 
     const { sql, args } = listSql(userId, marketplaceId, null);
-    const [files]       = await pool.query(sql + ' LIMIT ?', [...args, limit]);
+    const [files] = await pool.query(sql + ' LIMIT ?', [...args, limit]);
 
     res.render('catalogUpload', {
       markets,
@@ -153,14 +165,14 @@ router.get('/', isAuthenticated, isCatalogUpload, async (req, res) => {
 
 // GET /catalogUpload/files — JSON for lazy-loading
 router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
-  const userId        = req.session.user.id;
+  const userId = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10) || null;
-  const limit         = parseInt(req.query.limit, 10) || 20;
-  const lastId        = parseInt(req.query.lastId, 10) || null;
+  const limit = parseInt(req.query.limit, 10) || 20;
+  const lastId = parseInt(req.query.lastId, 10) || null;
 
   try {
     const { sql, args } = listSql(userId, marketplaceId, lastId);
-    const [rows]        = await pool.query(sql + ' LIMIT ?', [...args, limit]);
+    const [rows] = await pool.query(sql + ' LIMIT ?', [...args, limit]);
     res.json({ files: rows });
   } catch (err) {
     console.error(err);
@@ -168,7 +180,7 @@ router.get('/files', isAuthenticated, isCatalogUpload, async (req, res) => {
   }
 });
 
-// POST /catalogUpload/upload — upload to S3 + metadata
+// POST /catalogUpload/upload — upload to GCS + metadata
 router.post(
   '/upload',
   isAuthenticated,
@@ -176,12 +188,12 @@ router.post(
   upload.single('csvfile'),
   async (req, res) => {
     try {
-      const userId        = req.session.user.id;
+      const userId = req.session.user.id;
       const marketplaceId = parseInt(req.body.marketplace, 10);
       if (!marketplaceId) throw new Error('Marketplace required');
 
       let originalName = req.file.originalname;
-      const today      = new Date().toISOString().slice(0,10);
+      const today = new Date().toISOString().slice(0, 10);
       const [[dup]] = await pool.query(`
         SELECT 1
           FROM uploaded_files
@@ -193,7 +205,7 @@ router.post(
       `, [userId, marketplaceId, originalName, today]);
 
       if (dup) {
-        const ext  = path.extname(originalName);
+        const ext = path.extname(originalName);
         const base = path.basename(originalName, ext);
         originalName = `${base}_${today}${ext}`;
       }
@@ -213,13 +225,13 @@ router.post(
   }
 );
 
-// GET /catalogUpload/search — unchanged search behavior
+// GET /catalogUpload/search — search within files
 router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
-  const userId        = req.session.user.id;
+  const userId = req.session.user.id;
   const marketplaceId = parseInt(req.query.marketplace, 10);
-  const term          = (req.query.q||'').trim().toLowerCase();
+  const term = (req.query.q || '').trim().toLowerCase();
   if (!marketplaceId || !term) {
-    req.flash('error','Marketplace + search term required');
+    req.flash('error', 'Marketplace + search term required');
     return res.redirect('/catalogUpload');
   }
 
@@ -227,7 +239,7 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
     const matches = await searchFiles(userId, marketplaceId, term);
 
     if (!matches.length) {
-      req.flash('error','No matching files found.');
+      req.flash('error', 'No matching files found.');
       return res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
     }
 
@@ -241,12 +253,12 @@ router.get('/search', isAuthenticated, isCatalogUpload, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    req.flash('error','Search failed.');
+    req.flash('error', 'Search failed.');
     res.redirect(`/catalogUpload?marketplace=${marketplaceId}`);
   }
 });
 
-// GET /catalogUpload/download/:id — stream back from S3
+// GET /catalogUpload/download/:id — stream back from GCS
 router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -266,27 +278,25 @@ router.get('/download/:id', isAuthenticated, isCatalogUpload, async (req, res) =
     const { filename, original_filename } = rows[0];
     res.attachment(original_filename);
 
-    const data = await s3.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: filename })
-    );
+    const data = await getObject(filename);
     data.Body.pipe(res).on('error', err => {
       console.error('Stream error:', err);
       res.status(500).end('Download error');
     });
   } catch (err) {
     console.error('Download failed:', err);
-    req.flash('error','Download failed.');
+    req.flash('error', 'Download failed.');
     res.redirect('/catalogUpload');
   }
 });
-// Admin: list all uploads + aggregate counts for chart
+
+// Admin: list all uploads + aggregate counts
 router.get(
   '/admin',
   isAuthenticated,
   isAdmin,
   async (req, res) => {
     try {
-      // 1) Detailed rows for listing
       const limit = parseInt(req.query.limit, 10) || 500;
       const [files] = await pool.query(`
         SELECT uf.id,
@@ -301,7 +311,6 @@ router.get(
          LIMIT ?
       `, [limit]);
 
-      // 2) Aggregated counts per user & marketplace
       const [aggData] = await pool.query(`
         SELECT u.username,
                m.name   AS marketplace,
