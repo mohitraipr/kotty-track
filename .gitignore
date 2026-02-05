@@ -1,3 +1,22 @@
 node_modules/
 .env
+.env.*
+!.env.gcp.example
 logs/
+uploads/
+
+# GCP
+*.json.key
+*-service-account.json
+service-account*.json
+temp_pass.txt
+temp.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

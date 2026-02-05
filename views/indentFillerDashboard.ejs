@@ -404,6 +404,17 @@
           }
         });
       });
+
+      // Prevent duplicate form submissions
+      document.querySelector('form').addEventListener('submit', function(e) {
+        const btn = this.querySelector('button[type="submit"]');
+        if (btn.disabled) {
+          e.preventDefault();
+          return false;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+      });
     </script>
   
 </html>

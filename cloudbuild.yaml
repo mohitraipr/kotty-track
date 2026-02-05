@@ -57,7 +57,7 @@ substitutions:
   _BUCKET_NAME: 'kotty-track-uploads'
   _DB_USER: 'kotty_user'
   _DB_NAME: 'kotty_db'
-  _MEMORY: '512Mi'
+  _MEMORY: '1Gi'
   _CPU: '1'
   _MIN_INSTANCES: '0'
   _MAX_INSTANCES: '10'

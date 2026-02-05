@@ -44,7 +44,16 @@
       "Bash(gcloud compute target-http-proxies create:*)",
       "Bash(gcloud compute ssl-certificates describe:*)",
       "Bash(nslookup:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(gcloud run services delete:*)",
+      "Bash(gcloud compute backend-services get-health:*)",
+      "Bash(gcloud compute backend-services describe:*)",
+      "Bash(gcloud compute forwarding-rules list:*)",
+      "Bash(gcloud compute network-endpoint-groups describe:*)",
+      "Bash(gcloud compute backend-services update:*)",
+      "Bash(gcloud compute url-maps describe:*)",
+      "Bash(gcloud sql instances describe:*)",
+      "Bash(gcloud sql instances patch:*)"
     ]
   }
 }
