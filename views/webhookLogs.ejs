@@ -3,12 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="vapid-public" content="<%= vapidPublicKey %>">
-  <title>Webhook Logs</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    pre { white-space: pre-wrap; word-break: break-word; }
-  </style>
+  <title>Inventory Webhook Logs</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,75 +12,108 @@
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container-fluid">
-    <span class="navbar-brand">Webhook Logs</span>
+    <span class="navbar-brand">Inventory Webhook Logs</span>
+    <span class="text-white ms-auto">Showing last <%= logs.length %> entries (from database)</span>
   </div>
 </nav>
-<div class="container py-4">
-  <h3 class="mb-4">Inventory Webhook Calls</h3>
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Inventory Snapshots</h3>
+    <div class="d-flex gap-2 align-items-center">
+      <div id="clearStatus" class="d-none">
+        <div class="d-flex align-items-center gap-2">
+          <div class="progress" style="width: 200px; height: 20px;">
+            <div id="clearProgress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+          </div>
+          <small id="clearText" class="text-muted"></small>
+        </div>
+      </div>
+      <button id="clearBtn" class="btn btn-outline-danger btn-sm" onclick="clearRawData()">Clear Raw Data</button>
+      <a href="/webhook/order/logs" class="btn btn-outline-primary btn-sm">View Order Logs</a>
+    </div>
+  </div>
   <div class="table-responsive shadow-sm">
-    <table id="log-table" class="table table-bordered table-striped table-hover table-sm align-middle">
+    <table class="table table-bordered table-striped table-hover table-sm align-middle">
       <thead class="table-dark">
         <tr>
           <th>Time</th>
-          <th>Access Token</th>
-          <th>Raw Body</th>
-          <th>Parsed Data</th>
+          <th>SKU</th>
+          <th>Warehouse</th>
+          <th>Inventory</th>
+          <th>Status</th>
         </tr>
       </thead>
-      <tbody id="log-body">
-      <% logs.slice().reverse().forEach(function(log) { %>
+      <tbody>
+      <% logs.forEach(function(log) { %>
         <tr>
           <td><%= log.time %></td>
-          <td><%= log.accessToken %></td>
-          <td><pre class="mb-0"><%= log.raw %></pre></td>
-          <td><pre class="mb-0"><%= JSON.stringify(log.data, null, 2) %></pre></td>
+          <td><strong><%= log.sku %></strong></td>
+          <td><%= log.warehouse_id || 'N/A' %></td>
+          <td><%= log.inventory != null ? log.inventory : 'N/A' %></td>
+          <td><%= log.sku_status || 'N/A' %></td>
         </tr>
       <% }); %>
+      <% if (!logs.length) { %>
+        <tr><td colspan="5" class="text-center text-muted">No inventory snapshots found</td></tr>
+      <% } %>
       </tbody>
     </table>
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const logBody = document.getElementById('log-body');
-  const evtSource = new EventSource('/webhook/logs/stream');
+async function clearRawData() {
+  const btn = document.getElementById('clearBtn');
+  const status = document.getElementById('clearStatus');
+  const progress = document.getElementById('clearProgress');
+  const text = document.getElementById('clearText');
 
-  evtSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.logs) {
-      data.logs.slice().reverse().forEach(addRow);
-    } else if (data.log) {
-      addRow(data.log);
-    } else if (data.alert) {
-      showNotification(data.alert.message);
+  // First get the count
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  try {
+    const countRes = await fetch('/webhook/clear-raw/inventory/count');
+    const countData = await countRes.json();
+    if (countData.total === 0) {
+      btn.textContent = 'Already clean';
+      btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+      return;
     }
-  };
-
-  function addRow(log) {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${log.time}</td>
-      <td>${log.accessToken || ''}</td>
-      <td><pre class="mb-0">${log.raw}</pre></td>
-      <td><pre class="mb-0">${JSON.stringify(log.data, null, 2)}</pre></td>
-    `;
-    logBody.prepend(row);
-    if (logBody.rows.length > 50) {
-      logBody.deleteRow(-1);
+    if (!confirm('Clear raw JSON data from ' + countData.total.toLocaleString() + ' inventory snapshots? This frees disk space but cannot be undone.')) {
+      btn.disabled = false;
+      btn.textContent = 'Clear Raw Data';
+      return;
     }
-  }
+    // Show progress
+    status.classList.remove('d-none');
+    btn.classList.add('d-none');
+    text.textContent = 'Clearing ' + countData.total.toLocaleString() + ' rows...';
+    progress.style.width = '30%';
+    progress.textContent = 'Working...';
 
-  function showNotification(msg) {
-    if (window.Notification && Notification.permission === 'granted') {
-      const n = new Notification('Inventory Alert', { body: msg });
-      n.onclick = () => window.open('/inventory/alerts', '_blank');
-    }
-  }
+    const res = await fetch('/webhook/clear-raw/inventory', { method: 'POST' });
+    const data = await res.json();
 
-  if (window.Notification && Notification.permission !== 'granted') {
-    Notification.requestPermission();
+    progress.style.width = '100%';
+    progress.classList.remove('progress-bar-animated');
+    progress.classList.replace('bg-primary', 'bg-success');
+    progress.classList.add('bg-success');
+    progress.textContent = 'Done!';
+    text.textContent = data.message || ('Cleared ' + data.cleared + ' rows');
+
+    btn.classList.remove('d-none');
+    btn.textContent = 'Cleared!';
+    btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+  } catch (err) {
+    progress.style.width = '100%';
+    progress.classList.add('bg-danger');
+    progress.textContent = 'Error';
+    text.textContent = err.message;
+    btn.classList.remove('d-none');
+    btn.disabled = false;
+    btn.textContent = 'Retry';
   }
+}
 </script>
-<script src="/public/js/notification.js"></script>
 </body>
 </html>

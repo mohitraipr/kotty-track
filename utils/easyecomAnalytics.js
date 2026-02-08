@@ -430,66 +430,69 @@ async function getMomentumWithGrowth(pool, { periodKey = '1d', warehouseIds } = 
 
 async function getSlowMovers(pool, { warehouseIds } = {}) {
   const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
-  const hasWarehouseFilter = allowedWarehouses.length > 0;
+  const key = `slowMovers:${allowedWarehouses.sort().join(',')}`;
+  return memoize(key, CACHE_TTL_MS, async () => {
+    const hasWarehouseFilter = allowedWarehouses.length > 0;
 
-  const [healthRows] = await pool.query(
-    `SELECT h.sku, h.warehouse_id, h.inventory
-     FROM ee_inventory_health h
-     WHERE EXISTS (
-       SELECT 1 FROM ee_replenishment_rules r
-       WHERE r.sku = h.sku
-         AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
-         AND r.making_time_days IS NOT NULL
-     )
-     ${hasWarehouseFilter ? 'AND h.warehouse_id IN (?)' : ''}
-     GROUP BY h.sku, h.warehouse_id`,
-    hasWarehouseFilter ? [allowedWarehouses] : []
-  );
+    const [healthRows] = await pool.query(
+      `SELECT h.sku, h.warehouse_id, h.inventory
+       FROM ee_inventory_health h
+       WHERE EXISTS (
+         SELECT 1 FROM ee_replenishment_rules r
+         WHERE r.sku = h.sku
+           AND (r.warehouse_id IS NULL OR r.warehouse_id = h.warehouse_id)
+           AND r.making_time_days IS NOT NULL
+       )
+       ${hasWarehouseFilter ? 'AND h.warehouse_id IN (?)' : ''}
+       GROUP BY h.sku, h.warehouse_id`,
+      hasWarehouseFilter ? [allowedWarehouses] : []
+    );
 
-  const end = new Date();
-  const start7 = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const start30 = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const end = new Date();
+    const start7 = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const start30 = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const [orders7, orders30] = await Promise.all([
-    getAggregateForWindow(pool, start7, end, { warehouseIds: allowedWarehouses }),
-    getAggregateForWindow(pool, start30, end, { warehouseIds: allowedWarehouses }),
-  ]);
+    const [orders7, orders30] = await Promise.all([
+      getAggregateForWindow(pool, start7, end, { warehouseIds: allowedWarehouses }),
+      getAggregateForWindow(pool, start30, end, { warehouseIds: allowedWarehouses }),
+    ]);
 
-  const map7 = new Map();
-  const map30 = new Map();
-  for (const row of orders7) {
-    map7.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
-  }
-  for (const row of orders30) {
-    map30.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
-  }
+    const map7 = new Map();
+    const map30 = new Map();
+    for (const row of orders7) {
+      map7.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
+    }
+    for (const row of orders30) {
+      map30.set(`${row.sku}:${row.warehouse_id ?? 'null'}`, Number(row.order_count) || 0);
+    }
 
-  const slowMovers = healthRows
-    .map((row) => {
-      const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
-      const count7 = map7.get(key) || 0;
-      const count30 = map30.get(key) || 0;
+    const slowMovers = healthRows
+      .map((row) => {
+        const key = `${row.sku}:${row.warehouse_id ?? 'null'}`;
+        const count7 = map7.get(key) || 0;
+        const count30 = map30.get(key) || 0;
 
-      if (count7 <= 10 && count30 <= 10) {
-        return {
-          sku: row.sku,
-          warehouse_id: row.warehouse_id,
-          orders_7d: count7,
-          orders_30d: count30,
-          inventory: Number(row.inventory) || 0,
-        };
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => {
-      if (a.inventory !== b.inventory) return b.inventory - a.inventory;
-      if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
-      if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
-      return a.sku.localeCompare(b.sku);
-    });
+        if (count7 <= 10 && count30 <= 10) {
+          return {
+            sku: row.sku,
+            warehouse_id: row.warehouse_id,
+            orders_7d: count7,
+            orders_30d: count30,
+            inventory: Number(row.inventory) || 0,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.inventory !== b.inventory) return b.inventory - a.inventory;
+        if (a.orders_30d !== b.orders_30d) return a.orders_30d - b.orders_30d;
+        if (a.orders_7d !== b.orders_7d) return a.orders_7d - b.orders_7d;
+        return a.sku.localeCompare(b.sku);
+      });
 
-  return slowMovers;
+    return slowMovers;
+  });
 }
 
 module.exports = {

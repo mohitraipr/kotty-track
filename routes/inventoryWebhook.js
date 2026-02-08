@@ -20,52 +20,6 @@ function verifyAccessToken(req, res, next) {
   return res.status(403).send('Invalid Access Token');
 }
 
-// In-memory store for recent webhook requests
-const logs = [];
-const orderLogs = [];
-
-// Simple in-memory rate limiter for webhooks
-// Allows 300 requests per minute (5 per second average)
-// EasyEcom will retry on 429 response
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX = 300; // max requests per window
-const rateLimitStore = {
-  inventory: { count: 0, windowStart: Date.now() },
-  order: { count: 0, windowStart: Date.now() },
-};
-
-function checkRateLimit(type) {
-  const store = rateLimitStore[type];
-  const now = Date.now();
-
-  // Reset window if expired
-  if (now - store.windowStart > RATE_LIMIT_WINDOW_MS) {
-    store.count = 0;
-    store.windowStart = now;
-  }
-
-  store.count++;
-
-  if (store.count > RATE_LIMIT_MAX) {
-    return false; // Rate limited
-  }
-
-  return true; // Allowed
-}
-
-function rateLimitMiddleware(type) {
-  return (req, res, next) => {
-    if (!checkRateLimit(type)) {
-      console.warn(`Rate limit exceeded for ${type} webhook`);
-      return res.status(429).json({
-        error: 'Too many requests',
-        retryAfter: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000),
-      });
-    }
-    next();
-  };
-}
-
 const MAKING_TIME_CACHE_MS = 5 * 60 * 1000;
 let makingTimeSkuCache = { skus: new Set(), fetchedAt: 0 };
 
@@ -91,7 +45,7 @@ async function getMakingTimeSkus() {
 }
 
 async function persistInventorySnapshots(inventoryData = [], allowedSkus = new Set()) {
-  if (!Array.isArray(inventoryData) || !inventoryData.length || !allowedSkus.size) return [];
+  if (!Array.isArray(inventoryData) || !inventoryData.length) return [];
 
   const preparedRows = [];
   const healthUpdates = new Map();
@@ -108,11 +62,11 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
       location_key: item.location_key || null,
       raw: JSON.stringify(item),
     };
-    if (!allowedSkus.has(payload.sku)) continue;
+    // Save ALL inventory data (no SKU filtering for storage)
     preparedRows.push(payload);
-    if (payload.inventory !== null && payload.warehouse_id !== null) {
+    // Only queue health refresh for making-time SKUs (keeps analytics fast)
+    if (allowedSkus.has(payload.sku) && payload.inventory !== null && payload.warehouse_id !== null) {
       const key = `${payload.sku}:${payload.warehouse_id}`;
-      // Keep the most recent snapshot per SKU/warehouse in this batch only
       healthUpdates.set(key, payload);
     }
   }
@@ -148,8 +102,7 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
     connection.release();
   }
 
-  // Queue health refresh for background processing instead of running synchronously
-  // This drastically reduces DB load during high webhook traffic
+  // Queue health refresh for background processing (only making-time SKUs)
   for (const payload of healthUpdates.values()) {
     queueHealthRefresh(payload.sku, payload.warehouse_id, payload.inventory);
   }
@@ -158,7 +111,7 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
 }
 
 async function persistOrders(orders = [], allowedSkus = new Set()) {
-  if (!Array.isArray(orders) || !orders.length || !allowedSkus.size) return [];
+  if (!Array.isArray(orders) || !orders.length) return [];
 
   const orderRows = [];
   const subOrderRows = [];
@@ -190,7 +143,9 @@ async function persistOrders(orders = [], allowedSkus = new Set()) {
     };
 
     if (Array.isArray(order.suborders)) {
-      const filteredSubs = order.suborders
+      // Save ALL suborders (no SKU filtering for storage)
+      const mappedSubs = order.suborders
+        .filter((sub) => sub && sub.suborder_id)
         .map((sub) => ({
           order_id: orderPayload.order_id,
           suborder_id: sub.suborder_id,
@@ -207,20 +162,17 @@ async function persistOrders(orders = [], allowedSkus = new Set()) {
           size: sub.size || null,
           brand: sub.brand || null,
           category: sub.category || null,
-          product_name: sub.productName || null,
+          product_name: sub.productName || sub.product_name || null,
           warehouse_id: orderPayload.warehouse_id,
           marketplace_id: orderPayload.marketplace_id,
           order_date: orderPayload.order_date,
-        }))
-        .filter((sub) => allowedSkus.has(sub.sku));
-
-      if (!filteredSubs.length) {
-        // Skip storing the order if none of its suborders belong to the making-time list
-        continue;
-      }
+        }));
 
       orderRows.push(orderPayload);
-      subOrderRows.push(...filteredSubs);
+      subOrderRows.push(...mappedSubs);
+    } else {
+      // Save order even without suborders
+      orderRows.push(orderPayload);
     }
   }
 
@@ -358,37 +310,22 @@ function parseBody(raw) {
   return raw;
 }
 
-// Override global JSON parser: use raw buffer to capture true payload
+// Receive inventory webhooks (no rate limiting - save everything)
 router.post(
   '/inventory',
-  rateLimitMiddleware('inventory'),
   verifyAccessToken,
   express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {
-    const headers = req.headers;
-    const raw = captureRawBody(req);
     let data;
     try {
+      const raw = captureRawBody(req);
       data = parseBody(raw);
     } catch (err) {
       return res.status(400).send('Invalid JSON');
     }
 
-    const entry = {
-      time: new Date().toISOString(),
-      headers,
-      raw,
-      data,
-      accessToken: req.get('Access-Token'),
-    };
-    logs.push(entry);
-    if (logs.length > 50) logs.shift();
-
     try {
       const allowedSkus = await getMakingTimeSkus();
-      if (!allowedSkus.size) {
-        console.warn('Skipping inventory payload: no making-time SKUs configured');
-      }
       const snapshots = await persistInventorySnapshots(data.inventoryData, allowedSkus);
       res.status(200).json({ ok: true, saved: snapshots.length });
     } catch (err) {
@@ -398,35 +335,21 @@ router.post(
   }
 );
 
-// Endpoint to receive order webhooks
+// Receive order webhooks (no rate limiting - save everything)
 router.post(
   '/order',
-  rateLimitMiddleware('order'),
   verifyAccessToken,
   express.raw({ type: 'application/json', limit: '2mb' }),
   async (req, res) => {
-    const headers = req.headers;
-    const raw = captureRawBody(req);
     let data;
     try {
+      const raw = captureRawBody(req);
       data = parseBody(raw);
     } catch (err) {
       return res.status(400).send('Invalid JSON');
     }
-    const entry = {
-      time: new Date().toISOString(),
-      headers,
-      raw,
-      data,
-      accessToken: req.get('Access-Token'),
-    };
-    orderLogs.push(entry);
-    if (orderLogs.length > 50) orderLogs.shift();
     try {
       const allowedSkus = await getMakingTimeSkus();
-      if (!allowedSkus.size) {
-        console.warn('Skipping order payload: no making-time SKUs configured');
-      }
       const saved = await persistOrders(data.orders, allowedSkus);
       res.status(200).json({ ok: true, saved: saved.length });
     } catch (err) {
@@ -436,12 +359,110 @@ router.post(
   }
 );
 
-// View webhook logs
-router.get('/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
-  res.render('webhookLogs', { logs });
+// View inventory webhook logs from database (last 200 entries)
+router.get('/logs', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT sku, warehouse_id, inventory, sku_status, location_key, received_at
+       FROM ee_inventory_snapshots
+       ORDER BY id DESC
+       LIMIT 200`
+    );
+    const logs = rows.map((row) => ({
+      time: row.received_at ? new Date(row.received_at).toISOString() : '',
+      sku: row.sku,
+      warehouse_id: row.warehouse_id,
+      inventory: row.inventory,
+      sku_status: row.sku_status,
+      raw: '',
+    }));
+    res.render('webhookLogs', { logs, totalCount: rows.length });
+  } catch (err) {
+    console.error('Failed to load inventory logs:', err);
+    res.render('webhookLogs', { logs: [], totalCount: 0 });
+  }
 });
-router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, (req, res) => {
-  res.render('orderWebhookLogs', { logs: orderLogs });
+
+// View order webhook logs from database (last 200 entries)
+router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT order_id, marketplace, order_status, warehouse_id, order_date, order_quantity, total_amount, created_at
+       FROM ee_orders
+       ORDER BY id DESC
+       LIMIT 200`
+    );
+    const logs = rows.map((row) => ({
+      time: row.created_at ? new Date(row.created_at).toISOString() : '',
+      order_id: row.order_id,
+      marketplace: row.marketplace,
+      order_status: row.order_status,
+      warehouse_id: row.warehouse_id,
+      order_quantity: row.order_quantity,
+      total_amount: row.total_amount,
+      raw: '',
+    }));
+    res.render('orderWebhookLogs', { logs, totalCount: rows.length });
+  } catch (err) {
+    console.error('Failed to load order logs:', err);
+    res.render('orderWebhookLogs', { logs: [], totalCount: 0 });
+  }
+});
+
+// Get count of rows with raw data (for progress display)
+router.get('/clear-raw/inventory/count', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_snapshots WHERE raw IS NOT NULL');
+    res.json({ total: rows[0].total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/clear-raw/orders/count', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT COUNT(*) as total FROM ee_orders WHERE raw IS NOT NULL');
+    res.json({ total: rows[0].total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear raw JSON data in batches (returns JSON with progress)
+router.post('/clear-raw/inventory', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_snapshots WHERE raw IS NOT NULL');
+    if (total === 0) return res.json({ cleared: 0, total: 0, message: 'Already clean' });
+    let cleared = 0;
+    while (true) {
+      const [result] = await pool.query('UPDATE ee_inventory_snapshots SET raw = NULL WHERE raw IS NOT NULL LIMIT 50000');
+      cleared += result.affectedRows;
+      if (result.affectedRows === 0) break;
+    }
+    console.log(`Cleared raw data from ${cleared} inventory snapshots`);
+    res.json({ cleared, total, message: `Cleared ${cleared.toLocaleString()} rows` });
+  } catch (err) {
+    console.error('Failed to clear inventory raw data:', err);
+    res.status(500).json({ error: 'Failed to clear raw data' });
+  }
+});
+
+router.post('/clear-raw/orders', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+  try {
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_orders WHERE raw IS NOT NULL');
+    if (total === 0) return res.json({ cleared: 0, total: 0, message: 'Already clean' });
+    let cleared = 0;
+    while (true) {
+      const [result] = await pool.query('UPDATE ee_orders SET raw = NULL WHERE raw IS NOT NULL LIMIT 50000');
+      cleared += result.affectedRows;
+      if (result.affectedRows === 0) break;
+    }
+    console.log(`Cleared raw data from ${cleared} orders`);
+    res.json({ cleared, total, message: `Cleared ${cleared.toLocaleString()} rows` });
+  } catch (err) {
+    console.error('Failed to clear order raw data:', err);
+    res.status(500).json({ error: 'Failed to clear raw data' });
+  }
 });
 
 module.exports = router;

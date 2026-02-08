@@ -702,7 +702,7 @@
     </div>
 
     <div class="hero-meta">
-      <div class="meta-chip"><i class="bi bi-clock-history"></i>Auto-refresh every 15s</div>
+      <div class="meta-chip"><i class="bi bi-clock-history"></i>Auto-refresh every 2 min</div>
       <div class="meta-chip"><i class="bi bi-bezier2"></i>Linked inventory + demand signals</div>
     </div>
 
@@ -1222,7 +1222,24 @@
   renderOrders(orderRows, document.getElementById('orders-period-label').textContent);
   renderSlowMovers(slowMoverRows);
 
-  setInterval(refreshData, 15000);
+  // Smart refresh: only poll when tab is visible, match server cache TTL (2 min)
+  let refreshTimer = null;
+  function startAutoRefresh() {
+    if (refreshTimer) return;
+    refreshTimer = setInterval(refreshData, 2 * 60 * 1000);
+  }
+  function stopAutoRefresh() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopAutoRefresh();
+    } else {
+      refreshData(); // fetch fresh data when user comes back
+      startAutoRefresh();
+    }
+  });
+  startAutoRefresh();
 </script>
 </body>
 </html>

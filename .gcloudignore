@@ -1,23 +1,14 @@
+.git
 node_modules/
-.env
-.env.*
-!.env.gcp.example
 logs/
 uploads/
-
-# GCP
+nul
+.env
+.env.*
 *.json.key
 *-service-account.json
 service-account*.json
-temp_pass.txt
-temp.txt
-
-# OS
 .DS_Store
 Thumbs.db
-nul
-
-# IDE
 .idea/
 .vscode/
-*.swp

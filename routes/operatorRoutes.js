@@ -747,7 +747,9 @@ async function fetchLotAggregates(lotNos = []) {
     };
   }
 
-  const cacheKey = `lotAgg-${lotNos.slice().sort().join(',')}`;
+  // Use count + first/last lot as cache key instead of joining all 7000+ lot numbers
+  const sorted = lotNos.slice().sort();
+  const cacheKey = `lotAgg-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
   return cache.fetchCached(cacheKey, async () => {
     const sumsQ = pool.query(`
       SELECT 'stitched' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
@@ -1369,6 +1371,18 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     // 1) Build filters for main lots query
     let dateWhere = "";
     let dateParams = [];
+
+    // Default to last 90 days if no date range specified (prevents loading all 7000+ lots)
+    let effectiveStartDate = startDate;
+    let effectiveEndDate = endDate;
+    if (!startDate || !endDate) {
+      const now = new Date();
+      effectiveEndDate = now.toISOString().slice(0, 10);
+      const past = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      effectiveStartDate = past.toISOString().slice(0, 10);
+      dateWhere = " AND DATE(cl.created_at) >= ? ";
+      dateParams.push(effectiveStartDate);
+    }
 
     if (startDate && endDate) {
       if (dateFilter === "createdAt") {

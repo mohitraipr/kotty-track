@@ -19,6 +19,31 @@ const WAREHOUSE_LABELS = {
   173983: 'Faridabad',
   176318: 'Delhi',
 };
+
+// Cache for stock-market data to reduce DB load (2-minute TTL)
+const stockMarketCache = new Map();
+const STOCK_MARKET_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function getCachedStockMarketData(cacheKey) {
+  const entry = stockMarketCache.get(cacheKey);
+  if (entry && Date.now() - entry.time < STOCK_MARKET_CACHE_TTL) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setCachedStockMarketData(cacheKey, data) {
+  stockMarketCache.set(cacheKey, { data, time: Date.now() });
+  // Clean old entries periodically
+  if (stockMarketCache.size > 50) {
+    const now = Date.now();
+    for (const [key, val] of stockMarketCache) {
+      if (now - val.time > STOCK_MARKET_CACHE_TTL) {
+        stockMarketCache.delete(key);
+      }
+    }
+  }
+}
 const ALLOWED_WAREHOUSES = [
   { id: 176318, label: 'Delhi' },
   { id: 173983, label: 'Faridabad' },
@@ -179,6 +204,28 @@ router.get('/ops', isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
+async function fetchStockMarketData(warehouseFilter, periodKey) {
+  const cacheKey = `stock-market:${[...warehouseFilter].sort().join(',')}:${periodKey}`;
+  const cached = getCachedStockMarketData(cacheKey);
+  if (cached) return cached;
+
+  const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
+    getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
+    getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
+    getSlowMovers(pool, { warehouseIds: warehouseFilter }),
+  ]);
+
+  const result = {
+    inventory: decorateWithWarehouseLabel(inventoryRaw),
+    orders: decorateWithWarehouseLabel(ordersRaw),
+    slowMovers: decorateWithWarehouseLabel(slowMoversRaw),
+    period: resolvePeriod(periodKey),
+  };
+
+  setCachedStockMarketData(cacheKey, result);
+  return result;
+}
+
 router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req, res) => {
   try {
     const user = req.session?.user || null;
@@ -188,15 +235,7 @@ router.get('/stock-market', isAuthenticated, allowStockMarketAccess, async (req,
     );
 
     const periodKey = normalizePeriod(req.query.period);
-    const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
-      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
-      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
-      getSlowMovers(pool, { warehouseIds: warehouseFilter }),
-    ]);
-
-    const inventory = decorateWithWarehouseLabel(inventoryRaw);
-    const orders = decorateWithWarehouseLabel(ordersRaw);
-    const slowMovers = decorateWithWarehouseLabel(slowMoversRaw);
+    const { inventory, orders, slowMovers } = await fetchStockMarketData(warehouseFilter, periodKey);
 
     res.render('stockMarket', {
       user,
@@ -220,23 +259,9 @@ router.get('/stock-market/data', isAuthenticated, allowStockMarketAccess, async 
   try {
     const user = req.session?.user || null;
     const { warehouseFilter } = await buildWarehouseContext(user, req.query.warehouseId);
-
     const periodKey = normalizePeriod(req.query.period);
-    const [inventoryRaw, ordersRaw, slowMoversRaw] = await Promise.all([
-      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
-      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
-      getSlowMovers(pool, { warehouseIds: warehouseFilter }),
-    ]);
-    const inventory = decorateWithWarehouseLabel(inventoryRaw);
-    const orders = decorateWithWarehouseLabel(ordersRaw);
-    const slowMovers = decorateWithWarehouseLabel(slowMoversRaw);
-
-    res.json({
-      inventory,
-      orders,
-      slowMovers,
-      period: resolvePeriod(periodKey),
-    });
+    const result = await fetchStockMarketData(warehouseFilter, periodKey);
+    res.json(result);
   } catch (err) {
     console.error('Failed to fetch out-of-stock data:', err);
     res.status(500).json({ error: 'Unable to refresh data' });
@@ -249,12 +274,7 @@ router.get('/stock-market/download', isAuthenticated, allowStockMarketAccess, as
     const { warehouseFilter } = await buildWarehouseContext(user, req.query.warehouseId);
 
     const periodKey = normalizePeriod(req.query.period);
-    const [inventoryRaw, ordersRaw] = await Promise.all([
-      getInventoryRunway(pool, { warehouseIds: warehouseFilter }),
-      getMomentumWithGrowth(pool, { periodKey, warehouseIds: warehouseFilter }),
-    ]);
-    const inventory = decorateWithWarehouseLabel(inventoryRaw);
-    const orders = decorateWithWarehouseLabel(ordersRaw);
+    const { inventory, orders } = await fetchStockMarketData(warehouseFilter, periodKey);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Kotty Track';
