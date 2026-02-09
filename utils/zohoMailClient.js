@@ -401,11 +401,19 @@ function extractOrderDetails(body, subject = '') {
     }
   }
 
-  // Order ID patterns (AJIO format: OD followed by numbers)
-  const orderMatch = text.match(/order\s*(?:id|no|number)?[:\s]*([A-Z0-9-]+)/i) ||
-                     text.match(/\bOD\d{10,}\b/i);
-  if (orderMatch) {
-    details.orderId = orderMatch[1] || orderMatch[0];
+  // Order ID patterns (AJIO format: FN or OD followed by numbers)
+  const orderPatterns = [
+    /order\s*id[:\s]*([A-Z0-9]+)/i,        // Order ID: FN9735702115
+    /\b(FN\d{8,})\b/i,                      // FN9735702115 standalone
+    /\b(OD\d{10,})\b/i                      // OD pattern
+  ];
+
+  for (const pattern of orderPatterns) {
+    const orderMatch = text.match(pattern);
+    if (orderMatch && orderMatch[1]) {
+      details.orderId = orderMatch[1];
+      break;
+    }
   }
 
   // If no AWB from RT pattern, try other AWB patterns
