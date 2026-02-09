@@ -142,7 +142,7 @@ async function getAccountId() {
 
 /**
  * Search emails by query
- * @param {string} query - Search query (supports Zoho search syntax)
+ * @param {string} query - Search query keyword
  * @param {number} limit - Max results to return
  * @param {number} start - Pagination start index
  */
@@ -150,10 +150,15 @@ async function searchEmails(query, limit = 50, start = 0) {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
+  // Format search key like Python tool: entire:keyword::in:Inbox
+  // Use Zoho's search syntax
+  const searchKey = `entire:${query.toLowerCase()}::in:Inbox`;
+
   const params = new URLSearchParams({
-    searchKey: query,
+    searchKey: searchKey,
     limit: limit.toString(),
-    start: start.toString()
+    start: start.toString(),
+    includeto: 'true'
   });
 
   const options = {
@@ -165,8 +170,16 @@ async function searchEmails(query, limit = 50, start = 0) {
     }
   };
 
-  const result = await makeRequest(options);
-  return result.data || [];
+  console.log('Zoho search URL:', options.path);
+
+  try {
+    const result = await makeRequest(options);
+    console.log('Zoho search result count:', (result.data || []).length);
+    return result.data || [];
+  } catch (err) {
+    console.error('Zoho search error:', err);
+    throw err;
+  }
 }
 
 /**
