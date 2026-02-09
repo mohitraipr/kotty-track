@@ -15,6 +15,7 @@ const {
   deleteObject,
   generatePresignedUrl,
   formatFileSize,
+  listObjects,
   S3_BUCKET,
 } = require('../utils/s3Client');
 
@@ -50,12 +51,11 @@ router.get('/', isAuthenticated, allowVideoFinderAccess, (req, res) => {
   });
 });
 
-// Search for videos by AWB (single or multiple)
-router.post('/search', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
-  const { awbList, dateFilter } = req.body;
-  const isMohit = checkMohitOperator(req);
-
+// Search for videos by AWB - AJAX API endpoint
+router.post('/api/search', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
   try {
+    const { awbList } = req.body;
+
     // Parse AWB list (comma, newline, or space separated)
     const awbs = (awbList || '')
       .split(/[\n,\s]+/)
@@ -63,14 +63,7 @@ router.post('/search', isAuthenticated, allowVideoFinderAccess, async (req, res)
       .filter(Boolean);
 
     if (!awbs.length) {
-      return res.render('videoFinder', {
-        results: [],
-        searchQuery: awbList || '',
-        dateFilter: dateFilter || '',
-        isMohitOperator: isMohit,
-        bucketName: S3_BUCKET,
-        error: 'Please enter at least one AWB/tracking number.',
-      });
+      return res.status(400).json({ error: 'Please enter at least one AWB/tracking number.' });
     }
 
     // Search S3 for matching videos
@@ -96,24 +89,69 @@ router.post('/search', isAuthenticated, allowVideoFinderAccess, async (req, res)
 
     const foundCount = results.filter((r) => r.found).length;
 
-    res.render('videoFinder', {
+    res.json({
+      success: true,
+      found: foundCount,
+      total: awbs.length,
       results,
-      searchQuery: awbList,
-      dateFilter: dateFilter || '',
-      isMohitOperator: isMohit,
-      bucketName: S3_BUCKET,
-      message: `Found ${foundCount} of ${awbs.length} videos`,
     });
   } catch (err) {
     console.error('Video search error:', err);
-    res.render('videoFinder', {
-      results: [],
-      searchQuery: awbList || '',
-      dateFilter: dateFilter || '',
-      isMohitOperator: isMohit,
-      bucketName: S3_BUCKET,
-      error: 'Search failed: ' + err.message,
+    res.status(500).json({ error: 'Search failed: ' + err.message });
+  }
+});
+
+// Keyword search - find all videos matching a keyword in filename
+router.get('/api/keyword', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
+  try {
+    const { keyword, date } = req.query;
+
+    if (!keyword || keyword.length < 2) {
+      return res.status(400).json({ error: 'Keyword must be at least 2 characters' });
+    }
+
+    const keywordUpper = keyword.toUpperCase();
+    let allVideos = [];
+
+    if (date) {
+      // Search specific date folder
+      allVideos = await getVideosForDate(date);
+    } else {
+      // Search last 14 days
+      const today = new Date();
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = d.toISOString().slice(0, 10);
+        const videos = await getVideosForDate(dateStr);
+        allVideos.push(...videos);
+      }
+    }
+
+    // Filter by keyword
+    const matches = allVideos.filter((v) =>
+      v.filename.toUpperCase().includes(keywordUpper) ||
+      v.key.toUpperCase().includes(keywordUpper)
+    );
+
+    const results = matches.map((v) => ({
+      found: true,
+      filename: v.filename,
+      key: v.key,
+      url: v.url,
+      size: v.size,
+      sizeFormatted: v.sizeFormatted,
+    }));
+
+    res.json({
+      success: true,
+      keyword,
+      date: date || 'last 14 days',
+      count: results.length,
+      results,
     });
+  } catch (err) {
+    console.error('Keyword search error:', err);
+    res.status(500).json({ error: 'Search failed: ' + err.message });
   }
 });
 
