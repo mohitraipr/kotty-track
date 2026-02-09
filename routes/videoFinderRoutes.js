@@ -274,6 +274,18 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  // Keep-alive ping every 15 seconds to prevent timeout
+  const keepAlive = setInterval(() => {
+    res.write(': keep-alive\n\n');
+  }, 15000);
+
+  // Track if client disconnects
+  let clientDisconnected = false;
+  req.on('close', () => {
+    clientDisconnected = true;
+    clearInterval(keepAlive);
+  });
+
   try {
     const awbListRaw = req.query.awbList || '';
     const awbs = awbListRaw
@@ -283,6 +295,7 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
 
     if (!awbs.length) {
       sendEvent('error', { message: 'No AWB numbers provided' });
+      clearInterval(keepAlive);
       return res.end();
     }
 
@@ -294,6 +307,12 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
 
     // Process in chunks
     for (let i = 0; i < awbs.length; i += CHUNK_SIZE) {
+      // Check if client disconnected
+      if (clientDisconnected) {
+        console.log('Client disconnected, stopping search');
+        break;
+      }
+
       const chunk = awbs.slice(i, i + CHUNK_SIZE);
       const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
       const totalChunks = Math.ceil(awbs.length / CHUNK_SIZE);
@@ -337,17 +356,22 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
       allResults.push(...chunkResults);
     }
 
-    // Send completion
-    sendEvent('complete', {
-      success: true,
-      total,
-      found: foundCount,
-      notFound: total - foundCount,
-    });
+    // Send completion (only if client still connected)
+    if (!clientDisconnected) {
+      sendEvent('complete', {
+        success: true,
+        total,
+        found: foundCount,
+        notFound: total - foundCount,
+      });
+    }
   } catch (err) {
     console.error('Stream search error:', err);
-    sendEvent('error', { message: err.message });
+    if (!clientDisconnected) {
+      sendEvent('error', { message: err.message });
+    }
   } finally {
+    clearInterval(keepAlive);
     res.end();
   }
 });

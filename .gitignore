@@ -21,3 +21,4 @@ nul
 .idea/
 .vscode/
 *.swp
+.env

@@ -329,10 +329,10 @@ router.get('/lookup-awb/:orderId', isAuthenticated, isOnlyMohitOperator, async (
 
 // ==================== EMAIL ROUTES ====================
 
-// Search emails
+// Search emails - checks database for existing replies to prevent double-reply
 router.get('/emails/search', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { query, limit = 50, start = 0 } = req.query;
+    const { query, limit = 200, start = 0, fromDate, toDate } = req.query;
 
     if (!query) {
       return res.status(400).json({ error: 'Search query required' });
@@ -340,11 +340,59 @@ router.get('/emails/search', isAuthenticated, isOnlyMohitOperator, async (req, r
 
     const emails = await zohoMail.searchEmails(query, parseInt(limit), parseInt(start));
 
-    // Classify each email
-    const classified = emails.map(email => ({
-      ...email,
-      classification: zohoMail.classifyEmail(email.subject, email.summary || '')
-    }));
+    // Filter by date if provided
+    let filtered = emails;
+    if (fromDate || toDate) {
+      filtered = emails.filter(email => {
+        const emailDate = new Date(parseInt(email.receivedTime));
+        if (fromDate && emailDate < new Date(fromDate)) return false;
+        if (toDate) {
+          const endDate = new Date(toDate);
+          endDate.setHours(23, 59, 59, 999);
+          if (emailDate > endDate) return false;
+        }
+        return true;
+      });
+    }
+
+    // Get message IDs for batch lookup
+    const messageIds = filtered.map(e => e.messageId);
+
+    // Check database for existing reply records (prevents double-reply)
+    let replyStatusMap = {};
+    if (messageIds.length > 0) {
+      try {
+        const [dbRecords] = await pool.query(
+          `SELECT message_id, status, replied_at FROM mail_replies WHERE message_id IN (?)`,
+          [messageIds]
+        );
+        dbRecords.forEach(rec => {
+          replyStatusMap[rec.message_id] = {
+            status: rec.status,
+            repliedAt: rec.replied_at
+          };
+        });
+      } catch (dbErr) {
+        console.error('Failed to check reply status:', dbErr);
+      }
+    }
+
+    // Classify each email, but override with DB status if already replied
+    const classified = filtered.map(email => {
+      const dbStatus = replyStatusMap[email.messageId];
+      let classification = zohoMail.classifyEmail(email.subject, email.summary || '');
+
+      // If we have a database record showing this was replied, use that status
+      if (dbStatus) {
+        classification = dbStatus.status; // 'replied', 'proceeding', 'closed', etc.
+      }
+
+      return {
+        ...email,
+        classification,
+        dbStatus: dbStatus || null // Include for UI to show reply info
+      };
+    });
 
     res.json({ emails: classified, count: classified.length });
   } catch (err) {
@@ -353,17 +401,49 @@ router.get('/emails/search', isAuthenticated, isOnlyMohitOperator, async (req, r
   }
 });
 
-// Get inbox emails
+// Get inbox emails - checks database for existing replies
 router.get('/emails/inbox', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { limit = 50, start = 0 } = req.query;
+    const { limit = 200, start = 0 } = req.query;
     const emails = await zohoMail.getEmails('inbox', parseInt(limit), parseInt(start));
 
-    // Classify each email
-    const classified = emails.map(email => ({
-      ...email,
-      classification: zohoMail.classifyEmail(email.subject, email.summary || '')
-    }));
+    // Get message IDs for batch lookup
+    const messageIds = emails.map(e => e.messageId);
+
+    // Check database for existing reply records
+    let replyStatusMap = {};
+    if (messageIds.length > 0) {
+      try {
+        const [dbRecords] = await pool.query(
+          `SELECT message_id, status, replied_at FROM mail_replies WHERE message_id IN (?)`,
+          [messageIds]
+        );
+        dbRecords.forEach(rec => {
+          replyStatusMap[rec.message_id] = {
+            status: rec.status,
+            repliedAt: rec.replied_at
+          };
+        });
+      } catch (dbErr) {
+        console.error('Failed to check reply status:', dbErr);
+      }
+    }
+
+    // Classify each email, override with DB status if already replied
+    const classified = emails.map(email => {
+      const dbStatus = replyStatusMap[email.messageId];
+      let classification = zohoMail.classifyEmail(email.subject, email.summary || '');
+
+      if (dbStatus) {
+        classification = dbStatus.status;
+      }
+
+      return {
+        ...email,
+        classification,
+        dbStatus: dbStatus || null
+      };
+    });
 
     res.json({ emails: classified, count: classified.length });
   } catch (err) {
@@ -512,6 +592,249 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
   } catch (err) {
     console.error('Reply send error:', err);
     res.status(500).json({ error: 'Failed to send reply: ' + (err.message || err) });
+  }
+});
+
+// ==================== BULK REPLY WITH SSE STREAMING ====================
+
+// Bulk reply for multiple emails - uses SSE for progress
+// This processes multiple "initial" emails: finds videos, sends replies, tracks progress
+router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Keep-alive ping every 15 seconds
+  const keepAlive = setInterval(() => {
+    res.write(': keep-alive\n\n');
+  }, 15000);
+
+  try {
+    const messageIdsRaw = req.query.messageIds || '';
+    const messageIds = messageIdsRaw.split(',').filter(Boolean);
+
+    if (!messageIds.length) {
+      sendEvent('error', { message: 'No message IDs provided' });
+      clearInterval(keepAlive);
+      return res.end();
+    }
+
+    // Check which emails are already replied (from database)
+    const [alreadyReplied] = await pool.query(
+      `SELECT message_id FROM mail_replies WHERE message_id IN (?) AND status = 'replied'`,
+      [messageIds]
+    );
+    const repliedSet = new Set(alreadyReplied.map(r => r.message_id));
+
+    // Filter out already replied
+    const toProcess = messageIds.filter(id => !repliedSet.has(id));
+
+    sendEvent('start', {
+      total: messageIds.length,
+      toProcess: toProcess.length,
+      alreadyReplied: repliedSet.size
+    });
+
+    const results = {
+      success: 0,
+      failed: 0,
+      skipped: repliedSet.size,
+      noVideo: 0,
+      details: []
+    };
+
+    // Process each email
+    for (let i = 0; i < toProcess.length; i++) {
+      const messageId = toProcess[i];
+
+      sendEvent('progress', {
+        current: i + 1,
+        total: toProcess.length,
+        percent: Math.round(((i + 1) / toProcess.length) * 100),
+        messageId
+      });
+
+      try {
+        // Fetch email details
+        const [details, content] = await Promise.all([
+          zohoMail.getEmailDetails(messageId),
+          zohoMail.getEmailContent(messageId)
+        ]);
+
+        if (!details) {
+          results.failed++;
+          results.details.push({ messageId, status: 'failed', error: 'Could not fetch email' });
+          continue;
+        }
+
+        const subject = details.subject || '';
+        const bodyText = content?.content || '';
+        const fromAddress = details.fromAddress || '';
+        const toAddress = details.toAddress || details.sender || '';
+
+        // Extract AWB from subject (AJIO pattern: ||RT205313651||)
+        const extracted = zohoMail.extractOrderDetails(bodyText, subject);
+
+        if (!extracted.awb) {
+          results.noVideo++;
+          results.details.push({ messageId, subject, status: 'no_awb', error: 'No AWB found in email' });
+          continue;
+        }
+
+        // Search S3 for videos
+        const videoResults = await findVideosByAwb([extracted.awb]);
+        const videoHit = videoResults.get(extracted.awb.toUpperCase());
+
+        if (!videoHit) {
+          results.noVideo++;
+          results.details.push({ messageId, subject, awb: extracted.awb, status: 'no_video', error: 'No video found for AWB' });
+          continue;
+        }
+
+        // Build video links and reply HTML
+        const videoLinks = [{
+          awb: extracted.awb,
+          url: videoHit.url,
+          filename: videoHit.key.split('/').pop()
+        }];
+        const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId || extracted.awb, videoLinks);
+
+        // Send reply
+        await zohoMail.sendReply(messageId, details.threadId, fromAddress, subject, htmlContent);
+
+        // Save to database
+        await saveReplyRecord({
+          messageId,
+          threadId: details.threadId,
+          fromAddress,
+          toAddress,
+          subject,
+          orderId: extracted.orderId,
+          awb: extracted.awb,
+          videoUrl: videoHit.url,
+          status: 'replied',
+          classification: 'initial',
+          userId: req.session?.user?.id
+        });
+
+        results.success++;
+        results.details.push({
+          messageId,
+          subject,
+          awb: extracted.awb,
+          status: 'replied',
+          videoUrl: videoHit.url
+        });
+
+        sendEvent('replied', {
+          messageId,
+          subject: subject.substring(0, 60),
+          awb: extracted.awb
+        });
+
+      } catch (emailErr) {
+        console.error(`Bulk reply error for ${messageId}:`, emailErr);
+        results.failed++;
+        results.details.push({ messageId, status: 'error', error: emailErr.message });
+      }
+
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    sendEvent('complete', {
+      success: results.success,
+      failed: results.failed,
+      skipped: results.skipped,
+      noVideo: results.noVideo,
+      total: messageIds.length
+    });
+
+  } catch (err) {
+    console.error('Bulk reply stream error:', err);
+    sendEvent('error', { message: err.message });
+  } finally {
+    clearInterval(keepAlive);
+    res.end();
+  }
+});
+
+// Get multiple emails' AWBs and video status at once (for bulk reply prep)
+router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+
+    if (!messageIds || !messageIds.length) {
+      return res.status(400).json({ error: 'No message IDs provided' });
+    }
+
+    // Check which are already replied
+    const [alreadyReplied] = await pool.query(
+      `SELECT message_id, status FROM mail_replies WHERE message_id IN (?)`,
+      [messageIds]
+    );
+    const statusMap = {};
+    alreadyReplied.forEach(r => {
+      statusMap[r.message_id] = r.status;
+    });
+
+    const results = [];
+
+    for (const messageId of messageIds) {
+      // Skip already replied
+      if (statusMap[messageId] === 'replied') {
+        results.push({ messageId, status: 'already_replied', canReply: false });
+        continue;
+      }
+
+      try {
+        // Fetch email to extract AWB
+        const details = await zohoMail.getEmailDetails(messageId);
+        const content = await zohoMail.getEmailContent(messageId);
+
+        const subject = details?.subject || '';
+        const bodyText = content?.content || '';
+        const extracted = zohoMail.extractOrderDetails(bodyText, subject);
+
+        if (!extracted.awb) {
+          results.push({ messageId, subject, status: 'no_awb', canReply: false });
+          continue;
+        }
+
+        // Check if video exists
+        const videoResults = await findVideosByAwb([extracted.awb]);
+        const hasVideo = videoResults.has(extracted.awb.toUpperCase());
+
+        results.push({
+          messageId,
+          subject,
+          awb: extracted.awb,
+          ticket: extracted.ticket,
+          hasVideo,
+          canReply: hasVideo,
+          status: hasVideo ? 'ready' : 'no_video'
+        });
+      } catch (err) {
+        results.push({ messageId, status: 'error', error: err.message, canReply: false });
+      }
+    }
+
+    const readyCount = results.filter(r => r.canReply).length;
+
+    res.json({
+      total: messageIds.length,
+      ready: readyCount,
+      results
+    });
+  } catch (err) {
+    console.error('Bulk check error:', err);
+    res.status(500).json({ error: 'Failed to check videos: ' + err.message });
   }
 });
 

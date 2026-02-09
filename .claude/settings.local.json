@@ -53,7 +53,9 @@
       "Bash(gcloud compute backend-services update:*)",
       "Bash(gcloud compute url-maps describe:*)",
       "Bash(gcloud sql instances describe:*)",
-      "Bash(gcloud sql instances patch:*)"
+      "Bash(gcloud sql instances patch:*)",
+      "Bash(gcloud run services logs read:*)",
+      "Bash(tasklist:*)"
     ]
   }
 }

@@ -16,8 +16,12 @@
     .badge-initial { background-color: #0d6efd; }
     .badge-closed { background-color: #198754; }
     .badge-proceeding { background-color: #ffc107; color: #000; }
+    .badge-replied { background-color: #20c997; }
     .badge-error { background-color: #dc3545; }
     .badge-unknown { background-color: #6c757d; }
+    .email-checkbox { width: 18px; height: 18px; cursor: pointer; }
+    .bulk-actions { display: none; }
+    .bulk-actions.show { display: flex; }
     .email-preview { max-height: 400px; overflow-y: auto; }
     .video-card { border-left: 4px solid #198754; }
     .upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 2rem; text-align: center; transition: all 0.2s; }
@@ -138,11 +142,23 @@
     <!-- Middle Column: Email List -->
     <div class="col-lg-4">
       <div class="card h-100">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-          <span><i class="bi bi-inbox me-2"></i>Emails</span>
-          <span id="emailCount" class="badge bg-secondary">0</span>
+        <div class="card-header bg-white">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span><i class="bi bi-inbox me-2"></i>Emails</span>
+            <span id="emailCount" class="badge bg-secondary">0</span>
+          </div>
+          <!-- Bulk Actions -->
+          <div id="bulkActions" class="bulk-actions gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" onclick="selectAllInitial()">
+              <i class="bi bi-check-all me-1"></i>Select Initial
+            </button>
+            <button class="btn btn-sm btn-success" onclick="startBulkReply()" id="bulkReplyBtn" disabled>
+              <i class="bi bi-send me-1"></i>Bulk Reply (<span id="selectedCount">0</span>)
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">Clear</button>
+          </div>
         </div>
-        <div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;">
+        <div class="card-body p-0" style="max-height: 65vh; overflow-y: auto;">
           <div id="emailList">
             <div class="text-center text-muted p-4">
               <i class="bi bi-envelope-slash fs-1"></i>
@@ -235,11 +251,73 @@
   </div>
 </div>
 
+<!-- Bulk Reply Progress Modal -->
+<div class="modal fade" id="bulkReplyModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Bulk Reply Progress</h5>
+      </div>
+      <div class="modal-body">
+        <div id="bulkProgress">
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span>Progress</span>
+              <span id="bulkProgressText">0 / 0</span>
+            </div>
+            <div class="progress">
+              <div id="bulkProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="row g-3 text-center mb-3">
+            <div class="col-3">
+              <div class="border rounded p-2">
+                <div id="bulkStatSuccess" class="fs-4 fw-bold text-success">0</div>
+                <small class="text-muted">Replied</small>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="border rounded p-2">
+                <div id="bulkStatNoVideo" class="fs-4 fw-bold text-warning">0</div>
+                <small class="text-muted">No Video</small>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="border rounded p-2">
+                <div id="bulkStatFailed" class="fs-4 fw-bold text-danger">0</div>
+                <small class="text-muted">Failed</small>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="border rounded p-2">
+                <div id="bulkStatSkipped" class="fs-4 fw-bold text-secondary">0</div>
+                <small class="text-muted">Skipped</small>
+              </div>
+            </div>
+          </div>
+          <div id="bulkReplyLog" class="border rounded p-2" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+            <div class="text-muted text-center">Waiting to start...</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="cancelBulkReply()" id="bulkCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary d-none" onclick="closeBulkModal()" id="bulkDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // Current state
 let currentEmail = null;
 let foundVideos = [];
+let emailData = []; // Store loaded emails for selection
+let selectedEmails = new Set(); // Track selected message IDs
+let bulkEventSource = null; // For SSE connection
+let lastSearchQuery = '';
+let lastSearchStart = 0;
 
 // ==================== FILE UPLOAD ====================
 
@@ -356,7 +434,7 @@ function setDateLastWeek() {
   document.getElementById('searchDateTo').value = today.toISOString().split('T')[0];
 }
 
-async function searchEmails(query) {
+async function searchEmails(query, append = false) {
   const searchInput = document.getElementById('emailSearch');
   const searchQuery = query || searchInput.value.trim();
   const dateFrom = document.getElementById('searchDateFrom').value;
@@ -368,31 +446,43 @@ async function searchEmails(query) {
   }
 
   searchInput.value = searchQuery;
-  document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+
+  // Track for "Load More"
+  if (!append) {
+    lastSearchQuery = searchQuery;
+    lastSearchStart = 0;
+    document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+  }
 
   try {
-    let url = '/mail-manager/emails/search?query=' + encodeURIComponent(searchQuery);
-    if (dateFrom) url += '&dateFrom=' + dateFrom;
-    if (dateTo) url += '&dateTo=' + dateTo;
+    let url = '/mail-manager/emails/search?query=' + encodeURIComponent(searchQuery) + '&limit=200&start=' + lastSearchStart;
+    if (dateFrom) url += '&fromDate=' + dateFrom;
+    if (dateTo) url += '&toDate=' + dateTo;
 
     const res = await fetch(url);
     const data = await res.json();
 
-    // Filter by date if specified (client-side filter since Zoho search is limited)
     let emails = data.emails || [];
-    if (dateFrom || dateTo) {
-      const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
-      const toTs = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : Date.now();
 
-      emails = emails.filter(e => {
-        const ts = parseInt(e.receivedTime);
-        return ts >= fromTs && ts <= toTs;
-      });
+    // Update pagination
+    lastSearchStart += emails.length;
+
+    // Append or replace
+    if (append) {
+      emailData = [...emailData, ...emails];
+    } else {
+      emailData = emails;
     }
 
-    renderEmailList(emails);
+    renderEmailList(emailData, emails.length >= 200); // Show load more if we got full page
   } catch (err) {
     document.getElementById('emailList').innerHTML = '<div class="alert alert-danger m-3">Search failed: ' + err.message + '</div>';
+  }
+}
+
+async function loadMoreEmails() {
+  if (lastSearchQuery) {
+    await searchEmails(lastSearchQuery, true);
   }
 }
 
@@ -409,29 +499,59 @@ async function loadInbox() {
   }
 }
 
-function renderEmailList(emails) {
+function renderEmailList(emails, showLoadMore = false) {
   const list = document.getElementById('emailList');
   const count = document.getElementById('emailCount');
 
   count.textContent = emails.length;
+  emailData = emails; // Store for selection
+
+  // Show bulk actions bar
+  document.getElementById('bulkActions').classList.toggle('show', emails.length > 0);
 
   if (!emails.length) {
     list.innerHTML = '<div class="text-center text-muted p-4"><i class="bi bi-inbox fs-1"></i><p class="mt-2">No emails found</p></div>';
     return;
   }
 
-  list.innerHTML = emails.map((email, idx) => `
-    <div class="email-row p-3 border-bottom" onclick="loadEmailDetails('${email.messageId}', this)">
-      <div class="d-flex justify-content-between align-items-start">
-        <div class="flex-grow-1 overflow-hidden">
-          <div class="fw-semibold text-truncate">${escapeHtml(email.subject || '(No Subject)')}</div>
-          <small class="text-muted">${escapeHtml(email.fromAddress || email.sender || '')}</small>
+  let html = emails.map((email, idx) => {
+    const isReplied = email.classification === 'replied' || email.dbStatus?.status === 'replied';
+    const badgeClass = email.classification || 'unknown';
+    const badgeText = email.classification || '?';
+    const repliedInfo = email.dbStatus?.repliedAt ? ' (' + new Date(email.dbStatus.repliedAt).toLocaleDateString() + ')' : '';
+
+    return `
+    <div class="email-row p-3 border-bottom d-flex align-items-start gap-2" data-message-id="${email.messageId}" data-classification="${email.classification}">
+      <input type="checkbox" class="email-checkbox mt-1"
+        onchange="toggleEmailSelection('${email.messageId}')"
+        ${isReplied ? 'disabled title="Already replied"' : ''}
+        ${selectedEmails.has(email.messageId) ? 'checked' : ''}>
+      <div class="flex-grow-1 overflow-hidden" onclick="loadEmailDetails('${email.messageId}', this.parentElement)">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="fw-semibold text-truncate">${escapeHtml(email.subject || '(No Subject)')}</div>
+            <small class="text-muted">${escapeHtml(email.fromAddress || email.sender || '')}</small>
+          </div>
+          <span class="badge classification-badge badge-${badgeClass}">${badgeText}${repliedInfo}</span>
         </div>
-        <span class="badge classification-badge badge-${email.classification || 'unknown'}">${email.classification || '?'}</span>
+        <small class="text-muted">${email.receivedTime ? new Date(parseInt(email.receivedTime)).toLocaleString() : ''}</small>
       </div>
-      <small class="text-muted">${email.receivedTime ? new Date(parseInt(email.receivedTime)).toLocaleString() : ''}</small>
     </div>
-  `).join('');
+  `}).join('');
+
+  // Add "Load More" button if there might be more results
+  if (showLoadMore) {
+    html += `
+      <div class="text-center p-3">
+        <button class="btn btn-outline-primary btn-sm" onclick="loadMoreEmails()">
+          <i class="bi bi-arrow-down-circle me-1"></i>Load More Emails
+        </button>
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
+  updateSelectionUI();
 }
 
 // ==================== EMAIL DETAILS ====================
@@ -619,6 +739,155 @@ document.getElementById('emailSearch').addEventListener('keypress', (e) => {
 document.getElementById('lookupOrderId').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') lookupAwb();
 });
+
+// ==================== BULK SELECTION & REPLY ====================
+
+function toggleEmailSelection(messageId) {
+  if (selectedEmails.has(messageId)) {
+    selectedEmails.delete(messageId);
+  } else {
+    selectedEmails.add(messageId);
+  }
+  updateSelectionUI();
+}
+
+function selectAllInitial() {
+  // Select all emails with classification "initial" that aren't already replied
+  emailData.forEach(email => {
+    if (email.classification === 'initial' && email.dbStatus?.status !== 'replied') {
+      selectedEmails.add(email.messageId);
+    }
+  });
+
+  // Update checkboxes
+  document.querySelectorAll('.email-row').forEach(row => {
+    const msgId = row.dataset.messageId;
+    const checkbox = row.querySelector('.email-checkbox');
+    if (checkbox && selectedEmails.has(msgId)) {
+      checkbox.checked = true;
+    }
+  });
+
+  updateSelectionUI();
+}
+
+function clearSelection() {
+  selectedEmails.clear();
+  document.querySelectorAll('.email-checkbox').forEach(cb => cb.checked = false);
+  updateSelectionUI();
+}
+
+function updateSelectionUI() {
+  const count = selectedEmails.size;
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('bulkReplyBtn').disabled = count === 0;
+}
+
+function startBulkReply() {
+  if (selectedEmails.size === 0) {
+    showToast('No emails selected', 'warning');
+    return;
+  }
+
+  // Open modal
+  const modal = new bootstrap.Modal(document.getElementById('bulkReplyModal'));
+  modal.show();
+
+  // Reset stats
+  document.getElementById('bulkProgressBar').style.width = '0%';
+  document.getElementById('bulkProgressText').textContent = '0 / ' + selectedEmails.size;
+  document.getElementById('bulkStatSuccess').textContent = '0';
+  document.getElementById('bulkStatNoVideo').textContent = '0';
+  document.getElementById('bulkStatFailed').textContent = '0';
+  document.getElementById('bulkStatSkipped').textContent = '0';
+  document.getElementById('bulkReplyLog').innerHTML = '<div class="text-muted">Starting bulk reply...</div>';
+  document.getElementById('bulkCancelBtn').classList.remove('d-none');
+  document.getElementById('bulkDoneBtn').classList.add('d-none');
+
+  // Start SSE connection
+  const messageIds = Array.from(selectedEmails).join(',');
+  bulkEventSource = new EventSource('/mail-manager/bulk-reply-stream?messageIds=' + encodeURIComponent(messageIds));
+
+  const logDiv = document.getElementById('bulkReplyLog');
+
+  bulkEventSource.addEventListener('start', (e) => {
+    const data = JSON.parse(e.data);
+    logDiv.innerHTML = `<div>Processing ${data.toProcess} emails (${data.alreadyReplied} already replied, skipped)</div>`;
+    document.getElementById('bulkStatSkipped').textContent = data.alreadyReplied;
+  });
+
+  bulkEventSource.addEventListener('progress', (e) => {
+    const data = JSON.parse(e.data);
+    document.getElementById('bulkProgressBar').style.width = data.percent + '%';
+    document.getElementById('bulkProgressText').textContent = data.current + ' / ' + data.total;
+  });
+
+  bulkEventSource.addEventListener('replied', (e) => {
+    const data = JSON.parse(e.data);
+    const successCount = parseInt(document.getElementById('bulkStatSuccess').textContent) + 1;
+    document.getElementById('bulkStatSuccess').textContent = successCount;
+    logDiv.innerHTML += `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${escapeHtml(data.awb)} - Replied</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+  });
+
+  bulkEventSource.addEventListener('complete', (e) => {
+    const data = JSON.parse(e.data);
+    bulkEventSource.close();
+    bulkEventSource = null;
+
+    document.getElementById('bulkProgressBar').style.width = '100%';
+    document.getElementById('bulkStatSuccess').textContent = data.success;
+    document.getElementById('bulkStatNoVideo').textContent = data.noVideo;
+    document.getElementById('bulkStatFailed').textContent = data.failed;
+    document.getElementById('bulkStatSkipped').textContent = data.skipped;
+
+    logDiv.innerHTML += `<div class="fw-bold mt-2 pt-2 border-top">Complete: ${data.success} replied, ${data.noVideo} no video, ${data.failed} failed, ${data.skipped} skipped</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+
+    document.getElementById('bulkCancelBtn').classList.add('d-none');
+    document.getElementById('bulkDoneBtn').classList.remove('d-none');
+
+    // Refresh email list to show updated statuses
+    searchEmails();
+  });
+
+  bulkEventSource.addEventListener('error', (e) => {
+    let errMsg = 'Connection error';
+    try {
+      const data = JSON.parse(e.data);
+      errMsg = data.message || errMsg;
+    } catch {}
+    logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${escapeHtml(errMsg)}</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+  });
+
+  bulkEventSource.onerror = () => {
+    if (bulkEventSource) {
+      bulkEventSource.close();
+      bulkEventSource = null;
+      logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Connection lost</div>`;
+      document.getElementById('bulkCancelBtn').classList.add('d-none');
+      document.getElementById('bulkDoneBtn').classList.remove('d-none');
+    }
+  };
+}
+
+function cancelBulkReply() {
+  if (bulkEventSource) {
+    bulkEventSource.close();
+    bulkEventSource = null;
+    document.getElementById('bulkReplyLog').innerHTML += '<div class="text-warning"><i class="bi bi-x-circle me-1"></i>Cancelled by user</div>';
+    document.getElementById('bulkCancelBtn').classList.add('d-none');
+    document.getElementById('bulkDoneBtn').classList.remove('d-none');
+  }
+}
+
+function closeBulkModal() {
+  const modalEl = document.getElementById('bulkReplyModal');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  clearSelection();
+}
 </script>
 </body>
 </html>

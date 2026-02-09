@@ -146,7 +146,7 @@ async function getAccountId() {
  * @param {number} limit - Max results to return
  * @param {number} start - Pagination start index
  */
-async function searchEmails(query, limit = 50, start = 0) {
+async function searchEmails(query, limit = 200, start = 0) {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
