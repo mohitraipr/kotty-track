@@ -8,7 +8,7 @@ const xlsx = require('xlsx');
 const { isAuthenticated, isOnlyMohitOperator } = require('../middlewares/auth');
 const zohoMail = require('../utils/zohoMailClient');
 const { findVideosByAwb, formatFileSize } = require('../utils/s3Client');
-const pool = require('../config/db');
+const { pool } = require('../config/db');
 
 // In-memory storage for Excel mappings (Order ID -> AWB)
 // Also persisted to database for durability

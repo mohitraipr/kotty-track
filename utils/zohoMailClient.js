@@ -368,15 +368,37 @@ function extractOrderDetails(body, subject = '') {
 
   // AJIO CCTV subject pattern: ||INC00101496592||RT205313651||DV00336119
   // Extract RT number as AWB (this is the tracking number)
-  const rtMatch = subject?.match(/\|\|RT(\d+)\|\|/i) || text.match(/\bRT(\d{6,})\b/i);
-  if (rtMatch) {
-    details.awb = 'RT' + rtMatch[1];
+  // Try multiple patterns for RT number
+  const rtPatterns = [
+    /\|\|RT(\d+)\|\|/i,           // ||RT205313651|| format in subject
+    /RT[\s:]*(\d{6,})/i,          // RT: 205313651 or RT 205313651
+    /\bRT(\d{6,})\b/i,            // RT205313651 as word
+    /tracking[:\s]*RT(\d+)/i,     // tracking: RT205313651
+    /awb[:\s]*RT(\d+)/i           // awb: RT205313651
+  ];
+
+  for (const pattern of rtPatterns) {
+    const rtMatch = text.match(pattern);
+    if (rtMatch && rtMatch[1]) {
+      details.awb = 'RT' + rtMatch[1];
+      break;
+    }
   }
 
   // Extract INC number as ticket
-  const incMatch = subject?.match(/\|\|INC(\d+)\|\|/i) || text.match(/\bINC(\d{6,})\b/i);
-  if (incMatch) {
-    details.ticket = 'INC' + incMatch[1];
+  const incPatterns = [
+    /\|\|INC(\d+)\|\|/i,          // ||INC00101496592|| format
+    /INC[\s:]*(\d{6,})/i,         // INC: 00101496592
+    /\bINC(\d{6,})\b/i,           // INC00101496592 as word
+    /ticket[:\s]*INC(\d+)/i       // ticket: INC00101496592
+  ];
+
+  for (const pattern of incPatterns) {
+    const incMatch = text.match(pattern);
+    if (incMatch && incMatch[1]) {
+      details.ticket = 'INC' + incMatch[1];
+      break;
+    }
   }
 
   // Order ID patterns (AJIO format: OD followed by numbers)
@@ -386,11 +408,20 @@ function extractOrderDetails(body, subject = '') {
     details.orderId = orderMatch[1] || orderMatch[0];
   }
 
-  // If no AWB from RT pattern, try other patterns
+  // If no AWB from RT pattern, try other AWB patterns
   if (!details.awb) {
-    const awbMatch = text.match(/(?:awb|tracking|shipment)\s*(?:no|number|id)?[:\s]*([A-Z0-9]+)/i);
-    if (awbMatch) {
-      details.awb = awbMatch[1];
+    const awbPatterns = [
+      /(?:awb|tracking|shipment)\s*(?:no|number|id)?[:\s]*([A-Z0-9]{6,})/i,
+      /fwd\s*awb[:\s]*([A-Z0-9]{6,})/i,  // FWD AWB
+      /courier\s*awb[:\s]*([A-Z0-9]{6,})/i
+    ];
+
+    for (const pattern of awbPatterns) {
+      const awbMatch = text.match(pattern);
+      if (awbMatch && awbMatch[1]) {
+        details.awb = awbMatch[1];
+        break;
+      }
     }
   }
 
