@@ -351,11 +351,12 @@ function classifyEmail(subject, body) {
 }
 
 /**
- * Extract order details from email body
+ * Extract order details from email subject and body
  * @param {string} body - Email body text
+ * @param {string} subject - Email subject (optional)
  * @returns {object} Extracted details: orderId, packingTime, ticket, awb
  */
-function extractOrderDetails(body) {
+function extractOrderDetails(body, subject = '') {
   const details = {
     orderId: null,
     packingTime: null,
@@ -363,31 +364,48 @@ function extractOrderDetails(body) {
     awb: null
   };
 
-  if (!body) return details;
+  const text = `${subject || ''} ${body || ''}`;
+
+  // AJIO CCTV subject pattern: ||INC00101496592||RT205313651||DV00336119
+  // Extract RT number as AWB (this is the tracking number)
+  const rtMatch = subject?.match(/\|\|RT(\d+)\|\|/i) || text.match(/\bRT(\d{6,})\b/i);
+  if (rtMatch) {
+    details.awb = 'RT' + rtMatch[1];
+  }
+
+  // Extract INC number as ticket
+  const incMatch = subject?.match(/\|\|INC(\d+)\|\|/i) || text.match(/\bINC(\d{6,})\b/i);
+  if (incMatch) {
+    details.ticket = 'INC' + incMatch[1];
+  }
 
   // Order ID patterns (AJIO format: OD followed by numbers)
-  const orderMatch = body.match(/order\s*(?:id|no|number)?[:\s]*([A-Z0-9-]+)/i) ||
-                     body.match(/OD\d{10,}/i);
+  const orderMatch = text.match(/order\s*(?:id|no|number)?[:\s]*([A-Z0-9-]+)/i) ||
+                     text.match(/\bOD\d{10,}\b/i);
   if (orderMatch) {
     details.orderId = orderMatch[1] || orderMatch[0];
   }
 
-  // AWB/Tracking number patterns
-  const awbMatch = body.match(/(?:awb|tracking|shipment)\s*(?:no|number|id)?[:\s]*([A-Z0-9]+)/i);
-  if (awbMatch) {
-    details.awb = awbMatch[1];
+  // If no AWB from RT pattern, try other patterns
+  if (!details.awb) {
+    const awbMatch = text.match(/(?:awb|tracking|shipment)\s*(?:no|number|id)?[:\s]*([A-Z0-9]+)/i);
+    if (awbMatch) {
+      details.awb = awbMatch[1];
+    }
   }
 
-  // Packing time patterns
-  const timeMatch = body.match(/(?:packing|packed|dispatch)\s*(?:time|date)?[:\s]*(\d{1,2}[:\-\/]\d{2}[:\-\/]?\d{0,4}[\s]*(?:am|pm)?)/i);
+  // Packing time/date patterns
+  const timeMatch = text.match(/(?:packing|packed|dispatch)\s*(?:time|date)?[:\s]*(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4}[\s]*\d{0,2}[:\s]?\d{0,2}[\s]*(?:am|pm)?)/i);
   if (timeMatch) {
     details.packingTime = timeMatch[1];
   }
 
-  // Ticket number patterns
-  const ticketMatch = body.match(/(?:ticket|case|reference)\s*(?:no|number|id)?[:\s]*([A-Z0-9-]+)/i);
-  if (ticketMatch) {
-    details.ticket = ticketMatch[1];
+  // If no ticket from INC pattern, try other patterns
+  if (!details.ticket) {
+    const ticketMatch = text.match(/(?:ticket|case|reference)\s*(?:no|number|id)?[:\s]*([A-Z0-9-]+)/i);
+    if (ticketMatch) {
+      details.ticket = ticketMatch[1];
+    }
   }
 
   return details;

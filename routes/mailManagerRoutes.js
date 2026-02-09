@@ -383,14 +383,24 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
     ]);
 
     const bodyText = content?.content || '';
-    const extractedDetails = zohoMail.extractOrderDetails(bodyText);
+    const subject = details?.subject || '';
 
-    // Try to find AWB from mapping if we have an order ID
+    // Extract details from BOTH subject (for RT/INC numbers) and body
+    const extractedDetails = zohoMail.extractOrderDetails(bodyText, subject);
+
+    // Try to find AWB from mapping if we have an order ID but no AWB yet
     const sessionKey = getSessionKey(req);
     const mapping = sessionMappings.get(sessionKey);
 
-    if (extractedDetails.orderId && mapping && !extractedDetails.awb) {
-      extractedDetails.awb = mapping[extractedDetails.orderId.toUpperCase()] || null;
+    if (extractedDetails.orderId && !extractedDetails.awb) {
+      // Check session mapping first
+      if (mapping) {
+        extractedDetails.awb = mapping[extractedDetails.orderId.toUpperCase()] || null;
+      }
+      // Then check database
+      if (!extractedDetails.awb) {
+        extractedDetails.awb = await lookupAwbFromDb(extractedDetails.orderId);
+      }
     }
 
     res.json({
