@@ -7,11 +7,144 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const { isAuthenticated, isOnlyMohitOperator } = require('../middlewares/auth');
 const zohoMail = require('../utils/zohoMailClient');
-const { findVideosByAwb } = require('../utils/s3Client');
+const { findVideosByAwb, formatFileSize } = require('../utils/s3Client');
+const pool = require('../db');
 
 // In-memory storage for Excel mappings (Order ID -> AWB)
-// Each user session gets its own mapping
+// Also persisted to database for durability
 const sessionMappings = new Map();
+
+// ==================== DATABASE HELPERS ====================
+
+// Save reply to database for tracking
+async function saveReplyRecord(data) {
+  try {
+    await pool.query(`
+      INSERT INTO mail_replies
+        (message_id, thread_id, from_address, to_address, subject, order_id, awb, video_url, status, classification, replied_by, replied_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        status = VALUES(status),
+        video_url = VALUES(video_url),
+        replied_at = NOW(),
+        replied_by = VALUES(replied_by)
+    `, [
+      data.messageId,
+      data.threadId || null,
+      data.fromAddress || null,
+      data.toAddress,
+      data.subject,
+      data.orderId || null,
+      data.awb || null,
+      data.videoUrl || null,
+      data.status || 'replied',
+      data.classification || null,
+      data.userId
+    ]);
+    return true;
+  } catch (err) {
+    console.error('Failed to save reply record:', err);
+    return false;
+  }
+}
+
+// Get reply status for a message
+async function getReplyStatus(messageId) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM mail_replies WHERE message_id = ?',
+      [messageId]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    console.error('Failed to get reply status:', err);
+    return null;
+  }
+}
+
+// Get all replies with pagination
+async function getReplies(limit = 50, offset = 0, status = null) {
+  try {
+    let query = 'SELECT * FROM mail_replies';
+    const params = [];
+
+    if (status) {
+      query += ' WHERE status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const [rows] = await pool.query(query, params);
+    return rows;
+  } catch (err) {
+    console.error('Failed to get replies:', err);
+    return [];
+  }
+}
+
+// Save order-AWB mapping to database (for persistence across sessions)
+async function saveOrderAwbMapping(mappings, userId, sourceFile) {
+  try {
+    const entries = Object.entries(mappings);
+    if (entries.length === 0) return 0;
+
+    // Batch insert with ON DUPLICATE KEY UPDATE
+    const values = entries.map(([orderId, awb]) => [orderId, awb, userId, sourceFile]);
+
+    // Insert in batches of 500
+    let inserted = 0;
+    for (let i = 0; i < values.length; i += 500) {
+      const batch = values.slice(i, i + 500);
+      const placeholders = batch.map(() => '(?, ?, ?, ?)').join(',');
+      const flatValues = batch.flat();
+
+      await pool.query(`
+        INSERT INTO order_awb_mapping (order_id, awb, uploaded_by, source_file)
+        VALUES ${placeholders}
+        ON DUPLICATE KEY UPDATE awb = VALUES(awb), uploaded_by = VALUES(uploaded_by), uploaded_at = NOW()
+      `, flatValues);
+
+      inserted += batch.length;
+    }
+
+    return inserted;
+  } catch (err) {
+    console.error('Failed to save order-AWB mapping:', err);
+    return 0;
+  }
+}
+
+// Load order-AWB mapping from database
+async function loadOrderAwbMapping() {
+  try {
+    const [rows] = await pool.query(
+      'SELECT order_id, awb FROM order_awb_mapping'
+    );
+    const mapping = {};
+    rows.forEach(row => {
+      mapping[row.order_id] = row.awb;
+    });
+    return mapping;
+  } catch (err) {
+    console.error('Failed to load order-AWB mapping:', err);
+    return {};
+  }
+}
+
+// Lookup AWB from database
+async function lookupAwbFromDb(orderId) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT awb FROM order_awb_mapping WHERE order_id = ?',
+      [orderId.toUpperCase()]
+    );
+    return rows[0]?.awb || null;
+  } catch (err) {
+    return null;
+  }
+}
 
 // Multer setup for memory storage (no disk writes)
 const upload = multer({
@@ -117,8 +250,17 @@ router.post('/upload-mapping', isAuthenticated, isOnlyMohitOperator, upload.sing
 
     const sessionKey = getSessionKey(req);
 
-    // Replace existing mapping (as per requirement)
+    // Replace existing mapping in session (as per requirement)
     sessionMappings.set(sessionKey, mapping);
+
+    // Also persist to database for durability (async, don't wait)
+    const userId = req.session?.user?.id;
+    const sourceFile = req.file.originalname;
+    saveOrderAwbMapping(mapping, userId, sourceFile).then(saved => {
+      console.log(`Persisted ${saved} order-AWB mappings to database`);
+    }).catch(err => {
+      console.error('Failed to persist mappings:', err);
+    });
 
     res.json({
       success: true,
@@ -150,21 +292,38 @@ router.post('/clear-mapping', isAuthenticated, isOnlyMohitOperator, (req, res) =
   res.json({ success: true, message: 'Mapping cleared' });
 });
 
-// Lookup AWB by Order ID
-router.get('/lookup-awb/:orderId', isAuthenticated, isOnlyMohitOperator, (req, res) => {
+// Lookup AWB by Order ID (checks session first, then database)
+router.get('/lookup-awb/:orderId', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   const sessionKey = getSessionKey(req);
   const mapping = sessionMappings.get(sessionKey);
   const orderId = (req.params.orderId || '').trim().toUpperCase();
 
-  if (!mapping) {
-    return res.json({ found: false, error: 'No mapping loaded' });
+  // First check session mapping
+  if (mapping && mapping[orderId]) {
+    return res.json({
+      found: true,
+      orderId,
+      awb: mapping[orderId],
+      source: 'session'
+    });
   }
 
-  const awb = mapping[orderId];
+  // Then check database
+  const dbAwb = await lookupAwbFromDb(orderId);
+  if (dbAwb) {
+    return res.json({
+      found: true,
+      orderId,
+      awb: dbAwb,
+      source: 'database'
+    });
+  }
+
   res.json({
-    found: !!awb,
+    found: false,
     orderId,
-    awb: awb || null
+    awb: null,
+    error: mapping ? 'Order ID not found in mapping' : 'No mapping loaded'
   });
 });
 
@@ -300,7 +459,7 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
 // Send reply with video links
 router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { messageId, threadId, toAddress, subject, orderId, videos } = req.body;
+    const { messageId, threadId, toAddress, subject, orderId, videos, classification, fromAddress } = req.body;
 
     if (!messageId || !toAddress || !subject) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -319,6 +478,22 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     // Send reply
     const result = await zohoMail.sendReply(messageId, threadId, toAddress, subject, htmlContent);
 
+    // Save reply record to database for tracking
+    const awb = videos && videos.length > 0 ? videos[0].awb : null;
+    await saveReplyRecord({
+      messageId,
+      threadId,
+      fromAddress,
+      toAddress,
+      subject,
+      orderId,
+      awb,
+      videoUrl: videos && videos.length > 0 ? videos[0].url : null,
+      status: 'replied',
+      classification,
+      userId: req.session?.user?.id
+    });
+
     res.json({
       success: true,
       message: 'Reply sent successfully',
@@ -327,6 +502,68 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
   } catch (err) {
     console.error('Reply send error:', err);
     res.status(500).json({ error: 'Failed to send reply: ' + (err.message || err) });
+  }
+});
+
+// Update email status (without sending reply)
+router.post('/update-status', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const { messageId, status, orderId, awb, subject, classification } = req.body;
+
+    if (!messageId || !status) {
+      return res.status(400).json({ error: 'Missing messageId or status' });
+    }
+
+    const validStatuses = ['initial', 'proceeding', 'replied', 'closed', 'error'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    await saveReplyRecord({
+      messageId,
+      orderId,
+      awb,
+      subject,
+      status,
+      classification,
+      userId: req.session?.user?.id
+    });
+
+    res.json({ success: true, message: 'Status updated' });
+  } catch (err) {
+    console.error('Status update error:', err);
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
+// Get reply history
+router.get('/replies', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const { limit = 50, offset = 0, status } = req.query;
+    const replies = await getReplies(parseInt(limit), parseInt(offset), status || null);
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) as total FROM mail_replies';
+    if (status) {
+      countQuery += ' WHERE status = ?';
+    }
+    const [countResult] = await pool.query(countQuery, status ? [status] : []);
+    const total = countResult[0]?.total || 0;
+
+    res.json({ replies, total, limit: parseInt(limit), offset: parseInt(offset) });
+  } catch (err) {
+    console.error('Replies fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch replies' });
+  }
+});
+
+// Get status for a specific message
+router.get('/reply-status/:messageId', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const status = await getReplyStatus(req.params.messageId);
+    res.json({ found: !!status, status });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get status' });
   }
 });
 

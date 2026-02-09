@@ -16,6 +16,11 @@
     .awb-input { min-height: 100px; font-family: monospace; }
     .stats-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
     .search-mode-btn.active { background-color: #0d6efd; color: white; }
+    .progress-container { display: none; }
+    .progress-container.active { display: block; }
+    .live-stats { font-size: 0.85rem; }
+    .live-stats .stat-item { display: inline-block; margin-right: 15px; }
+    .cancel-btn { margin-left: 10px; }
   </style>
 </head>
 <body class="bg-light">
@@ -130,10 +135,37 @@
     <div class="col-lg-8">
       <div id="alertContainer"></div>
 
+      <!-- Progress Bar for Large Searches -->
+      <div class="card shadow-sm mb-3 progress-container" id="progressContainer">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold"><i class="bi bi-hourglass-split"></i> Processing Large Search...</span>
+            <button class="btn btn-sm btn-outline-danger cancel-btn" id="cancelSearchBtn">
+              <i class="bi bi-x-circle"></i> Cancel
+            </button>
+          </div>
+          <div class="progress mb-2" style="height: 25px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" id="searchProgress"
+                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              <span id="progressText">0%</span>
+            </div>
+          </div>
+          <div class="live-stats text-muted">
+            <span class="stat-item"><i class="bi bi-list-check"></i> Processed: <strong id="processedCount">0</strong> / <span id="totalCount">0</span></span>
+            <span class="stat-item text-success"><i class="bi bi-check-circle"></i> Found: <strong id="foundLiveCount">0</strong></span>
+            <span class="stat-item"><i class="bi bi-layers"></i> Chunk: <span id="chunkInfo">0/0</span></span>
+          </div>
+        </div>
+      </div>
+
       <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0"><i class="bi bi-list-ul"></i> Search Results</h5>
-          <span class="badge bg-secondary" id="resultCount">0 result(s)</span>
+          <div>
+            <span class="badge bg-success me-1" id="foundBadge" style="display:none;">Found: 0</span>
+            <span class="badge bg-danger me-1" id="notFoundBadge" style="display:none;">Not Found: 0</span>
+            <span class="badge bg-secondary" id="resultCount">0 result(s)</span>
+          </div>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
@@ -246,7 +278,166 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// AWB Search (AJAX)
+// Constants
+const MAX_SINGLE_REQUEST = 500;
+let currentEventSource = null;
+let streamedResults = [];
+
+// Progress UI helpers
+function showProgress() {
+  document.getElementById('progressContainer').classList.add('active');
+}
+
+function hideProgress() {
+  document.getElementById('progressContainer').classList.remove('active');
+}
+
+function updateProgress(processed, total, found, chunk, totalChunks) {
+  const percent = Math.round((processed / total) * 100);
+  const bar = document.getElementById('searchProgress');
+  bar.style.width = percent + '%';
+  bar.setAttribute('aria-valuenow', percent);
+  document.getElementById('progressText').textContent = percent + '%';
+  document.getElementById('processedCount').textContent = processed.toLocaleString();
+  document.getElementById('totalCount').textContent = total.toLocaleString();
+  document.getElementById('foundLiveCount').textContent = found.toLocaleString();
+  document.getElementById('chunkInfo').textContent = `${chunk}/${totalChunks}`;
+}
+
+function updateResultBadges(found, notFound) {
+  const foundBadge = document.getElementById('foundBadge');
+  const notFoundBadge = document.getElementById('notFoundBadge');
+  if (found > 0) {
+    foundBadge.textContent = 'Found: ' + found.toLocaleString();
+    foundBadge.style.display = 'inline-block';
+  }
+  if (notFound > 0) {
+    notFoundBadge.textContent = 'Not Found: ' + notFound.toLocaleString();
+    notFoundBadge.style.display = 'inline-block';
+  }
+}
+
+// Append results to table (for streaming)
+function appendResults(items) {
+  const tbody = document.getElementById('resultsBody');
+  const countEl = document.getElementById('resultCount');
+
+  // Clear placeholder if first results
+  if (streamedResults.length === 0) {
+    tbody.innerHTML = '';
+  }
+
+  items.forEach(r => {
+    streamedResults.push(r);
+    const found = r.found !== false;
+    const displayName = r.awb || r.filename || r.key?.split('/').pop() || 'Unknown';
+
+    const tr = document.createElement('tr');
+    tr.className = found ? 'found-row' : 'not-found-row';
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(displayName)}</strong></td>
+      <td>
+        ${found
+          ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Found</span>'
+          : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Not Found</span>'}
+      </td>
+      <td>
+        ${found && r.url
+          ? `<a href="${r.url}" target="_blank" class="video-link"><i class="bi bi-play-circle"></i> ${escapeHtml(r.filename || 'Download')}</a>`
+          : '<span class="text-muted">-</span>'}
+      </td>
+      <td>${found && r.sizeFormatted ? r.sizeFormatted : '-'}</td>
+      ${isMohitOperator ? `
+        <td>
+          ${found && r.key
+            ? `<button class="btn btn-sm btn-outline-danger delete-btn" data-key="${escapeHtml(r.key)}" data-name="${escapeHtml(displayName)}"><i class="bi bi-trash"></i></button>`
+            : '-'}
+        </td>
+      ` : ''}
+    `;
+    tbody.appendChild(tr);
+  });
+
+  countEl.textContent = streamedResults.length + ' result(s)';
+}
+
+// Streaming search using SSE
+function streamSearch(awbList) {
+  return new Promise((resolve, reject) => {
+    streamedResults = [];
+    document.getElementById('foundBadge').style.display = 'none';
+    document.getElementById('notFoundBadge').style.display = 'none';
+    document.getElementById('resultsBody').innerHTML = '';
+
+    const encoded = encodeURIComponent(awbList);
+    currentEventSource = new EventSource(`/video-finder/api/search-stream?awbList=${encoded}`);
+
+    let totalAwbs = 0;
+    let foundCount = 0;
+
+    currentEventSource.addEventListener('start', (e) => {
+      const data = JSON.parse(e.data);
+      totalAwbs = data.total;
+      showProgress();
+      updateProgress(0, totalAwbs, 0, 0, Math.ceil(totalAwbs / data.chunkSize));
+    });
+
+    currentEventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data);
+      foundCount = data.found;
+      updateProgress(data.processed, data.total, data.found, data.chunk, data.totalChunks);
+    });
+
+    currentEventSource.addEventListener('found', (e) => {
+      const data = JSON.parse(e.data);
+      appendResults(data.items);
+    });
+
+    currentEventSource.addEventListener('complete', (e) => {
+      const data = JSON.parse(e.data);
+      currentEventSource.close();
+      currentEventSource = null;
+      hideProgress();
+      updateResultBadges(data.found, data.notFound);
+      resolve(data);
+    });
+
+    currentEventSource.addEventListener('error', (e) => {
+      if (e.data) {
+        const data = JSON.parse(e.data);
+        reject(new Error(data.message));
+      } else {
+        reject(new Error('Connection lost'));
+      }
+      currentEventSource.close();
+      currentEventSource = null;
+      hideProgress();
+    });
+
+    currentEventSource.onerror = () => {
+      if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+      }
+      hideProgress();
+      reject(new Error('Connection lost'));
+    };
+  });
+}
+
+// Cancel button
+document.getElementById('cancelSearchBtn').addEventListener('click', function() {
+  if (currentEventSource) {
+    currentEventSource.close();
+    currentEventSource = null;
+  }
+  hideProgress();
+  showAlert('Search cancelled', 'warning');
+  document.getElementById('searchAwbBtn').disabled = false;
+  document.getElementById('searchAwbBtn').innerHTML = '<i class="bi bi-search"></i> Search AWBs';
+});
+
+// AWB Search (AJAX or Streaming based on count)
 document.getElementById('searchAwbBtn').addEventListener('click', async function() {
   const awbList = document.getElementById('awbList').value.trim();
   if (!awbList) {
@@ -254,24 +445,36 @@ document.getElementById('searchAwbBtn').addEventListener('click', async function
     return;
   }
 
+  // Count AWBs
+  const awbCount = awbList.split(/[\n,\s|]+/).filter(s => s.trim()).length;
+
   this.disabled = true;
   this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Searching...';
 
   try {
-    const res = await fetch('/video-finder/api/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ awbList })
-    });
-    const data = await res.json();
+    if (awbCount > MAX_SINGLE_REQUEST) {
+      // Use streaming for large searches
+      showAlert(`Large search (${awbCount.toLocaleString()} AWBs) - streaming results...`, 'info');
+      const result = await streamSearch(awbList);
+      showAlert(`Complete! Found ${result.found.toLocaleString()} of ${result.total.toLocaleString()} videos`, 'success');
+    } else {
+      // Use regular AJAX for smaller searches
+      const res = await fetch('/video-finder/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ awbList })
+      });
+      const data = await res.json();
 
-    if (data.error) {
-      showAlert(data.error, 'danger');
-      return;
+      if (data.error) {
+        showAlert(data.error, 'danger');
+        return;
+      }
+
+      renderResults(data.results);
+      updateResultBadges(data.found, data.total - data.found);
+      showAlert(`Found ${data.found} of ${data.total} videos`, 'success');
     }
-
-    renderResults(data.results);
-    showAlert(`Found ${data.found} of ${data.total} videos`, 'success');
   } catch (err) {
     showAlert('Search failed: ' + err.message, 'danger');
   } finally {

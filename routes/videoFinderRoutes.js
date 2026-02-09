@@ -1,6 +1,7 @@
 /**
  * Video Finder Routes
  * Search AWS S3 for CCTV/packing videos by AWB/tracking number
+ * Supports large bulk searches with progress streaming (SSE)
  */
 
 const express = require('express');
@@ -18,6 +19,10 @@ const {
   listObjects,
   S3_BUCKET,
 } = require('../utils/s3Client');
+
+// Constants for bulk search
+const MAX_SINGLE_REQUEST_AWBS = 500; // Above this, use chunked/streaming
+const CHUNK_SIZE = 100; // Process 100 AWBs at a time for progress updates
 
 // Multer for Excel upload (in-memory only)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -253,6 +258,97 @@ router.get('/url', isAuthenticated, allowVideoFinderAccess, async (req, res) => 
   } catch (err) {
     console.error('URL generation error:', err);
     res.status(500).json({ error: 'Failed to generate URL: ' + err.message });
+  }
+});
+
+// Chunked bulk search with Server-Sent Events (SSE) for progress
+// Use this for large searches (>500 AWBs)
+router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const awbListRaw = req.query.awbList || '';
+    const awbs = awbListRaw
+      .split(/[\n,\s|]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (!awbs.length) {
+      sendEvent('error', { message: 'No AWB numbers provided' });
+      return res.end();
+    }
+
+    const total = awbs.length;
+    sendEvent('start', { total, chunkSize: CHUNK_SIZE });
+
+    const allResults = [];
+    let foundCount = 0;
+
+    // Process in chunks
+    for (let i = 0; i < awbs.length; i += CHUNK_SIZE) {
+      const chunk = awbs.slice(i, i + CHUNK_SIZE);
+      const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+      const totalChunks = Math.ceil(awbs.length / CHUNK_SIZE);
+
+      sendEvent('progress', {
+        processed: Math.min(i + chunk.length, total),
+        total,
+        percent: Math.round(((i + chunk.length) / total) * 100),
+        chunk: chunkNum,
+        totalChunks,
+        found: foundCount,
+      });
+
+      // Search this chunk
+      const hits = await findVideosByAwb(chunk);
+
+      // Build results for this chunk
+      const chunkResults = chunk.map((awb) => {
+        const hit = hits.get(awb);
+        if (hit) {
+          foundCount++;
+          return {
+            awb,
+            found: true,
+            key: hit.key,
+            filename: hit.key.split('/').pop(),
+            url: hit.url,
+            size: hit.size,
+            sizeFormatted: formatFileSize(hit.size),
+          };
+        }
+        return { awb, found: false };
+      });
+
+      // Send found items immediately (streaming results)
+      const foundInChunk = chunkResults.filter((r) => r.found);
+      if (foundInChunk.length > 0) {
+        sendEvent('found', { items: foundInChunk });
+      }
+
+      allResults.push(...chunkResults);
+    }
+
+    // Send completion
+    sendEvent('complete', {
+      success: true,
+      total,
+      found: foundCount,
+      notFound: total - foundCount,
+    });
+  } catch (err) {
+    console.error('Stream search error:', err);
+    sendEvent('error', { message: err.message });
+  } finally {
+    res.end();
   }
 });
 
