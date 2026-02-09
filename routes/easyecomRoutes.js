@@ -428,4 +428,34 @@ router.post(
   }
 );
 
+// Get count of stale health records (for cleanup preview)
+router.get('/health-cleanup/count', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const [[{ stale }]] = await pool.query(
+      `SELECT COUNT(*) as stale FROM ee_inventory_health
+       WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) AND drr_per_day IS NULL`
+    );
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_health');
+    res.json({ stale, total });
+  } catch (err) {
+    console.error('Failed to count stale health records:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clean up stale health records (>30 days old with NULL DRR)
+router.post('/health-cleanup', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const [result] = await pool.query(
+      `DELETE FROM ee_inventory_health
+       WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) AND drr_per_day IS NULL`
+    );
+    console.log(`Cleaned up ${result.affectedRows} stale health records`);
+    res.json({ deleted: result.affectedRows, message: `Deleted ${result.affectedRows} stale records` });
+  } catch (err) {
+    console.error('Failed to cleanup health records:', err);
+    res.status(500).json({ error: 'Failed to cleanup health records' });
+  }
+});
+
 module.exports = router;

@@ -53,7 +53,7 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
       es.sku,
       eo.warehouse_id,
       eo.marketplace_id,
-      COUNT(*) AS order_count,
+      COALESCE(SUM(es.quantity), 0) AS order_count,
       MAX(eo.order_date) AS last_order_date
     FROM ee_suborders es
     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
@@ -274,7 +274,7 @@ async function getYesterdayOrdersBySku(pool, { warehouseIds } = {}) {
   const hasWarehouseFilter = allowedWarehouses.length > 0;
   const { start, end } = getYesterdayBounds();
   const [rows] = await pool.query(
-    `SELECT es.sku, eo.warehouse_id, COUNT(*) AS orders
+    `SELECT es.sku, eo.warehouse_id, COALESCE(SUM(es.quantity), 0) AS orders
      FROM ee_suborders es
      INNER JOIN ee_orders eo ON es.order_id = eo.order_id
       WHERE eo.order_date >= ? AND eo.order_date < ?
@@ -373,7 +373,7 @@ async function getAggregateForWindow(pool, start, end, { warehouseIds } = {}) {
   const allowedWarehouses = sanitizeWarehouseIds(warehouseIds);
   const hasWarehouseFilter = allowedWarehouses.length > 0;
   const [rows] = await pool.query(
-    `SELECT es.sku, eo.warehouse_id, COUNT(*) AS order_count
+    `SELECT es.sku, eo.warehouse_id, COALESCE(SUM(es.quantity), 0) AS order_count
      FROM ee_suborders es
      INNER JOIN ee_orders eo ON es.order_id = eo.order_id
      WHERE eo.order_date >= ? AND eo.order_date < ?

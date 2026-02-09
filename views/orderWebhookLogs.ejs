@@ -38,6 +38,7 @@
         <tr>
           <th>Time</th>
           <th>Order ID</th>
+          <th>SKU(s)</th>
           <th>Marketplace</th>
           <th>Status</th>
           <th>Warehouse</th>
@@ -50,6 +51,7 @@
         <tr>
           <td><%= log.time %></td>
           <td><strong><%= log.order_id %></strong></td>
+          <td><small><%= log.skus || 'N/A' %></small></td>
           <td><%= log.marketplace || 'N/A' %></td>
           <td><%= log.order_status || 'N/A' %></td>
           <td><%= log.warehouse_id || 'N/A' %></td>
@@ -58,7 +60,7 @@
         </tr>
       <% }); %>
       <% if (!logs.length) { %>
-        <tr><td colspan="7" class="text-center text-muted">No orders found</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">No orders found</td></tr>
       <% } %>
       </tbody>
     </table>
@@ -89,23 +91,33 @@ async function clearRawData() {
     }
     status.classList.remove('d-none');
     btn.classList.add('d-none');
-    text.textContent = 'Clearing ' + countData.total.toLocaleString() + ' rows...';
-    progress.style.width = '30%';
-    progress.textContent = 'Working...';
 
-    const res = await fetch('/webhook/clear-raw/orders', { method: 'POST' });
-    const data = await res.json();
+    let totalCleared = 0;
+    const originalTotal = countData.total;
 
-    progress.style.width = '100%';
-    progress.classList.remove('progress-bar-animated');
-    progress.classList.replace('bg-primary', 'bg-success');
-    progress.classList.add('bg-success');
-    progress.textContent = 'Done!';
-    text.textContent = data.message || ('Cleared ' + data.cleared + ' rows');
+    // Auto-retry loop until done
+    while (true) {
+      const pct = Math.min(95, Math.round((totalCleared / originalTotal) * 100));
+      progress.style.width = pct + '%';
+      progress.textContent = pct + '%';
+      text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' / ' + originalTotal.toLocaleString() + '...';
 
-    btn.classList.remove('d-none');
-    btn.textContent = 'Cleared!';
-    btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+      const res = await fetch('/webhook/clear-raw/orders', { method: 'POST' });
+      const data = await res.json();
+      totalCleared += data.cleared;
+
+      if (data.done) {
+        progress.style.width = '100%';
+        progress.classList.remove('progress-bar-animated');
+        progress.classList.replace('bg-primary', 'bg-success');
+        progress.textContent = 'Done!';
+        text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' rows';
+        btn.classList.remove('d-none');
+        btn.textContent = 'Cleared!';
+        btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+        break;
+      }
+    }
   } catch (err) {
     progress.style.width = '100%';
     progress.classList.add('bg-danger');

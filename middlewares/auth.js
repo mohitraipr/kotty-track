@@ -168,6 +168,10 @@ function isVendorFiles(req, res, next) {
   return hasRole('vendorfiles')(req, res, next);
 }
 
+function isVideoFinder(req, res, next) {
+  return hasRole('videofinder')(req, res, next);
+}
+
 // ---------------------------------------------------------------------------
 // Helper to restrict routes to specific user ids
 function allowUserIds(ids) {
@@ -242,6 +246,7 @@ module.exports = {
     isPOCreator,
     isNowiPOOrganization,
     isVendorFiles,
+    isVideoFinder,
     allowUserIds,
     allowRoles,
     allowUsernames

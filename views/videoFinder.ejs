@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Finder</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/professional.css">
+  <style>
+    .found-row { background-color: #d4edda !important; }
+    .not-found-row { background-color: #f8d7da !important; }
+    .video-link { font-weight: 500; text-decoration: none; }
+    .video-link:hover { text-decoration: underline; }
+    .awb-input { min-height: 120px; font-family: monospace; }
+    .stats-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+  </style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand d-flex align-items-center gap-2">
+      <i class="bi bi-camera-video"></i> Video Finder
+    </span>
+    <div class="d-flex gap-2">
+      <% if (isMohitOperator) { %>
+        <a href="/mail-manager" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-envelope"></i> Mail Manager
+        </a>
+      <% } %>
+      <a href="/logout" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-box-arrow-right"></i> Logout
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid py-4">
+  <div class="row g-4">
+    <!-- Search Panel -->
+    <div class="col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-search"></i> Search Videos</h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/video-finder/search" id="searchForm">
+            <div class="mb-3">
+              <label for="awbList" class="form-label">AWB / Tracking Numbers</label>
+              <textarea
+                class="form-control awb-input"
+                id="awbList"
+                name="awbList"
+                placeholder="Enter AWB numbers (one per line, or comma/space separated)&#10;&#10;Example:&#10;SF123456789&#10;SF987654321"
+              ><%= searchQuery || '' %></textarea>
+              <small class="text-muted">Paste multiple AWBs to search in bulk</small>
+            </div>
+            <div class="mb-3">
+              <label for="dateFilter" class="form-label">Date Filter (optional)</label>
+              <input type="date" class="form-control" id="dateFilter" name="dateFilter" value="<%= dateFilter || '' %>">
+              <small class="text-muted">Narrow search to a specific date folder</small>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="searchBtn">
+              <i class="bi bi-search"></i> Search Videos
+            </button>
+          </form>
+
+          <hr>
+
+          <div class="mb-3">
+            <label class="form-label">Bulk Upload (Excel/CSV)</label>
+            <input type="file" class="form-control" id="bulkFile" accept=".xlsx,.xls,.csv">
+            <small class="text-muted">Upload file with AWB column to search in bulk</small>
+          </div>
+          <button type="button" class="btn btn-outline-primary w-100" id="bulkSearchBtn" disabled>
+            <i class="bi bi-file-earmark-spreadsheet"></i> Bulk Search
+          </button>
+        </div>
+      </div>
+
+      <% if (bucketName) { %>
+      <div class="card shadow-sm mt-3">
+        <div class="card-body text-center text-muted">
+          <small><i class="bi bi-cloud"></i> S3 Bucket: <code><%= bucketName %></code></small>
+        </div>
+      </div>
+      <% } %>
+    </div>
+
+    <!-- Results Panel -->
+    <div class="col-lg-8">
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="bi bi-exclamation-triangle"></i> <%= error %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% } %>
+
+      <% if (typeof message !== 'undefined' && message) { %>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle"></i> <%= message %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% } %>
+
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-list-ul"></i> Search Results</h5>
+          <span class="badge bg-secondary" id="resultCount">
+            <%= results.length %> result(s)
+          </span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0" id="resultsTable">
+              <thead class="table-dark">
+                <tr>
+                  <th>AWB</th>
+                  <th>Status</th>
+                  <th>Video</th>
+                  <th>Size</th>
+                  <% if (isMohitOperator) { %><th>Actions</th><% } %>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (results.length === 0) { %>
+                  <tr>
+                    <td colspan="<%= isMohitOperator ? 5 : 4 %>" class="text-center text-muted py-4">
+                      <i class="bi bi-search fs-1 d-block mb-2"></i>
+                      Enter AWB numbers and click Search to find videos
+                    </td>
+                  </tr>
+                <% } else { %>
+                  <% results.forEach(function(r) { %>
+                    <tr class="<%= r.found ? 'found-row' : 'not-found-row' %>">
+                      <td><strong><%= r.awb %></strong></td>
+                      <td>
+                        <% if (r.found) { %>
+                          <span class="badge bg-success"><i class="bi bi-check-circle"></i> Found</span>
+                        <% } else { %>
+                          <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Not Found</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (r.found) { %>
+                          <a href="<%= r.url %>" target="_blank" class="video-link">
+                            <i class="bi bi-play-circle"></i> <%= r.filename %>
+                          </a>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
+                      <td><%= r.found ? r.sizeFormatted : '-' %></td>
+                      <% if (isMohitOperator) { %>
+                        <td>
+                          <% if (r.found) { %>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-key="<%= r.key %>" data-awb="<%= r.awb %>">
+                              <i class="bi bi-trash"></i>
+                            </button>
+                          <% } else { %>
+                            -
+                          <% } %>
+                        </td>
+                      <% } %>
+                    </tr>
+                  <% }); %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const bulkFile = document.getElementById('bulkFile');
+  const bulkSearchBtn = document.getElementById('bulkSearchBtn');
+  const resultsTable = document.getElementById('resultsTable').querySelector('tbody');
+  const resultCount = document.getElementById('resultCount');
+
+  // Enable bulk search button when file selected
+  bulkFile.addEventListener('change', function() {
+    bulkSearchBtn.disabled = !this.files.length;
+  });
+
+  // Bulk search handler
+  bulkSearchBtn.addEventListener('click', async function() {
+    if (!bulkFile.files.length) return;
+
+    bulkSearchBtn.disabled = true;
+    bulkSearchBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Searching...';
+
+    const formData = new FormData();
+    formData.append('awbFile', bulkFile.files[0]);
+
+    try {
+      const res = await fetch('/video-finder/bulk-search', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      // Render results
+      resultCount.textContent = data.total + ' result(s)';
+      resultsTable.innerHTML = '';
+
+      data.results.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = r.found ? 'found-row' : 'not-found-row';
+        tr.innerHTML = `
+          <td><strong>${r.awb}</strong></td>
+          <td>
+            ${r.found
+              ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Found</span>'
+              : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Not Found</span>'}
+          </td>
+          <td>
+            ${r.found
+              ? `<a href="${r.url}" target="_blank" class="video-link"><i class="bi bi-play-circle"></i> ${r.filename}</a>`
+              : '<span class="text-muted">-</span>'}
+          </td>
+          <td>${r.found ? r.sizeFormatted : '-'}</td>
+          <% if (isMohitOperator) { %>
+          <td>
+            ${r.found
+              ? `<button class="btn btn-sm btn-outline-danger delete-btn" data-key="${r.key}" data-awb="${r.awb}"><i class="bi bi-trash"></i></button>`
+              : '-'}
+          </td>
+          <% } %>
+        `;
+        resultsTable.appendChild(tr);
+      });
+
+      alert(`Found ${data.found} of ${data.total} videos`);
+    } catch (err) {
+      alert('Bulk search failed: ' + err.message);
+    } finally {
+      bulkSearchBtn.disabled = false;
+      bulkSearchBtn.innerHTML = '<i class="bi bi-file-earmark-spreadsheet"></i> Bulk Search';
+    }
+  });
+
+  // Delete handler (event delegation)
+  document.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.delete-btn');
+    if (!btn) return;
+
+    const key = btn.dataset.key;
+    const awb = btn.dataset.awb;
+
+    if (!confirm(`Delete video for AWB ${awb}?\n\nFile: ${key}\n\nThis cannot be undone.`)) {
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+      const res = await fetch('/video-finder/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        btn.closest('tr').remove();
+        alert('Video deleted successfully');
+      } else {
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash"></i>';
+      }
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-trash"></i>';
+    }
+  });
+});
+</script>
+</body>
+</html>

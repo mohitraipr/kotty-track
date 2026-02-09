@@ -722,6 +722,9 @@
           <a class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2" href="/easyecom/warehouse-access" data-bs-toggle="tooltip" data-bs-title="Grant warehouse visibility to Out-of-Stock users">
             <i class="bi bi-building-gear"></i><span>Warehouse access</span>
           </a>
+          <button class="btn btn-outline-danger d-flex align-items-center justify-content-center gap-2" id="cleanup-health" type="button" data-bs-toggle="tooltip" data-bs-title="Remove stale health records (>30 days old with no orders)">
+            <i class="bi bi-trash3"></i><span>Cleanup stale</span>
+          </button>
         <% } %>
 
         <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button" data-bs-toggle="tooltip" data-bs-title="Export the current filters as Excel">
@@ -1214,6 +1217,43 @@
       spinner?.classList.add('d-none');
       icon?.classList.remove('d-none');
       downloadBtn.disabled = false;
+    }
+  });
+
+  // Health cleanup button handler (mohitOperator only)
+  const cleanupBtn = document.getElementById('cleanup-health');
+  cleanupBtn?.addEventListener('click', async () => {
+    try {
+      cleanupBtn.disabled = true;
+      cleanupBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Checking...';
+
+      const countRes = await fetch('/easyecom/health-cleanup/count');
+      const { stale, total } = await countRes.json();
+
+      if (stale === 0) {
+        alert('No stale records to clean up!');
+        cleanupBtn.innerHTML = '<i class="bi bi-check-circle"></i> Clean';
+        return;
+      }
+
+      if (!confirm(`Delete ${stale.toLocaleString()} stale health records (>30 days old with no orders)?\n\nTotal records: ${total.toLocaleString()}`)) {
+        cleanupBtn.disabled = false;
+        cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup stale</span>';
+        return;
+      }
+
+      cleanupBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Deleting...';
+      const res = await fetch('/easyecom/health-cleanup', { method: 'POST' });
+      const data = await res.json();
+
+      alert(data.message || `Deleted ${data.deleted} stale records`);
+      cleanupBtn.innerHTML = '<i class="bi bi-check-circle"></i> Done';
+      cleanupBtn.classList.replace('btn-outline-danger', 'btn-outline-success');
+    } catch (err) {
+      console.error('Cleanup failed:', err);
+      alert('Cleanup failed: ' + err.message);
+      cleanupBtn.disabled = false;
+      cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup stale</span>';
     }
   });
 

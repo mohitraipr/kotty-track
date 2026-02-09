@@ -68,7 +68,6 @@ async function clearRawData() {
   const progress = document.getElementById('clearProgress');
   const text = document.getElementById('clearText');
 
-  // First get the count
   btn.disabled = true;
   btn.textContent = 'Checking...';
   try {
@@ -84,26 +83,35 @@ async function clearRawData() {
       btn.textContent = 'Clear Raw Data';
       return;
     }
-    // Show progress
     status.classList.remove('d-none');
     btn.classList.add('d-none');
-    text.textContent = 'Clearing ' + countData.total.toLocaleString() + ' rows...';
-    progress.style.width = '30%';
-    progress.textContent = 'Working...';
 
-    const res = await fetch('/webhook/clear-raw/inventory', { method: 'POST' });
-    const data = await res.json();
+    let totalCleared = 0;
+    const originalTotal = countData.total;
 
-    progress.style.width = '100%';
-    progress.classList.remove('progress-bar-animated');
-    progress.classList.replace('bg-primary', 'bg-success');
-    progress.classList.add('bg-success');
-    progress.textContent = 'Done!';
-    text.textContent = data.message || ('Cleared ' + data.cleared + ' rows');
+    // Auto-retry loop until done
+    while (true) {
+      const pct = Math.min(95, Math.round((totalCleared / originalTotal) * 100));
+      progress.style.width = pct + '%';
+      progress.textContent = pct + '%';
+      text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' / ' + originalTotal.toLocaleString() + '...';
 
-    btn.classList.remove('d-none');
-    btn.textContent = 'Cleared!';
-    btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+      const res = await fetch('/webhook/clear-raw/inventory', { method: 'POST' });
+      const data = await res.json();
+      totalCleared += data.cleared;
+
+      if (data.done) {
+        progress.style.width = '100%';
+        progress.classList.remove('progress-bar-animated');
+        progress.classList.replace('bg-primary', 'bg-success');
+        progress.textContent = 'Done!';
+        text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' rows';
+        btn.classList.remove('d-none');
+        btn.textContent = 'Cleared!';
+        btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+        break;
+      }
+    }
   } catch (err) {
     progress.style.width = '100%';
     progress.classList.add('bg-danger');

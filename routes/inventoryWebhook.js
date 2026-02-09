@@ -387,9 +387,12 @@ router.get('/logs', isAuthenticated, isOperator, isMohitOperator, async (req, re
 router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT order_id, marketplace, order_status, warehouse_id, order_date, order_quantity, total_amount, created_at
-       FROM ee_orders
-       ORDER BY id DESC
+      `SELECT eo.order_id, eo.marketplace, eo.order_status, eo.warehouse_id, eo.order_date, eo.order_quantity, eo.total_amount, eo.created_at,
+              GROUP_CONCAT(DISTINCT es.sku ORDER BY es.sku SEPARATOR ', ') AS skus
+       FROM ee_orders eo
+       LEFT JOIN ee_suborders es ON eo.order_id = es.order_id
+       GROUP BY eo.id, eo.order_id, eo.marketplace, eo.order_status, eo.warehouse_id, eo.order_date, eo.order_quantity, eo.total_amount, eo.created_at
+       ORDER BY eo.id DESC
        LIMIT 200`
     );
     const logs = rows.map((row) => ({
@@ -400,6 +403,7 @@ router.get('/order/logs', isAuthenticated, isOperator, isMohitOperator, async (r
       warehouse_id: row.warehouse_id,
       order_quantity: row.order_quantity,
       total_amount: row.total_amount,
+      skus: row.skus || '',
       raw: '',
     }));
     res.render('orderWebhookLogs', { logs, totalCount: rows.length });
@@ -428,19 +432,26 @@ router.get('/clear-raw/orders/count', isAuthenticated, isOperator, isMohitOperat
   }
 });
 
-// Clear raw JSON data in batches (returns JSON with progress)
+// Clear raw JSON data in batches (limit per request to avoid timeout)
+const CLEAR_BATCH_SIZE = 50000;
+const MAX_BATCHES_PER_REQUEST = 5; // 250K rows max per request to avoid 504 timeout
+
 router.post('/clear-raw/inventory', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
   try {
     const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_snapshots WHERE raw IS NOT NULL');
-    if (total === 0) return res.json({ cleared: 0, total: 0, message: 'Already clean' });
+    if (total === 0) return res.json({ cleared: 0, remaining: 0, total: 0, done: true, message: 'Already clean' });
+
     let cleared = 0;
-    while (true) {
-      const [result] = await pool.query('UPDATE ee_inventory_snapshots SET raw = NULL WHERE raw IS NOT NULL LIMIT 50000');
+    for (let i = 0; i < MAX_BATCHES_PER_REQUEST; i++) {
+      const [result] = await pool.query('UPDATE ee_inventory_snapshots SET raw = NULL WHERE raw IS NOT NULL LIMIT ?', [CLEAR_BATCH_SIZE]);
       cleared += result.affectedRows;
       if (result.affectedRows === 0) break;
     }
-    console.log(`Cleared raw data from ${cleared} inventory snapshots`);
-    res.json({ cleared, total, message: `Cleared ${cleared.toLocaleString()} rows` });
+
+    const [[{ remaining }]] = await pool.query('SELECT COUNT(*) as remaining FROM ee_inventory_snapshots WHERE raw IS NOT NULL');
+    const done = remaining === 0;
+    console.log(`Cleared raw data from ${cleared} inventory snapshots, ${remaining} remaining`);
+    res.json({ cleared, remaining, total, done, message: done ? `Done! Cleared ${cleared.toLocaleString()} rows` : `Cleared ${cleared.toLocaleString()}, ${remaining.toLocaleString()} remaining...` });
   } catch (err) {
     console.error('Failed to clear inventory raw data:', err);
     res.status(500).json({ error: 'Failed to clear raw data' });
@@ -450,15 +461,19 @@ router.post('/clear-raw/inventory', isAuthenticated, isOperator, isMohitOperator
 router.post('/clear-raw/orders', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
   try {
     const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_orders WHERE raw IS NOT NULL');
-    if (total === 0) return res.json({ cleared: 0, total: 0, message: 'Already clean' });
+    if (total === 0) return res.json({ cleared: 0, remaining: 0, total: 0, done: true, message: 'Already clean' });
+
     let cleared = 0;
-    while (true) {
-      const [result] = await pool.query('UPDATE ee_orders SET raw = NULL WHERE raw IS NOT NULL LIMIT 50000');
+    for (let i = 0; i < MAX_BATCHES_PER_REQUEST; i++) {
+      const [result] = await pool.query('UPDATE ee_orders SET raw = NULL WHERE raw IS NOT NULL LIMIT ?', [CLEAR_BATCH_SIZE]);
       cleared += result.affectedRows;
       if (result.affectedRows === 0) break;
     }
-    console.log(`Cleared raw data from ${cleared} orders`);
-    res.json({ cleared, total, message: `Cleared ${cleared.toLocaleString()} rows` });
+
+    const [[{ remaining }]] = await pool.query('SELECT COUNT(*) as remaining FROM ee_orders WHERE raw IS NOT NULL');
+    const done = remaining === 0;
+    console.log(`Cleared raw data from ${cleared} orders, ${remaining} remaining`);
+    res.json({ cleared, remaining, total, done, message: done ? `Done! Cleared ${cleared.toLocaleString()} rows` : `Cleared ${cleared.toLocaleString()}, ${remaining.toLocaleString()} remaining...` });
   } catch (err) {
     console.error('Failed to clear order raw data:', err);
     res.status(500).json({ error: 'Failed to clear raw data' });
