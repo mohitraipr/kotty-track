@@ -14,6 +14,7 @@ const ZOHO_SENDER_EMAIL = process.env.ZOHO_SENDER_EMAIL || 'ksonu@kotty.in';
 const ZOHO_ACCOUNTS_BASE = {
   IN: 'accounts.zoho.in',
   US: 'accounts.zoho.com',
+  COM: 'accounts.zoho.com',
   EU: 'accounts.zoho.eu',
   AU: 'accounts.zoho.com.au',
   JP: 'accounts.zoho.jp'
@@ -22,6 +23,7 @@ const ZOHO_ACCOUNTS_BASE = {
 const ZOHO_MAIL_BASE = {
   IN: 'mail.zoho.in',
   US: 'mail.zoho.com',
+  COM: 'mail.zoho.com',
   EU: 'mail.zoho.eu',
   AU: 'mail.zoho.com.au',
   JP: 'mail.zoho.jp'
