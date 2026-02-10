@@ -234,23 +234,20 @@ async function getEmailContent(messageId) {
 
 /**
  * Get email details (metadata)
+ * NOTE: Zoho API doesn't support GET on /messages/{messageId} directly.
+ * This endpoint returns 404 INVALID_METHOD.
+ * Email metadata should come from search results, not a separate API call.
+ * Keeping this function for compatibility but it may not work.
+ *
  * @param {string} messageId - Message ID
+ * @returns {object|null} Returns null since direct fetch not supported
  */
 async function getEmailDetails(messageId) {
-  const token = await getAccessToken();
-  const accountId = await getAccountId();
-
-  const options = {
-    hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
-    path: `/api/accounts/${accountId}/messages/${messageId}`,
-    method: 'GET',
-    headers: {
-      'Authorization': `Zoho-oauthtoken ${token}`
-    }
-  };
-
-  const result = await makeRequest(options);
-  return result.data || null;
+  // Zoho Mail API does not support GET on /messages/{messageId}
+  // Email details must come from search results
+  // Return minimal object to avoid breaking callers
+  console.log('getEmailDetails called - returning null (endpoint not supported)');
+  return null;
 }
 
 /**

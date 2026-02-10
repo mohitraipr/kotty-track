@@ -454,17 +454,20 @@ router.get('/emails/inbox', isAuthenticated, isOnlyMohitOperator, async (req, re
 
 // Get single email content
 // Returns extracted details with proper AWB lookup from mapping
+// NOTE: Email metadata (subject, fromAddress) should be passed via query params
+// because Zoho API doesn't support GET on /messages/{messageId}
 router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
     const { messageId } = req.params;
+    // Get metadata from query params (passed from frontend which has search results)
+    const { subject: subjectParam, fromAddress: fromAddressParam } = req.query;
 
-    const [details, content] = await Promise.all([
-      zohoMail.getEmailDetails(messageId),
-      zohoMail.getEmailContent(messageId)
-    ]);
+    // Only fetch content - metadata comes from search results via query params
+    const content = await zohoMail.getEmailContent(messageId);
 
     const bodyText = content?.content || '';
-    const subject = details?.subject || '';
+    // Use subject from query param, or try to extract from content
+    const subject = subjectParam || content?.subject || '';
 
     // Extract details from BOTH subject (for RT/INC numbers) and body
     const extractedDetails = zohoMail.extractOrderDetails(bodyText, subject);
@@ -495,11 +498,18 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
     extractedDetails.outboundAwb = outboundAwb;
     extractedDetails.awbSource = awbSource;
 
+    // Build details object from query params (from search results)
+    const details = {
+      messageId,
+      subject,
+      fromAddress: fromAddressParam || ''
+    };
+
     res.json({
       details,
       content,
       extracted: extractedDetails,
-      classification: zohoMail.classifyEmail(details?.subject, bodyText),
+      classification: zohoMail.classifyEmail(subject, bodyText),
       hasMappingLoaded: !!(mapping && Object.keys(mapping).length > 0),
       mappingCount: mapping ? Object.keys(mapping).length : 0
     });
@@ -723,22 +733,22 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
       });
 
       try {
-        // Fetch email details
-        const [details, content] = await Promise.all([
-          zohoMail.getEmailDetails(messageId),
-          zohoMail.getEmailContent(messageId)
-        ]);
+        // Only fetch content - Zoho API doesn't support GET on /messages/{messageId}
+        // Subject must come from search results (cached or passed in)
+        const content = await zohoMail.getEmailContent(messageId);
 
-        if (!details) {
+        if (!content) {
           results.failed++;
-          results.details.push({ messageId, status: 'failed', error: 'Could not fetch email' });
+          results.details.push({ messageId, status: 'failed', error: 'Could not fetch email content' });
           continue;
         }
 
-        const subject = details.subject || '';
+        // Extract subject from content if available, otherwise empty
+        // Note: For bulk reply, we extract order details from body - subject less critical
+        const subject = content?.subject || '';
         const bodyText = content?.content || '';
-        const fromAddress = details.fromAddress || '';
-        const toAddress = details.toAddress || details.sender || '';
+        const fromAddress = content?.fromAddress || content?.sender || '';
+        const toAddress = content?.toAddress || content?.replyTo || fromAddress;
 
         // Extract Order ID from email (NOT the RT number - that's return AWB)
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
@@ -925,11 +935,11 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
       }
 
       try {
-        // Fetch email to extract Order ID
-        const details = await zohoMail.getEmailDetails(messageId);
+        // Fetch email content to extract Order ID
+        // Zoho API doesn't support GET on /messages/{messageId}
         const content = await zohoMail.getEmailContent(messageId);
 
-        const subject = details?.subject || '';
+        const subject = content?.subject || '';
         const bodyText = content?.content || '';
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
 
@@ -1106,11 +1116,11 @@ router.post('/export-selected', isAuthenticated, isOnlyMohitOperator, async (req
       const messageId = messageIds[i];
 
       try {
-        // Fetch email to extract Order ID
-        const details = await zohoMail.getEmailDetails(messageId);
+        // Fetch email content to extract Order ID
+        // Zoho API doesn't support GET on /messages/{messageId}
         const content = await zohoMail.getEmailContent(messageId);
 
-        const subject = details?.subject || '';
+        const subject = content?.subject || '';
         const bodyText = content?.content || '';
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
 

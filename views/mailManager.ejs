@@ -545,7 +545,7 @@ function renderEmailList(emails, showLoadMore = false) {
         onchange="toggleEmailSelection('${email.messageId}')"
         ${isReplied ? 'disabled title="Already replied"' : ''}
         ${selectedEmails.has(email.messageId) ? 'checked' : ''}>
-      <div class="flex-grow-1 overflow-hidden" onclick="loadEmailDetails('${email.messageId}', this.parentElement)">
+      <div class="flex-grow-1 overflow-hidden" onclick="loadEmailDetails('${email.messageId}', this.parentElement, '${escapeHtml(email.subject || '')}', '${escapeHtml(email.fromAddress || email.sender || '')}')">
         <div class="d-flex justify-content-between align-items-start">
           <div class="flex-grow-1 overflow-hidden">
             <div class="fw-semibold text-truncate">${escapeHtml(email.subject || '(No Subject)')}</div>
@@ -575,7 +575,7 @@ function renderEmailList(emails, showLoadMore = false) {
 
 // ==================== EMAIL DETAILS ====================
 
-async function loadEmailDetails(messageId, rowEl) {
+async function loadEmailDetails(messageId, rowEl, subject = '', fromAddress = '') {
   // Highlight selected row
   document.querySelectorAll('.email-row').forEach(r => r.classList.remove('selected'));
   if (rowEl) rowEl.classList.add('selected');
@@ -587,13 +587,16 @@ async function loadEmailDetails(messageId, rowEl) {
   foundVideos = [];
 
   try {
-    const res = await fetch('/mail-manager/emails/' + messageId);
+    // Pass subject and fromAddress as query params (from search results)
+    // Zoho API doesn't support GET on /messages/{messageId} so we pass metadata from search
+    const params = new URLSearchParams({ subject, fromAddress });
+    const res = await fetch('/mail-manager/emails/' + messageId + '?' + params.toString());
     const data = await res.json();
 
-    currentEmail = { messageId, ...data.details, extracted: data.extracted };
+    currentEmail = { messageId, subject, fromAddress, ...data.details, extracted: data.extracted };
 
-    document.getElementById('detailSubject').textContent = data.details?.subject || '(No Subject)';
-    document.getElementById('detailFrom').textContent = data.details?.fromAddress || '';
+    document.getElementById('detailSubject').textContent = subject || data.details?.subject || '(No Subject)';
+    document.getElementById('detailFrom').textContent = fromAddress || data.details?.fromAddress || '';
     document.getElementById('detailContent').innerHTML = data.content?.content || '<em>No content</em>';
 
     // Classification badge
