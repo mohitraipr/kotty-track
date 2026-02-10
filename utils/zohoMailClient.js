@@ -220,7 +220,7 @@ async function getEmailContent(messageId) {
 
   const options = {
     hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
-    path: `/api/accounts/${accountId}/messages/${messageId}/content`,
+    path: `/api/accounts/${accountId}/messages/${messageId}/originalmessage`,
     method: 'GET',
     headers: {
       'Authorization': `Zoho-oauthtoken ${token}`
@@ -228,6 +228,7 @@ async function getEmailContent(messageId) {
   };
 
   const result = await makeRequest(options);
+  // originalmessage returns { data: { content: "...", ... } }
   return result.data || null;
 }
 
