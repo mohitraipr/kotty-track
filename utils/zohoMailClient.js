@@ -254,7 +254,10 @@ async function getEmailDetails(messageId) {
 
 /**
  * Send a reply to an email
- * @param {string} messageId - Original message ID
+ * Uses Zoho's reply endpoint: POST /accounts/{accountId}/messages/{messageId}
+ * with action: "reply" - this is how the Python tool does it
+ *
+ * @param {string} messageId - Original message ID to reply to
  * @param {string} threadId - Thread ID (for threading)
  * @param {string} toAddress - Recipient email
  * @param {string} subject - Email subject
@@ -264,19 +267,21 @@ async function sendReply(messageId, threadId, toAddress, subject, htmlContent) {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
+  // Zoho requires the reply endpoint with action: "reply"
+  // URL format: /api/accounts/{accountId}/messages/{messageId}
   const emailData = {
     fromAddress: ZOHO_SENDER_EMAIL,
     toAddress: toAddress,
     subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
     content: htmlContent,
     mailFormat: 'html',
-    inReplyTo: messageId,
-    askReceipt: 'no'
+    askReceipt: 'no',
+    action: 'reply'  // CRITICAL: This tells Zoho it's a reply, not a new message
   };
 
   const options = {
     hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
-    path: `/api/accounts/${accountId}/messages`,
+    path: `/api/accounts/${accountId}/messages/${messageId}`,  // Include messageId in URL!
     method: 'POST',
     headers: {
       'Authorization': `Zoho-oauthtoken ${token}`,
@@ -352,40 +357,45 @@ function classifyEmail(subject, body) {
 
 /**
  * Extract order details from email subject and body
+ *
+ * IMPORTANT: For AJIO CCTV requests:
+ * - The RT number in email (like ||RT205327752||) is the RETURN AWB (when customer sends item back)
+ * - This RT number will NEVER match videos because videos are named by OUTBOUND AWB
+ * - The OUTBOUND AWB (when Kotty shipped the product) must be looked up from the Excel mapping
+ * - Flow: Extract Order ID → Lookup in Excel mapping → Get Outbound AWB → Search S3
+ *
  * @param {string} body - Email body text
  * @param {string} subject - Email subject (optional)
- * @returns {object} Extracted details: orderId, packingTime, ticket, awb
+ * @returns {object} Extracted details: orderId, packingTime, ticket, returnAwb (RT number, for reference only)
  */
 function extractOrderDetails(body, subject = '') {
   const details = {
     orderId: null,
     packingTime: null,
     ticket: null,
-    awb: null
+    returnAwb: null  // RT number from email - NOT for video search, just for reference
   };
 
   const text = `${subject || ''} ${body || ''}`;
 
-  // AJIO CCTV subject pattern: ||INC00101496592||RT205313651||DV00336119
-  // Extract RT number as AWB (this is the tracking number)
-  // Try multiple patterns for RT number
-  const rtPatterns = [
-    /\|\|RT(\d+)\|\|/i,           // ||RT205313651|| format in subject
-    /RT[\s:]*(\d{6,})/i,          // RT: 205313651 or RT 205313651
-    /\bRT(\d{6,})\b/i,            // RT205313651 as word
-    /tracking[:\s]*RT(\d+)/i,     // tracking: RT205313651
-    /awb[:\s]*RT(\d+)/i           // awb: RT205313651
+  // PRIORITY 1: Extract Order ID (this is key for AWB lookup)
+  // AJIO format: FN or OD followed by numbers, e.g., "Order ID: FN9735702115"
+  const orderPatterns = [
+    /order\s*id[:\s]*([A-Z]{1,2}\d{8,})/i,  // Order ID: FN9735702115
+    /\b(FN\d{8,})\b/i,                       // FN9735702115 standalone
+    /\b(OD\d{10,})\b/i,                      // OD pattern
+    /\b([A-Z]{1,2}\d{8,12})\b/i              // Generic: 1-2 letters + 8-12 digits
   ];
 
-  for (const pattern of rtPatterns) {
-    const rtMatch = text.match(pattern);
-    if (rtMatch && rtMatch[1]) {
-      details.awb = 'RT' + rtMatch[1];
+  for (const pattern of orderPatterns) {
+    const orderMatch = text.match(pattern);
+    if (orderMatch && orderMatch[1]) {
+      details.orderId = orderMatch[1].toUpperCase();
       break;
     }
   }
 
-  // Extract INC number as ticket
+  // PRIORITY 2: Extract INC number as ticket
   const incPatterns = [
     /\|\|INC(\d+)\|\|/i,          // ||INC00101496592|| format
     /INC[\s:]*(\d{6,})/i,         // INC: 00101496592
@@ -401,35 +411,19 @@ function extractOrderDetails(body, subject = '') {
     }
   }
 
-  // Order ID patterns (AJIO format: FN or OD followed by numbers)
-  const orderPatterns = [
-    /order\s*id[:\s]*([A-Z0-9]+)/i,        // Order ID: FN9735702115
-    /\b(FN\d{8,})\b/i,                      // FN9735702115 standalone
-    /\b(OD\d{10,})\b/i                      // OD pattern
+  // PRIORITY 3: Extract RT number as returnAwb (for reference only, NOT for video search)
+  // RT = Return tracking number when customer sends item back
+  const rtPatterns = [
+    /\|\|RT(\d+)\|\|/i,           // ||RT205313651|| format in subject
+    /RT[\s:]*(\d{6,})/i,          // RT: 205313651 or RT 205313651
+    /\bRT(\d{6,})\b/i             // RT205313651 as word
   ];
 
-  for (const pattern of orderPatterns) {
-    const orderMatch = text.match(pattern);
-    if (orderMatch && orderMatch[1]) {
-      details.orderId = orderMatch[1];
+  for (const pattern of rtPatterns) {
+    const rtMatch = text.match(pattern);
+    if (rtMatch && rtMatch[1]) {
+      details.returnAwb = 'RT' + rtMatch[1];
       break;
-    }
-  }
-
-  // If no AWB from RT pattern, try other AWB patterns
-  if (!details.awb) {
-    const awbPatterns = [
-      /(?:awb|tracking|shipment)\s*(?:no|number|id)?[:\s]*([A-Z0-9]{6,})/i,
-      /fwd\s*awb[:\s]*([A-Z0-9]{6,})/i,  // FWD AWB
-      /courier\s*awb[:\s]*([A-Z0-9]{6,})/i
-    ];
-
-    for (const pattern of awbPatterns) {
-      const awbMatch = text.match(pattern);
-      if (awbMatch && awbMatch[1]) {
-        details.awb = awbMatch[1];
-        break;
-      }
     }
   }
 

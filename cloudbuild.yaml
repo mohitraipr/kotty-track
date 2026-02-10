@@ -45,10 +45,15 @@ steps:
       - '${_MAX_INSTANCES}'
       - '--set-secrets'
       - 'DB_PASSWORD=db-password:latest,SESSION_SECRET=session-secret:latest'
-      - '--set-env-vars'
+      # Use --update-env-vars to PRESERVE existing env vars (like Zoho, AWS credentials)
+      # Only update the base vars needed for the app to run
+      - '--update-env-vars'
       - 'NODE_ENV=production,GCP_PROJECT_ID=${PROJECT_ID},GCS_BUCKET_NAME=${_BUCKET_NAME},DB_HOST=/cloudsql/${PROJECT_ID}:${_REGION}:${_SQL_INSTANCE},DB_USER=${_DB_USER},DB_NAME=${_DB_NAME}'
 
 # Substitution variables (can be overridden)
+# NOTE: Sensitive env vars (Zoho, AWS, EasyEcom) are set once via:
+#   gcloud run services update kotty-track --region=asia-south1 --update-env-vars="..."
+# They persist across deployments because we use --update-env-vars (not --set-env-vars)
 substitutions:
   _REGION: 'asia-south1'
   _REPO_NAME: 'kotty-track'

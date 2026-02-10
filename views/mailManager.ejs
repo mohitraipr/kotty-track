@@ -155,6 +155,9 @@
             <button class="btn btn-sm btn-success" onclick="startBulkReply()" id="bulkReplyBtn" disabled>
               <i class="bi bi-send me-1"></i>Bulk Reply (<span id="selectedCount">0</span>)
             </button>
+            <button class="btn btn-sm btn-outline-info" onclick="exportSelected()" id="exportBtn" disabled>
+              <i class="bi bi-download me-1"></i>Export
+            </button>
             <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">Clear</button>
           </div>
         </div>
@@ -196,26 +199,30 @@
           <div class="card-body">
             <div class="row g-2">
               <div class="col-6">
-                <label class="form-label small text-muted">Order ID</label>
-                <input type="text" id="extractedOrderId" class="form-control form-control-sm" readonly>
+                <label class="form-label small text-muted">Order ID <span class="text-primary">(key for AWB lookup)</span></label>
+                <input type="text" id="extractedOrderId" class="form-control form-control-sm fw-bold" readonly>
               </div>
               <div class="col-6">
-                <label class="form-label small text-muted">AWB</label>
+                <label class="form-label small text-muted">Outbound AWB <span class="text-success">(from mapping)</span></label>
                 <div class="input-group input-group-sm">
-                  <input type="text" id="extractedAwb" class="form-control">
-                  <button class="btn btn-outline-primary" onclick="findVideosForEmail()">
+                  <input type="text" id="extractedOutboundAwb" class="form-control fw-bold">
+                  <button class="btn btn-outline-primary" onclick="findVideosForEmail()" title="Search videos">
                     <i class="bi bi-camera-video"></i>
                   </button>
                 </div>
               </div>
               <div class="col-6">
-                <label class="form-label small text-muted">Packing Time</label>
-                <input type="text" id="extractedPackingTime" class="form-control form-control-sm">
+                <label class="form-label small text-muted">Return AWB <span class="text-danger">(not for video search)</span></label>
+                <input type="text" id="extractedReturnAwb" class="form-control form-control-sm text-muted" readonly>
               </div>
               <div class="col-6">
                 <label class="form-label small text-muted">Ticket</label>
                 <input type="text" id="extractedTicket" class="form-control form-control-sm" readonly>
               </div>
+            </div>
+            <div id="mappingWarning" class="alert alert-warning mt-2 mb-0 py-2 d-none">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              <span id="mappingWarningText">Upload Excel mapping to lookup AWB from Order ID</span>
             </div>
           </div>
         </div>
@@ -269,28 +276,40 @@
               <div id="bulkProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
             </div>
           </div>
-          <div class="row g-3 text-center mb-3">
-            <div class="col-3">
+          <div class="row g-2 text-center mb-3">
+            <div class="col-4 col-md-2">
               <div class="border rounded p-2">
-                <div id="bulkStatSuccess" class="fs-4 fw-bold text-success">0</div>
+                <div id="bulkStatSuccess" class="fs-5 fw-bold text-success">0</div>
                 <small class="text-muted">Replied</small>
               </div>
             </div>
-            <div class="col-3">
+            <div class="col-4 col-md-2">
               <div class="border rounded p-2">
-                <div id="bulkStatNoVideo" class="fs-4 fw-bold text-warning">0</div>
+                <div id="bulkStatNoOrderId" class="fs-5 fw-bold text-info">0</div>
+                <small class="text-muted">No Order</small>
+              </div>
+            </div>
+            <div class="col-4 col-md-2">
+              <div class="border rounded p-2">
+                <div id="bulkStatNoMapping" class="fs-5 fw-bold text-primary">0</div>
+                <small class="text-muted">No AWB</small>
+              </div>
+            </div>
+            <div class="col-4 col-md-2">
+              <div class="border rounded p-2">
+                <div id="bulkStatNoVideo" class="fs-5 fw-bold text-warning">0</div>
                 <small class="text-muted">No Video</small>
               </div>
             </div>
-            <div class="col-3">
+            <div class="col-4 col-md-2">
               <div class="border rounded p-2">
-                <div id="bulkStatFailed" class="fs-4 fw-bold text-danger">0</div>
+                <div id="bulkStatFailed" class="fs-5 fw-bold text-danger">0</div>
                 <small class="text-muted">Failed</small>
               </div>
             </div>
-            <div class="col-3">
+            <div class="col-4 col-md-2">
               <div class="border rounded p-2">
-                <div id="bulkStatSkipped" class="fs-4 fw-bold text-secondary">0</div>
+                <div id="bulkStatSkipped" class="fs-5 fw-bold text-secondary">0</div>
                 <small class="text-muted">Skipped</small>
               </div>
             </div>
@@ -564,6 +583,7 @@ async function loadEmailDetails(messageId, rowEl) {
   document.getElementById('noEmailSelected').classList.add('d-none');
   document.getElementById('emailDetails').classList.remove('d-none');
   document.getElementById('videoResults').classList.add('d-none');
+  document.getElementById('mappingWarning').classList.add('d-none');
   foundVideos = [];
 
   try {
@@ -581,19 +601,31 @@ async function loadEmailDetails(messageId, rowEl) {
     classBadge.textContent = data.classification || 'unknown';
     classBadge.className = 'badge classification-badge badge-' + (data.classification || 'unknown');
 
-    // Extracted details
+    // Extracted details - Order ID is key, Outbound AWB comes from mapping
     document.getElementById('extractedOrderId').value = data.extracted?.orderId || '';
-    document.getElementById('extractedAwb').value = data.extracted?.awb || '';
-    document.getElementById('extractedPackingTime').value = data.extracted?.packingTime || '';
+    document.getElementById('extractedOutboundAwb').value = data.extracted?.outboundAwb || '';
+    document.getElementById('extractedReturnAwb').value = data.extracted?.returnAwb || '';
     document.getElementById('extractedTicket').value = data.extracted?.ticket || '';
+
+    // Show warning if we have Order ID but no mapping
+    const mappingWarning = document.getElementById('mappingWarning');
+    const warningText = document.getElementById('mappingWarningText');
+    if (data.extracted?.orderId && !data.extracted?.outboundAwb) {
+      if (!data.hasMappingLoaded) {
+        warningText.textContent = 'Upload Excel mapping to lookup AWB from Order ID';
+      } else {
+        warningText.textContent = 'Order ID not found in mapping (' + data.mappingCount + ' entries loaded)';
+      }
+      mappingWarning.classList.remove('d-none');
+    }
 
     // Reset reply button
     document.getElementById('sendReplyBtn').disabled = true;
     document.getElementById('replyStatus').classList.add('d-none');
 
-    // AUTO-SEARCH for videos if AWB was extracted
-    if (data.extracted?.awb) {
-      console.log('Auto-searching for videos with AWB:', data.extracted.awb);
+    // AUTO-SEARCH for videos if Outbound AWB was found from mapping
+    if (data.extracted?.outboundAwb) {
+      console.log('Auto-searching for videos with Outbound AWB:', data.extracted.outboundAwb);
       findVideosForEmail();
     }
 
@@ -606,11 +638,12 @@ async function loadEmailDetails(messageId, rowEl) {
 
 async function findVideosForEmail() {
   const orderId = document.getElementById('extractedOrderId').value.trim();
-  const awb = document.getElementById('extractedAwb').value.trim();
-  const packingDate = document.getElementById('extractedPackingTime').value.trim();
+  const outboundAwb = document.getElementById('extractedOutboundAwb').value.trim();
 
-  if (!awb && !orderId) {
-    showToast('Enter an AWB or Order ID', 'warning');
+  // Outbound AWB takes priority (either from mapping or manually entered)
+  // If no outbound AWB but have Order ID, backend will look up from mapping
+  if (!outboundAwb && !orderId) {
+    showToast('Need Order ID or Outbound AWB', 'warning');
     return;
   }
 
@@ -618,20 +651,29 @@ async function findVideosForEmail() {
   const videoList = document.getElementById('videoList');
 
   videoResults.classList.remove('d-none');
-  videoList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
+  videoList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> Searching S3...</div>';
 
   try {
     const res = await fetch('/mail-manager/find-videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, awb, packingDate })
+      body: JSON.stringify({ orderId, awb: outboundAwb })
     });
 
     const data = await res.json();
 
     if (data.found && data.videos?.length) {
       foundVideos = data.videos.map(v => ({ ...v, awb: data.awb }));
-      videoList.innerHTML = foundVideos.map((v, i) => `
+
+      // Update the outbound AWB field if it was looked up from mapping
+      if (data.awb && !outboundAwb) {
+        document.getElementById('extractedOutboundAwb').value = data.awb;
+        document.getElementById('mappingWarning').classList.add('d-none');
+      }
+
+      videoList.innerHTML = `
+        <div class="small text-muted mb-2">AWB: <strong>${escapeHtml(data.awb)}</strong> (${data.awbSource || 'provided'})</div>
+        ${foundVideos.map((v, i) => `
         <div class="video-card card mb-2">
           <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
@@ -645,11 +687,11 @@ async function findVideosForEmail() {
             </div>
           </div>
         </div>
-      `).join('');
+      `).join('')}`;
 
       // Enable reply button
       document.getElementById('sendReplyBtn').disabled = false;
-      showToast('Found ' + foundVideos.length + ' video(s)', 'success');
+      showToast('Found ' + foundVideos.length + ' video(s) for AWB ' + data.awb, 'success');
     } else {
       foundVideos = [];
       videoList.innerHTML = '<div class="alert alert-warning mb-0">' + (data.error || 'No videos found') + '</div>';
@@ -670,6 +712,8 @@ async function sendReply() {
 
   const btn = document.getElementById('sendReplyBtn');
   const status = document.getElementById('replyStatus');
+  const orderId = document.getElementById('extractedOrderId').value;
+  const outboundAwb = document.getElementById('extractedOutboundAwb').value;
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
@@ -683,7 +727,8 @@ async function sendReply() {
         threadId: currentEmail.threadId,
         toAddress: currentEmail.fromAddress,
         subject: currentEmail.subject,
-        orderId: document.getElementById('extractedOrderId').value,
+        orderId: orderId,
+        outboundAwb: outboundAwb,
         videos: foundVideos
       })
     });
@@ -692,7 +737,7 @@ async function sendReply() {
 
     status.classList.remove('d-none');
     if (data.success) {
-      status.innerHTML = '<div class="alert alert-success mb-0 py-2"><i class="bi bi-check-circle me-2"></i>Reply sent successfully!</div>';
+      status.innerHTML = '<div class="alert alert-success mb-0 py-2"><i class="bi bi-check-circle me-2"></i>Reply sent successfully! (Order: ' + escapeHtml(data.orderId || orderId) + ', AWB: ' + escapeHtml(data.awb || outboundAwb) + ')</div>';
       btn.innerHTML = '<i class="bi bi-check me-2"></i>Sent';
     } else {
       status.innerHTML = '<div class="alert alert-danger mb-0 py-2">' + (data.error || 'Failed to send') + '</div>';
@@ -781,6 +826,52 @@ function updateSelectionUI() {
   const count = selectedEmails.size;
   document.getElementById('selectedCount').textContent = count;
   document.getElementById('bulkReplyBtn').disabled = count === 0;
+  document.getElementById('exportBtn').disabled = count === 0;
+}
+
+// Export selected emails' Order IDs and AWBs to CSV
+async function exportSelected() {
+  if (selectedEmails.size === 0) {
+    showToast('No emails selected', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exporting...';
+
+  try {
+    const messageIds = Array.from(selectedEmails);
+
+    const res = await fetch('/mail-manager/export-selected', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageIds })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Export failed');
+    }
+
+    // Download the CSV
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'selected_emails_export.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+
+    showToast('Exported ' + messageIds.length + ' emails', 'success');
+  } catch (err) {
+    showToast('Export failed: ' + err.message, 'danger');
+  } finally {
+    btn.disabled = selectedEmails.size === 0;
+    btn.innerHTML = '<i class="bi bi-download me-1"></i>Export';
+  }
 }
 
 function startBulkReply() {
@@ -797,6 +888,8 @@ function startBulkReply() {
   document.getElementById('bulkProgressBar').style.width = '0%';
   document.getElementById('bulkProgressText').textContent = '0 / ' + selectedEmails.size;
   document.getElementById('bulkStatSuccess').textContent = '0';
+  document.getElementById('bulkStatNoOrderId').textContent = '0';
+  document.getElementById('bulkStatNoMapping').textContent = '0';
   document.getElementById('bulkStatNoVideo').textContent = '0';
   document.getElementById('bulkStatFailed').textContent = '0';
   document.getElementById('bulkStatSkipped').textContent = '0';
@@ -812,7 +905,14 @@ function startBulkReply() {
 
   bulkEventSource.addEventListener('start', (e) => {
     const data = JSON.parse(e.data);
-    logDiv.innerHTML = `<div>Processing ${data.toProcess} emails (${data.alreadyReplied} already replied, skipped)</div>`;
+    let statusMsg = `Processing ${data.toProcess} emails`;
+    if (data.alreadyReplied > 0) statusMsg += ` (${data.alreadyReplied} already replied)`;
+    if (data.hasMappingLoaded) {
+      statusMsg += ` | Mapping: ${data.mappingCount} entries`;
+    } else {
+      statusMsg += ` | <span class="text-warning">No mapping loaded!</span>`;
+    }
+    logDiv.innerHTML = `<div>${statusMsg}</div>`;
     document.getElementById('bulkStatSkipped').textContent = data.alreadyReplied;
   });
 
@@ -826,7 +926,15 @@ function startBulkReply() {
     const data = JSON.parse(e.data);
     const successCount = parseInt(document.getElementById('bulkStatSuccess').textContent) + 1;
     document.getElementById('bulkStatSuccess').textContent = successCount;
-    logDiv.innerHTML += `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${escapeHtml(data.awb)} - Replied</div>`;
+    logDiv.innerHTML += `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${escapeHtml(data.orderId || '')} → ${escapeHtml(data.awb)} - Replied</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+  });
+
+  bulkEventSource.addEventListener('failed', (e) => {
+    const data = JSON.parse(e.data);
+    const failedCount = parseInt(document.getElementById('bulkStatFailed').textContent) + 1;
+    document.getElementById('bulkStatFailed').textContent = failedCount;
+    logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-x-circle me-1"></i>Failed: ${escapeHtml(data.error || 'Unknown error')}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
   });
 
@@ -837,11 +945,20 @@ function startBulkReply() {
 
     document.getElementById('bulkProgressBar').style.width = '100%';
     document.getElementById('bulkStatSuccess').textContent = data.success;
+    document.getElementById('bulkStatNoOrderId').textContent = data.noOrderId || 0;
+    document.getElementById('bulkStatNoMapping').textContent = data.noMapping || 0;
     document.getElementById('bulkStatNoVideo').textContent = data.noVideo;
     document.getElementById('bulkStatFailed').textContent = data.failed;
     document.getElementById('bulkStatSkipped').textContent = data.skipped;
 
-    logDiv.innerHTML += `<div class="fw-bold mt-2 pt-2 border-top">Complete: ${data.success} replied, ${data.noVideo} no video, ${data.failed} failed, ${data.skipped} skipped</div>`;
+    let summary = `Complete: ${data.success} replied`;
+    if (data.noOrderId > 0) summary += `, ${data.noOrderId} no order ID`;
+    if (data.noMapping > 0) summary += `, ${data.noMapping} no AWB mapping`;
+    if (data.noVideo > 0) summary += `, ${data.noVideo} no video`;
+    if (data.failed > 0) summary += `, ${data.failed} failed`;
+    if (data.skipped > 0) summary += `, ${data.skipped} skipped`;
+
+    logDiv.innerHTML += `<div class="fw-bold mt-2 pt-2 border-top">${summary}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
 
     document.getElementById('bulkCancelBtn').classList.add('d-none');

@@ -453,6 +453,7 @@ router.get('/emails/inbox', isAuthenticated, isOnlyMohitOperator, async (req, re
 });
 
 // Get single email content
+// Returns extracted details with proper AWB lookup from mapping
 router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -468,26 +469,39 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
     // Extract details from BOTH subject (for RT/INC numbers) and body
     const extractedDetails = zohoMail.extractOrderDetails(bodyText, subject);
 
-    // Try to find AWB from mapping if we have an order ID but no AWB yet
+    // Get session mapping for AWB lookup
     const sessionKey = getSessionKey(req);
     const mapping = sessionMappings.get(sessionKey);
 
-    if (extractedDetails.orderId && !extractedDetails.awb) {
+    // Lookup OUTBOUND AWB from mapping using Order ID
+    // NOTE: returnAwb from email is the RETURN tracking number, not for video search
+    let outboundAwb = null;
+    let awbSource = null;
+
+    if (extractedDetails.orderId) {
       // Check session mapping first
-      if (mapping) {
-        extractedDetails.awb = mapping[extractedDetails.orderId.toUpperCase()] || null;
+      if (mapping && mapping[extractedDetails.orderId.toUpperCase()]) {
+        outboundAwb = mapping[extractedDetails.orderId.toUpperCase()];
+        awbSource = 'session';
       }
       // Then check database
-      if (!extractedDetails.awb) {
-        extractedDetails.awb = await lookupAwbFromDb(extractedDetails.orderId);
+      if (!outboundAwb) {
+        outboundAwb = await lookupAwbFromDb(extractedDetails.orderId);
+        if (outboundAwb) awbSource = 'database';
       }
     }
+
+    // Add outbound AWB to extracted details (separate from returnAwb)
+    extractedDetails.outboundAwb = outboundAwb;
+    extractedDetails.awbSource = awbSource;
 
     res.json({
       details,
       content,
       extracted: extractedDetails,
-      classification: zohoMail.classifyEmail(details?.subject, bodyText)
+      classification: zohoMail.classifyEmail(details?.subject, bodyText),
+      hasMappingLoaded: !!(mapping && Object.keys(mapping).length > 0),
+      mappingCount: mapping ? Object.keys(mapping).length : 0
     });
   } catch (err) {
     console.error('Email fetch error:', err);
@@ -497,26 +511,44 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
 
 // ==================== VIDEO + REPLY ROUTES ====================
 
-// Find videos for an order/AWB
+// Find videos for an order using OUTBOUND AWB
+// Flow: If Order ID provided, lookup AWB from mapping first
+// If AWB provided directly, use that (for manual override)
 router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
     const { orderId, awb, packingDate } = req.body;
 
-    // Get AWB from mapping if not provided
-    let awbToSearch = awb;
+    // Get AWB from mapping if not provided directly
+    let awbToSearch = awb; // Allow direct AWB override
+    let awbSource = awb ? 'provided' : null;
+
     if (!awbToSearch && orderId) {
+      // Lookup from session mapping first
       const sessionKey = getSessionKey(req);
       const mapping = sessionMappings.get(sessionKey);
-      if (mapping) {
+      if (mapping && mapping[orderId.toUpperCase()]) {
         awbToSearch = mapping[orderId.toUpperCase()];
+        awbSource = 'session';
+      }
+
+      // Then try database
+      if (!awbToSearch) {
+        awbToSearch = await lookupAwbFromDb(orderId);
+        if (awbToSearch) awbSource = 'database';
       }
     }
 
     if (!awbToSearch) {
-      return res.json({ found: false, error: 'No AWB number available' });
+      return res.json({
+        found: false,
+        orderId,
+        error: orderId
+          ? 'Order ID not found in AWB mapping. Please upload Excel mapping first.'
+          : 'No Order ID or AWB provided'
+      });
     }
 
-    // Search S3 for videos
+    // Search S3 for videos using the OUTBOUND AWB
     const packingDatesMap = {};
     if (packingDate) {
       packingDatesMap[awbToSearch.toUpperCase()] = packingDate;
@@ -528,7 +560,9 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
     if (videos && videos.length > 0) {
       res.json({
         found: true,
+        orderId,
         awb: awbToSearch,
+        awbSource,
         videos: videos.map(v => ({
           key: v.key,
           url: v.url,
@@ -538,7 +572,13 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
         }))
       });
     } else {
-      res.json({ found: false, awb: awbToSearch, error: 'No videos found for this AWB' });
+      res.json({
+        found: false,
+        orderId,
+        awb: awbToSearch,
+        awbSource,
+        error: 'No videos found in S3 for this AWB'
+      });
     }
   } catch (err) {
     console.error('Video search error:', err);
@@ -547,17 +587,18 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
 });
 
 // Send reply with video links
+// Expects orderId and videos array with outbound AWB (from mapping lookup)
 router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { messageId, threadId, toAddress, subject, orderId, videos, classification, fromAddress } = req.body;
+    const { messageId, threadId, toAddress, subject, orderId, videos, classification, fromAddress, outboundAwb } = req.body;
 
     if (!messageId || !toAddress || !subject) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Build video links array
+    // Build video links array (AWB should be the outbound AWB, not RT number)
     const videoLinks = (videos || []).map(v => ({
-      awb: v.awb || 'N/A',
+      awb: v.awb || outboundAwb || 'N/A',
       url: v.url,
       filename: v.filename || 'Download Video'
     }));
@@ -569,7 +610,8 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     const result = await zohoMail.sendReply(messageId, threadId, toAddress, subject, htmlContent);
 
     // Save reply record to database for tracking
-    const awb = videos && videos.length > 0 ? videos[0].awb : null;
+    // Use outbound AWB (from mapping), not RT number
+    const awb = outboundAwb || (videos && videos.length > 0 ? videos[0].awb : null);
     await saveReplyRecord({
       messageId,
       threadId,
@@ -587,6 +629,8 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     res.json({
       success: true,
       message: 'Reply sent successfully',
+      orderId,
+      awb,
       result
     });
   } catch (err) {
@@ -598,7 +642,14 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
 // ==================== BULK REPLY WITH SSE STREAMING ====================
 
 // Bulk reply for multiple emails - uses SSE for progress
-// This processes multiple "initial" emails: finds videos, sends replies, tracks progress
+// CORRECT FLOW:
+// 1. Extract Order ID from email body (e.g., FN9735702115)
+// 2. Lookup Order ID in Excel mapping to get OUTBOUND AWB
+// 3. Search S3 for videos using the OUTBOUND AWB
+// 4. Send reply with video links
+//
+// NOTE: The RT number in email subjects (e.g., ||RT205327752||) is the RETURN AWB
+// which will NEVER match videos. Videos are stored by OUTBOUND AWB.
 router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -615,6 +666,10 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
     res.write(': keep-alive\n\n');
   }, 15000);
 
+  // Get session mapping for AWB lookup
+  const sessionKey = getSessionKey(req);
+  const mapping = sessionMappings.get(sessionKey);
+
   try {
     const messageIdsRaw = req.query.messageIds || '';
     const messageIds = messageIdsRaw.split(',').filter(Boolean);
@@ -624,6 +679,9 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
       clearInterval(keepAlive);
       return res.end();
     }
+
+    // Check if mapping is loaded
+    const hasMappingLoaded = mapping && Object.keys(mapping).length > 0;
 
     // Check which emails are already replied (from database)
     const [alreadyReplied] = await pool.query(
@@ -638,13 +696,17 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
     sendEvent('start', {
       total: messageIds.length,
       toProcess: toProcess.length,
-      alreadyReplied: repliedSet.size
+      alreadyReplied: repliedSet.size,
+      hasMappingLoaded,
+      mappingCount: mapping ? Object.keys(mapping).length : 0
     });
 
     const results = {
       success: 0,
       failed: 0,
       skipped: repliedSet.size,
+      noOrderId: 0,
+      noMapping: 0,
       noVideo: 0,
       details: []
     };
@@ -678,34 +740,74 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         const fromAddress = details.fromAddress || '';
         const toAddress = details.toAddress || details.sender || '';
 
-        // Extract AWB from subject (AJIO pattern: ||RT205313651||)
+        // Extract Order ID from email (NOT the RT number - that's return AWB)
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
 
-        if (!extracted.awb) {
-          results.noVideo++;
-          results.details.push({ messageId, subject, status: 'no_awb', error: 'No AWB found in email' });
+        // STEP 1: Check if we have an Order ID
+        if (!extracted.orderId) {
+          results.noOrderId++;
+          results.details.push({
+            messageId,
+            subject,
+            status: 'no_order_id',
+            error: 'No Order ID found in email body',
+            returnAwb: extracted.returnAwb // Show RT number for reference
+          });
           continue;
         }
 
-        // Search S3 for videos
-        const videoResults = await findVideosByAwb([extracted.awb]);
-        const videoHit = videoResults.get(extracted.awb.toUpperCase());
+        // STEP 2: Lookup the OUTBOUND AWB from mapping using Order ID
+        let outboundAwb = null;
+
+        // Check session mapping first
+        if (mapping && mapping[extracted.orderId.toUpperCase()]) {
+          outboundAwb = mapping[extracted.orderId.toUpperCase()];
+        }
+
+        // Then check database if not found in session
+        if (!outboundAwb) {
+          outboundAwb = await lookupAwbFromDb(extracted.orderId);
+        }
+
+        if (!outboundAwb) {
+          results.noMapping++;
+          results.details.push({
+            messageId,
+            subject,
+            orderId: extracted.orderId,
+            status: 'no_mapping',
+            error: 'Order ID not found in AWB mapping. Upload Excel mapping first.',
+            returnAwb: extracted.returnAwb
+          });
+          continue;
+        }
+
+        // STEP 3: Search S3 for videos using the OUTBOUND AWB
+        const videoResults = await findVideosByAwb([outboundAwb]);
+        const videoHit = videoResults.get(outboundAwb.toUpperCase());
 
         if (!videoHit) {
           results.noVideo++;
-          results.details.push({ messageId, subject, awb: extracted.awb, status: 'no_video', error: 'No video found for AWB' });
+          results.details.push({
+            messageId,
+            subject,
+            orderId: extracted.orderId,
+            awb: outboundAwb,
+            status: 'no_video',
+            error: 'No video found for AWB in S3'
+          });
           continue;
         }
 
-        // Build video links and reply HTML
+        // STEP 4: Build video links and reply HTML
         const videoLinks = [{
-          awb: extracted.awb,
+          awb: outboundAwb,
           url: videoHit.url,
           filename: videoHit.key.split('/').pop()
         }];
-        const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId || extracted.awb, videoLinks);
+        const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId, videoLinks);
 
-        // Send reply
+        // STEP 5: Send reply
         await zohoMail.sendReply(messageId, details.threadId, fromAddress, subject, htmlContent);
 
         // Save to database
@@ -716,7 +818,7 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
           toAddress,
           subject,
           orderId: extracted.orderId,
-          awb: extracted.awb,
+          awb: outboundAwb,
           videoUrl: videoHit.url,
           status: 'replied',
           classification: 'initial',
@@ -727,7 +829,8 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         results.details.push({
           messageId,
           subject,
-          awb: extracted.awb,
+          orderId: extracted.orderId,
+          awb: outboundAwb,
           status: 'replied',
           videoUrl: videoHit.url
         });
@@ -735,23 +838,45 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         sendEvent('replied', {
           messageId,
           subject: subject.substring(0, 60),
-          awb: extracted.awb
+          orderId: extracted.orderId,
+          awb: outboundAwb
         });
 
       } catch (emailErr) {
         console.error(`Bulk reply error for ${messageId}:`, emailErr);
         results.failed++;
-        results.details.push({ messageId, status: 'error', error: emailErr.message });
+
+        // Extract meaningful error message
+        let errorMsg = emailErr.message || 'Unknown error';
+        if (emailErr.data?.errorCode) {
+          errorMsg = emailErr.data.errorCode;
+        }
+
+        results.details.push({ messageId, status: 'error', error: errorMsg });
+
+        // Send failure event to client
+        sendEvent('failed', {
+          messageId,
+          error: errorMsg
+        });
+
+        // If rate limited, add extra delay
+        if (errorMsg.includes('THROTTLE') || errorMsg.includes('LIMIT')) {
+          console.log('Rate limited, waiting 5 seconds...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
       }
 
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Longer delay to avoid Zoho rate limiting (1.5 seconds between emails)
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
     sendEvent('complete', {
       success: results.success,
       failed: results.failed,
       skipped: results.skipped,
+      noOrderId: results.noOrderId,
+      noMapping: results.noMapping,
       noVideo: results.noVideo,
       total: messageIds.length
     });
@@ -766,6 +891,7 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
 });
 
 // Get multiple emails' AWBs and video status at once (for bulk reply prep)
+// Uses correct flow: Order ID → Mapping → Outbound AWB → S3 video search
 router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
     const { messageIds } = req.body;
@@ -773,6 +899,11 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
     if (!messageIds || !messageIds.length) {
       return res.status(400).json({ error: 'No message IDs provided' });
     }
+
+    // Get session mapping for AWB lookup
+    const sessionKey = getSessionKey(req);
+    const mapping = sessionMappings.get(sessionKey);
+    const hasMappingLoaded = mapping && Object.keys(mapping).length > 0;
 
     // Check which are already replied
     const [alreadyReplied] = await pool.query(
@@ -794,7 +925,7 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
       }
 
       try {
-        // Fetch email to extract AWB
+        // Fetch email to extract Order ID
         const details = await zohoMail.getEmailDetails(messageId);
         const content = await zohoMail.getEmailContent(messageId);
 
@@ -802,19 +933,48 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
         const bodyText = content?.content || '';
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
 
-        if (!extracted.awb) {
-          results.push({ messageId, subject, status: 'no_awb', canReply: false });
+        // Check for Order ID (NOT the RT number)
+        if (!extracted.orderId) {
+          results.push({
+            messageId,
+            subject,
+            status: 'no_order_id',
+            canReply: false,
+            returnAwb: extracted.returnAwb
+          });
           continue;
         }
 
-        // Check if video exists
-        const videoResults = await findVideosByAwb([extracted.awb]);
-        const hasVideo = videoResults.has(extracted.awb.toUpperCase());
+        // Lookup OUTBOUND AWB from mapping using Order ID
+        let outboundAwb = null;
+        if (mapping && mapping[extracted.orderId.toUpperCase()]) {
+          outboundAwb = mapping[extracted.orderId.toUpperCase()];
+        }
+        if (!outboundAwb) {
+          outboundAwb = await lookupAwbFromDb(extracted.orderId);
+        }
+
+        if (!outboundAwb) {
+          results.push({
+            messageId,
+            subject,
+            orderId: extracted.orderId,
+            status: 'no_mapping',
+            canReply: false,
+            returnAwb: extracted.returnAwb
+          });
+          continue;
+        }
+
+        // Check if video exists for the OUTBOUND AWB
+        const videoResults = await findVideosByAwb([outboundAwb]);
+        const hasVideo = videoResults.has(outboundAwb.toUpperCase());
 
         results.push({
           messageId,
           subject,
-          awb: extracted.awb,
+          orderId: extracted.orderId,
+          awb: outboundAwb,
           ticket: extracted.ticket,
           hasVideo,
           canReply: hasVideo,
@@ -830,6 +990,8 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
     res.json({
       total: messageIds.length,
       ready: readyCount,
+      hasMappingLoaded,
+      mappingCount: mapping ? Object.keys(mapping).length : 0,
       results
     });
   } catch (err) {
@@ -920,6 +1082,110 @@ router.get('/folders', isAuthenticated, isOnlyMohitOperator, async (req, res) =>
   } catch (err) {
     console.error('Folders fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch folders' });
+  }
+});
+
+// Export selected emails' Order IDs and AWBs to CSV
+// This allows user to download and investigate the data
+router.post('/export-selected', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+
+    if (!messageIds || !messageIds.length) {
+      return res.status(400).json({ error: 'No message IDs provided' });
+    }
+
+    // Get session mapping for AWB lookup
+    const sessionKey = getSessionKey(req);
+    const mapping = sessionMappings.get(sessionKey);
+
+    const results = [];
+
+    // Process emails in smaller batches with delays to avoid rate limiting
+    for (let i = 0; i < messageIds.length; i++) {
+      const messageId = messageIds[i];
+
+      try {
+        // Fetch email to extract Order ID
+        const details = await zohoMail.getEmailDetails(messageId);
+        const content = await zohoMail.getEmailContent(messageId);
+
+        const subject = details?.subject || '';
+        const bodyText = content?.content || '';
+        const extracted = zohoMail.extractOrderDetails(bodyText, subject);
+
+        // Lookup OUTBOUND AWB from mapping
+        let outboundAwb = null;
+        if (extracted.orderId) {
+          if (mapping && mapping[extracted.orderId.toUpperCase()]) {
+            outboundAwb = mapping[extracted.orderId.toUpperCase()];
+          }
+          if (!outboundAwb) {
+            outboundAwb = await lookupAwbFromDb(extracted.orderId);
+          }
+        }
+
+        results.push({
+          messageId,
+          subject: subject.substring(0, 100),
+          orderId: extracted.orderId || '',
+          outboundAwb: outboundAwb || '',
+          returnAwb: extracted.returnAwb || '',
+          ticket: extracted.ticket || '',
+          fromAddress: details?.fromAddress || ''
+        });
+
+        // Delay to avoid rate limiting (500ms between requests)
+        if (i < messageIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } catch (err) {
+        // If rate limited, wait longer
+        if (err.data?.errorCode?.includes('THROTTLE')) {
+          console.log('Rate limited during export, waiting 3 seconds...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+
+        results.push({
+          messageId,
+          subject: '',
+          orderId: '',
+          outboundAwb: '',
+          returnAwb: '',
+          ticket: '',
+          fromAddress: '',
+          error: err.data?.errorCode || err.message || 'Failed to fetch'
+        });
+      }
+    }
+
+    // Generate CSV
+    const headers = ['Message ID', 'Subject', 'Order ID', 'Outbound AWB', 'Return AWB', 'Ticket', 'From', 'Error'];
+    const csvRows = [headers.join(',')];
+
+    results.forEach(r => {
+      const row = [
+        r.messageId,
+        `"${(r.subject || '').replace(/"/g, '""')}"`,
+        r.orderId,
+        r.outboundAwb,
+        r.returnAwb,
+        r.ticket,
+        r.fromAddress,
+        r.error || ''
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csv = csvRows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=selected_emails_export.csv');
+    res.send(csv);
+
+  } catch (err) {
+    console.error('Export error:', err);
+    res.status(500).json({ error: 'Failed to export: ' + err.message });
   }
 });
 
