@@ -817,13 +817,14 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         }];
         const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId, videoLinks);
 
-        // STEP 5: Send reply
-        await zohoMail.sendReply(messageId, details.threadId, fromAddress, subject, htmlContent);
+        // STEP 5: Send reply (threadId from content or null)
+        const threadId = content?.threadId || null;
+        await zohoMail.sendReply(messageId, threadId, fromAddress, subject, htmlContent);
 
         // Save to database
         await saveReplyRecord({
           messageId,
-          threadId: details.threadId,
+          threadId,
           fromAddress,
           toAddress,
           subject,
@@ -1142,7 +1143,7 @@ router.post('/export-selected', isAuthenticated, isOnlyMohitOperator, async (req
           outboundAwb: outboundAwb || '',
           returnAwb: extracted.returnAwb || '',
           ticket: extracted.ticket || '',
-          fromAddress: details?.fromAddress || ''
+          fromAddress: content?.fromAddress || content?.sender || ''
         });
 
         // Delay to avoid rate limiting (500ms between requests)
