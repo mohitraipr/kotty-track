@@ -1764,10 +1764,18 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       department = "all",
       status = "all",
       dateFilter = "createdAt",
-      startDate = "",
-      endDate = "",
       download = ""
     } = req.query;
+
+    // Default to last 7 days if no dates specified (for faster initial load)
+    let { startDate = "", endDate = "" } = req.query;
+    if (!startDate || !endDate) {
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      endDate = today.toISOString().split('T')[0];
+      startDate = weekAgo.toISOString().split('T')[0];
+    }
 
     // 1) Build filters for main lots query (same logic as pic-report)
     let dateWhere = "";
@@ -1859,7 +1867,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       `;
     }
 
-    // 2) Fetch all lot/size rows
+    // 2) Fetch lot/size rows (with LIMIT for performance)
     const baseQuery = `
       SELECT cl.lot_no, cl.sku, cls.size_label, cls.total_pieces, cl.created_at, cl.remark,
              u.username AS created_by
@@ -1870,6 +1878,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
          ${lotTypeClause}
          ${dateWhere}
        ORDER BY cl.created_at DESC
+       LIMIT 5000
     `;
     const [rows] = await pool.query(baseQuery, dateParams);
 
