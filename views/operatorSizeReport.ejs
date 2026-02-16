@@ -282,32 +282,50 @@
           <thead>
             <tr>
               <th>Lot No</th>
-              <th>SKU</th>
-              <th>Size</th>
-              <th>Pieces</th>
-              <th>Department</th>
-              <th>Status</th>
+              <th>SKU_Size</th>
+              <th>Type</th>
+              <th>Cut</th>
+              <th>Stitched</th>
+              <th>Assembled</th>
+              <th>Washed</th>
+              <th>Finished</th>
             </tr>
           </thead>
           <tbody>
-            <% rows.slice(0, 15).forEach(row => { %>
+            <% rows.slice(0, 20).forEach(row => { %>
             <tr>
-              <td><strong><%= row.lot_no %></strong></td>
-              <td><%= row.sku %></td>
-              <td><span class="badge bg-secondary"><%= row.size_label || 'N/A' %></span></td>
-              <td><%= row.pieces || 0 %></td>
-              <td><%= row.department || 'N/A' %></td>
+              <td><strong><%= row.lotNo %></strong></td>
+              <td><%= row.sku_size %></td>
+              <td><span class="badge <%= row.lotType === 'Denim' ? 'bg-primary' : 'bg-info' %>"><%= row.lotType %></span></td>
+              <td><%= row.totalCut %></td>
               <td>
-                <% if (row.status === 'completed') { %>
-                  <span class="badge bg-success">Completed</span>
-                <% } else if (row.status === 'pending') { %>
-                  <span class="badge bg-warning">Pending</span>
-                <% } else if (row.status === 'inline') { %>
-                  <span class="badge bg-info">In-Line</span>
-                <% } else if (row.status === 'denied') { %>
-                  <span class="badge bg-danger">Denied</span>
+                <% if (row.stitchedQty > 0) { %>
+                  <span class="badge bg-success"><%= row.stitchedQty %></span>
                 <% } else { %>
-                  <span class="badge bg-secondary"><%= row.status %></span>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (row.assembledQty > 0) { %>
+                  <span class="badge bg-success"><%= row.assembledQty %></span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (row.washedQty > 0) { %>
+                  <span class="badge bg-success"><%= row.washedQty %></span>
+                <% } else if (row.washingInQty > 0) { %>
+                  <span class="badge bg-warning"><%= row.washingInQty %> (in)</span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (row.finishedQty > 0) { %>
+                  <span class="badge bg-success"><%= row.finishedQty %></span>
+                <% } else { %>
+                  <span class="text-muted">-</span>
                 <% } %>
               </td>
             </tr>
@@ -315,9 +333,9 @@
           </tbody>
         </table>
       </div>
-      <% if (rows.length > 15) { %>
+      <% if (rows.length > 20) { %>
       <p class="text-muted mb-0" style="font-size: 14px;">
-        Showing first 15 of <%= rows.length %> records. Download the full report to see all data.
+        Showing first 20 of <%= rows.length %> records. Download the full report to see all data.
       </p>
       <% } %>
     </div>
