@@ -824,12 +824,16 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         try {
           await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent);
         } catch (sendErr) {
-          const errMsg = sendErr?.data?.moreInfo || sendErr?.message || 'Unknown error';
-          console.log(`Reply error for ${messageId}: ${errMsg}`);
+          // Check all possible locations for error message
+          const errMsg = sendErr?.data?.moreInfo || sendErr?.moreInfo ||
+                         sendErr?.data?.status?.description || sendErr?.message || '';
+          const errStr = JSON.stringify(sendErr);
+          console.log(`Reply error for ${messageId}: ${errMsg || errStr}`);
 
           // IMPORTANT: Zoho often returns "Temporary system error" AFTER successfully
           // sending the email. Do NOT retry - treat it as success.
-          if (!errMsg.includes('Temporary')) {
+          // Check both the extracted message AND the stringified error
+          if (!errMsg.includes('Temporary') && !errStr.includes('Temporary')) {
             throw sendErr;
           }
           console.log(`Treating as success (Zoho quirk - email was likely sent) for ${messageId}`);
