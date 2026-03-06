@@ -565,21 +565,21 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
     }
 
     const results = await findVideosByAwb([awbToSearch], packingDatesMap);
-    const videos = results.get(awbToSearch.toUpperCase());
+    const video = results.get(awbToSearch.toUpperCase());
 
-    if (videos && videos.length > 0) {
+    if (video) {
       res.json({
         found: true,
         orderId,
         awb: awbToSearch,
         awbSource,
-        videos: videos.map(v => ({
-          key: v.key,
-          url: v.url,
-          filename: v.key.split('/').pop(),
-          size: v.size,
-          lastModified: v.lastModified
-        }))
+        videos: [{
+          key: video.key,
+          url: video.url,
+          filename: video.key.split('/').pop(),
+          size: video.size,
+          lastModified: video.lastModified
+        }]
       });
     } else {
       res.json({
