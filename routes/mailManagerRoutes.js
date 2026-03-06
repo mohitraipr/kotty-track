@@ -1063,33 +1063,21 @@ router.post('/update-status', isAuthenticated, isOnlyMohitOperator, async (req, 
   }
 });
 
-// Sync sent emails - mark replied emails from sent folder
+// Sync sent emails - mark replied emails based on sent folder search
 router.post('/sync-sent', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    // Get folders to find Sent folder ID
-    const folders = await zohoMail.getFolders();
-    const sentFolder = folders?.data?.find(f =>
-      f.folderName?.toLowerCase() === 'sent' ||
-      f.folderName?.toLowerCase() === 'sentmail' ||
-      f.folderType === 'sent'
-    );
-
-    if (!sentFolder) {
-      return res.status(404).json({ error: 'Sent folder not found' });
-    }
-
-    // Get recent sent emails (last 100)
-    const sentEmails = await zohoMail.getEmails(sentFolder.folderId, 100, 0);
-    const emails = sentEmails?.data || [];
+    // Search for CCTV replies in Sent folder
+    const emails = await zohoMail.searchEmails('CCTV FOOTAGE', 100, 0, 'Sent');
+    console.log(`Sync sent: found ${emails.length} emails in Sent folder`);
 
     // Find replies to CCTV FOOTAGE emails
     let synced = 0;
     const syncedDetails = [];
 
     for (const email of emails) {
-      // Check if it's a reply to CCTV FOOTAGE email
-      if (email.subject?.includes('Re:') && email.subject?.includes('CCTV FOOTAGE')) {
-        // Extract info from subject: Re: CCTV FOOTAGE REQUIRED||INC..||...
+      // Check if it's a reply (subject starts with Re:)
+      if (email.subject?.includes('Re:')) {
+        // Extract ticket number from subject
         const incMatch = email.subject.match(/INC\d+/);
         const ticket = incMatch ? incMatch[0] : null;
 

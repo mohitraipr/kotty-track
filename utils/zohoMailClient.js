@@ -145,14 +145,15 @@ async function getAccountId() {
  * @param {string} query - Search query keyword
  * @param {number} limit - Max results to return
  * @param {number} start - Pagination start index
+ * @param {string} folder - Folder to search in (Inbox, Sent, etc.)
  */
-async function searchEmails(query, limit = 200, start = 0) {
+async function searchEmails(query, limit = 200, start = 0, folder = 'Inbox') {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
-  // Format search key like Python tool: entire:keyword::in:Inbox
+  // Format search key: entire:keyword::in:FolderName
   // Use Zoho's search syntax
-  const searchKey = `entire:${query.toLowerCase()}::in:Inbox`;
+  const searchKey = `entire:${query.toLowerCase()}::in:${folder}`;
 
   const params = new URLSearchParams({
     searchKey: searchKey,
