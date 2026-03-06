@@ -134,6 +134,9 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="searchEmails('cctv')">CCTV Requests</button>
             <button class="btn btn-sm btn-outline-info" onclick="setDateToday()">Today</button>
             <button class="btn btn-sm btn-outline-info" onclick="setDateLastWeek()">Last 7 Days</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="syncFromSent()" title="Mark emails as replied based on sent folder">
+              <i class="bi bi-arrow-repeat me-1"></i>Sync Sent
+            </button>
           </div>
         </div>
       </div>
@@ -451,6 +454,32 @@ function setDateLastWeek() {
   const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
   document.getElementById('searchDateFrom').value = lastWeek.toISOString().split('T')[0];
   document.getElementById('searchDateTo').value = today.toISOString().split('T')[0];
+}
+
+async function syncFromSent() {
+  if (!confirm('This will scan your Sent folder and mark CCTV emails as replied. Continue?')) {
+    return;
+  }
+
+  showToast('Syncing from sent folder...', 'info');
+
+  try {
+    const res = await fetch('/mail-manager/sync-sent', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      showToast(`Synced ${data.synced} emails as replied (checked ${data.totalSentChecked} sent)`, 'success');
+      // Refresh the current email list
+      const searchInput = document.getElementById('emailSearch');
+      if (searchInput.value) {
+        searchEmails(searchInput.value);
+      }
+    } else {
+      showToast('Sync failed: ' + (data.error || 'Unknown error'), 'danger');
+    }
+  } catch (err) {
+    showToast('Sync failed: ' + err.message, 'danger');
+  }
 }
 
 async function searchEmails(query, append = false) {

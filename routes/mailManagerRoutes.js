@@ -1063,6 +1063,88 @@ router.post('/update-status', isAuthenticated, isOnlyMohitOperator, async (req, 
   }
 });
 
+// Sync sent emails - mark replied emails from sent folder
+router.post('/sync-sent', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    // Get folders to find Sent folder ID
+    const folders = await zohoMail.getFolders();
+    const sentFolder = folders?.data?.find(f =>
+      f.folderName?.toLowerCase() === 'sent' ||
+      f.folderName?.toLowerCase() === 'sentmail' ||
+      f.folderType === 'sent'
+    );
+
+    if (!sentFolder) {
+      return res.status(404).json({ error: 'Sent folder not found' });
+    }
+
+    // Get recent sent emails (last 100)
+    const sentEmails = await zohoMail.getEmails(sentFolder.folderId, 100, 0);
+    const emails = sentEmails?.data || [];
+
+    // Find replies to CCTV FOOTAGE emails
+    let synced = 0;
+    const syncedDetails = [];
+
+    for (const email of emails) {
+      // Check if it's a reply to CCTV FOOTAGE email
+      if (email.subject?.includes('Re:') && email.subject?.includes('CCTV FOOTAGE')) {
+        // Extract info from subject: Re: CCTV FOOTAGE REQUIRED||INC..||...
+        const incMatch = email.subject.match(/INC\d+/);
+        const ticket = incMatch ? incMatch[0] : null;
+
+        // Try to find the original message ID from the References header or In-Reply-To
+        // For now, we'll mark by subject pattern
+        const [existing] = await pool.query(
+          `SELECT message_id FROM mail_replies WHERE subject LIKE ? AND status = 'replied'`,
+          [`%${ticket}%`]
+        );
+
+        if (existing.length === 0 && ticket) {
+          // Find original emails with this ticket number
+          const [originals] = await pool.query(
+            `SELECT message_id FROM mail_replies WHERE subject LIKE ? AND status != 'replied'`,
+            [`%${ticket}%`]
+          );
+
+          // If no record exists, create one
+          if (originals.length === 0) {
+            await saveReplyRecord({
+              messageId: email.messageId,
+              subject: email.subject.replace('Re: ', ''),
+              status: 'replied',
+              classification: 'synced',
+              userId: req.session?.user?.id
+            });
+            synced++;
+            syncedDetails.push({ ticket, subject: email.subject });
+          } else {
+            // Update existing records
+            for (const orig of originals) {
+              await pool.query(
+                `UPDATE mail_replies SET status = 'replied', replied_at = NOW() WHERE message_id = ?`,
+                [orig.message_id]
+              );
+              synced++;
+              syncedDetails.push({ ticket, messageId: orig.message_id });
+            }
+          }
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      synced,
+      details: syncedDetails,
+      totalSentChecked: emails.length
+    });
+  } catch (err) {
+    console.error('Sync sent error:', err);
+    res.status(500).json({ error: 'Failed to sync sent emails: ' + err.message });
+  }
+});
+
 // Get reply history
 router.get('/replies', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
