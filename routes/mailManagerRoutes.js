@@ -817,9 +817,39 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         }];
         const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId, videoLinks);
 
-        // STEP 5: Send reply (threadId from content or null)
+        // STEP 5: Send reply with retry logic
         const threadId = content?.threadId || null;
-        await zohoMail.sendReply(messageId, threadId, fromAddress, subject, htmlContent);
+        const replyTo = fromAddress; // Reply TO the sender
+
+        let sendSuccess = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!sendSuccess && retryCount < maxRetries) {
+          try {
+            await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent);
+            sendSuccess = true;
+
+            // Add delay after successful send to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          } catch (sendErr) {
+            retryCount++;
+            const errMsg = sendErr?.data?.moreInfo || sendErr?.message || 'Unknown error';
+            console.log(`Reply attempt ${retryCount} failed for ${messageId}: ${errMsg}`);
+
+            if (errMsg.includes('Temporary') || errMsg.includes('THROTTLE')) {
+              // Wait longer on rate limit/temporary errors
+              await new Promise(resolve => setTimeout(resolve, 3000 * retryCount));
+            } else {
+              // Non-retryable error, break out
+              throw sendErr;
+            }
+          }
+        }
+
+        if (!sendSuccess) {
+          throw new Error(`Failed after ${maxRetries} retries`);
+        }
 
         // Save to database
         await saveReplyRecord({
