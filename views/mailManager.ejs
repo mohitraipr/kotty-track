@@ -707,11 +707,21 @@ async function findVideosForEmail() {
 
 // ==================== REPLY ====================
 
+let isSendingReply = false;  // Guard against double-sends
+
 async function sendReply() {
+  // Prevent double-clicks or duplicate calls
+  if (isSendingReply) {
+    console.log('Already sending reply, ignoring duplicate call');
+    return;
+  }
+
   if (!currentEmail || !foundVideos.length) {
     showToast('No email or videos selected', 'warning');
     return;
   }
+
+  isSendingReply = true;  // Set guard immediately
 
   const btn = document.getElementById('sendReplyBtn');
   const status = document.getElementById('replyStatus');
@@ -752,6 +762,8 @@ async function sendReply() {
     status.innerHTML = '<div class="alert alert-danger mb-0 py-2">Error: ' + err.message + '</div>';
     btn.innerHTML = '<i class="bi bi-send me-2"></i>Send Reply with Video Links';
     btn.disabled = false;
+  } finally {
+    isSendingReply = false;  // Reset guard
   }
 }
 

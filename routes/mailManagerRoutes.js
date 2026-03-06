@@ -817,39 +817,26 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         }];
         const htmlContent = zohoMail.buildVideoReplyHtml(extracted.orderId, videoLinks);
 
-        // STEP 5: Send reply with retry logic
+        // STEP 5: Send reply (NO RETRY - Zoho often sends email but returns error)
         const threadId = content?.threadId || null;
         const replyTo = fromAddress; // Reply TO the sender
 
-        let sendSuccess = false;
-        let retryCount = 0;
-        const maxRetries = 3;
+        try {
+          await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent);
+        } catch (sendErr) {
+          const errMsg = sendErr?.data?.moreInfo || sendErr?.message || 'Unknown error';
+          console.log(`Reply error for ${messageId}: ${errMsg}`);
 
-        while (!sendSuccess && retryCount < maxRetries) {
-          try {
-            await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent);
-            sendSuccess = true;
-
-            // Add delay after successful send to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1500));
-          } catch (sendErr) {
-            retryCount++;
-            const errMsg = sendErr?.data?.moreInfo || sendErr?.message || 'Unknown error';
-            console.log(`Reply attempt ${retryCount} failed for ${messageId}: ${errMsg}`);
-
-            if (errMsg.includes('Temporary') || errMsg.includes('THROTTLE')) {
-              // Wait longer on rate limit/temporary errors
-              await new Promise(resolve => setTimeout(resolve, 3000 * retryCount));
-            } else {
-              // Non-retryable error, break out
-              throw sendErr;
-            }
+          // IMPORTANT: Zoho often returns "Temporary system error" AFTER successfully
+          // sending the email. Do NOT retry - treat it as success.
+          if (!errMsg.includes('Temporary')) {
+            throw sendErr;
           }
+          console.log(`Treating as success (Zoho quirk - email was likely sent) for ${messageId}`);
         }
 
-        if (!sendSuccess) {
-          throw new Error(`Failed after ${maxRetries} retries`);
-        }
+        // Delay after send to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Save to database
         await saveReplyRecord({
