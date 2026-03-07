@@ -616,10 +616,10 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     // Build HTML reply
     const htmlContent = zohoMail.buildVideoReplyHtml(orderId || 'N/A', videoLinks);
 
-    // For Reply All: CC the original recipients (excluding our own addresses)
+    // For Reply All: CC ALL original recipients (as AJIO requires)
     const ccAddresses = (originalTo || '').split(',')
       .map(e => e.trim())
-      .filter(e => e && !e.toLowerCase().includes('kotty.in'))
+      .filter(e => e)
       .join(',');
 
     // Send reply
@@ -826,11 +826,11 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         // STEP 5: Send reply (NO RETRY - Zoho often sends email but returns error)
         const threadId = content?.threadId || null;
         const replyTo = fromAddress; // Reply TO the sender
-        // For Reply All: CC the original recipients (excluding our own addresses)
+        // For Reply All: CC ALL original recipients (as AJIO requires)
         const originalTo = content?.toAddress || '';
         const ccAddresses = originalTo.split(',')
           .map(e => e.trim())
-          .filter(e => e && !e.toLowerCase().includes('kotty.in'))
+          .filter(e => e)
           .join(',');
 
         try {
