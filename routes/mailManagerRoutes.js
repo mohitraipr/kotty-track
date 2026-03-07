@@ -1063,12 +1063,16 @@ router.post('/update-status', isAuthenticated, isOnlyMohitOperator, async (req, 
   }
 });
 
-// Sync sent emails - mark replied emails based on sent folder search
+// Sync sent emails - mark replied emails based on sent folder
 router.post('/sync-sent', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    // Search for CCTV replies in Sent folder
-    const emails = await zohoMail.searchEmails('CCTV FOOTAGE', 100, 0, 'Sent');
-    console.log(`Sync sent: found ${emails.length} emails in Sent folder`);
+    // Get sent emails using messages/view endpoint
+    const allEmails = await zohoMail.getSentEmails(200, 0);
+    // Filter to only CCTV FOOTAGE replies
+    const emails = allEmails.filter(e =>
+      e.subject?.includes('Re:') && e.subject?.includes('CCTV FOOTAGE')
+    );
+    console.log(`Sync sent: found ${emails.length} CCTV replies out of ${allEmails.length} sent emails`);
 
     // Find replies to CCTV FOOTAGE emails
     let synced = 0;

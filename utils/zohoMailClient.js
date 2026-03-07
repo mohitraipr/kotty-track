@@ -212,6 +212,37 @@ async function getEmails(folderId = 'inbox', limit = 50, start = 0) {
 }
 
 /**
+ * Get sent emails using messages/view with includesent parameter
+ * @param {number} limit - Max results
+ * @param {number} start - Pagination start
+ */
+async function getSentEmails(limit = 100, start = 0) {
+  const token = await getAccessToken();
+  const accountId = await getAccountId();
+
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    start: start.toString(),
+    includesent: 'true',
+    includeto: 'true'
+  });
+
+  const options = {
+    hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
+    path: `/api/accounts/${accountId}/messages/view?${params.toString()}`,
+    method: 'GET',
+    headers: {
+      'Authorization': `Zoho-oauthtoken ${token}`
+    }
+  };
+
+  console.log('Getting sent emails:', options.path);
+  const result = await makeRequest(options);
+  console.log('Sent emails count:', (result.data || []).length);
+  return result.data || [];
+}
+
+/**
  * Get full email content by message ID
  * @param {string} messageId - Message ID
  */
@@ -533,6 +564,7 @@ module.exports = {
   getAccountId,
   searchEmails,
   getEmails,
+  getSentEmails,
   getEmailContent,
   getEmailDetails,
   sendReply,
