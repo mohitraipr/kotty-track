@@ -600,7 +600,7 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
 // Expects orderId and videos array with outbound AWB (from mapping lookup)
 router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { messageId, threadId, toAddress, subject, orderId, videos, classification, fromAddress, outboundAwb } = req.body;
+    const { messageId, threadId, toAddress, subject, orderId, videos, classification, fromAddress, outboundAwb, originalTo } = req.body;
 
     if (!messageId || !toAddress || !subject) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -616,8 +616,14 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     // Build HTML reply
     const htmlContent = zohoMail.buildVideoReplyHtml(orderId || 'N/A', videoLinks);
 
+    // For Reply All: CC the original recipients (excluding our own addresses)
+    const ccAddresses = (originalTo || '').split(',')
+      .map(e => e.trim())
+      .filter(e => e && !e.toLowerCase().includes('kotty.in'))
+      .join(',');
+
     // Send reply
-    const result = await zohoMail.sendReply(messageId, threadId, toAddress, subject, htmlContent);
+    const result = await zohoMail.sendReply(messageId, threadId, toAddress, subject, htmlContent, ccAddresses);
 
     // Save reply record to database for tracking
     // Use outbound AWB (from mapping), not RT number
@@ -820,9 +826,15 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         // STEP 5: Send reply (NO RETRY - Zoho often sends email but returns error)
         const threadId = content?.threadId || null;
         const replyTo = fromAddress; // Reply TO the sender
+        // For Reply All: CC the original recipients (excluding our own addresses)
+        const originalTo = content?.toAddress || '';
+        const ccAddresses = originalTo.split(',')
+          .map(e => e.trim())
+          .filter(e => e && !e.toLowerCase().includes('kotty.in'))
+          .join(',');
 
         try {
-          await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent);
+          await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent, ccAddresses);
         } catch (sendErr) {
           // Check all possible locations for error message
           const errMsg = sendErr?.data?.moreInfo || sendErr?.moreInfo ||

@@ -293,7 +293,7 @@ async function getEmailDetails(messageId) {
  * @param {string} subject - Email subject
  * @param {string} htmlContent - HTML body content
  */
-async function sendReply(messageId, threadId, toAddress, subject, htmlContent) {
+async function sendReply(messageId, threadId, toAddress, subject, htmlContent, ccAddress = '') {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
@@ -306,8 +306,13 @@ async function sendReply(messageId, threadId, toAddress, subject, htmlContent) {
     content: htmlContent,
     mailFormat: 'html',
     askReceipt: 'no',
-    action: 'reply'  // CRITICAL: This tells Zoho it's a reply, not a new message
+    action: 'replyAll'  // Use replyAll to include all original recipients
   };
+
+  // Add CC if provided (for Reply All functionality)
+  if (ccAddress) {
+    emailData.ccAddress = ccAddress;
+  }
 
   const options = {
     hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
