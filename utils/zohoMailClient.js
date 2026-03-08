@@ -306,7 +306,7 @@ async function sendReply(messageId, threadId, toAddress, subject, htmlContent, c
     content: htmlContent,
     mailFormat: 'html',
     askReceipt: 'no',
-    action: 'replyAll'  // Use replyAll to include all original recipients
+    action: 'reply'  // Zoho only supports 'reply' - Reply All done via ccAddress
   };
 
   // Add CC if provided (for Reply All functionality)
