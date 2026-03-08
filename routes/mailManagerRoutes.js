@@ -651,7 +651,10 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     });
   } catch (err) {
     console.error('Reply send error:', err);
-    res.status(500).json({ error: 'Failed to send reply: ' + (err.message || err) });
+    // Extract error message from various possible structures
+    const errMsg = err?.data?.moreInfo || err?.data?.status?.description ||
+                   err?.moreInfo || err?.message || JSON.stringify(err);
+    res.status(500).json({ error: 'Failed to send reply: ' + errMsg });
   }
 });
 
