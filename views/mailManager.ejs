@@ -919,7 +919,7 @@ async function exportSelected() {
   }
 }
 
-function startBulkReply() {
+async function startBulkReply() {
   if (selectedEmails.size === 0) {
     showToast('No emails selected', 'warning');
     return;
@@ -941,6 +941,29 @@ function startBulkReply() {
   document.getElementById('bulkReplyLog').innerHTML = '<div class="text-muted">Starting bulk reply...</div>';
   document.getElementById('bulkCancelBtn').classList.remove('d-none');
   document.getElementById('bulkDoneBtn').classList.add('d-none');
+
+  // Build email metadata for selected emails
+  const emailMetadata = {};
+  emailData.forEach(email => {
+    if (selectedEmails.has(email.messageId)) {
+      emailMetadata[email.messageId] = {
+        subject: email.subject,
+        fromAddress: email.fromAddress || email.sender,
+        toAddress: email.toAddress || ''
+      };
+    }
+  });
+
+  // Store metadata on server before starting SSE
+  try {
+    await fetch('/mail-manager/bulk-reply-setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailMetadata })
+    });
+  } catch (err) {
+    console.error('Failed to setup bulk reply:', err);
+  }
 
   // Start SSE connection
   const messageIds = Array.from(selectedEmails).join(',');

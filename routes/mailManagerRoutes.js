@@ -660,6 +660,22 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
 
 // ==================== BULK REPLY WITH SSE STREAMING ====================
 
+// Store email metadata for bulk reply (keyed by session)
+const bulkReplyMetadata = new Map();
+
+// Setup endpoint - store email metadata before SSE starts
+router.post('/bulk-reply-setup', isAuthenticated, isOnlyMohitOperator, (req, res) => {
+  const sessionKey = getSessionKey(req);
+  const { emailMetadata } = req.body;
+
+  if (emailMetadata) {
+    bulkReplyMetadata.set(sessionKey, emailMetadata);
+    console.log(`Stored metadata for ${Object.keys(emailMetadata).length} emails`);
+  }
+
+  res.json({ success: true });
+});
+
 // Bulk reply for multiple emails - uses SSE for progress
 // CORRECT FLOW:
 // 1. Extract Order ID from email body (e.g., FN9735702115)
@@ -688,6 +704,8 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
   // Get session mapping for AWB lookup
   const sessionKey = getSessionKey(req);
   const mapping = sessionMappings.get(sessionKey);
+  // Get stored email metadata (subject, fromAddress, toAddress from search results)
+  const emailMetadata = bulkReplyMetadata.get(sessionKey) || {};
 
   try {
     const messageIdsRaw = req.query.messageIds || '';
@@ -742,8 +760,10 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
       });
 
       try {
-        // Only fetch content - Zoho API doesn't support GET on /messages/{messageId}
-        // Subject must come from search results (cached or passed in)
+        // Get stored metadata from setup call (has subject, fromAddress, toAddress)
+        const emailMeta = emailMetadata?.[messageId] || {};
+
+        // Fetch email content for body text
         const content = await zohoMail.getEmailContent(messageId);
 
         if (!content) {
@@ -752,12 +772,12 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
           continue;
         }
 
-        // Extract subject from content if available, otherwise empty
-        // Note: For bulk reply, we extract order details from body - subject less critical
-        const subject = content?.subject || '';
+        // Use stored metadata for subject/from/to (from search results)
+        // Fall back to content fields if metadata not available
+        const subject = emailMeta.subject || content?.subject || '';
         const bodyText = content?.content || '';
-        const fromAddress = content?.fromAddress || content?.sender || '';
-        const toAddress = content?.toAddress || content?.replyTo || fromAddress;
+        const fromAddress = emailMeta.fromAddress || content?.fromAddress || content?.sender || '';
+        const toAddress = emailMeta.toAddress || content?.toAddress || '';
 
         // Extract Order ID from email (NOT the RT number - that's return AWB)
         const extracted = zohoMail.extractOrderDetails(bodyText, subject);
@@ -828,10 +848,10 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
 
         // STEP 5: Send reply (NO RETRY - Zoho often sends email but returns error)
         const threadId = content?.threadId || null;
-        const replyTo = fromAddress; // Reply TO the sender
+        const replyTo = fromAddress; // Reply TO the sender (seller.communication@ajio.com)
         // For Reply All: CC ALL original recipients (as AJIO requires)
-        const originalTo = content?.toAddress || '';
-        const ccAddresses = originalTo.split(',')
+        // Use stored toAddress from metadata (search results have this info)
+        const ccAddresses = toAddress.split(',')
           .map(e => e.trim())
           .filter(e => e)
           .join(',');
