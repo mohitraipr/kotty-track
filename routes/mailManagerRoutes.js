@@ -849,12 +849,16 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         // STEP 5: Send reply (NO RETRY - Zoho often sends email but returns error)
         const threadId = content?.threadId || null;
         const replyTo = fromAddress; // Reply TO the sender (seller.communication@ajio.com)
+
         // For Reply All: CC ALL original recipients (as AJIO requires)
-        // Use stored toAddress from metadata (search results have this info)
-        const ccAddresses = toAddress.split(',')
+        // Default AJIO recipients if toAddress not available
+        const defaultAjioRecipients = 'AJIO@KOTTY.IN,sales@kotty.in,ksonu@kotty.in,dk.kotty@gmail.com,seller.fulfillment@ajio.com';
+        const ccSource = toAddress || defaultAjioRecipients;
+        const ccAddresses = ccSource.split(',')
           .map(e => e.trim())
           .filter(e => e)
           .join(',');
+        console.log(`Reply CC for ${messageId}: ${ccAddresses}`);
 
         try {
           await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent, ccAddresses);
