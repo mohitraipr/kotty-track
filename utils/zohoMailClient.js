@@ -302,7 +302,7 @@ async function sendReply(messageId, threadId, toAddress, subject, htmlContent, c
   const emailData = {
     fromAddress: ZOHO_SENDER_EMAIL,
     toAddress: toAddress,
-    subject: subject,  // Keep subject UNCHANGED as AJIO requires
+    subject: subject.startsWith('Re:') ? subject : `Re:${subject}`,  // Add Re: prefix for reply
     content: htmlContent,
     mailFormat: 'html',
     askReceipt: 'no',
