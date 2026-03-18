@@ -563,7 +563,10 @@ function renderEmailList(emails, showLoadMore = false) {
   }
 
   let html = emails.map((email, idx) => {
-    const isReplied = email.classification === 'replied' || email.dbStatus?.status === 'replied';
+    // Disable checkbox if already replied OR closed (AJIO acknowledged, no action needed)
+    const isHandled = email.classification === 'replied' || email.classification === 'closed' ||
+                      email.dbStatus?.status === 'replied' || email.dbStatus?.status === 'closed';
+    const disabledReason = email.classification === 'closed' ? 'No action needed' : 'Already replied';
     const badgeClass = email.classification || 'unknown';
     const badgeText = email.classification || '?';
     const repliedInfo = email.dbStatus?.repliedAt ? ' (' + new Date(email.dbStatus.repliedAt).toLocaleDateString() + ')' : '';
@@ -572,7 +575,7 @@ function renderEmailList(emails, showLoadMore = false) {
     <div class="email-row p-3 border-bottom d-flex align-items-start gap-2" data-message-id="${email.messageId}" data-classification="${email.classification}">
       <input type="checkbox" class="email-checkbox mt-1"
         onchange="toggleEmailSelection('${email.messageId}')"
-        ${isReplied ? 'disabled title="Already replied"' : ''}
+        ${isHandled ? `disabled title="${disabledReason}"` : ''}
         ${selectedEmails.has(email.messageId) ? 'checked' : ''}>
       <div class="flex-grow-1 overflow-hidden" onclick="loadEmailDetails('${email.messageId}', this.parentElement, '${escapeHtml(email.subject || '')}', '${escapeHtml(email.fromAddress || email.sender || '')}', '${escapeHtml(email.toAddress || '')}')">
         <div class="d-flex justify-content-between align-items-start">
@@ -842,9 +845,11 @@ function toggleEmailSelection(messageId) {
 }
 
 function selectAllInitial() {
-  // Select all emails with classification "initial" that aren't already replied
+  // Select all emails with classification "initial" that aren't already handled (replied/closed)
   emailData.forEach(email => {
-    if (email.classification === 'initial' && email.dbStatus?.status !== 'replied') {
+    const isHandled = email.classification === 'replied' || email.classification === 'closed' ||
+                      email.dbStatus?.status === 'replied' || email.dbStatus?.status === 'closed';
+    if (email.classification === 'initial' && !isHandled) {
       selectedEmails.add(email.messageId);
     }
   });

@@ -14,6 +14,15 @@ const { pool } = require('../config/db');
 // Also persisted to database for durability
 const sessionMappings = new Map();
 
+// Our sender email - filter out emails FROM this to prevent replying to our own replies
+const OUR_SENDER_EMAIL = (process.env.ZOHO_SENDER_EMAIL || 'ksonu@kotty.in').toLowerCase();
+
+// Check if email is from our sender address (to prevent infinite reply loops)
+function isOurOwnEmail(email) {
+  const fromAddress = (email.fromAddress || email.sender || '').toLowerCase();
+  return fromAddress.includes(OUR_SENDER_EMAIL);
+}
+
 // ==================== DATABASE HELPERS ====================
 
 // Save reply to database for tracking
@@ -340,10 +349,12 @@ router.get('/emails/search', isAuthenticated, isOnlyMohitOperator, async (req, r
 
     const emails = await zohoMail.searchEmails(query, parseInt(limit), parseInt(start));
 
+    // Filter out our own emails (prevents replying to our own replies = infinite loop)
+    let filtered = emails.filter(email => !isOurOwnEmail(email));
+
     // Filter by date if provided
-    let filtered = emails;
     if (fromDate || toDate) {
-      filtered = emails.filter(email => {
+      filtered = filtered.filter(email => {
         const emailDate = new Date(parseInt(email.receivedTime));
         if (fromDate && emailDate < new Date(fromDate)) return false;
         if (toDate) {
@@ -405,7 +416,10 @@ router.get('/emails/search', isAuthenticated, isOnlyMohitOperator, async (req, r
 router.get('/emails/inbox', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
     const { limit = 200, start = 0 } = req.query;
-    const emails = await zohoMail.getEmails('inbox', parseInt(limit), parseInt(start));
+    const allEmails = await zohoMail.getEmails('inbox', parseInt(limit), parseInt(start));
+
+    // Filter out our own emails (prevents replying to our own replies = infinite loop)
+    const emails = allEmails.filter(email => !isOurOwnEmail(email));
 
     // Get message IDs for batch lookup
     const messageIds = emails.map(e => e.messageId);
@@ -720,20 +734,20 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
     // Check if mapping is loaded
     const hasMappingLoaded = mapping && Object.keys(mapping).length > 0;
 
-    // Check which emails are already replied (from database)
-    const [alreadyReplied] = await pool.query(
-      `SELECT message_id FROM mail_replies WHERE message_id IN (?) AND status = 'replied'`,
+    // Check which emails are already handled (replied or closed - no action needed)
+    const [alreadyHandled] = await pool.query(
+      `SELECT message_id FROM mail_replies WHERE message_id IN (?) AND status IN ('replied', 'closed')`,
       [messageIds]
     );
-    const repliedSet = new Set(alreadyReplied.map(r => r.message_id));
+    const handledSet = new Set(alreadyHandled.map(r => r.message_id));
 
-    // Filter out already replied
-    const toProcess = messageIds.filter(id => !repliedSet.has(id));
+    // Filter out already handled emails
+    const toProcess = messageIds.filter(id => !handledSet.has(id));
 
     sendEvent('start', {
       total: messageIds.length,
       toProcess: toProcess.length,
-      alreadyReplied: repliedSet.size,
+      alreadyReplied: handledSet.size,
       hasMappingLoaded,
       mappingCount: mapping ? Object.keys(mapping).length : 0
     });
@@ -741,7 +755,7 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
     const results = {
       success: 0,
       failed: 0,
-      skipped: repliedSet.size,
+      skipped: handledSet.size,
       noOrderId: 0,
       noMapping: 0,
       noVideo: 0,

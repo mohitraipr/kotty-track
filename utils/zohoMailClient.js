@@ -35,9 +35,15 @@ let tokenExpiry = null;
 
 // Classification patterns (based on AJIO CCTV request patterns)
 const CLASSIFICATION_PATTERNS = {
+  // Initial CCTV request from AJIO
   initial: /cctv\s*(footage|video|recording|request)/i,
-  closed: /(closed|resolved|completed|done)/i,
-  proceeding: /(proceeding|processing|in\s*progress|working)/i,
+  // AJIO acknowledged our footage - no further action needed
+  acknowledged: /thank\s*you\s*(for\s*)?(sharing|providing|sending)\s*(the\s*)?(requested\s*)?(footage|video|recording)/i,
+  // Case closed by AJIO
+  closed: /(closed|resolved|completed|done|case\s*closed)/i,
+  // AJIO is processing/validating
+  proceeding: /(proceeding|processing|in\s*progress|working|will\s*proceed\s*to\s*validate)/i,
+  // Error cases
   error: /(error|failed|issue|problem)/i
 };
 
@@ -383,8 +389,10 @@ function classifyEmail(subject, body) {
 
   // Check patterns in priority order
   if (CLASSIFICATION_PATTERNS.error.test(text)) return 'error';
+  // AJIO acknowledged receipt of footage - mark as closed (no action needed)
+  if (CLASSIFICATION_PATTERNS.acknowledged.test(text)) return 'closed';
   if (CLASSIFICATION_PATTERNS.closed.test(text)) return 'closed';
-  if (CLASSIFICATION_PATTERNS.proceeding.test(text)) return 'proceeding';
+  if (CLASSIFICATION_PATTERNS.proceeding.test(text)) return 'closed'; // proceeding = they're handling it, no action
   if (CLASSIFICATION_PATTERNS.initial.test(text)) return 'initial';
 
   return 'unknown';
