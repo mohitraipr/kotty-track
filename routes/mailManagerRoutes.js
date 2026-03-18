@@ -630,10 +630,11 @@ router.post('/reply', isAuthenticated, isOnlyMohitOperator, async (req, res) => 
     // Build HTML reply
     const htmlContent = zohoMail.buildVideoReplyHtml(orderId || 'N/A', videoLinks);
 
-    // For Reply All: CC ALL original recipients (as AJIO requires)
+    // For Reply All: CC original recipients, but exclude the sender (toAddress) since we're replying TO them
+    const senderEmail = (toAddress || '').toLowerCase().trim();
     const ccAddresses = (originalTo || '').split(',')
       .map(e => e.trim())
-      .filter(e => e)
+      .filter(e => e && e.toLowerCase() !== senderEmail)
       .join(',');
 
     // Send reply
@@ -864,15 +865,16 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         const threadId = content?.threadId || null;
         const replyTo = fromAddress; // Reply TO the sender (seller.communication@ajio.com)
 
-        // For Reply All: CC ALL original recipients (as AJIO requires)
+        // For Reply All: CC original recipients, but exclude the sender since we're replying TO them
         // Default AJIO recipients if toAddress not available
         const defaultAjioRecipients = 'AJIO@KOTTY.IN,sales@kotty.in,ksonu@kotty.in,dk.kotty@gmail.com,seller.fulfillment@ajio.com';
         const ccSource = toAddress || defaultAjioRecipients;
+        const senderEmail = (replyTo || '').toLowerCase().trim();
         const ccAddresses = ccSource.split(',')
           .map(e => e.trim())
-          .filter(e => e)
+          .filter(e => e && e.toLowerCase() !== senderEmail)
           .join(',');
-        console.log(`Reply CC for ${messageId}: ${ccAddresses}`);
+        console.log(`Reply CC for ${messageId}: ${ccAddresses} (excluded sender: ${senderEmail})`);
 
         try {
           await zohoMail.sendReply(messageId, threadId, replyTo, subject, htmlContent, ccAddresses);
