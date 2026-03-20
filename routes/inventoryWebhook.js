@@ -420,14 +420,18 @@ router.get('/logs/download-count', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
   }
 });
 
-// Download inventory as Excel (chunked queries, buffered write)
-// Limit to 100K rows to prevent memory issues
-// Use streaming workbook to avoid memory issues with large datasets
+// Download inventory as Excel (chunked queries, streaming write)
+// wishlinkops users get a special format for inventory adjustment upload
 router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
   try {
+    const username = req.session?.user?.username || '';
+    const userRole = req.session?.user?.role || req.session?.user?.roleName || '';
+    const isWishlinkOps = userRole === 'wishlinkops' || username.toLowerCase() === 'vinaykumar';
+
     // Set headers before streaming
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=inventory_snapshots_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const filename = isWishlinkOps ? 'inventory_adjustment' : 'inventory_snapshots';
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
     // Create streaming workbook that writes directly to response
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -436,17 +440,34 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
       useSharedStrings: false,
     });
 
-    const sheet = workbook.addWorksheet('Inventory Snapshots');
+    const sheet = workbook.addWorksheet('Inventory');
 
-    // Define columns
-    sheet.columns = [
-      { header: 'Time', key: 'time', width: 22 },
-      { header: 'SKU', key: 'sku', width: 20 },
-      { header: 'Warehouse', key: 'warehouse_name', width: 15 },
-      { header: 'Warehouse ID', key: 'warehouse_id', width: 12 },
-      { header: 'Inventory', key: 'inventory', width: 10 },
-      { header: 'Status', key: 'sku_status', width: 12 },
-    ];
+    // Define columns based on user role
+    if (isWishlinkOps) {
+      // WishlinkOps format for inventory adjustment upload
+      sheet.columns = [
+        { header: 'Product Code*', key: 'product_code', width: 20 },
+        { header: 'Quantity*', key: 'quantity', width: 12 },
+        { header: 'Shelf Code*', key: 'shelf_code', width: 15 },
+        { header: 'Adjustment Type*', key: 'adjustment_type', width: 18 },
+        { header: 'Inventory Type', key: 'inventory_type', width: 15 },
+        { header: 'Transfer to Shelf Code', key: 'transfer_shelf', width: 22 },
+        { header: 'Sla', key: 'sla', width: 10 },
+        { header: 'Source Batch Code', key: 'source_batch', width: 18 },
+        { header: 'Remarks', key: 'remarks', width: 15 },
+        { header: 'Force Allocate', key: 'force_allocate', width: 15 },
+      ];
+    } else {
+      // Standard format for operators
+      sheet.columns = [
+        { header: 'Time', key: 'time', width: 22 },
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Warehouse', key: 'warehouse_name', width: 15 },
+        { header: 'Warehouse ID', key: 'warehouse_id', width: 12 },
+        { header: 'Inventory', key: 'inventory', width: 10 },
+        { header: 'Status', key: 'sku_status', width: 12 },
+      ];
+    }
 
     // Style header row
     const headerRow = sheet.getRow(1);
@@ -474,14 +495,32 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
       }
 
       for (const row of rows) {
-        const dataRow = sheet.addRow({
-          time: row.received_at ? new Date(row.received_at).toISOString() : '',
-          sku: row.sku,
-          warehouse_name: getWarehouseLabel(row.warehouse_id),
-          warehouse_id: row.warehouse_id,
-          inventory: row.inventory,
-          sku_status: row.sku_status,
-        });
+        let dataRow;
+        if (isWishlinkOps) {
+          // WishlinkOps format
+          dataRow = sheet.addRow({
+            product_code: row.sku,
+            quantity: row.inventory,
+            shelf_code: 'default',
+            adjustment_type: 'replace',
+            inventory_type: '',
+            transfer_shelf: '',
+            sla: '',
+            source_batch: '',
+            remarks: '',
+            force_allocate: '',
+          });
+        } else {
+          // Standard format
+          dataRow = sheet.addRow({
+            time: row.received_at ? new Date(row.received_at).toISOString() : '',
+            sku: row.sku,
+            warehouse_name: getWarehouseLabel(row.warehouse_id),
+            warehouse_id: row.warehouse_id,
+            inventory: row.inventory,
+            sku_status: row.sku_status,
+          });
+        }
         dataRow.commit(); // Commit each row to free memory
       }
 
@@ -493,7 +532,7 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
     }
 
     // Commit the worksheet and workbook
-    await sheet.commit();
+    sheet.commit();
     await workbook.commit();
 
   } catch (err) {
