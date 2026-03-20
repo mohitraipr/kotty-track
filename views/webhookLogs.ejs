@@ -786,6 +786,19 @@
       <h3 id="modalTitle" class="modal-title">Download Inventory Data</h3>
       <p id="modalSubtitle" class="modal-subtitle">Preparing your export...</p>
 
+      <% if (typeof username !== 'undefined' && username === 'vinaykumar') { %>
+      <div id="warehouseSelector" class="warehouse-selector" style="margin: 16px 0;">
+        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 13px;">
+          Select Warehouse <span style="color: var(--accent-red);">*</span>
+        </label>
+        <select id="warehouseSelect" style="width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 14px;">
+          <option value="">-- Select Warehouse --</option>
+          <option value="176318">Delhi</option>
+          <option value="173983">Faridabad</option>
+        </select>
+      </div>
+      <% } %>
+
       <div id="modalStats" class="modal-stats">
         <div class="modal-stat">
           <div class="modal-stat-label">Total Records</div>
@@ -815,6 +828,8 @@
 
   <script>
     let downloadRecordCount = 0;
+    let selectedWarehouse = '';
+    const isVinay = <%= typeof username !== 'undefined' && username === 'vinaykumar' ? 'true' : 'false' %>;
 
     async function startDownload() {
       const modal = document.getElementById('downloadModal');
@@ -825,19 +840,55 @@
       const progress = document.getElementById('modalProgress');
       const actions = document.getElementById('modalActions');
       const confirmBtn = document.getElementById('confirmDownloadBtn');
+      const warehouseSelect = document.getElementById('warehouseSelect');
 
       // Show modal
       modal.classList.add('active');
+
+      // For vinaykumar, wait for warehouse selection
+      if (isVinay && warehouseSelect) {
+        icon.classList.remove('loading');
+        title.textContent = 'Select Warehouse';
+        subtitle.textContent = 'Choose a warehouse to download inventory data';
+        stats.style.display = 'none';
+        progress.style.display = 'none';
+        confirmBtn.disabled = true;
+
+        // Watch for warehouse selection
+        warehouseSelect.onchange = async function() {
+          if (this.value) {
+            selectedWarehouse = this.value;
+            await fetchRecordCount();
+          } else {
+            confirmBtn.disabled = true;
+            stats.style.display = 'none';
+          }
+        };
+        return;
+      }
+
+      await fetchRecordCount();
+    }
+
+    async function fetchRecordCount() {
+      const icon = document.getElementById('modalIcon');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const stats = document.getElementById('modalStats');
+      const confirmBtn = document.getElementById('confirmDownloadBtn');
+
       icon.classList.add('loading');
       title.textContent = 'Preparing Download';
       subtitle.textContent = 'Counting records...';
-      stats.style.display = 'none';
-      progress.style.display = 'none';
       confirmBtn.disabled = true;
 
       try {
-        // Get record count
-        const res = await fetch('/webhook/logs/download-count', {
+        // Get record count (with warehouse filter for vinaykumar)
+        let countUrl = '/webhook/logs/download-count';
+        if (selectedWarehouse) {
+          countUrl += '?warehouse_id=' + selectedWarehouse;
+        }
+        const res = await fetch(countUrl, {
           headers: { 'Accept': 'application/json' }
         });
         const data = await res.json();
@@ -856,8 +907,9 @@
 
         // Update modal
         icon.classList.remove('loading');
+        const warehouseName = selectedWarehouse === '176318' ? 'Delhi' : selectedWarehouse === '173983' ? 'Faridabad' : 'All';
         title.textContent = 'Download Inventory Data';
-        subtitle.textContent = 'Ready to export all inventory snapshots';
+        subtitle.textContent = selectedWarehouse ? 'Ready to export ' + warehouseName + ' warehouse data' : 'Ready to export all inventory snapshots';
         document.getElementById('statRecords').textContent = data.total.toLocaleString();
         document.getElementById('statTime').textContent = '~' + estTimeStr;
         stats.style.display = 'grid';
@@ -901,10 +953,15 @@
         progressText.textContent = 'Processing ' + Math.round(fakeProgress) + '%...';
       }, 500);
 
-      // Start actual download
+      // Start actual download (with warehouse filter if selected)
       const link = document.createElement('a');
-      link.href = '/webhook/logs/download-excel';
-      link.download = 'inventory_snapshots.xlsx';
+      let downloadUrl = '/webhook/logs/download-excel';
+      if (selectedWarehouse) {
+        downloadUrl += '?warehouse_id=' + selectedWarehouse;
+      }
+      link.href = downloadUrl;
+      const warehouseSuffix = selectedWarehouse === '176318' ? '_delhi' : selectedWarehouse === '173983' ? '_faridabad' : '';
+      link.download = 'inventory_adjustment' + warehouseSuffix + '.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

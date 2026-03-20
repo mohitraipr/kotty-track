@@ -412,7 +412,16 @@ router.get('/logs', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req,
 // Get count of inventory records for download preview
 router.get('/logs/download-count', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
   try {
-    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_snapshots');
+    const warehouseId = req.query.warehouse_id;
+    let query = 'SELECT COUNT(*) as total FROM ee_inventory_snapshots';
+    const params = [];
+
+    if (warehouseId) {
+      query += ' WHERE warehouse_id = ?';
+      params.push(warehouseId);
+    }
+
+    const [[{ total }]] = await pool.query(query, params);
     res.json({ total });
   } catch (err) {
     console.error('Failed to count inventory:', err);
@@ -427,10 +436,15 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
     const username = req.session?.user?.username || '';
     const userRole = req.session?.user?.role || req.session?.user?.roleName || '';
     const isWishlinkOps = userRole === 'wishlinkops' || username.toLowerCase() === 'vinaykumar';
+    const warehouseId = req.query.warehouse_id;
 
     // Set headers before streaming
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    const filename = isWishlinkOps ? 'inventory_adjustment' : 'inventory_snapshots';
+    let filename = isWishlinkOps ? 'inventory_adjustment' : 'inventory_snapshots';
+    if (warehouseId) {
+      const whName = warehouseId === '176318' ? 'delhi' : warehouseId === '173983' ? 'faridabad' : warehouseId;
+      filename += '_' + whName;
+    }
     res.setHeader('Content-Disposition', `attachment; filename=${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
     // Create streaming workbook that writes directly to response
@@ -480,13 +494,18 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
     let offset = 0;
     let hasMore = true;
 
+    // Build query with optional warehouse filter
+    const whereClause = warehouseId ? 'WHERE warehouse_id = ?' : '';
+    const baseParams = warehouseId ? [warehouseId] : [];
+
     while (hasMore) {
       const [rows] = await pool.query(
         `SELECT sku, warehouse_id, inventory, sku_status, received_at
          FROM ee_inventory_snapshots
+         ${whereClause}
          ORDER BY id DESC
          LIMIT ? OFFSET ?`,
-        [CHUNK_SIZE, offset]
+        [...baseParams, CHUNK_SIZE, offset]
       );
 
       if (rows.length === 0) {
