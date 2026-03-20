@@ -422,14 +422,23 @@ router.get('/logs/download-count', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
 
 // Download inventory as Excel (chunked queries, buffered write)
 // Limit to 100K rows to prevent memory issues
-const EXCEL_MAX_ROWS = 100000;
-const EXCEL_CHUNK_SIZE = 10000;
-
+// Use streaming workbook to avoid memory issues with large datasets
 router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
   try {
-    const workbook = new ExcelJS.Workbook();
+    // Set headers before streaming
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=inventory_snapshots_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+    // Create streaming workbook that writes directly to response
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+
     const sheet = workbook.addWorksheet('Inventory Snapshots');
 
+    // Define columns
     sheet.columns = [
       { header: 'Time', key: 'time', width: 22 },
       { header: 'SKU', key: 'sku', width: 20 },
@@ -440,26 +449,32 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
     ];
 
     // Style header row
-    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF333333' } };
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF333333' } };
+    headerRow.commit();
 
-    // Fetch data in chunks to reduce memory spikes
+    // Stream data in chunks - fetch and write immediately
+    const CHUNK_SIZE = 5000;
     let offset = 0;
-    let totalRows = 0;
+    let hasMore = true;
 
-    while (totalRows < EXCEL_MAX_ROWS) {
+    while (hasMore) {
       const [rows] = await pool.query(
         `SELECT sku, warehouse_id, inventory, sku_status, received_at
          FROM ee_inventory_snapshots
          ORDER BY id DESC
          LIMIT ? OFFSET ?`,
-        [EXCEL_CHUNK_SIZE, offset]
+        [CHUNK_SIZE, offset]
       );
 
-      if (rows.length === 0) break;
+      if (rows.length === 0) {
+        hasMore = false;
+        break;
+      }
 
       for (const row of rows) {
-        sheet.addRow({
+        const dataRow = sheet.addRow({
           time: row.received_at ? new Date(row.received_at).toISOString() : '',
           sku: row.sku,
           warehouse_name: getWarehouseLabel(row.warehouse_id),
@@ -467,21 +482,20 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
           inventory: row.inventory,
           sku_status: row.sku_status,
         });
+        dataRow.commit(); // Commit each row to free memory
       }
 
       offset += rows.length;
-      totalRows += rows.length;
 
-      if (rows.length < EXCEL_CHUNK_SIZE) break;
+      if (rows.length < CHUNK_SIZE) {
+        hasMore = false;
+      }
     }
 
-    // Write to buffer then send
-    const buffer = await workbook.xlsx.writeBuffer();
+    // Commit the worksheet and workbook
+    await sheet.commit();
+    await workbook.commit();
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=inventory_snapshots_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    res.setHeader('Content-Length', buffer.length);
-    res.send(buffer);
   } catch (err) {
     console.error('Failed to generate inventory Excel:', err);
     if (!res.headersSent) {
