@@ -2,8 +2,20 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { isAuthenticated, isOperator, isMohitOperator } = require('../middlewares/auth');
+const { isAuthenticated, isOperator, isMohitOperator, allowRoles } = require('../middlewares/auth');
 const { queueHealthRefresh } = require('../utils/healthRefreshQueue');
+const ExcelJS = require('exceljs');
+
+// Warehouse ID to name mapping
+const WAREHOUSE_LABELS = {
+  173983: 'Faridabad',
+  176318: 'Delhi',
+};
+
+function getWarehouseLabel(warehouseId) {
+  if (warehouseId === null || warehouseId === undefined) return 'N/A';
+  return WAREHOUSE_LABELS[warehouseId] || String(warehouseId);
+}
 
 // Access token used to authenticate incoming EasyEcom webhooks
 const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
@@ -87,11 +99,20 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
       payload.raw,
     ]);
 
-    // Bulk insert to drastically reduce round trips and lock contention
+    // Upsert: Insert or update existing row for same SKU+warehouse
+    // This prevents duplicate rows when inventory value hasn't changed
     await connection.query(
       `INSERT INTO ee_inventory_snapshots
         (sku, warehouse_id, company_product_id, product_id, inventory, sku_status, location_key, raw)
-       VALUES ?`,
+       VALUES ?
+       ON DUPLICATE KEY UPDATE
+        inventory = VALUES(inventory),
+        sku_status = VALUES(sku_status),
+        company_product_id = VALUES(company_product_id),
+        product_id = VALUES(product_id),
+        location_key = VALUES(location_key),
+        raw = VALUES(raw),
+        received_at = CURRENT_TIMESTAMP`,
       [values]
     );
     await connection.commit();
@@ -359,9 +380,13 @@ router.post(
   }
 );
 
+// Roles allowed to access inventory logs
+const LOGS_ALLOWED_ROLES = ['operator', 'wishlinkops'];
+
 // View inventory webhook logs from database (last 200 entries)
-router.get('/logs', isAuthenticated, isOperator, isMohitOperator, async (req, res) => {
+router.get('/logs', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
   try {
+    const username = req.session?.user?.username || '';
     const [rows] = await pool.query(
       `SELECT sku, warehouse_id, inventory, sku_status, location_key, received_at
        FROM ee_inventory_snapshots
@@ -372,14 +397,96 @@ router.get('/logs', isAuthenticated, isOperator, isMohitOperator, async (req, re
       time: row.received_at ? new Date(row.received_at).toISOString() : '',
       sku: row.sku,
       warehouse_id: row.warehouse_id,
+      warehouse_name: getWarehouseLabel(row.warehouse_id),
       inventory: row.inventory,
       sku_status: row.sku_status,
       raw: '',
     }));
-    res.render('webhookLogs', { logs, totalCount: rows.length });
+    res.render('webhookLogs', { logs, totalCount: rows.length, username });
   } catch (err) {
     console.error('Failed to load inventory logs:', err);
-    res.render('webhookLogs', { logs: [], totalCount: 0 });
+    res.render('webhookLogs', { logs: [], totalCount: 0, username: '' });
+  }
+});
+
+// Get count of inventory records for download preview
+router.get('/logs/download-count', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM ee_inventory_snapshots');
+    res.json({ total });
+  } catch (err) {
+    console.error('Failed to count inventory:', err);
+    res.status(500).json({ error: 'Failed to count records' });
+  }
+});
+
+// Download inventory as Excel (chunked queries, buffered write)
+// Limit to 100K rows to prevent memory issues
+const EXCEL_MAX_ROWS = 100000;
+const EXCEL_CHUNK_SIZE = 10000;
+
+router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Inventory Snapshots');
+
+    sheet.columns = [
+      { header: 'Time', key: 'time', width: 22 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Warehouse', key: 'warehouse_name', width: 15 },
+      { header: 'Warehouse ID', key: 'warehouse_id', width: 12 },
+      { header: 'Inventory', key: 'inventory', width: 10 },
+      { header: 'Status', key: 'sku_status', width: 12 },
+    ];
+
+    // Style header row
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF333333' } };
+
+    // Fetch data in chunks to reduce memory spikes
+    let offset = 0;
+    let totalRows = 0;
+
+    while (totalRows < EXCEL_MAX_ROWS) {
+      const [rows] = await pool.query(
+        `SELECT sku, warehouse_id, inventory, sku_status, received_at
+         FROM ee_inventory_snapshots
+         ORDER BY id DESC
+         LIMIT ? OFFSET ?`,
+        [EXCEL_CHUNK_SIZE, offset]
+      );
+
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        sheet.addRow({
+          time: row.received_at ? new Date(row.received_at).toISOString() : '',
+          sku: row.sku,
+          warehouse_name: getWarehouseLabel(row.warehouse_id),
+          warehouse_id: row.warehouse_id,
+          inventory: row.inventory,
+          sku_status: row.sku_status,
+        });
+      }
+
+      offset += rows.length;
+      totalRows += rows.length;
+
+      if (rows.length < EXCEL_CHUNK_SIZE) break;
+    }
+
+    // Write to buffer then send
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=inventory_snapshots_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Failed to generate inventory Excel:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate Excel file' });
+    }
   }
 });
 

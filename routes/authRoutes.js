@@ -46,6 +46,8 @@ function getDashboardForRole(roleName) {
     'checking': '/department/dashboard',
     'quality_assurance': '/department/dashboard',
     'challan_dashboard': '/challandashboard',
+    'productviewer': '/product-links',
+    'wishlinkops': '/webhook/logs',
   };
 
   // If role not found, log it for debugging and return a safe default

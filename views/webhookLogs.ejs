@@ -3,125 +3,1017 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventory Webhook Logs</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <title>Inventory Snapshots | Operations Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Inventory Webhook Logs</span>
-    <span class="text-white ms-auto">Showing last <%= logs.length %> entries (from database)</span>
-  </div>
-</nav>
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Inventory Snapshots</h3>
-    <div class="d-flex gap-2 align-items-center">
-      <div id="clearStatus" class="d-none">
-        <div class="d-flex align-items-center gap-2">
-          <div class="progress" style="width: 200px; height: 20px;">
-            <div id="clearProgress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
-          </div>
-          <small id="clearText" class="text-muted"></small>
-        </div>
-      </div>
-      <button id="clearBtn" class="btn btn-outline-danger btn-sm" onclick="clearRawData()">Clear Raw Data</button>
-      <a href="/webhook/order/logs" class="btn btn-outline-primary btn-sm">View Order Logs</a>
-    </div>
-  </div>
-  <div class="table-responsive shadow-sm">
-    <table class="table table-bordered table-striped table-hover table-sm align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Time</th>
-          <th>SKU</th>
-          <th>Warehouse</th>
-          <th>Inventory</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-      <% logs.forEach(function(log) { %>
-        <tr>
-          <td><%= log.time %></td>
-          <td><strong><%= log.sku %></strong></td>
-          <td><%= log.warehouse_id || 'N/A' %></td>
-          <td><%= log.inventory != null ? log.inventory : 'N/A' %></td>
-          <td><%= log.sku_status || 'N/A' %></td>
-        </tr>
-      <% }); %>
-      <% if (!logs.length) { %>
-        <tr><td colspan="5" class="text-center text-muted">No inventory snapshots found</td></tr>
-      <% } %>
-      </tbody>
-    </table>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-async function clearRawData() {
-  const btn = document.getElementById('clearBtn');
-  const status = document.getElementById('clearStatus');
-  const progress = document.getElementById('clearProgress');
-  const text = document.getElementById('clearText');
-
-  btn.disabled = true;
-  btn.textContent = 'Checking...';
-  try {
-    const countRes = await fetch('/webhook/clear-raw/inventory/count');
-    const countData = await countRes.json();
-    if (countData.total === 0) {
-      btn.textContent = 'Already clean';
-      btn.classList.replace('btn-outline-danger', 'btn-outline-success');
-      return;
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #131920;
+      --bg-card: #1a2028;
+      --bg-row-hover: #232d3a;
+      --border-color: #2a3544;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-amber: #d29922;
+      --accent-red: #f85149;
+      --accent-purple: #a371f7;
+      --warehouse-delhi: #f97316;
+      --warehouse-faridabad: #06b6d4;
+      --font-display: 'DM Sans', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
     }
-    if (!confirm('Clear raw JSON data from ' + countData.total.toLocaleString() + ' inventory snapshots? This frees disk space but cannot be undone.')) {
-      btn.disabled = false;
-      btn.textContent = 'Clear Raw Data';
-      return;
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    status.classList.remove('d-none');
-    btn.classList.add('d-none');
 
-    let totalCleared = 0;
-    const originalTotal = countData.total;
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
 
-    // Auto-retry loop until done
-    while (true) {
-      const pct = Math.min(95, Math.round((totalCleared / originalTotal) * 100));
-      progress.style.width = pct + '%';
-      progress.textContent = pct + '%';
-      text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' / ' + originalTotal.toLocaleString() + '...';
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
 
-      const res = await fetch('/webhook/clear-raw/inventory', { method: 'POST' });
-      const data = await res.json();
-      totalCleared += data.cleared;
+    .dashboard {
+      position: relative;
+      z-index: 1;
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
 
-      if (data.done) {
-        progress.style.width = '100%';
-        progress.classList.remove('progress-bar-animated');
-        progress.classList.replace('bg-primary', 'bg-success');
-        progress.textContent = 'Done!';
-        text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' rows';
-        btn.classList.remove('d-none');
-        btn.textContent = 'Cleared!';
-        btn.classList.replace('btn-outline-danger', 'btn-outline-success');
-        break;
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .header-left h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-left h1::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 28px;
+      background: linear-gradient(180deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 2px;
+    }
+
+    .header-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-family: var(--font-mono);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-family: var(--font-display);
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-green) 0%, #2ea043 100%);
+      color: white;
+      box-shadow: 0 2px 8px rgba(63, 185, 80, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(63, 185, 80, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-row-hover);
+      border-color: var(--accent-blue);
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--accent-red);
+      border: 1px solid var(--accent-red);
+    }
+
+    .btn-danger:hover {
+      background: rgba(248, 81, 73, 0.1);
+    }
+
+    .btn i {
+      font-size: 1.1em;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      animation: slideUp 0.5s ease-out backwards;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: 0.1s; }
+    .stat-card:nth-child(2) { animation-delay: 0.15s; }
+    .stat-card:nth-child(3) { animation-delay: 0.2s; }
+    .stat-card:nth-child(4) { animation-delay: 0.25s; }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      opacity: 0.6;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .stat-card.delhi .stat-value { color: var(--warehouse-delhi); }
+    .stat-card.faridabad .stat-value { color: var(--warehouse-faridabad); }
+
+    /* Table Container */
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      animation: slideUp 0.6s ease-out 0.3s backwards;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+    }
+
+    .table-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-title i {
+      color: var(--accent-blue);
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--accent-green);
+      font-family: var(--font-mono);
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    /* Data Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table thead {
+      background: var(--bg-secondary);
+    }
+
+    .data-table th {
+      padding: 14px 20px;
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--border-color);
+      transition: background 0.15s ease;
+      animation: fadeIn 0.4s ease-out backwards;
+    }
+
+    .data-table tbody tr:nth-child(1) { animation-delay: 0.35s; }
+    .data-table tbody tr:nth-child(2) { animation-delay: 0.38s; }
+    .data-table tbody tr:nth-child(3) { animation-delay: 0.41s; }
+    .data-table tbody tr:nth-child(4) { animation-delay: 0.44s; }
+    .data-table tbody tr:nth-child(5) { animation-delay: 0.47s; }
+    .data-table tbody tr:nth-child(n+6) { animation-delay: 0.5s; }
+
+    .data-table tbody tr:hover {
+      background: var(--bg-row-hover);
+    }
+
+    .data-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .data-table td {
+      padding: 14px 20px;
+      font-size: 0.875rem;
+    }
+
+    /* Cell Styles */
+    .cell-time {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .cell-sku {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.02em;
+    }
+
+    .cell-warehouse {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .warehouse-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .warehouse-badge.delhi {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--warehouse-delhi);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+    }
+
+    .warehouse-badge.faridabad {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--warehouse-faridabad);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .warehouse-badge.unknown {
+      background: rgba(110, 118, 129, 0.15);
+      color: var(--text-muted);
+      border: 1px solid rgba(110, 118, 129, 0.3);
+    }
+
+    .warehouse-badge i {
+      font-size: 0.9em;
+    }
+
+    .cell-inventory {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .inventory-high { color: var(--accent-green); }
+    .inventory-medium { color: var(--accent-amber); }
+    .inventory-low { color: var(--accent-red); }
+
+    .cell-status {
+      display: inline-block;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .status-active {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--accent-green);
+    }
+
+    .status-inactive {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--accent-red);
+    }
+
+    .status-pending {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--accent-amber);
+    }
+
+    .status-default {
+      background: rgba(139, 148, 158, 0.15);
+      color: var(--text-secondary);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+    }
+
+    .progress-container.active {
+      display: flex;
+    }
+
+    .progress-bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border-color);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      min-width: 120px;
+    }
+
+    /* Animations */
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
-  } catch (err) {
-    progress.style.width = '100%';
-    progress.classList.add('bg-danger');
-    progress.textContent = 'Error';
-    text.textContent = err.message;
-    btn.classList.remove('d-none');
-    btn.disabled = false;
-    btn.textContent = 'Retry';
-  }
-}
-</script>
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard {
+        padding: 16px;
+      }
+
+      .header {
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .header-actions {
+        flex-wrap: wrap;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 12px;
+      }
+
+      .cell-time {
+        font-size: 0.7rem;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* Download Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 28px;
+      color: white;
+    }
+
+    .modal-icon.loading {
+      animation: pulse 1.5s infinite;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .modal-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+
+    .modal-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .modal-stat {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .modal-stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .modal-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+    }
+
+    .modal-progress {
+      margin-bottom: 24px;
+    }
+
+    .modal-progress-bar {
+      height: 8px;
+      background: var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .modal-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .modal-progress-text {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .modal-actions .btn {
+      min-width: 120px;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>Inventory Snapshots</h1>
+        <p class="header-subtitle">Real-time warehouse inventory tracking</p>
+      </div>
+      <div class="header-actions">
+        <% if (typeof username !== 'undefined' && username !== 'vinaykumar') { %>
+        <div id="clearStatus" class="progress-container">
+          <div class="progress-bar-track">
+            <div id="clearProgress" class="progress-bar-fill" style="width: 0%"></div>
+          </div>
+          <span id="clearText" class="progress-text">Processing...</span>
+        </div>
+        <button id="clearBtn" class="btn btn-danger" onclick="clearRawData()">
+          <i class="bi bi-trash3"></i> Clear Raw Data
+        </button>
+        <% } %>
+        <button id="downloadBtn" class="btn btn-primary" onclick="startDownload()">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download Excel
+        </button>
+        <a href="/webhook/order/logs" class="btn btn-secondary">
+          <i class="bi bi-box-seam"></i> Order Logs
+        </a>
+      </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <%
+      const delhiCount = logs.filter(l => l.warehouse_name === 'Delhi' || l.warehouse_id == 176318).length;
+      const faridabadCount = logs.filter(l => l.warehouse_name === 'Faridabad' || l.warehouse_id == 173983).length;
+      const totalInventory = logs.reduce((sum, l) => sum + (Number(l.inventory) || 0), 0);
+      const activeCount = logs.filter(l => l.sku_status && l.sku_status.toLowerCase().includes('active')).length;
+    %>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Records</div>
+        <div class="stat-value"><%= logs.length %></div>
+      </div>
+      <div class="stat-card delhi">
+        <div class="stat-label">Delhi Warehouse</div>
+        <div class="stat-value"><%= delhiCount %></div>
+      </div>
+      <div class="stat-card faridabad">
+        <div class="stat-label">Faridabad Warehouse</div>
+        <div class="stat-value"><%= faridabadCount %></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Inventory</div>
+        <div class="stat-value"><%= totalInventory.toLocaleString() %></div>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+      <div class="table-header">
+        <span class="table-title">
+          <i class="bi bi-database"></i> Recent Snapshots
+        </span>
+        <span class="live-indicator">
+          <span class="live-dot"></span>
+          LIVE DATA
+        </span>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>SKU</th>
+              <th>Warehouse</th>
+              <th>Inventory</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (logs.length > 0) { %>
+              <% logs.forEach(function(log) {
+                const warehouseName = log.warehouse_name || (log.warehouse_id == 176318 ? 'Delhi' : log.warehouse_id == 173983 ? 'Faridabad' : 'Unknown');
+                const warehouseClass = warehouseName.toLowerCase() === 'delhi' ? 'delhi' : warehouseName.toLowerCase() === 'faridabad' ? 'faridabad' : 'unknown';
+                const inventory = log.inventory != null ? Number(log.inventory) : null;
+                const inventoryClass = inventory === null ? '' : inventory >= 50 ? 'inventory-high' : inventory >= 10 ? 'inventory-medium' : 'inventory-low';
+                const status = log.sku_status || 'N/A';
+                const statusLower = status.toLowerCase();
+                const statusClass = statusLower.includes('active') ? 'status-active' : statusLower.includes('inactive') || statusLower.includes('disabled') ? 'status-inactive' : statusLower.includes('pending') ? 'status-pending' : 'status-default';
+                const timeStr = log.time ? new Date(log.time).toLocaleString('en-IN', {
+                  day: '2-digit', month: 'short', year: '2-digit',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                }) : 'N/A';
+              %>
+              <tr>
+                <td class="cell-time"><%= timeStr %></td>
+                <td class="cell-sku"><%= log.sku %></td>
+                <td>
+                  <span class="warehouse-badge <%= warehouseClass %>">
+                    <i class="bi bi-building"></i>
+                    <%= warehouseName %>
+                  </span>
+                </td>
+                <td class="cell-inventory <%= inventoryClass %>">
+                  <%= inventory !== null ? inventory.toLocaleString() : 'N/A' %>
+                </td>
+                <td class="cell-status">
+                  <span class="status-pill <%= statusClass %>"><%= status %></span>
+                </td>
+              </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="5">
+                  <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p>No inventory snapshots found</p>
+                  </div>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download Modal -->
+  <div id="downloadModal" class="modal-overlay">
+    <div class="modal-content">
+      <div id="modalIcon" class="modal-icon">
+        <i class="bi bi-file-earmark-spreadsheet"></i>
+      </div>
+      <h3 id="modalTitle" class="modal-title">Download Inventory Data</h3>
+      <p id="modalSubtitle" class="modal-subtitle">Preparing your export...</p>
+
+      <div id="modalStats" class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-label">Total Records</div>
+          <div id="statRecords" class="modal-stat-value">--</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-label">Est. Time</div>
+          <div id="statTime" class="modal-stat-value">--</div>
+        </div>
+      </div>
+
+      <div id="modalProgress" class="modal-progress" style="display: none;">
+        <div class="modal-progress-bar">
+          <div id="modalProgressFill" class="modal-progress-fill"></div>
+        </div>
+        <div id="modalProgressText" class="modal-progress-text">Starting download...</div>
+      </div>
+
+      <div id="modalActions" class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDownloadModal()">Cancel</button>
+        <button id="confirmDownloadBtn" class="btn btn-primary" onclick="confirmDownload()">
+          <i class="bi bi-download"></i> Download
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let downloadRecordCount = 0;
+
+    async function startDownload() {
+      const modal = document.getElementById('downloadModal');
+      const icon = document.getElementById('modalIcon');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const stats = document.getElementById('modalStats');
+      const progress = document.getElementById('modalProgress');
+      const actions = document.getElementById('modalActions');
+      const confirmBtn = document.getElementById('confirmDownloadBtn');
+
+      // Show modal
+      modal.classList.add('active');
+      icon.classList.add('loading');
+      title.textContent = 'Preparing Download';
+      subtitle.textContent = 'Counting records...';
+      stats.style.display = 'none';
+      progress.style.display = 'none';
+      confirmBtn.disabled = true;
+
+      try {
+        // Get record count
+        const res = await fetch('/webhook/logs/download-count', {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        downloadRecordCount = data.total;
+
+        // Estimate time (roughly 10k records per second)
+        const estSeconds = Math.ceil(data.total / 10000);
+        const estTimeStr = estSeconds < 60
+          ? estSeconds + 's'
+          : Math.ceil(estSeconds / 60) + 'm';
+
+        // Update modal
+        icon.classList.remove('loading');
+        title.textContent = 'Download Inventory Data';
+        subtitle.textContent = 'Ready to export all inventory snapshots';
+        document.getElementById('statRecords').textContent = data.total.toLocaleString();
+        document.getElementById('statTime').textContent = '~' + estTimeStr;
+        stats.style.display = 'grid';
+        confirmBtn.disabled = false;
+      } catch (err) {
+        icon.classList.remove('loading');
+        title.textContent = 'Error';
+        subtitle.textContent = err.message || 'Failed to prepare download';
+      }
+    }
+
+    function closeDownloadModal() {
+      document.getElementById('downloadModal').classList.remove('active');
+    }
+
+    function confirmDownload() {
+      const modal = document.getElementById('downloadModal');
+      const icon = document.getElementById('modalIcon');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const stats = document.getElementById('modalStats');
+      const progress = document.getElementById('modalProgress');
+      const progressFill = document.getElementById('modalProgressFill');
+      const progressText = document.getElementById('modalProgressText');
+      const actions = document.getElementById('modalActions');
+
+      // Update UI for downloading state
+      icon.classList.add('loading');
+      title.textContent = 'Downloading...';
+      subtitle.textContent = 'Generating Excel file with ' + downloadRecordCount.toLocaleString() + ' records';
+      stats.style.display = 'none';
+      progress.style.display = 'block';
+      actions.style.display = 'none';
+
+      // Simulate progress (since we can't track actual download progress)
+      let fakeProgress = 0;
+      const progressInterval = setInterval(function() {
+        fakeProgress += Math.random() * 15;
+        if (fakeProgress > 90) fakeProgress = 90;
+        progressFill.style.width = fakeProgress + '%';
+        progressText.textContent = 'Processing ' + Math.round(fakeProgress) + '%...';
+      }, 500);
+
+      // Start actual download
+      const link = document.createElement('a');
+      link.href = '/webhook/logs/download-excel';
+      link.download = 'inventory_snapshots.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Complete after estimated time
+      const estMs = Math.max(3000, Math.ceil(downloadRecordCount / 10) + 2000);
+      setTimeout(function() {
+        clearInterval(progressInterval);
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Download started!';
+        icon.classList.remove('loading');
+        title.textContent = 'Download Complete';
+        subtitle.textContent = 'Your file should be downloading now';
+
+        setTimeout(function() {
+          closeDownloadModal();
+          actions.style.display = 'flex';
+          progress.style.display = 'none';
+          progressFill.style.width = '0%';
+        }, 2000);
+      }, estMs);
+    }
+
+    async function clearRawData() {
+      const btn = document.getElementById('clearBtn');
+      const status = document.getElementById('clearStatus');
+      const progress = document.getElementById('clearProgress');
+      const text = document.getElementById('clearText');
+
+      if (!btn || !status || !progress || !text) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+
+      try {
+        const countRes = await fetch('/webhook/clear-raw/inventory/count', {
+          headers: { 'Accept': 'application/json' }
+        });
+        const countData = await countRes.json();
+
+        if (countData.error) {
+          alert('Permission Denied: ' + (countData.message || countData.error));
+          btn.disabled = false;
+          btn.textContent = 'No Permission';
+          return;
+        }
+
+        if (countData.total === 0) {
+          btn.textContent = 'Already Clean';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-secondary');
+          return;
+        }
+
+        if (!confirm('Clear raw JSON data from ' + countData.total.toLocaleString() + ' inventory snapshots?\n\nThis frees disk space but cannot be undone.')) {
+          btn.disabled = false;
+          btn.textContent = 'Clear Raw Data';
+          return;
+        }
+
+        status.classList.add('active');
+        btn.style.display = 'none';
+
+        let totalCleared = 0;
+        const originalTotal = countData.total;
+
+        while (true) {
+          const pct = Math.min(95, Math.round((totalCleared / originalTotal) * 100));
+          progress.style.width = pct + '%';
+          text.textContent = totalCleared.toLocaleString() + ' / ' + originalTotal.toLocaleString();
+
+          const res = await fetch('/webhook/clear-raw/inventory', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+          });
+          const data = await res.json();
+
+          if (data.error) {
+            throw new Error(data.message || data.error);
+          }
+
+          totalCleared += data.cleared;
+
+          if (data.done) {
+            progress.style.width = '100%';
+            text.textContent = 'Done! Cleared ' + totalCleared.toLocaleString() + ' rows';
+
+            setTimeout(function() {
+              status.classList.remove('active');
+              btn.style.display = 'inline-flex';
+              btn.textContent = 'Cleared!';
+              btn.classList.remove('btn-danger');
+              btn.classList.add('btn-secondary');
+            }, 1500);
+            break;
+          }
+        }
+      } catch (err) {
+        progress.style.width = '100%';
+        text.textContent = err.message || 'Failed to clear data';
+
+        setTimeout(function() {
+          status.classList.remove('active');
+          btn.style.display = 'inline-flex';
+          btn.disabled = false;
+          btn.textContent = 'Retry';
+        }, 2000);
+      }
+    }
+  </script>
 </body>
 </html>
