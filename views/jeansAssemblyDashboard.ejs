@@ -1,147 +1,755 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Jeans Assembly Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<%- include('partials/header', { pageTitle: 'Jeans Assembly Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/jeansassemblydashboard' }) %>
 
-  <!-- Bootstrap 5 CSS & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-  <!-- Select2 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  /* Page Layout */
+  .page-container {
+    padding-top: calc(var(--navbar-height) + 24px);
+    padding-bottom: 48px;
+    min-height: 100vh;
+    background: var(--bg-page);
+  }
 
-  <style>
-    body { background-color: #f8f9fa; }
-    .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .nav-tabs .nav-link { font-weight: 500; }
+  .page-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
 
-    /* make Select2 match Bootstrap 5 input height */
-    .select2-container .select2-selection--single{
-      height: calc(2.5rem + 2px);
-      padding: 0.375rem 0.75rem;
-      font-size: 1rem;
-      line-height: 1.5;
+  /* Page Header */
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Tabs */
+  .kotty-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-card);
+    padding: 6px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    margin-bottom: 24px;
+  }
+
+  .kotty-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .kotty-tab:hover {
+    color: var(--text-primary);
+    background: var(--gray-100);
+  }
+
+  .kotty-tab.active {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .kotty-tab i {
+    font-size: 16px;
+  }
+
+  /* Tab Content */
+  .tab-pane {
+    display: none;
+  }
+
+  .tab-pane.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Card Styles */
+  .kotty-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .kotty-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kotty-card-header i {
+    color: var(--terracotta);
+    font-size: 20px;
+  }
+
+  .kotty-card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .kotty-card-body {
+    padding: 24px;
+  }
+
+  /* Form Styles */
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:hover {
+    border-color: var(--border-medium);
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted);
+  }
+
+  .form-hint {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* Select2 Customization */
+  .select2-container .select2-selection--single {
+    height: 48px;
+    padding: 10px 16px;
+    font-size: var(--text-base);
+    line-height: 1.5;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text-primary);
+    line-height: 26px;
+    padding-left: 0;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 46px;
+    right: 12px;
+  }
+
+  .select2-container--default .select2-selection--single:focus,
+  .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .select2-dropdown {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--terracotta);
+  }
+
+  .select2-selection__arrow { height: 100%; }
+  .autocomplete-items { display: none !important; }
+
+  /* Size Table */
+  .size-table-container {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .size-table-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin-bottom: 16px;
+  }
+
+  .kotty-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .kotty-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .kotty-table td {
+    padding: 14px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .kotty-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .kotty-table input[type="number"] {
+    width: 100%;
+    max-width: 120px;
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .kotty-table input[type="number"]:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .total-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--terracotta-bg);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    color: var(--terracotta-dark);
+  }
+
+  .total-display span {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+  }
+
+  /* Submit Button */
+  .btn-submit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin-top: 24px;
+  }
+
+  .btn-submit:hover {
+    background: var(--terracotta-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Existing Entries Section */
+  .entries-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .entries-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+  }
+
+  .entries-title i {
+    color: var(--terracotta);
+  }
+
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-download:hover {
+    background: #247a52;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Search Box */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .search-box i {
+    padding: 0 16px;
+    color: var(--text-muted);
+  }
+
+  .search-box input {
+    flex: 1;
+    padding: 14px 16px 14px 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+  }
+
+  .search-box input:focus {
+    outline: none;
+  }
+
+  .search-box input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Accordion Entries */
+  .entry-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .entry-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all var(--transition-fast);
+  }
+
+  .entry-item:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .entry-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    transition: background var(--transition-fast);
+  }
+
+  .entry-header:hover {
+    background: var(--gray-50);
+  }
+
+  .entry-header i {
+    color: var(--terracotta);
+    font-size: 18px;
+  }
+
+  .entry-header .chevron {
+    margin-left: auto;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+  }
+
+  .entry-item.expanded .entry-header .chevron {
+    transform: rotate(180deg);
+  }
+
+  .entry-body {
+    display: none;
+    padding: 0 20px 20px;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .entry-item.expanded .entry-body {
+    display: block;
+  }
+
+  .entry-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 16px;
+    margin-bottom: 16px;
+  }
+
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-action-info {
+    background: var(--info-light);
+    color: var(--info);
+    border-color: var(--info);
+  }
+
+  .btn-action-info:hover {
+    background: var(--info);
+    color: white;
+  }
+
+  .btn-action-warning {
+    background: var(--warning-light);
+    color: var(--warning);
+    border-color: var(--warning);
+  }
+
+  .btn-action-warning:hover {
+    background: var(--warning);
+    color: white;
+  }
+
+  .entry-detail {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  .entry-detail strong {
+    color: var(--text-primary);
+  }
+
+  .entry-image {
+    max-width: 200px;
+    border-radius: var(--radius-md);
+    margin-top: 8px;
+  }
+
+  /* Load More Sentinel */
+  #loadMoreSentinel {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Modal Styles */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--terracotta);
+  }
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+
+  .btn-modal-cancel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-modal-cancel:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+  }
+
+  .btn-modal-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-modal-save:hover {
+    background: var(--terracotta-dark);
+    transform: translateY(-1px);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .page-content {
+      padding: 0 16px;
     }
-    .select2-selection__arrow{height:100%;}
-    /* hide any legacy autocomplete widgets */
-    .autocomplete-items{display:none!important;}
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-people-carry"></i> Jeans Assembly Dashboard
-      </a>
-      <div class="ms-auto">
-        <a href="/jeansassemblydashboard/approve" class="btn btn-outline-info btn-sm me-2">
-          <i class="fas fa-check-circle"></i> Approvals
-        </a>
-        <a href="/challandashboard" class="btn btn-outline-info btn-sm me-2">
-          <i class="fas fa-check-circle"></i> Challan
-        </a>
-        <a href="/logout" class="btn btn-outline-danger btn-sm">
-          <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+    .page-title {
+      font-size: var(--text-2xl);
+    }
+
+    .kotty-tabs {
+      flex-direction: column;
+    }
+
+    .kotty-tab {
+      justify-content: flex-start;
+    }
+
+    .entries-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .header-actions {
+      width: 100%;
+    }
+
+    .header-actions a {
+      flex: 1;
+      justify-content: center;
+    }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <h1 class="page-title">Jeans Assembly Dashboard</h1>
+        <div class="header-actions">
+          <a href="/jeansassemblydashboard/approve" class="btn-action btn-action-info">
+            <i class="bi bi-check-circle"></i> Approvals
+          </a>
+          <a href="/challandashboard" class="btn-action btn-action-info">
+            <i class="bi bi-file-text"></i> Challan
+          </a>
+        </div>
       </div>
     </div>
-  </nav>
 
-  <div class="container my-4">
     <!-- Flash Messages -->
     <%- include('partials/flashMessages') %>
 
     <!-- Tabs -->
-    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
-      <li class="nav-item">
-        <button class="nav-link active" id="create-tab" data-bs-toggle="tab"
-                data-bs-target="#createTab" type="button" role="tab">
-          <i class="fas fa-plus-circle me-1"></i> Create Entry
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" id="existing-tab" data-bs-toggle="tab"
-                data-bs-target="#existingTab" type="button" role="tab">
-          <i class="fas fa-list me-1"></i> Existing Entries
-        </button>
-      </li>
-    </ul>
+    <div class="kotty-tabs" role="tablist">
+      <button class="kotty-tab active" id="create-tab" data-target="createTab" role="tab">
+        <i class="bi bi-plus-circle"></i>
+        <span>Create Entry</span>
+      </button>
+      <button class="kotty-tab" id="existing-tab" data-target="existingTab" role="tab">
+        <i class="bi bi-list-ul"></i>
+        <span>Existing Entries</span>
+      </button>
+    </div>
 
-    <div class="tab-content mt-3">
+    <!-- Tab Content -->
+    <div class="tab-content">
       <!-- CREATE ENTRY TAB -->
-      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
-        <div class="card shadow-sm">
-          <div class="card-header bg-primary text-white">
-            <i class="fas fa-plus-circle"></i> Create New Jeans Assembly Entry
+      <div class="tab-pane active" id="createTab" role="tabpanel">
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <i class="bi bi-plus-circle"></i>
+            <h2 class="kotty-card-title">Create New Jeans Assembly Entry</h2>
           </div>
-          <div class="card-body">
+          <div class="kotty-card-body">
             <form id="createForm" enctype="multipart/form-data">
               <!-- LOT select -->
-              <div class="mb-3">
+              <div class="form-group">
                 <label for="selectedLotId" class="form-label">Select Lot</label>
-                <select id="selectedLotId" name="selectedLotId"
-                        class="form-select" required>
+                <select id="selectedLotId" name="selectedLotId" class="form-control" required>
                   <option value="">-- Choose a Lot --</option>
                   <% lots.forEach(l => { %>
                     <option value="<%= l.id %>">
-                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>) 
-<% if (l.cutting_remark) { %>
-                          - <%= l.cutting_remark %>
-                        <% } %>
+                      Lot <%= l.lot_no %> (SKU: <%= l.sku %>)
+                      <% if (l.cutting_remark) { %>
+                        - <%= l.cutting_remark %>
+                      <% } %>
                     </option>
                   <% }) %>
                 </select>
               </div>
 
-              <div class="mb-3">
+              <div class="form-group">
                 <label class="form-label">Remark (optional)</label>
-                <input type="text" name="remark" class="form-control"
-                       placeholder="Enter remark...">
+                <input type="text" name="remark" class="form-control" placeholder="Enter remark...">
               </div>
 
-              <div class="mb-3">
+              <div class="form-group">
                 <label class="form-label">Image (optional)</label>
-                <input type="file" name="image_file" class="form-control"
-                       accept="image/*">
+                <input type="file" name="image_file" class="form-control" accept="image/*">
               </div>
 
-              <div class="mb-3">
+              <div class="form-group">
                 <label class="form-label">Assign to Washer</label>
-                <select name="washer_id" class="form-select">
+                <select name="washer_id" class="form-control">
                   <option value="">-- Do not assign to washing --</option>
                   <% washers.forEach(w => { %>
                     <option value="<%= w.id %>"><%= w.username %></option>
                   <% }) %>
                 </select>
-                <p class="small text-muted mb-0">
+                <p class="form-hint">
                   Selecting a washer auto-assigns all created pieces.
                 </p>
               </div>
 
               <!-- Size table -->
-              <div id="lotSizesContainer" style="display:none;">
-                <h5 class="mt-4">Sizes for This Lot</h5>
-                <table class="table table-bordered" id="sizesTable">
-                  <thead class="table-light">
+              <div id="lotSizesContainer" class="size-table-container" style="display:none;">
+                <h3 class="size-table-title">Sizes for This Lot</h3>
+                <table class="kotty-table" id="sizesTable">
+                  <thead>
                     <tr>
-                      <th>Size Label</th><th>Max Available</th><th>Enter Pieces</th>
+                      <th>Size Label</th>
+                      <th>Max Available</th>
+                      <th>Enter Pieces</th>
                     </tr>
                   </thead>
                   <tbody></tbody>
                 </table>
-                <div class="mt-2">
+                <div class="total-display">
                   <strong>Total Pieces Selected:</strong>
                   <span id="createTotalPieces">0</span>
                 </div>
               </div>
 
-              <button class="btn btn-success mt-3" type="submit">
-                <i class="fas fa-check me-1"></i> Create Jeans Assembly Entry
+              <button class="btn-submit" type="submit">
+                <i class="bi bi-check-lg"></i> Create Jeans Assembly Entry
               </button>
             </form>
           </div>
@@ -149,315 +757,456 @@
       </div>
 
       <!-- EXISTING ENTRIES TAB -->
-      <div class="tab-pane fade" id="existingTab" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4><i class="fas fa-list"></i> Existing Jeans Assembly Entries</h4>
-          <a class="btn btn-success" href="/jeansassemblydashboard/download-all">
-            <i class="fas fa-file-excel me-1"></i> Download Excel
+      <div class="tab-pane" id="existingTab" role="tabpanel">
+        <div class="entries-header">
+          <h2 class="entries-title">
+            <i class="bi bi-list-ul"></i>
+            Existing Jeans Assembly Entries
+          </h2>
+          <a class="btn-download" href="/jeansassemblydashboard/download-all">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
           </a>
         </div>
 
-        <div class="input-group mb-3">
-          <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input id="searchExisting" class="form-control"
-                 placeholder="Search by lot or SKU...">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input id="searchExisting" type="text" placeholder="Search by lot or SKU...">
         </div>
 
-        <div id="existingEntriesContainer" class="accordion"></div>
-        <div id="loadMoreSentinel" style="height:60px;"></div>
+        <div id="existingEntriesContainer" class="entry-accordion"></div>
+        <div id="loadMoreSentinel"></div>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- UPDATE MODAL -->
-  <div class="modal fade" id="updateModal" tabindex="-1"
-       aria-labelledby="updateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <form id="updateForm">
-          <div class="modal-header">
-            <h5 class="modal-title" id="updateModalLabel">
-              <i class="fas fa-edit"></i> Update Jeans Assembly Data
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <p><strong>Updating Entry ID:</strong>
-               <span id="updatingEntryId"></span></p>
-            <div id="updateAlert" class="alert alert-danger d-none"></div>
-            <table class="table table-bordered" id="updateSizesTable">
-              <thead class="table-light">
-                <tr>
-                  <th>Size Label</th><th>Already Used</th>
-                  <th>Max Remain</th><th>New Pieces (Increment)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-            <p class="small text-muted">Leave blank/zero for no increment.</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" type="button"
-                    data-bs-dismiss="modal">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-            <button class="btn btn-primary" type="submit">
-              <i class="fas fa-save"></i> Save Updates
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- SCRIPT SECTION -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-  <script>
-    /* =========================================================
-       SHARED DOM REFERENCES
-    ============================================================*/
-    const lotSizesContainer = document.getElementById('lotSizesContainer');
-    const sizesTableBody    = document.querySelector('#sizesTable tbody');
-    const createTotalPieces = document.getElementById('createTotalPieces');
-
-    /* =========================================================
-       0)  INITIALISE SEARCHABLE LOT SELECT + SIZE FETCH
-    ============================================================*/
-    $(function () {
-      const $lot = $('#selectedLotId').select2({
-        placeholder: '-- Choose a Lot --',
-        allowClear : true,
-        width      : '100%'
-      });
-
-      async function handleLotChange () {
-        const lotId = $lot.val();
-        if (!lotId) {
-          sizesTableBody.innerHTML = '';
-          lotSizesContainer.style.display = 'none';
-          createTotalPieces.textContent = '0';
-          return;
-        }
-        try {
-          const res = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotId}`);
-          if (!res.ok) throw new Error(res.status);
-          renderSizes(await res.json());
-        } catch (err) {
-          console.error('Error fetching lot sizes:', err);
-          sizesTableBody.innerHTML = '';
-          lotSizesContainer.style.display = 'none';
-          createTotalPieces.textContent = '0';
-        }
-      }
-
-      // react to both selection and clear
-      $lot.on('change select2:clear', handleLotChange);
-    });
-
-    /* helper to render each size row */
-    function renderSizes(arr) {
-      sizesTableBody.innerHTML = '';
-      lotSizesContainer.style.display = 'block';
-      arr.forEach(sz => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${sz.size_label}</td>
-          <td>${sz.remain}</td>
-          <td>
-            <input type="number" class="form-control" min="1"
-                   max="${sz.remain}" value="${sz.remain}"
-                   data-size-id="${sz.id}">
-          </td>`;
-        sizesTableBody.appendChild(tr);
-      });
-      updateTotal();
-    }
-
-    /* live total pieces counter */
-    function updateTotal() {
-      let sum = 0;
-      sizesTableBody.querySelectorAll('input').forEach(inp => {
-        const v = parseInt(inp.value,10);
-        if(!isNaN(v)&&v>0) sum += v;
-      });
-      createTotalPieces.textContent = sum;
-    }
-    sizesTableBody.addEventListener('input', updateTotal);
-
-    /* =========================================================
-       1)  CREATE FORM SUBMIT
-    ============================================================*/
-    document.getElementById('createForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-
-      sizesTableBody.querySelectorAll('tr').forEach(row => {
-        const inp = row.querySelector('input');
-        let val   = parseInt(inp.value,10);
-        if(!isNaN(val)&&val>0){
-          fd.append(`sizes[${inp.dataset.sizeId}]`, val);
-        }
-      });
-
-      try{
-        const res = await fetch('/jeansassemblydashboard/create',{
-          method:'POST', body:fd
-        });
-        if(res.redirected) return window.location.href = res.url;
-        const j = await res.json().catch(()=>({}));
-        if(j.error) alert(j.error); else window.location.reload();
-      }catch(err){
-        console.error('Create error:',err); alert('Error creating entry.');
-      }
-    });
-
-    /* =========================================================
-       2)  LAZY-LOAD EXISTING ENTRIES
-    ============================================================*/
-    let offset=0, loading=false, hasMore=true;
-    const existingContainer = document.getElementById('existingEntriesContainer');
-    const sentinel          = document.getElementById('loadMoreSentinel');
-    const searchExisting    = document.getElementById('searchExisting');
-
-    async function loadEntries(){
-      if(loading||!hasMore) return;
-      loading=true;
-      try{
-        const term=encodeURIComponent(searchExisting.value.trim());
-        const r = await fetch(`/jeansassemblydashboard/list-entries?offset=${offset}&search=${term}`);
-        if(!r.ok) throw new Error(r.status);
-        const { data: list = [], hasMore: more } = await r.json();
-        hasMore = more;
-        list.forEach(addEntryCard);
-        offset += list.length;
-      }catch(e){ console.error('Load entries:',e); }
-      finally{ loading=false; }
-    }
-
-    function addEntryCard(item){
-      const headerId  = `head-${item.id}`;
-      const collapseId= `coll-${item.id}`;
-      const card = document.createElement('div');
-      card.className='accordion-item';
-      card.innerHTML = `
-        <h2 class="accordion-header" id="${headerId}">
-          <button class="accordion-button collapsed" type="button"
-                  data-bs-toggle="collapse" data-bs-target="#${collapseId}"
-                  aria-expanded="false" aria-controls="${collapseId}">
-            <i class="fas fa-box-open me-1"></i>
-            Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}
+<!-- UPDATE MODAL -->
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="updateForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="updateModalLabel">
+            <i class="bi bi-pencil-square"></i> Update Jeans Assembly Data
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="entry-detail"><strong>Updating Entry ID:</strong> <span id="updatingEntryId"></span></p>
+          <div id="updateAlert" class="alert alert-danger d-none"></div>
+          <table class="kotty-table" id="updateSizesTable">
+            <thead>
+              <tr>
+                <th>Size Label</th>
+                <th>Already Used</th>
+                <th>Max Remain</th>
+                <th>New Pieces (Increment)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="form-hint">Leave blank or zero for no increment.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" type="button" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Cancel
           </button>
-        </h2>
-        <div id="${collapseId}" class="accordion-collapse collapse"
-             aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
-          <div class="accordion-body">
-            <div class="d-flex justify-content-end mb-3">
-              <a class="btn btn-sm btn-info me-2"
-                 href="/jeansassemblydashboard/challan/${item.id}" target="_blank">
-                <i class="fas fa-file-alt"></i> Challan
-              </a>
-              <button class="btn btn-sm btn-warning"
-                      data-bs-toggle="modal" data-bs-target="#updateModal"
-                      data-entry-id="${item.id}">
-                <i class="fas fa-edit"></i> Update
-              </button>
-            </div>
-            <p><strong>ID:</strong> ${item.id}</p>
-            <p><strong>Remark:</strong> ${item.remark||'N/A'}</p>
-            ${item.image_url?`<p><img src="${item.image_url}"
-                         style="max-width:200px;"></p>`:''}
-            <table class="table table-sm">
-              <thead><tr><th>Size Label</th><th>Pieces</th></tr></thead>
-              <tbody>
-                ${
-                  item.sizes?.length
-                    ? item.sizes.map(s=>`<tr><td>${s.size_label}</td><td>${s.pieces}</td></tr>`).join('')
-                    : '<tr><td colspan="2">No sizes</td></tr>'
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-      existingContainer.appendChild(card);
+          <button class="btn-modal-save" type="submit">
+            <i class="bi bi-check-lg"></i> Save Updates
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPT SECTION -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+  /* =========================================================
+     TAB NAVIGATION
+  ============================================================*/
+  document.querySelectorAll('.kotty-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      // Remove active from all tabs
+      document.querySelectorAll('.kotty-tab').forEach(t => t.classList.remove('active'));
+      // Add active to clicked tab
+      this.classList.add('active');
+
+      // Hide all panes
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+      // Show target pane
+      const targetId = this.getAttribute('data-target');
+      document.getElementById(targetId).classList.add('active');
+    });
+  });
+
+  /* =========================================================
+     SHARED DOM REFERENCES
+  ============================================================*/
+  const lotSizesContainer = document.getElementById('lotSizesContainer');
+  const sizesTableBody    = document.querySelector('#sizesTable tbody');
+  const createTotalPieces = document.getElementById('createTotalPieces');
+
+  /* =========================================================
+     0)  INITIALISE SEARCHABLE LOT SELECT + SIZE FETCH
+  ============================================================*/
+  $(function () {
+    const $lot = $('#selectedLotId').select2({
+      placeholder: '-- Choose a Lot --',
+      allowClear : true,
+      width      : '100%'
+    });
+
+    async function handleLotChange () {
+      const lotId = $lot.val();
+      if (!lotId) {
+        sizesTableBody.textContent = '';
+        lotSizesContainer.style.display = 'none';
+        createTotalPieces.textContent = '0';
+        return;
+      }
+      try {
+        const res = await fetch(`/jeansassemblydashboard/get-lot-sizes/${lotId}`);
+        if (!res.ok) throw new Error(res.status);
+        renderSizes(await res.json());
+      } catch (err) {
+        console.error('Error fetching lot sizes:', err);
+        sizesTableBody.textContent = '';
+        lotSizesContainer.style.display = 'none';
+        createTotalPieces.textContent = '0';
+      }
     }
 
-    new IntersectionObserver(
-      e=>{ if(e[0].isIntersecting) loadEntries(); },
-      {threshold:0.1}
-    ).observe(sentinel);
+    // react to both selection and clear
+    $lot.on('change select2:clear', handleLotChange);
+  });
 
-    searchExisting.addEventListener('input', ()=>{
-      offset=0; hasMore=true; existingContainer.innerHTML=''; loadEntries();
+  /* helper to render each size row */
+  function renderSizes(arr) {
+    // Clear existing rows
+    while (sizesTableBody.firstChild) {
+      sizesTableBody.removeChild(sizesTableBody.firstChild);
+    }
+    lotSizesContainer.style.display = 'block';
+    arr.forEach(sz => {
+      const tr = document.createElement('tr');
+
+      const tdLabel = document.createElement('td');
+      tdLabel.textContent = sz.size_label;
+      tr.appendChild(tdLabel);
+
+      const tdRemain = document.createElement('td');
+      tdRemain.textContent = sz.remain;
+      tr.appendChild(tdRemain);
+
+      const tdInput = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'form-control';
+      input.min = '1';
+      input.max = sz.remain;
+      input.value = sz.remain;
+      input.dataset.sizeId = sz.id;
+      tdInput.appendChild(input);
+      tr.appendChild(tdInput);
+
+      sizesTableBody.appendChild(tr);
     });
+    updateTotal();
+  }
+
+  /* live total pieces counter */
+  function updateTotal() {
+    let sum = 0;
+    sizesTableBody.querySelectorAll('input').forEach(inp => {
+      const v = parseInt(inp.value,10);
+      if(!isNaN(v)&&v>0) sum += v;
+    });
+    createTotalPieces.textContent = sum;
+  }
+  sizesTableBody.addEventListener('input', updateTotal);
+
+  /* =========================================================
+     1)  CREATE FORM SUBMIT
+  ============================================================*/
+  document.getElementById('createForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+
+    sizesTableBody.querySelectorAll('tr').forEach(row => {
+      const inp = row.querySelector('input');
+      let val   = parseInt(inp.value,10);
+      if(!isNaN(val)&&val>0){
+        fd.append(`sizes[${inp.dataset.sizeId}]`, val);
+      }
+    });
+
+    try{
+      const res = await fetch('/jeansassemblydashboard/create',{
+        method:'POST', body:fd
+      });
+      if(res.redirected) return window.location.href = res.url;
+      const j = await res.json().catch(()=>({}));
+      if(j.error) alert(j.error); else window.location.reload();
+    }catch(err){
+      console.error('Create error:',err); alert('Error creating entry.');
+    }
+  });
+
+  /* =========================================================
+     2)  LAZY-LOAD EXISTING ENTRIES
+  ============================================================*/
+  let offset=0, loading=false, hasMore=true;
+  const existingContainer = document.getElementById('existingEntriesContainer');
+  const sentinel          = document.getElementById('loadMoreSentinel');
+  const searchExisting    = document.getElementById('searchExisting');
+
+  async function loadEntries(){
+    if(loading||!hasMore) return;
+    loading=true;
+    try{
+      const term=encodeURIComponent(searchExisting.value.trim());
+      const r = await fetch(`/jeansassemblydashboard/list-entries?offset=${offset}&search=${term}`);
+      if(!r.ok) throw new Error(r.status);
+      const { data: list = [], hasMore: more } = await r.json();
+      hasMore = more;
+      list.forEach(addEntryCard);
+      offset += list.length;
+    }catch(e){ console.error('Load entries:',e); }
+    finally{ loading=false; }
+  }
+
+  function addEntryCard(item){
+    const entryId = `entry-${item.id}`;
+    const card = document.createElement('div');
+    card.className = 'entry-item';
+    card.id = entryId;
+
+    // Build header button
+    const headerBtn = document.createElement('button');
+    headerBtn.className = 'entry-header';
+    headerBtn.type = 'button';
+    headerBtn.onclick = function() { toggleEntry(entryId); };
+
+    const iconBox = document.createElement('i');
+    iconBox.className = 'bi bi-box-seam';
+    headerBtn.appendChild(iconBox);
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = `Lot ${item.lot_no} (SKU: ${item.sku}) - Total: ${item.total_pieces}`;
+    headerBtn.appendChild(titleSpan);
+
+    const chevron = document.createElement('i');
+    chevron.className = 'bi bi-chevron-down chevron';
+    headerBtn.appendChild(chevron);
+
+    card.appendChild(headerBtn);
+
+    // Build body
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'entry-body';
+
+    // Actions
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'entry-actions';
+
+    const challanLink = document.createElement('a');
+    challanLink.className = 'btn-action btn-action-info';
+    challanLink.href = `/jeansassemblydashboard/challan/${item.id}`;
+    challanLink.target = '_blank';
+    const challanIcon = document.createElement('i');
+    challanIcon.className = 'bi bi-file-text';
+    challanLink.appendChild(challanIcon);
+    challanLink.appendChild(document.createTextNode(' Challan'));
+    actionsDiv.appendChild(challanLink);
+
+    const updateBtn = document.createElement('button');
+    updateBtn.className = 'btn-action btn-action-warning';
+    updateBtn.setAttribute('data-bs-toggle', 'modal');
+    updateBtn.setAttribute('data-bs-target', '#updateModal');
+    updateBtn.setAttribute('data-entry-id', item.id);
+    const updateIcon = document.createElement('i');
+    updateIcon.className = 'bi bi-pencil';
+    updateBtn.appendChild(updateIcon);
+    updateBtn.appendChild(document.createTextNode(' Update'));
+    actionsDiv.appendChild(updateBtn);
+
+    bodyDiv.appendChild(actionsDiv);
+
+    // Details
+    const idP = document.createElement('p');
+    idP.className = 'entry-detail';
+    const idStrong = document.createElement('strong');
+    idStrong.textContent = 'ID:';
+    idP.appendChild(idStrong);
+    idP.appendChild(document.createTextNode(' ' + item.id));
+    bodyDiv.appendChild(idP);
+
+    const remarkP = document.createElement('p');
+    remarkP.className = 'entry-detail';
+    const remarkStrong = document.createElement('strong');
+    remarkStrong.textContent = 'Remark:';
+    remarkP.appendChild(remarkStrong);
+    remarkP.appendChild(document.createTextNode(' ' + (item.remark || 'N/A')));
+    bodyDiv.appendChild(remarkP);
+
+    if (item.image_url) {
+      const imgP = document.createElement('p');
+      const img = document.createElement('img');
+      img.src = item.image_url;
+      img.className = 'entry-image';
+      img.alt = 'Entry image';
+      imgP.appendChild(img);
+      bodyDiv.appendChild(imgP);
+    }
+
+    // Size table
+    const sizeTable = document.createElement('table');
+    sizeTable.className = 'kotty-table';
+
+    const thead = document.createElement('thead');
+    const theadRow = document.createElement('tr');
+    const th1 = document.createElement('th');
+    th1.textContent = 'Size Label';
+    const th2 = document.createElement('th');
+    th2.textContent = 'Pieces';
+    theadRow.appendChild(th1);
+    theadRow.appendChild(th2);
+    thead.appendChild(theadRow);
+    sizeTable.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    if (item.sizes && item.sizes.length) {
+      item.sizes.forEach(s => {
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td');
+        td1.textContent = s.size_label;
+        const td2 = document.createElement('td');
+        td2.textContent = s.pieces;
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        tbody.appendChild(tr);
+      });
+    } else {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2;
+      td.textContent = 'No sizes';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+    sizeTable.appendChild(tbody);
+    bodyDiv.appendChild(sizeTable);
+
+    card.appendChild(bodyDiv);
+    existingContainer.appendChild(card);
+  }
+
+  function toggleEntry(entryId) {
+    const entry = document.getElementById(entryId);
+    entry.classList.toggle('expanded');
+  }
+
+  new IntersectionObserver(
+    e=>{ if(e[0].isIntersecting) loadEntries(); },
+    {threshold:0.1}
+  ).observe(sentinel);
+
+  searchExisting.addEventListener('input', ()=>{
+    offset=0; hasMore=true;
+    while (existingContainer.firstChild) {
+      existingContainer.removeChild(existingContainer.firstChild);
+    }
     loadEntries();
+  });
+  loadEntries();
 
-    /* =========================================================
-       3)  UPDATE MODAL
-    ============================================================*/
-    const updateModal = document.getElementById('updateModal');
-    const updateSizesTable = document.getElementById('updateSizesTable');
-    const updatingEntryId  = document.getElementById('updatingEntryId');
-    const updateAlert = document.getElementById('updateAlert');
-    updateModal.addEventListener('show.bs.modal', async evt=>{
-      const entryId = evt.relatedTarget.getAttribute('data-entry-id');
-      updatingEntryId.textContent = entryId;
-      const tbody = updateSizesTable.querySelector('tbody');
-      tbody.innerHTML='';
-      updateAlert.classList.add('d-none');
-      document.getElementById('updateForm').action =
-        `/jeansassemblydashboard/update/${entryId}`;
+  /* =========================================================
+     3)  UPDATE MODAL
+  ============================================================*/
+  const updateModal = document.getElementById('updateModal');
+  const updateSizesTable = document.getElementById('updateSizesTable');
+  const updatingEntryId  = document.getElementById('updatingEntryId');
+  const updateAlert = document.getElementById('updateAlert');
+  updateModal.addEventListener('show.bs.modal', async evt=>{
+    const entryId = evt.relatedTarget.getAttribute('data-entry-id');
+    updatingEntryId.textContent = entryId;
+    const tbody = updateSizesTable.querySelector('tbody');
+    while (tbody.firstChild) {
+      tbody.removeChild(tbody.firstChild);
+    }
+    updateAlert.classList.add('d-none');
+    document.getElementById('updateForm').action =
+      `/jeansassemblydashboard/update/${entryId}`;
 
-      try{
-        const r = await fetch(`/jeansassemblydashboard/update/${entryId}/json`);
-        if(!r.ok) throw new Error(r.status);
-        const {sizes=[]}=await r.json();
-        if(!sizes.length){
-          updateAlert.textContent='No size data available.';
-          updateAlert.classList.remove('d-none');
-          return;
-        }
-        sizes.forEach(sz=>{
-          const tr=document.createElement('tr');
-          tr.innerHTML=`
-            <td>${sz.size_label}</td>
-            <td>${sz.pieces}</td>
-            <td>${sz.remain??999999}</td>
-            <td><input type="number" class="form-control" min="0"
-                       placeholder="0" data-size-label="${sz.size_label}"></td>`;
-          tbody.appendChild(tr);
-        });
-      }catch(e){
-        console.error('Fetch update sizes:',e);
-        updateAlert.textContent='Failed to load data.';
+    try{
+      const r = await fetch(`/jeansassemblydashboard/update/${entryId}/json`);
+      if(!r.ok) throw new Error(r.status);
+      const {sizes=[]}=await r.json();
+      if(!sizes.length){
+        updateAlert.textContent='No size data available.';
         updateAlert.classList.remove('d-none');
+        return;
       }
-    });
+      sizes.forEach(sz=>{
+        const tr = document.createElement('tr');
 
-    document.getElementById('updateForm').addEventListener('submit', async e=>{
-      e.preventDefault();
-      // remove old hidden fields
-      document.querySelectorAll('.updateSizeMappingField').forEach(n=>n.remove());
-      const rows = updateSizesTable.querySelectorAll('tbody tr');
-      for(const row of rows){
-        const label=row.children[0].textContent;
-        const remain=parseInt(row.children[2].textContent,10);
-        const val=parseInt(row.querySelector('input').value||'0',10);
-        if(val>remain){return alert(`Cannot add ${val} to ${label}; only ${remain} remain`);}
-        if(val>0){
-          const h=document.createElement('input');
-          h.type='hidden';h.className='updateSizeMappingField';
-          h.name=`updateSizes[${label}]`;h.value=val;
-          e.target.appendChild(h);
-        }
+        const td1 = document.createElement('td');
+        td1.textContent = sz.size_label;
+        tr.appendChild(td1);
+
+        const td2 = document.createElement('td');
+        td2.textContent = sz.pieces;
+        tr.appendChild(td2);
+
+        const td3 = document.createElement('td');
+        td3.textContent = sz.remain ?? 999999;
+        tr.appendChild(td3);
+
+        const td4 = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'form-control';
+        input.min = '0';
+        input.placeholder = '0';
+        input.dataset.sizeLabel = sz.size_label;
+        td4.appendChild(input);
+        tr.appendChild(td4);
+
+        tbody.appendChild(tr);
+      });
+    }catch(e){
+      console.error('Fetch update sizes:',e);
+      updateAlert.textContent='Failed to load data.';
+      updateAlert.classList.remove('d-none');
+    }
+  });
+
+  document.getElementById('updateForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    // remove old hidden fields
+    document.querySelectorAll('.updateSizeMappingField').forEach(n=>n.remove());
+    const rows = updateSizesTable.querySelectorAll('tbody tr');
+    for(const row of rows){
+      const label=row.children[0].textContent;
+      const remain=parseInt(row.children[2].textContent,10);
+      const val=parseInt(row.querySelector('input').value||'0',10);
+      if(val>remain){return alert(`Cannot add ${val} to ${label}; only ${remain} remain`);}
+      if(val>0){
+        const h=document.createElement('input');
+        h.type='hidden';h.className='updateSizeMappingField';
+        h.name=`updateSizes[${label}]`;h.value=val;
+        e.target.appendChild(h);
       }
-      try{
-        const r=await fetch(e.target.action,{method:'POST',body:new FormData(e.target)});
-        if(r.redirected) window.location.href=r.url;
-      }catch(err){console.error('Update error:',err);}
-    });
-  </script>
+    }
+    try{
+      const r=await fetch(e.target.action,{method:'POST',body:new FormData(e.target)});
+      if(r.redirected) window.location.href=r.url;
+    }catch(err){console.error('Update error:',err);}
+  });
+</script>
 
-</html>
+<%- include('partials/footer') %>

@@ -1,217 +1,178 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>GST Master - Accounts DC Challan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
-  <nav class="navbar navbar-expand-lg navbar-light app-navbar">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">
-        <i class="bi bi-file-earmark-text me-2"></i>Accounts DC Challan
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/purchase">
-                <i class="bi bi-cart-fill"></i> Purchase
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan">
-              <i class="bi bi-file-earmark-text"></i> DC Challan
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan/list">
-              <i class="bi bi-list-ul"></i> Challan List
-            </a>
-          </li>
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link active" href="/accounts-challan/gst">
-                <i class="bi bi-receipt"></i> GST Master
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'GST Master - Accounts DC Challan' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/accounts-challan' }) %>
 
-  <div class="app-shell">
+<% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
+
+<!-- Main Content -->
+<div class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Alerts -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <i class="bi bi-exclamation-triangle me-2"></i>
-        <% error.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
+        <div>
+          <% error.forEach(msg => { %>
+            <div><%= msg %></div>
+          <% }); %>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
     <% } %>
     <% if (success && success.length) { %>
       <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="bi bi-check-circle me-2"></i>
-        <% success.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
+        <div>
+          <% success.forEach(msg => { %>
+            <div><%= msg %></div>
+          <% }); %>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
     <% } %>
 
-    <!-- Tab Navigation -->
-    <ul class="nav nav-pills app-tabs mb-4">
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/purchase">
-            <i class="bi bi-cart-fill"></i> Purchase
-          </a>
-        </li>
-      <% } %>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan">
-          <i class="bi bi-file-earmark-text"></i> DC Challan
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan/list">
-          <i class="bi bi-list-ul"></i> Challan List
-        </a>
-      </li>
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link active" href="/accounts-challan/gst">
-            <i class="bi bi-receipt"></i> GST Master
-          </a>
-        </li>
-      <% } %>
-    </ul>
-
-    <!-- Hero Section -->
-    <div class="page-hero">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/accounts-challan">Accounts</a>
+        <span class="separator">/</span>
+        <span>GST Master</span>
+      </div>
       <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-          <h2 class="mb-2">
-            <i class="bi bi-receipt me-2"></i>GST Master
-          </h2>
-          <p class="mb-0 opacity-90">Manage sender and consignee GST profiles used in delivery challans.</p>
+          <h1 class="page-title">GST Master</h1>
+          <p class="page-subtitle">Manage sender and consignee GST profiles used in delivery challans.</p>
         </div>
-        <a href="/accounts-challan" class="btn btn-soft icon-btn" data-bs-toggle="tooltip" title="Back to Dashboard">
-          <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+        <a href="/accounts-challan" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i>
+          <span>Back to Dashboard</span>
         </a>
       </div>
     </div>
 
-    <div class="row">
+    <!-- Tab Navigation -->
+    <div class="card mb-4" style="padding: 8px 12px;">
+      <div class="d-flex flex-wrap gap-2">
+        <% if (isSapna) { %>
+          <a href="/purchase" class="btn btn-ghost">
+            <i class="bi bi-cart-fill"></i>
+            <span>Purchase</span>
+          </a>
+        <% } %>
+        <a href="/accounts-challan" class="btn btn-ghost">
+          <i class="bi bi-file-earmark-text"></i>
+          <span>DC Challan</span>
+        </a>
+        <a href="/accounts-challan/list" class="btn btn-ghost">
+          <i class="bi bi-list-ul"></i>
+          <span>Challan List</span>
+        </a>
+        <% if (isSapna) { %>
+          <a href="/accounts-challan/gst" class="btn btn-primary">
+            <i class="bi bi-receipt"></i>
+            <span>GST Master</span>
+          </a>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Add GST Party Form -->
       <div class="col-lg-4">
-        <div class="form-panel mb-3">
-          <h5 class="mb-4">
-            <i class="bi bi-plus-circle me-2"></i>Add GST Party
-          </h5>
-          <form action="/accounts-challan/gst" method="POST">
-            <div class="mb-3">
-              <label for="partyType" class="form-label fw-semibold">
-                <i class="bi bi-tag me-2"></i>Party Type <span class="text-danger">*</span>
-              </label>
-              <select id="partyType" name="party_type" class="form-select" required data-bs-toggle="tooltip" title="Select if this is a sender or consignee">
-                <option value="sender">Sender</option>
-                <option value="consignee">Consignee</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="name" class="form-label fw-semibold">
-                <i class="bi bi-building me-2"></i>Name <span class="text-danger">*</span>
-              </label>
-              <input type="text" id="name" name="name" class="form-control" required placeholder="Enter party name" data-bs-toggle="tooltip" title="Full legal name of the party">
-            </div>
-            <div class="mb-3">
-              <label for="gstin" class="form-label fw-semibold">
-                <i class="bi bi-hash me-2"></i>GSTIN
-              </label>
-              <input type="text" id="gstin" name="gstin" class="form-control" placeholder="15-digit GSTIN" data-bs-toggle="tooltip" title="15-digit GST Identification Number">
-            </div>
-            <div class="mb-3">
-              <label for="state" class="form-label fw-semibold">
-                <i class="bi bi-geo-alt me-2"></i>State
-              </label>
-              <input type="text" id="state" name="state" class="form-control" placeholder="State name" data-bs-toggle="tooltip" title="State where the party is registered">
-            </div>
-            <div class="mb-3">
-              <label for="pan" class="form-label fw-semibold">
-                <i class="bi bi-credit-card me-2"></i>PAN
-              </label>
-              <input type="text" id="pan" name="pan" class="form-control" placeholder="10-digit PAN" data-bs-toggle="tooltip" title="10-digit Permanent Account Number">
-            </div>
-            <div class="mb-3">
-              <label for="address" class="form-label fw-semibold">
-                <i class="bi bi-geo me-2"></i>Address
-              </label>
-              <textarea id="address" name="address" class="form-control" rows="3" placeholder="Full address" data-bs-toggle="tooltip" title="Complete address of the party"></textarea>
-            </div>
-            <div class="mb-3">
-              <label for="placeOfSupply" class="form-label fw-semibold">
-                <i class="bi bi-pin-map me-2"></i>Place of Supply
-              </label>
-              <input type="text" id="placeOfSupply" name="place_of_supply" class="form-control" placeholder="Place of supply" data-bs-toggle="tooltip" title="Location where goods/services are supplied">
-            </div>
-            <div class="mb-3">
-              <label for="shortCode" class="form-label fw-semibold">
-                <i class="bi bi-code-slash me-2"></i>Short Code
-              </label>
-              <input type="text" id="shortCode" name="short_code" class="form-control" maxlength="6" placeholder="Max 6 chars" data-bs-toggle="tooltip" title="Short code used in challan numbering (max 6 characters)">
-            </div>
-            <div class="form-check mb-3">
-              <input type="checkbox" class="form-check-input" id="isActive" name="is_active" checked>
-              <label class="form-check-label" for="isActive">
-                <i class="bi bi-toggle-on me-1"></i>Active
-              </label>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 icon-btn">
-              <i class="bi bi-plus-lg me-2"></i>Add GST Party
-            </button>
-          </form>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title">
+              <i class="bi bi-plus-circle me-2 text-terracotta"></i>Add GST Party
+            </h5>
+          </div>
+          <div class="card-body">
+            <form action="/accounts-challan/gst" method="POST">
+              <div class="form-group">
+                <label for="partyType" class="form-label">
+                  Party Type <span class="text-danger">*</span>
+                </label>
+                <select id="partyType" name="party_type" class="form-control form-select" required>
+                  <option value="sender">Sender</option>
+                  <option value="consignee">Consignee</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="name" class="form-label">
+                  Name <span class="text-danger">*</span>
+                </label>
+                <input type="text" id="name" name="name" class="form-control form-input" required placeholder="Enter party name">
+              </div>
+
+              <div class="form-group">
+                <label for="gstin" class="form-label">GSTIN</label>
+                <input type="text" id="gstin" name="gstin" class="form-control form-input" placeholder="15-digit GSTIN">
+              </div>
+
+              <div class="form-group">
+                <label for="state" class="form-label">State</label>
+                <input type="text" id="state" name="state" class="form-control form-input" placeholder="State name">
+              </div>
+
+              <div class="form-group">
+                <label for="pan" class="form-label">PAN</label>
+                <input type="text" id="pan" name="pan" class="form-control form-input" placeholder="10-digit PAN">
+              </div>
+
+              <div class="form-group">
+                <label for="address" class="form-label">Address</label>
+                <textarea id="address" name="address" class="form-control form-textarea" rows="3" placeholder="Full address"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="placeOfSupply" class="form-label">Place of Supply</label>
+                <input type="text" id="placeOfSupply" name="place_of_supply" class="form-control form-input" placeholder="Place of supply">
+              </div>
+
+              <div class="form-group">
+                <label for="shortCode" class="form-label">Short Code</label>
+                <input type="text" id="shortCode" name="short_code" class="form-control form-input" maxlength="6" placeholder="Max 6 chars">
+                <small class="text-muted">Used in challan numbering</small>
+              </div>
+
+              <div class="form-group">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="isActive" name="is_active" checked style="border-color: var(--terracotta);">
+                  <label class="form-check-label" for="isActive">Active</label>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-plus-lg"></i>
+                <span>Add GST Party</span>
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 
+      <!-- GST Party List -->
       <div class="col-lg-8">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white border-bottom">
-            <div class="d-flex justify-content-between align-items-center">
-              <h5 class="mb-0">
-                <i class="bi bi-list-ul me-2"></i>GST Party List
-              </h5>
-              <small class="text-muted">
-                <i class="bi bi-info-circle me-1"></i>Edit details to keep challan data current
-              </small>
-            </div>
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title">
+              <i class="bi bi-list-ul me-2 text-terracotta"></i>GST Party List
+            </h5>
+            <small class="text-muted">
+              <i class="bi bi-info-circle me-1"></i>Edit details to keep challan data current
+            </small>
           </div>
-          <div class="card-body p-0">
+          <div class="table-container" style="border: none; border-radius: 0;">
             <div class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead class="table-light">
+              <table class="table mb-0">
+                <thead>
                   <tr>
-                    <th><i class="bi bi-building me-1"></i>Name</th>
-                    <th><i class="bi bi-tag me-1"></i>Type</th>
-                    <th><i class="bi bi-hash me-1"></i>GSTIN</th>
-                    <th><i class="bi bi-code me-1"></i>Short Code</th>
-                    <th><i class="bi bi-toggle-on me-1"></i>Status</th>
-                    <th><i class="bi bi-gear me-1"></i>Action</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>GSTIN</th>
+                    <th>Short Code</th>
+                    <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,40 +187,52 @@
                         </td>
                         <td>
                           <% if (party.party_type === 'sender') { %>
-                            <span class="badge-type badge-sender">
+                            <span class="badge badge-info">
                               <i class="bi bi-send me-1"></i>Sender
                             </span>
                           <% } else { %>
-                            <span class="badge-type badge-consignee">
+                            <span class="badge badge-primary">
                               <i class="bi bi-inbox me-1"></i>Consignee
                             </span>
                           <% } %>
                         </td>
-                        <td><code><%= party.gstin || '-' %></code></td>
-                        <td><span class="badge bg-info"><%= party.short_code || '-' %></span></td>
+                        <td><code style="background: var(--gray-100); padding: 2px 6px; border-radius: 4px;"><%= party.gstin || '-' %></code></td>
+                        <td>
+                          <% if (party.short_code) { %>
+                            <span class="badge badge-neutral"><%= party.short_code %></span>
+                          <% } else { %>
+                            <span class="text-muted">-</span>
+                          <% } %>
+                        </td>
                         <td>
                           <% if (party.is_active) { %>
-                            <span class="badge bg-success">
+                            <span class="badge badge-success">
                               <i class="bi bi-check-circle me-1"></i>Active
                             </span>
                           <% } else { %>
-                            <span class="badge bg-secondary">
+                            <span class="badge badge-neutral">
                               <i class="bi bi-x-circle me-1"></i>Inactive
                             </span>
                           <% } %>
                         </td>
                         <td>
-                          <button type="button" class="btn btn-sm btn-outline-primary icon-btn" data-bs-toggle="modal" data-bs-target="#editModal-<%= party.id %>" title="Edit party details">
-                            <i class="bi bi-pencil me-1"></i>Edit
+                          <button type="button" class="btn btn-sm btn-outline" data-bs-toggle="modal" data-bs-target="#editModal-<%= party.id %>">
+                            <i class="bi bi-pencil"></i>
+                            <span>Edit</span>
                           </button>
                         </td>
                       </tr>
                     <% }); %>
                   <% } else { %>
                     <tr>
-                      <td colspan="6" class="text-center text-muted py-4">
-                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                        No GST parties found. Add your first party using the form on the left.
+                      <td colspan="6">
+                        <div class="empty-state">
+                          <div class="empty-state-icon">
+                            <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                          </div>
+                          <h5 class="empty-state-title">No GST Parties Found</h5>
+                          <p class="empty-state-text">Add your first party using the form on the left.</p>
+                        </div>
                       </td>
                     </tr>
                   <% } %>
@@ -271,94 +244,97 @@
       </div>
     </div>
   </div>
+</div>
 
-  <% if (parties && parties.length) { %>
-    <% parties.forEach(party => { %>
-      <div class="modal fade" id="editModal-<%= party.id %>" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-          <form class="modal-content" action="/accounts-challan/gst/<%= party.id %>" method="POST">
-            <div class="modal-header">
-              <h5 class="modal-title">Edit GST Party</h5>
-              <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                <span aria-hidden="true">&times;</span>
-              </button>
+<!-- Edit Modals -->
+<% if (parties && parties.length) { %>
+  <% parties.forEach(party => { %>
+    <div class="modal fade" id="editModal-<%= party.id %>" tabindex="-1" aria-labelledby="editModalLabel-<%= party.id %>" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <form class="modal-content" action="/accounts-challan/gst/<%= party.id %>" method="POST" style="background: var(--bg-card); border-radius: var(--radius-xl);">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border-light); padding: 20px 24px;">
+            <h5 class="modal-title font-display" id="editModalLabel-<%= party.id %>">
+              <i class="bi bi-pencil-square me-2 text-terracotta"></i>Edit GST Party
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" style="padding: 24px;">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">Party Type</label>
+                  <select name="party_type" class="form-control form-select">
+                    <option value="sender" <%= party.party_type === 'sender' ? 'selected' : '' %>>Sender</option>
+                    <option value="consignee" <%= party.party_type === 'consignee' ? 'selected' : '' %>>Consignee</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">Name <span class="text-danger">*</span></label>
+                  <input type="text" name="name" class="form-control form-input" value="<%= party.name %>" required>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">GSTIN</label>
+                  <input type="text" name="gstin" class="form-control form-input" value="<%= party.gstin || '' %>">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">State</label>
+                  <input type="text" name="state" class="form-control form-input" value="<%= party.state || '' %>">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">PAN</label>
+                  <input type="text" name="pan" class="form-control form-input" value="<%= party.pan || '' %>">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">Place of Supply</label>
+                  <input type="text" name="place_of_supply" class="form-control form-input" value="<%= party.place_of_supply || '' %>">
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-group mb-0">
+                  <label class="form-label">Address</label>
+                  <textarea name="address" class="form-control form-textarea" rows="3"><%= party.address || '' %></textarea>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0">
+                  <label class="form-label">Short Code</label>
+                  <input type="text" name="short_code" class="form-control form-input" value="<%= party.short_code || '' %>" maxlength="6">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group mb-0 d-flex align-items-end h-100">
+                  <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="active-<%= party.id %>" name="is_active" <%= party.is_active ? 'checked' : '' %> style="border-color: var(--terracotta);">
+                    <label class="form-check-label" for="active-<%= party.id %>">Active</label>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="modal-body">
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>Party Type</label>
-                    <select name="party_type" class="form-control">
-                      <option value="sender" <%= party.party_type === 'sender' ? 'selected' : '' %>>Sender</option>
-                      <option value="consignee" <%= party.party_type === 'consignee' ? 'selected' : '' %>>Consignee</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" name="name" class="form-control" value="<%= party.name %>" required>
-                  </div>
-                </div>
-              </div>
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>GSTIN</label>
-                    <input type="text" name="gstin" class="form-control" value="<%= party.gstin || '' %>">
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>State</label>
-                    <input type="text" name="state" class="form-control" value="<%= party.state || '' %>">
-                  </div>
-                </div>
-              </div>
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>PAN</label>
-                    <input type="text" name="pan" class="form-control" value="<%= party.pan || '' %>">
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>Place of Supply</label>
-                    <input type="text" name="place_of_supply" class="form-control" value="<%= party.place_of_supply || '' %>">
-                  </div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Address</label>
-                <textarea name="address" class="form-control" rows="3"><%= party.address || '' %></textarea>
-              </div>
-              <div class="form-group">
-                <label>Short Code</label>
-                <input type="text" name="short_code" class="form-control" value="<%= party.short_code || '' %>" maxlength="6">
-              </div>
-              <div class="form-check">
-                <input type="checkbox" class="form-check-input" id="active-<%= party.id %>" name="is_active" <%= party.is_active ? 'checked' : '' %>>
-                <label class="form-check-label" for="active-<%= party.id %>">Active</label>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-              <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-          </form>
-        </div>
+          </div>
+          <div class="modal-footer" style="border-top: 1px solid var(--border-light); padding: 16px 24px; background: var(--gray-50); border-radius: 0 0 var(--radius-xl) var(--radius-xl);">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-lg"></i>
+              <span>Cancel</span>
+            </button>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i>
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </form>
       </div>
-    <% }); %>
-  <% } %>
+    </div>
+  <% }); %>
+<% } %>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-  </script>
-</body>
-</html>
+<%- include('partials/footer') %>

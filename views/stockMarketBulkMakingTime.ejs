@@ -1,71 +1,147 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bulk Making Time</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { background: #f7f9fb; font-family: 'Inter', sans-serif; }
-    .card { border: 1px solid #dce4ed; border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 82, 186, 0.08); }
-    .badge-soft { background: #e9f0ff; color: #0f52ba; border: 1px solid #d0dcf0; }
-    textarea { font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Bulk Making Time' }) %>
+<%- include('partials/navbar') %>
 
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container" style="max-width: 800px;">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/dashboard">Dashboard</a>
+        <span class="separator">/</span>
+        <a href="/easyecom/stock-market">Out of Stock</a>
+        <span class="separator">/</span>
+        <span>Bulk Making Time</span>
+      </div>
+      <div class="d-flex align-items-center justify-content-between">
+        <h1 class="page-title">Bulk Making Time</h1>
+        <a href="/easyecom/stock-market" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i>
+          Back to Out of Stock
         </a>
       </div>
-    </div>
-  </nav>
-
-  <div class="container py-4">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-      <h3 class="fw-bold mb-0">Bulk set making time</h3>
-      <a href="/easyecom/stock-market" class="btn btn-outline-secondary">Back to out-of-stock</a>
+      <p class="page-subtitle">Update making time for multiple SKUs in bulk using comma-separated values</p>
     </div>
 
+    <!-- Main Card -->
     <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-clock-history me-2" style="color: var(--terracotta);"></i>
+          Bulk Update
+        </h2>
+      </div>
       <div class="card-body">
-        <p class="text-muted">Paste comma-separated rows to update making time in bulk.</p>
-        <div class="alert alert-info">
-          Format: <span class="badge badge-soft">SKU, Warehouse(optional), Making Time (days)</span>
-          <br>Example: <code>SKU123, WH1, 5</code> or <code>SKU123,,7</code> for default warehouse
+        <!-- Format Info -->
+        <div class="alert alert-info alert-permanent">
+          <i class="bi bi-info-circle"></i>
+          <div>
+            <strong>Format:</strong>
+            <span class="badge badge-primary ms-2">SKU, Warehouse (optional), Making Time (days)</span>
+            <br>
+            <small class="mt-2 d-block">
+              <strong>Example:</strong>
+              <code style="background: var(--cream-dark); padding: 2px 6px; border-radius: 4px;">SKU123, WH1, 5</code> or
+              <code style="background: var(--cream-dark); padding: 2px 6px; border-radius: 4px;">SKU123,,7</code> for default warehouse
+            </small>
+          </div>
         </div>
-        <% if (result && result.errors.length) { %>
-          <div class="alert alert-danger">
-            <strong>Some rows failed:</strong>
-            <ul class="mb-0">
-              <% result.errors.forEach(err => { %>
-                <li><%= err %></li>
-              <% }); %>
-            </ul>
+
+        <!-- Error Messages -->
+        <% if (result && result.errors && result.errors.length) { %>
+          <div class="alert alert-danger alert-permanent">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div>
+              <strong>Some rows failed:</strong>
+              <ul class="mb-0 mt-2" style="padding-left: 1.25rem;">
+                <% result.errors.forEach(err => { %>
+                  <li><%= err %></li>
+                <% }); %>
+              </ul>
+            </div>
           </div>
         <% } %>
-        <% if (result && result.success.length) { %>
-          <div class="alert alert-success">
-            Updated <strong><%= result.success.length %></strong> row(s).
+
+        <!-- Success Message -->
+        <% if (result && result.success && result.success.length) { %>
+          <div class="alert alert-success alert-permanent">
+            <i class="bi bi-check-circle"></i>
+            <div>
+              Successfully updated <strong><%= result.success.length %></strong> row(s).
+            </div>
           </div>
         <% } %>
+
+        <!-- Form -->
         <form method="post" action="/easyecom/stock-market/making-time">
-          <div class="mb-3">
-            <label for="bulkInput" class="form-label fw-semibold">Bulk input</label>
-            <textarea class="form-control" id="bulkInput" name="bulkInput" rows="8" placeholder="SKU123, WH1, 5&#10;SKU456,,7" required><%= bulkInput || '' %></textarea>
+          <div class="form-group">
+            <label for="bulkInput" class="form-label">Bulk Input</label>
+            <textarea
+              class="form-control form-textarea"
+              id="bulkInput"
+              name="bulkInput"
+              rows="10"
+              placeholder="SKU123, WH1, 5&#10;SKU456,,7&#10;SKU789, WH2, 14"
+              required
+              style="font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.6;"
+            ><%= bulkInput || '' %></textarea>
+            <small class="text-muted mt-2 d-block">
+              Enter one entry per line. Empty warehouse field uses the default warehouse.
+            </small>
           </div>
-          <button type="submit" class="btn btn-primary">Update making time</button>
+
+          <div class="d-flex justify-content-end gap-3">
+            <a href="/easyecom/stock-market" class="btn btn-secondary">
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check2-circle"></i>
+              Update Making Time
+            </button>
+          </div>
         </form>
       </div>
     </div>
-  </div>
 
-</html>
+    <!-- Help Section -->
+    <div class="card mt-4">
+      <div class="card-body">
+        <h3 style="font-family: var(--font-display); font-size: var(--text-lg); margin-bottom: 1rem;">
+          <i class="bi bi-question-circle me-2" style="color: var(--terracotta);"></i>
+          How to Use
+        </h3>
+        <div class="row g-4">
+          <div class="col-md-4">
+            <div class="d-flex gap-3">
+              <div style="width: 32px; height: 32px; background: var(--terracotta-bg); color: var(--terracotta); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">1</div>
+              <div>
+                <strong>Prepare Data</strong>
+                <p class="text-muted mb-0" style="font-size: var(--text-sm);">Format your data as comma-separated values with SKU, warehouse, and days.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex gap-3">
+              <div style="width: 32px; height: 32px; background: var(--terracotta-bg); color: var(--terracotta); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">2</div>
+              <div>
+                <strong>Paste Data</strong>
+                <p class="text-muted mb-0" style="font-size: var(--text-sm);">Paste the data into the text area with one entry per line.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex gap-3">
+              <div style="width: 32px; height: 32px; background: var(--terracotta-bg); color: var(--terracotta); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;">3</div>
+              <div>
+                <strong>Submit</strong>
+                <p class="text-muted mb-0" style="font-size: var(--text-sm);">Click Update to process all entries at once.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer') %>

@@ -4,105 +4,187 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Track Your Return - Kotty</title>
+  <meta name="description" content="Track the status of your Kotty return request">
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    * {
+    :root {
+      /* Brand Colors */
+      --charcoal: #1a1a1a;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --cream-darker: #e5dfd4;
+      --terracotta: #c45c3a;
+      --terracotta-light: #d4826a;
+      --terracotta-dark: #a34a2d;
+      --terracotta-bg: rgba(196, 92, 58, 0.08);
+
+      /* Semantic Colors */
+      --success: #2d8a5f;
+      --success-light: #e8f5ee;
+      --danger: #c23b22;
+      --danger-light: #fdf2f0;
+
+      /* Neutral Grays */
+      --gray-100: #f5f5f3;
+      --gray-200: #e8e6e1;
+      --gray-300: #d4d1c9;
+      --gray-400: #a8a49a;
+      --gray-500: #78746a;
+      --gray-600: #5a5650;
+
+      /* Typography */
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    *, *::before, *::after {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      font-family: var(--font-body);
+      background: var(--cream);
       min-height: 100vh;
-      padding: 20px;
+      padding: 24px 20px 48px;
+      color: var(--charcoal);
+      line-height: 1.5;
     }
 
+    /* Container */
     .tracking-container {
-      max-width: 640px;
+      max-width: 600px;
       margin: 0 auto;
     }
 
+    /* Brand Header */
     .brand-header {
       text-align: center;
+      margin-bottom: 32px;
+      padding-top: 8px;
+    }
+
+    .brand-link {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 32px;
+      color: var(--charcoal);
+      text-decoration: none;
+      letter-spacing: 0.08em;
+      transition: color 0.2s ease;
+    }
+
+    .brand-link:hover {
+      color: var(--terracotta);
+    }
+
+    .page-title {
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--gray-500);
+      margin-top: 8px;
+      letter-spacing: 0.02em;
+    }
+
+    /* Main Card */
+    .card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(26, 26, 26, 0.06);
+      overflow: hidden;
       margin-bottom: 24px;
     }
 
-    .brand-header a {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1e293b;
-      text-decoration: none;
-    }
-
-    .card {
-      background: white;
-      border: none;
-      border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-
+    /* Card Header */
     .card-header-custom {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      background: var(--charcoal);
       color: white;
-      padding: 24px;
+      padding: 28px 28px 24px;
+      position: relative;
+    }
+
+    .card-header-custom::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--terracotta), var(--terracotta-light));
     }
 
     .return-id {
-      font-size: 14px;
-      opacity: 0.9;
-      margin-bottom: 4px;
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 8px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
     }
 
     .order-info {
-      font-size: 20px;
-      font-weight: 600;
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1.3;
     }
 
     .status-badge {
       display: inline-block;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 11px;
       font-weight: 600;
-      margin-top: 12px;
+      margin-top: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
 
-    .status-pending_review { background: rgba(255,255,255,0.2); }
-    .status-approved { background: rgba(255,255,255,0.2); }
-    .status-pickup_scheduled { background: rgba(255,255,255,0.2); }
-    .status-picked_up { background: rgba(255,255,255,0.2); }
-    .status-in_transit { background: rgba(255,255,255,0.2); }
-    .status-received { background: rgba(255,255,255,0.2); }
-    .status-refund_pending { background: rgba(255,255,255,0.2); }
-    .status-refunded { background: #22c55e; }
-    .status-rejected { background: #ef4444; }
+    .status-pending_review { background: rgba(255,255,255,0.12); }
+    .status-approved { background: rgba(255,255,255,0.12); }
+    .status-pickup_scheduled { background: rgba(255,255,255,0.12); }
+    .status-picked_up { background: rgba(255,255,255,0.12); }
+    .status-in_transit { background: rgba(255,255,255,0.12); }
+    .status-received { background: rgba(255,255,255,0.12); }
+    .status-refund_pending { background: rgba(255,255,255,0.12); }
+    .status-refunded { background: var(--success); }
+    .status-rejected { background: var(--danger); }
+    .status-cancelled { background: var(--danger); }
 
     .card-body {
-      padding: 24px;
+      padding: 28px;
     }
 
     /* Progress Tracker */
     .progress-tracker {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 32px;
+      margin-bottom: 36px;
       position: relative;
     }
 
     .progress-tracker::before {
       content: '';
       position: absolute;
-      top: 16px;
-      left: 24px;
-      right: 24px;
-      height: 3px;
-      background: #e2e8f0;
+      top: 18px;
+      left: 28px;
+      right: 28px;
+      height: 2px;
+      background: var(--gray-200);
       z-index: 1;
     }
 
@@ -116,54 +198,58 @@
     }
 
     .step-circle {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
-      background: #e2e8f0;
+      background: var(--gray-200);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      color: #94a3b8;
-      margin-bottom: 8px;
-      transition: all 0.3s;
+      font-size: 13px;
+      color: var(--gray-500);
+      margin-bottom: 10px;
+      transition: all 0.3s ease;
+      font-weight: 500;
     }
 
     .step-circle.active {
-      background: #2563eb;
+      background: var(--terracotta);
       color: white;
+      box-shadow: 0 4px 16px rgba(196, 92, 58, 0.35);
     }
 
     .step-circle.completed {
-      background: #22c55e;
+      background: var(--success);
       color: white;
     }
 
     .step-label {
       font-size: 11px;
-      color: #64748b;
+      color: var(--gray-500);
       text-align: center;
-      max-width: 70px;
+      max-width: 64px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
     }
 
     .step-label.active {
-      color: #2563eb;
+      color: var(--terracotta);
       font-weight: 600;
     }
 
     .step-label.completed {
-      color: #22c55e;
+      color: var(--success);
     }
 
     /* Timeline */
     .timeline {
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
     .timeline-item {
       display: flex;
       gap: 16px;
-      padding-bottom: 20px;
+      padding-bottom: 24px;
       position: relative;
     }
 
@@ -171,10 +257,10 @@
       content: '';
       position: absolute;
       left: 15px;
-      top: 32px;
+      top: 36px;
       bottom: 0;
       width: 2px;
-      background: #e2e8f0;
+      background: var(--gray-200);
     }
 
     .timeline-icon {
@@ -185,137 +271,304 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      font-size: 14px;
     }
 
     .timeline-icon.completed {
-      background: #dcfce7;
-      color: #22c55e;
+      background: var(--success-light);
+      color: var(--success);
     }
 
     .timeline-icon.active {
-      background: #dbeafe;
-      color: #2563eb;
+      background: var(--terracotta-bg);
+      color: var(--terracotta);
     }
 
     .timeline-icon.pending {
-      background: #f1f5f9;
-      color: #94a3b8;
+      background: var(--gray-100);
+      color: var(--gray-400);
+    }
+
+    .timeline-content {
+      flex: 1;
+      padding-top: 4px;
     }
 
     .timeline-content h4 {
-      font-size: 15px;
-      font-weight: 600;
-      color: #1e293b;
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--charcoal);
       margin: 0 0 4px 0;
     }
 
     .timeline-content p {
       font-size: 13px;
-      color: #64748b;
+      color: var(--gray-600);
       margin: 0;
+      line-height: 1.5;
     }
 
     .timeline-content .date {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--gray-400);
+      margin-top: 6px;
+      display: block;
     }
 
-    /* AWB Tracking */
+    /* AWB Tracking Box */
     .awb-box {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
+      background: var(--cream);
+      border: 1px solid var(--gray-200);
       border-radius: 12px;
-      padding: 16px;
+      padding: 20px;
       margin-bottom: 24px;
     }
 
     .awb-label {
-      font-size: 12px;
-      color: #64748b;
+      font-size: 11px;
+      color: var(--gray-500);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      font-weight: 500;
     }
 
     .awb-number {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
-      color: #1e293b;
-      font-family: monospace;
+      color: var(--charcoal);
+      font-family: var(--font-mono);
+      letter-spacing: 0.03em;
+    }
+
+    .courier-name {
+      font-size: 13px;
+      color: var(--gray-600);
+      margin-top: 8px;
     }
 
     .track-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      background: #2563eb;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--terracotta);
       color: white;
       text-decoration: none;
       border-radius: 8px;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
-      margin-top: 12px;
+      margin-top: 16px;
+      transition: all 0.2s ease;
     }
 
     .track-btn:hover {
-      background: #1d4ed8;
+      background: var(--terracotta-dark);
       color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(196, 92, 58, 0.3);
     }
 
-    /* Refund Info */
+    .track-btn i {
+      font-size: 14px;
+    }
+
+    /* Refund Info Box */
     .refund-box {
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
+      background: var(--success-light);
+      border: 1px solid rgba(45, 138, 95, 0.15);
       border-radius: 12px;
-      padding: 16px;
+      padding: 20px;
     }
 
     .refund-label {
       font-size: 13px;
-      color: #166534;
-      margin-bottom: 4px;
+      color: var(--success);
+      margin-bottom: 6px;
+      font-weight: 500;
     }
 
     .refund-amount {
-      font-size: 24px;
-      font-weight: 700;
-      color: #166534;
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 400;
+      color: var(--success);
+      line-height: 1.2;
     }
 
     .refund-method {
       font-size: 13px;
-      color: #64748b;
-      margin-top: 4px;
+      color: var(--gray-600);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    /* Rejected/Cancelled Status Card */
+    .status-message-card {
+      text-align: center;
+      padding: 40px 24px;
+    }
+
+    .status-icon-wrapper {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .status-icon-wrapper.rejected {
+      background: var(--danger-light);
+    }
+
+    .status-icon-wrapper.rejected i {
+      font-size: 28px;
+      color: var(--danger);
+    }
+
+    .status-message-card h4 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      color: var(--charcoal);
+      margin-bottom: 12px;
+    }
+
+    .status-message-card p {
+      color: var(--gray-600);
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 320px;
+      margin: 0 auto;
     }
 
     /* Help Box */
     .help-box {
       text-align: center;
-      padding: 20px;
-      background: #f8fafc;
+      padding: 28px;
+      background: white;
+      border: 1px solid var(--gray-200);
       border-radius: 12px;
     }
 
     .help-box p {
       margin: 0;
-      color: #64748b;
+      color: var(--gray-600);
       font-size: 14px;
     }
 
-    .help-box a {
-      color: #2563eb;
+    .help-box p:first-child {
+      margin-bottom: 8px;
       font-weight: 500;
+      color: var(--charcoal);
+    }
+
+    .help-box a {
+      color: var(--terracotta);
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .help-box a:hover {
+      color: var(--terracotta-dark);
+      text-decoration: underline;
+    }
+
+    /* Footer Branding */
+    .footer-brand {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .footer-brand span {
+      font-size: 12px;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+
+    .footer-brand a {
+      color: var(--terracotta);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .footer-brand a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive Styles */
+    @media (max-width: 480px) {
+      body {
+        padding: 16px 16px 40px;
+      }
+
+      .brand-header {
+        margin-bottom: 24px;
+      }
+
+      .brand-link {
+        font-size: 26px;
+      }
+
+      .card-header-custom {
+        padding: 24px 20px 20px;
+      }
+
+      .order-info {
+        font-size: 20px;
+      }
+
+      .card-body {
+        padding: 20px;
+      }
+
+      .step-label {
+        font-size: 9px;
+        max-width: 52px;
+      }
+
+      .step-circle {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+      }
+
+      .progress-tracker::before {
+        top: 15px;
+        left: 22px;
+        right: 22px;
+      }
+
+      .timeline-content h4 {
+        font-size: 15px;
+      }
+
+      .refund-amount {
+        font-size: 28px;
+      }
+
+      .awb-number {
+        font-size: 17px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="tracking-container">
-    <div class="brand-header">
-      <a href="https://kotty.in">KOTTY</a>
-    </div>
+    <!-- Brand Header -->
+    <header class="brand-header">
+      <a href="https://kotty.in" class="brand-link">KOTTY</a>
+      <p class="page-title">Return Tracking</p>
+    </header>
 
-    <div class="card">
+    <!-- Main Tracking Card -->
+    <article class="card">
       <div class="card-header-custom">
         <div class="return-id">Return ID: <%= returnData.return_id %></div>
         <div class="order-info">
@@ -462,7 +715,7 @@
           <div class="awb-label">Tracking Number</div>
           <div class="awb-number"><%= returnData.awb_number %></div>
           <% if (returnData.courier_name) { %>
-          <div class="awb-label mt-2">Courier: <%= returnData.courier_name %></div>
+          <div class="courier-name">via <%= returnData.courier_name %></div>
           <% } %>
           <%
             let trackingUrl = returnData.courier_tracking_url;
@@ -480,8 +733,9 @@
             }
           %>
           <% if (trackingUrl) { %>
-          <a href="<%= trackingUrl %>" target="_blank" class="track-btn">
-            <i class="bi bi-box-arrow-up-right"></i> Track on <%= returnData.courier_name || 'Courier' %>
+          <a href="<%= trackingUrl %>" target="_blank" rel="noopener noreferrer" class="track-btn">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Track on <%= returnData.courier_name || 'Courier' %>
           </a>
           <% } %>
         </div>
@@ -502,35 +756,37 @@
         </div>
         <% } %>
       </div>
-    </div>
+    </article>
 
     <!-- Rejected/Cancelled Status -->
     <% if (['rejected', 'cancelled'].includes(returnData.status)) { %>
-    <div class="card">
-      <div class="card-body">
-        <div class="text-center">
-          <div style="width: 60px; height: 60px; background: #fee2e2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-            <i class="bi bi-x-lg" style="font-size: 24px; color: #ef4444;"></i>
-          </div>
-          <h4 style="margin-bottom: 8px;">Return <%= returnData.status === 'rejected' ? 'Rejected' : 'Cancelled' %></h4>
-          <p style="color: #64748b; margin: 0;">
-            <% if (returnData.status === 'rejected') { %>
-            Unfortunately, your return request was not approved.
-            Please contact support for more details.
-            <% } else { %>
-            This return request has been cancelled.
-            <% } %>
-          </p>
+    <article class="card">
+      <div class="status-message-card">
+        <div class="status-icon-wrapper rejected">
+          <i class="bi bi-x-lg"></i>
         </div>
+        <h4>Return <%= returnData.status === 'rejected' ? 'Rejected' : 'Cancelled' %></h4>
+        <p>
+          <% if (returnData.status === 'rejected') { %>
+          Unfortunately, your return request was not approved. Please contact support for more details.
+          <% } else { %>
+          This return request has been cancelled.
+          <% } %>
+        </p>
       </div>
-    </div>
+    </article>
     <% } %>
 
     <!-- Help Box -->
-    <div class="help-box">
+    <aside class="help-box">
       <p>Need help with your return?</p>
       <p><a href="mailto:support@kotty.in">support@kotty.in</a></p>
-    </div>
+    </aside>
+
+    <!-- Footer Branding -->
+    <footer class="footer-brand">
+      <span>Shop more at <a href="https://kotty.in">kotty.in</a></span>
+    </footer>
   </div>
 </body>
 </html>

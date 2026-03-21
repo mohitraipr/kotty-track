@@ -3,229 +3,704 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Kotty Track</title>
+  <title>Sign In - Kotty Track</title>
 
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Fonts: DM Serif Display + Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 
   <style>
+    :root {
+      --charcoal: #1a1a1a;
+      --charcoal-light: #2d2d2d;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --terracotta: #c45c3a;
+      --terracotta-light: #d4826a;
+      --terracotta-dark: #a34a2d;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666660;
+      --text-muted: #999990;
+      --border: #e0dcd4;
+      --error: #c23b22;
+      --error-bg: #fdf2f0;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
+    html {
+      height: 100%;
+    }
+
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f7fa;
-      min-height: 100vh;
+      font-family: 'Outfit', sans-serif;
+      background: var(--cream);
+      min-height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      position: relative;
+    }
+
+    /* ============================================
+       LEFT PANEL - VISUAL BRANDING
+       ============================================ */
+    .visual-panel {
+      background: var(--charcoal);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px;
+      overflow: hidden;
+    }
+
+    /* Stitching pattern background */
+    .visual-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 60px,
+          rgba(255,255,255,0.03) 60px,
+          rgba(255,255,255,0.03) 61px
+        ),
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 60px,
+          rgba(255,255,255,0.03) 60px,
+          rgba(255,255,255,0.03) 61px
+        );
+      pointer-events: none;
+    }
+
+    /* Diagonal stitch accent */
+    .visual-panel::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 300px;
+      height: 100%;
+      background: linear-gradient(
+        135deg,
+        transparent 0%,
+        transparent 49%,
+        var(--terracotta) 49%,
+        var(--terracotta) 51%,
+        transparent 51%
+      );
+      opacity: 0.15;
+    }
+
+    .brand-header {
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-mark {
+      width: 48px;
+      height: 48px;
+      background: var(--terracotta);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      position: relative;
     }
 
-    .login-container {
-      width: 100%;
+    /* Thread/needle icon */
+    .logo-mark::before {
+      content: '';
+      width: 20px;
+      height: 2px;
+      background: white;
+      position: absolute;
+      transform: rotate(-45deg);
+    }
+
+    .logo-mark::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border: 2px solid white;
+      border-radius: 50%;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+    }
+
+    .logo-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: white;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-content {
+      position: relative;
+      z-index: 1;
       max-width: 420px;
     }
 
-    .login-card {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-      padding: 40px;
+    .brand-tagline {
+      font-family: 'DM Serif Display', serif;
+      font-size: 48px;
+      line-height: 1.15;
+      color: white;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
     }
 
-    .login-header {
-      text-align: center;
-      margin-bottom: 32px;
+    .brand-tagline span {
+      color: var(--terracotta-light);
     }
 
-    .logo {
-      width: 48px;
-      height: 48px;
-      background: #2563eb;
-      border-radius: 8px;
-      display: inline-flex;
+    .brand-description {
+      font-size: 17px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.7);
+      font-weight: 300;
+    }
+
+    .brand-footer {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 32px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 28px;
+      color: white;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* ============================================
+       RIGHT PANEL - LOGIN FORM
+       ============================================ */
+    .form-panel {
+      display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 16px;
+      padding: 48px;
+      position: relative;
     }
 
-    .login-title {
-      font-size: 24px;
-      font-weight: 600;
-      color: #1e293b;
-      margin-bottom: 8px;
+    /* Subtle texture */
+    .form-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.015;
+      pointer-events: none;
     }
 
-    .login-subtitle {
+    .form-container {
+      width: 100%;
+      max-width: 380px;
+      position: relative;
+    }
+
+    /* Mobile brand header */
+    .mobile-brand {
+      display: none;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+
+    .mobile-brand .logo-mark {
+      margin: 0 auto 16px;
+    }
+
+    .mobile-brand h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 28px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .mobile-brand p {
       font-size: 14px;
-      color: #64748b;
+      color: var(--text-secondary);
+    }
+
+    .form-header {
+      margin-bottom: 36px;
+    }
+
+    .form-header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 32px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .form-header p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* Error alert */
+    .alert {
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      animation: alertSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .alert-error {
+      background: var(--error-bg);
+      color: var(--error);
+      border-left: 3px solid var(--error);
+    }
+
+    .alert-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+    }
+
+    .alert-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--error);
+      opacity: 0.6;
+      cursor: pointer;
+      padding: 2px;
+      line-height: 1;
+      transition: opacity 0.2s;
+    }
+
+    .alert-close:hover {
+      opacity: 1;
+    }
+
+    @keyframes alertSlide {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Form elements */
+    .form-group {
+      margin-bottom: 24px;
     }
 
     .form-label {
-      font-size: 14px;
+      display: block;
+      font-size: 13px;
       font-weight: 500;
-      color: #334155;
+      color: var(--text-primary);
       margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
-    .form-control {
-      height: 44px;
-      border: 1px solid #e2e8f0;
+    .form-input {
+      width: 100%;
+      height: 52px;
+      padding: 0 18px;
+      font-size: 16px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 400;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      font-size: 14px;
-      padding: 10px 14px;
-    }
-
-    .form-control:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .input-group-text {
       background: white;
-      border: 1px solid #e2e8f0;
-      border-left: 0;
-      cursor: pointer;
+      color: var(--text-primary);
+      transition: all 0.2s ease;
     }
 
-    .btn-primary {
-      height: 44px;
-      background: #2563eb;
+    .form-input:hover {
+      border-color: #ccc8be;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.12);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    /* Password field with toggle */
+    .password-field {
+      position: relative;
+    }
+
+    .password-field .form-input {
+      padding-right: 52px;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
       border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
       transition: all 0.2s;
     }
 
-    .btn-primary:hover {
-      background: #1d4ed8;
+    .password-toggle:hover {
+      color: var(--text-primary);
+      background: var(--cream-dark);
     }
 
-    .btn-primary:active {
-      background: #1e40af;
+    .password-toggle svg {
+      width: 20px;
+      height: 20px;
     }
 
-    .alert {
-      border-radius: 6px;
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      height: 54px;
+      padding: 0 28px;
+      margin-top: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: 0.02em;
+      color: white;
+      background: var(--terracotta);
       border: none;
-      font-size: 14px;
-      padding: 12px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
     }
 
-    .alert-danger {
-      background: #fef2f2;
-      color: #991b1b;
+    .btn-submit::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.1) 100%);
+    }
+
+    .btn-submit:hover {
+      background: var(--terracotta-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(196, 92, 58, 0.3);
+    }
+
+    .btn-submit:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 12px rgba(196, 92, 58, 0.2);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-submit .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Footer */
+    .form-footer {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .form-footer p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ============================================
+       RESPONSIVE DESIGN
+       ============================================ */
+    @media (max-width: 1024px) {
+      body {
+        grid-template-columns: 1fr;
+      }
+
+      .visual-panel {
+        display: none;
+      }
+
+      .form-panel {
+        min-height: 100vh;
+      }
+
+      .mobile-brand {
+        display: block;
+      }
     }
 
     @media (max-width: 480px) {
-      .login-card {
+      .form-panel {
         padding: 32px 24px;
+      }
+
+      .form-header h1 {
+        font-size: 28px;
+      }
+
+      .form-input,
+      .btn-submit {
+        height: 50px;
+      }
+
+      .brand-footer {
+        flex-direction: column;
+        gap: 20px;
+      }
+    }
+
+    /* Stagger animations on load */
+    .animate-in {
+      animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+
+    .animate-in:nth-child(1) { animation-delay: 0.1s; }
+    .animate-in:nth-child(2) { animation-delay: 0.2s; }
+    .animate-in:nth-child(3) { animation-delay: 0.3s; }
+    .animate-in:nth-child(4) { animation-delay: 0.4s; }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
   </style>
-  <link rel="stylesheet" href="/css/professional.css">
 </head>
 <body>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="login-header">
-        <div class="logo">K</div>
-        <h1 class="login-title">Kotty Track</h1>
-        <p class="login-subtitle">Production Management System</p>
+  <!-- LEFT: Visual Panel -->
+  <div class="visual-panel">
+    <div class="brand-header">
+      <div class="brand-logo">
+        <div class="logo-mark"></div>
+        <span class="logo-text">Kotty Track</span>
+      </div>
+    </div>
+
+    <div class="brand-content">
+      <h2 class="brand-tagline">
+        Where every <span>stitch</span> counts
+      </h2>
+      <p class="brand-description">
+        Precision production tracking for garment manufacturing.
+        Monitor your workflow from cutting floor to finished goods
+        with real-time visibility across all warehouses.
+      </p>
+    </div>
+
+    <div class="brand-footer">
+      <div class="stat-item">
+        <span class="stat-value">95K+</span>
+        <span class="stat-label">SKUs Tracked</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">2</span>
+        <span class="stat-label">Warehouses</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">24/7</span>
+        <span class="stat-label">Monitoring</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Login Form -->
+  <div class="form-panel">
+    <div class="form-container">
+      <!-- Mobile-only brand header -->
+      <div class="mobile-brand animate-in">
+        <div class="logo-mark"></div>
+        <h2>Kotty Track</h2>
+        <p>Production Management System</p>
       </div>
 
-      <% if (error && error.length > 0) { %>
-        <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-          <i class="bi bi-exclamation-circle me-2"></i><%= error %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      <div class="form-header animate-in">
+        <h1>Welcome back</h1>
+        <p>Sign in to continue to your dashboard</p>
+      </div>
+
+      <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
+        <div class="alert alert-error" id="alertBox">
+          <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span><%- error %></span>
+          <button class="alert-close" onclick="this.parentElement.remove()" aria-label="Dismiss">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
         </div>
       <% } %>
 
-      <form method="POST" action="/login">
-        <div class="mb-3">
+      <form method="POST" action="/login" id="loginForm" class="animate-in">
+        <div class="form-group">
           <label for="username" class="form-label">Username</label>
           <input
             type="text"
             name="username"
             id="username"
-            class="form-control"
+            class="form-input"
             placeholder="Enter your username"
             required
+            autocomplete="username"
             autofocus
           />
         </div>
 
-        <div class="mb-4">
+        <div class="form-group">
           <label for="password" class="form-label">Password</label>
-          <div class="input-group">
+          <div class="password-field">
             <input
               type="password"
               name="password"
               id="password"
-              class="form-control"
+              class="form-input"
               placeholder="Enter your password"
               required
+              autocomplete="current-password"
             />
-            <span class="input-group-text" id="togglePassword">
-              <i class="bi bi-eye-slash" id="toggleIcon"></i>
-            </span>
+            <button type="button" class="password-toggle" id="togglePassword" aria-label="Show password">
+              <svg id="eyeOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+              <svg id="eyeOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none;">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
           </div>
         </div>
 
-        <div class="d-grid">
-          <button type="submit" class="btn btn-primary" id="loginBtn">
-            <span id="btnText">Sign In</span>
-            <span class="spinner-border spinner-border-sm d-none" id="spinner"></span>
-          </button>
-        </div>
+        <button type="submit" class="btn-submit" id="loginBtn">
+          <span id="btnText">Sign in to Dashboard</span>
+          <div class="spinner" id="spinner" style="display: none;"></div>
+        </button>
       </form>
+
+      <div class="form-footer animate-in">
+        <p>&copy; 2026 Kotty Track &middot; All rights reserved</p>
+      </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
-    const togglePassword = document.getElementById('togglePassword');
-    const passwordField = document.getElementById('password');
-    const toggleIcon = document.getElementById('toggleIcon');
+    // Password visibility toggle
+    const toggleBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    const eyeOff = document.getElementById('eyeOff');
+    const eyeOn = document.getElementById('eyeOn');
+
+    toggleBtn.addEventListener('click', () => {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      eyeOff.style.display = isPassword ? 'none' : 'block';
+      eyeOn.style.display = isPassword ? 'block' : 'none';
+      toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    });
+
+    // Form submission with loading state
+    const form = document.getElementById('loginForm');
     const loginBtn = document.getElementById('loginBtn');
     const btnText = document.getElementById('btnText');
     const spinner = document.getElementById('spinner');
 
-    togglePassword.addEventListener('click', () => {
-      const type = passwordField.type === 'password' ? 'text' : 'password';
-      passwordField.type = type;
-      toggleIcon.classList.toggle('bi-eye');
-      toggleIcon.classList.toggle('bi-eye-slash');
+    form.addEventListener('submit', () => {
+      btnText.textContent = 'Signing in...';
+      spinner.style.display = 'block';
+      loginBtn.disabled = true;
     });
 
-    loginBtn.addEventListener('click', () => {
-      btnText.classList.add('d-none');
-      spinner.classList.remove('d-none');
-    });
-
-    // Auto-dismiss alerts
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
+    // Auto-dismiss alert
+    const alertBox = document.getElementById('alertBox');
+    if (alertBox) {
       setTimeout(() => {
-        const bsAlert = new bootstrap.Alert(alert);
-        bsAlert.close();
-      }, 5000);
-    });
+        alertBox.style.opacity = '0';
+        alertBox.style.transform = 'translateY(-8px)';
+        alertBox.style.transition = 'all 0.3s ease';
+        setTimeout(() => alertBox.remove(), 300);
+      }, 6000);
+    }
   </script>
 </body>
 </html>

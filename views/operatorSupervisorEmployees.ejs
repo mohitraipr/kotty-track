@@ -1,115 +1,216 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Employees</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Employees - <%= supervisor.username %></span>
-    <div class="ms-auto">
-      <a href="/operator/supervisors" class="btn btn-outline-light btn-sm me-2">Back</a>
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+<%- include('partials/header', { pageTitle: 'Employees - ' + supervisor.username }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/operator/dashboard">Dashboard</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <a href="/operator/supervisors">Supervisors</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span><%= supervisor.username %></span>
+      </div>
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Employees</h1>
+          <p class="page-subtitle">Manage employees under <%= supervisor.username %></p>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/operator/supervisors/<%= supervisor.id %>/bulk-attendance" class="btn btn-secondary">
+            <i class="bi bi-calendar-check"></i>
+            Bulk Edit Attendance
+          </a>
+          <a href="/operator/supervisors" class="btn btn-outline">
+            <i class="bi bi-arrow-left"></i>
+            Back
+          </a>
+        </div>
+      </div>
     </div>
+
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
+
+    <!-- Add Employee Card -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-person-plus-fill text-terracotta me-2"></i>
+          Add New Employee
+        </h2>
+      </div>
+      <div class="card-body">
+        <form action="/operator/supervisors/<%= supervisor.id %>/employees" method="POST" id="addEmployeeForm">
+          <div class="row g-3">
+            <!-- Row 1 -->
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Punching ID <span class="text-danger">*</span></label>
+              <input type="text" name="punching_id" class="form-control" required placeholder="Enter punching ID">
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Name <span class="text-danger">*</span></label>
+              <input type="text" name="name" class="form-control" required placeholder="Enter full name">
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Designation</label>
+              <input type="text" name="designation" class="form-control" placeholder="e.g., Operator">
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Phone</label>
+              <input type="text" name="phone_number" class="form-control" placeholder="10-digit number">
+            </div>
+
+            <!-- Row 2 -->
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Aadhar</label>
+              <input type="text" name="aadhar_card_number" class="form-control" pattern="\d{12}" minlength="12" maxlength="12" placeholder="12-digit Aadhar">
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Date of Joining <span class="text-danger">*</span></label>
+              <input type="date" name="date_of_joining" class="form-control" required>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Salary <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text" style="background: var(--gray-50); border-color: var(--border-light);">Rs.</span>
+                <input type="number" step="0.01" name="salary" class="form-control" required placeholder="0.00">
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Salary Type <span class="text-danger">*</span></label>
+              <select name="salary_type" class="form-select" required>
+                <option value="dihadi">Dihadi</option>
+              </select>
+            </div>
+
+            <!-- Row 3 -->
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Allotted Hours <span class="text-danger">*</span></label>
+              <input type="number" step="0.1" name="allotted_hours" class="form-control" required placeholder="e.g., 8">
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Paid Sunday Allowance</label>
+              <div class="input-group">
+                <span class="input-group-text" style="background: var(--gray-50); border-color: var(--border-light);">Rs.</span>
+                <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Pay Sundays?</label>
+              <select name="pay_sunday" class="form-select">
+                <option value="1" selected>Yes</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <label class="form-label">Leave Start Months</label>
+              <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
+            </div>
+
+            <!-- Submit Button -->
+            <div class="col-12 mt-2">
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-plus-circle me-1"></i>
+                Create Employee
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Employees Table Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-people-fill text-terracotta me-2"></i>
+          Employee List
+        </h2>
+        <span class="badge badge-neutral">
+          <%= employees.length %> employee<%= employees.length !== 1 ? 's' : '' %>
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <% if (employees.length === 0) { %>
+          <!-- Empty State -->
+          <div class="empty-state" style="padding: 60px 20px; text-align: center;">
+            <div class="empty-state-icon" style="margin-bottom: 16px;">
+              <i class="bi bi-people" style="font-size: 48px; color: var(--text-muted);"></i>
+            </div>
+            <h3 style="font-family: var(--font-display); font-size: 1.25rem; color: var(--text-primary); margin-bottom: 8px;">No Employees Found</h3>
+            <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">There are no employees under this supervisor yet. Use the form above to add employees.</p>
+          </div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width: 100px;">Punch ID</th>
+                  <th>Name</th>
+                  <th>Designation</th>
+                  <th style="width: 320px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% employees.forEach(function(emp){ %>
+                <tr>
+                  <td>
+                    <span class="badge badge-neutral" style="font-family: var(--font-mono); font-size: 0.8rem;">
+                      <%= emp.punching_id %>
+                    </span>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="user-avatar" style="background: var(--terracotta); color: white; width: 36px; height: 36px; min-width: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 500; font-size: 0.875rem;">
+                        <%= emp.name ? emp.name.charAt(0).toUpperCase() : 'E' %>
+                      </div>
+                      <span class="fw-medium" style="color: var(--text-primary);"><%= emp.name %></span>
+                    </div>
+                  </td>
+                  <td>
+                    <% if (emp.designation) { %>
+                      <span style="color: var(--text-secondary);"><%= emp.designation %></span>
+                    <% } else { %>
+                      <span class="text-muted">-</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <form action="/operator/employees/<%= emp.id %>/edit" method="GET" class="d-flex align-items-center gap-2">
+                        <input type="date" name="date" class="form-control form-control-sm" required style="width: 150px;">
+                        <button type="submit" class="btn btn-secondary btn-sm">
+                          <i class="bi bi-pencil-square me-1"></i>Edit Punch
+                        </button>
+                      </form>
+                      <a href="/operator/employees/<%= emp.id %>/bulk-attendance" class="btn btn-primary btn-sm">
+                        <i class="bi bi-calendar3 me-1"></i>Bulk Edit
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mt-4">
+      <div class="col-md-4">
+        <div class="stat-card">
+          <div class="stat-label">Total Employees</div>
+          <div class="stat-value"><%= employees.length %></div>
+        </div>
+      </div>
+    </div>
+
   </div>
-</nav>
-<div class="container my-4">
-  <%- include('partials/flashMessages') %>
-  <div class="mb-3">
-    <a href="/operator/supervisors/<%= supervisor.id %>/bulk-attendance" class="btn btn-sm btn-primary">Bulk Edit Attendance</a>
-  </div>
-  <h5>Add Employee</h5>
-  <form action="/operator/supervisors/<%= supervisor.id %>/employees" method="POST" class="row g-3 mb-4">
-    <div class="col-md-3">
-      <label class="form-label">Punching ID</label>
-      <input type="text" name="punching_id" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Name</label>
-      <input type="text" name="name" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Designation</label>
-      <input type="text" name="designation" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Phone</label>
-      <input type="text" name="phone_number" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Aadhar</label>
-      <input type="text" name="aadhar_card_number" class="form-control" pattern="\d{12}" minlength="12" maxlength="12">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Date of Joining</label>
-      <input type="date" name="date_of_joining" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Salary</label>
-      <input type="number" step="0.01" name="salary" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Salary Type</label>
-      <select name="salary_type" class="form-select" required>
-        <option value="dihadi">Dihadi</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Allotted Hours</label>
-      <input type="number" step="0.1" name="allotted_hours" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Paid Sunday Allowance</label>
-      <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Pay Sundays?</label>
-      <select name="pay_sunday" class="form-select">
-        <option value="1" selected>Yes</option>
-        <option value="0">No</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Leave Start Months</label>
-      <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
-    </div>
-    <div class="col-md-2 align-self-end">
-      <button type="submit" class="btn btn-success">Create</button>
-    </div>
-  </form>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Punch ID</th>
-        <th>Name</th>
-        <th>Designation</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% employees.forEach(function(emp){ %>
-      <tr>
-        <td><%= emp.punching_id %></td>
-        <td><%= emp.name %></td>
-        <td><%= emp.designation || '' %></td>
-        <td>
-          <form action="/operator/employees/<%= emp.id %>/edit" method="GET" class="d-flex">
-            <input type="date" name="date" class="form-control form-control-sm me-2" required>
-            <button class="btn btn-sm btn-secondary">Edit Punch</button>
-          </form>
-          <a href="/operator/employees/<%= emp.id %>/bulk-attendance" class="btn btn-sm btn-primary mt-1">Bulk Edit</a>
-        </td>
-      </tr>
-      <% }) %>
-    </tbody>
-  </table>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</main>
+
+<%- include('partials/footer') %>

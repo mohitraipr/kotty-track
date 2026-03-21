@@ -1,92 +1,159 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Order Webhook Logs</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Order Webhook Logs</span>
-    <span class="text-white ms-auto">Showing last <%= logs.length %> entries (from database)</span>
-  </div>
-</nav>
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Recent Orders</h3>
-    <div class="d-flex gap-2 align-items-center">
-      <div id="clearStatus" class="d-none">
-        <div class="d-flex align-items-center gap-2">
-          <div class="progress" style="width: 200px; height: 20px;">
-            <div id="clearProgress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
-          </div>
-          <small id="clearText" class="text-muted"></small>
-        </div>
+<%
+  const pageTitle = 'Order Webhook Logs';
+%>
+<%- include('partials/header') %>
+<%- include('partials/navbar') %>
+
+<!-- Main Content -->
+<div class="main-content" style="margin-left: 0;">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h1 class="page-title">Order Webhook Logs</h1>
+        <p class="page-subtitle">Showing last <%= logs.length %> entries from database</p>
       </div>
-      <button id="clearBtn" class="btn btn-outline-danger btn-sm" onclick="clearRawData()">Clear Raw Data</button>
-      <a href="/webhook/logs" class="btn btn-outline-primary btn-sm">View Inventory Logs</a>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <!-- Clear Status Progress -->
+        <div id="clearStatus" class="d-none">
+          <div class="d-flex align-items-center gap-2">
+            <div class="progress" style="width: 200px; height: 24px; background: var(--gray-200);">
+              <div id="clearProgress" class="progress-bar" role="progressbar" style="width: 0%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 500;">0%</div>
+            </div>
+            <small id="clearText" class="text-secondary"></small>
+          </div>
+        </div>
+        <button id="clearBtn" class="btn btn-outline" style="border-color: var(--danger); color: var(--danger);" onclick="clearRawData()">
+          <i class="bi bi-trash3" id="clearBtnIcon"></i>
+          <span id="clearBtnText">Clear Raw Data</span>
+        </button>
+        <a href="/webhook/logs" class="btn btn-secondary">
+          <i class="bi bi-box-seam"></i>
+          View Inventory Logs
+        </a>
+      </div>
     </div>
   </div>
-  <div class="table-responsive shadow-sm">
-    <table class="table table-bordered table-striped table-hover table-sm align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Time</th>
-          <th>Order ID</th>
-          <th>SKU(s)</th>
-          <th>Marketplace</th>
-          <th>Status</th>
-          <th>Warehouse</th>
-          <th>Qty</th>
-          <th>Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-      <% logs.forEach(function(log) { %>
-        <tr>
-          <td><%= log.time %></td>
-          <td><strong><%= log.order_id %></strong></td>
-          <td><small><%= log.skus || 'N/A' %></small></td>
-          <td><%= log.marketplace || 'N/A' %></td>
-          <td><%= log.order_status || 'N/A' %></td>
-          <td><%= log.warehouse_id || 'N/A' %></td>
-          <td><%= log.order_quantity || 'N/A' %></td>
-          <td><%= log.total_amount || 'N/A' %></td>
-        </tr>
-      <% }); %>
-      <% if (!logs.length) { %>
-        <tr><td colspan="8" class="text-center text-muted">No orders found</td></tr>
-      <% } %>
-      </tbody>
-    </table>
+
+  <!-- Orders Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Recent Orders</h2>
+      <span class="badge badge-neutral"><%= logs.length %> entries</span>
+    </div>
+    <div class="table-container" style="border: none; border-radius: 0;">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Order ID</th>
+              <th>SKU(s)</th>
+              <th>Marketplace</th>
+              <th>Status</th>
+              <th>Warehouse</th>
+              <th>Qty</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% logs.forEach(function(log) { %>
+              <tr>
+                <td>
+                  <span class="text-secondary" style="font-size: var(--text-xs);"><%= log.time %></span>
+                </td>
+                <td>
+                  <strong class="text-primary"><%= log.order_id %></strong>
+                </td>
+                <td>
+                  <code style="font-size: var(--text-xs); background: var(--gray-100); padding: 2px 6px; border-radius: var(--radius-sm);"><%= log.skus || 'N/A' %></code>
+                </td>
+                <td><%= log.marketplace || 'N/A' %></td>
+                <td>
+                  <% if (log.order_status) { %>
+                    <span class="badge <%= log.order_status.toLowerCase().includes('confirm') || log.order_status.toLowerCase().includes('complete') ? 'badge-success' : log.order_status.toLowerCase().includes('cancel') ? 'badge-danger' : log.order_status.toLowerCase().includes('pending') ? 'badge-warning' : 'badge-neutral' %>">
+                      <%= log.order_status %>
+                    </span>
+                  <% } else { %>
+                    <span class="text-muted">N/A</span>
+                  <% } %>
+                </td>
+                <td><%= log.warehouse_id || 'N/A' %></td>
+                <td>
+                  <% if (log.order_quantity) { %>
+                    <span class="badge badge-info"><%= log.order_quantity %></span>
+                  <% } else { %>
+                    <span class="text-muted">N/A</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (log.total_amount) { %>
+                    <strong style="color: var(--success);"><%= log.total_amount %></strong>
+                  <% } else { %>
+                    <span class="text-muted">N/A</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+            <% if (!logs.length) { %>
+              <tr>
+                <td colspan="8">
+                  <div class="empty-state">
+                    <div class="empty-state-icon">
+                      <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                    </div>
+                    <h3 class="empty-state-title">No Orders Found</h3>
+                    <p class="empty-state-text">No order webhook logs have been recorded yet.</p>
+                  </div>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 async function clearRawData() {
   const btn = document.getElementById('clearBtn');
+  const btnIcon = document.getElementById('clearBtnIcon');
+  const btnText = document.getElementById('clearBtnText');
   const status = document.getElementById('clearStatus');
   const progress = document.getElementById('clearProgress');
   const text = document.getElementById('clearText');
 
   btn.disabled = true;
-  btn.textContent = 'Checking...';
+  btnText.textContent = 'Checking...';
   try {
-    const countRes = await fetch('/webhook/clear-raw/orders/count');
+    const countRes = await fetch('/webhook/clear-raw/orders/count', {
+      headers: { 'Accept': 'application/json' }
+    });
     const countData = await countRes.json();
+
+    // Check for permission error
+    if (countData.error) {
+      alert('Permission Denied: ' + (countData.message || countData.error));
+      btn.disabled = false;
+      btnIcon.className = 'bi bi-x-circle';
+      btnText.textContent = 'No Permission';
+      btn.style.borderColor = 'var(--gray-400)';
+      btn.style.color = 'var(--gray-500)';
+      return;
+    }
+
     if (countData.total === 0) {
-      btn.textContent = 'Already clean';
-      btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+      btnIcon.className = 'bi bi-check-circle';
+      btnText.textContent = 'Already clean';
+      btn.style.borderColor = 'var(--success)';
+      btn.style.color = 'var(--success)';
       return;
     }
     if (!confirm('Clear raw JSON data from ' + countData.total.toLocaleString() + ' orders? This frees disk space but cannot be undone.')) {
       btn.disabled = false;
-      btn.textContent = 'Clear Raw Data';
+      btnIcon.className = 'bi bi-trash3';
+      btnText.textContent = 'Clear Raw Data';
       return;
     }
     status.classList.remove('d-none');
@@ -102,32 +169,44 @@ async function clearRawData() {
       progress.textContent = pct + '%';
       text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' / ' + originalTotal.toLocaleString() + '...';
 
-      const res = await fetch('/webhook/clear-raw/orders', { method: 'POST' });
+      const res = await fetch('/webhook/clear-raw/orders', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+      });
       const data = await res.json();
+
+      // Check for permission error
+      if (data.error) {
+        throw new Error(data.message || data.error);
+      }
+
       totalCleared += data.cleared;
 
       if (data.done) {
         progress.style.width = '100%';
-        progress.classList.remove('progress-bar-animated');
-        progress.classList.replace('bg-primary', 'bg-success');
+        progress.style.background = 'var(--success)';
         progress.textContent = 'Done!';
         text.textContent = 'Cleared ' + totalCleared.toLocaleString() + ' rows';
         btn.classList.remove('d-none');
-        btn.textContent = 'Cleared!';
-        btn.classList.replace('btn-outline-danger', 'btn-outline-success');
+        btnIcon.className = 'bi bi-check-circle';
+        btnText.textContent = 'Cleared!';
+        btn.style.borderColor = 'var(--success)';
+        btn.style.color = 'var(--success)';
         break;
       }
     }
   } catch (err) {
+    status.classList.remove('d-none');
     progress.style.width = '100%';
-    progress.classList.add('bg-danger');
+    progress.style.background = 'var(--danger)';
     progress.textContent = 'Error';
-    text.textContent = err.message;
+    text.textContent = err.message || 'Failed to clear data';
     btn.classList.remove('d-none');
     btn.disabled = false;
-    btn.textContent = 'Retry';
+    btnIcon.className = 'bi bi-arrow-clockwise';
+    btnText.textContent = 'Retry';
   }
 }
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

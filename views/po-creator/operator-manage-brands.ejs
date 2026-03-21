@@ -1,76 +1,214 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Manage Brand Codes - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; padding: 20px; }
-    .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
-    .btn-primary { background: #2563eb; border: none; }
-    .btn-secondary { background: #6c757d; border: none; }
-    table { width: 100%; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="d-flex justify-content-between mb-4">
-      <h2><i class="bi bi-tags"></i> Manage Brand Codes</h2>
-      <a href="/operator/dashboard" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+<%- include('../partials/header', { pageTitle: 'Manage Brand Codes' }) %>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/po-creator/operator/dashboard' }) %>
+
+<!-- Main Content Area -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1000px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div>
+          <h1 class="page-title"><i class="bi bi-tags me-2" style="color: var(--terracotta);"></i>Manage Brand Codes</h1>
+          <p class="page-subtitle">Add and manage brand codes for PO creation</p>
+        </div>
+        <a href="/po-creator/operator/dashboard" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i>
+          <span>Back to Dashboard</span>
+        </a>
+      </div>
     </div>
-    <div class="mb-4">
-      <h5>Add New Brand Code</h5>
-      <form id="addBrandForm" class="row g-3">
-        <div class="col-md-4">
-          <input type="text" class="form-control" id="code" placeholder="Brand Code (e.g., KTT)" required>
-        </div>
-        <div class="col-md-6">
-          <input type="text" class="form-control" id="description" placeholder="Description">
-        </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus"></i> Add</button>
-        </div>
-      </form>
+
+    <!-- Add New Brand Code Card -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-plus-circle me-2" style="color: var(--terracotta);"></i>Add New Brand Code</h5>
+      </div>
+      <div class="card-body">
+        <form id="addBrandForm" class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label for="code" class="form-label">Brand Code</label>
+            <input type="text" class="form-control form-input" id="code" placeholder="e.g., KTT" required>
+          </div>
+          <div class="col-md-5">
+            <label for="description" class="form-label">Description</label>
+            <input type="text" class="form-control form-input" id="description" placeholder="Enter description (optional)">
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-plus-lg me-1"></i> Add Brand
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-    <table class="table table-striped">
-      <thead>
-        <tr><th>Code</th><th>Description</th><th>Active</th></tr>
-      </thead>
-      <tbody>
-        <% brandCodes.forEach(brand => { %>
-          <tr>
-            <td><strong><%= brand.code %></strong></td>
-            <td><%= brand.description || '-' %></td>
-            <td><span class="badge bg-<%= brand.is_active ? 'success' : 'secondary' %>"><%= brand.is_active ? 'Active' : 'Inactive' %></span></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+
+    <!-- Brand Codes Table -->
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0"><i class="bi bi-list-ul me-2" style="color: var(--terracotta);"></i>Brand Codes</h5>
+        <span class="badge badge-neutral"><%= brandCodes.length %> total</span>
+      </div>
+      <div class="table-container" style="border: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
+        <div class="table-responsive">
+          <table class="table mb-0">
+            <thead>
+              <tr>
+                <th style="width: 30%;">Code</th>
+                <th style="width: 50%;">Description</th>
+                <th style="width: 20%;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (brandCodes && brandCodes.length > 0) { %>
+                <% brandCodes.forEach(brand => { %>
+                  <tr>
+                    <td>
+                      <span class="badge badge-primary" style="font-size: var(--text-sm); font-weight: 600;">
+                        <%= brand.code %>
+                      </span>
+                    </td>
+                    <td><%= brand.description || '-' %></td>
+                    <td>
+                      <% if (brand.is_active) { %>
+                        <span class="badge badge-success">
+                          <i class="bi bi-check-circle me-1"></i>Active
+                        </span>
+                      <% } else { %>
+                        <span class="badge badge-neutral">
+                          <i class="bi bi-pause-circle me-1"></i>Inactive
+                        </span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr>
+                  <td colspan="3" class="text-center py-5">
+                    <div class="empty-state">
+                      <i class="bi bi-tags empty-state-icon" style="font-size: 48px;"></i>
+                      <h4 class="empty-state-title mt-3">No Brand Codes</h4>
+                      <p class="empty-state-text">Add your first brand code using the form above.</p>
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
-  <script>
-    document.getElementById('addBrandForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      try {
-        const response = await fetch('/po-creator/operator/api/add-brand', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: document.getElementById('code').value,
-            description: document.getElementById('description').value
-          })
-        });
-        if (response.ok) {
-          alert('Brand code added successfully!');
-          location.reload();
+</main>
+
+<!-- Page-specific Styles -->
+<style>
+  .main-content {
+    padding-top: 28px;
+    padding-bottom: 40px;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .table th {
+    white-space: nowrap;
+  }
+
+  .table td {
+    vertical-align: middle;
+  }
+
+  /* Form styling */
+  .form-input:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .page-header .btn span {
+      display: none;
+    }
+
+    .page-header .btn {
+      padding: 10px;
+    }
+
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+  }
+</style>
+
+<!-- JavaScript -->
+<script>
+  document.getElementById('addBrandForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    // Store original button content
+    const originalIcon = submitBtn.querySelector('i');
+    const originalText = submitBtn.textContent;
+
+    // Show loading state
+    submitBtn.disabled = true;
+    submitBtn.textContent = '';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner me-2';
+    submitBtn.appendChild(spinner);
+    submitBtn.appendChild(document.createTextNode('Adding...'));
+
+    try {
+      const response = await fetch('/po-creator/operator/api/add-brand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: document.getElementById('code').value,
+          description: document.getElementById('description').value
+        })
+      });
+      if (response.ok) {
+        // Show success toast
+        if (window.KottyTrack && window.KottyTrack.showToast) {
+          window.KottyTrack.showToast('Brand code added successfully!', 'success');
         } else {
-          const data = await response.json();
+          alert('Brand code added successfully!');
+        }
+        location.reload();
+      } else {
+        const data = await response.json();
+        if (window.KottyTrack && window.KottyTrack.showToast) {
+          window.KottyTrack.showToast('Error: ' + (data.error || 'Failed to add brand code'), 'danger');
+        } else {
           alert('Error: ' + (data.error || 'Failed to add brand code'));
         }
-      } catch (error) {
+        // Reset button state
+        resetButton();
+      }
+    } catch (error) {
+      if (window.KottyTrack && window.KottyTrack.showToast) {
+        window.KottyTrack.showToast('Error: ' + error.message, 'danger');
+      } else {
         alert('Error: ' + error.message);
       }
-    });
-  </script>
-</body>
-</html>
+      // Reset button state
+      resetButton();
+    }
+
+    function resetButton() {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '';
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-plus-lg me-1';
+      submitBtn.appendChild(icon);
+      submitBtn.appendChild(document.createTextNode(' Add Brand'));
+    }
+  });
+</script>
+
+<%- include('../partials/footer') %>

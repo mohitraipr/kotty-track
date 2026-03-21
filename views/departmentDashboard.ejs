@@ -1,114 +1,432 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Department Dashboard</title>
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  />
-  <style>
-    body { background-color: #f8f9fa; }
-    .bordered-block {
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #fff;
-      padding: 1rem;
-      margin-bottom: 1rem;
+<% const pageTitle = 'Department Dashboard'; %>
+<%- include('partials/header') %>
+<%- include('partials/navbar') %>
+
+<style>
+  /* Department Dashboard - Page Specific Styles */
+  .department-container {
+    padding: 28px;
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    margin-top: var(--navbar-height);
+    min-height: calc(100vh - var(--navbar-height));
+  }
+
+  .assignment-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .assignment-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .assignment-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .lot-number {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .assignment-body {
+    padding: 22px;
+  }
+
+  .assignment-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .meta-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .meta-value {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .status-assigned {
+    background: var(--info-light);
+    color: var(--info);
+  }
+
+  .status-in_progress {
+    background: var(--warning-light);
+    color: var(--warning);
+  }
+
+  .status-completed {
+    background: var(--success-light);
+    color: var(--success);
+  }
+
+  .status-cancelled {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+
+  .size-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+
+  .size-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .size-table td {
+    padding: 12px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .size-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .size-table input[type="number"] {
+    width: 100%;
+    max-width: 100px;
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .size-table input[type="number"]:hover {
+    border-color: var(--border-medium);
+  }
+
+  .size-table input[type="number"]:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .remarks-section {
+    margin-bottom: 20px;
+  }
+
+  .remarks-section label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .remarks-section textarea {
+    width: 100%;
+    padding: 12px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    resize: vertical;
+    transition: all var(--transition-fast);
+  }
+
+  .remarks-section textarea:hover {
+    border-color: var(--border-medium);
+  }
+
+  .remarks-section textarea:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .assignment-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 28px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .cannot-confirm-notice {
+    padding: 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cannot-confirm-notice i {
+    color: var(--text-muted);
+    font-size: 18px;
+  }
+
+  @media (max-width: 768px) {
+    .department-container {
+      padding: 16px;
     }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <span class="navbar-brand">Department Dashboard</span>
-      <div class="ms-auto">
-        <span class="navbar-text me-3">
-          Welcome, <strong><%= user.username %></strong>
-        </span>
-        <a href="/logout" class="btn btn-outline-light">Logout</a>
-      </div>
-    </div>
-  </nav>
 
-  <div class="container mt-4">
-    <% if (error && error.length>0) { %>
-      <div class="alert alert-danger"><%= error[0] %></div>
-    <% } %>
-    <% if (success && success.length>0) { %>
-      <div class="alert alert-success"><%= success[0] %></div>
-    <% } %>
+    .assignment-header {
+      padding: 14px 16px;
+    }
 
-    <h4>My Assigned Lots</h4>
-    <% if (!myAssignments || myAssignments.length===0) { %>
-      <p>No assigned lots found.</p>
-    <% } else { %>
-      <% myAssignments.forEach(asg => { %>
-        <div class="bordered-block mb-3">
-          <h5>Lot No: <%= asg.lot_no %></h5>
-          <p>
-            <strong>SKU:</strong> <%= asg.sku %><br/>
-            <strong>Fabric:</strong> <%= asg.fabric_type %> (flow=<%= asg.flow_type %>)<br/>
-            <strong>Assigned Pieces:</strong> <%= asg.assignment_total_pieces %><br/>
-            <strong>Status:</strong> <%= asg.assignment_status %><br/>
-            <strong>Assigned At:</strong> <%= new Date(asg.assigned_at).toLocaleString() %>
-          </p>
-          <% if (asg.assignment_status==='assigned' || asg.assignment_status==='in_progress') { %>
-            <form method="POST" action="/department/confirm">
-              <input type="hidden" name="assignment_id" value="<%= asg.assignment_id %>"/>
-              <table class="table table-sm table-bordered">
-                <thead class="table-light">
-                  <tr>
-                    <th>Size</th>
-                    <th>Assigned</th>
-                    <th>Completed So Far</th>
-                    <th>Confirm Now</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% asg.sizes.forEach((sz, idx) => {
-                       const leftover = sz.assigned_pieces - sz.completed_pieces;
-                  %>
-                    <tr>
-                      <td>
-                        <%= sz.size_label %>
-                        <input type="hidden" name="sizeConfirms[<%= idx %>][size_assignment_id]" value="<%= sz.size_assignment_id %>"/>
-                      </td>
-                      <td><%= sz.assigned_pieces %></td>
-                      <td><%= sz.completed_pieces %></td>
-                      <td>
-                        <input
-                          type="number"
-                          class="form-control form-control-sm"
-                          min="0"
-                          max="<%= leftover %>"
-                          value="<%= leftover %>"
-                          name="sizeConfirms[<%= idx %>][completed_pieces]"
-                        />
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-              <div class="mb-2">
-                <label>Remarks (optional)</label>
-                <textarea class="form-control" name="remarks" rows="2"></textarea>
-              </div>
-              <button type="submit" class="btn btn-sm btn-primary">Confirm</button>
-            </form>
-          <% } else { %>
-            <p class="text-muted">Cannot confirm pieces. Status=<%= asg.assignment_status %>.</p>
-          <% } %>
-        </div>
-      <% }) %>
-    <% } %>
+    .assignment-body {
+      padding: 16px;
+    }
+
+    .assignment-meta {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .size-table {
+      display: block;
+      overflow-x: auto;
+    }
+
+    .size-table th,
+    .size-table td {
+      padding: 10px 12px;
+      white-space: nowrap;
+    }
+  }
+</style>
+
+<div class="department-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Department Dashboard</h1>
+    <p class="page-subtitle">View and manage your assigned lots</p>
   </div>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
-  </script>
-</body>
-</html>
+  <!-- Flash Messages -->
+  <% if (error && error.length > 0) { %>
+    <div class="alert alert-danger">
+      <i class="bi bi-exclamation-circle"></i>
+      <span><%= error[0] %></span>
+    </div>
+  <% } %>
+  <% if (success && success.length > 0) { %>
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle"></i>
+      <span><%= success[0] %></span>
+    </div>
+  <% } %>
+
+  <!-- Section Title -->
+  <div style="margin-bottom: 20px;">
+    <h2 style="font-family: var(--font-display); font-size: var(--text-2xl); color: var(--text-primary); margin: 0;">
+      My Assigned Lots
+    </h2>
+  </div>
+
+  <!-- Assignments List -->
+  <% if (!myAssignments || myAssignments.length === 0) { %>
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <i class="bi bi-inbox"></i>
+      </div>
+      <div class="empty-state-title">No Assigned Lots</div>
+      <p class="empty-state-text">You currently have no lots assigned to you. Check back later for new assignments.</p>
+    </div>
+  <% } else { %>
+    <% myAssignments.forEach(asg => { %>
+      <div class="assignment-card">
+        <div class="assignment-header">
+          <h3 class="lot-number">Lot No: <%= asg.lot_no %></h3>
+          <span class="status-badge status-<%= asg.assignment_status %>">
+            <% if (asg.assignment_status === 'assigned') { %>
+              <i class="bi bi-clock"></i>
+            <% } else if (asg.assignment_status === 'in_progress') { %>
+              <i class="bi bi-arrow-repeat"></i>
+            <% } else if (asg.assignment_status === 'completed') { %>
+              <i class="bi bi-check-circle"></i>
+            <% } else { %>
+              <i class="bi bi-x-circle"></i>
+            <% } %>
+            <%= asg.assignment_status.replace('_', ' ') %>
+          </span>
+        </div>
+
+        <div class="assignment-body">
+          <!-- Assignment Meta Information -->
+          <div class="assignment-meta">
+            <div class="meta-item">
+              <span class="meta-label">SKU</span>
+              <span class="meta-value"><%= asg.sku %></span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Fabric Type</span>
+              <span class="meta-value"><%= asg.fabric_type %></span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Flow Type</span>
+              <span class="meta-value"><%= asg.flow_type %></span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Assigned Pieces</span>
+              <span class="meta-value"><%= asg.assignment_total_pieces %></span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Assigned At</span>
+              <span class="meta-value"><%= new Date(asg.assigned_at).toLocaleString() %></span>
+            </div>
+          </div>
+
+          <% if (asg.assignment_status === 'assigned' || asg.assignment_status === 'in_progress') { %>
+            <form method="POST" action="/department/confirm">
+              <input type="hidden" name="assignment_id" value="<%= asg.assignment_id %>"/>
+
+              <!-- Size Table -->
+              <div class="table-container" style="margin-bottom: 20px;">
+                <table class="size-table">
+                  <thead>
+                    <tr>
+                      <th>Size</th>
+                      <th>Assigned</th>
+                      <th>Completed So Far</th>
+                      <th>Confirm Now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% asg.sizes.forEach((sz, idx) => {
+                         const leftover = sz.assigned_pieces - sz.completed_pieces;
+                    %>
+                      <tr>
+                        <td>
+                          <strong><%= sz.size_label %></strong>
+                          <input type="hidden" name="sizeConfirms[<%= idx %>][size_assignment_id]" value="<%= sz.size_assignment_id %>"/>
+                        </td>
+                        <td><%= sz.assigned_pieces %></td>
+                        <td><%= sz.completed_pieces %></td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            max="<%= leftover %>"
+                            value="<%= leftover %>"
+                            name="sizeConfirms[<%= idx %>][completed_pieces]"
+                          />
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Remarks Section -->
+              <div class="remarks-section">
+                <label for="remarks-<%= asg.assignment_id %>">Remarks (optional)</label>
+                <textarea
+                  id="remarks-<%= asg.assignment_id %>"
+                  name="remarks"
+                  rows="2"
+                  placeholder="Add any notes or comments about this assignment..."
+                ></textarea>
+              </div>
+
+              <!-- Actions -->
+              <div class="assignment-actions">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-check-lg"></i>
+                  Confirm Completion
+                </button>
+              </div>
+            </form>
+          <% } else { %>
+            <div class="cannot-confirm-notice">
+              <i class="bi bi-info-circle"></i>
+              <span>Cannot confirm pieces. Current status: <strong><%= asg.assignment_status.replace('_', ' ') %></strong></span>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% }) %>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

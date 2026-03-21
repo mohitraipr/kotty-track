@@ -1,67 +1,124 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>All PO Creators Data - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
-    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-    .container-fluid { max-width: 1600px; margin: 0 auto; }
-    .back-btn, .download-btn { padding: 10px 20px; border-radius: 6px; text-decoration: none; border: none; cursor: pointer; }
-    .back-btn { background: #6c757d; color: white; }
-    .download-btn { background: #10b981; color: white; }
-    .filter-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
-    .carton-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 15px; cursor: pointer; transition: all 0.2s; }
-    .carton-card:hover { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
-    .creator-badge { background: #2563eb; color: white; padding: 5px 12px; border-radius: 5px; font-size: 13px; display: inline-block; margin-bottom: 10px; }
-    .badge { padding: 5px 10px; border-radius: 5px; font-size: 12px; }
-    .badge-blue { background: #3b82f6; color: white; }
-    .badge-green { background: #10b981; color: white; }
-  </style>
-</head>
-<body>
-  <div class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4 class="mb-0"><i class="bi bi-people"></i> All PO Creators Inward Data</h4>
-      <div>
-        <a href="/po-creator/operator/download-all-excel" class="download-btn me-2"><i class="bi bi-download"></i> Download Excel</a>
-        <a href="/operator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
+<%- include('../partials/header', { pageTitle: 'All PO Creators Data' }) %>
+<%- include('../partials/navbar', { dashboardUrl: '/po-creator/operator/dashboard' }) %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1600px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div>
+          <h1 class="page-title">
+            <i class="bi bi-people" style="color: var(--terracotta);"></i> All PO Creators Inward Data
+          </h1>
+          <p class="page-subtitle">View and manage all carton entries from all creators</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="/po-creator/operator/download-all-excel" class="btn btn-success">
+            <i class="bi bi-download me-1"></i> Download Excel
+          </a>
+          <a href="/po-creator/operator/dashboard" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back
+          </a>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="container-fluid">
+
     <%- include('../partials/flashMessages') %>
-    <div class="filter-section">
-      <div class="row">
-        <div class="col-md-6"><input type="text" id="searchInput" class="form-control" placeholder="Search by carton number, creator, or packed by..."></div>
-        <div class="col-md-3"><input type="date" id="dateFilter" class="form-control"></div>
-        <div class="col-md-3"><button class="btn btn-secondary w-100" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-5">
+            <label for="searchInput" class="form-label fw-medium">Search</label>
+            <div class="input-group">
+              <span class="input-group-text" style="background: var(--cream-dark); border-color: var(--border-light);">
+                <i class="bi bi-search" style="color: var(--terracotta);"></i>
+              </span>
+              <input type="text" id="searchInput" class="form-control" placeholder="Search by carton number, creator, or packed by...">
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="dateFilter" class="form-label fw-medium">Filter by Date</label>
+            <div class="input-group">
+              <span class="input-group-text" style="background: var(--cream-dark); border-color: var(--border-light);">
+                <i class="bi bi-calendar3" style="color: var(--terracotta);"></i>
+              </span>
+              <input type="date" id="dateFilter" class="form-control">
+            </div>
+          </div>
+          <div class="col-md-3">
+            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+              <i class="bi bi-x-circle me-1"></i> Clear Filters
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="mb-3"><span class="badge bg-primary">Total: <span id="totalCount"><%= cartons.length %></span></span></div>
+
+    <!-- Stats Badge -->
+    <div class="mb-4">
+      <span class="badge" style="background: var(--terracotta); font-size: 0.9rem; padding: 0.5rem 1rem;">
+        <i class="bi bi-box-seam me-1"></i> Total Cartons: <span id="totalCount"><%= cartons.length %></span>
+      </span>
+    </div>
+
+    <!-- Cartons Grid -->
     <% if (cartons.length === 0) { %>
-      <div class="alert alert-info"><i class="bi bi-info-circle"></i> No inward entries found.</div>
+      <div class="card">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-inbox" style="font-size: 3rem; color: var(--gray-400);"></i>
+          <h5 class="mt-3" style="color: var(--text-secondary);">No Inward Entries Found</h5>
+          <p class="text-muted">There are no carton entries available at the moment.</p>
+        </div>
+      </div>
     <% } else { %>
       <div class="row" id="cartonContainer">
         <% cartons.forEach(carton => { %>
-          <div class="col-md-6 col-lg-4 carton-item" data-carton-number="<%= carton.carton_number.toLowerCase() %>" data-creator="<%= carton.creator_username.toLowerCase() %>" data-packed-by="<%= carton.packed_by.toLowerCase() %>" data-date="<%= carton.date_of_packing %>">
-            <div class="carton-card" onclick="viewCartonDetails(<%= carton.id %>)">
-              <span class="creator-badge"><i class="bi bi-person"></i> <%= carton.creator_username %></span>
-              <h5><i class="bi bi-box"></i> <%= carton.carton_number %></h5>
-              <div class="mb-2"><small><strong>Panel:</strong> <%= carton.panel_name %></small></div>
-              <hr>
-              <div class="d-flex justify-content-between mb-2">
-                <small><strong>Packed:</strong> <%= new Date(carton.date_of_packing).toLocaleDateString() %></small>
-                <small><strong>By:</strong> <%= carton.packed_by %></small>
-              </div>
-              <div class="d-flex justify-content-between">
-                <span class="badge badge-blue">SKUs: <%= carton.sku_count %></span>
-                <span class="badge badge-green">Qty: <%= carton.total_quantity %></span>
+          <div class="col-md-6 col-lg-4 carton-item mb-4"
+               data-carton-number="<%= carton.carton_number.toLowerCase() %>"
+               data-creator="<%= carton.creator_username.toLowerCase() %>"
+               data-packed-by="<%= carton.packed_by.toLowerCase() %>"
+               data-date="<%= carton.date_of_packing %>">
+            <div class="card carton-card h-100" onclick="viewCartonDetails(<%= carton.id %>)" style="cursor: pointer;">
+              <div class="card-body">
+                <!-- Creator Badge -->
+                <span class="badge mb-3" style="background: var(--terracotta);">
+                  <i class="bi bi-person me-1"></i> <%= carton.creator_username %>
+                </span>
+
+                <!-- Carton Number -->
+                <h5 class="card-title mb-2" style="font-family: var(--font-display); color: var(--charcoal);">
+                  <i class="bi bi-box" style="color: var(--terracotta);"></i> <%= carton.carton_number %>
+                </h5>
+
+                <!-- Panel Name -->
+                <p class="mb-2" style="font-size: 0.875rem; color: var(--text-secondary);">
+                  <strong>Panel:</strong> <%= carton.panel_name %>
+                </p>
+
+                <hr style="border-color: var(--border-light);">
+
+                <!-- Date and Packed By -->
+                <div class="d-flex justify-content-between mb-3" style="font-size: 0.85rem;">
+                  <span style="color: var(--text-secondary);">
+                    <i class="bi bi-calendar2 me-1"></i> <%= new Date(carton.date_of_packing).toLocaleDateString() %>
+                  </span>
+                  <span style="color: var(--text-secondary);">
+                    <i class="bi bi-person-badge me-1"></i> <%= carton.packed_by %>
+                  </span>
+                </div>
+
+                <!-- Stats Badges -->
+                <div class="d-flex justify-content-between">
+                  <span class="badge" style="background: var(--info); font-size: 0.8rem;">
+                    <i class="bi bi-upc me-1"></i> SKUs: <%= carton.sku_count %>
+                  </span>
+                  <span class="badge" style="background: var(--success); font-size: 0.8rem;">
+                    <i class="bi bi-stack me-1"></i> Qty: <%= carton.total_quantity %>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -69,46 +126,296 @@
       </div>
     <% } %>
   </div>
-  <div class="modal fade" id="cartonModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">Carton Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body" id="modalContent"></div>
+</main>
+
+<!-- Carton Details Modal -->
+<div class="modal fade" id="cartonModal" tabindex="-1" aria-labelledby="cartonModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="border: none; border-radius: var(--radius-lg);">
+      <div class="modal-header" style="background: var(--charcoal); color: var(--text-inverse); border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+        <h5 class="modal-title" id="cartonModalLabel" style="font-family: var(--font-display);">
+          <i class="bi bi-box-seam me-2"></i> Carton Details
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modalContent" style="background: var(--cream);">
+        <!-- Content loaded dynamically -->
       </div>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    async function viewCartonDetails(cartonId) {
-      try {
-        const response = await fetch(\`/po-creator/api/carton/\${cartonId}\`);
-        const data = await response.json();
-        if (response.ok) {
-          let html = \`<div class="mb-3"><h6>Carton Information</h6><table class="table table-bordered"><tr><th>Carton Number</th><td>\${data.carton.carton_number}</td></tr><tr><th>Panel Name</th><td>\${data.carton.panel_name}</td></tr><tr><th>Date of Packing</th><td>\${new Date(data.carton.date_of_packing).toLocaleDateString()}</td></tr><tr><th>Packed By</th><td>\${data.carton.packed_by}</td></tr></table></div><div><h6>SKU Details</h6><table class="table table-striped table-bordered"><thead><tr><th>Brand</th><th>Category</th><th>SKU Code</th><th>Full SKU</th><th>Size</th><th>Quantity</th></tr></thead><tbody>\`;
-          data.skus.forEach(sku => { html += \`<tr><td>\${sku.brand_code}</td><td>\${sku.category}</td><td>\${sku.sku_code}</td><td><strong>\${sku.full_sku}</strong></td><td>\${sku.size}</td><td>\${sku.quantity}</td></tr>\`; });
-          html += \`</tbody></table></div>\`;
-          document.getElementById('modalContent').innerHTML = html;
-          new bootstrap.Modal(document.getElementById('cartonModal')).show();
-        } else { alert('Error loading details'); }
-      } catch (error) { alert('Error loading details'); }
+</div>
+
+<style>
+  /* Page-specific styles */
+  .carton-card {
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-light);
+  }
+
+  .carton-card:hover {
+    border-color: var(--terracotta);
+    box-shadow: 0 6px 20px rgba(196, 92, 58, 0.15);
+    transform: translateY(-3px);
+  }
+
+  .form-control:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 0.2rem rgba(196, 92, 58, 0.15);
+  }
+
+  .btn-success {
+    background: var(--success);
+    border-color: var(--success);
+  }
+
+  .btn-success:hover {
+    background: #247a52;
+    border-color: #247a52;
+  }
+
+  .btn-secondary {
+    background: var(--charcoal-muted);
+    border-color: var(--charcoal-muted);
+    color: white;
+  }
+
+  .btn-secondary:hover {
+    background: var(--charcoal);
+    border-color: var(--charcoal);
+  }
+
+  .btn-outline-secondary {
+    border-color: var(--border-medium);
+    color: var(--text-secondary);
+  }
+
+  .btn-outline-secondary:hover {
+    background: var(--gray-100);
+    border-color: var(--border-dark);
+    color: var(--text-primary);
+  }
+
+  /* Modal table styling */
+  #modalContent .table {
+    margin-bottom: 0;
+  }
+
+  #modalContent .table th {
+    background: var(--cream-dark);
+    color: var(--charcoal);
+    font-weight: 600;
+    border-color: var(--border-light);
+  }
+
+  #modalContent .table td {
+    border-color: var(--border-light);
+    color: var(--text-primary);
+  }
+
+  #modalContent .table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: var(--cream);
+  }
+
+  #modalContent h6 {
+    font-family: var(--font-display);
+    color: var(--terracotta);
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+
+  /* Input group styling */
+  .input-group-text {
+    border-right: none;
+  }
+
+  .input-group .form-control {
+    border-left: none;
+  }
+
+  .input-group .form-control:focus {
+    border-left: none;
+  }
+
+  .input-group:focus-within .input-group-text {
+    border-color: var(--terracotta);
+  }
+</style>
+
+<script>
+  // View Carton Details - builds modal content from API response
+  async function viewCartonDetails(cartonId) {
+    try {
+      const response = await fetch(`/po-creator/api/carton/${cartonId}`);
+      const data = await response.json();
+      if (response.ok) {
+        const modalContent = document.getElementById('modalContent');
+        modalContent.textContent = '';
+
+        // Create carton info section
+        const cartonSection = document.createElement('div');
+        cartonSection.className = 'mb-4';
+
+        const cartonTitle = document.createElement('h6');
+        cartonTitle.innerHTML = '<i class="bi bi-info-circle me-2"></i>Carton Information';
+        cartonSection.appendChild(cartonTitle);
+
+        const cartonCard = document.createElement('div');
+        cartonCard.className = 'card';
+        cartonCard.style.border = '1px solid var(--border-light)';
+
+        const cartonCardBody = document.createElement('div');
+        cartonCardBody.className = 'card-body p-0';
+
+        const cartonTable = document.createElement('table');
+        cartonTable.className = 'table table-bordered mb-0';
+
+        const cartonInfo = [
+          { label: 'Carton Number', value: data.carton.carton_number, bold: true },
+          { label: 'Panel Name', value: data.carton.panel_name },
+          { label: 'Date of Packing', value: new Date(data.carton.date_of_packing).toLocaleDateString() },
+          { label: 'Packed By', value: data.carton.packed_by }
+        ];
+
+        cartonInfo.forEach(info => {
+          const row = document.createElement('tr');
+          const th = document.createElement('th');
+          th.style.width = '35%';
+          th.textContent = info.label;
+          const td = document.createElement('td');
+          if (info.bold) {
+            const strong = document.createElement('strong');
+            strong.textContent = info.value;
+            td.appendChild(strong);
+          } else {
+            td.textContent = info.value;
+          }
+          row.appendChild(th);
+          row.appendChild(td);
+          cartonTable.appendChild(row);
+        });
+
+        cartonCardBody.appendChild(cartonTable);
+        cartonCard.appendChild(cartonCardBody);
+        cartonSection.appendChild(cartonCard);
+        modalContent.appendChild(cartonSection);
+
+        // Create SKU details section
+        const skuSection = document.createElement('div');
+
+        const skuTitle = document.createElement('h6');
+        skuTitle.innerHTML = '<i class="bi bi-upc me-2"></i>SKU Details';
+        skuSection.appendChild(skuTitle);
+
+        const skuCard = document.createElement('div');
+        skuCard.className = 'card';
+        skuCard.style.border = '1px solid var(--border-light)';
+
+        const skuCardBody = document.createElement('div');
+        skuCardBody.className = 'card-body p-0';
+
+        const tableResponsive = document.createElement('div');
+        tableResponsive.className = 'table-responsive';
+
+        const skuTable = document.createElement('table');
+        skuTable.className = 'table table-striped table-bordered mb-0';
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Brand', 'Category', 'SKU Code', 'Full SKU', 'Size', 'Quantity'].forEach(text => {
+          const th = document.createElement('th');
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        skuTable.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        data.skus.forEach(sku => {
+          const row = document.createElement('tr');
+
+          const brandTd = document.createElement('td');
+          brandTd.textContent = sku.brand_code;
+          row.appendChild(brandTd);
+
+          const categoryTd = document.createElement('td');
+          categoryTd.textContent = sku.category;
+          row.appendChild(categoryTd);
+
+          const skuCodeTd = document.createElement('td');
+          skuCodeTd.textContent = sku.sku_code;
+          row.appendChild(skuCodeTd);
+
+          const fullSkuTd = document.createElement('td');
+          const fullSkuStrong = document.createElement('strong');
+          fullSkuStrong.textContent = sku.full_sku;
+          fullSkuStrong.style.color = 'var(--terracotta)';
+          fullSkuTd.appendChild(fullSkuStrong);
+          row.appendChild(fullSkuTd);
+
+          const sizeTd = document.createElement('td');
+          sizeTd.textContent = sku.size;
+          row.appendChild(sizeTd);
+
+          const qtyTd = document.createElement('td');
+          const qtyBadge = document.createElement('span');
+          qtyBadge.className = 'badge';
+          qtyBadge.style.background = 'var(--success)';
+          qtyBadge.textContent = sku.quantity;
+          qtyTd.appendChild(qtyBadge);
+          row.appendChild(qtyTd);
+
+          tbody.appendChild(row);
+        });
+        skuTable.appendChild(tbody);
+
+        tableResponsive.appendChild(skuTable);
+        skuCardBody.appendChild(tableResponsive);
+        skuCard.appendChild(skuCardBody);
+        skuSection.appendChild(skuCard);
+        modalContent.appendChild(skuSection);
+
+        new bootstrap.Modal(document.getElementById('cartonModal')).show();
+      } else {
+        alert('Error loading carton details. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error loading carton details. Please try again.');
     }
-    document.getElementById('searchInput').addEventListener('keyup', filterCartons);
-    document.getElementById('dateFilter').addEventListener('change', filterCartons);
-    function filterCartons() {
-      const searchValue = document.getElementById('searchInput').value.toLowerCase();
-      const dateValue = document.getElementById('dateFilter').value;
-      const items = document.querySelectorAll('.carton-item');
-      let visibleCount = 0;
-      items.forEach(item => {
-        let show = true;
-        if (searchValue) show = item.dataset.cartonNumber.includes(searchValue) || item.dataset.creator.includes(searchValue) || item.dataset.packedBy.includes(searchValue);
-        if (dateValue && show) show = item.dataset.date === dateValue;
-        item.style.display = show ? 'block' : 'none';
-        if (show) visibleCount++;
-      });
-      document.getElementById('totalCount').textContent = visibleCount;
-    }
-    function clearFilters() { document.getElementById('searchInput').value = ''; document.getElementById('dateFilter').value = ''; filterCartons(); }
-  </script>
-</body>
-</html>
+  }
+
+  // Filter Cartons
+  document.getElementById('searchInput').addEventListener('keyup', filterCartons);
+  document.getElementById('dateFilter').addEventListener('change', filterCartons);
+
+  function filterCartons() {
+    const searchValue = document.getElementById('searchInput').value.toLowerCase();
+    const dateValue = document.getElementById('dateFilter').value;
+    const items = document.querySelectorAll('.carton-item');
+    let visibleCount = 0;
+
+    items.forEach(item => {
+      let show = true;
+      if (searchValue) {
+        show = item.dataset.cartonNumber.includes(searchValue) ||
+               item.dataset.creator.includes(searchValue) ||
+               item.dataset.packedBy.includes(searchValue);
+      }
+      if (dateValue && show) {
+        show = item.dataset.date === dateValue;
+      }
+      item.style.display = show ? 'block' : 'none';
+      if (show) visibleCount++;
+    });
+
+    document.getElementById('totalCount').textContent = visibleCount;
+  }
+
+  function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('dateFilter').value = '';
+    filterCartons();
+  }
+</script>
+
+<%- include('../partials/footer') %>

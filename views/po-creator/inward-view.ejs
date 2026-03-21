@@ -1,90 +1,456 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>View Inward Data - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
-    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-    .container-fluid { max-width: 1400px; margin: 0 auto; }
-    .back-btn, .download-btn { padding: 10px 20px; border-radius: 6px; text-decoration: none; border: none; font-size: 14px; cursor: pointer; }
-    .back-btn { background: #6c757d; color: white; }
-    .download-btn { background: #10b981; color: white; }
-    .download-btn:hover { background: #059669; }
-    .carton-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 15px; cursor: pointer; transition: all 0.2s; }
-    .carton-card:hover { border-color: #2563eb; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
-    .badge { padding: 5px 10px; border-radius: 5px; font-size: 12px; }
-    .badge-blue { background: #2563eb; color: white; }
-    .badge-green { background: #10b981; color: white; }
-  </style>
-</head>
-<body>
-  <div class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4 class="mb-0"><i class="bi bi-list-ul"></i> Inward Data</h4>
-      <div>
-        <a href="/po-creator/download/inward-excel" class="download-btn me-2"><i class="bi bi-download"></i> Download Excel</a>
-        <a href="/po-creator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
+<%- include('../partials/header', { pageTitle: 'View Inward Data' }) %>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/po-creator/dashboard' }) %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Flash Messages -->
+    <%- include('../partials/flashMessages') %>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Inward Data</h1>
+          <p class="page-subtitle">View all carton and SKU entries</p>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/po-creator/download/inward-excel" class="btn btn-success">
+            <i class="bi bi-download me-1"></i> Download Excel
+          </a>
+          <a href="/po-creator/dashboard" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+          </a>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="container-fluid">
-    <%- include('../partials/flashMessages') %>
+
+    <!-- Content Section -->
     <% if (cartons.length === 0) { %>
-      <div class="alert alert-info"><i class="bi bi-info-circle"></i> No inward entries found. <a href="/po-creator/inward">Create your first entry</a></div>
+      <div class="card">
+        <div class="card-body text-center py-5">
+          <div style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;">
+            <i class="bi bi-inbox"></i>
+          </div>
+          <h5 style="font-family: var(--font-display); color: var(--text-primary); margin-bottom: 8px;">No Inward Entries Found</h5>
+          <p style="color: var(--text-secondary); margin-bottom: 20px;">Start by creating your first carton entry.</p>
+          <a href="/po-creator/inward" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> Create Entry
+          </a>
+        </div>
+      </div>
     <% } else { %>
-      <div class="row">
+      <div class="row g-4">
         <% cartons.forEach(carton => { %>
           <div class="col-md-6 col-lg-4">
             <div class="carton-card" onclick="viewCartonDetails(<%= carton.id %>)">
-              <h5><i class="bi bi-box"></i> <%= carton.carton_number %></h5>
-              <div class="mb-2"><small><strong>Panel:</strong> <%= carton.panel_name %></small></div>
-              <hr>
-              <div class="d-flex justify-content-between mb-2">
-                <small><strong>Packed:</strong> <%= new Date(carton.date_of_packing).toLocaleDateString() %></small>
-                <small><strong>By:</strong> <%= carton.packed_by %></small>
+              <div class="carton-header">
+                <div class="carton-icon">
+                  <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="carton-info">
+                  <h5 class="carton-number"><%= carton.carton_number %></h5>
+                  <span class="carton-panel"><%= carton.panel_name %></span>
+                </div>
               </div>
-              <div class="d-flex justify-content-between">
-                <span class="badge badge-blue">SKUs: <%= carton.sku_count %></span>
-                <span class="badge badge-green">Qty: <%= carton.total_quantity %></span>
+              <div class="carton-divider"></div>
+              <div class="carton-details">
+                <div class="detail-row">
+                  <span class="detail-label"><i class="bi bi-calendar3 me-1"></i> Packed:</span>
+                  <span class="detail-value"><%= new Date(carton.date_of_packing).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %></span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label"><i class="bi bi-person me-1"></i> By:</span>
+                  <span class="detail-value"><%= carton.packed_by %></span>
+                </div>
+              </div>
+              <div class="carton-badges">
+                <span class="carton-badge badge-sku">
+                  <i class="bi bi-upc-scan me-1"></i> <%= carton.sku_count %> SKUs
+                </span>
+                <span class="carton-badge badge-qty">
+                  <i class="bi bi-layers me-1"></i> <%= carton.total_quantity %> Qty
+                </span>
               </div>
             </div>
           </div>
         <% }) %>
       </div>
     <% } %>
+
   </div>
-  <div class="modal fade" id="cartonModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Carton Details</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body" id="modalContent"></div>
+</main>
+
+<!-- Carton Details Modal -->
+<div class="modal fade" id="cartonModal" tabindex="-1" aria-labelledby="cartonModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="border: none; border-radius: var(--radius-xl); overflow: hidden;">
+      <div class="modal-header" style="background: var(--charcoal); color: var(--text-inverse); border: none; padding: 20px 24px;">
+        <h5 class="modal-title" id="cartonModalLabel" style="font-family: var(--font-display); font-size: var(--text-xl);">
+          <i class="bi bi-box-seam me-2"></i> Carton Details
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modalContent" style="padding: 24px;">
+        <!-- Content loaded dynamically -->
       </div>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    async function viewCartonDetails(cartonId) {
-      try {
-        const response = await fetch(\`/po-creator/api/carton/\${cartonId}\`);
-        const data = await response.json();
-        if (response.ok) {
-          let html = \`<div class="mb-3"><h6>Carton Information</h6><table class="table table-bordered"><tr><th>Carton Number</th><td>\${data.carton.carton_number}</td></tr><tr><th>Panel Name</th><td>\${data.carton.panel_name}</td></tr><tr><th>Date of Packing</th><td>\${new Date(data.carton.date_of_packing).toLocaleDateString()}</td></tr><tr><th>Packed By</th><td>\${data.carton.packed_by}</td></tr></table></div><div><h6>SKU Details</h6><table class="table table-striped table-bordered"><thead><tr><th>Brand</th><th>Category</th><th>SKU Code</th><th>Full SKU</th><th>Size</th><th>Quantity</th></tr></thead><tbody>\`;
-          data.skus.forEach(sku => { html += \`<tr><td>\${sku.brand_code}</td><td>\${sku.category}</td><td>\${sku.sku_code}</td><td><strong>\${sku.full_sku}</strong></td><td>\${sku.size}</td><td>\${sku.quantity}</td></tr>\`; });
-          html += \`</tbody></table></div>\`;
-          document.getElementById('modalContent').innerHTML = html;
-          new bootstrap.Modal(document.getElementById('cartonModal')).show();
-        } else { alert('Error loading carton details'); }
-      } catch (error) { alert('Error loading carton details'); }
+</div>
+
+<style>
+  /* Carton Cards */
+  .carton-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    height: 100%;
+  }
+
+  .carton-card:hover {
+    border-color: var(--terracotta);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .carton-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .carton-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .carton-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .carton-number {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .carton-panel {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .carton-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 0 -20px 16px -20px;
+  }
+
+  .carton-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .detail-label {
+    color: var(--text-secondary);
+  }
+
+  .detail-value {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .carton-badges {
+    display: flex;
+    gap: 8px;
+  }
+
+  .carton-badge {
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .badge-sku {
+    background: var(--info-light);
+    color: var(--info);
+  }
+
+  .badge-qty {
+    background: var(--success-light);
+    color: var(--success);
+  }
+
+  /* Modal Table Styles */
+  .modal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .modal-table th,
+  .modal-table td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .modal-table th {
+    background: var(--gray-50);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+  }
+
+  .modal-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .modal-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    background: var(--gray-50);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .info-label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .info-value {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title i {
+    color: var(--terracotta);
+  }
+
+  /* Button Styles */
+  .btn-primary {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-success {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+  }
+
+  .btn-success:hover {
+    background: #256b4d;
+    border-color: #256b4d;
+    color: white;
+  }
+
+  .btn-secondary {
+    background: var(--charcoal);
+    border-color: var(--charcoal);
+    color: white;
+  }
+
+  .btn-secondary:hover {
+    background: var(--charcoal-light);
+    border-color: var(--charcoal-light);
+    color: white;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 576px) {
+    .info-grid {
+      grid-template-columns: 1fr;
     }
-  </script>
-</body>
-</html>
+
+    .carton-badges {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+
+<script>
+  async function viewCartonDetails(cartonId) {
+    try {
+      const response = await fetch(`/po-creator/api/carton/${cartonId}`);
+      const data = await response.json();
+
+      if (response.ok) {
+        const modalContent = document.getElementById('modalContent');
+
+        // Build carton info section
+        const infoSection = document.createElement('div');
+        infoSection.innerHTML = '<div class="section-title"><i class="bi bi-info-circle"></i> Carton Information</div>';
+
+        const infoGrid = document.createElement('div');
+        infoGrid.className = 'info-grid';
+
+        const infoItems = [
+          { label: 'Carton Number', value: data.carton.carton_number },
+          { label: 'Panel Name', value: data.carton.panel_name },
+          { label: 'Date of Packing', value: new Date(data.carton.date_of_packing).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+          { label: 'Packed By', value: data.carton.packed_by }
+        ];
+
+        infoItems.forEach(item => {
+          const infoItem = document.createElement('div');
+          infoItem.className = 'info-item';
+
+          const label = document.createElement('span');
+          label.className = 'info-label';
+          label.textContent = item.label;
+
+          const value = document.createElement('span');
+          value.className = 'info-value';
+          value.textContent = item.value;
+
+          infoItem.appendChild(label);
+          infoItem.appendChild(value);
+          infoGrid.appendChild(infoItem);
+        });
+
+        infoSection.appendChild(infoGrid);
+
+        // Build SKU section
+        const skuSection = document.createElement('div');
+        skuSection.innerHTML = '<div class="section-title"><i class="bi bi-upc-scan"></i> SKU Details</div>';
+
+        const tableWrapper = document.createElement('div');
+        tableWrapper.style.cssText = 'overflow-x: auto; border: 1px solid var(--border-light); border-radius: var(--radius-md);';
+
+        const table = document.createElement('table');
+        table.className = 'modal-table';
+
+        // Table header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Brand', 'Category', 'SKU Code', 'Full SKU', 'Size', 'Quantity'].forEach(text => {
+          const th = document.createElement('th');
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Table body
+        const tbody = document.createElement('tbody');
+        data.skus.forEach(sku => {
+          const row = document.createElement('tr');
+
+          const brandCell = document.createElement('td');
+          brandCell.textContent = sku.brand_code;
+          row.appendChild(brandCell);
+
+          const categoryCell = document.createElement('td');
+          categoryCell.textContent = sku.category;
+          row.appendChild(categoryCell);
+
+          const skuCodeCell = document.createElement('td');
+          skuCodeCell.textContent = sku.sku_code;
+          row.appendChild(skuCodeCell);
+
+          const fullSkuCell = document.createElement('td');
+          const strong = document.createElement('strong');
+          strong.style.color = 'var(--terracotta)';
+          strong.textContent = sku.full_sku;
+          fullSkuCell.appendChild(strong);
+          row.appendChild(fullSkuCell);
+
+          const sizeCell = document.createElement('td');
+          sizeCell.textContent = sku.size;
+          row.appendChild(sizeCell);
+
+          const qtyCell = document.createElement('td');
+          const qtySpan = document.createElement('span');
+          qtySpan.style.fontWeight = '600';
+          qtySpan.textContent = sku.quantity;
+          qtyCell.appendChild(qtySpan);
+          row.appendChild(qtyCell);
+
+          tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableWrapper.appendChild(table);
+        skuSection.appendChild(tableWrapper);
+
+        // Clear and append all content
+        modalContent.textContent = '';
+        modalContent.appendChild(infoSection);
+        modalContent.appendChild(skuSection);
+
+        new bootstrap.Modal(document.getElementById('cartonModal')).show();
+      } else {
+        alert('Error loading carton details');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error loading carton details');
+    }
+  }
+</script>
+
+<%- include('../partials/footer') %>

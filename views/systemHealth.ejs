@@ -1,0 +1,452 @@
+<%- include('partials/header', { pageTitle: 'System Health' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  /* System Health Page Styles */
+  .system-health-container {
+    padding-top: calc(var(--navbar-height) + 24px);
+    padding-bottom: 48px;
+    min-height: 100vh;
+  }
+
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-header h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .page-header .subtitle {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+  }
+
+  /* Health Cards */
+  .health-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-light);
+  }
+
+  .health-card h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  /* Status Colors */
+  .status-ok {
+    color: var(--success);
+  }
+
+  .status-error {
+    color: var(--danger);
+  }
+
+  .status-warning {
+    color: var(--warning);
+  }
+
+  .badge-healthy {
+    background-color: var(--success);
+    color: white;
+    padding: 6px 16px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-family: var(--font-body);
+  }
+
+  .badge-error {
+    background-color: var(--danger);
+    color: white;
+    padding: 6px 16px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-family: var(--font-body);
+  }
+
+  /* Stat Boxes */
+  .stat-box {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-xs);
+    transition: var(--transition-base);
+  }
+
+  .stat-box:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .stat-box .value {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    color: var(--text-primary);
+    line-height: 1.2;
+  }
+
+  .stat-box .value.status-warning {
+    color: var(--warning);
+  }
+
+  .stat-box .label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: 8px;
+  }
+
+  /* Feature Grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .feature-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    border-left: 4px solid var(--success);
+    box-shadow: var(--shadow-xs);
+    transition: var(--transition-base);
+  }
+
+  .feature-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .feature-card.error {
+    border-left-color: var(--danger);
+  }
+
+  .feature-card h5 {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+  }
+
+  .feature-card .stats {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .feature-card .stats strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .last-activity {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Section Title */
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title i {
+    color: var(--terracotta);
+  }
+
+  /* Quick Links */
+  .quick-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .quick-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--cream-dark);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    transition: var(--transition-base);
+    border: 1px solid var(--border-light);
+  }
+
+  .quick-links a:hover {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .quick-links a i {
+    font-size: 1rem;
+  }
+
+  /* Alert Styles */
+  .alert-cleanup {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+  }
+
+  .alert-cleanup i {
+    color: var(--warning);
+    font-size: 1.25rem;
+  }
+
+  .alert-cleanup a {
+    color: var(--terracotta);
+    font-weight: 500;
+  }
+
+  .alert-cleanup a:hover {
+    color: var(--terracotta-dark);
+  }
+
+  .alert-error {
+    background: var(--danger-light);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+  }
+
+  /* Open Button in Feature Card */
+  .btn-feature-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px 14px;
+    background: var(--cream-dark);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition: var(--transition-base);
+  }
+
+  .btn-feature-open:hover {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  /* Refresh Footer */
+  .refresh-footer {
+    text-align: center;
+    padding: 24px 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .refresh-footer button {
+    background: none;
+    border: none;
+    color: var(--terracotta);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: var(--transition-base);
+  }
+
+  .refresh-footer button:hover {
+    color: var(--terracotta-dark);
+    text-decoration: underline;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .system-health-container {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+
+    .page-header h1 {
+      font-size: var(--text-2xl);
+    }
+
+    .stat-box .value {
+      font-size: var(--text-xl);
+    }
+
+    .feature-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .quick-links a {
+      padding: 8px 12px;
+      font-size: var(--text-xs);
+    }
+  }
+</style>
+
+<div class="system-health-container">
+  <div class="container" style="max-width: var(--content-max-width);">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1>System Health</h1>
+      <p class="subtitle">Monitor system status, database connections, and feature health</p>
+    </div>
+
+    <% if (error && error.length) { %>
+      <div class="alert-error">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <%= error %>
+      </div>
+    <% } %>
+
+    <!-- Database Status -->
+    <div class="health-card">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h4>
+            <i class="bi bi-database me-2 <%= dbHealthy ? 'status-ok' : 'status-error' %>"></i>
+            Database Status
+          </h4>
+          <p class="mb-0" style="color: var(--text-secondary); font-size: var(--text-sm);">MySQL Cloud SQL Connection</p>
+        </div>
+        <div>
+          <span class="<%= dbHealthy ? 'badge-healthy' : 'badge-error' %>">
+            <%= dbHealthy ? 'HEALTHY' : 'ERROR' %>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-2 col-6">
+        <div class="stat-box">
+          <div class="value"><%= stats.activeUsers %></div>
+          <div class="label">Active Users</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="stat-box">
+          <div class="value"><%= stats.totalRoles %></div>
+          <div class="label">Roles</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="stat-box">
+          <div class="value"><%= stats.activeSessions24h %></div>
+          <div class="label">Sessions (24h)</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="stat-box">
+          <div class="value <%= stats.inventoryRawRows > 0 ? 'status-warning' : '' %>">
+            <%= (stats.inventoryRawRows / 1000).toFixed(1) %>K
+          </div>
+          <div class="label">Inventory Raw Rows</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="stat-box">
+          <div class="value <%= stats.ordersRawRows > 0 ? 'status-warning' : '' %>">
+            <%= (stats.ordersRawRows / 1000).toFixed(1) %>K
+          </div>
+          <div class="label">Orders Raw Rows</div>
+        </div>
+      </div>
+    </div>
+
+    <% if (stats.inventoryRawRows > 0 || stats.ordersRawRows > 0) { %>
+    <div class="alert-cleanup d-flex align-items-center">
+      <i class="bi bi-exclamation-triangle me-3"></i>
+      <div>
+        Raw data needs cleanup to save database space.
+        <a href="/webhook/logs">Go to Inventory Logs</a> |
+        <a href="/webhook/order/logs">Go to Order Logs</a>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Feature Status Grid -->
+    <h5 class="section-title"><i class="bi bi-grid-3x3-gap-fill"></i>Feature Status</h5>
+    <div class="feature-grid mb-4">
+      <% features.forEach(function(f) { %>
+      <div class="feature-card <%= f.status === 'error' ? 'error' : '' %>">
+        <div class="d-flex justify-content-between align-items-start">
+          <h5><%= f.name %></h5>
+          <span class="<%= f.status === 'ok' ? 'status-ok' : 'status-error' %>">
+            <i class="bi <%= f.status === 'ok' ? 'bi-check-circle-fill' : 'bi-x-circle-fill' %>" style="font-size: 1.25rem;"></i>
+          </span>
+        </div>
+        <div class="stats">
+          <div><strong><%= f.rowCount.toLocaleString() %></strong> records</div>
+          <% if (f.lastActivity) { %>
+          <div class="last-activity">
+            Last: <%= new Date(f.lastActivity).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) %>
+          </div>
+          <% } %>
+          <% if (f.error) { %>
+          <div class="status-error mt-2"><small><i class="bi bi-exclamation-circle me-1"></i><%= f.error %></small></div>
+          <% } %>
+        </div>
+        <a href="<%= f.path %>" class="btn-feature-open">
+          <i class="bi bi-box-arrow-up-right"></i>Open
+        </a>
+      </div>
+      <% }); %>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="health-card">
+      <h5 class="section-title" style="margin-bottom: 16px;"><i class="bi bi-link-45deg"></i>Quick Links</h5>
+      <div class="quick-links">
+        <a href="/operator/dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
+        <a href="/operator/documentation"><i class="bi bi-book"></i>Documentation</a>
+        <a href="/operator/usage-analytics"><i class="bi bi-bar-chart"></i>Usage Analytics</a>
+        <a href="/webhook/logs"><i class="bi bi-database"></i>Inventory Logs</a>
+        <a href="/webhook/order/logs"><i class="bi bi-cart"></i>Order Logs</a>
+        <a href="/admin"><i class="bi bi-gear"></i>Admin Panel</a>
+        <a href="/operator/sku-management"><i class="bi bi-box"></i>SKU Management</a>
+        <a href="/product-links"><i class="bi bi-link"></i>Product Links</a>
+        <a href="/returns/dashboard"><i class="bi bi-arrow-return-left"></i>Returns</a>
+      </div>
+    </div>
+
+    <!-- Last Refresh -->
+    <div class="refresh-footer">
+      Page loaded: <%= new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) %> IST
+      <br>
+      <button onclick="location.reload()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<%- include('partials/footer') %>

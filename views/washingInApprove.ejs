@@ -1,277 +1,761 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Washing In Approvals</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Bootstrap 5 & FontAwesome -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    rel="stylesheet"
-  />
-  <style>
-    body { background-color: #f8f9fa; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Approve Washing In' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/washingin/dashboard' }) %>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#">Washing In Approvals</a>
-      <div class="ms-auto">
-        <a href="/washingin" class="btn btn-outline-light btn-sm">
-          <i class="fas fa-arrow-left"></i> Back to Dashboard
-        </a>
-      </div>
+<style>
+  /* Page Layout */
+  .page-wrapper {
+    padding-top: calc(var(--navbar-height) + 24px);
+    padding-bottom: 48px;
+    min-height: 100vh;
+  }
+
+  .page-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .page-subtitle {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+  }
+
+  /* Search Input */
+  .search-wrapper {
+    margin-bottom: 24px;
+  }
+
+  .search-input-group {
+    position: relative;
+  }
+
+  .search-input-group i {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 14px 16px 14px 48px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Loading Spinner */
+  .loading-spinner {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    padding: 48px;
+  }
+
+  .loading-spinner.active {
+    display: flex;
+  }
+
+  .spinner-icon {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-light);
+    border-top-color: var(--terracotta);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Assignment Cards */
+  .assignments-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .assignment-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition: all var(--transition-base);
+  }
+
+  .assignment-card:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-md);
+  }
+
+  .assignment-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .assignment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+  }
+
+  .meta-label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .meta-value {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .meta-value.lot-no {
+    color: var(--terracotta);
+    font-family: var(--font-mono);
+  }
+
+  .assignment-date {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .assignment-body {
+    padding: 20px;
+  }
+
+  .assignment-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .assignment-id {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .assignment-id code {
+    font-family: var(--font-mono);
+    background: var(--gray-100);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    color: var(--text-primary);
+  }
+
+  .cutting-remark {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .cutting-remark strong {
+    color: var(--text-primary);
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 12px;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-kotty:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-approve {
+    background: var(--success);
+    color: white;
+  }
+
+  .btn-approve:hover:not(:disabled) {
+    background: #248553;
+    transform: translateY(-1px);
+  }
+
+  .btn-deny {
+    background: var(--bg-card);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+  }
+
+  .btn-deny:hover:not(:disabled) {
+    background: var(--danger-light);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 64px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    background: var(--info-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+  }
+
+  .empty-state-icon i {
+    font-size: 28px;
+    color: var(--info);
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Error State */
+  .error-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: var(--danger-light);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-xl);
+  }
+
+  .error-state-icon {
+    width: 56px;
+    height: 56px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+  }
+
+  .error-state-icon i {
+    font-size: 24px;
+    color: var(--danger);
+  }
+
+  .error-state-text {
+    font-size: var(--text-base);
+    color: var(--danger);
+    font-weight: 500;
+  }
+
+  /* Modal Styling */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .modal-header {
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    padding: 20px 24px;
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--danger);
+  }
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+
+  .form-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  .form-control {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .btn-secondary {
+    background: var(--gray-200);
+    color: var(--text-primary);
+    border: none;
+  }
+
+  .btn-secondary:hover {
+    background: var(--gray-300);
+    color: var(--text-primary);
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: white;
+    border: none;
+  }
+
+  .btn-danger:hover {
+    background: #a83420;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .page-container {
+      padding: 0 16px;
+    }
+
+    .page-title {
+      font-size: var(--text-2xl);
+    }
+
+    .assignment-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .action-buttons {
+      width: 100%;
+    }
+
+    .btn-kotty {
+      flex: 1;
+    }
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Washing In Approvals</h1>
+      <p class="page-subtitle">Review and approve pending washing in assignments</p>
     </div>
-  </nav>
-
-  <div class="container my-4">
-    <!-- Flash messages -->
-    <% if (error && error.length) { %>
-      <div class="alert alert-danger">
-        <ul class="mb-0">
-          <% error.forEach(msg => { %>
-            <li><%= msg %></li>
-          <% }) %>
-        </ul>
-      </div>
-    <% } %>
-    <% if (success && success.length) { %>
-      <div class="alert alert-success">
-        <ul class="mb-0">
-          <% success.forEach(msg => { %>
-            <li><%= msg %></li>
-          <% }) %>
-        </ul>
-      </div>
-    <% } %>
-
-    <h2 class="mb-4">Pending Washing In Assignments</h2>
 
     <!-- Search Field -->
-    <div class="mb-3">
-      <input
-        type="text"
-        id="searchInput"
-        class="form-control"
-        placeholder="Search by Lot or SKU"
-        autocomplete="off"
-      />
-    </div>
-
-    <!-- Spinner (hidden by default) -->
-    <div id="spinner" class="spinner-border text-primary d-none" role="status">
-      <span class="visually-hidden">Loading…</span>
-    </div>
-
-    <!-- Assignments Container -->
-    <div id="assignmentsContainer"></div>
-  </div>
-
-  <!-- Deny Modal -->
-  <div
-    class="modal fade"
-    id="denyModal"
-    tabindex="-1"
-    aria-labelledby="denyModalLabel"
-    aria-hidden="true"
-  >
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form id="denyForm">
-          <div class="modal-header">
-            <h5 class="modal-title" id="denyModalLabel">
-              <i class="fas fa-ban"></i> Deny Assignment
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" id="denyAssignmentId" />
-            <div class="mb-3">
-              <label for="denialRemark" class="form-label">
-                Reason for Denial
-              </label>
-              <textarea
-                id="denialRemark"
-                class="form-control"
-                rows="3"
-                required
-              ></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              <i class="fas fa-times"></i> Cancel
-            </button>
-            <button type="submit" class="btn btn-danger">
-              <i class="fas fa-ban"></i> Deny
-            </button>
-          </div>
-        </form>
+    <div class="search-wrapper">
+      <div class="search-input-group">
+        <i class="bi bi-search"></i>
+        <input type="text" id="searchInput" class="search-input" placeholder="Search by Lot or SKU..." autocomplete="off">
       </div>
     </div>
+
+    <!-- Loading Spinner -->
+    <div id="spinner" class="loading-spinner">
+      <div class="spinner-icon"></div>
+    </div>
+
+    <!-- Container for assignments -->
+    <div id="assignmentsContainer" class="assignments-grid"></div>
   </div>
+</div>
 
-  <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Deny Modal -->
+<div class="modal fade" id="denyModal" tabindex="-1" aria-labelledby="denyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="denyForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="denyModalLabel">
+            <i class="bi bi-x-circle"></i>
+            Deny Assignment
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="denyAssignmentId">
+          <div class="mb-3">
+            <label for="denialRemark" class="form-label">Reason for Denial</label>
+            <textarea id="denialRemark" class="form-control" rows="3" required placeholder="Please provide a reason for denying this assignment..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-x-circle me-1"></i> Deny Assignment
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const container = document.getElementById('assignmentsContainer');
-      const spinner   = document.getElementById('spinner');
-      const search    = document.getElementById('searchInput');
-      const denyForm  = document.getElementById('denyForm');
-      let denyModal   = new bootstrap.Modal(document.getElementById('denyModal'));
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('assignmentsContainer');
+    const spinner = document.getElementById('spinner');
+    const search = document.getElementById('searchInput');
+    const denyForm = document.getElementById('denyForm');
+    let denyModal = new bootstrap.Modal(document.getElementById('denyModal'));
 
-      async function loadAssignments() {
-        container.innerHTML = '';            // clear stale
-        spinner.classList.remove('d-none');
-        try {
-          const term = encodeURIComponent(search.value.trim());
-          const res  = await fetch(`/washingin/approve/list?search=${term}`, {
-            credentials: 'same-origin'
-          });
-          if (!res.ok) throw new Error(res.statusText);
-          const { data } = await res.json();
-          renderAssignments(data);
-        } catch (err) {
-          console.error('[ERROR] loadAssignments:', err);
-          container.innerHTML =
-            '<div class="alert alert-danger">Error loading assignments.</div>';
-        } finally {
-          spinner.classList.add('d-none');
-        }
+    // Helper function to escape HTML to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function loadAssignments() {
+      container.innerHTML = '';
+      spinner.classList.add('active');
+      try {
+        const term = encodeURIComponent(search.value.trim());
+        const res = await fetch(`/washingin/approve/list?search=${term}`, {
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const { data } = await res.json();
+        renderAssignments(data);
+      } catch (err) {
+        console.error('[ERROR] loadAssignments:', err);
+        container.innerHTML = '';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-state';
+        errorDiv.innerHTML = '<div class="error-state-icon"><i class="bi bi-exclamation-triangle"></i></div><p class="error-state-text">Error loading assignments. Please try again.</p>';
+        container.appendChild(errorDiv);
+      } finally {
+        spinner.classList.remove('active');
+      }
+    }
+
+    function renderAssignments(list) {
+      container.innerHTML = '';
+      if (!list.length) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state';
+        emptyDiv.innerHTML = '<div class="empty-state-icon"><i class="bi bi-check-circle"></i></div><h3 class="empty-state-title">All Caught Up</h3><p class="empty-state-text">No pending washing in assignments to approve.</p>';
+        container.appendChild(emptyDiv);
+        return;
       }
 
-      function renderAssignments(list) {
-        if (!list.length) {
-          container.innerHTML =
-            '<div class="alert alert-info">No pending assignments found.</div>';
-          return;
-        }
-        list.forEach(a => {
-          const assignedOn = new Date(a.assigned_on).toLocaleString();
-          const card = document.createElement('div');
-          card.className = 'card mb-3';
-          card.innerHTML = `
-            <div class="card-header">
-              <strong>Lot:</strong> ${a.lot_no}
-              | <strong>SKU:</strong> ${a.sku}
-              | <strong>Pieces:</strong> ${a.total_pieces}
-              <small class="text-muted">Assigned: ${assignedOn}</small>
-            </div>
-            <div class="card-body">
-              <p><strong>Assignment ID:</strong> ${a.assignment_id}</p>
-              <p><strong>Cutting Remark:</strong> ${a.cutting_remark || '—'}</p>
-              <div class="d-flex gap-2">
-                <button
-                  type="button"
-                  class="btn btn-success btn-sm approveBtn"
-                  data-id="${a.assignment_id}"
-                >
-                  <i class="fas fa-check"></i> Approve
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-danger btn-sm denyBtn"
-                  data-id="${a.assignment_id}"
-                >
-                  <i class="fas fa-ban"></i> Deny
-                </button>
-              </div>
-            </div>
-          `;
-          container.appendChild(card);
+      list.forEach(a => {
+        const assignedOn = new Date(a.assigned_on).toLocaleString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
         });
 
-        // wire up approve
-        container.querySelectorAll('.approveBtn').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.dataset.id;
-            try {
-              const res = await fetch('/washingin/approve-lot', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assignment_id: id })
-              });
-              if (!res.ok) throw new Error(res.statusText);
-              const json = await res.json();
-              if (json.success) loadAssignments();
-              else alert(json.error || 'Could not approve.');
-            } catch (e) {
-              console.error('[ERROR] Approve:', e);
-              alert('Network or server error.');
+        const card = document.createElement('div');
+        card.className = 'assignment-card';
+
+        // Create header
+        const header = document.createElement('div');
+        header.className = 'assignment-header';
+
+        const meta = document.createElement('div');
+        meta.className = 'assignment-meta';
+
+        // Lot item
+        const lotItem = document.createElement('div');
+        lotItem.className = 'meta-item';
+        const lotLabel = document.createElement('span');
+        lotLabel.className = 'meta-label';
+        lotLabel.textContent = 'Lot:';
+        const lotValue = document.createElement('span');
+        lotValue.className = 'meta-value lot-no';
+        lotValue.textContent = a.lot_no;
+        lotItem.appendChild(lotLabel);
+        lotItem.appendChild(lotValue);
+
+        // SKU item
+        const skuItem = document.createElement('div');
+        skuItem.className = 'meta-item';
+        const skuLabel = document.createElement('span');
+        skuLabel.className = 'meta-label';
+        skuLabel.textContent = 'SKU:';
+        const skuValue = document.createElement('span');
+        skuValue.className = 'meta-value';
+        skuValue.textContent = a.sku;
+        skuItem.appendChild(skuLabel);
+        skuItem.appendChild(skuValue);
+
+        // Pieces item
+        const piecesItem = document.createElement('div');
+        piecesItem.className = 'meta-item';
+        const piecesLabel = document.createElement('span');
+        piecesLabel.className = 'meta-label';
+        piecesLabel.textContent = 'Pieces:';
+        const piecesValue = document.createElement('span');
+        piecesValue.className = 'meta-value';
+        piecesValue.textContent = a.total_pieces;
+        piecesItem.appendChild(piecesLabel);
+        piecesItem.appendChild(piecesValue);
+
+        meta.appendChild(lotItem);
+        meta.appendChild(skuItem);
+        meta.appendChild(piecesItem);
+
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'assignment-date';
+        const clockIcon = document.createElement('i');
+        clockIcon.className = 'bi bi-clock';
+        dateDiv.appendChild(clockIcon);
+        const dateText = document.createTextNode(' ' + assignedOn);
+        dateDiv.appendChild(dateText);
+
+        header.appendChild(meta);
+        header.appendChild(dateDiv);
+
+        // Create body
+        const body = document.createElement('div');
+        body.className = 'assignment-body';
+
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'assignment-info';
+
+        const idPara = document.createElement('p');
+        idPara.className = 'assignment-id';
+        idPara.textContent = 'Assignment ID: ';
+        const idCode = document.createElement('code');
+        idCode.textContent = a.assignment_id;
+        idPara.appendChild(idCode);
+
+        const remarkPara = document.createElement('p');
+        remarkPara.className = 'cutting-remark';
+        const remarkStrong = document.createElement('strong');
+        remarkStrong.textContent = 'Cutting Remark: ';
+        remarkPara.appendChild(remarkStrong);
+        remarkPara.appendChild(document.createTextNode(a.cutting_remark || '—'));
+
+        infoDiv.appendChild(idPara);
+        infoDiv.appendChild(remarkPara);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'action-buttons';
+
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'btn-kotty btn-approve approveBtn';
+        approveBtn.setAttribute('data-id', a.assignment_id);
+        const approveIcon = document.createElement('i');
+        approveIcon.className = 'bi bi-check-lg';
+        approveBtn.appendChild(approveIcon);
+        approveBtn.appendChild(document.createTextNode(' Approve'));
+
+        const denyBtn = document.createElement('button');
+        denyBtn.className = 'btn-kotty btn-deny denyBtn';
+        denyBtn.setAttribute('data-id', a.assignment_id);
+        const denyIcon = document.createElement('i');
+        denyIcon.className = 'bi bi-x-lg';
+        denyBtn.appendChild(denyIcon);
+        denyBtn.appendChild(document.createTextNode(' Deny'));
+
+        actionsDiv.appendChild(approveBtn);
+        actionsDiv.appendChild(denyBtn);
+
+        body.appendChild(infoDiv);
+        body.appendChild(actionsDiv);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        container.appendChild(card);
+      });
+
+      // Wire up approve buttons
+      container.querySelectorAll('.approveBtn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.id;
+          btn.disabled = true;
+          btn.textContent = '';
+          const spinnerSpan = document.createElement('span');
+          spinnerSpan.className = 'spinner-border spinner-border-sm me-1';
+          btn.appendChild(spinnerSpan);
+          btn.appendChild(document.createTextNode(' Approving...'));
+          try {
+            const res = await fetch('/washingin/approve-lot', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ assignment_id: id })
+            });
+            if (!res.ok) throw new Error(res.statusText);
+            const json = await res.json();
+            if (json.success) {
+              if (window.KottyTrack && window.KottyTrack.showToast) {
+                window.KottyTrack.showToast('Assignment approved successfully', 'success');
+              }
+              loadAssignments();
+            } else {
+              alert(json.error || 'Could not approve.');
+              btn.disabled = false;
+              btn.textContent = '';
+              const icon = document.createElement('i');
+              icon.className = 'bi bi-check-lg';
+              btn.appendChild(icon);
+              btn.appendChild(document.createTextNode(' Approve'));
             }
-          });
-        });
-
-        // wire up deny
-        container.querySelectorAll('.denyBtn').forEach(btn => {
-          btn.addEventListener('click', () => {
-            document.getElementById('denyAssignmentId').value = btn.dataset.id;
-            document.getElementById('denialRemark').value       = '';
-            denyModal.show();
-          });
-        });
-      }
-
-      // handle deny form submit
-      denyForm.addEventListener('submit', async e => {
-        e.preventDefault();
-        const assignment_id  = document.getElementById('denyAssignmentId').value;
-        const denial_remark  = document.getElementById('denialRemark').value.trim();
-        if (!denial_remark) {
-          alert('Please enter a reason for denial.');
-          return;
-        }
-        try {
-          const res = await fetch('/washingin/deny-lot', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignment_id, denial_remark })
-          });
-          if (!res.ok) throw new Error(res.statusText);
-          const json = await res.json();
-          if (json.success) {
-            denyModal.hide();
-            loadAssignments();
-          } else {
-            alert(json.error || 'Could not deny.');
+          } catch (e) {
+            console.error('[ERROR] Approve:', e);
+            alert('Network or server error.');
+            btn.disabled = false;
+            btn.textContent = '';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-check-lg';
+            btn.appendChild(icon);
+            btn.appendChild(document.createTextNode(' Approve'));
           }
-        } catch (e) {
-          console.error('[ERROR] Deny:', e);
-          alert('Network or server error.');
+        });
+      });
+
+      // Wire up deny buttons
+      container.querySelectorAll('.denyBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById('denyAssignmentId').value = btn.dataset.id;
+          document.getElementById('denialRemark').value = '';
+          denyModal.show();
+        });
+      });
+    }
+
+    // Handle deny form submit
+    denyForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const assignment_id = document.getElementById('denyAssignmentId').value;
+      const denial_remark = document.getElementById('denialRemark').value.trim();
+      if (!denial_remark) {
+        alert('Please enter a reason for denial.');
+        return;
+      }
+      const submitBtn = denyForm.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '';
+      const spinnerSpan = document.createElement('span');
+      spinnerSpan.className = 'spinner-border spinner-border-sm me-1';
+      submitBtn.appendChild(spinnerSpan);
+      submitBtn.appendChild(document.createTextNode(' Denying...'));
+      try {
+        const res = await fetch('/washingin/deny-lot', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignment_id, denial_remark })
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const json = await res.json();
+        if (json.success) {
+          denyModal.hide();
+          if (window.KottyTrack && window.KottyTrack.showToast) {
+            window.KottyTrack.showToast('Assignment denied successfully', 'info');
+          }
+          loadAssignments();
+        } else {
+          alert(json.error || 'Could not deny.');
         }
-      });
-
-      // events
-      search.addEventListener('input', () => {
-        loadAssignments();
-      });
-
-      // initial
-      loadAssignments();
+      } catch (e) {
+        console.error('[ERROR] Deny:', e);
+        alert('Network or server error.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-x-circle me-1';
+        submitBtn.appendChild(icon);
+        submitBtn.appendChild(document.createTextNode(' Deny Assignment'));
+      }
     });
-  </script>
 
-</html>
+    // Debounce search input
+    let searchTimeout;
+    search.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(loadAssignments, 300);
+    });
+
+    // Initial load
+    loadAssignments();
+  });
+</script>
+
+<%- include('partials/footer') %>

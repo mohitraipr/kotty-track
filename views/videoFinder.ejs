@@ -1,132 +1,240 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Video Finder</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-  <style>
-    .found-row { background-color: #d4edda !important; }
-    .not-found-row { background-color: #f8d7da !important; }
-    .video-link { font-weight: 500; text-decoration: none; }
-    .video-link:hover { text-decoration: underline; }
-    .awb-input { min-height: 100px; font-family: monospace; }
-    .stats-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-    .search-mode-btn.active { background-color: #0d6efd; color: white; }
-    .progress-container { display: none; }
-    .progress-container.active { display: block; }
-    .live-stats { font-size: 0.85rem; }
-    .live-stats .stat-item { display: inline-block; margin-right: 15px; }
-    .cancel-btn { margin-left: 10px; }
-  </style>
-</head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand d-flex align-items-center gap-2">
-      <i class="bi bi-camera-video"></i> Video Finder
-    </span>
-    <div class="d-flex gap-2">
+<%- include('partials/header', { pageTitle: 'Video Finder' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  /* Page-specific styles for Video Finder */
+  .video-finder-content {
+    margin-top: var(--navbar-height);
+    padding: 28px;
+    min-height: calc(100vh - var(--navbar-height));
+  }
+
+  .found-row {
+    background-color: var(--success-light) !important;
+  }
+
+  .not-found-row {
+    background-color: var(--danger-light) !important;
+  }
+
+  .video-link {
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--terracotta);
+    transition: color var(--transition-fast);
+  }
+
+  .video-link:hover {
+    color: var(--terracotta-dark);
+    text-decoration: underline;
+  }
+
+  .awb-input {
+    min-height: 120px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+
+  .search-mode-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border-medium);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+  }
+
+  .search-mode-btn:first-child {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+  }
+
+  .search-mode-btn:last-child {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+
+  .search-mode-btn:not(:last-child) {
+    border-right: none;
+  }
+
+  .search-mode-btn:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+  }
+
+  .search-mode-btn.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .progress-container {
+    display: none;
+  }
+
+  .progress-container.active {
+    display: block;
+  }
+
+  .live-stats {
+    font-size: var(--text-sm);
+  }
+
+  .live-stats .stat-item {
+    display: inline-block;
+    margin-right: 16px;
+  }
+
+  .results-table-wrapper {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .bucket-info {
+    background: var(--gray-100);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    text-align: center;
+  }
+
+  .bucket-info code {
+    background: var(--gray-200);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+
+  .empty-state-icon {
+    font-size: 3rem;
+    color: var(--text-muted);
+  }
+
+  .search-panel .card-header {
+    background: var(--charcoal);
+    color: white;
+  }
+
+  .search-panel .card-header h5 {
+    color: white;
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .video-finder-content {
+      padding: 16px;
+    }
+
+    .results-table-wrapper {
+      max-height: 50vh;
+    }
+  }
+</style>
+
+<div class="video-finder-content">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h1 class="page-title">Video Finder</h1>
+        <p class="page-subtitle">Search and manage video files by AWB, date, or keyword</p>
+      </div>
       <% if (isMohitOperator) { %>
-        <a href="/mail-manager" class="btn btn-outline-light btn-sm">
+        <a href="/mail-manager" class="btn btn-secondary">
           <i class="bi bi-envelope"></i> Mail Manager
         </a>
       <% } %>
-      <a href="/logout" class="btn btn-outline-light btn-sm">
-        <i class="bi bi-box-arrow-right"></i> Logout
-      </a>
     </div>
   </div>
-</nav>
 
-<div class="container-fluid py-4">
   <div class="row g-4">
     <!-- Search Panel -->
     <div class="col-lg-4">
-      <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-search"></i> Search Videos</h5>
+      <div class="card search-panel">
+        <div class="card-header">
+          <h5><i class="bi bi-search me-2"></i>Search Videos</h5>
         </div>
         <div class="card-body">
           <!-- Search Mode Toggle -->
-          <div class="btn-group w-100 mb-3" role="group">
-            <button type="button" class="btn btn-outline-primary search-mode-btn active" data-mode="awb">
-              <i class="bi bi-upc-scan"></i> By AWB
+          <div class="d-flex mb-4" role="group">
+            <button type="button" class="search-mode-btn active" data-mode="awb">
+              <i class="bi bi-upc-scan me-1"></i> AWB
             </button>
-            <button type="button" class="btn btn-outline-primary search-mode-btn" data-mode="date">
-              <i class="bi bi-calendar"></i> By Date
+            <button type="button" class="search-mode-btn" data-mode="date">
+              <i class="bi bi-calendar me-1"></i> Date
             </button>
-            <button type="button" class="btn btn-outline-primary search-mode-btn" data-mode="keyword">
-              <i class="bi bi-search"></i> Keyword
+            <button type="button" class="search-mode-btn" data-mode="keyword">
+              <i class="bi bi-search me-1"></i> Keyword
             </button>
           </div>
 
           <!-- AWB Search -->
           <div id="awbSearchPanel">
-            <div class="mb-3">
+            <div class="form-group">
               <label for="awbList" class="form-label">AWB / Tracking Numbers</label>
               <textarea
-                class="form-control awb-input"
+                class="form-control form-textarea awb-input"
                 id="awbList"
                 placeholder="Enter AWB numbers (one per line, or comma/space separated)"
               ></textarea>
               <small class="text-muted">Paste multiple AWBs to search in bulk</small>
             </div>
             <button type="button" class="btn btn-primary w-100" id="searchAwbBtn">
-              <i class="bi bi-search"></i> Search AWBs
+              <i class="bi bi-search me-1"></i> Search AWBs
             </button>
           </div>
 
           <!-- Date Search -->
           <div id="dateSearchPanel" class="d-none">
-            <div class="mb-3">
+            <div class="form-group">
               <label for="searchDate" class="form-label">Select Date</label>
-              <input type="date" class="form-control" id="searchDate" value="<%= new Date().toISOString().split('T')[0] %>">
+              <input type="date" class="form-control form-input" id="searchDate" value="<%= new Date().toISOString().split('T')[0] %>">
               <small class="text-muted">View all videos uploaded on this date</small>
             </div>
             <button type="button" class="btn btn-primary w-100" id="searchDateBtn">
-              <i class="bi bi-calendar-check"></i> Browse Date
+              <i class="bi bi-calendar-check me-1"></i> Browse Date
             </button>
           </div>
 
           <!-- Keyword Search -->
           <div id="keywordSearchPanel" class="d-none">
-            <div class="mb-3">
+            <div class="form-group">
               <label for="keywordInput" class="form-label">Search Keyword</label>
-              <input type="text" class="form-control" id="keywordInput" placeholder="e.g., 2026, SF123, etc.">
+              <input type="text" class="form-control form-input" id="keywordInput" placeholder="e.g., 2026, SF123, etc.">
               <small class="text-muted">Search for any text in video filenames</small>
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="keywordDate" class="form-label">Date (optional)</label>
-              <input type="date" class="form-control" id="keywordDate">
+              <input type="date" class="form-control form-input" id="keywordDate">
               <small class="text-muted">Limit search to specific date</small>
             </div>
             <button type="button" class="btn btn-primary w-100" id="searchKeywordBtn">
-              <i class="bi bi-search"></i> Search Keyword
+              <i class="bi bi-search me-1"></i> Search Keyword
             </button>
           </div>
 
-          <hr>
+          <hr class="my-4" style="border-color: var(--border-light);">
 
-          <div class="mb-3">
+          <div class="form-group mb-3">
             <label class="form-label">Bulk Upload (Excel/CSV)</label>
-            <input type="file" class="form-control" id="bulkFile" accept=".xlsx,.xls,.csv">
+            <input type="file" class="form-control form-input" id="bulkFile" accept=".xlsx,.xls,.csv">
             <small class="text-muted">Upload file with AWB column</small>
           </div>
-          <button type="button" class="btn btn-outline-primary w-100" id="bulkSearchBtn" disabled>
-            <i class="bi bi-file-earmark-spreadsheet"></i> Bulk Search
+          <button type="button" class="btn btn-secondary w-100" id="bulkSearchBtn" disabled>
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Bulk Search
           </button>
         </div>
       </div>
 
       <% if (bucketName) { %>
-      <div class="card shadow-sm mt-3">
-        <div class="card-body text-center text-muted">
-          <small><i class="bi bi-cloud"></i> S3 Bucket: <code><%= bucketName %></code></small>
-        </div>
+      <div class="bucket-info mt-3">
+        <small class="text-muted">
+          <i class="bi bi-cloud me-1"></i> S3 Bucket: <code><%= bucketName %></code>
+        </small>
       </div>
       <% } %>
     </div>
@@ -136,41 +244,50 @@
       <div id="alertContainer"></div>
 
       <!-- Progress Bar for Large Searches -->
-      <div class="card shadow-sm mb-3 progress-container" id="progressContainer">
+      <div class="card mb-3 progress-container" id="progressContainer">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold"><i class="bi bi-hourglass-split"></i> Processing Large Search...</span>
-            <button class="btn btn-sm btn-outline-danger cancel-btn" id="cancelSearchBtn">
-              <i class="bi bi-x-circle"></i> Cancel
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fw-bold">
+              <i class="bi bi-hourglass-split me-2 text-terracotta"></i>Processing Large Search...
+            </span>
+            <button class="btn btn-sm btn-outline btn-danger" id="cancelSearchBtn">
+              <i class="bi bi-x-circle me-1"></i> Cancel
             </button>
           </div>
-          <div class="progress mb-2" style="height: 25px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" id="searchProgress"
-                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-              <span id="progressText">0%</span>
+          <div class="progress mb-3" style="height: 24px; background: var(--gray-200); border-radius: var(--radius-full);">
+            <div class="progress-bar" id="searchProgress"
+                 role="progressbar" style="width: 0%; background: var(--terracotta); border-radius: var(--radius-full);"
+                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              <span id="progressText" style="font-size: var(--text-sm); font-weight: 500;">0%</span>
             </div>
           </div>
-          <div class="live-stats text-muted">
-            <span class="stat-item"><i class="bi bi-list-check"></i> Processed: <strong id="processedCount">0</strong> / <span id="totalCount">0</span></span>
-            <span class="stat-item text-success"><i class="bi bi-check-circle"></i> Found: <strong id="foundLiveCount">0</strong></span>
-            <span class="stat-item"><i class="bi bi-layers"></i> Chunk: <span id="chunkInfo">0/0</span></span>
+          <div class="live-stats text-secondary">
+            <span class="stat-item">
+              <i class="bi bi-list-check me-1"></i> Processed: <strong id="processedCount">0</strong> / <span id="totalCount">0</span>
+            </span>
+            <span class="stat-item text-success">
+              <i class="bi bi-check-circle me-1"></i> Found: <strong id="foundLiveCount">0</strong>
+            </span>
+            <span class="stat-item">
+              <i class="bi bi-layers me-1"></i> Chunk: <span id="chunkInfo">0/0</span>
+            </span>
           </div>
         </div>
       </div>
 
-      <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0"><i class="bi bi-list-ul"></i> Search Results</h5>
-          <div>
-            <span class="badge bg-success me-1" id="foundBadge" style="display:none;">Found: 0</span>
-            <span class="badge bg-danger me-1" id="notFoundBadge" style="display:none;">Not Found: 0</span>
-            <span class="badge bg-secondary" id="resultCount">0 result(s)</span>
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title"><i class="bi bi-list-ul me-2"></i>Search Results</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <span class="badge badge-success" id="foundBadge" style="display:none;">Found: 0</span>
+            <span class="badge badge-danger" id="notFoundBadge" style="display:none;">Not Found: 0</span>
+            <span class="badge badge-neutral" id="resultCount">0 result(s)</span>
           </div>
         </div>
         <div class="card-body p-0">
-          <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-            <table class="table table-hover table-striped mb-0" id="resultsTable">
-              <thead class="table-dark sticky-top">
+          <div class="results-table-wrapper">
+            <table class="table mb-0" id="resultsTable">
+              <thead>
                 <tr>
                   <th>AWB / Filename</th>
                   <th>Status</th>
@@ -181,9 +298,11 @@
               </thead>
               <tbody id="resultsBody">
                 <tr>
-                  <td colspan="<%= isMohitOperator ? 5 : 4 %>" class="text-center text-muted py-4">
-                    <i class="bi bi-search fs-1 d-block mb-2"></i>
-                    Search for videos using AWB, date, or keyword
+                  <td colspan="<%= isMohitOperator ? 5 : 4 %>" class="text-center py-5">
+                    <div class="empty-state">
+                      <i class="bi bi-search empty-state-icon d-block mb-3"></i>
+                      <p class="empty-state-text">Search for videos using AWB, date, or keyword</p>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -195,7 +314,6 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const isMohitOperator = <%= isMohitOperator %>;
 
@@ -212,70 +330,152 @@ document.querySelectorAll('.search-mode-btn').forEach(btn => {
   });
 });
 
-// Show alert
+// Show alert - uses escapeHtml for user content
 function showAlert(message, type = 'info') {
   const container = document.getElementById('alertContainer');
-  container.innerHTML = `
-    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-      <i class="bi bi-${type === 'danger' ? 'exclamation-triangle' : 'info-circle'}"></i> ${message}
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-  `;
+  const iconMap = {
+    'success': 'check-circle',
+    'danger': 'exclamation-triangle',
+    'warning': 'exclamation-circle',
+    'info': 'info-circle'
+  };
+  const alertDiv = document.createElement('div');
+  alertDiv.className = `alert alert-${type} d-flex align-items-center justify-content-between`;
+  alertDiv.setAttribute('role', 'alert');
+
+  const contentDiv = document.createElement('div');
+  const icon = document.createElement('i');
+  icon.className = `bi bi-${iconMap[type] || 'info-circle'} me-2`;
+  contentDiv.appendChild(icon);
+  contentDiv.appendChild(document.createTextNode(' ' + message));
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-close';
+  closeBtn.style.fontSize = '0.75rem';
+  closeBtn.onclick = function() { alertDiv.remove(); };
+
+  alertDiv.appendChild(contentDiv);
+  alertDiv.appendChild(closeBtn);
+
+  container.textContent = '';
+  container.appendChild(alertDiv);
 }
 
-// Render results
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.textContent;
+}
+
+// Create table row safely using DOM methods
+function createResultRow(r) {
+  const found = r.found !== false;
+  const displayName = r.awb || r.filename || (r.key ? r.key.split('/').pop() : null) || 'Unknown';
+
+  const tr = document.createElement('tr');
+  tr.className = found ? 'found-row' : 'not-found-row';
+
+  // AWB/Filename cell
+  const tdName = document.createElement('td');
+  const strong = document.createElement('strong');
+  strong.textContent = displayName;
+  tdName.appendChild(strong);
+  tr.appendChild(tdName);
+
+  // Status cell
+  const tdStatus = document.createElement('td');
+  const badge = document.createElement('span');
+  badge.className = found ? 'badge badge-success' : 'badge badge-danger';
+  const badgeIcon = document.createElement('i');
+  badgeIcon.className = found ? 'bi bi-check-circle me-1' : 'bi bi-x-circle me-1';
+  badge.appendChild(badgeIcon);
+  badge.appendChild(document.createTextNode(found ? ' Found' : ' Not Found'));
+  tdStatus.appendChild(badge);
+  tr.appendChild(tdStatus);
+
+  // Video cell
+  const tdVideo = document.createElement('td');
+  if (found && r.url) {
+    const link = document.createElement('a');
+    link.href = r.url;
+    link.target = '_blank';
+    link.className = 'video-link';
+    const linkIcon = document.createElement('i');
+    linkIcon.className = 'bi bi-play-circle me-1';
+    link.appendChild(linkIcon);
+    link.appendChild(document.createTextNode(' ' + (r.filename || 'Download')));
+    tdVideo.appendChild(link);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'text-muted';
+    span.textContent = '-';
+    tdVideo.appendChild(span);
+  }
+  tr.appendChild(tdVideo);
+
+  // Size cell
+  const tdSize = document.createElement('td');
+  tdSize.textContent = (found && r.sizeFormatted) ? r.sizeFormatted : '-';
+  tr.appendChild(tdSize);
+
+  // Actions cell (if operator)
+  if (isMohitOperator) {
+    const tdActions = document.createElement('td');
+    if (found && r.key) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn btn-sm btn-danger delete-btn';
+      deleteBtn.dataset.key = r.key;
+      deleteBtn.dataset.name = displayName;
+      const deleteIcon = document.createElement('i');
+      deleteIcon.className = 'bi bi-trash';
+      deleteBtn.appendChild(deleteIcon);
+      tdActions.appendChild(deleteBtn);
+    } else {
+      tdActions.textContent = '-';
+    }
+    tr.appendChild(tdActions);
+  }
+
+  return tr;
+}
+
+// Render results using DOM methods
 function renderResults(results, isDateSearch = false) {
   const tbody = document.getElementById('resultsBody');
   const count = document.getElementById('resultCount');
 
   count.textContent = results.length + ' result(s)';
+  tbody.textContent = '';
 
   if (!results.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="${isMohitOperator ? 5 : 4}" class="text-center text-muted py-4">
-          <i class="bi bi-search fs-1 d-block mb-2"></i>
-          No videos found
-        </td>
-      </tr>
-    `;
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = isMohitOperator ? 5 : 4;
+    td.className = 'text-center py-5';
+
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-search empty-state-icon d-block mb-3';
+    emptyState.appendChild(icon);
+
+    const text = document.createElement('p');
+    text.className = 'empty-state-text';
+    text.textContent = 'No videos found';
+    emptyState.appendChild(text);
+
+    td.appendChild(emptyState);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
     return;
   }
 
-  tbody.innerHTML = results.map(r => {
-    const found = r.found !== false;
-    const displayName = r.awb || r.filename || r.key?.split('/').pop() || 'Unknown';
-
-    return `
-      <tr class="${found ? 'found-row' : 'not-found-row'}">
-        <td><strong>${escapeHtml(displayName)}</strong></td>
-        <td>
-          ${found
-            ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Found</span>'
-            : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Not Found</span>'}
-        </td>
-        <td>
-          ${found && r.url
-            ? `<a href="${r.url}" target="_blank" class="video-link"><i class="bi bi-play-circle"></i> ${escapeHtml(r.filename || 'Download')}</a>`
-            : '<span class="text-muted">-</span>'}
-        </td>
-        <td>${found && r.sizeFormatted ? r.sizeFormatted : '-'}</td>
-        ${isMohitOperator ? `
-          <td>
-            ${found && r.key
-              ? `<button class="btn btn-sm btn-outline-danger delete-btn" data-key="${escapeHtml(r.key)}" data-name="${escapeHtml(displayName)}"><i class="bi bi-trash"></i></button>`
-              : '-'}
-          </td>
-        ` : ''}
-      </tr>
-    `;
-  }).join('');
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text || '';
-  return div.innerHTML;
+  results.forEach(r => {
+    tbody.appendChild(createResultRow(r));
+  });
 }
 
 // Constants
@@ -324,38 +524,12 @@ function appendResults(items) {
 
   // Clear placeholder if first results
   if (streamedResults.length === 0) {
-    tbody.innerHTML = '';
+    tbody.textContent = '';
   }
 
   items.forEach(r => {
     streamedResults.push(r);
-    const found = r.found !== false;
-    const displayName = r.awb || r.filename || r.key?.split('/').pop() || 'Unknown';
-
-    const tr = document.createElement('tr');
-    tr.className = found ? 'found-row' : 'not-found-row';
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(displayName)}</strong></td>
-      <td>
-        ${found
-          ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Found</span>'
-          : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Not Found</span>'}
-      </td>
-      <td>
-        ${found && r.url
-          ? `<a href="${r.url}" target="_blank" class="video-link"><i class="bi bi-play-circle"></i> ${escapeHtml(r.filename || 'Download')}</a>`
-          : '<span class="text-muted">-</span>'}
-      </td>
-      <td>${found && r.sizeFormatted ? r.sizeFormatted : '-'}</td>
-      ${isMohitOperator ? `
-        <td>
-          ${found && r.key
-            ? `<button class="btn btn-sm btn-outline-danger delete-btn" data-key="${escapeHtml(r.key)}" data-name="${escapeHtml(displayName)}"><i class="bi bi-trash"></i></button>`
-            : '-'}
-        </td>
-      ` : ''}
-    `;
-    tbody.appendChild(tr);
+    tbody.appendChild(createResultRow(r));
   });
 
   countEl.textContent = streamedResults.length + ' result(s)';
@@ -367,7 +541,7 @@ function streamSearch(awbList) {
     streamedResults = [];
     document.getElementById('foundBadge').style.display = 'none';
     document.getElementById('notFoundBadge').style.display = 'none';
-    document.getElementById('resultsBody').innerHTML = '';
+    document.getElementById('resultsBody').textContent = '';
 
     const encoded = encodeURIComponent(awbList);
     currentEventSource = new EventSource(`/video-finder/api/search-stream?awbList=${encoded}`);
@@ -434,8 +608,29 @@ document.getElementById('cancelSearchBtn').addEventListener('click', function() 
   hideProgress();
   showAlert('Search cancelled', 'warning');
   document.getElementById('searchAwbBtn').disabled = false;
-  document.getElementById('searchAwbBtn').innerHTML = '<i class="bi bi-search"></i> Search AWBs';
+  document.getElementById('searchAwbBtn').textContent = '';
+  const icon = document.createElement('i');
+  icon.className = 'bi bi-search me-1';
+  document.getElementById('searchAwbBtn').appendChild(icon);
+  document.getElementById('searchAwbBtn').appendChild(document.createTextNode(' Search AWBs'));
 });
+
+// Helper to set button loading state
+function setButtonLoading(btn, isLoading, icon, text) {
+  btn.disabled = isLoading;
+  btn.textContent = '';
+  if (isLoading) {
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm me-1';
+    btn.appendChild(spinner);
+    btn.appendChild(document.createTextNode(' ' + text));
+  } else {
+    const iconEl = document.createElement('i');
+    iconEl.className = icon + ' me-1';
+    btn.appendChild(iconEl);
+    btn.appendChild(document.createTextNode(' ' + text));
+  }
+}
 
 // AWB Search (AJAX or Streaming based on count)
 document.getElementById('searchAwbBtn').addEventListener('click', async function() {
@@ -448,15 +643,14 @@ document.getElementById('searchAwbBtn').addEventListener('click', async function
   // Count AWBs
   const awbCount = awbList.split(/[\n,\s|]+/).filter(s => s.trim()).length;
 
-  this.disabled = true;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Searching...';
+  setButtonLoading(this, true, 'bi bi-search', 'Searching...');
 
   try {
     if (awbCount > MAX_SINGLE_REQUEST) {
       // Use streaming for large searches
-      showAlert(`Large search (${awbCount.toLocaleString()} AWBs) - streaming results...`, 'info');
+      showAlert('Large search (' + awbCount.toLocaleString() + ' AWBs) - streaming results...', 'info');
       const result = await streamSearch(awbList);
-      showAlert(`Complete! Found ${result.found.toLocaleString()} of ${result.total.toLocaleString()} videos`, 'success');
+      showAlert('Complete! Found ' + result.found.toLocaleString() + ' of ' + result.total.toLocaleString() + ' videos', 'success');
     } else {
       // Use regular AJAX for smaller searches
       const res = await fetch('/video-finder/api/search', {
@@ -473,13 +667,12 @@ document.getElementById('searchAwbBtn').addEventListener('click', async function
 
       renderResults(data.results);
       updateResultBadges(data.found, data.total - data.found);
-      showAlert(`Found ${data.found} of ${data.total} videos`, 'success');
+      showAlert('Found ' + data.found + ' of ' + data.total + ' videos', 'success');
     }
   } catch (err) {
     showAlert('Search failed: ' + err.message, 'danger');
   } finally {
-    this.disabled = false;
-    this.innerHTML = '<i class="bi bi-search"></i> Search AWBs';
+    setButtonLoading(this, false, 'bi bi-search', 'Search AWBs');
   }
 });
 
@@ -491,8 +684,7 @@ document.getElementById('searchDateBtn').addEventListener('click', async functio
     return;
   }
 
-  this.disabled = true;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
+  setButtonLoading(this, true, 'bi bi-calendar-check', 'Loading...');
 
   try {
     const res = await fetch('/video-finder/date/' + date);
@@ -514,12 +706,11 @@ document.getElementById('searchDateBtn').addEventListener('click', async functio
     }));
 
     renderResults(results, true);
-    showAlert(`Found ${data.count} videos for ${date}`, 'success');
+    showAlert('Found ' + data.count + ' videos for ' + date, 'success');
   } catch (err) {
     showAlert('Failed to load videos: ' + err.message, 'danger');
   } finally {
-    this.disabled = false;
-    this.innerHTML = '<i class="bi bi-calendar-check"></i> Browse Date';
+    setButtonLoading(this, false, 'bi bi-calendar-check', 'Browse Date');
   }
 });
 
@@ -533,8 +724,7 @@ document.getElementById('searchKeywordBtn').addEventListener('click', async func
     return;
   }
 
-  this.disabled = true;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Searching...';
+  setButtonLoading(this, true, 'bi bi-search', 'Searching...');
 
   try {
     const params = new URLSearchParams({ keyword });
@@ -549,12 +739,11 @@ document.getElementById('searchKeywordBtn').addEventListener('click', async func
     }
 
     renderResults(data.results);
-    showAlert(`Found ${data.count} videos matching "${keyword}"`, 'success');
+    showAlert('Found ' + data.count + ' videos matching "' + keyword + '"', 'success');
   } catch (err) {
     showAlert('Search failed: ' + err.message, 'danger');
   } finally {
-    this.disabled = false;
-    this.innerHTML = '<i class="bi bi-search"></i> Search Keyword';
+    setButtonLoading(this, false, 'bi bi-search', 'Search Keyword');
   }
 });
 
@@ -569,8 +758,7 @@ bulkFile.addEventListener('change', function() {
 bulkSearchBtn.addEventListener('click', async function() {
   if (!bulkFile.files.length) return;
 
-  this.disabled = true;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Searching...';
+  setButtonLoading(this, true, 'bi bi-file-earmark-spreadsheet', 'Searching...');
 
   const formData = new FormData();
   formData.append('awbFile', bulkFile.files[0]);
@@ -588,12 +776,11 @@ bulkSearchBtn.addEventListener('click', async function() {
     }
 
     renderResults(data.results);
-    showAlert(`Found ${data.found} of ${data.total} videos`, 'success');
+    showAlert('Found ' + data.found + ' of ' + data.total + ' videos', 'success');
   } catch (err) {
     showAlert('Bulk search failed: ' + err.message, 'danger');
   } finally {
-    this.disabled = false;
-    this.innerHTML = '<i class="bi bi-file-earmark-spreadsheet"></i> Bulk Search';
+    setButtonLoading(this, false, 'bi bi-file-earmark-spreadsheet', 'Bulk Search');
   }
 });
 
@@ -605,12 +792,15 @@ document.addEventListener('click', async function(e) {
   const key = btn.dataset.key;
   const name = btn.dataset.name;
 
-  if (!confirm(`Delete video?\n\n${name}\n\nThis cannot be undone.`)) {
+  if (!confirm('Delete video?\n\n' + name + '\n\nThis cannot be undone.')) {
     return;
   }
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  btn.textContent = '';
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner-border spinner-border-sm';
+  btn.appendChild(spinner);
 
   try {
     const res = await fetch('/video-finder/delete', {
@@ -626,12 +816,18 @@ document.addEventListener('click', async function(e) {
     } else {
       showAlert('Delete failed: ' + (data.error || 'Unknown error'), 'danger');
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-trash"></i>';
+      btn.textContent = '';
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-trash';
+      btn.appendChild(icon);
     }
   } catch (err) {
     showAlert('Delete failed: ' + err.message, 'danger');
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-trash"></i>';
+    btn.textContent = '';
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-trash';
+    btn.appendChild(icon);
   }
 });
 
@@ -648,5 +844,5 @@ document.getElementById('keywordInput').addEventListener('keypress', function(e)
   }
 });
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

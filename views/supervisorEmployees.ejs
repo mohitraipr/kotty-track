@@ -1,246 +1,883 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Employees</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Roboto', sans-serif; font-size: 0.95rem; }
-    .toggle-salary { cursor: pointer; }
-    .summary-card { text-align: center; border: none; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-    .summary-card .icon { font-size: 1.75rem; color: #0d6efd; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Employees - <%= department %></span>
-    <div class="ms-auto">
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
-<div class="container-fluid my-4">
-  <%- include('partials/flashMessages') %>
-  <div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
-    <div class="col">
-      <div class="card summary-card">
-        <div class="card-body">
-          <div class="icon"><i class="fas fa-users"></i></div>
-          <div class="fw-semibold">Total Employees</div>
-          <div><%= totalEmployees %></div>
-        </div>
-      </div>
-    </div>
-  <div class="col">
-      <div class="card summary-card">
-        <div class="card-body">
-          <div class="icon"><i class="fas fa-dollar-sign"></i></div>
-          <div class="fw-semibold">Average Salary</div>
-          <div><%= avgSalary %></div>
-        </div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="card summary-card">
-        <div class="card-body">
-          <div class="icon"><i class="fas fa-user-check"></i></div>
-          <div class="fw-semibold">Present Employees</div>
-          <div><%= presentCount %></div>
-        </div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="card summary-card">
-        <div class="card-body">
-          <div class="icon"><i class="fas fa-money-bill-wave"></i></div>
-          <div class="fw-semibold">Paid Employees</div>
-          <div><%= paidCount %></div>
-        </div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="card summary-card">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-start mb-1">
-            <div>
-              <div class="icon"><i class="fas fa-clock"></i></div>
-              <div class="fw-semibold">Top OT Employees</div>
-            </div>
-            <select id="otMonth" class="form-select form-select-sm" style="width:auto;">
-              <% months.forEach(m => { %>
-                <option value="<%= m.value %>" <%= m.value === selectedMonth ? 'selected' : '' %>><%= m.label %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div class="small" id="otList"><%= topEmployees.join(', ') %></div>
+<%- include('partials/header', { pageTitle: 'Supervisor Employees' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/supervisor/employees' }) %>
 
-        </div>
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SUPERVISOR EMPLOYEES - Kotty Track Design System
+     Industrial Textile Elegance
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  :root {
+    --charcoal: #1a1a1a;
+    --charcoal-light: #2d2d2d;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-light: #d4826a;
+    --terracotta-dark: #a84a2d;
+    --terracotta-bg: rgba(196, 92, 58, 0.08);
+    --success: #2d8a5f;
+    --success-light: #e8f5ef;
+    --warning: #c4873a;
+    --warning-light: #fef3e2;
+    --danger: #c23b22;
+    --danger-light: #fdeaea;
+    --info: #3a7bc4;
+    --info-light: #e8f1fb;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border: #e5e0d8;
+    --border-light: #f0ebe3;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    background: var(--cream);
+    min-height: 100vh;
+  }
+
+  /* Main Layout */
+  .dashboard-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2.25rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+
+  .page-subtitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 20px;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out 0.1s backwards;
+  }
+
+  @media (max-width: 1200px) {
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .stat-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    position: relative;
+    transition: all 0.25s ease;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--terracotta);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+  }
+
+  .stat-card:hover::before {
+    opacity: 1;
+  }
+
+  .stat-card:nth-child(1)::before { background: var(--terracotta); }
+  .stat-card:nth-child(2)::before { background: var(--info); }
+  .stat-card:nth-child(3)::before { background: var(--success); }
+  .stat-card:nth-child(4)::before { background: var(--warning); }
+  .stat-card:nth-child(5)::before { background: #6b7280; }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 1.5rem;
+  }
+
+  .stat-icon.terracotta { background: var(--terracotta-bg); color: var(--terracotta); }
+  .stat-icon.info { background: var(--info-light); color: var(--info); }
+  .stat-icon.success { background: var(--success-light); color: var(--success); }
+  .stat-icon.warning { background: var(--warning-light); color: var(--warning); }
+  .stat-icon.neutral { background: #f3f4f6; color: #6b7280; }
+
+  .stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    line-height: 1;
+  }
+
+  .stat-card:nth-child(1) .stat-value { color: var(--terracotta); }
+  .stat-card:nth-child(2) .stat-value { color: var(--info); }
+  .stat-card:nth-child(3) .stat-value { color: var(--success); }
+  .stat-card:nth-child(4) .stat-value { color: var(--warning); }
+
+  .stat-card.has-dropdown .stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .stat-card .ot-select {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text-primary);
+    cursor: pointer;
+    min-width: 90px;
+  }
+
+  .stat-card .ot-list {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* Section Cards */
+  .section-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 28px;
+    overflow: hidden;
+    animation: fadeInUp 0.5s ease-out 0.2s backwards;
+  }
+
+  .section-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--cream-dark) 0%, white 100%);
+  }
+
+  .section-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.35rem;
+    color: var(--charcoal);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-title i {
+    font-size: 1.25rem;
+    color: var(--terracotta);
+  }
+
+  .section-body {
+    padding: 24px;
+  }
+
+  /* Download Forms */
+  .download-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out 0.15s backwards;
+  }
+
+  @media (max-width: 768px) {
+    .download-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .download-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+  }
+
+  .download-card .form-group {
+    flex: 1;
+    margin: 0;
+  }
+
+  .download-card .form-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  /* Forms */
+  .form-label {
+    display: block;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  .form-control,
+  .form-select {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+  }
+
+  .form-control:hover,
+  .form-select:hover {
+    border-color: var(--text-muted);
+  }
+
+  .form-control:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted);
+  }
+
+  .add-employee-form {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 16px;
+  }
+
+  @media (max-width: 1200px) {
+    .add-employee-form {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .add-employee-form {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .add-employee-form {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .form-group.submit-group {
+    justify-content: flex-end;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .btn-primary {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-success {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-success:hover {
+    background: #247a52;
+    border-color: #247a52;
+  }
+
+  .btn-secondary {
+    background: white;
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+
+  .btn-secondary:hover {
+    background: var(--cream-dark);
+    border-color: var(--text-muted);
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+  }
+
+  .btn-danger:hover {
+    background: #a33420;
+    border-color: #a33420;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Search Section */
+  .search-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    max-width: 400px;
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    flex: 1;
+  }
+
+  .search-input-wrapper .form-control {
+    padding-left: 42px;
+  }
+
+  .search-input-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1rem;
+  }
+
+  /* Table */
+  .table-container {
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1200px;
+  }
+
+  .table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    background: var(--cream-dark);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .table td {
+    padding: 14px 16px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  .table tbody tr:nth-child(even) {
+    background: rgba(250, 248, 245, 0.5);
+  }
+
+  .table tbody tr:nth-child(even):hover {
+    background: var(--cream);
+  }
+
+  /* Salary cell */
+  .salary-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .salary-hidden {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .toggle-salary {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .toggle-salary:hover {
+    background: var(--cream-dark);
+    border-color: var(--text-muted);
+  }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 9999px;
+  }
+
+  .status-badge.active {
+    background: var(--success-light);
+    color: var(--success);
+  }
+
+  .status-badge.inactive {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+
+  .status-badge i {
+    font-size: 0.6rem;
+  }
+
+  /* Action buttons */
+  .action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .action-buttons form {
+    margin: 0;
+  }
+
+  /* Animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Flash Messages */
+  .alert {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    animation: fadeInUp 0.3s ease-out;
+  }
+
+  .alert-success {
+    background: var(--success-light);
+    color: var(--success);
+    border-left: 4px solid var(--success);
+  }
+
+  .alert-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-left: 4px solid var(--danger);
+  }
+
+  .alert-warning {
+    background: var(--warning-light);
+    color: var(--warning);
+    border-left: 4px solid var(--warning);
+  }
+</style>
+
+<div class="dashboard-container">
+  <%- include('partials/flashMessages') %>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Employees - <%= department %></h1>
+    <p class="page-subtitle">Manage your team members and their details</p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon terracotta">
+        <i class="bi bi-people-fill"></i>
       </div>
+      <div class="stat-label">Total Employees</div>
+      <div class="stat-value"><%= totalEmployees %></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon info">
+        <i class="bi bi-currency-rupee"></i>
+      </div>
+      <div class="stat-label">Average Salary</div>
+      <div class="stat-value"><%= avgSalary %></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon success">
+        <i class="bi bi-person-check-fill"></i>
+      </div>
+      <div class="stat-label">Present Employees</div>
+      <div class="stat-value"><%= presentCount %></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon warning">
+        <i class="bi bi-wallet2"></i>
+      </div>
+      <div class="stat-label">Paid Employees</div>
+      <div class="stat-value"><%= paidCount %></div>
+    </div>
+    <div class="stat-card has-dropdown">
+      <div class="stat-header">
+        <div>
+          <div class="stat-icon neutral">
+            <i class="bi bi-clock-history"></i>
+          </div>
+          <div class="stat-label">Top OT Employees</div>
+        </div>
+        <select id="otMonth" class="ot-select">
+          <% months.forEach(m => { %>
+            <option value="<%= m.value %>" <%= m.value === selectedMonth ? 'selected' : '' %>><%= m.label %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="ot-list" id="otList"><%= topEmployees.join(', ') %></div>
     </div>
   </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <form action="/supervisor/salary/download" method="GET" class="d-flex gap-2 align-items-end">
+
+  <!-- Download Section -->
+  <div class="download-row">
+    <form action="/supervisor/salary/download" method="GET" class="download-card">
+      <div class="form-group">
+        <label class="form-label">Select Month</label>
         <input type="month" name="month" class="form-control" value="<%= selectedMonth %>" required>
-        <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Salary Excel</button>
-      </form>
-    </div>
-    <div class="col-md-6">
-      <form action="/supervisor/dihadi/download" method="GET" class="d-flex gap-2 align-items-end">
+      </div>
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-file-earmark-arrow-down"></i> Salary Excel
+      </button>
+    </form>
+    <form action="/supervisor/dihadi/download" method="GET" class="download-card">
+      <div class="form-group">
+        <label class="form-label">Select Month</label>
         <input type="month" name="month" class="form-control" value="<%= selectedMonth %>" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Half</label>
         <select name="half" class="form-select" required>
           <option value="1">1-15</option>
           <option value="2">16-end</option>
         </select>
-        <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Dihadi Excel</button>
+      </div>
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-file-earmark-arrow-down"></i> Dihadi Excel
+      </button>
+    </form>
+  </div>
+
+  <!-- Add Employee Section -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="bi bi-person-plus"></i>
+        Add New Employee
+      </h2>
+    </div>
+    <div class="section-body">
+      <form action="/supervisor/employees" method="POST" class="add-employee-form">
+        <div class="form-group">
+          <label class="form-label">Punching ID</label>
+          <input type="text" name="punching_id" class="form-control" placeholder="Punch ID" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" name="name" class="form-control" placeholder="Full name" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Designation</label>
+          <input type="text" name="designation" class="form-control" placeholder="e.g. Tailor" data-bs-toggle="tooltip" title="Employee role">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="text" name="phone_number" class="form-control" placeholder="Phone number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Aadhar</label>
+          <input type="text" name="aadhar_card_number" class="form-control" placeholder="Aadhar number" pattern="\d{12}" minlength="12" maxlength="12">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Joining</label>
+          <input type="date" name="date_of_joining" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salary</label>
+          <input type="number" step="0.01" name="salary" class="form-control" placeholder="Amount" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Salary Type</label>
+          <select name="salary_type" class="form-select" required>
+            <option value="dihadi">Dihadi</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Allotted Hours</label>
+          <input type="number" step="0.1" name="allotted_hours" class="form-control" placeholder="8" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paid Sunday Allowance</label>
+          <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pay Sundays?</label>
+          <select name="pay_sunday" class="form-select">
+            <option value="1" selected>Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Leave Start Months</label>
+          <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
+        </div>
+        <div class="form-group submit-group">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Create Employee
+          </button>
+        </div>
       </form>
     </div>
   </div>
-  <h4>Add Employee</h4>
-  <form action="/supervisor/employees" method="POST" class="row g-3 mb-4">
-    <div class="col-md-3">
-      <label class="form-label">Punching ID</label>
-      <input type="text" name="punching_id" class="form-control" placeholder="Punch ID" required>
+
+  <!-- Employee List Section -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="bi bi-people"></i>
+        My Employees
+      </h2>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">Name</label>
-      <input type="text" name="name" class="form-control" placeholder="Full name" required>
+    <div class="section-body">
+      <!-- Search -->
+      <div class="search-section">
+        <div class="search-input-wrapper">
+          <i class="bi bi-search"></i>
+          <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees...">
+        </div>
+        <button id="searchBtn" class="btn btn-secondary btn-sm">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Punch ID</th>
+              <th>Name</th>
+              <th>Designation</th>
+              <th>Phone</th>
+              <th>Salary</th>
+              <th>Type</th>
+              <th>Hours</th>
+              <th>Paid Sundays</th>
+              <th>Pay Sunday?</th>
+              <th>Leave Start</th>
+              <th>Joined</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% employees.forEach(emp => { %>
+              <tr>
+                <td><strong><%= emp.punching_id %></strong></td>
+                <td><%= emp.name %></td>
+                <td><%= emp.designation || '-' %></td>
+                <td><%= emp.phone_number || '-' %></td>
+                <td class="salary-container">
+                  <span class="salary-hidden" data-salary="<%= emp.salary %>">****</span>
+                  <button type="button" class="toggle-salary">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                </td>
+                <td><%= emp.salary_type %></td>
+                <td><%= emp.allotted_hours %></td>
+                <td><%= emp.paid_sunday_allowance %></td>
+                <td><%= emp.pay_sunday ? 'Yes' : 'No' %></td>
+                <td><%= emp.leave_start_months %></td>
+                <td><%= emp.date_of_joining.toLocaleDateString('en-CA') %></td>
+                <td>
+                  <span class="status-badge <%= emp.is_active ? 'active' : 'inactive' %>">
+                    <i class="bi bi-circle-fill"></i>
+                    <%= emp.is_active ? 'Active' : 'Inactive' %>
+                  </span>
+                </td>
+                <td>
+                  <div class="action-buttons">
+                    <form action="/supervisor/employees/<%= emp.id %>/toggle" method="POST">
+                      <button class="btn btn-sm <%= emp.is_active ? 'btn-danger' : 'btn-success' %>">
+                        <%= emp.is_active ? 'Deactivate' : 'Activate' %>
+                      </button>
+                    </form>
+                    <a href="/supervisor/employees/<%= emp.id %>/details" class="btn btn-sm btn-primary">Details</a>
+                    <a href="/supervisor/employees/<%= emp.id %>/salary" class="btn btn-sm btn-secondary">Salary</a>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div class="col-md-3">
-      <label class="form-label">Designation</label>
-      <input type="text" name="designation" class="form-control" placeholder="e.g. Tailor" data-bs-toggle="tooltip" title="Employee role">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Phone</label>
-      <input type="text" name="phone_number" class="form-control" placeholder="Phone number">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Aadhar</label>
-      <input type="text" name="aadhar_card_number" class="form-control" placeholder="Aadhar number" pattern="\d{12}" minlength="12" maxlength="12">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Date of Joining</label>
-      <input type="date" name="date_of_joining" class="form-control" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Salary</label>
-      <input type="number" step="0.01" name="salary" class="form-control" placeholder="Amount" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Salary Type</label>
-      <select name="salary_type" class="form-select" required>
-        <option value="dihadi">Dihadi</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Allotted Hours</label>
-      <input type="number" step="0.1" name="allotted_hours" class="form-control" placeholder="8" required>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Paid Sunday Allowance</label>
-      <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Pay Sundays?</label>
-      <select name="pay_sunday" class="form-select">
-        <option value="1" selected>Yes</option>
-        <option value="0">No</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Leave Start Months</label>
-      <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
-    </div>
-    <div class="col-md-2 align-self-end">
-      <button type="submit" class="btn btn-success"><i class="fas fa-plus me-1"></i> Create</button>
-    </div>
-  </form>
-  <h4>My Employees</h4>
-  <div class="mb-3 col-md-5 col-lg-4 px-0">
-    <div class="input-group">
-      <input type="text" id="employeeSearch" class="form-control" placeholder="Search employees">
-      <button id="searchBtn" class="btn btn-outline-secondary" type="button"><i class="fas fa-search"></i></button>
-    </div>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Punch ID</th>
-          <th>Name</th>
-          <th>Designation</th>
-          <th>Phone</th>
-          <th>Salary</th>
-          <th>Type</th>
-          <th>Hours</th>
-          <th>Paid Sundays</th>
-          <th>Pay Sunday?</th>
-          <th>Leave Start</th>
-          <th>Joined</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% employees.forEach(emp => { %>
-          <tr>
-            <td><%= emp.punching_id %></td>
-            <td><%= emp.name %></td>
-            <td><%= emp.designation || '' %></td>
-            <td><%= emp.phone_number || '' %></td>
-            <td class="salary-container">
-              <span class="salary-hidden" data-salary="<%= emp.salary %>">****</span>
-              <button type="button" class="btn btn-sm btn-outline-secondary toggle-salary ms-1">
-                <i class="fas fa-eye"></i>
-              </button>
-            </td>
-            <td><%= emp.salary_type %></td>
-            <td><%= emp.allotted_hours %></td>
-            <td><%= emp.paid_sunday_allowance %></td>
-            <td><%= emp.pay_sunday ? 'Yes' : 'No' %></td>
-            <td><%= emp.leave_start_months %></td>
-            <td><%= emp.date_of_joining.toLocaleDateString('en-CA') %></td>
-            <td><%= emp.is_active ? 'Active' : 'Inactive' %></td>
-            <td class="d-flex gap-1">
-              <form action="/supervisor/employees/<%= emp.id %>/toggle" method="POST">
-                <button class="btn btn-sm <%= emp.is_active ? 'btn-danger' : 'btn-success' %>">
-                  <%= emp.is_active ? 'Deactivate' : 'Activate' %>
-                </button>
-              </form>
-              <a href="/supervisor/employees/<%= emp.id %>/details" class="btn btn-sm btn-primary">Details</a>
-              <a href="/supervisor/employees/<%= emp.id %>/salary" class="btn btn-sm btn-secondary">Salary</a>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<%- include('partials/footer') %>
+
 <script>
+  // Initialize Bootstrap tooltips
   const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
   tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
 
+  // Employee search functionality
   const searchInput = document.getElementById('employeeSearch');
   const searchBtn = document.getElementById('searchBtn');
   const rows = Array.from(document.querySelectorAll('table tbody tr'));
+
   const filterEmployees = () => {
     const q = searchInput.value.toLowerCase();
     rows.forEach(r => {
       r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
   };
+
   searchInput.addEventListener('input', filterEmployees);
   searchBtn.addEventListener('click', filterEmployees);
 
+  // OT Month selector
   const monthSelect = document.getElementById('otMonth');
   if (monthSelect) {
     monthSelect.addEventListener('change', () => {
@@ -251,5 +888,3 @@
   }
 </script>
 <script src="/public/js/salaryToggle.js"></script>
-</body>
-</html>

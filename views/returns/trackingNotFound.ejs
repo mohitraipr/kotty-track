@@ -5,133 +5,330 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Return Not Found - Kotty</title>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+    :root {
+      /* Brand Colors */
+      --charcoal: #1a1a1a;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --cream-darker: #e5dfd4;
+      --terracotta: #c45c3a;
+      --terracotta-light: #d4826a;
+      --terracotta-dark: #a34a2d;
+      --terracotta-bg: rgba(196, 92, 58, 0.08);
+
+      /* Text Colors */
+      --text-primary: #1a1a1a;
+      --text-secondary: #5a5650;
+      --text-muted: #a8a49a;
+
+      /* Borders & Shadows */
+      --border-light: #e8e6e1;
+      --border-medium: #d4d1c9;
+      --shadow-sm: 0 2px 4px rgba(26, 26, 26, 0.06);
+      --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+
+      /* Border Radius */
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-xl: 12px;
+      --radius-2xl: 16px;
+      --radius-full: 9999px;
+
+      /* Typography */
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      /* Transitions */
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-fast: 150ms var(--ease-out);
+      --transition-base: 200ms var(--ease-out);
     }
 
-    .not-found-container {
-      max-width: 480px;
-      width: 100%;
-      background: white;
-      border-radius: 20px;
-      padding: 50px 40px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--cream);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: var(--text-primary);
+    }
+
+    .brand-header {
+      margin-bottom: 32px;
       text-align: center;
     }
 
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--charcoal);
+    }
+
+    .brand-logo:hover {
+      text-decoration: none;
+      color: var(--charcoal);
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--terracotta);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: white;
+    }
+
+    .brand-text {
+      font-family: var(--font-display);
+      font-size: 26px;
+      letter-spacing: -0.01em;
+    }
+
+    .not-found-card {
+      max-width: 460px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: var(--radius-2xl);
+      padding: 44px 36px;
+      box-shadow: var(--shadow-md);
+      text-align: center;
+      border: 1px solid var(--border-light);
+    }
+
     .not-found-icon {
-      width: 100px;
-      height: 100px;
-      background: #fef3c7;
-      border-radius: 50%;
+      width: 88px;
+      height: 88px;
+      background: var(--cream);
+      border-radius: var(--radius-full);
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0 auto 24px;
+      border: 2px solid var(--cream-dark);
     }
 
     .not-found-icon i {
-      font-size: 50px;
-      color: #f59e0b;
+      font-size: 36px;
+      color: var(--terracotta);
     }
 
     .not-found-title {
+      font-family: var(--font-display);
       font-size: 28px;
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: 12px;
+      font-weight: 400;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
     }
 
     .not-found-message {
-      font-size: 16px;
-      color: #64748b;
-      margin-bottom: 32px;
-      line-height: 1.6;
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+      line-height: 1.65;
+      font-weight: 400;
     }
 
     .search-box {
-      background: #f8fafc;
-      border-radius: 12px;
+      background: var(--cream);
+      border-radius: var(--radius-xl);
       padding: 20px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+      border: 1px solid var(--cream-dark);
     }
 
     .search-box input {
       width: 100%;
-      padding: 14px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
       font-size: 15px;
+      font-family: var(--font-body);
       margin-bottom: 12px;
+      background: #ffffff;
+      color: var(--text-primary);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .search-box input:hover {
+      border-color: var(--border-medium);
     }
 
     .search-box input:focus {
       outline: none;
-      border-color: #2563eb;
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px var(--terracotta-bg);
     }
 
     .search-box button {
       width: 100%;
-      padding: 14px;
-      background: #2563eb;
-      color: white;
+      padding: 12px 16px;
+      background: var(--terracotta);
+      color: #ffffff;
       border: none;
-      border-radius: 10px;
-      font-weight: 600;
+      border-radius: var(--radius-md);
+      font-weight: 500;
+      font-family: var(--font-body);
+      font-size: 15px;
       cursor: pointer;
+      transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .search-box button:hover {
-      background: #1d4ed8;
+      background: var(--terracotta-dark);
+      box-shadow: var(--shadow-sm);
     }
 
-    .home-btn {
-      display: inline-block;
-      padding: 14px 32px;
-      background: #f1f5f9;
-      color: #64748b;
+    .search-box button:active {
+      transform: scale(0.98);
+    }
+
+    .search-box button:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--terracotta-bg);
+    }
+
+    .home-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--cream);
+      color: var(--text-primary);
       text-decoration: none;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       font-weight: 500;
-      transition: all 0.2s;
+      font-size: 14px;
+      transition: background-color var(--transition-fast), border-color var(--transition-fast);
+      border: 1px solid var(--cream-dark);
     }
 
-    .home-btn:hover {
-      background: #e2e8f0;
-      color: #475569;
+    .home-link:hover {
+      background: var(--cream-dark);
+      border-color: var(--cream-darker);
+      color: var(--text-primary);
+      text-decoration: none;
     }
 
-    .contact-info {
+    .home-link i {
+      font-size: 16px;
+    }
+
+    .contact-section {
       margin-top: 24px;
-      padding-top: 24px;
-      border-top: 1px solid #e2e8f0;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-light);
     }
 
-    .contact-info p {
+    .contact-section p {
       margin: 0;
-      color: #64748b;
+      color: var(--text-secondary);
       font-size: 14px;
     }
 
-    .contact-info a {
-      color: #2563eb;
+    .contact-section a {
+      color: var(--terracotta);
       font-weight: 500;
+      text-decoration: none;
+      transition: color var(--transition-fast);
+    }
+
+    .contact-section a:hover {
+      color: var(--terracotta-dark);
+      text-decoration: underline;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 20px 16px;
+      }
+
+      .brand-header {
+        margin-bottom: 24px;
+      }
+
+      .brand-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
+
+      .brand-text {
+        font-size: 22px;
+      }
+
+      .not-found-card {
+        padding: 32px 24px;
+      }
+
+      .not-found-icon {
+        width: 72px;
+        height: 72px;
+        margin-bottom: 20px;
+      }
+
+      .not-found-icon i {
+        font-size: 30px;
+      }
+
+      .not-found-title {
+        font-size: 24px;
+      }
+
+      .not-found-message {
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+
+      .search-box {
+        padding: 16px;
+      }
+
+      .search-box input,
+      .search-box button {
+        padding: 11px 12px;
+        font-size: 14px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="not-found-container">
+  <header class="brand-header">
+    <a href="https://kotty.in" class="brand-logo">
+      <span class="brand-icon">K</span>
+      <span class="brand-text">Kotty</span>
+    </a>
+  </header>
+
+  <main class="not-found-card">
     <div class="not-found-icon">
       <i class="bi bi-search"></i>
     </div>
@@ -150,14 +347,15 @@
       </form>
     </div>
 
-    <a href="https://kotty.in" class="home-btn">
-      <i class="bi bi-house me-2"></i>Go to Homepage
+    <a href="https://kotty.in" class="home-link">
+      <i class="bi bi-house"></i>
+      Go to Homepage
     </a>
 
-    <div class="contact-info">
+    <div class="contact-section">
       <p>Need help? Contact us at <a href="mailto:support@kotty.in">support@kotty.in</a></p>
     </div>
-  </div>
+  </main>
 
   <script>
     document.getElementById('searchForm').addEventListener('submit', function(e) {

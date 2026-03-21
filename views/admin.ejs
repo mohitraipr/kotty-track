@@ -1,73 +1,418 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Admin Dashboard</title>
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css">
-  <style>
-    /* Light background for inline editing rows */
-    .collapse-row {
-      background-color: #f9f9f9;
+<%- include('partials/header', { pageTitle: 'Admin Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/admin' }) %>
+
+<style>
+  /* Admin Page Specific Styles */
+  .admin-container {
+    padding-top: calc(var(--navbar-height) + 28px);
+    padding-bottom: 40px;
+    min-height: 100vh;
+  }
+
+  /* Tab Navigation */
+  .admin-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 28px;
+    overflow-x: auto;
+    padding-bottom: 0;
+  }
+
+  .admin-tabs .tab-btn {
+    padding: 12px 20px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    margin-bottom: -1px;
+  }
+
+  .admin-tabs .tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--gray-50);
+  }
+
+  .admin-tabs .tab-btn.active {
+    color: var(--terracotta);
+    border-bottom-color: var(--terracotta);
+  }
+
+  /* Section Headers */
+  .section-header {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  /* Tables */
+  .admin-table-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .admin-table th {
+    padding: 14px 18px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .admin-table td {
+    padding: 14px 18px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .admin-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .admin-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Collapse Row for Inline Editing */
+  .collapse-row {
+    background: var(--cream-dark);
+  }
+
+  .collapse-row td {
+    padding: 20px 18px;
+  }
+
+  .collapse-row .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  /* Action Buttons in Table */
+  .action-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn-edit {
+    background: var(--info-light);
+    color: var(--info);
+    border: 1px solid var(--info);
+    padding: 6px 12px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-edit:hover {
+    background: var(--info);
+    color: white;
+  }
+
+  .btn-delete {
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 6px 12px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-delete:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  .btn-update-role {
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-medium);
+    padding: 6px 12px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-update-role:hover {
+    background: var(--gray-200);
+    color: var(--text-primary);
+  }
+
+  /* Form Cards */
+  .form-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    margin-top: 20px;
+  }
+
+  .form-card .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-card .form-label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .form-card .form-control,
+  .form-card .form-select {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .form-card .form-control:hover,
+  .form-card .form-select:hover {
+    border-color: var(--border-medium);
+  }
+
+  .form-card .form-control:focus,
+  .form-card .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-card textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  .form-card .form-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .form-card .form-check-input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--terracotta);
+    cursor: pointer;
+  }
+
+  .form-card .form-check-label {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  /* Existing Tables List */
+  .tables-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .table-item {
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    transition: all var(--transition-fast);
+  }
+
+  .table-item:hover {
+    border-color: var(--terracotta);
+    background: var(--terracotta-bg);
+  }
+
+  /* Password Toggle */
+  .password-input-group {
+    position: relative;
+    display: flex;
+  }
+
+  .password-input-group .form-control {
+    padding-right: 44px;
+  }
+
+  .toggle-password {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    width: 42px;
+    background: var(--gray-50);
+    border: none;
+    border-left: 1px solid var(--border-light);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .toggle-password:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+  }
+
+  /* Badge Styles */
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+  }
+
+  .can-update-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+  }
+
+  .can-update-badge.yes {
+    background: var(--success-light);
+    color: var(--success);
+  }
+
+  .can-update-badge.no {
+    background: var(--gray-200);
+    color: var(--text-secondary);
+  }
+
+  /* Tab Content */
+  .tab-pane {
+    display: none;
+  }
+
+  .tab-pane.active {
+    display: block;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .admin-tabs {
+      padding: 0;
     }
-    .toggle-password {
-      cursor: pointer;
+
+    .admin-tabs .tab-btn {
+      padding: 10px 14px;
+      font-size: var(--text-xs);
     }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navigation Bar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">Admin Dashboard</a>
-      <div class="d-flex">
-        <span class="navbar-text text-white me-3">Logged in as: <%= user.username %></span>
-        <a class="btn btn-outline-light" href="/logout">Logout</a>
-      </div>
+
+    .admin-table th,
+    .admin-table td {
+      padding: 10px 12px;
+    }
+
+    .form-card {
+      padding: 20px;
+    }
+
+    .action-btns {
+      flex-direction: column;
+      gap: 6px;
+    }
+  }
+</style>
+
+<div class="container admin-container">
+  <!-- Flash Messages -->
+  <% if (typeof error !== 'undefined' && error.length) { %>
+    <div class="alert alert-danger alert-permanent">
+      <i class="bi bi-exclamation-circle me-2"></i>
+      <%= error %>
     </div>
-  </nav>
+  <% } %>
+  <% if (typeof success !== 'undefined' && success.length) { %>
+    <div class="alert alert-success alert-permanent">
+      <i class="bi bi-check-circle me-2"></i>
+      <%= success %>
+    </div>
+  <% } %>
 
-  <div class="container my-4">
-    <!-- Flash Messages -->
-    <% if (typeof error !== 'undefined' && error.length) { %>
-      <div class="alert alert-danger"><%= error %></div>
-    <% } %>
-    <% if (typeof success !== 'undefined' && success.length) { %>
-      <div class="alert alert-success"><%= success %></div>
-    <% } %>
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Admin Dashboard</h1>
+    <p class="page-subtitle">Manage users, roles, dashboards, and view audit logs</p>
+  </div>
 
-    <!-- Tabs for different admin functions -->
-    <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button">Overview</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="createDashboard-tab" data-bs-toggle="tab" data-bs-target="#createDashboard" type="button">Create Dashboard</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="createRole-tab" data-bs-toggle="tab" data-bs-target="#createRole" type="button">Create Role</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="createUser-tab" data-bs-toggle="tab" data-bs-target="#createUser" type="button">Create User</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="auditLogs-tab" data-bs-toggle="tab" data-bs-target="#auditLogs" type="button">Audit Logs</button>
-      </li>
-    </ul>
+  <!-- Tab Navigation -->
+  <div class="admin-tabs" role="tablist">
+    <button class="tab-btn active" id="overview-tab" data-tab="overview" type="button" role="tab">
+      <i class="bi bi-grid-3x3-gap me-2"></i>Overview
+    </button>
+    <button class="tab-btn" id="createDashboard-tab" data-tab="createDashboard" type="button" role="tab">
+      <i class="bi bi-plus-square me-2"></i>Create Dashboard
+    </button>
+    <button class="tab-btn" id="createRole-tab" data-tab="createRole" type="button" role="tab">
+      <i class="bi bi-person-badge me-2"></i>Create Role
+    </button>
+    <button class="tab-btn" id="createUser-tab" data-tab="createUser" type="button" role="tab">
+      <i class="bi bi-person-plus me-2"></i>Create User
+    </button>
+    <button class="tab-btn" id="auditLogs-tab" data-tab="auditLogs" type="button" role="tab">
+      <i class="bi bi-journal-text me-2"></i>Audit Logs
+    </button>
+  </div>
 
-    <div class="tab-content" id="adminTabsContent">
-      <!-- Overview Tab -->
-      <div class="tab-pane fade show active" id="overview">
-        <!-- Users Section -->
-        <h3 class="mt-4">Users</h3>
-        <table class="table table-striped table-bordered">
-          <thead class="table-light">
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Overview Tab -->
+    <div class="tab-pane active" id="overview" role="tabpanel">
+      <!-- Users Section -->
+      <h3 class="section-header">
+        <i class="bi bi-people me-2"></i>Users
+      </h3>
+      <div class="admin-table-container">
+        <table class="admin-table">
+          <thead>
             <tr>
               <th>ID</th>
               <th>Username</th>
@@ -78,41 +423,49 @@
           <tbody>
             <% users.forEach(function(userItem) { %>
               <tr>
-                <td><%= userItem.id %></td>
+                <td><strong>#<%= userItem.id %></strong></td>
                 <td><%= userItem.username %></td>
-                <td><%= userItem.role_name ? userItem.role_name : 'N/A' %></td>
                 <td>
-                  <!-- Clicking Edit toggles the inline editing row -->
-                  <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#editUser-<%= userItem.id %>">
-                    Edit
-                  </button>
-                  <!-- Delete uses a confirmation prompt -->
-                  <form action="/admin/delete-user" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete user <%= userItem.username %>?');">
-                    <input type="hidden" name="user_id" value="<%= userItem.id %>">
-                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                  </form>
+                  <span class="role-badge"><%= userItem.role_name ? userItem.role_name : 'N/A' %></span>
+                </td>
+                <td>
+                  <div class="action-btns">
+                    <button class="btn-edit" type="button" data-bs-toggle="collapse" data-bs-target="#editUser-<%= userItem.id %>">
+                      <i class="bi bi-pencil me-1"></i>Edit
+                    </button>
+                    <form action="/admin/delete-user" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete user <%= userItem.username %>?');">
+                      <input type="hidden" name="user_id" value="<%= userItem.id %>">
+                      <button type="submit" class="btn-delete">
+                        <i class="bi bi-trash me-1"></i>Delete
+                      </button>
+                    </form>
+                  </div>
                 </td>
               </tr>
               <!-- Inline Edit Row for User -->
               <tr class="collapse collapse-row" id="editUser-<%= userItem.id %>">
                 <td colspan="4">
-                  <form action="/admin/update-user" method="POST" class="row g-3 align-items-end">
+                  <form action="/admin/update-user" method="POST">
                     <input type="hidden" name="user_id" value="<%= userItem.id %>">
-                    <div class="col-md-4">
-                      <label for="username-<%= userItem.id %>" class="form-label">Username</label>
-                      <input type="text" class="form-control" id="username-<%= userItem.id %>" name="username" value="<%= userItem.username %>" required>
-                    </div>
-                    <div class="col-md-4">
-                      <label for="password-<%= userItem.id %>" class="form-label">New Password (optional)</label>
-                      <div class="input-group">
-                        <input type="password" class="form-control" id="password-<%= userItem.id %>" name="password">
-                        <button type="button" class="btn btn-outline-secondary toggle-password" data-target="#password-<%= userItem.id %>">
-                          <i class="bi bi-eye"></i>
+                    <div class="row g-3 align-items-end">
+                      <div class="col-md-4">
+                        <label for="username-<%= userItem.id %>" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username-<%= userItem.id %>" name="username" value="<%= userItem.username %>" required>
+                      </div>
+                      <div class="col-md-4">
+                        <label for="password-<%= userItem.id %>" class="form-label">New Password (optional)</label>
+                        <div class="password-input-group">
+                          <input type="password" class="form-control" id="password-<%= userItem.id %>" name="password" placeholder="Leave blank to keep current">
+                          <button type="button" class="toggle-password" data-target="#password-<%= userItem.id %>">
+                            <i class="bi bi-eye"></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <button type="submit" class="btn btn-success">
+                          <i class="bi bi-check-lg me-1"></i>Save Changes
                         </button>
                       </div>
-                    </div>
-                    <div class="col-md-4">
-                      <button type="submit" class="btn btn-success">Save Changes</button>
                     </div>
                   </form>
                 </td>
@@ -120,11 +473,15 @@
             <% }); %>
           </tbody>
         </table>
+      </div>
 
-        <!-- Dashboards Section -->
-        <h3 class="mt-5">Dashboards</h3>
-        <table class="table table-striped table-bordered">
-          <thead class="table-light">
+      <!-- Dashboards Section -->
+      <h3 class="section-header">
+        <i class="bi bi-layout-text-window-reverse me-2"></i>Dashboards
+      </h3>
+      <div class="admin-table-container">
+        <table class="admin-table">
+          <thead>
             <tr>
               <th>ID</th>
               <th>Name</th>
@@ -137,32 +494,43 @@
           <tbody>
             <% dashboards.forEach(function(dashboard) { %>
               <tr>
-                <td><%= dashboard.id %></td>
+                <td><strong>#<%= dashboard.id %></strong></td>
                 <td><%= dashboard.name %></td>
-                <td><%= dashboard.table_name %></td>
-                <td><%= dashboard.role_name ? dashboard.role_name : 'N/A' %></td>
-                <td><%= dashboard.can_update ? 'Yes' : 'No' %></td>
+                <td><code style="background: var(--gray-100); padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--text-xs);"><%= dashboard.table_name %></code></td>
                 <td>
-                  <button class="btn btn-sm btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editDashboard-<%= dashboard.id %>">
-                    Update Role
+                  <span class="role-badge"><%= dashboard.role_name ? dashboard.role_name : 'N/A' %></span>
+                </td>
+                <td>
+                  <span class="can-update-badge <%= dashboard.can_update ? 'yes' : 'no' %>">
+                    <i class="bi bi-<%= dashboard.can_update ? 'check-circle' : 'x-circle' %> me-1"></i>
+                    <%= dashboard.can_update ? 'Yes' : 'No' %>
+                  </span>
+                </td>
+                <td>
+                  <button class="btn-update-role" type="button" data-bs-toggle="collapse" data-bs-target="#editDashboard-<%= dashboard.id %>">
+                    <i class="bi bi-arrow-repeat me-1"></i>Update Role
                   </button>
                 </td>
               </tr>
               <!-- Inline Edit Row for Dashboard Role -->
               <tr class="collapse collapse-row" id="editDashboard-<%= dashboard.id %>">
                 <td colspan="6">
-                  <form action="/admin/update-dashboard-role" method="POST" class="row g-3 align-items-end">
+                  <form action="/admin/update-dashboard-role" method="POST">
                     <input type="hidden" name="dashboardId" value="<%= dashboard.id %>">
-                    <div class="col-md-6">
-                      <label for="dashboardRoleId-<%= dashboard.id %>" class="form-label">Select Role</label>
-                      <select class="form-select" id="dashboardRoleId-<%= dashboard.id %>" name="roleId" required>
-                        <% roles.forEach(function(role) { %>
-                          <option value="<%= role.id %>" <%= dashboard.role_id == role.id ? 'selected' : '' %>><%= role.name %></option>
-                        <% }); %>
-                      </select>
-                    </div>
-                    <div class="col-md-6">
-                      <button type="submit" class="btn btn-success">Update Role</button>
+                    <div class="row g-3 align-items-end">
+                      <div class="col-md-6">
+                        <label for="dashboardRoleId-<%= dashboard.id %>" class="form-label">Select Role</label>
+                        <select class="form-select" id="dashboardRoleId-<%= dashboard.id %>" name="roleId" required>
+                          <% roles.forEach(function(role) { %>
+                            <option value="<%= role.id %>" <%= dashboard.role_id == role.id ? 'selected' : '' %>><%= role.name %></option>
+                          <% }); %>
+                        </select>
+                      </div>
+                      <div class="col-md-6">
+                        <button type="submit" class="btn btn-success">
+                          <i class="bi bi-check-lg me-1"></i>Update Role
+                        </button>
+                      </div>
                     </div>
                   </form>
                 </td>
@@ -170,29 +538,37 @@
             <% }); %>
           </tbody>
         </table>
-
-        <!-- Existing Tables Section -->
-        <h3 class="mt-5">Existing Tables</h3>
-        <ul class="list-group">
-          <% existingTables.forEach(function(table) { %>
-            <li class="list-group-item"><%= table %></li>
-          <% }); %>
-        </ul>
       </div>
 
-      <!-- Create Dashboard Tab -->
-      <div class="tab-pane fade" id="createDashboard">
-        <h3 class="mt-4">Create New Dashboard</h3>
+      <!-- Existing Tables Section -->
+      <h3 class="section-header">
+        <i class="bi bi-database me-2"></i>Existing Tables
+      </h3>
+      <div class="tables-list">
+        <% existingTables.forEach(function(table) { %>
+          <div class="table-item">
+            <i class="bi bi-table me-2" style="color: var(--terracotta);"></i><%= table %>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- Create Dashboard Tab -->
+    <div class="tab-pane" id="createDashboard" role="tabpanel">
+      <h3 class="section-header">
+        <i class="bi bi-plus-square me-2"></i>Create New Dashboard
+      </h3>
+      <div class="form-card">
         <form action="/admin/create-dashboard" method="POST">
-          <div class="mb-3">
+          <div class="form-group">
             <label for="dashboardName" class="form-label">Dashboard Name</label>
-            <input type="text" class="form-control" id="dashboardName" name="dashboardName" required>
+            <input type="text" class="form-control" id="dashboardName" name="dashboardName" required placeholder="e.g., Inventory Dashboard">
           </div>
-          <div class="mb-3">
+          <div class="form-group">
             <label for="tableName" class="form-label">Table Name</label>
-            <input type="text" class="form-control" id="tableName" name="tableName" required placeholder="Letters, numbers & underscores only">
+            <input type="text" class="form-control" id="tableName" name="tableName" required placeholder="Letters, numbers & underscores only (e.g., inventory_data)">
           </div>
-          <div class="mb-3">
+          <div class="form-group">
             <label for="roleId" class="form-label">Assign Role</label>
             <select class="form-select" id="roleId" name="roleId" required>
               <% roles.forEach(function(role) { %>
@@ -200,48 +576,63 @@
               <% }); %>
             </select>
           </div>
-          <div class="mb-3 form-check">
-            <input type="checkbox" class="form-check-input" id="canUpdate" name="canUpdate">
-            <label class="form-check-label" for="canUpdate">Allow Updates</label>
+          <div class="form-group">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="canUpdate" name="canUpdate">
+              <label class="form-check-label" for="canUpdate">Allow Updates</label>
+            </div>
           </div>
-          <div class="mb-3">
+          <div class="form-group">
             <label for="columns" class="form-label">Columns (JSON Array)</label>
             <textarea class="form-control" id="columns" name="columns" rows="5" placeholder='[{"name": "column1", "type": "VARCHAR(255)", "isNotNull": true}, {"name": "column2", "type": "INT", "isNotNull": false}]' required></textarea>
+            <small class="text-muted mt-2 d-block">Define table columns as a JSON array with name, type, and isNotNull properties.</small>
           </div>
-          <button type="submit" class="btn btn-primary">Create Dashboard</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Create Dashboard
+          </button>
         </form>
       </div>
+    </div>
 
-      <!-- Create Role Tab -->
-      <div class="tab-pane fade" id="createRole">
-        <h3 class="mt-4">Create New Role</h3>
+    <!-- Create Role Tab -->
+    <div class="tab-pane" id="createRole" role="tabpanel">
+      <h3 class="section-header">
+        <i class="bi bi-person-badge me-2"></i>Create New Role
+      </h3>
+      <div class="form-card">
         <form action="/admin/create-role" method="POST">
-          <div class="mb-3">
+          <div class="form-group">
             <label for="roleName" class="form-label">Role Name</label>
-            <input type="text" class="form-control" id="roleName" name="roleName" required>
+            <input type="text" class="form-control" id="roleName" name="roleName" required placeholder="e.g., Manager, Supervisor, Operator">
           </div>
-          <button type="submit" class="btn btn-primary">Create Role</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Create Role
+          </button>
         </form>
       </div>
+    </div>
 
-      <!-- Create User Tab -->
-      <div class="tab-pane fade" id="createUser">
-        <h3 class="mt-4">Create New User</h3>
+    <!-- Create User Tab -->
+    <div class="tab-pane" id="createUser" role="tabpanel">
+      <h3 class="section-header">
+        <i class="bi bi-person-plus me-2"></i>Create New User
+      </h3>
+      <div class="form-card">
         <form action="/admin/create-user" method="POST">
-          <div class="mb-3">
+          <div class="form-group">
             <label for="newUsername" class="form-label">Username</label>
-            <input type="text" class="form-control" id="newUsername" name="username" required>
+            <input type="text" class="form-control" id="newUsername" name="username" required placeholder="Enter username">
           </div>
-          <div class="mb-3">
+          <div class="form-group">
             <label for="newPassword" class="form-label">Password</label>
-            <div class="input-group">
-              <input type="password" class="form-control" id="newPassword" name="password" required>
-              <button type="button" class="btn btn-outline-secondary toggle-password" data-target="#newPassword">
+            <div class="password-input-group">
+              <input type="password" class="form-control" id="newPassword" name="password" required placeholder="Enter password">
+              <button type="button" class="toggle-password" data-target="#newPassword">
                 <i class="bi bi-eye"></i>
               </button>
             </div>
           </div>
-          <div class="mb-3">
+          <div class="form-group">
             <label for="newRoleId" class="form-label">Assign Role</label>
             <select class="form-select" id="newRoleId" name="role_id" required>
               <% roles.forEach(function(role) { %>
@@ -249,15 +640,21 @@
               <% }); %>
             </select>
           </div>
-          <button type="submit" class="btn btn-primary">Create User</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Create User
+          </button>
         </form>
       </div>
+    </div>
 
-      <!-- Audit Logs Tab -->
-      <div class="tab-pane fade" id="auditLogs">
-        <h3 class="mt-4">Audit Logs (Latest 100)</h3>
-        <table class="table table-striped table-bordered">
-          <thead class="table-light">
+    <!-- Audit Logs Tab -->
+    <div class="tab-pane" id="auditLogs" role="tabpanel">
+      <h3 class="section-header">
+        <i class="bi bi-journal-text me-2"></i>Audit Logs (Latest 100)
+      </h3>
+      <div class="admin-table-container">
+        <table class="admin-table">
+          <thead>
             <tr>
               <th>ID</th>
               <th>User</th>
@@ -267,38 +664,66 @@
             </tr>
           </thead>
           <tbody>
-            <% auditLogs.forEach(function(log) { %>
+            <% if (auditLogs && auditLogs.length > 0) { %>
+              <% auditLogs.forEach(function(log) { %>
+                <tr>
+                  <td><strong>#<%= log.id %></strong></td>
+                  <td>
+                    <span class="role-badge"><%= log.username %></span>
+                  </td>
+                  <td><%= log.action %></td>
+                  <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;"><%= log.details %></td>
+                  <td><%= log.performed_at %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
               <tr>
-                <td><%= log.id %></td>
-                <td><%= log.username %></td>
-                <td><%= log.action %></td>
-                <td><%= log.details %></td>
-                <td><%= log.performed_at %></td>
+                <td colspan="5" class="text-center text-muted" style="padding: 40px;">
+                  <i class="bi bi-journal-x" style="font-size: 2rem; display: block; margin-bottom: 10px;"></i>
+                  No audit logs found
+                </td>
               </tr>
-            <% }); %>
+            <% } %>
           </tbody>
         </table>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- Bootstrap JS Bundle (includes Popper) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Toggle password view/hide
-    document.querySelectorAll('.toggle-password').forEach(function(button) {
-      button.addEventListener('click', function() {
-        const targetSelector = this.getAttribute('data-target');
-        const input = document.querySelector(targetSelector);
-        if (input.getAttribute('type') === 'password') {
-          input.setAttribute('type', 'text');
-          this.innerHTML = '<i class="bi bi-eye-slash"></i>';
-        } else {
-          input.setAttribute('type', 'password');
-          this.innerHTML = '<i class="bi bi-eye"></i>';
-        }
-      });
+<script>
+  // Tab Navigation
+  document.querySelectorAll('.tab-btn').forEach(function(tabBtn) {
+    tabBtn.addEventListener('click', function() {
+      var tabId = this.getAttribute('data-tab');
+
+      // Remove active class from all tabs and panes
+      document.querySelectorAll('.tab-btn').forEach(function(btn) { btn.classList.remove('active'); });
+      document.querySelectorAll('.tab-pane').forEach(function(pane) { pane.classList.remove('active'); });
+
+      // Add active class to clicked tab and corresponding pane
+      this.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
     });
-  </script>
-</body>
-</html>
+  });
+
+  // Toggle password view/hide
+  document.querySelectorAll('.toggle-password').forEach(function(button) {
+    button.addEventListener('click', function() {
+      var targetSelector = this.getAttribute('data-target');
+      var input = document.querySelector(targetSelector);
+      var icon = this.querySelector('i');
+      if (input.getAttribute('type') === 'password') {
+        input.setAttribute('type', 'text');
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+      } else {
+        input.setAttribute('type', 'password');
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+      }
+    });
+  });
+</script>
+
+<%- include('partials/footer') %>

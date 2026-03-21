@@ -1,274 +1,604 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Approve Jeans Assembly Assignments</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Bootstrap and FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <style>
-    body {
-      background-color: #f8f9fa;
-      color: #212529;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .main-content { flex: 1 0 auto; }
-    .sticky-subheader {
-      position: sticky;
-      top: 0;
-      z-index: 1020;
-      background-color: #f8f9fa;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #dee2e6;
-    }
-    .table-responsive { overflow-x: auto; }
-    @media (max-width: 576px) {
-      body { font-size: 0.9rem; }
-      .table thead { display: none; }
-      .table td {
-        display: block;
-        width: 100%;
-        border: none !important;
-        border-bottom: 1px solid #dee2e6 !important;
-      }
-      .table td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        margin-right: 0.5rem;
-        display: inline-block;
-        min-width: 110px;
-        color: #495057;
-      }
-      .table td:last-child { border-bottom: 2px solid #dee2e6 !important; }
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="fas fa-tshirt me-2"></i> KOTTY
-      </a>
-      <div class="ms-auto d-flex gap-2">
-        <a href="/jeansassemblydashboard" class="btn btn-outline-light btn-sm">
-          <i class="fas fa-arrow-left"></i> Back to Dashboard
-        </a>
-        <a href="/logout" class="btn btn-sm btn-danger">
-          <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'Jeans Assembly Approve' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/jeansassemblydashboard' }) %>
 
-  <!-- Main Container -->
-  <div class="container my-4 main-content">
-    <!-- FLASH MESSAGES -->
-    <% if (error && error.length > 0) { %>
+<style>
+  /* Page Layout - No Sidebar */
+  .page-wrapper {
+    margin-top: var(--navbar-height);
+    min-height: calc(100vh - var(--navbar-height));
+    padding: 28px;
+    background: var(--bg-page);
+  }
+
+  .content-container {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+  }
+
+  /* Sticky Search Header */
+  .sticky-subheader {
+    position: sticky;
+    top: var(--navbar-height);
+    z-index: 100;
+    background: var(--bg-page);
+    padding: 16px 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  /* Search Input Group */
+  .search-input-group {
+    display: flex;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0 14px;
+    transition: all var(--transition-fast);
+  }
+
+  .search-input-group:focus-within {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .search-input-group i {
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+
+  .search-input-group input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 10px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .search-input-group input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Table Styling */
+  .table-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .table-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-card);
+  }
+
+  .table-header h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .table-header h2 i {
+    color: var(--terracotta);
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 14px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Action Buttons */
+  .action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .btn-approve {
+    background: var(--success);
+    color: white;
+    border: 1px solid var(--success);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-approve:hover {
+    background: #257a4f;
+    border-color: #257a4f;
+    transform: translateY(-1px);
+  }
+
+  .btn-deny {
+    background: var(--danger);
+    color: white;
+    border: 1px solid var(--danger);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-deny:hover {
+    background: #a52f1a;
+    border-color: #a52f1a;
+    transform: translateY(-1px);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-top: 20px;
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: var(--info-light);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--info);
+    font-size: 28px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  /* Modal Customizations */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-card);
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    font-size: 20px;
+  }
+
+  .modal-title.approve-title i {
+    color: var(--success);
+  }
+
+  .modal-title.deny-title i {
+    color: var(--danger);
+  }
+
+  .modal-body {
+    padding: 24px;
+    background: var(--bg-card);
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-light);
+    background: var(--gray-50);
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  }
+
+  /* Form Elements */
+  .form-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .page-wrapper {
+      padding: 20px 16px;
+    }
+
+    .data-table thead {
+      display: none;
+    }
+
+    .data-table tbody tr {
+      display: block;
+      margin-bottom: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 12px;
+    }
+
+    .data-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-light) !important;
+    }
+
+    .data-table td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+
+    .data-table td:last-child {
+      border-bottom: none !important;
+    }
+
+    .action-buttons {
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+</style>
+
+<!-- Main Page Wrapper -->
+<div class="page-wrapper">
+  <div class="content-container">
+    <!-- Flash Messages -->
+    <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
       <% error.forEach(function(msg) { %>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <i class="fas fa-exclamation-circle me-2"></i> <%= msg %>
+          <i class="bi bi-exclamation-circle me-2"></i> <%= msg %>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       <% }); %>
     <% } %>
-    <% if (success && success.length > 0) { %>
+    <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
       <% success.forEach(function(msg) { %>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <i class="fas fa-check-circle me-2"></i> <%= msg %>
+          <i class="bi bi-check-circle me-2"></i> <%= msg %>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       <% }); %>
     <% } %>
 
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h1 class="mb-0"><i class="fas fa-check-circle"></i> Pending Jeans Assembly Assignments</h1>
+    <!-- Page Header -->
+    <div class="page-header">
+      <nav class="breadcrumbs">
+        <a href="/jeansassemblydashboard">Jeans Assembly</a>
+        <span class="separator">/</span>
+        <span>Pending Approvals</span>
+      </nav>
+      <h1 class="page-title">Pending Jeans Assembly Assignments</h1>
+      <p class="page-subtitle">Review and approve or deny assembly assignments</p>
     </div>
 
-    <!-- Sticky sub-header with search -->
+    <!-- Sticky Search Header -->
     <div class="sticky-subheader">
       <div class="row">
-        <div class="col-sm-6">
-          <div class="input-group">
-            <span class="input-group-text"><i class="fas fa-search"></i></span>
-            <input type="text" id="searchAssignments" class="form-control" placeholder="Search by Lot or SKU..." />
+        <div class="col-md-6 col-lg-4">
+          <div class="search-input-group">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchAssignments" placeholder="Search by Lot or SKU..." />
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Card for pending approvals -->
-    <div class="card mt-2">
-      <div class="card-header"><strong>Pending Approvals</strong></div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-striped mb-0" id="assignmentsTable">
-            <thead class="table-dark">
-              <tr>
-                <th scope="col">Assignment ID</th>
-                <th scope="col">Lot No</th>
-                <th scope="col">Cutting Remark</th>
-                <th scope="col">SKU</th>
-                <th scope="col">Total Pieces</th>
-                <th scope="col">Assigned On</th>
-                <th scope="col">Remark</th>
-                <th scope="col" style="width: 180px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Rows will be injected via JavaScript -->
-            </tbody>
-          </table>
+    <!-- Data Table Card -->
+    <div class="table-container">
+      <div class="table-header">
+        <h2><i class="bi bi-clipboard-check"></i> Pending Approvals</h2>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table" id="assignmentsTable">
+          <thead>
+            <tr>
+              <th>Assignment ID</th>
+              <th>Lot No</th>
+              <th>Cutting Remark</th>
+              <th>SKU</th>
+              <th>Total Pieces</th>
+              <th>Assigned On</th>
+              <th>Remark</th>
+              <th style="width: 180px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Rows will be injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Empty State Alert -->
+    <div id="noAssignmentsAlert" class="empty-state d-none">
+      <div class="empty-state-icon">
+        <i class="bi bi-inbox"></i>
+      </div>
+      <h3 class="empty-state-title">No Pending Assignments</h3>
+      <p class="empty-state-text">All jeans assembly assignments have been reviewed. Check back later for new items.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Deny Modal -->
+<div class="modal fade" id="denyModal" tabindex="-1" aria-labelledby="denyModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="denyForm" action="/jeansassemblydashboard/deny-lot" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title deny-title" id="denyModalLabel">
+            <i class="bi bi-x-circle"></i> Deny Assignment
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-      </div>
-    </div>
-
-    <!-- Alert when no assignments -->
-    <div id="noAssignmentsAlert" class="alert alert-info mt-3 d-none">
-      <i class="fas fa-info-circle me-2"></i> No pending assignments found.
-    </div>
-  </div>
-
-  <!-- Deny Modal (remark required) -->
-  <div class="modal fade" id="denyModal" tabindex="-1" aria-labelledby="denyModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form id="denyForm" action="/jeansassemblydashboard/deny-lot" method="POST">
-          <div class="modal-header">
-            <h5 class="modal-title" id="denyModalLabel"><i class="fas fa-ban"></i> Deny Assignment</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-body">
+          <input type="hidden" name="assignment_id" id="denyAssignmentId" value="" />
+          <div class="mb-3">
+            <label for="denial_remark" class="form-label">Reason for Denial <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="denial_remark" id="denial_remark" rows="3" placeholder="Please provide a reason for denying this assignment..." required></textarea>
           </div>
-          <div class="modal-body">
-            <input type="hidden" name="assignment_id" id="denyAssignmentId" value="" />
-            <div class="mb-3">
-              <label for="denial_remark" class="form-label"><strong>Reason for Denial</strong></label>
-              <textarea class="form-control" name="denial_remark" id="denial_remark" rows="3" required></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-danger"><i class="fas fa-ban"></i> Deny</button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-x-circle me-1"></i> Deny Assignment
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>
 
-  <!-- Approve Modal (remark optional) -->
-  <div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form id="approveForm" action="/jeansassemblydashboard/approve-lot" method="POST">
-          <div class="modal-header">
-            <h5 class="modal-title" id="approveModalLabel"><i class="fas fa-check-circle"></i> Approve Assignment</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Approve Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="approveForm" action="/jeansassemblydashboard/approve-lot" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title approve-title" id="approveModalLabel">
+            <i class="bi bi-check-circle"></i> Approve Assignment
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="assignment_id" id="approveAssignmentId" value="" />
+          <div class="mb-3">
+            <label for="approval_remark" class="form-label">Approval Remark (Optional)</label>
+            <textarea class="form-control" name="approval_remark" id="approval_remark" rows="3" placeholder="Add any notes or comments..."></textarea>
           </div>
-          <div class="modal-body">
-            <input type="hidden" name="assignment_id" id="approveAssignmentId" value="" />
-            <div class="mb-3">
-              <label for="approval_remark" class="form-label"><strong>Approval Remark (Optional)</strong></label>
-              <textarea class="form-control" name="approval_remark" id="approval_remark" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-success"><i class="fas fa-check-circle"></i> Approve</button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-circle me-1"></i> Approve Assignment
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const searchAssignments = document.getElementById('searchAssignments');
-    const assignmentsTableBody = document.querySelector('#assignmentsTable tbody');
-    const noAssignmentsAlert = document.getElementById('noAssignmentsAlert');
-    let assignmentData = [];
+<script>
+  const searchAssignments = document.getElementById('searchAssignments');
+  const assignmentsTableBody = document.querySelector('#assignmentsTable tbody');
+  const noAssignmentsAlert = document.getElementById('noAssignmentsAlert');
+  const tableContainer = document.querySelector('.table-container');
+  let assignmentData = [];
 
-    async function fetchAssignments(search = '') {
-      try {
-        const resp = await fetch(`/jeansassemblydashboard/approve/list?search=${encodeURIComponent(search)}`);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        assignmentData = data.data || [];
-        renderAssignmentsTable();
-      } catch (err) {
-        console.error('Error fetching assignments:', err);
-        assignmentsTableBody.innerHTML = `
-          <tr>
-            <td colspan="8" class="text-danger">Error loading assignments. Please try again later.</td>
-          </tr>
-        `;
-      }
+  async function fetchAssignments(search = '') {
+    try {
+      const resp = await fetch(`/jeansassemblydashboard/approve/list?search=${encodeURIComponent(search)}`);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      assignmentData = data.data || [];
+      renderAssignmentsTable();
+    } catch (err) {
+      console.error('Error fetching assignments:', err);
+      assignmentsTableBody.textContent = '';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '8');
+      td.className = 'text-center text-danger py-4';
+      td.textContent = 'Error loading assignments. Please try again later.';
+      tr.appendChild(td);
+      assignmentsTableBody.appendChild(tr);
     }
+  }
 
-    function renderAssignmentsTable() {
-      assignmentsTableBody.innerHTML = '';
-      if (!assignmentData.length) {
-        noAssignmentsAlert.classList.remove('d-none');
-        return;
-      } else {
-        noAssignmentsAlert.classList.add('d-none');
-      }
-      assignmentData.forEach(item => {
-        const tr = document.createElement('tr');
-        const assignedOn = new Date(item.assigned_on).toLocaleString();
-        tr.innerHTML = `
-          <td data-label="Assignment ID">${item.assignment_id}</td>
-          <td data-label="Lot No">${item.lot_no}</td>
-          <td data-label="Cutting Remark">${item.cutting_remark || 'N/A'}</td>
-          <td data-label="SKU">${item.sku}</td>
-          <td data-label="Total Pieces">${item.total_pieces || 'N/A'}</td>
-          <td data-label="Assigned On">${assignedOn}</td>
-          <td data-label="Remark">${item.assignment_remark || 'N/A'}</td>
-          <td data-label="Actions">
-            <div class="d-flex flex-wrap gap-2">
-              <button class="btn btn-success btn-sm approveBtn" data-bs-toggle="modal" data-bs-target="#approveModal" data-assignment-id="${item.assignment_id}">
-                <i class="fas fa-check-circle"></i> Approve
-              </button>
-              <button class="btn btn-danger btn-sm denyBtn" data-bs-toggle="modal" data-bs-target="#denyModal" data-assignment-id="${item.assignment_id}">
-                <i class="fas fa-ban"></i> Deny
-              </button>
-            </div>
-          </td>
-        `;
-        assignmentsTableBody.appendChild(tr);
+  function escapeHtml(text) {
+    if (text === null || text === undefined) return 'N/A';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function renderAssignmentsTable() {
+    assignmentsTableBody.textContent = '';
+    if (!assignmentData.length) {
+      tableContainer.classList.add('d-none');
+      noAssignmentsAlert.classList.remove('d-none');
+      return;
+    } else {
+      tableContainer.classList.remove('d-none');
+      noAssignmentsAlert.classList.add('d-none');
+    }
+    assignmentData.forEach(item => {
+      const tr = document.createElement('tr');
+      const assignedOn = new Date(item.assigned_on).toLocaleString();
+
+      // Create cells with proper escaping
+      const cells = [
+        { label: 'Assignment ID', value: item.assignment_id },
+        { label: 'Lot No', value: item.lot_no },
+        { label: 'Cutting Remark', value: item.cutting_remark || 'N/A' },
+        { label: 'SKU', value: item.sku },
+        { label: 'Total Pieces', value: item.total_pieces || 'N/A' },
+        { label: 'Assigned On', value: assignedOn },
+        { label: 'Remark', value: item.assignment_remark || 'N/A' }
+      ];
+
+      cells.forEach(cell => {
+        const td = document.createElement('td');
+        td.setAttribute('data-label', cell.label);
+        td.textContent = cell.value;
+        tr.appendChild(td);
       });
-    }
 
-    // Setup Deny Modal
-    const denyModal = document.getElementById('denyModal');
-    denyModal.addEventListener('show.bs.modal', (event) => {
-      const button = event.relatedTarget;
-      const assignmentId = button.getAttribute('data-assignment-id');
-      document.getElementById('denyAssignmentId').value = assignmentId;
-      document.getElementById('denial_remark').value = '';
+      // Actions cell
+      const actionsTd = document.createElement('td');
+      actionsTd.setAttribute('data-label', 'Actions');
+
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'action-buttons';
+
+      const approveBtn = document.createElement('button');
+      approveBtn.className = 'btn-approve approveBtn';
+      approveBtn.setAttribute('data-bs-toggle', 'modal');
+      approveBtn.setAttribute('data-bs-target', '#approveModal');
+      approveBtn.setAttribute('data-assignment-id', item.assignment_id);
+      approveBtn.innerHTML = '<i class="bi bi-check-circle"></i> Approve';
+
+      const denyBtn = document.createElement('button');
+      denyBtn.className = 'btn-deny denyBtn';
+      denyBtn.setAttribute('data-bs-toggle', 'modal');
+      denyBtn.setAttribute('data-bs-target', '#denyModal');
+      denyBtn.setAttribute('data-assignment-id', item.assignment_id);
+      denyBtn.innerHTML = '<i class="bi bi-x-circle"></i> Deny';
+
+      actionsDiv.appendChild(approveBtn);
+      actionsDiv.appendChild(denyBtn);
+      actionsTd.appendChild(actionsDiv);
+      tr.appendChild(actionsTd);
+
+      assignmentsTableBody.appendChild(tr);
     });
+  }
 
-    // Setup Approve Modal
-    const approveModal = document.getElementById('approveModal');
-    approveModal.addEventListener('show.bs.modal', (event) => {
-      const button = event.relatedTarget;
-      const assignmentId = button.getAttribute('data-assignment-id');
-      document.getElementById('approveAssignmentId').value = assignmentId;
-      document.getElementById('approval_remark').value = '';
-    });
+  // Setup Deny Modal
+  const denyModal = document.getElementById('denyModal');
+  denyModal.addEventListener('show.bs.modal', (event) => {
+    const button = event.relatedTarget;
+    const assignmentId = button.getAttribute('data-assignment-id');
+    document.getElementById('denyAssignmentId').value = assignmentId;
+    document.getElementById('denial_remark').value = '';
+  });
 
-    searchAssignments.addEventListener('input', () => {
-      fetchAssignments(searchAssignments.value.trim());
-    });
+  // Setup Approve Modal
+  const approveModal = document.getElementById('approveModal');
+  approveModal.addEventListener('show.bs.modal', (event) => {
+    const button = event.relatedTarget;
+    const assignmentId = button.getAttribute('data-assignment-id');
+    document.getElementById('approveAssignmentId').value = assignmentId;
+    document.getElementById('approval_remark').value = '';
+  });
 
-    fetchAssignments();
-  </script>
-</body>
-</html>
+  searchAssignments.addEventListener('input', () => {
+    fetchAssignments(searchAssignments.value.trim());
+  });
+
+  fetchAssignments();
+</script>
+
+<%- include('partials/footer') %>

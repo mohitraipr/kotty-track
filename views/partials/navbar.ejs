@@ -10,21 +10,13 @@
 
       <!-- Brand Logo & Name -->
       <a href="<%= typeof dashboardUrl !== 'undefined' ? dashboardUrl : '/dashboard' %>" class="navbar-brand">
-        <div class="brand-logo">
-          K
-        </div>
-        <span class="d-none d-sm-inline">Kotty Track</span>
+        <div class="brand-logo">K</div>
+        <span class="brand-text d-none d-sm-inline">Kotty Track</span>
       </a>
     </div>
 
     <!-- Right Section: User Menu -->
     <div class="navbar-menu">
-      <!-- Dark Mode Toggle -->
-      <button class="navbar-btn" id="themeToggle" aria-label="Toggle Dark Mode">
-        <i class="bi bi-moon-stars"></i>
-        <span class="d-none d-md-inline">Dark Mode</span>
-      </button>
-
       <!-- Notifications (if any) -->
       <% if (typeof user !== 'undefined' && user.role === 'operator') { %>
         <button class="navbar-btn position-relative" data-bs-toggle="dropdown">
@@ -95,34 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Theme Toggle
-  const themeToggle = document.getElementById('themeToggle');
-  const html = document.documentElement;
-
-  // Load saved theme
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  html.setAttribute('data-theme', savedTheme);
-  updateThemeIcon(savedTheme);
-
-  if (themeToggle) {
-    themeToggle.addEventListener('click', function() {
-      const currentTheme = html.getAttribute('data-theme');
-      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-      html.setAttribute('data-theme', newTheme);
-      localStorage.setItem('theme', newTheme);
-      updateThemeIcon(newTheme);
-    });
-  }
-
-  function updateThemeIcon(theme) {
-    const icon = themeToggle?.querySelector('i');
-    if (icon) {
-      icon.className = theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun';
-    }
-    const text = themeToggle?.querySelector('span');
-    if (text) {
-      text.textContent = theme === 'light' ? 'Dark Mode' : 'Light Mode';
-    }
-  }
+  // Force light theme
+  document.documentElement.setAttribute('data-theme', 'light');
 });
 </script>

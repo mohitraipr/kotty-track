@@ -1,224 +1,374 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Kotty Search Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Bootstrap 5 -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <!-- Bootstrap Icons (Optional) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-  />
-  <style>
-    /* Tag styling for "bulk search" */
-    .tag-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      border: 1px solid #ced4da;
-      padding: 0.5rem;
-      border-radius: 0.375rem;
-      min-height: calc(1.5em + 0.75rem + 2px); 
-      background-color: #fff;
-      cursor: text;
-    }
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      background-color: #0d6efd; /* Bootstrap primary color */
-      color: #fff;
-      border-radius: 0.375rem;
-      padding: 0 0.5rem;
-    }
-    .tag i {
-      cursor: pointer;
-      margin-left: 0.3rem;
-    }
-    .tag-input {
-      border: none;
-      outline: none;
-      min-width: 100px;
-      flex: 1;
-    }
-    .tag-input:focus {
-      outline: none;
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
+<%- include('partials/header', { pageTitle: 'Search' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/search-dashboard' }) %>
 
-<!-- Navbar with company branding & logout -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand fw-bold">Kotty</span>
-    <div class="d-flex">
-      <a href="/logout" class="btn btn-outline-light">Logout</a>
+<style>
+  /* Tag styling for bulk search */
+  .tag-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    border: 1px solid var(--border-light);
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    min-height: 48px;
+    background-color: var(--bg-card);
+    cursor: text;
+    transition: all var(--transition-fast);
+  }
+
+  .tag-container:hover {
+    border-color: var(--border-medium);
+  }
+
+  .tag-container:focus-within {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: var(--terracotta);
+    color: white;
+    border-radius: var(--radius-full);
+    padding: 4px 12px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .tag i {
+    cursor: pointer;
+    margin-left: 8px;
+    opacity: 0.8;
+    transition: opacity var(--transition-fast);
+  }
+
+  .tag i:hover {
+    opacity: 1;
+  }
+
+  .tag-input {
+    border: none;
+    outline: none;
+    min-width: 150px;
+    flex: 1;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    background: transparent;
+    color: var(--text-primary);
+  }
+
+  .tag-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Column checkboxes grid */
+  .column-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .column-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--gray-50);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .column-checkbox:hover {
+    background: var(--cream-dark);
+  }
+
+  .column-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--terracotta);
+    cursor: pointer;
+  }
+
+  .column-checkbox label {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    margin: 0;
+  }
+
+  /* Results table styling */
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .results-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  .results-table td {
+    padding: 14px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .results-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .results-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Instructions list */
+  .instructions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .instructions-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .instructions-list li::before {
+    content: counter(step);
+    counter-increment: step;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .instructions-list {
+    counter-reset: step;
+  }
+</style>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width); margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Search Dashboard</h1>
+      <p class="page-subtitle">Query and export data from any table in the database</p>
     </div>
-  </div>
-</nav>
 
-<div class="container py-4">
-  <h1 class="mb-4">Search Dashboard</h1>
-
-  <!-- 1) CHOOSE TABLE (GET) -->
-  <form method="GET" action="/search-dashboard" class="row gy-3 card p-4 mb-4 shadow-sm">
-    <div class="col-md-6">
-      <label class="form-label"><strong>Choose Table</strong></label>
-      <select name="table" class="form-select" onchange="this.form.submit()">
-        <option value="">-- Select Table --</option>
-        <% allTables.forEach(tbl => { %>
-          <option
-            value="<%= tbl %>"
-            <%= (selectedTable === tbl) ? 'selected' : '' %>
-          ><%= tbl %></option>
-        <% }) %>
-      </select>
-    </div>
-  </form>
-
-  <!-- 2) If user picked a table, show columns & search form (POST) -->
-  <% if (selectedTable) { %>
-    <form method="POST" action="/search-dashboard" class="row gy-3 card p-4 shadow-sm">
-      <!-- Hidden fields to keep track of POST action & table -->
-      <input type="hidden" name="action" id="actionField" value="search">
-      <input type="hidden" name="selectedTable" value="<%= selectedTable %>">
-      
-      <!-- Hidden input that will contain all search terms joined by spaces (for the server) -->
-      <input type="hidden" name="searchTerm" id="searchTermHidden" value="<%= searchTerm %>">
-
-      <div class="col-12">
-        <h5 class="mb-1">Table: <%= selectedTable %></h5>
-        <p class="text-muted mb-2">
-          1) Select columns to display (and optionally to search). <br/>
-          2) Choose whether to search in all selected columns or a single column. <br/>
-          3) Enter one or more keywords (press Tab/Enter after each).
-        </p>
+    <!-- Step 1: Choose Table -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-database me-2" style="color: var(--terracotta);"></i>
+          Select Table
+        </h2>
       </div>
-
-      <!-- Column checkboxes to determine which columns to display -->
-      <div class="col-12 mb-3">
-        <label class="form-label fw-bold">Columns to Display:</label>
-        <div class="row">
-          <% columnList.forEach(col => {
-             const isChecked = chosenColumns.includes(col);
-          %>
-            <div class="col-md-3 mb-2">
-              <div class="form-check">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  name="chosenColumns"
-                  value="<%= col %>"
-                  id="<%= col %>"
-                  <%= isChecked ? 'checked' : '' %>
-                />
-                <label class="form-check-label" for="<%= col %>">
-                  <%= col %>
-                </label>
-              </div>
+      <div class="card-body">
+        <form method="GET" action="/search-dashboard">
+          <div class="row align-items-end">
+            <div class="col-md-6">
+              <label for="tableSelect" class="form-label">Choose a table to search</label>
+              <select name="table" id="tableSelect" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Select Table --</option>
+                <% allTables.forEach(tbl => { %>
+                  <option
+                    value="<%= tbl %>"
+                    <%= (selectedTable === tbl) ? 'selected' : '' %>
+                  ><%= tbl %></option>
+                <% }) %>
+              </select>
             </div>
-          <% }) %>
-        </div>
+          </div>
+        </form>
       </div>
+    </div>
 
-      <!-- Select primary column to search (or "All Selected Columns") -->
-      <div class="col-md-4">
-        <label for="primaryColumn" class="form-label fw-bold">Search In Column:</label>
-        <select name="primaryColumn" id="primaryColumn" class="form-select">
-          <!-- If primaryColumn is empty, that means "search in all selected columns" -->
-          <option value="">All Selected Columns</option>
-          <% columnList.forEach(col => { %>
-            <option
-              value="<%= col %>"
-              <%= (primaryColumn === col) ? 'selected' : '' %>
-            ><%= col %></option>
-          <% }) %>
-        </select>
-      </div>
-
-      <!-- Bulk Search Input (Tagging) -->
-      <div class="col-md-6">
-        <label class="form-label fw-bold">Keyword(s)</label>
-        <div 
-          class="tag-container" 
-          id="tagContainer" 
-          onclick="document.getElementById('tagInput').focus()"
-        >
-          <!-- The input for typing tags -->
-          <input
-            type="text"
-            class="tag-input"
-            id="tagInput"
-            placeholder="Type term and press Tab/Enter..."
-          />
-        </div>
-      </div>
-
-      <!-- Buttons -->
-      <div class="col-12 d-flex gap-3 mt-2">
-        <button type="button" class="btn btn-success" onclick="submitForm('search')">
-          <i class="bi bi-search"></i> Search
-        </button>
-        <button type="button" class="btn btn-outline-primary" onclick="submitForm('export')">
-          <i class="bi bi-file-earmark-spreadsheet"></i> Export
-        </button>
-      </div>
-    </form>
-
-    <!-- If we have results, display them -->
-    <% if (resultRows !== null) { %>
-      <hr/>
-      <div class="card shadow-sm">
-        <div class="card-header bg-secondary text-white">
-          <i class="bi bi-table"></i> Results
+    <!-- Step 2: Configure Search (only shown when table is selected) -->
+    <% if (selectedTable) { %>
+      <div class="card mb-4">
+        <div class="card-header">
+          <h2 class="card-title">
+            <i class="bi bi-search me-2" style="color: var(--terracotta);"></i>
+            Search: <%= selectedTable %>
+          </h2>
         </div>
         <div class="card-body">
-          <% if (!resultRows.length) { %>
-            <p class="text-muted">No data found.</p>
-          <% } else {
-               const colNames = Object.keys(resultRows[0]);
-          %>
-            <div class="table-responsive">
-              <table class="table table-bordered table-hover align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <% colNames.forEach(cn => { %>
-                      <th><%= cn %></th>
-                    <% }) %>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% resultRows.forEach(row => { %>
-                    <tr>
-                      <% colNames.forEach(cn => { %>
-                        <td><%= row[cn] %></td>
-                      <% }) %>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+          <!-- Instructions -->
+          <div class="mb-4 p-3" style="background: var(--terracotta-bg); border-radius: var(--radius-md);">
+            <ul class="instructions-list mb-0">
+              <li>Select columns to display (and optionally to search)</li>
+              <li>Choose whether to search in all selected columns or a single column</li>
+              <li>Enter one or more keywords (press Tab/Enter after each)</li>
+            </ul>
+          </div>
+
+          <form method="POST" action="/search-dashboard">
+            <!-- Hidden fields -->
+            <input type="hidden" name="action" id="actionField" value="search">
+            <input type="hidden" name="selectedTable" value="<%= selectedTable %>">
+            <input type="hidden" name="searchTerm" id="searchTermHidden" value="<%= searchTerm %>">
+
+            <!-- Column Selection -->
+            <div class="form-group mb-4">
+              <label class="form-label">
+                <i class="bi bi-columns-gap me-1"></i>
+                Columns to Display
+              </label>
+              <div class="column-grid">
+                <% columnList.forEach(col => {
+                   const isChecked = chosenColumns.includes(col);
+                %>
+                  <div class="column-checkbox">
+                    <input
+                      type="checkbox"
+                      name="chosenColumns"
+                      value="<%= col %>"
+                      id="col_<%= col %>"
+                      <%= isChecked ? 'checked' : '' %>
+                    />
+                    <label for="col_<%= col %>"><%= col %></label>
+                  </div>
+                <% }) %>
+              </div>
             </div>
-          <% } %>
+
+            <!-- Search Configuration -->
+            <div class="row g-3 mb-4">
+              <!-- Search Column Selection -->
+              <div class="col-md-4">
+                <label for="primaryColumn" class="form-label">
+                  <i class="bi bi-filter me-1"></i>
+                  Search In Column
+                </label>
+                <select name="primaryColumn" id="primaryColumn" class="form-select">
+                  <option value="">All Selected Columns</option>
+                  <% columnList.forEach(col => { %>
+                    <option
+                      value="<%= col %>"
+                      <%= (primaryColumn === col) ? 'selected' : '' %>
+                    ><%= col %></option>
+                  <% }) %>
+                </select>
+              </div>
+
+              <!-- Keyword Input with Tags -->
+              <div class="col-md-8">
+                <label class="form-label">
+                  <i class="bi bi-tags me-1"></i>
+                  Keyword(s)
+                </label>
+                <div
+                  class="tag-container"
+                  id="tagContainer"
+                  onclick="document.getElementById('tagInput').focus()"
+                >
+                  <input
+                    type="text"
+                    class="tag-input"
+                    id="tagInput"
+                    placeholder="Type term and press Tab/Enter..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex gap-3 flex-wrap">
+              <button type="button" class="btn btn-primary" onclick="submitForm('search')">
+                <i class="bi bi-search"></i>
+                Search
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="submitForm('export')">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                Export to Excel
+              </button>
+            </div>
+          </form>
         </div>
       </div>
+
+      <!-- Results Section -->
+      <% if (resultRows !== null) { %>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <i class="bi bi-table me-2" style="color: var(--terracotta);"></i>
+              Results
+            </h2>
+            <% if (resultRows.length > 0) { %>
+              <span class="badge badge-primary"><%= resultRows.length %> record<%= resultRows.length !== 1 ? 's' : '' %> found</span>
+            <% } %>
+          </div>
+          <div class="card-body p-0">
+            <% if (!resultRows.length) { %>
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                </div>
+                <h3 class="empty-state-title">No Results Found</h3>
+                <p class="empty-state-text">Try adjusting your search criteria or selecting different columns.</p>
+              </div>
+            <% } else {
+                 const colNames = Object.keys(resultRows[0]);
+            %>
+              <div class="table-responsive">
+                <table class="results-table">
+                  <thead>
+                    <tr>
+                      <% colNames.forEach(cn => { %>
+                        <th><%= cn %></th>
+                      <% }) %>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% resultRows.forEach(row => { %>
+                      <tr>
+                        <% colNames.forEach(cn => { %>
+                          <td><%= row[cn] %></td>
+                        <% }) %>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
     <% } %>
-  <% } %>
-</div>
+
+  </div>
+</main>
 
 <!-- Tagging logic + Form submission script -->
 <script>
   // Restore existing tags if searchTerm was previously used
   let tags = [];
-  const existing = "<%= searchTerm %>".trim();
+  const existing = (<%- JSON.stringify(searchTerm || '') %>).trim();
   if (existing) {
     // For a true multi-tag scenario, you might split on spaces:
     tags = existing.split(/\s+/).filter(Boolean);
@@ -236,13 +386,15 @@
   }
 
   // On "Tab" or "Enter," create a new tag if there's text.
-  tagInput.addEventListener('keydown', function(e) {
-    if ((e.key === 'Enter' || e.key === 'Tab') && this.value.trim() !== '') {
-      e.preventDefault();  // Prevent form submission or losing focus
-      addTag(this.value.trim());
-      this.value = '';
-    }
-  });
+  if (tagInput) {
+    tagInput.addEventListener('keydown', function(e) {
+      if ((e.key === 'Enter' || e.key === 'Tab') && this.value.trim() !== '') {
+        e.preventDefault();  // Prevent form submission or losing focus
+        addTag(this.value.trim());
+        this.value = '';
+      }
+    });
+  }
 
   function addTag(text) {
     tags.push(text);
@@ -253,15 +405,21 @@
   function createChip(text) {
     const chip = document.createElement('span');
     chip.className = 'tag';
-    chip.innerHTML = `
-      ${text}
-      <i class="bi bi-x-circle"></i>
-    `;
-    // Handle remove
-    chip.querySelector('i').addEventListener('click', () => removeTag(text, chip));
-    
+
+    // Create text node for the tag text (safe from XSS)
+    const textNode = document.createTextNode(text + ' ');
+    chip.appendChild(textNode);
+
+    // Create close icon
+    const closeIcon = document.createElement('i');
+    closeIcon.className = 'bi bi-x-circle';
+    closeIcon.addEventListener('click', () => removeTag(text, chip));
+    chip.appendChild(closeIcon);
+
     // Insert chip before the input
-    tagContainer.insertBefore(chip, tagInput);
+    if (tagContainer && tagInput) {
+      tagContainer.insertBefore(chip, tagInput);
+    }
   }
 
   function removeTag(text, chipEl) {
@@ -271,11 +429,15 @@
   }
 
   function updateHiddenField() {
-    hiddenInput.value = tags.join(' ');
+    if (hiddenInput) {
+      hiddenInput.value = tags.join(' ');
+    }
   }
 
   // Initialize existing tags if any
-  renderExistingTags();
+  if (tagContainer) {
+    renderExistingTags();
+  }
 
   function submitForm(actionVal) {
     document.getElementById('actionField').value = actionVal;
@@ -284,9 +446,4 @@
   }
 </script>
 
-<!-- Bootstrap -->
-<script
-  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-></script>
-</body>
-</html>
+<%- include('partials/footer') %>

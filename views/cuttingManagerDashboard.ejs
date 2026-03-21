@@ -1,238 +1,305 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<%- include('partials/header', { pageTitle: 'Cutting Manager Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/cutting-manager/dashboard' }) %>
 
-  <!-- Bootstrap CSS -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
+<style>
+  .page-container {
+    padding-top: calc(var(--navbar-height) + 24px);
+    padding-bottom: 48px;
+    min-height: 100vh;
+  }
+  .page-header { margin-bottom: 24px; }
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+  .page-subtitle { color: var(--text-secondary); font-size: var(--text-base); }
+  .kotty-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid var(--border-light);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .kotty-tab {
+    padding: 12px 20px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: var(--transition-base);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+  .kotty-tab:hover { color: var(--terracotta); }
+  .kotty-tab.active { color: var(--terracotta); border-bottom-color: var(--terracotta); }
+  .kotty-tab i { font-size: 1rem; }
+  .kotty-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-light);
+    overflow: hidden;
+  }
+  .kotty-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+  .kotty-card-header h2, .kotty-card-header h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+  .kotty-card-header i { color: var(--terracotta); }
+  .kotty-card-body { padding: 24px; }
+  .kotty-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .kotty-table thead th {
+    background: var(--gray-100);
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--border-light);
+    text-align: left;
+    white-space: nowrap;
+  }
+  .kotty-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+    font-size: var(--text-sm);
+  }
+  .kotty-table tbody tr:hover { background: var(--gray-50); }
+  .kotty-table tbody tr:last-child td { border-bottom: none; }
+  .size-table { font-size: var(--text-xs); }
+  .size-table th, .size-table td { padding: 6px 10px !important; }
+  .kotty-form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+  .kotty-form-label i { color: var(--terracotta); font-size: 0.875rem; }
+  .kotty-input, .kotty-select, .kotty-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    transition: var(--transition-base);
+  }
+  .kotty-input:focus, .kotty-select:focus, .kotty-textarea:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+  .kotty-input:read-only { background: var(--gray-100); color: var(--text-secondary); }
+  .kotty-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    transition: var(--transition-base);
+    text-decoration: none;
+  }
+  .kotty-btn-primary { background: var(--terracotta); color: white; }
+  .kotty-btn-primary:hover { background: var(--terracotta-dark); color: white; }
+  .kotty-btn-secondary { background: var(--gray-200); color: var(--text-primary); }
+  .kotty-btn-secondary:hover { background: var(--gray-300); }
+  .kotty-btn-success { background: var(--success); color: white; }
+  .kotty-btn-success:hover { background: #246e4c; }
+  .kotty-btn-danger { background: var(--danger); color: white; }
+  .kotty-btn-danger:hover { background: #a32f1a; }
+  .kotty-btn-info { background: var(--info); color: white; }
+  .kotty-btn-info:hover { background: #2d6aa8; }
+  .kotty-btn-sm { padding: 6px 12px; font-size: var(--text-xs); }
+  .kotty-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .kotty-btn-block { width: 100%; }
+  .roll-section, .size-section {
+    border: 1px solid var(--border-light);
+    margin-bottom: 16px;
+    padding: 20px;
+    border-radius: var(--radius-lg);
+    background: var(--gray-50);
+    position: relative;
+  }
+  .roll-section .remove-roll-btn, .size-section .removeSizeBtn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+  .kotty-progress {
+    height: 24px;
+    background: var(--gray-200);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .kotty-progress-bar {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: white;
+    background: var(--info);
+    transition: width 0.3s ease-in-out;
+  }
+  .kotty-progress-bar.danger { background: var(--danger); }
+  .autocomplete { position: relative; width: 100%; }
+  .autocomplete-items {
+    position: absolute;
+    border: 1px solid var(--border-medium);
+    border-top: none;
+    z-index: 1000;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-card);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow-md);
+    display: none;
+  }
+  .autocomplete-items.d-block { display: block; }
+  .autocomplete-items li {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .autocomplete-items li:last-child { border-bottom: none; }
+  .autocomplete-items li:hover, .autocomplete-items li.active {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+  }
+  .highlight {
+    font-weight: 700;
+    background: rgba(196, 92, 58, 0.2);
+    color: var(--terracotta-dark);
+  }
+  .section-divider { border: none; border-top: 1px solid var(--border-light); margin: 24px 0; }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .section-title i { color: var(--terracotta); }
+  .total-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--terracotta-bg);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+  }
+  .total-display strong { font-size: var(--text-base); color: var(--text-primary); }
+  .total-display span { font-size: var(--text-xl); font-weight: 700; color: var(--terracotta); }
+  .kotty-alert {
+    padding: 14px 18px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .kotty-alert-danger { background: var(--danger-light); border: 1px solid var(--danger); color: var(--danger); }
+  .kotty-alert-success { background: var(--success-light); border: 1px solid var(--success); color: var(--success); }
+  .kotty-alert .btn-close { margin-left: auto; }
+  .lot-image { max-width: 80px; border-radius: var(--radius-md); border: 1px solid var(--border-light); }
+  .action-buttons { display: flex; flex-direction: column; gap: 8px; }
+  @media (min-width: 576px) { .action-buttons { flex-direction: row; } }
+  .weight-info { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 8px; }
+  .weight-info span { font-weight: 600; color: var(--terracotta); }
+  @media (max-width: 768px) {
+    .page-title { font-size: var(--text-2xl); }
+    .kotty-card-body { padding: 16px; }
+    .kotty-tabs { gap: 4px; }
+    .kotty-tab { padding: 10px 14px; font-size: var(--text-xs); }
+    .kotty-table thead th, .kotty-table tbody td { padding: 10px 12px; font-size: var(--text-xs); }
+    .roll-section, .size-section { padding: 16px; }
+  }
+</style>
 
-  <!-- Bootstrap Icons -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-    rel="stylesheet"
-  />
-
-  <!-- Custom CSS -->
-  <style>
-    body {
-      background-color: #f8f9fa;
-    }
-    .card {
-      margin-bottom: 1rem;
-    }
-    .roll-section, .size-section {
-      border: 1px solid #dee2e6;
-      margin-bottom: 1rem;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      background-color: #fff;
-      position: relative;
-    }
-    .roll-section .remove-roll-btn, .size-section .removeSizeBtn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-    }
-    .progress {
-      height: 20px;
-    }
-    .progress-bar {
-      transition: width 0.3s ease-in-out;
-    }
-
-    /* Autocomplete Styles */
-    .autocomplete {
-      position: relative;
-      width: 100%;
-    }
-    .autocomplete input {
-      width: 100%;
-      padding: 0.375rem 0.75rem;
-      border: 1px solid #ced4da;
-      border-radius: 0.25rem;
-      box-sizing: border-box;
-    }
-    .autocomplete-items {
-      position: absolute;
-      border: 1px solid #ced4da;
-      border-top: none;
-      z-index: 1000;
-      top: 100%;
-      left: 0;
-      right: 0;
-      max-height: 200px;
-      overflow-y: auto;
-      background-color: #fff;
-      animation: fadeIn 0.2s ease-in-out;
-      display: none; /* Hidden by default */
-    }
-    .autocomplete-items li {
-      padding: 0.375rem 0.75rem;
-      cursor: pointer;
-    }
-    .autocomplete-items li:hover, .autocomplete-active {
-      background-color: #e9ecef;
-    }
-    /* Highlight matching text */
-    .highlight {
-      font-weight: bold;
-      background-color: yellow;
-    }
-    /* Animations */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    /* Mobile Enhancements */
-    @media (max-width: 576px) {
-      .navbar-brand {
-        font-size: 1rem;
-      }
-      .navbar-text {
-        display: none;
-      }
-      .btn {
-        font-size: 0.875rem;
-        padding: 0.5rem 0.75rem;
-      }
-      .table-responsive {
-        font-size: 0.875rem;
-      }
-      .autocomplete-items {
-        max-height: 150px;
-      }
-      .progress {
-        height: 16px;
-      }
-      .progress-bar {
-        font-size: 0.75rem;
-      }
-    }
-    /* Language Toggle styling */
-    .language-toggle {
-      margin-right: 1rem;
-      color: #fff;
-    }
-    .language-toggle input {
-      margin-left: 5px;
-      margin-right: 2px;
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="bi bi-speedometer2 me-2"></i> 
-        <span data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</span>
-      </a>
-
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" 
-        aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <!-- Language Toggle (Radio Buttons) -->
-        <div class="ms-auto d-flex align-items-center">
-          <div class="language-toggle">
-            <span data-i18n="selectLanguage">Select Language:</span>
-            <label>
-              <input type="radio" name="language" value="en" checked />
-              EN
-            </label>
-            <label>
-              <input type="radio" name="language" value="hi" />
-              HI
-            </label>
-          </div>
-          <div class="d-flex align-items-center">
-            <i class="bi bi-person-circle text-white me-2"></i>
-            <!-- For example, you can partially localize text or keep dynamic user info as is -->
-            <span class="navbar-text me-3 d-none d-sm-inline">
-              <span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> 
-              (<%= user.roleName %>)
-            </span>
-            <a href="/logout" class="btn btn-outline-light btn-sm">
-              <i class="bi bi-box-arrow-right me-1"></i> <span data-i18n="logout">Logout</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Main Container with Tabs -->
+<main class="page-container">
   <div class="container">
-    <!-- Alert Messages -->
+    <div class="page-header">
+      <h1 class="page-title" data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</h1>
+      <p class="page-subtitle"><span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> (<%= user.roleName %>)</p>
+    </div>
+
     <% if (error && error.length > 0) { %>
-      <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2"></i>
-        <div>
-          <%= error %>
-        </div>
+      <div class="kotty-alert kotty-alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div><%= error %></div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
     <% if (success && success.length > 0) { %>
-      <div class="alert alert-success alert-dismissible fade show d-flex align-items-center" role="alert">
-        <i class="bi bi-check-circle-fill flex-shrink-0 me-2"></i>
-        <div>
-          <%= success %>
-        </div>
+      <div class="kotty-alert kotty-alert-success" role="alert">
+        <i class="bi bi-check-circle-fill"></i>
+        <div><%= success %></div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
-    <!-- Tabs for Navigation -->
-    <ul class="nav nav-tabs mb-3" id="dashboardTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="existing-lots-tab" data-bs-toggle="tab" data-bs-target="#existing-lots" type="button" role="tab" aria-controls="existing-lots" aria-selected="true">
-          <i class="bi bi-folder-fill me-1"></i> 
-          <span data-i18n="existingCuttingLots">Existing Cutting Lots</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
-          <i class="bi bi-plus-circle-fill me-1"></i> 
-          <span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
-        </button>
-      </li>
-      <!-- NEW LINK: Instead of modifying this tabs approach extensively,
-           we simply add a link to go to a separate page for "Assign to Stitching" -->
-      <li class="nav-item" role="presentation">
-        <a class="nav-link" href="/cutting-manager/assign-stitching">
-          <i class="bi bi-people-fill me-1"></i>
-          <span>Assign to Stitching</span>
-        </a>
-      </li>
-    </ul>
+    <div class="kotty-tabs" id="dashboardTabs" role="tablist">
+      <button class="kotty-tab active" id="existing-lots-tab" data-bs-toggle="tab" data-bs-target="#existing-lots" type="button" role="tab" aria-controls="existing-lots" aria-selected="true">
+        <i class="bi bi-folder-fill"></i><span data-i18n="existingCuttingLots">Existing Cutting Lots</span>
+      </button>
+      <button class="kotty-tab" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
+        <i class="bi bi-plus-circle-fill"></i><span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
+      </button>
+      <a class="kotty-tab" href="/cutting-manager/assign-stitching">
+        <i class="bi bi-people-fill"></i><span>Assign to Stitching</span>
+      </a>
+    </div>
 
     <div class="tab-content" id="dashboardTabsContent">
-      <!-- Existing Cutting Lots Tab -->
       <div class="tab-pane fade show active" id="existing-lots" role="tabpanel" aria-labelledby="existing-lots-tab">
-        <div class="card">
-          <div class="card-header">
-            <h2 class="mb-0">
-              <i class="bi bi-folder-fill me-2"></i> 
-              <span data-i18n="existingCuttingLots">Existing Cutting Lots</span>
-            </h2>
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <h2><i class="bi bi-folder-fill"></i><span data-i18n="existingCuttingLots">Existing Cutting Lots</span></h2>
           </div>
-          <div class="card-body p-2">
+          <div class="kotty-card-body" style="padding: 0;">
             <div class="table-responsive">
-              <table class="table table-bordered mb-4 bg-white">
-                <thead class="table-dark">
+              <table class="kotty-table">
+                <thead>
                   <tr>
                     <th data-i18n="idLabel">ID</th>
                     <th data-i18n="lotNumberLabel">Lot Number</th>
@@ -250,75 +317,32 @@
                 </thead>
                 <tbody>
                   <% if (cuttingLots.length === 0) { %>
-                    <tr>
-                      <td colspan="12" class="text-center" data-i18n="noCuttingLotsAvailable">
-                        No cutting lots available.
-                      </td>
-                    </tr>
+                    <tr><td colspan="12" class="text-center" style="padding: 40px;" data-i18n="noCuttingLotsAvailable">No cutting lots available.</td></tr>
                   <% } else { %>
                     <% cuttingLots.forEach(lot => { %>
                       <tr>
                         <td><%= lot.id %></td>
-                        <td><%= lot.lot_no %></td>
+                        <td><strong><%= lot.lot_no %></strong></td>
                         <td><%= lot.sku %></td>
                         <td><%= lot.fabric_type %></td>
                         <td><%= lot.table_length ?? 'N/A' %></td>
                         <td><%= lot.remark || 'N/A' %></td>
-                        <td>
-                          <% if (lot.image_url) { %>
-                            <img 
-                              src="/<%= lot.image_url %>" 
-                              alt="lot image" 
-                              class="img-fluid rounded" 
-                              style="max-width:100px;"
-                            />
-                          <% } else { %>
-                            <i class="bi bi-image text-muted"></i> 
-                            <span data-i18n="notAvailable">Not available</span>
-                          <% } %>
-                        </td>
+                        <td><% if (lot.image_url) { %><img src="/<%= lot.image_url %>" alt="lot image" class="lot-image" /><% } else { %><i class="bi bi-image text-muted"></i> N/A<% } %></td>
                         <td><%= lot.created_by || 'N/A' %></td>
-                        <td>
-                          <%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %>
-                        </td>
-                        <td><%= lot.total_pieces || 0 %></td>
+                        <td><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : 'N/A' %></td>
+                        <td><strong><%= lot.total_pieces || 0 %></strong></td>
                         <td>
                           <% if (lot.sizes && lot.sizes.length > 0) { %>
-                            <div class="table-responsive">
-                              <table class="table table-sm mb-0">
-                                <thead>
-                                  <tr>
-                                    <th data-i18n="sizeLabel">Size</th>
-                                    <th data-i18n="patternCountLabel">Pattern Count</th>
-                                    <th data-i18n="totalPiecesLabel">Total Pieces</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <% lot.sizes.forEach(size => { %>
-                                    <tr>
-                                      <td><%= size.size_label %></td>
-                                      <td><%= size.pattern_count %></td>
-                                      <td><%= size.total_pieces %></td>
-                                    </tr>
-                                  <% }) %>
-                                </tbody>
-                              </table>
-                            </div>
-                          <% } else { %>
-                            <i class="bi bi-list-stars text-muted"></i> 
-                            <span data-i18n="notAvailable">Not available</span>
-                          <% } %>
+                            <table class="kotty-table size-table">
+                              <thead><tr><th>Size</th><th>Pattern</th><th>Pieces</th></tr></thead>
+                              <tbody><% lot.sizes.forEach(size => { %><tr><td><%= size.size_label %></td><td><%= size.pattern_count %></td><td><%= size.total_pieces %></td></tr><% }) %></tbody>
+                            </table>
+                          <% } else { %>N/A<% } %>
                         </td>
                         <td>
-                          <div class="d-flex flex-column flex-sm-row gap-2">
-                            <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="btn btn-sm btn-primary">
-                              <i class="bi bi-file-earmark-arrow-down me-1"></i> 
-                              <span data-i18n="generateChallan">Generate Challan</span>
-                            </a>
-                            <a href="/cutting-manager/lot-details/<%= lot.id %>" class="btn btn-sm btn-info">
-                              <i class="bi bi-eye me-1"></i> 
-                              <span data-i18n="viewDetails">View Details</span>
-                            </a>
+                          <div class="action-buttons">
+                            <a href="/cutting-manager/generate-challan/<%= lot.id %>" class="kotty-btn kotty-btn-primary kotty-btn-sm"><i class="bi bi-file-earmark-arrow-down"></i>Challan</a>
+                            <a href="/cutting-manager/lot-details/<%= lot.id %>" class="kotty-btn kotty-btn-info kotty-btn-sm"><i class="bi bi-eye"></i>Details</a>
                           </div>
                         </td>
                       </tr>
@@ -331,991 +355,423 @@
         </div>
       </div>
 
-      <!-- Create New Cutting Lot Tab -->
       <div class="tab-pane fade" id="create-lot" role="tabpanel" aria-labelledby="create-lot-tab">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="mb-0">
-              <i class="bi bi-plus-circle-fill me-2"></i> 
-              <span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
-            </h3>
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <h3><i class="bi bi-plus-circle-fill"></i><span data-i18n="createNewCuttingLot">Create New Cutting Lot</span></h3>
           </div>
-          <div class="card-body">
-            <form
-              id="lotForm"
-              method="POST"
-              action="/cutting-manager/create-lot"
-              enctype="multipart/form-data"
-            >
-              <!-- Lot Details Section -->
+          <div class="kotty-card-body">
+            <form id="lotForm" method="POST" action="/cutting-manager/create-lot" enctype="multipart/form-data">
               <div class="row g-3">
-                <!-- Lot No (Read-Only) -->
                 <div class="col-md-4">
-                  <label for="lot_no" class="form-label">
-                    <i class="bi bi-hash me-1"></i> 
-                    <span data-i18n="lotNumberGenerated">Lot Number (Generated)</span>
-                  </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="lot_no"
-                    name="lot_no"
-                    value="<%= generatedLotNumber %>"
-                    readonly
-                  />
+                  <label for="lot_no" class="kotty-form-label"><i class="bi bi-hash"></i><span data-i18n="lotNumberGenerated">Lot Number (Generated)</span></label>
+                  <input type="text" class="kotty-input" id="lot_no" name="lot_no" value="<%= generatedLotNumber %>" readonly />
                 </div>
-
-                <!-- SKU Input -->
                 <div class="col-md-4">
-                  <label for="sku" class="form-label">
-                    <i class="bi bi-barcode me-1"></i> 
-                    <span data-i18n="skuLabel">SKU</span>
-                  </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="sku"
-                    name="sku"
-                    placeholder="Enter SKU"
-                    pattern="^(?:[Kk][Tt][Tt]|[Cc][Cc]|[Kk][Tt][Yy]|[Kk][Oo][Tt][Tt][Yy]|[Ff]{2}[Kk][Tt][Tt])[A-Za-z]+\d+$"
-                    title="Type The SKU In This Format(e.g., kttwomenspant261)"
-                    required
-                  />
+                  <label for="sku" class="kotty-form-label"><i class="bi bi-barcode"></i><span data-i18n="skuLabel">SKU</span></label>
+                  <input type="text" class="kotty-input" id="sku" name="sku" placeholder="Enter SKU" pattern="^(?:[Kk][Tt][Tt]|[Cc][Cc]|[Kk][Tt][Yy]|[Kk][Oo][Tt][Tt][Yy]|[Ff]{2}[Kk][Tt][Tt])[A-Za-z]+\d+$" title="Type The SKU In This Format(e.g., kttwomenspant261)" required />
                 </div>
-
-                <!-- Fabric Type (Autocomplete) -->
                 <div class="col-md-4">
-                  <label for="fabric_type_search" class="form-label">
-                    <i class="bi bi-hexagon-fill me-1"></i> 
-                    <span data-i18n="fabricTypeLabel">Fabric Type</span>
-                  </label>
+                  <label for="fabric_type_search" class="kotty-form-label"><i class="bi bi-hexagon-fill"></i><span data-i18n="fabricTypeLabel">Fabric Type</span></label>
                   <div class="autocomplete">
-                    <input
-                      type="text"
-                      id="fabric_type_search"
-                      class="form-control"
-                      placeholder="Search Fabric Type..."
-                      aria-autocomplete="list"
-                      aria-controls="fabric_type_options"
-                      aria-expanded="false"
-                      aria-haspopup="listbox"
-                      required
-                    >
+                    <input type="text" id="fabric_type_search" class="kotty-input" placeholder="Search Fabric Type..." aria-autocomplete="list" aria-controls="fabric_type_options" aria-expanded="false" aria-haspopup="listbox" required>
                     <input type="hidden" id="fabric_type" name="fabric_type" required>
                     <ul class="autocomplete-items list-group d-none" id="fabric_type_options" role="listbox"></ul>
                   </div>
                 </div>
-
-                <!-- Table Length -->
                 <div class="col-md-4">
-                  <label for="table_length" class="form-label">
-                    <i class="bi bi-rulers me-1"></i>
-                    <span data-i18n="tableLengthLabel">Table Length</span>
-                  </label>
-                  <input
-                    type="number"
-                    class="form-control"
-                    id="table_length"
-                    name="table_length"
-                    placeholder="Enter table length"
-                    min="0"
-                    step="0.01"
-                  />
+                  <label for="table_length" class="kotty-form-label"><i class="bi bi-rulers"></i><span data-i18n="tableLengthLabel">Table Length</span></label>
+                  <input type="number" class="kotty-input" id="table_length" name="table_length" placeholder="Enter table length" min="0" step="0.01" />
                 </div>
-
-                <!-- Remark -->
-                <div class="col-md-6">
-                  <label for="remark" class="form-label">
-                    <i class="bi bi-chat-left-text me-1"></i> 
-                    <span data-i18n="remarkLabel">Remark</span>
-                  </label>
-                  <textarea
-                    class="form-control"
-                    name="remark"
-                    id="remark"
-                    rows="2"
-                    placeholder="Any note..."
-                  ></textarea>
+                <div class="col-md-4">
+                  <label for="remark" class="kotty-form-label"><i class="bi bi-chat-left-text"></i><span data-i18n="remarkLabel">Remark</span></label>
+                  <textarea class="kotty-textarea" name="remark" id="remark" rows="2" placeholder="Any note..."></textarea>
                 </div>
-
-                <!-- Image Upload -->
-                <div class="col-md-6">
-                  <label for="image" class="form-label">
-                    <i class="bi bi-image me-1"></i> 
-                    <span data-i18n="imageLabel">Image</span>
-                  </label>
-                  <input
-                    type="file"
-                    class="form-control"
-                    name="image"
-                    id="image"
-                    accept="image/*"
-                  />
+                <div class="col-md-4">
+                  <label for="image" class="kotty-form-label"><i class="bi bi-image"></i><span data-i18n="imageLabel">Image</span></label>
+                  <input type="file" class="kotty-input" name="image" id="image" accept="image/*" />
                 </div>
               </div>
 
-              <hr/>
-              <!-- Sizes and Patterns Section -->
+              <hr class="section-divider"/>
               <div class="mb-3">
-                <h4>
-                  <i class="bi bi-list me-1"></i> 
-                  <span data-i18n="sizesAndPatterns">Sizes and Patterns</span>
-                </h4>
+                <h4 class="section-title"><i class="bi bi-list"></i><span data-i18n="sizesAndPatterns">Sizes and Patterns</span></h4>
                 <div id="sizesContainer"></div>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-secondary mt-2"
-                  id="addSizeBtn"
-                >
-                  <i class="bi bi-plus-circle me-1"></i> 
-                  <span data-i18n="addNewSize">Add New Size</span>
-                </button>
+                <button type="button" class="kotty-btn kotty-btn-secondary kotty-btn-sm" id="addSizeBtn"><i class="bi bi-plus-circle"></i><span data-i18n="addNewSize">Add New Size</span></button>
               </div>
 
-              <hr/>
-              <!-- Rolls Used Section -->
+              <hr class="section-divider"/>
               <div class="mb-3">
-                <h4>
-                  <i class="bi bi-box-seam me-1"></i> 
-                  <span data-i18n="rollsUsed">Rolls Used</span>
-                </h4>
+                <h4 class="section-title"><i class="bi bi-box-seam"></i><span data-i18n="rollsUsed">Rolls Used</span></h4>
                 <div id="rollsContainer"></div>
-                <button 
-                  type="button" 
-                  class="btn btn-sm btn-primary mt-2" 
-                  id="addRollBtn" 
-                  disabled
-                >
-                  <i class="bi bi-plus-circle me-1"></i> 
-                  <span data-i18n="addAnotherRoll">Add Another Roll</span>
-                </button>
+                <button type="button" class="kotty-btn kotty-btn-primary kotty-btn-sm" id="addRollBtn" disabled><i class="bi bi-plus-circle"></i><span data-i18n="addAnotherRoll">Add Another Roll</span></button>
               </div>
 
-              <hr/>
-              <!-- Total Pieces Display -->
-              <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap">
+              <hr class="section-divider"/>
+              <div class="total-display">
                 <strong data-i18n="totalPiecesCalc">Total Pieces (Calculated):</strong>
-                <span id="totalPiecesDisplay" class="fs-5 fw-bold">0</span>
+                <span id="totalPiecesDisplay">0</span>
               </div>
 
-              <!-- Submit Button -->
-              <button 
-                type="submit" 
-                class="btn btn-success w-100" 
-                id="createLotBtn" 
-                disabled
-              >
-                <i class="bi bi-check-circle me-1"></i> 
-                <span data-i18n="createLotBtn">Create Lot</span>
-              </button>
+              <button type="submit" class="kotty-btn kotty-btn-success kotty-btn-block" id="createLotBtn" disabled><i class="bi bi-check-circle"></i><span data-i18n="createLotBtn">Create Lot</span></button>
             </form>
           </div>
         </div>
       </div>
     </div>
   </div>
+</main>
 
-  <!-- Size Template (Hidden) -->
-  <div id="sizeTemplate" class="d-none">
-    <div class="roll-section size-section">
-      <button type="button" class="btn btn-sm btn-danger removeSizeBtn" aria-label="Remove size">
-        <i class="bi bi-dash-circle me-1"></i> 
-        <span data-i18n="remove">Remove</span>
-      </button>
-      <div class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label visually-hidden" data-i18n="sizeLabel">Size</label>
-          <select class="form-select sizeLabelSel" name="size_label[]" required>
-            <option value="">--Select Size--</option>
-            <option value="XS">XS</option>
-            <option value="S">S</option>
-            <option value="M">M</option>
-            <option value="L">L</option>
-            <option value="XL">XL</option>
-            <option value="XXL">XXL</option>
-            <option value="3XL">3XL</option>
-            <option value="4XL">4XL</option>
-            <option value="5XL">5XL</option>
-            <option value="6XL">6XL</option>
-            <option value="7XL">7XL</option>
-            <option value="24">24</option>
-            <option value="25">25</option>
-            <option value="26">26</option>
-            <option value="27">27</option>
-            <option value="28">28</option>
-            <option value="29">29</option>
-            <option value="30">30</option>
-            <option value="31">31</option>
-            <option value="32">32</option>
-            <option value="33">33</option>
-            <option value="34">34</option>
-            <option value="35">35</option>
-            <option value="36">36</option>
-            <option value="37">37</option>
-            <option value="38">38</option>
-            <option value="39">39</option>
-            <option value="40">40</option>
-            <option value="41">41</option>
-            <option value="42">42</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label visually-hidden" data-i18n="patternCountLabel">Pattern Count</label>
-          <input
-            type="number"
-            class="form-control patternCountInput"
-            min="1"
-            step="0.01"
-            value="1"
-            name="pattern_count[]"
-            required
-            placeholder="Pattern Count"
-          />
-        </div>
+<div id="sizeTemplate" class="d-none">
+  <div class="roll-section size-section">
+    <button type="button" class="kotty-btn kotty-btn-danger kotty-btn-sm removeSizeBtn" aria-label="Remove size"><i class="bi bi-dash-circle"></i><span data-i18n="remove">Remove</span></button>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="kotty-form-label" data-i18n="sizeLabel">Size</label>
+        <select class="kotty-select sizeLabelSel" name="size_label[]" required>
+          <option value="">--Select Size--</option>
+          <option value="XS">XS</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="XXL">XXL</option><option value="3XL">3XL</option><option value="4XL">4XL</option><option value="5XL">5XL</option><option value="6XL">6XL</option><option value="7XL">7XL</option>
+          <option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="kotty-form-label" data-i18n="patternCountLabel">Pattern Count</label>
+        <input type="number" class="kotty-input patternCountInput" min="1" step="0.01" value="1" name="pattern_count[]" required placeholder="Pattern Count" />
       </div>
     </div>
   </div>
+</div>
 
-  <!-- Roll Template (Hidden) -->
-  <div id="rollTemplate" class="d-none">
-    <div class="roll-section">
-      <button type="button" class="btn btn-sm btn-danger remove-roll-btn" aria-label="Remove roll">
-        <i class="bi bi-x-circle"></i>
-        <span data-i18n="remove">Remove</span>
-      </button>
-      <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label" data-i18n="rollNumber">Roll Number</label>
-          <div class="autocomplete">
-            <input
-              type="text"
-              class="form-control rollNo_search"
-              placeholder="Search Roll..."
-              aria-autocomplete="list"
-              aria-controls="rollNo_options"
-              aria-expanded="false"
-              aria-haspopup="listbox"
-              required
-            >
-            <input type="hidden" class="rollNoSel" name="roll_no[]" required>
-            <ul class="autocomplete-items list-group d-none" role="listbox"></ul>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" data-i18n="layersLabel">Layers</label>
-          <input
-            type="number"
-            class="form-control layersInput"
-            name="layers[]"
-            min="1"
-            required
-            placeholder="Layers"
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label" data-i18n="weightUsedLabel">Weight Used</label>
-          <input
-            type="number"
-            step="0.01"
-            class="form-control weightUsedInput"
-            name="weight_used[]"
-            min="0"
-            required
-            placeholder="Weight used (calculated)"
-            readonly
-          />
+<div id="rollTemplate" class="d-none">
+  <div class="roll-section">
+    <button type="button" class="kotty-btn kotty-btn-danger kotty-btn-sm remove-roll-btn" aria-label="Remove roll"><i class="bi bi-x-circle"></i><span data-i18n="remove">Remove</span></button>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="kotty-form-label" data-i18n="rollNumber">Roll Number</label>
+        <div class="autocomplete">
+          <input type="text" class="kotty-input rollNo_search" placeholder="Search Roll..." aria-autocomplete="list" aria-controls="rollNo_options" aria-expanded="false" aria-haspopup="listbox" required>
+          <input type="hidden" class="rollNoSel" name="roll_no[]" required>
+          <ul class="autocomplete-items list-group d-none" role="listbox"></ul>
         </div>
       </div>
-      <div class="row g-3 mt-1">
-        <div class="col-md-6">
-          <label class="form-label" data-i18n="fullWeightLabel">Full Roll Weight</label>
-          <input
-            type="number"
-            step="0.01"
-            class="form-control fullWeightInput"
-            name="roll_full_weight[]"
-            min="0"
-            required
-            placeholder="Full weight"
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" data-i18n="remainingWeightLabel">Remaining Weight</label>
-          <input
-            type="number"
-            step="0.01"
-            class="form-control remainingWeightInput"
-            name="roll_remaining_weight[]"
-            min="0"
-            required
-            placeholder="Remaining weight"
-          />
-        </div>
+      <div class="col-md-4">
+        <label class="kotty-form-label" data-i18n="layersLabel">Layers</label>
+        <input type="number" class="kotty-input layersInput" name="layers[]" min="1" required placeholder="Layers" />
       </div>
-      <!-- Progress bar for used vs available -->
-      <div class="mb-3">
-        <label class="form-label">
-          <i class="bi bi-graph-up me-1"></i> 
-          <span data-i18n="weightUsageProgress">Weight Usage Progress</span>
-        </label>
-        <div class="progress">
-          <div
-            class="progress-bar bg-info"
-            role="progressbar"
-            style="width: 0%;"
-            aria-valuenow="0"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            0%
-          </div>
-        </div>
-        <small class="text-muted">
-          <span data-i18n="availableLabel">Available:</span> 
-          <span class="availableWeightTxt">0</span>
-        </small>
+      <div class="col-md-4">
+        <label class="kotty-form-label" data-i18n="weightUsedLabel">Weight Used</label>
+        <input type="number" step="0.01" class="kotty-input weightUsedInput" name="weight_used[]" min="0" required placeholder="Weight used (calculated)" readonly />
       </div>
     </div>
+    <div class="row g-3 mt-1">
+      <div class="col-md-6">
+        <label class="kotty-form-label" data-i18n="fullWeightLabel">Full Roll Weight</label>
+        <input type="number" step="0.01" class="kotty-input fullWeightInput" name="roll_full_weight[]" min="0" required placeholder="Full weight" />
+      </div>
+      <div class="col-md-6">
+        <label class="kotty-form-label" data-i18n="remainingWeightLabel">Remaining Weight</label>
+        <input type="number" step="0.01" class="kotty-input remainingWeightInput" name="roll_remaining_weight[]" min="0" required placeholder="Remaining weight" />
+      </div>
+    </div>
+    <div class="mt-3">
+      <label class="kotty-form-label"><i class="bi bi-graph-up"></i><span data-i18n="weightUsageProgress">Weight Usage Progress</span></label>
+      <div class="kotty-progress">
+        <div class="kotty-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+      </div>
+      <div class="weight-info"><span data-i18n="availableLabel">Available:</span> <span class="availableWeightTxt">0</span></div>
+    </div>
   </div>
+</div>
 
-  <!-- Bootstrap JS and Dependencies -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  ></script>
+<script>
+const langData = {
+  en: { cuttingManagerDashboardTitle: "Cutting Manager Dashboard", welcomeUser: "Welcome", existingCuttingLots: "Existing Cutting Lots", createNewCuttingLot: "Create New Cutting Lot", idLabel: "ID", lotNumberLabel: "Lot Number", skuLabel: "SKU", fabricTypeLabel: "Fabric Type", tableLengthLabel: "Table Length", remarkLabel: "Remark", imageLabel: "Image", createdByLabel: "Created By", creationTimeLabel: "Creation Time", totalPiecesLabel: "Total Pieces", sizesLabel: "Sizes", actionsLabel: "Actions", noCuttingLotsAvailable: "No cutting lots available.", sizeLabel: "Size", patternCountLabel: "Pattern Count", lotNumberGenerated: "Lot Number (Generated)", createLotBtn: "Create Lot", remove: "Remove", rollNumber: "Roll Number", layersLabel: "Layers", weightUsedLabel: "Weight Used (Calculated)", weightUsageProgress: "Weight Usage Progress", availableLabel: "Available", sizesAndPatterns: "Sizes and Patterns", rollsUsed: "Rolls Used", addNewSize: "Add New Size", addAnotherRoll: "Add Another Roll", totalPiecesCalc: "Total Pieces (Calculated)", fullWeightLabel: "Full Roll Weight", remainingWeightLabel: "Remaining Weight" },
+  hi: { cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड", welcomeUser: "स्वागत हे", existingCuttingLots: "मौजूदा काटिंग लॉट्स", createNewCuttingLot: "नया काटिंग लॉट बनाएं", idLabel: "आईडी", lotNumberLabel: "लॉट नंबर", skuLabel: "एसकेयू", fabricTypeLabel: "फैब्रिक प्रकार", tableLengthLabel: "टेबल लंबाई", remarkLabel: "टिप्पणी", imageLabel: "छवि", createdByLabel: "बनाने वाले", creationTimeLabel: "बनाने का समय", totalPiecesLabel: "कुल पीस", sizesLabel: "साइज़", actionsLabel: "कार्रवाई", noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।", sizeLabel: "साइज़", patternCountLabel: "पैटर्न की संख्या", lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)", createLotBtn: "लॉट तैयार करें", remove: "हटाएं", rollNumber: "रोल नंबर", layersLabel: "लेयर्स", weightUsedLabel: "उपयोग किया गया वज़न (गणना)", weightUsageProgress: "वज़न उपयोग की प्रगति", availableLabel: "उपलब्ध", sizesAndPatterns: "साइज़ और पैटर्न", rollsUsed: "उपयोग किए गए रोल्स", addNewSize: "नया साइज़ जोड़ें", addAnotherRoll: "एक और रोल जोड़ें", totalPiecesCalc: "कुल पीस (हिसाब से)", fullWeightLabel: "रोल का कुल वज़न", remainingWeightLabel: "बचा हुआ वज़न" }
+};
+let currentLanguage = "en";
+function setLanguage(lang) {
+  currentLanguage = lang;
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (langData[lang][key]) el.textContent = langData[lang][key];
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setLanguage("en"));
 
-  <!-- Custom Script for Dynamic Functionality (Autocomplete + i18n Toggling) -->
-  <script>
-    // ====== Language Dictionaries ======
-    const langData = {
-      en: {
-        cuttingManagerDashboardTitle: "Cutting Manager Dashboard",
-        selectLanguage: "Select Language:",
-        welcomeUser: "Welcome",
-        logout: "Logout",
-        existingCuttingLots: "Existing Cutting Lots",
-        createNewCuttingLot: "Create New Cutting Lot",
-        idLabel: "ID",
-        lotNumberLabel: "Lot Number",
-        skuLabel: "SKU",
-        fabricTypeLabel: "Fabric Type",
-        tableLengthLabel: "Table Length",
-        remarkLabel: "Remark",
-        imageLabel: "Image",
-        createdByLabel: "Created By",
-        creationTimeLabel: "Creation Time",
-        totalPiecesLabel: "Total Pieces",
-        sizesLabel: "Sizes",
-        actionsLabel: "Actions",
-        noCuttingLotsAvailable: "No cutting lots available.",
-        notAvailable: "Not available",
-        sizeLabel: "Size",
-        patternCountLabel: "Pattern Count",
-        generateChallan: "Generate Challan",
-        viewDetails: "View Details",
-        lotNumberGenerated: "Lot Number (Generated)",
-        createLotBtn: "Create Lot",
-        remove: "Remove",
-        rollNumber: "Roll Number",
-        layersLabel: "Layers",
-        weightUsedLabel: "Weight Used (Calculated)",
-        weightUsageProgress: "Weight Usage Progress",
-        availableLabel: "Available",
-        sizesAndPatterns: "Sizes and Patterns",
-        rollsUsed: "Rolls Used",
-        addNewSize: "Add New Size",
-        addAnotherRoll: "Add Another Roll",
-        totalPiecesCalc: "Total Pieces (Calculated)",
-        fullWeightLabel: "Full Roll Weight",
-        remainingWeightLabel: "Remaining Weight"
-      },
-      hi: {
-        cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड",
-        selectLanguage: "भाषा चुनें:",
-        welcomeUser: "स्वागत हे",
-        logout: "लॉगआउट",
-        existingCuttingLots: "मौजूदा काटिंग लॉट्स",
-        createNewCuttingLot: "नया काटिंग लॉट बनाएं",
-        idLabel: "आईडी",
-        lotNumberLabel: "लॉट नंबर",
-        skuLabel: "एसकेयू",
-        fabricTypeLabel: "फैब्रिक प्रकार",
-        tableLengthLabel: "टेबल लंबाई",
-        remarkLabel: "टिप्पणी",
-        imageLabel: "छवि",
-        createdByLabel: "बनाने वाले",
-        creationTimeLabel: "बनाने का समय",
-        totalPiecesLabel: "कुल पीस",
-        sizesLabel: "साइज़",
-        actionsLabel: "कार्रवाई",
-        noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।",
-        notAvailable: "उपलब्ध नहीं",
-        sizeLabel: "साइज़",
-        patternCountLabel: "पैटर्न की संख्या",
-        generateChallan: "चालान बनाएं",
-        viewDetails: "विवरण देखें",
-        lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)",
-        createLotBtn: "लॉट तैयार करें",
-        remove: "हटाएं",
-        rollNumber: "रोल नंबर",
-        layersLabel: "लेयर्स",
-        weightUsedLabel: "उपयोग किया गया वज़न (गणना)",
-        weightUsageProgress: "वज़न उपयोग की प्रगति",
-        availableLabel: "उपलब्ध",
-        sizesAndPatterns: "साइज़ और पैटर्न",
-        rollsUsed: "उपयोग किए गए रोल्स",
-        addNewSize: "नया साइज़ जोड़ें",
-        addAnotherRoll: "एक और रोल जोड़ें",
-        totalPiecesCalc: "कुल पीस (हिसाब से)",
-        fullWeightLabel: "रोल का कुल वज़न",
-        remainingWeightLabel: "बचा हुआ वज़न"
-      }
-    };
+const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>;
+const sizeTemplate = document.getElementById('sizeTemplate');
+const rollTemplate = document.getElementById('rollTemplate');
+const sizesContainer = document.getElementById('sizesContainer');
+const addSizeBtn = document.getElementById('addSizeBtn');
+const rollsContainer = document.getElementById('rollsContainer');
+const addRollBtn = document.getElementById('addRollBtn');
+const totalPiecesDisplay = document.getElementById('totalPiecesDisplay');
+const fabricTypeSel = document.getElementById('fabric_type');
+const fabricTypeSearch = document.getElementById('fabric_type_search');
+const fabricTypeOptions = document.getElementById('fabric_type_options');
+const createLotBtn = document.getElementById('createLotBtn');
 
-    let currentLanguage = "en"; // default
+function debounce(func, delay) {
+  let t;
+  return function(...args) { clearTimeout(t); t = setTimeout(() => func.apply(this, args), delay); };
+}
 
-    function setLanguage(lang) {
-      currentLanguage = lang;
-      document.documentElement.lang = lang;
-      // Loop through all [data-i18n] elements and set textContent
-      const elements = document.querySelectorAll("[data-i18n]");
-      elements.forEach(el => {
-        const key = el.getAttribute("data-i18n");
-        el.textContent = langData[lang][key] || el.textContent;
-      });
-    }
-
-    // Listen for radio button changes
-    document.addEventListener('DOMContentLoaded', () => {
-      const langRadios = document.querySelectorAll('input[name="language"]');
-      langRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          setLanguage(radio.value);
-        });
-      });
-      // Initialize with English (or whichever you like)
-      setLanguage("en");
+function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = []) {
+  function populateOptions() {
+    optionsContainer.innerHTML = '';
+    data.forEach(item => {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'list-group-item-action');
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+      li.textContent = typeof item === 'object' ? item.displayText : item;
+      li.dataset.value = typeof item === 'object' ? item.value : item;
+      if (item.availableWeight) li.dataset.availableWeight = item.availableWeight;
+      optionsContainer.appendChild(li);
     });
+  }
+  populateOptions();
 
-
-    // ====== SERVER DATA: Rolls by Fabric Type ======
-    const rollsByFabricType = <%- JSON.stringify(rollsByFabricType) %>;
-    console.log("rollsByFabricType:", rollsByFabricType);
-
-    // Key elements
-    const sizeTemplate = document.getElementById('sizeTemplate');
-    const rollTemplate = document.getElementById('rollTemplate');
-    const sizesContainer = document.getElementById('sizesContainer');
-    const addSizeBtn = document.getElementById('addSizeBtn');
-    const rollsContainer = document.getElementById('rollsContainer');
-    const addRollBtn = document.getElementById('addRollBtn');
-    const totalPiecesDisplay = document.getElementById('totalPiecesDisplay');
-    const fabricTypeSel = document.getElementById('fabric_type');
-    const fabricTypeSearch = document.getElementById('fabric_type_search');
-    const fabricTypeOptions = document.getElementById('fabric_type_options');
-    const createLotBtn = document.getElementById('createLotBtn');
-
-    // ====== Debounce Function ======
-    function debounce(func, delay) {
-      let debounceTimer;
-      return function(...args) {
-        const context = this;
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => func.apply(context, args), delay);
-      };
+  inputField.addEventListener('focus', () => {
+    if (inputField.value.trim() !== '') {
+      optionsContainer.classList.remove('d-none');
+      optionsContainer.classList.add('d-block');
+      inputField.setAttribute('aria-expanded', 'true');
     }
+  });
 
-    // ====== Autocomplete Initialization ======
-    function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = []) {
-      populateOptions();
-
-      inputField.addEventListener('focus', () => {
-        if (inputField.value.trim() !== '') {
-          optionsContainer.classList.remove('d-none');
-          optionsContainer.classList.add('d-block');
-          inputField.setAttribute('aria-expanded', 'true');
-        }
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!inputField.contains(e.target) && !optionsContainer.contains(e.target)) {
-          optionsContainer.classList.remove('d-block');
-          optionsContainer.classList.add('d-none');
-          inputField.setAttribute('aria-expanded', 'false');
-        }
-      });
-
-      inputField.addEventListener('input', debounce(() => {
-        const filter = inputField.value.toLowerCase();
-        const options = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
-        let visibleCount = 0;
-
-        options.forEach(option => {
-          const text = option.textContent.toLowerCase();
-          if (text.includes(filter)) {
-            option.style.display = 'block';
-            const regex = new RegExp(`(${filter})`, 'gi');
-            option.innerHTML = option.textContent.replace(regex, '<span class="highlight">$1</span>');
-            visibleCount++;
-          } else {
-            option.style.display = 'none';
-            option.innerHTML = option.textContent;
-          }
-        });
-
-        const noResult = optionsContainer.querySelector('.no-results');
-        if (visibleCount === 0) {
-          if (!noResult) {
-            const li = document.createElement('li');
-            li.classList.add('list-group-item', 'no-results');
-            li.textContent = 'No matching results.';
-            optionsContainer.appendChild(li);
-          }
-        } else {
-          if (noResult) {
-            noResult.remove();
-          }
-        }
-
-        if (inputField.value.trim() !== '') {
-          optionsContainer.classList.remove('d-none');
-          optionsContainer.classList.add('d-block');
-          inputField.setAttribute('aria-expanded', 'true');
-        } else {
-          optionsContainer.classList.remove('d-block');
-          optionsContainer.classList.add('d-none');
-          inputField.setAttribute('aria-expanded', 'false');
-        }
-
-        // Check if typed value matches any option
-        const typedValue = inputField.value.trim();
-        const matchingOption = data.find(d =>
-          d.value.toLowerCase() === typedValue.toLowerCase() ||
-          d.displayText.toLowerCase().startsWith(typedValue.toLowerCase())
-        );
-
-        if (matchingOption) {
-          // Exact match found - use its value
-          hiddenField.value = matchingOption.value;
-        } else if (typedValue) {
-          // No match - allow manual entry (for roll numbers not in the list)
-          hiddenField.value = typedValue;
-        } else {
-          hiddenField.value = '';
-        }
-
-        hiddenField.dispatchEvent(new Event('change'));
-        checkRollsCompletion();
-      }, 300));
-
-      optionsContainer.addEventListener('click', (e) => {
-        if (e.target && e.target.matches('li.list-group-item') && !e.target.classList.contains('no-results')) {
-          const selectedValue = e.target.dataset.value;
-          const selectedText = e.target.textContent;
-          hiddenField.value = selectedValue;
-          inputField.value = selectedText;
-          optionsContainer.classList.remove('d-block');
-          optionsContainer.classList.add('d-none');
-          inputField.setAttribute('aria-expanded', 'false');
-          hiddenField.dispatchEvent(new Event('change'));
-
-          checkRollsCompletion();
-        }
-      });
-
-      inputField.addEventListener('blur', () => {
-        const value = inputField.value.trim();
-        if (value && !hiddenField.value) {
-          hiddenField.value = value;
-          hiddenField.dispatchEvent(new Event('change'));
-        }
-      });
-
-      let currentFocus = -1;
-      inputField.addEventListener('keydown', function(e) {
-        const items = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
-        if (e.key === 'ArrowDown') {
-          currentFocus++;
-          addActive(items);
-          e.preventDefault();
-        } else if (e.key === 'ArrowUp') {
-          currentFocus--;
-          addActive(items);
-          e.preventDefault();
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (currentFocus > -1 && items[currentFocus]) {
-            items[currentFocus].click();
-          }
-        }
-      });
-
-      function addActive(items) {
-        if (!items) return;
-        removeActive(items);
-        if (currentFocus >= items.length) currentFocus = 0;
-        if (currentFocus < 0) currentFocus = items.length - 1;
-        items[currentFocus].classList.add('active');
-        items[currentFocus].setAttribute('aria-selected', 'true');
-      }
-
-      function removeActive(items) {
-        items.forEach(item => {
-          item.classList.remove('active');
-          item.setAttribute('aria-selected', 'false');
-        });
-      }
-
-      function populateOptions() {
-        optionsContainer.innerHTML = '';
-        data.forEach(item => {
-          let displayText = item;
-          let value = item;
-          let availableWeight = '';
-
-          if (typeof item === 'object' && item !== null) {
-            displayText = item.displayText;
-            value = item.value;
-            availableWeight = item.availableWeight || '';
-          }
-
-          const li = document.createElement('li');
-          li.classList.add('list-group-item', 'list-group-item-action');
-          li.setAttribute('role', 'option');
-          li.setAttribute('aria-selected', 'false');
-          li.textContent = displayText;
-          li.dataset.value = value;
-          if (availableWeight) {
-            li.dataset.availableWeight = availableWeight;
-          }
-          optionsContainer.appendChild(li);
-        });
-      }
+  document.addEventListener('click', (e) => {
+    if (!inputField.contains(e.target) && !optionsContainer.contains(e.target)) {
+      optionsContainer.classList.remove('d-block');
+      optionsContainer.classList.add('d-none');
+      inputField.setAttribute('aria-expanded', 'false');
     }
+  });
 
-    // Setup the fabric type autocomplete
-    const fabricTypes = Object.keys(rollsByFabricType);
-    const fabricTypeData = fabricTypes.map(ft => ({
-      displayText: ft,
-      value: ft
-    }));
-    initializeAutocomplete(
-      fabricTypeSearch, 
-      fabricTypeSel, 
-      fabricTypeOptions, 
-      fabricTypeData
-    );
-
-    function initializeRollNoAutocomplete(rollSection, fabricType) {
-      const rollNoSel = rollSection.querySelector('.rollNoSel');
-      const rollNoSearch = rollSection.querySelector('.rollNo_search');
-      const rollNoOptions = rollSection.querySelector('.autocomplete-items');
-      const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
-      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
-
-      const availableRolls = rollsByFabricType[fabricType] || [];
-
-      const rollData = availableRolls.map(roll => ({
-        displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
-        value: roll.roll_no,
-        availableWeight: roll.per_roll_weight,
-        unit: roll.unit
-      }));
-
-      initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
-
-      rollNoSearch.placeholder = `Search Roll (${fabricType})...`;
-      weightUsedInput.placeholder = `Weight used (${fabricType}, calculated)...`;
-
-      rollNoSel.addEventListener('change', () => {
-        const selectedRollNo = rollNoSel.value;
-        const selectedRoll = availableRolls.find(r => r.roll_no === selectedRollNo);
-        if (selectedRoll) {
-          const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-          availableWeightTxt.textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
-          fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
-          fullWeightInput.readOnly = true;
-          remainingWeightInput.readOnly = false;
-          remainingWeightInput.value = '';
-          remainingWeightInput.max = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
-          updateWeightUsed(rollSection);
-          updateWeightProgress(rollSection);
-        } else {
-          const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-          availableWeightTxt.textContent = '0';
-          weightUsedInput.value = '';
-          weightUsedInput.placeholder = `Weight used (${fabricType}, calculated)...`;
-          fullWeightInput.readOnly = false;
-          remainingWeightInput.readOnly = false;
-          fullWeightInput.value = '';
-          remainingWeightInput.value = '';
-          remainingWeightInput.removeAttribute('max');
-
-          const progressBar = rollSection.querySelector('.progress-bar');
-          progressBar.style.width = '0%';
-          progressBar.textContent = '0%';
-          progressBar.classList.remove('bg-danger');
-          progressBar.classList.add('bg-info');
-        }
-        checkRollsCompletion();
-      });
-
-      fullWeightInput.addEventListener('input', () => {
-        const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-        if (fullWeightInput.value) {
-          availableWeightTxt.textContent = parseFloat(fullWeightInput.value || '0').toFixed(2);
-        }
-        remainingWeightInput.max = fullWeightInput.value || '';
-        updateWeightUsed(rollSection);
-        updateWeightProgress(rollSection);
-        checkRollsCompletion();
-      });
-
-      remainingWeightInput.addEventListener('input', () => {
-        updateWeightUsed(rollSection);
-        updateWeightProgress(rollSection);
-        checkRollsCompletion();
-      });
-
-      const layersInput = rollSection.querySelector('.layersInput');
-      layersInput.addEventListener('input', () => {
-        checkRollsCompletion();
-      });
-    }
-
-    // ====== Add new size row ======
-    function addNewSize() {
-      const newSize = sizeTemplate.cloneNode(true);
-      newSize.classList.remove('d-none');
-      newSize.removeAttribute('id');
-      sizesContainer.appendChild(newSize);
-
-      const removeSizeBtn = newSize.querySelector('.removeSizeBtn');
-      removeSizeBtn.addEventListener('click', () => {
-        newSize.remove();
-        updateTotalPieces();
-        checkRollsCompletion();
-      });
-
-      const patternCountInput = newSize.querySelector('.patternCountInput');
-      patternCountInput.addEventListener('input', () => {
-        updateTotalPieces();
-      });
-    }
-
-    // ====== Add new roll row ======
-    function addNewRoll() {
-      const newRoll = rollTemplate.cloneNode(true);
-      newRoll.classList.remove('d-none');
-      newRoll.removeAttribute('id');
-      rollsContainer.appendChild(newRoll);
-
-      const removeRollBtn = newRoll.querySelector('.remove-roll-btn');
-      removeRollBtn.addEventListener('click', () => {
-        newRoll.remove();
-        updateTotalPieces();
-        checkRollsCompletion();
-      });
-
-      const layersInput = newRoll.querySelector('.layersInput');
-      layersInput.addEventListener('input', () => {
-        updateTotalPieces();
-        checkRollsCompletion();
-      });
-
-      const fullWeightInput = newRoll.querySelector('.fullWeightInput');
-      fullWeightInput.addEventListener('input', () => {
-        const remainingWeightInput = newRoll.querySelector('.remainingWeightInput');
-        remainingWeightInput.max = fullWeightInput.value || '';
-        updateWeightUsed(newRoll);
-        updateWeightProgress(newRoll);
-        checkRollsCompletion();
-      });
-
-      const remainingWeightInput = newRoll.querySelector('.remainingWeightInput');
-      remainingWeightInput.addEventListener('input', () => {
-        updateWeightUsed(newRoll);
-        updateWeightProgress(newRoll);
-        checkRollsCompletion();
-      });
-
-      // Based on currently selected fabric type
-      const currentFabricType = fabricTypeSel.value;
-      if (currentFabricType) {
-        initializeRollNoAutocomplete(newRoll, currentFabricType);
+  inputField.addEventListener('input', debounce(() => {
+    const filter = inputField.value.toLowerCase();
+    const options = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
+    let visibleCount = 0;
+    options.forEach(option => {
+      const text = option.textContent.toLowerCase();
+      if (text.includes(filter)) {
+        option.style.display = 'block';
+        const regex = new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        option.innerHTML = option.textContent.replace(regex, '<span class="highlight">$1</span>');
+        visibleCount++;
       } else {
-        newRoll.querySelector('.rollNo_search').placeholder = 'Search Roll...';
-        weightUsedInput.placeholder = 'Weight used (calculated)...';
+        option.style.display = 'none';
       }
+    });
+    let noResult = optionsContainer.querySelector('.no-results');
+    if (visibleCount === 0 && !noResult) {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'no-results');
+      li.textContent = 'No matching results.';
+      optionsContainer.appendChild(li);
+    } else if (visibleCount > 0 && noResult) noResult.remove();
+
+    if (inputField.value.trim() !== '') {
+      optionsContainer.classList.remove('d-none');
+      optionsContainer.classList.add('d-block');
+      inputField.setAttribute('aria-expanded', 'true');
+    } else {
+      optionsContainer.classList.remove('d-block');
+      optionsContainer.classList.add('d-none');
+      inputField.setAttribute('aria-expanded', 'false');
     }
 
-    function updateWeightProgress(rollSection) {
-      const rollNoSel = rollSection.querySelector('.rollNoSel');
-      const selectedRollNo = rollNoSel.value;
-      const rollData = Object.values(rollsByFabricType).flat().find(r => r.roll_no === selectedRollNo);
+    const typedValue = inputField.value.trim();
+    const matchingOption = data.find(d => (typeof d === 'object' ? d.value : d).toLowerCase() === typedValue.toLowerCase());
+    hiddenField.value = matchingOption ? (typeof matchingOption === 'object' ? matchingOption.value : matchingOption) : typedValue;
+    hiddenField.dispatchEvent(new Event('change'));
+    checkRollsCompletion();
+  }, 300));
 
-      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
-      const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-      const available = rollData ? parseFloat(rollData.per_roll_weight) || 0 : parseFloat(fullWeightInput.value) || 0;
-      const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
-      const bar = rollSection.querySelector('.progress-bar');
-      const ratio = available === 0 ? 0 : (weightUsed / available) * 100;
-      const percent = isNaN(ratio) ? 0 : Math.min(Math.max(ratio, 0), 100).toFixed(1);
-
-      if (!rollData) {
-        availableWeightTxt.textContent = available ? available.toFixed(2) : '0';
-      }
-
-      bar.style.width = `${percent}%`;
-      bar.textContent = `${percent}%`;
-      bar.setAttribute('aria-valuenow', percent);
-
-      if (weightUsed > available) {
-        bar.classList.remove('bg-info');
-        bar.classList.add('bg-danger');
-      } else {
-        bar.classList.remove('bg-danger');
-        bar.classList.add('bg-info');
-      }
-    }
-
-    function updateWeightUsed(rollSection) {
-      const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-      const fullWeightInput = rollSection.querySelector('.fullWeightInput');
-      const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
-      const fullWeight = parseFloat(fullWeightInput.value);
-      const remainingWeight = parseFloat(remainingWeightInput.value);
-
-      if (isNaN(fullWeight) || isNaN(remainingWeight)) {
-        weightUsedInput.value = '';
-        return;
-      }
-
-      const used = fullWeight - remainingWeight;
-      weightUsedInput.value = used >= 0 ? used.toFixed(2) : '0';
-    }
-
-    // ====== Calculate total pieces (patterns * layers) ======
-    function updateTotalPieces() {
-      let totalPatterns = 0;
-      sizesContainer.querySelectorAll('.size-section:not(.d-none)').forEach(sr => {
-        const patternCount = parseFloat(sr.querySelector('.patternCountInput').value || '0');
-        totalPatterns += patternCount;
-      });
-
-      let totalLayers = 0;
-      rollsContainer.querySelectorAll('.roll-section:not(.d-none)').forEach(rs => {
-        const layers = parseFloat(rs.querySelector('.layersInput').value || '0');
-        totalLayers += layers;
-      });
-
-      let totalPieces = totalPatterns * totalLayers;
-      totalPieces = isNaN(totalPieces) ? 0 : totalPieces;
-
-      totalPiecesDisplay.textContent = totalPieces;
-    }
-
-    function populateRollNos(selectedFabricType) {
-      const rollNoSels = rollsContainer.querySelectorAll('.rollNoSel');
-      rollNoSels.forEach(rollNoSel => {
-        const rollSection = rollNoSel.closest('.roll-section');
-        const rollNoSearch = rollSection.querySelector('.rollNo_search');
-        const rollNoOptions = rollSection.querySelector('.autocomplete-items');
-        const weightUsedInput = rollSection.querySelector('.weightUsedInput');
-        const fullWeightInput = rollSection.querySelector('.fullWeightInput');
-        const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
-
-        const availableRolls = rollsByFabricType[selectedFabricType] || [];
-        const rollData = availableRolls.map(roll => ({
-          displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`,
-          value: roll.roll_no,
-          availableWeight: roll.per_roll_weight,
-          unit: roll.unit
-        }));
-
-        initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
-        rollNoSearch.placeholder = `Search Roll (${selectedFabricType})...`;
-        weightUsedInput.placeholder = `Weight used (${selectedFabricType}, calculated)...`;
-
-        const availableWeightTxt = rollSection.querySelector('.availableWeightTxt');
-        availableWeightTxt.textContent = '0';
-        weightUsedInput.value = '';
-        fullWeightInput.value = '';
-        remainingWeightInput.value = '';
-        fullWeightInput.readOnly = false;
-        remainingWeightInput.readOnly = false;
-        remainingWeightInput.removeAttribute('max');
-        const progressBar = rollSection.querySelector('.progress-bar');
-        progressBar.style.width = '0%';
-        progressBar.textContent = '0%';
-        progressBar.setAttribute('aria-valuenow', '0');
-        progressBar.classList.remove('bg-danger');
-        progressBar.classList.add('bg-info');
-      });
-    }
-
-    // Fabric type change event
-    fabricTypeSel.addEventListener('change', () => {
-      const selectedFabricType = fabricTypeSel.value;
-      if (selectedFabricType) {
-        addRollBtn.disabled = false;
-        rollsContainer.innerHTML = '';
-        populateRollNos(selectedFabricType);
-        updateTotalPieces();
-      } else {
-        addRollBtn.disabled = true;
-        rollsContainer.innerHTML = '';
-        updateTotalPieces();
-      }
+  optionsContainer.addEventListener('click', (e) => {
+    if (e.target && e.target.matches('li.list-group-item') && !e.target.classList.contains('no-results')) {
+      hiddenField.value = e.target.dataset.value;
+      inputField.value = e.target.textContent;
+      optionsContainer.classList.remove('d-block');
+      optionsContainer.classList.add('d-none');
+      inputField.setAttribute('aria-expanded', 'false');
+      hiddenField.dispatchEvent(new Event('change'));
       checkRollsCompletion();
-    });
-
-    // Button event listeners
-    addSizeBtn.addEventListener('click', addNewSize);
-    addRollBtn.addEventListener('click', addNewRoll);
-
-    // Initialize with 1 size row
-    addNewSize();
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const existingRollSections = rollsContainer.querySelectorAll('.roll-section');
-      existingRollSections.forEach(rollSection => {
-        const fabricType = fabricTypeSel.value;
-        if (fabricType) {
-          initializeRollNoAutocomplete(rollSection, fabricType);
-        }
-      });
-      checkRollsCompletion();
-    });
-
-    function checkRollsCompletion() {
-      const allRollSections = rollsContainer.querySelectorAll('.roll-section');
-
-      // If no roll sections yet, disable the final create-lot button
-      if (allRollSections.length === 0) {
-        createLotBtn.disabled = true;
-        return;
-      }
-
-      let allFilled = true;
-      allRollSections.forEach(roll => {
-        const rollNo = roll.querySelector('.rollNoSel').value.trim();
-        const layers = roll.querySelector('.layersInput').value.trim();
-        const fullWeight = roll.querySelector('.fullWeightInput').value.trim();
-        const remainingWeight = roll.querySelector('.remainingWeightInput').value.trim();
-
-        if (!rollNo || !layers || !fullWeight || !remainingWeight) {
-          allFilled = false;
-        }
-      });
-
-      createLotBtn.disabled = !allFilled;
     }
+  });
 
-  document.getElementById('lotForm').addEventListener('submit', function(e) {
-  // Disable the create lot button to prevent multiple submissions.
-  document.getElementById('createLotBtn').disabled = true;
+  inputField.addEventListener('blur', () => {
+    const value = inputField.value.trim();
+    if (value && !hiddenField.value) {
+      hiddenField.value = value;
+      hiddenField.dispatchEvent(new Event('change'));
+    }
+  });
+
+  let currentFocus = -1;
+  inputField.addEventListener('keydown', function(e) {
+    const items = optionsContainer.querySelectorAll('li.list-group-item:not(.no-results)');
+    if (e.key === 'ArrowDown') { currentFocus++; addActive(items); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); e.preventDefault(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (currentFocus > -1 && items[currentFocus]) items[currentFocus].click(); }
+  });
+
+  function addActive(items) {
+    if (!items) return;
+    items.forEach(i => { i.classList.remove('active'); i.setAttribute('aria-selected', 'false'); });
+    if (currentFocus >= items.length) currentFocus = 0;
+    if (currentFocus < 0) currentFocus = items.length - 1;
+    items[currentFocus].classList.add('active');
+    items[currentFocus].setAttribute('aria-selected', 'true');
+  }
+}
+
+const fabricTypes = Object.keys(rollsByFabricType);
+initializeAutocomplete(fabricTypeSearch, fabricTypeSel, fabricTypeOptions, fabricTypes.map(ft => ({ displayText: ft, value: ft })));
+
+function initializeRollNoAutocomplete(rollSection, fabricType) {
+  const rollNoSel = rollSection.querySelector('.rollNoSel');
+  const rollNoSearch = rollSection.querySelector('.rollNo_search');
+  const rollNoOptions = rollSection.querySelector('.autocomplete-items');
+  const weightUsedInput = rollSection.querySelector('.weightUsedInput');
+  const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+  const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
+  const availableRolls = rollsByFabricType[fabricType] || [];
+  const rollData = availableRolls.map(roll => ({ displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`, value: roll.roll_no, availableWeight: roll.per_roll_weight, unit: roll.unit }));
+  initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
+  rollNoSearch.placeholder = `Search Roll (${fabricType})...`;
+
+  rollNoSel.addEventListener('change', () => {
+    const selectedRoll = availableRolls.find(r => r.roll_no === rollNoSel.value);
+    if (selectedRoll) {
+      rollSection.querySelector('.availableWeightTxt').textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
+      fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
+      fullWeightInput.readOnly = true;
+      remainingWeightInput.max = selectedRoll.per_roll_weight;
+    } else {
+      rollSection.querySelector('.availableWeightTxt').textContent = '0';
+      fullWeightInput.readOnly = false;
+      fullWeightInput.value = '';
+      remainingWeightInput.value = '';
+    }
+    updateWeightUsed(rollSection);
+    updateWeightProgress(rollSection);
+    checkRollsCompletion();
+  });
+
+  fullWeightInput.addEventListener('input', () => {
+    rollSection.querySelector('.availableWeightTxt').textContent = parseFloat(fullWeightInput.value || 0).toFixed(2);
+    remainingWeightInput.max = fullWeightInput.value || '';
+    updateWeightUsed(rollSection);
+    updateWeightProgress(rollSection);
+    checkRollsCompletion();
+  });
+  remainingWeightInput.addEventListener('input', () => { updateWeightUsed(rollSection); updateWeightProgress(rollSection); checkRollsCompletion(); });
+  rollSection.querySelector('.layersInput').addEventListener('input', checkRollsCompletion);
+}
+
+function addNewSize() {
+  const newSize = sizeTemplate.cloneNode(true);
+  newSize.classList.remove('d-none');
+  newSize.removeAttribute('id');
+  sizesContainer.appendChild(newSize);
+  newSize.querySelector('.removeSizeBtn').addEventListener('click', () => { newSize.remove(); updateTotalPieces(); checkRollsCompletion(); });
+  newSize.querySelector('.patternCountInput').addEventListener('input', updateTotalPieces);
+}
+
+function addNewRoll() {
+  const newRoll = rollTemplate.cloneNode(true);
+  newRoll.classList.remove('d-none');
+  newRoll.removeAttribute('id');
+  rollsContainer.appendChild(newRoll);
+  newRoll.querySelector('.remove-roll-btn').addEventListener('click', () => { newRoll.remove(); updateTotalPieces(); checkRollsCompletion(); });
+  newRoll.querySelector('.layersInput').addEventListener('input', () => { updateTotalPieces(); checkRollsCompletion(); });
+  newRoll.querySelector('.fullWeightInput').addEventListener('input', () => { newRoll.querySelector('.remainingWeightInput').max = newRoll.querySelector('.fullWeightInput').value || ''; updateWeightUsed(newRoll); updateWeightProgress(newRoll); checkRollsCompletion(); });
+  newRoll.querySelector('.remainingWeightInput').addEventListener('input', () => { updateWeightUsed(newRoll); updateWeightProgress(newRoll); checkRollsCompletion(); });
+  const currentFabricType = fabricTypeSel.value;
+  if (currentFabricType) initializeRollNoAutocomplete(newRoll, currentFabricType);
+}
+
+function updateWeightProgress(rollSection) {
+  const rollNoSel = rollSection.querySelector('.rollNoSel');
+  const rollData = Object.values(rollsByFabricType).flat().find(r => r.roll_no === rollNoSel.value);
+  const fullWeightInput = rollSection.querySelector('.fullWeightInput');
+  const available = rollData ? parseFloat(rollData.per_roll_weight) || 0 : parseFloat(fullWeightInput.value) || 0;
+  const weightUsed = parseFloat(rollSection.querySelector('.weightUsedInput').value) || 0;
+  const bar = rollSection.querySelector('.kotty-progress-bar');
+  const percent = available === 0 ? 0 : Math.min(Math.max((weightUsed / available) * 100, 0), 100).toFixed(1);
+  bar.style.width = `${percent}%`;
+  bar.textContent = `${percent}%`;
+  bar.setAttribute('aria-valuenow', percent);
+  bar.classList.toggle('danger', weightUsed > available);
+}
+
+function updateWeightUsed(rollSection) {
+  const fullWeight = parseFloat(rollSection.querySelector('.fullWeightInput').value);
+  const remainingWeight = parseFloat(rollSection.querySelector('.remainingWeightInput').value);
+  const used = isNaN(fullWeight) || isNaN(remainingWeight) ? '' : Math.max(fullWeight - remainingWeight, 0).toFixed(2);
+  rollSection.querySelector('.weightUsedInput').value = used;
+}
+
+function updateTotalPieces() {
+  let totalPatterns = 0;
+  sizesContainer.querySelectorAll('.size-section:not(.d-none)').forEach(sr => { totalPatterns += parseFloat(sr.querySelector('.patternCountInput').value || 0); });
+  let totalLayers = 0;
+  rollsContainer.querySelectorAll('.roll-section:not(.d-none)').forEach(rs => { totalLayers += parseFloat(rs.querySelector('.layersInput').value || 0); });
+  totalPiecesDisplay.textContent = isNaN(totalPatterns * totalLayers) ? 0 : totalPatterns * totalLayers;
+}
+
+function populateRollNos(selectedFabricType) {
+  rollsContainer.querySelectorAll('.rollNoSel').forEach(rollNoSel => {
+    const rollSection = rollNoSel.closest('.roll-section');
+    const availableRolls = rollsByFabricType[selectedFabricType] || [];
+    const rollData = availableRolls.map(roll => ({ displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`, value: roll.roll_no, availableWeight: roll.per_roll_weight }));
+    initializeAutocomplete(rollSection.querySelector('.rollNo_search'), rollNoSel, rollSection.querySelector('.autocomplete-items'), rollData);
+    rollSection.querySelector('.rollNo_search').placeholder = `Search Roll (${selectedFabricType})...`;
+    rollSection.querySelector('.availableWeightTxt').textContent = '0';
+    rollSection.querySelector('.weightUsedInput').value = '';
+    rollSection.querySelector('.fullWeightInput').value = '';
+    rollSection.querySelector('.remainingWeightInput').value = '';
+    rollSection.querySelector('.fullWeightInput').readOnly = false;
+    const progressBar = rollSection.querySelector('.kotty-progress-bar');
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    progressBar.classList.remove('danger');
+  });
+}
+
+fabricTypeSel.addEventListener('change', () => {
+  const selectedFabricType = fabricTypeSel.value;
+  addRollBtn.disabled = !selectedFabricType;
+  rollsContainer.innerHTML = '';
+  if (selectedFabricType) populateRollNos(selectedFabricType);
+  updateTotalPieces();
+  checkRollsCompletion();
 });
-  </script>
-</body>
-</html>
+
+addSizeBtn.addEventListener('click', addNewSize);
+addRollBtn.addEventListener('click', addNewRoll);
+addNewSize();
+
+document.addEventListener('DOMContentLoaded', () => {
+  rollsContainer.querySelectorAll('.roll-section').forEach(rollSection => {
+    if (fabricTypeSel.value) initializeRollNoAutocomplete(rollSection, fabricTypeSel.value);
+  });
+  checkRollsCompletion();
+});
+
+function checkRollsCompletion() {
+  const allRollSections = rollsContainer.querySelectorAll('.roll-section');
+  if (allRollSections.length === 0) { createLotBtn.disabled = true; return; }
+  let allFilled = true;
+  allRollSections.forEach(roll => {
+    if (!roll.querySelector('.rollNoSel').value.trim() || !roll.querySelector('.layersInput').value.trim() || !roll.querySelector('.fullWeightInput').value.trim() || !roll.querySelector('.remainingWeightInput').value.trim()) allFilled = false;
+  });
+  createLotBtn.disabled = !allFilled;
+}
+
+document.getElementById('lotForm').addEventListener('submit', function(e) { document.getElementById('createLotBtn').disabled = true; });
+</script>
+
+<%- include('partials/footer') %>

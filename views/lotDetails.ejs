@@ -1,128 +1,262 @@
 <!-- views/lotDetails.ejs -->
+<%- include('partials/header', { pageTitle: 'Lot Details - ' + lot.lot_no }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/cutting-manager/dashboard' }) %>
 
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Lot Details - <%= lot.lot_no %></title>
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="/cutting-manager/dashboard">Cutting Manager Dashboard</a>
-      <div class="ms-auto">
-        <span class="navbar-text me-3">
-          Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
-        </span>
-        <a href="/logout" class="btn btn-outline-light">Logout</a>
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1200px; margin: 0 auto;">
+
+    <!-- Breadcrumbs -->
+    <nav class="breadcrumbs">
+      <a href="/cutting-manager/dashboard">Dashboard</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <span>Lot Details</span>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Lot <%= lot.lot_no %></h1>
+          <p class="page-subtitle">Complete lot information and breakdown</p>
+        </div>
+        <a href="/cutting-manager/dashboard" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i>
+          Back to Dashboard
+        </a>
       </div>
     </div>
-  </nav>
 
-  <div class="container">
-    <!-- Display Error or Success Message if any -->
+    <!-- Alert Messages -->
     <% if (error && error.length > 0) { %>
       <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <%= error %>
+        <i class="bi bi-exclamation-circle"></i>
+        <span><%= error %></span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
     <% if (success && success.length > 0) { %>
       <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <%= success %>
+        <i class="bi bi-check-circle"></i>
+        <span><%= success %></span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
-    <h2>Lot Details - <%= lot.lot_no %></h2>
-    <hr/>
-
-    <div class="row">
-      <div class="col-md-6">
-        <p><strong>SKU:</strong> <%= lot.sku %></p>
-        <p><strong>Fabric Type:</strong> <%= lot.fabric_type %></p>
-        <p><strong>Table Length:</strong> <%= lot.table_length ?? 'N/A' %></p>
-        <p><strong>Remark:</strong> <%= lot.remark || 'N/A' %></p>
-        <p><strong>Created By:</strong> <%= lot.created_by %></p>
-        <p><strong>Created At:</strong> <%= new Date(lot.created_at).toLocaleString() %></p>
-        <p><strong>Total Pieces:</strong> <%= lot.total_pieces %></p>
+    <!-- Lot Details Card -->
+    <div class="row g-4 mb-4">
+      <!-- Lot Information -->
+      <div class="col-lg-7">
+        <div class="card h-100">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="bi bi-info-circle me-2" style="color: var(--terracotta);"></i>
+              Lot Information
+            </h3>
+            <span class="badge badge-primary"><%= lot.sku %></span>
+          </div>
+          <div class="card-body">
+            <div class="row g-4">
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">SKU</span>
+                  <span class="info-value"><%= lot.sku %></span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">Fabric Type</span>
+                  <span class="info-value"><%= lot.fabric_type %></span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">Table Length</span>
+                  <span class="info-value"><%= lot.table_length ?? 'N/A' %></span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">Total Pieces</span>
+                  <span class="info-value" style="color: var(--terracotta); font-weight: 600;"><%= lot.total_pieces %></span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">Created By</span>
+                  <span class="info-value"><%= lot.created_by %></span>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="info-item">
+                  <span class="info-label">Created At</span>
+                  <span class="info-value"><%= new Date(lot.created_at).toLocaleString() %></span>
+                </div>
+              </div>
+              <% if (lot.remark) { %>
+              <div class="col-12">
+                <div class="info-item">
+                  <span class="info-label">Remark</span>
+                  <span class="info-value"><%= lot.remark %></span>
+                </div>
+              </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="col-md-6">
-        <% if (lot.image_url) { %>
-          <img src="/<%= lot.image_url %>" alt="Lot Image" class="img-fluid" />
-        <% } else { %>
-          <p>No image available.</p>
-        <% } %>
+
+      <!-- Lot Image -->
+      <div class="col-lg-5">
+        <div class="card h-100">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="bi bi-image me-2" style="color: var(--terracotta);"></i>
+              Lot Image
+            </h3>
+          </div>
+          <div class="card-body d-flex align-items-center justify-content-center">
+            <% if (lot.image_url) { %>
+              <img src="/<%= lot.image_url %>" alt="Lot Image" class="img-fluid" style="max-height: 280px; border-radius: var(--radius-md); object-fit: contain;" />
+            <% } else { %>
+              <div class="text-center" style="color: var(--text-muted); padding: 40px;">
+                <i class="bi bi-image" style="font-size: 48px; opacity: 0.3;"></i>
+                <p class="mt-3 mb-0">No image available</p>
+              </div>
+            <% } %>
+          </div>
+        </div>
       </div>
     </div>
 
-    <hr/>
-
-    <h4>Sizes and Patterns</h4>
-    <table class="table table-bordered mb-4 bg-white">
-      <thead class="table-light">
-        <tr>
-          <th>Size Label</th>
-          <th>Pattern Count</th>
-          <th>Total Pieces</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (sizes.length === 0) { %>
-          <tr>
-            <td colspan="3" class="text-center">No sizes available.</td>
-          </tr>
-        <% } else { %>
-          <% sizes.forEach(size => { %>
+    <!-- Sizes and Patterns Table -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-rulers me-2" style="color: var(--terracotta);"></i>
+          Sizes and Patterns
+        </h3>
+        <span class="badge badge-neutral"><%= sizes.length %> size<%= sizes.length !== 1 ? 's' : '' %></span>
+      </div>
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <table class="table">
+          <thead>
             <tr>
-              <td><%= size.size_label %></td>
-              <td><%= size.pattern_count %></td>
-              <td><%= size.total_pieces %></td>
+              <th>Size Label</th>
+              <th>Pattern Count</th>
+              <th>Total Pieces</th>
             </tr>
-          <% }) %>
-        <% } %>
-      </tbody>
-    </table>
+          </thead>
+          <tbody>
+            <% if (sizes.length === 0) { %>
+              <tr>
+                <td colspan="3" class="text-center" style="padding: 40px; color: var(--text-muted);">
+                  <i class="bi bi-inbox" style="font-size: 24px; opacity: 0.5;"></i>
+                  <p class="mt-2 mb-0">No sizes available</p>
+                </td>
+              </tr>
+            <% } else { %>
+              <% sizes.forEach(size => { %>
+                <tr>
+                  <td>
+                    <span class="badge badge-primary"><%= size.size_label %></span>
+                  </td>
+                  <td><%= size.pattern_count %></td>
+                  <td><strong><%= size.total_pieces %></strong></td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-    <h4>Rolls Used</h4>
-    <table class="table table-bordered mb-4 bg-white">
-      <thead class="table-light">
-        <tr>
-          <th>Roll No</th>
-          <th>Weight Used</th>
-          <th>Layers</th>
-          <th>Total Pieces</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (rolls.length === 0) { %>
-          <tr>
-            <td colspan="4" class="text-center">No rolls used.</td>
-          </tr>
-        <% } else { %>
-          <% rolls.forEach(roll => { %>
+    <!-- Rolls Used Table -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-layers me-2" style="color: var(--terracotta);"></i>
+          Rolls Used
+        </h3>
+        <span class="badge badge-neutral"><%= rolls.length %> roll<%= rolls.length !== 1 ? 's' : '' %></span>
+      </div>
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <table class="table">
+          <thead>
             <tr>
-              <td><%= roll.roll_no %></td>
-              <td><%= roll.weight_used %></td>
-              <td><%= roll.layers %></td>
-              <td><%= roll.total_pieces %></td>
+              <th>Roll No</th>
+              <th>Weight Used</th>
+              <th>Layers</th>
+              <th>Total Pieces</th>
             </tr>
-          <% }) %>
-        <% } %>
-      </tbody>
-    </table>
+          </thead>
+          <tbody>
+            <% if (rolls.length === 0) { %>
+              <tr>
+                <td colspan="4" class="text-center" style="padding: 40px; color: var(--text-muted);">
+                  <i class="bi bi-inbox" style="font-size: 24px; opacity: 0.5;"></i>
+                  <p class="mt-2 mb-0">No rolls used</p>
+                </td>
+              </tr>
+            <% } else { %>
+              <% rolls.forEach(roll => { %>
+                <tr>
+                  <td>
+                    <span style="font-weight: 500;"><%= roll.roll_no %></span>
+                  </td>
+                  <td><%= roll.weight_used %> kg</td>
+                  <td><%= roll.layers %></td>
+                  <td><strong><%= roll.total_pieces %></strong></td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
+</main>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-  ></script>
-</body>
-</html>
+<style>
+  /* Info Item Styling */
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .info-label {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+  }
+
+  .info-value {
+    font-size: var(--text-base);
+    color: var(--text-primary);
+  }
+
+  /* Card adjustments */
+  .card {
+    overflow: hidden;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .page-header .d-flex {
+      flex-direction: column;
+      align-items: flex-start !important;
+    }
+
+    .page-header .btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+</style>
+
+<%- include('partials/footer') %>

@@ -1,93 +1,53 @@
-<!-- views/catalogUpload.ejs -->
+<%- include('partials/header', { pageTitle: 'Upload & Search Catalog' }) %>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>File Upload & Search</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<%- include('partials/navbar') %>
 
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"/>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-    rel="stylesheet"/>
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1000px; margin: 0 auto;">
 
-  <style>
-    body { background:#f4f6f9; font-family:"Segoe UI", Roboto, Arial; }
-    .wrapper { max-width:900px; margin:2rem auto; padding:0 1rem; }
-    .card { border:none; border-radius:1rem; box-shadow:0 0 24px rgba(0,0,0,.05); margin-bottom:2rem; }
-    .card-header { background:#fff; border-bottom:1px solid #e3e6f0; padding:1rem 1.5rem; font-weight:600; }
-    .card-body { padding:1.5rem; }
-    .btn { padding:.6rem 1.5rem; transition:.1s, .2s; }
-    .btn:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
-    @keyframes fadeIn { from {opacity:0;transform:translateY(10px)} to {opacity:1;transform:translateY(0)} }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
-      </div>
-    </div>
-  </nav>
-
-  <div class="wrapper">
-
-    <!-- Title -->
-    <div class="text-center mb-5">
-      <h1 class="display-6 fw-bold">📁 Upload & Search Catalog</h1>
-      <p class="text-muted fs-5">Your files, organized by date & marketplace</p>
+    <!-- Page Header -->
+    <div class="page-header text-center mb-4">
+      <h1 class="page-title">Upload & Search Catalog</h1>
+      <p class="page-subtitle">Your files, organized by date & marketplace</p>
     </div>
 
     <!-- Flash Messages -->
-    <% const renderAlerts = (arr, type) => arr.map(m=>`
-      <div class="alert alert-${type} alert-dismissible d-flex align-items-center" role="alert">
-        <i class="bi bi-${type==='success'?'check-circle-fill':'exclamation-triangle-fill'} fs-4 me-2"></i>
-        <div>${m}</div>
-        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-      </div>
-    `).join('');
-       const sarr = Array.isArray(success)? success : (success? [success]:[]);
-       const earr = Array.isArray(error  )? error   : (error  ? [error]  :[]);
-    %>
-    <%- renderAlerts(sarr,'success') %>
-    <%- renderAlerts(earr,'danger')  %>
+    <%- include('partials/flashMessages') %>
 
     <!-- Upload Card -->
-    <div class="card" style="animation:fadeIn .4s">
-      <div class="card-header text-primary"><i class="bi bi-upload me-1"></i> Upload File</div>
+    <div class="card kotty-card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-cloud-arrow-up me-2 text-terracotta"></i>
+          Upload File
+        </h2>
+      </div>
       <div class="card-body">
         <form action="/catalogUpload/upload" method="POST" enctype="multipart/form-data">
           <div class="row g-4">
             <div class="col-md-6">
-              <label class="form-label">Marketplace</label>
-              <select name="marketplace" class="form-select" required>
-                <option value="">Select marketplace…</option>
-                <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>>
-                    <%= m.name %>
-                  </option>
-                <% }) %>
-              </select>
+              <div class="form-group mb-0">
+                <label class="form-label">Marketplace</label>
+                <select name="marketplace" class="form-select form-input" required>
+                  <option value="">Select marketplace...</option>
+                  <% markets.forEach(m => { %>
+                    <option value="<%= m.id %>" <%= selectedMarketplace == m.id ? 'selected' : '' %>>
+                      <%= m.name %>
+                    </option>
+                  <% }) %>
+                </select>
+              </div>
             </div>
             <div class="col-md-6">
-              <label class="form-label">File</label>
-              <input type="file" name="csvfile" class="form-control" accept=".csv,.xls,.xlsx" required>
+              <div class="form-group mb-0">
+                <label class="form-label">File</label>
+                <input type="file" name="csvfile" class="form-control form-input" accept=".csv,.xls,.xlsx" required>
+              </div>
             </div>
           </div>
           <div class="text-end mt-4">
-            <button class="btn btn-primary">
+            <button type="submit" class="btn btn-primary">
               <i class="bi bi-cloud-arrow-up me-1"></i> Upload
             </button>
           </div>
@@ -96,29 +56,38 @@
     </div>
 
     <!-- Search Card -->
-    <div class="card" style="animation:fadeIn .4s">
-      <div class="card-header text-success"><i class="bi bi-search me-1"></i> Search Files</div>
+    <div class="card kotty-card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-search me-2" style="color: var(--success);"></i>
+          Search Files
+        </h2>
+      </div>
       <div class="card-body">
         <form action="/catalogUpload/search" method="GET">
           <div class="row g-4">
             <div class="col-md-4">
-              <label class="form-label">Marketplace</label>
-              <select name="marketplace" class="form-select" required>
-                <option value="">Select marketplace…</option>
-                <% markets.forEach(m => { %>
-                  <option value="<%= m.id %>" <%= selectedMarketplace==m.id?'selected':'' %>>
-                    <%= m.name %>
-                  </option>
-                <% }) %>
-              </select>
+              <div class="form-group mb-0">
+                <label class="form-label">Marketplace</label>
+                <select name="marketplace" class="form-select form-input" required>
+                  <option value="">Select marketplace...</option>
+                  <% markets.forEach(m => { %>
+                    <option value="<%= m.id %>" <%= selectedMarketplace == m.id ? 'selected' : '' %>>
+                      <%= m.name %>
+                    </option>
+                  <% }) %>
+                </select>
+              </div>
             </div>
             <div class="col-md-8">
-              <label class="form-label">Search term</label>
-              <input type="text" name="q" class="form-control" placeholder="Keyword…" value="<%= q %>" required>
+              <div class="form-group mb-0">
+                <label class="form-label">Search term</label>
+                <input type="text" name="q" class="form-control form-input" placeholder="Enter keyword..." value="<%= q %>" required>
+              </div>
             </div>
           </div>
           <div class="text-end mt-4">
-            <button class="btn btn-success">
+            <button type="submit" class="btn btn-success">
               <i class="bi bi-search me-1"></i> Search
             </button>
           </div>
@@ -126,12 +95,17 @@
       </div>
     </div>
 
-    <!-- All Uploads Accordion -->
-    <div class="card" style="animation:fadeIn .4s">
-      <div class="card-header text-dark"><i class="bi bi-list-ul me-1"></i> All Uploads</div>
+    <!-- All Uploads Card -->
+    <div class="card kotty-card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-folder2-open me-2"></i>
+          All Uploads
+        </h2>
+      </div>
       <div class="card-body">
         <div class="accordion" id="uploadsAccordion">
-          <% 
+          <%
             const dates = [...new Set(files.map(f => new Date(f.uploaded_at).toLocaleDateString()))];
           %>
           <% dates.forEach((date, idx) => {
@@ -139,7 +113,7 @@
                  new Date(f.uploaded_at).toLocaleDateString() === date
                );
           %>
-            <div class="accordion-item">
+            <div class="accordion-item" style="border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 8px; overflow: hidden;">
               <h2 class="accordion-header" id="heading<%= idx %>">
                 <button
                   class="accordion-button collapsed"
@@ -147,9 +121,11 @@
                   data-bs-toggle="collapse"
                   data-bs-target="#collapse<%= idx %>"
                   aria-expanded="false"
-                  aria-controls="collapse<%= idx %>">
+                  aria-controls="collapse<%= idx %>"
+                  style="background: var(--gray-50); color: var(--text-primary); font-family: var(--font-body); font-weight: 500;">
+                  <i class="bi bi-calendar3 me-2 text-terracotta"></i>
                   <%= date %>
-                  <span class="badge bg-primary ms-2"><%= byDate.length %></span>
+                  <span class="badge badge-primary ms-2"><%= byDate.length %></span>
                 </button>
               </h2>
               <div
@@ -157,25 +133,30 @@
                 class="accordion-collapse collapse"
                 aria-labelledby="heading<%= idx %>"
                 data-bs-parent="#uploadsAccordion">
-                <div class="accordion-body">
-                  <% 
+                <div class="accordion-body" style="background: var(--bg-card);">
+                  <%
                     const mkts = [...new Set(byDate.map(f => f.marketplace_name))];
                   %>
                   <% mkts.forEach(mn => {
                        const byMkt = byDate.filter(f => f.marketplace_name === mn);
                   %>
                     <div class="mb-4">
-                      <h5>
+                      <h5 class="d-flex align-items-center gap-2 mb-3" style="font-family: var(--font-display); font-size: var(--text-base); color: var(--text-primary);">
+                        <i class="bi bi-shop text-terracotta"></i>
                         <%= mn %>
-                        <span class="badge bg-secondary"><%= byMkt.length %></span>
+                        <span class="badge badge-neutral"><%= byMkt.length %></span>
                       </h5>
-                      <ul class="list-group list-group-flush">
+                      <ul class="list-group" style="border-radius: var(--radius-md); overflow: hidden;">
                         <% byMkt.forEach(file => { %>
-                          <li class="list-group-item d-flex justify-content-between">
-                            <%= file.original_filename %>
+                          <li class="list-group-item d-flex justify-content-between align-items-center" style="border-color: var(--border-light); background: var(--bg-card); padding: 12px 16px;">
+                            <span style="font-size: var(--text-sm); color: var(--text-primary);">
+                              <i class="bi bi-file-earmark-text me-2 text-muted"></i>
+                              <%= file.original_filename %>
+                            </span>
                             <a
                               href="/catalogUpload/download/<%= file.id %>"
-                              class="btn btn-outline-secondary btn-sm">
+                              class="btn btn-sm btn-secondary"
+                              title="Download">
                               <i class="bi bi-download"></i>
                             </a>
                           </li>
@@ -188,54 +169,139 @@
             </div>
           <% }) %>
         </div>
-        <div id="files-sentinel" class="text-center my-3 text-muted">Loading more…</div>
+
+        <% if (dates.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-folder-x" style="font-size: 48px;"></i>
+            </div>
+            <h3 class="empty-state-title">No Files Yet</h3>
+            <p class="empty-state-text">Upload your first catalog file using the form above.</p>
+          </div>
+        <% } %>
+
+        <div id="files-sentinel" class="text-center my-3 text-muted" style="font-size: var(--text-sm);">
+          <% if (dates.length > 0) { %>
+            <span class="spinner me-2" style="display: inline-block; width: 16px; height: 16px; vertical-align: middle;"></span>
+            Loading more...
+          <% } %>
+        </div>
       </div>
     </div>
 
   </div>
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    (function(){
-      let offset  = <%= initialLimit %>;
-      const limit = <%= initialLimit %>;
-      const market= '<%= selectedMarketplace||'' %>';
-      let loading = false;
+<!-- Page-specific Styles -->
+<style>
+  /* Accordion Overrides for Kotty Theme */
+  .accordion-button:not(.collapsed) {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    box-shadow: none;
+  }
 
-      const accordion = document.getElementById('uploadsAccordion');
-      const sentinel  = document.getElementById('files-sentinel');
+  .accordion-button:focus {
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    border-color: var(--terracotta);
+  }
 
-      function appendBatch(files) {
-        // merge new files into existing `files` array on the server side
-        files.forEach(f => {
-          // find or create date-panel
-          // (for brevity, assume no duplicates in lazy load beyond initial)
-          // you can reload the page or fully re-render via small React/Vue component
-        });
+  .accordion-button::after {
+    filter: brightness(0.5);
+  }
+
+  .accordion-button:not(.collapsed)::after {
+    filter: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23c45c3a' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+  }
+
+  .list-group-item:hover {
+    background: var(--gray-50) !important;
+  }
+
+  /* File input styling */
+  .form-control[type="file"] {
+    padding: 8px 14px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+  }
+
+  .form-control[type="file"]:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    margin-right: 12px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .form-control[type="file"]::file-selector-button:hover {
+    background: var(--terracotta-dark);
+  }
+
+  /* Main content without sidebar */
+  .main-content {
+    margin-left: 0 !important;
+  }
+</style>
+
+<script>
+  (function(){
+    let offset  = <%= initialLimit %>;
+    const limit = <%= initialLimit %>;
+    const market= '<%= selectedMarketplace || '' %>';
+    let loading = false;
+
+    const accordion = document.getElementById('uploadsAccordion');
+    const sentinel  = document.getElementById('files-sentinel');
+
+    function appendBatch(files) {
+      // merge new files into existing `files` array on the server side
+      files.forEach(f => {
+        // find or create date-panel
+        // (for brevity, assume no duplicates in lazy load beyond initial)
+        // you can reload the page or fully re-render via small React/Vue component
+      });
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && !loading) {
+        loading = true;
+        fetch(`/catalogUpload/files?offset=${offset}&limit=${limit}&marketplace=${market}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.files.length) {
+              // for full grouping you'd ideally re-render the accordion,
+              // but in practice you might just reload the page after all pages.
+              // For now we simply stop further loading.
+              offset += data.files.length;
+              loading = false;
+            } else {
+              sentinel.textContent = 'No more files';
+              observer.disconnect();
+            }
+          })
+          .catch(()=> {
+            sentinel.textContent = 'Error loading more';
+            sentinel.classList.remove('text-muted');
+            sentinel.classList.add('text-danger');
+          });
       }
+    }, { rootMargin: '200px' });
 
-      new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting && !loading) {
-          loading = true;
-          fetch(`/catalogUpload/files?offset=${offset}&limit=${limit}&marketplace=${market}`)
-            .then(r => r.json())
-            .then(data => {
-              if (data.files.length) {
-                // for full grouping you'd ideally re-render the accordion,
-                // but in practice you might just reload the page after all pages.
-                // For now we simply stop further loading.
-                offset += data.files.length;
-                loading = false;
-              } else {
-                sentinel.textContent = 'No more files';
-                this.disconnect();
-              }
-            })
-            .catch(()=> sentinel.textContent = 'Error loading more');
-        }
-      }, { rootMargin: '200px' })
-      .observe(sentinel);
-    })();
-  </script>
+    if (sentinel) {
+      observer.observe(sentinel);
+    }
+  })();
+</script>
 
-</html>
+<%- include('partials/footer') %>

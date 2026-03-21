@@ -1,50 +1,385 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PO Admin Lot Entries - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
-    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-    .back-btn { background: #6c757d; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; }
-    .back-btn:hover { background: #5c636a; color: white; }
-    .filter-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-    .table-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-    .table thead { background: #f8f9fa; }
-    .table thead th { font-weight: 600; color: #1e293b; padding: 14px; border-bottom: 2px solid #e2e8f0; }
-  </style>
-</head>
-<body>
-  <div class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4 class="mb-0"><i class="bi bi-archive"></i> PO Creator Lot Entries</h4>
-      <a href="/po-admin/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
-    </div>
-  </div>
+<%- include('../partials/header', { pageTitle: 'PO Admin Lot Entries' }) %>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/po-admin/dashboard' }) %>
 
-  <div class="container-fluid">
+<style>
+  /* Page Layout - No sidebar for this page */
+  .page-wrapper {
+    padding-top: var(--navbar-height);
+    min-height: 100vh;
+    background: var(--bg-page);
+  }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-title i {
+    color: var(--terracotta);
+  }
+
+  .page-subtitle {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+  }
+
+  /* Filter Card */
+  .filter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .filter-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .filter-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .filter-input {
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .filter-input:hover {
+    border-color: var(--border-medium);
+  }
+
+  .filter-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .filter-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Buttons */
+  .btn-filter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-filter:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .btn-primary {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--border-medium);
+  }
+
+  .btn-secondary:hover {
+    background: var(--gray-100);
+    border-color: var(--border-dark);
+    color: var(--text-primary);
+    text-decoration: none;
+  }
+
+  .btn-success {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-success:hover {
+    background: #247a52;
+    border-color: #247a52;
+    color: white;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Table Card */
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .table-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .table-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--gray-50);
+  }
+
+  .table-header-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .table-header-title i {
+    color: var(--terracotta);
+  }
+
+  .entry-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  /* Data Table */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table thead th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  .data-table tbody td {
+    padding: 14px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    color: var(--text-muted);
+    font-size: 48px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  /* Lot Code Badge */
+  .lot-badge {
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--terracotta);
+    background: var(--terracotta-bg);
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+  }
+
+  /* SKU Badge */
+  .sku-badge {
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  /* Creator Badge */
+  .creator-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--info-light);
+    color: var(--info);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  /* Quantity Badge */
+  .quantity-badge {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* Size Badge */
+  .size-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    padding: 4px 8px;
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .page-container {
+      padding: 20px 16px;
+    }
+
+    .page-title {
+      font-size: var(--text-2xl);
+    }
+
+    .filter-card {
+      padding: 16px;
+    }
+
+    .table-header {
+      padding: 14px 16px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .data-table {
+      font-size: var(--text-xs);
+    }
+
+    .data-table thead th,
+    .data-table tbody td {
+      padding: 10px 12px;
+    }
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <!-- Flash Messages -->
     <%- include('../partials/flashMessages') %>
 
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="bi bi-archive"></i>
+        PO Creator Lot Entries
+      </h1>
+      <p class="page-subtitle">View and search all lot entries created by PO creators</p>
+    </div>
+
+    <!-- Filter Card -->
     <div class="filter-card">
       <form class="row g-3" method="GET" action="/po-admin/lot-entries">
         <div class="col-md-3">
-          <label class="form-label">Filter by Date</label>
-          <input type="date" name="date" class="form-control" value="<%= selectedDate %>">
+          <label class="filter-label">Filter by Date</label>
+          <input type="date" name="date" class="filter-input" value="<%= selectedDate %>">
         </div>
         <div class="col-md-4">
-          <label class="form-label">Search (Lot or SKU)</label>
-          <input type="text" name="search" class="form-control" value="<%= searchTerm %>" placeholder="LOT123 or SKU">
+          <label class="filter-label">Search (Lot or SKU)</label>
+          <input type="text" name="search" class="filter-input" value="<%= searchTerm %>" placeholder="Enter lot code or SKU...">
         </div>
-        <div class="col-md-5 d-flex align-items-end">
-          <button type="submit" class="btn btn-primary me-2"><i class="bi bi-funnel"></i> Apply</button>
-          <a href="/po-admin/lot-entries" class="btn btn-outline-secondary me-2"><i class="bi bi-x-circle"></i> Reset</a>
+        <div class="col-md-5 d-flex align-items-end gap-2 flex-wrap">
+          <button type="submit" class="btn-filter btn-primary">
+            <i class="bi bi-funnel"></i> Apply Filters
+          </button>
+          <a href="/po-admin/lot-entries" class="btn-filter btn-secondary">
+            <i class="bi bi-x-circle"></i> Reset
+          </a>
           <a
-            class="btn btn-outline-success"
+            class="btn-filter btn-success"
             href="/po-admin/lot-entries/export?<%= new URLSearchParams({ date: selectedDate || '', search: searchTerm || '' }).toString() %>"
           >
             <i class="bi bi-file-earmark-excel"></i> Export Excel
@@ -53,12 +388,21 @@
       </form>
     </div>
 
+    <!-- Table Card -->
     <div class="table-card">
-      <div class="p-3 border-bottom d-flex justify-content-between">
-        <strong>Total Entries:</strong> <span><%= entries.length %></span>
+      <div class="table-header">
+        <h2 class="table-header-title">
+          <i class="bi bi-list-ul"></i>
+          Lot Entries
+        </h2>
+        <span class="entry-count">
+          <i class="bi bi-box"></i>
+          <%= entries.length %> entries
+        </span>
       </div>
+
       <div class="table-responsive">
-        <table class="table mb-0">
+        <table class="data-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -72,17 +416,25 @@
           <tbody>
             <% if (entries.length === 0) { %>
               <tr>
-                <td colspan="6" class="text-center py-4">No lot entries found.</td>
+                <td colspan="6">
+                  <div class="empty-state">
+                    <div class="empty-state-icon">
+                      <i class="bi bi-inbox"></i>
+                    </div>
+                    <div class="empty-state-title">No Lot Entries Found</div>
+                    <p class="empty-state-text">There are no lot entries matching your current filters. Try adjusting your search criteria.</p>
+                  </div>
+                </td>
               </tr>
             <% } else { %>
               <% entries.forEach(entry => { %>
                 <tr>
                   <td><%= new Date(entry.display_date || entry.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) %></td>
-                  <td><%= entry.creator_username %></td>
-                  <td><%= entry.lot_code %></td>
-                  <td><%= entry.sku %></td>
-                  <td><%= entry.size || '-' %></td>
-                  <td><%= entry.quantity %></td>
+                  <td><span class="creator-badge"><i class="bi bi-person"></i> <%= entry.creator_username %></span></td>
+                  <td><span class="lot-badge"><%= entry.lot_code %></span></td>
+                  <td><span class="sku-badge"><%= entry.sku %></span></td>
+                  <td><span class="size-badge"><%= entry.size || '-' %></span></td>
+                  <td><span class="quantity-badge"><%= entry.quantity %></span></td>
                 </tr>
               <% }) %>
             <% } %>
@@ -91,7 +443,6 @@
       </div>
     </div>
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<%- include('../partials/footer') %>

@@ -1,494 +1,788 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Departments & Salaries</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f8f9fa;
-    }
-    nav.navbar {
-      background: linear-gradient(90deg, #343a40, #212529);
-    }
-    .card-header {
-      background-color: #e9ecef;
-      font-weight: 600;
-    }
-    .summary-card {
-      text-align: center;
-      border: none;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-    }
-    .summary-card .icon {
-      font-size: 1.75rem;
-      color: #0d6efd;
-    }
-    .download-buttons form {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: end;
-      gap: 0.5rem;
-    }
-    .download-buttons .btn {
-      white-space: nowrap;
-    }
-    .toggle-salary { cursor: pointer; }
-    #employeesTableContainer {
-      max-height: 60vh;
-      overflow-y: auto;
-      overflow-x: auto;
-    }
-    #employeesTable th, #employeesTable td {
-      min-width: 120px;
-      white-space: nowrap;
-    }
-    #employeesTable th {
-      resize: horizontal;
-      overflow: auto;
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark navbar-expand-lg">
-  <div class="container-fluid">
-    <span class="navbar-brand">Kotty Departments</span>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="topNav">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a href="/operator/dashboard" class="nav-link">Dashboard</a></li>
-        <li class="nav-item"><a href="/logout" class="nav-link">Logout</a></li>
-        <li class="nav-item"><a href="/operator/supervisors" class="nav-link">Edit Attendance</a></li>
-      </ul>
-    </div>
-  </div>
-</nav>
+<%- include('partials/header', { pageTitle: 'Departments & Salaries' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
 
-<main class="container py-4">
-  <%- include('partials/flashMessages') %>
-  <div class="row g-3">
-    <div class="col-12 col-md-4">
-      <div class="card h-100 shadow-sm">
-        <div class="card-header">Uploads & Downloads</div>
-        <div class="card-body">
-          <form action="/operator/departments/salary/upload" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
-            <div class="col-12">
-              <input type="file" name="attFile" accept="application/json" class="form-control" required>
-            </div>
-            <div class="col-12 form-check">
-              <input class="form-check-input" type="checkbox" name="hourly" value="1" id="hourlyMode">
-              <label class="form-check-label" for="hourlyMode">Use hourly salary for this month</label>
-            </div>
-            <div class="col-12 text-end">
-              <button type="submit" class="btn btn-primary w-100">Upload Attendance</button>
-            </div>
-          </form>
-          <form action="/salary/upload-nights" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
-            <div class="col-12">
-              <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
-            </div>
-            <div class="col-12 text-end">
-              <button type="submit" class="btn btn-primary w-100">Upload Nights</button>
-            </div>
+<!-- DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+  /* Page Layout */
+  .page-wrapper {
+    padding-top: calc(var(--navbar-height) + 2rem);
+    padding-bottom: 3rem;
+    min-height: 100vh;
+    background-color: var(--cream);
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--charcoal);
+    margin-bottom: 0.5rem;
+  }
+
+  .page-subtitle {
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+  }
+
+  /* Card Styling */
+  .kotty-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+
+  .kotty-card-header {
+    background: var(--cream-dark);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--charcoal);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .kotty-card-body {
+    padding: 1.25rem;
+  }
+
+  /* Summary Cards */
+  .summary-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    padding: 1.25rem;
+    text-align: center;
+    transition: var(--transition-base);
+  }
+
+  .summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .summary-card .icon {
+    font-size: 1.75rem;
+    color: var(--terracotta);
+    margin-bottom: 0.5rem;
+  }
+
+  .summary-card .fw-semibold {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    margin-bottom: 0.25rem;
+  }
+
+  .summary-card .small {
+    color: var(--charcoal);
+    font-weight: 500;
+  }
+
+  /* Button Styling */
+  .btn-terracotta {
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-base);
+  }
+
+  .btn-terracotta:hover {
+    background: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-terracotta-outline {
+    background: transparent;
+    color: var(--terracotta);
+    border: 1px solid var(--terracotta);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-base);
+  }
+
+  .btn-terracotta-outline:hover {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .btn-success-kotty {
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-base);
+  }
+
+  .btn-success-kotty:hover {
+    background: #236d4b;
+    color: white;
+  }
+
+  .btn-danger-kotty {
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-base);
+  }
+
+  .btn-danger-kotty:hover {
+    background: #9e2f1b;
+    color: white;
+  }
+
+  /* Form Controls */
+  .form-control, .form-select {
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: var(--text-sm);
+    transition: var(--transition-base);
+    background-color: var(--bg-card);
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    outline: none;
+  }
+
+  .form-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.375rem;
+    font-size: var(--text-sm);
+  }
+
+  /* Table Styling */
+  .table {
+    margin-bottom: 0;
+  }
+
+  .table thead th {
+    background: var(--cream-dark);
+    color: var(--charcoal);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border-medium);
+  }
+
+  .table tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    border-color: var(--border-light);
+  }
+
+  .table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--gray-50);
+  }
+
+  /* Download Buttons Container */
+  .download-buttons form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .download-buttons .btn {
+    white-space: nowrap;
+  }
+
+  /* Toggle Salary */
+  .toggle-salary {
+    cursor: pointer;
+  }
+
+  /* Employees Table Container */
+  #employeesTableContainer {
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  #employeesTable th, #employeesTable td {
+    min-width: 120px;
+    white-space: nowrap;
+  }
+
+  #employeesTable th {
+    resize: horizontal;
+    overflow: auto;
+  }
+
+  /* Alert Styling */
+  .alert-info {
+    background-color: var(--info-light);
+    border-color: var(--info);
+    color: var(--info);
+  }
+
+  /* Toast Styling */
+  .toast.text-bg-success {
+    background-color: var(--success) !important;
+  }
+
+  .toast.text-bg-danger {
+    background-color: var(--danger) !important;
+  }
+
+  /* Badge Styling */
+  .badge.bg-info {
+    background-color: var(--info) !important;
+  }
+
+  /* Section Divider */
+  .section-divider {
+    border-top: 1px solid var(--border-light);
+    margin: 1.5rem 0;
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .page-wrapper {
+      padding-top: calc(var(--navbar-height) + 1rem);
+    }
+
+    .kotty-card-body {
+      padding: 1rem;
+    }
+
+    .summary-card {
+      padding: 1rem;
+    }
+  }
+</style>
+
+<main class="page-wrapper">
+  <div class="container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Departments & Salaries</h1>
+      <p class="page-subtitle">Manage departments, employees, and salary information</p>
+    </div>
+
+    <%- include('partials/flashMessages') %>
+
+    <div class="row g-4">
+      <!-- Left Column: Uploads & Downloads -->
+      <div class="col-12 col-lg-4">
+        <!-- Uploads & Downloads Card -->
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <span><i class="bi bi-cloud-upload me-2"></i>Uploads & Downloads</span>
+          </div>
+          <div class="kotty-card-body">
+            <!-- Upload Attendance -->
+            <form action="/operator/departments/salary/upload" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+              <div class="col-12">
+                <label class="form-label">Upload Attendance (JSON)</label>
+                <input type="file" name="attFile" accept="application/json" class="form-control" required>
+              </div>
+              <div class="col-12 form-check ps-4">
+                <input class="form-check-input" type="checkbox" name="hourly" value="1" id="hourlyMode">
+                <label class="form-check-label" for="hourlyMode">Use hourly salary for this month</label>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-terracotta w-100">
+                  <i class="bi bi-upload me-1"></i> Upload Attendance
+                </button>
+              </div>
             </form>
+
+            <div class="section-divider"></div>
+
+            <!-- Upload Nights -->
+            <form action="/salary/upload-nights" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
+              <div class="col-12">
+                <label class="form-label">Upload Nights (Excel)</label>
+                <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-terracotta w-100">
+                  <i class="bi bi-upload me-1"></i> Upload Nights
+                </button>
+              </div>
+            </form>
+
+            <!-- Upload Advances -->
             <form action="/salary/upload-advances" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
               <div class="col-12">
+                <label class="form-label">Upload Advances (Excel)</label>
                 <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
               </div>
-              <div class="col-12 text-end">
-                <button type="submit" class="btn btn-primary w-100">Upload Advances</button>
+              <div class="col-12">
+                <button type="submit" class="btn btn-terracotta w-100">
+                  <i class="bi bi-upload me-1"></i> Upload Advances
+                </button>
               </div>
             </form>
+
+            <!-- Upload Deductions -->
             <form action="/salary/upload-advance-deductions" method="POST" enctype="multipart/form-data" class="row g-3 mb-3">
               <div class="col-12">
+                <label class="form-label">Upload Deductions (Excel)</label>
                 <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
               </div>
-              <div class="col-12 text-end">
-                <button type="submit" class="btn btn-primary w-100">Upload Deductions</button>
+              <div class="col-12">
+                <button type="submit" class="btn btn-terracotta w-100">
+                  <i class="bi bi-upload me-1"></i> Upload Deductions
+                </button>
               </div>
             </form>
-            <div class="mb-3 text-center">
-              <a href="/salary/night-template" class="btn btn-success w-100">Download Night Template</a>
+
+            <div class="section-divider"></div>
+
+            <!-- Download Templates -->
+            <div class="d-grid gap-2 mb-3">
+              <a href="/salary/night-template" class="btn btn-success-kotty">
+                <i class="bi bi-download me-1"></i> Night Template
+              </a>
+              <a href="/salary/advance-template" class="btn btn-success-kotty">
+                <i class="bi bi-download me-1"></i> Advance Template
+              </a>
+              <a href="/salary/advance-deduction-template" class="btn btn-success-kotty">
+                <i class="bi bi-download me-1"></i> Deduction Template
+              </a>
             </div>
-            <div class="mb-3 text-center">
-              <a href="/salary/advance-template" class="btn btn-success w-100">Download Advance Template</a>
+
+            <div class="section-divider"></div>
+
+            <!-- Download Salary Excel -->
+            <div class="download-buttons">
+              <form action="/operator/departments/salary/download" method="GET" class="w-100">
+                <label class="form-label">Download Salary Excel</label>
+                <div class="d-flex gap-2">
+                  <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
+                  <button type="submit" class="btn btn-success-kotty">
+                    <i class="bi bi-file-earmark-arrow-down"></i>
+                  </button>
+                </div>
+              </form>
             </div>
-            <div class="mb-3 text-center">
-              <a href="/salary/advance-deduction-template" class="btn btn-success w-100">Download Deduction Template</a>
+
+            <!-- Download Dihadi Excel -->
+            <div class="download-buttons mt-3">
+              <form action="/operator/departments/dihadi/download" method="GET" class="w-100">
+                <label class="form-label">Download Dihadi Excel</label>
+                <div class="d-flex gap-2">
+                  <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
+                  <select name="half" class="form-select" style="max-width: 100px;" required>
+                    <option value="1">1-15</option>
+                    <option value="2">16-end</option>
+                  </select>
+                  <button type="submit" class="btn btn-success-kotty">
+                    <i class="bi bi-file-earmark-arrow-down"></i>
+                  </button>
+                </div>
+              </form>
             </div>
-          <div class="download-buttons">
-            <form action="/operator/departments/salary/download" method="GET">
-              <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
-              <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Salary Excel</button>
-            </form>
-            <form action="/operator/departments/dihadi/download" method="GET">
-              <input type="month" name="month" class="form-control" value="<%= currentMonth %>" required>
-              <select name="half" class="form-select" required>
-                <option value="1">1-15</option>
-                <option value="2">16-end</option>
-              </select>
-              <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-arrow-down"></i> Dihadi Excel</button>
+          </div>
+        </div>
+
+        <!-- Create Department Card -->
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <span><i class="bi bi-plus-circle me-2"></i>Create Department</span>
+          </div>
+          <div class="kotty-card-body">
+            <form action="/operator/departments" method="POST" class="row g-3">
+              <div class="col-12">
+                <input type="text" name="name" class="form-control" placeholder="Department name" required>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-terracotta w-100">
+                  <i class="bi bi-plus-lg me-1"></i> Create
+                </button>
+              </div>
             </form>
           </div>
         </div>
       </div>
-      <div class="card shadow-sm mt-3">
-        <div class="card-header">Create Department</div>
-        <div class="card-body">
-          <form action="/operator/departments" method="POST" class="row g-2">
-            <div class="col-12">
-              <input type="text" name="name" class="form-control" placeholder="Department name" required>
-            </div>
-            <div class="col-12 text-end">
-              <button type="submit" class="btn btn-primary w-100">Create</button>
-            </div>
-          </form>
+
+      <!-- Right Column: Departments List -->
+      <div class="col-12 col-lg-8">
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <span><i class="bi bi-diagram-3 me-2"></i>Existing Departments</span>
+            <button type="button" class="btn btn-sm btn-terracotta" data-bs-toggle="modal" data-bs-target="#createDeptModal">
+              <i class="bi bi-plus-lg me-1"></i> Add Department
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Supervisors</th>
+                  <th>Assign</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% departments.forEach(function(d) { %>
+                <tr>
+                  <td><%= d.name %></td>
+                  <td><%= d.supervisors || '' %></td>
+                  <td>
+                    <% if (!d.supervisors) { %>
+                    <form action="/operator/departments/<%= d.id %>/assign" method="POST" class="d-flex gap-2">
+                      <select name="user_id" class="form-select form-select-sm" style="max-width: 150px;" required>
+                        <% supervisors.forEach(function(u){ %>
+                          <option value="<%= u.id %>"><%= u.username %></option>
+                        <% }) %>
+                      </select>
+                      <button class="btn btn-sm btn-terracotta-outline">Assign</button>
+                    </form>
+                    <% } else { %>
+                      <span class="text-muted"><i class="bi bi-check-circle me-1"></i>Assigned</span>
+                    <% } %>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="col-12 col-md-8">
-      <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Existing Departments</span>
-          <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createDeptModal">Add Department</button>
+    <!-- Salary Management Section -->
+    <% if (showSalarySection) { %>
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-cash-coin me-2"></i>Salary Management</span>
         </div>
-        <div class="table-responsive">
-          <table class="table table-striped table-sm mb-0">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Supervisors</th>
-                <th>Assign</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% departments.forEach(function(d) { %>
-              <tr>
-                <td><%= d.name %></td>
-                <td><%= d.supervisors || '' %></td>
-                <td>
-                  <% if (!d.supervisors) { %>
-                  <form action="/operator/departments/<%= d.id %>/assign" method="POST" class="d-flex">
-                    <select name="user_id" class="form-select form-select-sm me-2" required>
-                      <% supervisors.forEach(function(u){ %>
-                        <option value="<%= u.id %>"><%= u.username %></option>
-                      <% }) %>
-                    </select>
-                    <button class="btn btn-sm btn-secondary">Assign</button>
-                  </form>
-                  <% } else { %>
-                    <span class="text-muted">Assigned</span>
-                  <% } %>
-                </td>
-              </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <% if (showSalarySection) { %>
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Salary Management</div>
-      <div class="card-body">
-
-        <% if (overview) { %>
-        <div class="row row-cols-2 row-cols-md-4 g-3 mb-3">
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+        <div class="kotty-card-body">
+          <% if (overview) { %>
+          <div class="row row-cols-2 row-cols-md-4 g-3 mb-4">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-cash-stack"></i></div>
                 <div class="fw-semibold">Total Salary</div>
-                <div><%= overview.totalSalaryAll %></div>
+                <div class="small"><%= overview.totalSalaryAll %></div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-people-fill"></i></div>
                 <div class="fw-semibold">Total Supervisors</div>
-                <div><%= overview.totalSupervisors %></div>
+                <div class="small"><%= overview.totalSupervisors %></div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-person-workspace"></i></div>
                 <div class="fw-semibold">Most Employees</div>
                 <div class="small"><%= overview.topEmployeeSupervisor %> (<%= overview.topEmployeeCount %>)</div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-graph-up-arrow"></i></div>
                 <div class="fw-semibold">Highest Salary</div>
                 <div class="small"><%= overview.topSalarySupervisor %> (<%= overview.topSalaryAmount %>)</div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-currency-dollar"></i></div>
                 <div class="fw-semibold">Total Advances</div>
-                <div><%= overview.totalAdvances %></div>
+                <div class="small"><%= overview.totalAdvances %></div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-award"></i></div>
                 <div class="fw-semibold">Highest Avg Monthly</div>
                 <div class="small"><%= overview.highestMonthlySupervisor %> (<%= overview.highestMonthlyAverage %>)</div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-award-fill"></i></div>
                 <div class="fw-semibold">Highest Avg Dihadi</div>
                 <div class="small"><%= overview.highestDihadiSupervisor %> (<%= overview.highestDihadiAverage %>)</div>
               </div>
             </div>
-          </div>
-          <div class="col">
-            <div class="card summary-card">
-              <div class="card-body">
+            <div class="col">
+              <div class="summary-card">
                 <div class="icon"><i class="bi bi-person-check-fill"></i></div>
                 <div class="fw-semibold">Active Employees</div>
-                <div><%= overview.totalActiveEmployees %></div>
+                <div class="small"><%= overview.totalActiveEmployees %></div>
               </div>
             </div>
           </div>
-        </div>
-        <% } %>
+          <% } %>
 
-
-        <div class="table-responsive">
-          <table class="table table-bordered table-sm">
-            <thead>
-              <tr>
-                <th>Supervisor</th>
-                <th>Active Employees</th>
-                <th>Total Salary</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% salarySummary.forEach(function(s){ %>
-              <tr>
-                <td><%= s.supervisor_name %></td>
-                <td><%= s.employee_count %></td>
-                <td class="salary-container">
-                  <% if (canViewSalary) { %>
-                    <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
-                    <% if (s.dihadi_salary) { %>
-                      <span class="badge bg-info text-dark ms-1">D <%= s.dihadi_salary %></span>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th>Supervisor</th>
+                  <th>Active Employees</th>
+                  <th>Total Salary</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% salarySummary.forEach(function(s){ %>
+                <tr>
+                  <td><%= s.supervisor_name %></td>
+                  <td><%= s.employee_count %></td>
+                  <td class="salary-container">
+                    <% if (canViewSalary) { %>
+                      <span class="salary-hidden" data-salary="<%= s.total_salary %>">****</span>
+                      <% if (s.dihadi_salary) { %>
+                        <span class="badge bg-info text-white ms-1">D <%= s.dihadi_salary %></span>
+                      <% } %>
+                      <button type="button" class="btn btn-sm btn-terracotta-outline toggle-salary ms-1">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    <% } else { %>
+                      ****
                     <% } %>
-                    <button type="button" class="btn btn-outline-secondary btn-sm toggle-salary ms-1">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                  <% } else { %>
-                    ****
-                  <% } %>
-                </td>
-              </tr>
-              <% }) %>
-            </tbody>
-          </table>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Edit Employees Section -->
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-person-lines-fill me-2"></i>Edit Employees</span>
+        </div>
+        <div class="kotty-card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label">Select Supervisor</label>
+              <select id="empSupervisorSelect" class="form-select">
+                <option value="">Choose a supervisor...</option>
+                <% supervisors.forEach(function(s){ %>
+                  <option value="<%= s.id %>"><%= s.username %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+          <div id="addEmployeeFormContainer" class="mt-3"></div>
+          <div id="employeesTableContainer" class="table-responsive mt-3"></div>
         </div>
       </div>
     </div>
-  </div>
-  <% } %>
 
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Edit Employees</div>
-      <div class="card-body">
-        <div class="row g-3 align-items-end">
-          <div class="col-md-4">
-            <label class="form-label">Supervisor</label>
-            <select id="empSupervisorSelect" class="form-select">
-              <option value="">Choose...</option>
-              <% supervisors.forEach(function(s){ %>
-                <option value="<%= s.id %>"><%= s.username %></option>
-              <% }) %>
-            </select>
-          </div>
+    <!-- Reset Supervisor Data Section -->
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-arrow-counterclockwise me-2"></i>Reset Supervisor Data</span>
         </div>
-        <div id="addEmployeeFormContainer" class="mt-3"></div>
-        <div id="employeesTableContainer" class="table-responsive mt-3"></div>
+        <div class="kotty-card-body">
+          <form action="/operator/departments/reset-supervisor" method="POST" class="row g-3 align-items-end" onsubmit="return confirm('Delete all attendance and salary data for the selected supervisor(s)?');">
+            <div class="col-md-6">
+              <label class="form-label">Supervisor</label>
+              <select name="supervisor_id" class="form-select" required>
+                <option value="">Choose...</option>
+                <option value="all">All Supervisors</option>
+                <% supervisors.forEach(function(s){ %>
+                  <option value="<%= s.id %>"><%= s.username %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <button type="submit" class="btn btn-danger-kotty w-100">
+                <i class="bi bi-trash me-1"></i> Clear Data
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Reset Supervisor Data</div>
-      <div class="card-body">
-        <form action="/operator/departments/reset-supervisor" method="POST" class="row g-3 align-items-end" onsubmit="return confirm('Delete all attendance and salary data for the selected supervisor(s)?');">
-          <div class="col-md-6">
-            <label class="form-label">Supervisor</label>
-            <select name="supervisor_id" class="form-select" required>
-              <option value="">Choose...</option>
-              <option value="all">All Supervisors</option>
-              <% supervisors.forEach(function(s){ %>
-                <option value="<%= s.id %>"><%= s.username %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div class="col-md-6 text-end">
-            <button type="submit" class="btn btn-danger w-100">Clear Data</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Delete Supervisor Employees</div>
-      <div class="card-body">
-        <form action="/operator/departments/delete-supervisor-employees" method="POST" class="row g-3 align-items-end" onsubmit="return confirm('Delete all employees and related data for this supervisor?');">
-          <div class="col-md-6">
-            <label class="form-label">Supervisor</label>
-            <select name="supervisor_id" class="form-select" required>
-              <option value="">Choose...</option>
-              <% supervisors.forEach(function(s){ %>
-                <option value="<%= s.id %>"><%= s.username %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div class="col-md-6 text-end">
-            <button type="submit" class="btn btn-danger w-100">Delete Employees</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Bulk Fix Miss Punch</div>
-      <div class="card-body">
-        <form action="/operator/departments/fix-miss-punch" method="POST" class="row g-3 align-items-end">
-          <div class="col-md-6">
-            <label class="form-label">Employee ID</label>
-            <input type="number" name="employee_id" class="form-control" required>
-          </div>
-          <div class="col-md-6 text-end">
-            <button type="submit" class="btn btn-primary w-100">Fix Miss Punch</button>
-          </div>
-        </form>
-        <hr>
-        <form action="/operator/departments/bulk-fix-miss-punch" method="POST" enctype="multipart/form-data" class="row g-3 align-items-end">
-          <div class="col-md-6">
-            <label class="form-label">Excel File (employeeid column)</label>
-            <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
-          </div>
-          <div class="col-md-6 text-end">
-            <button type="submit" class="btn btn-primary w-100">Fix in Bulk</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  <div class="mt-4">
-    <div class="card shadow-sm">
-      <div class="card-header">Salary Rules</div>
-      <div class="card-body">
-        <div class="alert alert-info">Use SQL like conditions on attendance fields. Example: punch_in &gt; '09:15:00'.</div>
-        <h6>Dihadi Employees</h6>
-        <form action="/operator/departments/dihadi/download-rule" method="GET" class="row g-2 align-items-end mb-3">
-          <div class="col-md-3">
-            <label class="form-label">Month</label>
-            <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Half</label>
-            <select name="half" class="form-select">
-              <option value="1">1-15</option>
-              <option value="2">16-end</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Preset Rule</label>
-            <select name="rule" class="form-select">
-              <option value="">Custom</option>
-              <option value="dihadi_late">Punch after 9:15 deduct 1hr</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">Custom Query</label>
-            <input type="text" name="query" class="form-control" placeholder="punch_in &gt; '09:15:00'">
-          </div>
-          <div class="col-12 text-end">
-            <button type="submit" class="btn btn-primary">Download Dihadi</button>
-          </div>
-        </form>
 
-        <h6>Monthly Employees</h6>
-        <form action="/operator/departments/salary/download-rule" method="GET" class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label">Month</label>
-            <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Preset Rule</label>
-            <select name="rule" class="form-select">
-              <option value="">Custom</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Custom Query</label>
-            <input type="text" name="query" class="form-control" placeholder="punch_in &gt; '09:15:00'">
-          </div>
-          <div class="col-12 text-end">
-            <button type="submit" class="btn btn-primary">Download Monthly</button>
-          </div>
-        </form>
+    <!-- Delete Supervisor Employees Section -->
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-person-x me-2"></i>Delete Supervisor Employees</span>
+        </div>
+        <div class="kotty-card-body">
+          <form action="/operator/departments/delete-supervisor-employees" method="POST" class="row g-3 align-items-end" onsubmit="return confirm('Delete all employees and related data for this supervisor?');">
+            <div class="col-md-6">
+              <label class="form-label">Supervisor</label>
+              <select name="supervisor_id" class="form-select" required>
+                <option value="">Choose...</option>
+                <% supervisors.forEach(function(s){ %>
+                  <option value="<%= s.id %>"><%= s.username %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <button type="submit" class="btn btn-danger-kotty w-100">
+                <i class="bi bi-trash me-1"></i> Delete Employees
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
-  <!-- Create Department Modal -->
-  <div class="modal fade" id="createDeptModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form action="/operator/departments" method="POST">
-          <div class="modal-header">
-            <h5 class="modal-title">Create Department</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+
+    <!-- Bulk Fix Miss Punch Section -->
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-wrench me-2"></i>Bulk Fix Miss Punch</span>
+        </div>
+        <div class="kotty-card-body">
+          <form action="/operator/departments/fix-miss-punch" method="POST" class="row g-3 align-items-end mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Employee ID</label>
+              <input type="number" name="employee_id" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <button type="submit" class="btn btn-terracotta w-100">
+                <i class="bi bi-check-lg me-1"></i> Fix Miss Punch
+              </button>
+            </div>
+          </form>
+          <div class="section-divider"></div>
+          <form action="/operator/departments/bulk-fix-miss-punch" method="POST" enctype="multipart/form-data" class="row g-3 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Excel File (employeeid column)</label>
+              <input type="file" name="excelFile" accept=".xlsx,.xls" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <button type="submit" class="btn btn-terracotta w-100">
+                <i class="bi bi-check-all me-1"></i> Fix in Bulk
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Salary Rules Section -->
+    <div class="mt-4">
+      <div class="kotty-card">
+        <div class="kotty-card-header">
+          <span><i class="bi bi-sliders me-2"></i>Salary Rules</span>
+        </div>
+        <div class="kotty-card-body">
+          <div class="alert alert-info d-flex align-items-center">
+            <i class="bi bi-info-circle me-2"></i>
+            Use SQL like conditions on attendance fields. Example: punch_in &gt; '09:15:00'.
           </div>
-          <div class="modal-body">
-            <input type="text" name="name" class="form-control" placeholder="Department name" required>
-          </div>
-          <div class="modal-footer">
-            <button type="submit" class="btn btn-primary">Create</button>
-          </div>
-        </form>
+
+          <h6 class="mb-3" style="font-family: var(--font-display); color: var(--charcoal);">
+            <i class="bi bi-calendar-day me-2"></i>Dihadi Employees
+          </h6>
+          <form action="/operator/departments/dihadi/download-rule" method="GET" class="row g-3 align-items-end mb-4">
+            <div class="col-md-3">
+              <label class="form-label">Month</label>
+              <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Half</label>
+              <select name="half" class="form-select">
+                <option value="1">1-15</option>
+                <option value="2">16-end</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Preset Rule</label>
+              <select name="rule" class="form-select">
+                <option value="">Custom</option>
+                <option value="dihadi_late">Punch after 9:15 deduct 1hr</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Custom Query</label>
+              <input type="text" name="query" class="form-control" placeholder="punch_in > '09:15:00'">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-terracotta">
+                <i class="bi bi-download me-1"></i> Download Dihadi
+              </button>
+            </div>
+          </form>
+
+          <h6 class="mb-3" style="font-family: var(--font-display); color: var(--charcoal);">
+            <i class="bi bi-calendar-month me-2"></i>Monthly Employees
+          </h6>
+          <form action="/operator/departments/salary/download-rule" method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label">Month</label>
+              <input type="month" name="month" class="form-control" value="<%= currentMonth %>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Preset Rule</label>
+              <select name="rule" class="form-select">
+                <option value="">Custom</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Custom Query</label>
+              <input type="text" name="query" class="form-control" placeholder="punch_in > '09:15:00'">
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-terracotta">
+                <i class="bi bi-download me-1"></i> Download Monthly
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </div>
 </main>
+
+<!-- Create Department Modal -->
+<div class="modal fade" id="createDeptModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--border-light);">
+      <form action="/operator/departments" method="POST">
+        <div class="modal-header" style="background: var(--cream-dark); border-bottom: 1px solid var(--border-light);">
+          <h5 class="modal-title" style="font-family: var(--font-display);">Create Department</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="text" name="name" class="form-control" placeholder="Department name" required>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid var(--border-light);">
+          <button type="button" class="btn btn-terracotta-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-terracotta">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:11">
   <div id="saveToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="d-flex">
@@ -497,7 +791,8 @@
     </div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
@@ -511,66 +806,36 @@
 
   function renderAddForm(id) {
     if (!addFormContainer) return;
-    addFormContainer.innerHTML = `
-      <h6>Add Employee</h6>
-      <form action="/operator/departments/${id}/employees" method="POST" class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">Punching ID</label>
-          <input type="text" name="punching_id" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Name</label>
-          <input type="text" name="name" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Designation</label>
-          <input type="text" name="designation" class="form-control">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Phone</label>
-          <input type="text" name="phone_number" class="form-control">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Aadhar</label>
-          <input type="text" name="aadhar_card_number" class="form-control" pattern="\\d{12}" minlength="12" maxlength="12">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Date of Joining</label>
-          <input type="date" name="date_of_joining" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Salary</label>
-          <input type="number" step="0.01" name="salary" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Salary Type</label>
-          <select name="salary_type" class="form-select" required>
-            <option value="dihadi">Dihadi</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Allotted Hours</label>
-          <input type="number" step="0.1" name="allotted_hours" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Paid Sunday Allowance</label>
-          <input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Pay Sundays?</label>
-          <select name="pay_sunday" class="form-select">
-            <option value="1" selected>Yes</option>
-            <option value="0">No</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Leave Start Months</label>
-          <input type="number" name="leave_start_months" class="form-control" value="3" min="0">
-        </div>
-        <div class="col-md-2 align-self-end">
-          <button type="submit" class="btn btn-success w-100">Create</button>
-        </div>
-      </form>`;
+    const formHtml = '<h6 style="font-family: var(--font-display); color: var(--charcoal); margin-bottom: 1rem;">' +
+      '<i class="bi bi-person-plus me-2"></i>Add Employee</h6>' +
+      '<form action="/operator/departments/' + id + '/employees" method="POST" class="row g-3 mb-3">' +
+      '<div class="col-md-3"><label class="form-label">Punching ID</label>' +
+      '<input type="text" name="punching_id" class="form-control" required></div>' +
+      '<div class="col-md-3"><label class="form-label">Name</label>' +
+      '<input type="text" name="name" class="form-control" required></div>' +
+      '<div class="col-md-3"><label class="form-label">Designation</label>' +
+      '<input type="text" name="designation" class="form-control"></div>' +
+      '<div class="col-md-3"><label class="form-label">Phone</label>' +
+      '<input type="text" name="phone_number" class="form-control"></div>' +
+      '<div class="col-md-3"><label class="form-label">Aadhar</label>' +
+      '<input type="text" name="aadhar_card_number" class="form-control" pattern="\\d{12}" minlength="12" maxlength="12"></div>' +
+      '<div class="col-md-3"><label class="form-label">Date of Joining</label>' +
+      '<input type="date" name="date_of_joining" class="form-control" required></div>' +
+      '<div class="col-md-3"><label class="form-label">Salary</label>' +
+      '<input type="number" step="0.01" name="salary" class="form-control" required></div>' +
+      '<div class="col-md-3"><label class="form-label">Salary Type</label>' +
+      '<select name="salary_type" class="form-select" required><option value="dihadi">Dihadi</option></select></div>' +
+      '<div class="col-md-3"><label class="form-label">Allotted Hours</label>' +
+      '<input type="number" step="0.1" name="allotted_hours" class="form-control" required></div>' +
+      '<div class="col-md-3"><label class="form-label">Paid Sunday Allowance</label>' +
+      '<input type="number" name="paid_sunday_allowance" class="form-control" value="0" min="0"></div>' +
+      '<div class="col-md-3"><label class="form-label">Pay Sundays?</label>' +
+      '<select name="pay_sunday" class="form-select"><option value="1" selected>Yes</option><option value="0">No</option></select></div>' +
+      '<div class="col-md-3"><label class="form-label">Leave Start Months</label>' +
+      '<input type="number" name="leave_start_months" class="form-control" value="3" min="0"></div>' +
+      '<div class="col-md-2 align-self-end"><button type="submit" class="btn btn-success-kotty w-100">' +
+      '<i class="bi bi-plus-lg me-1"></i> Create</button></div></form>';
+    addFormContainer.innerHTML = formHtml;
   }
 
   function showToast(msg, isError) {
@@ -581,95 +846,260 @@
     toast.show();
   }
 
+  function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   if (supervisorSelect) {
-    supervisorSelect.addEventListener('change', () => {
+    supervisorSelect.addEventListener('change', function() {
       const id = supervisorSelect.value;
       tableContainer.innerHTML = '';
       if (addFormContainer) addFormContainer.innerHTML = '';
       if (!id) return;
       renderAddForm(id);
-      fetch(`/operator/departments/${id}/employees-json`)
-        .then(r => r.json())
-        .then(data => {
+      fetch('/operator/departments/' + id + '/employees-json')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
           const table = document.createElement('table');
           table.id = 'employeesTable';
           table.className = 'table table-bordered table-sm nowrap w-100';
-          table.innerHTML = `<thead><tr>
-            <th>Punch ID</th><th>Name</th><th>Designation</th><th>Phone</th><th>Aadhar</th>
-            <th>Salary</th><th>Type</th><th>Hours</th><th>Mandatory Sun</th><th>Pay Sun?</th><th>Leave Start</th>
-            <th>Join Date</th><th>Active</th><th>Save</th></tr></thead>`;
+
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          ['Punch ID', 'Name', 'Designation', 'Phone', 'Aadhar', 'Salary', 'Type', 'Hours', 'Mandatory Sun', 'Pay Sun?', 'Leave Start', 'Join Date', 'Active', 'Save'].forEach(function(text) {
+            const th = document.createElement('th');
+            th.textContent = text;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+
           const tbody = document.createElement('tbody');
-          data.forEach(emp => {
+          data.forEach(function(emp) {
             const joinDate = new Date(emp.date_of_joining).toISOString().split('T')[0];
             const row = document.createElement('tr');
-            const salaryCell = canToggle
-              ? `<div class="input-group input-group-sm">
-                   <input type="password" step="0.01" class="form-control salary-input" name="salary" value="${emp.salary}" required>
-                   <button type="button" class="btn btn-outline-secondary toggle-salary"><i class="fas fa-eye"></i></button>
-                 </div>`
-              : '<span class="salary-hidden">****</span>';
-            row.innerHTML = `
-              <td><input type="text" class="form-control form-control-sm" name="punching_id" value="${emp.punching_id}"></td>
-              <td><input type="text" class="form-control form-control-sm" name="name" value="${emp.name}" required></td>
-              <td><input type="text" class="form-control form-control-sm" name="designation" value="${emp.designation || ''}"></td>
-              <td><input type="text" class="form-control form-control-sm" name="phone_number" value="${emp.phone_number || ''}" pattern="\\d*"></td>
-              <td><input type="text" class="form-control form-control-sm" name="aadhar_card_number" value="${emp.aadhar_card_number || ''}" pattern="\\d{12}" minlength="12" maxlength="12"></td>
-              <td class="salary-container">${salaryCell}</td>
-              <td><select class="form-select form-select-sm" name="salary_type">
-                    <option value="dihadi" ${emp.salary_type==='dihadi'?'selected':''}>Dihadi</option>
-                  </select></td>
-              <td><input type="number" step="0.1" class="form-control form-control-sm" name="allotted_hours" value="${emp.allotted_hours}" required></td>
-              <td><input type="number" class="form-control form-control-sm" name="paid_sunday_allowance" value="${emp.paid_sunday_allowance}" min="0"></td>
-              <td>
-                <select class="form-select form-select-sm" name="pay_sunday">
-                  <option value="1" ${emp.pay_sunday ? 'selected' : ''}>Yes</option>
-                  <option value="0" ${!emp.pay_sunday ? 'selected' : ''}>No</option>
-                </select>
-              </td>
-              <td><input type="number" class="form-control form-control-sm" name="leave_start_months" value="${emp.leave_start_months}" min="0"></td>
-              <td><input type="date" class="form-control form-control-sm" name="date_of_joining" value="${joinDate}" required></td>
-              <td><select class="form-select form-select-sm" name="is_active">
-                    <option value="1" ${emp.is_active? 'selected':''}>Active</option>
-                    <option value="0" ${!emp.is_active? 'selected':''}>Inactive</option>
-                  </select></td>
-              <td><button type="button" class="btn btn-sm btn-primary">Save</button></td>`;
-            const saveBtn = row.querySelector('button.btn-primary');
-            const toggleBtn = row.querySelector('.toggle-salary');
-            const salaryInput = row.querySelector('.salary-input');
 
-            if (toggleBtn) {
-              toggleBtn.addEventListener('click', () => {
+            // Punching ID
+            let td = document.createElement('td');
+            let input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control form-control-sm';
+            input.name = 'punching_id';
+            input.value = emp.punching_id || '';
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Name
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control form-control-sm';
+            input.name = 'name';
+            input.value = emp.name || '';
+            input.required = true;
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Designation
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control form-control-sm';
+            input.name = 'designation';
+            input.value = emp.designation || '';
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Phone
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control form-control-sm';
+            input.name = 'phone_number';
+            input.value = emp.phone_number || '';
+            input.pattern = '\\d*';
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Aadhar
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control form-control-sm';
+            input.name = 'aadhar_card_number';
+            input.value = emp.aadhar_card_number || '';
+            input.pattern = '\\d{12}';
+            input.minLength = 12;
+            input.maxLength = 12;
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Salary
+            td = document.createElement('td');
+            td.className = 'salary-container';
+            if (canToggle) {
+              const inputGroup = document.createElement('div');
+              inputGroup.className = 'input-group input-group-sm';
+              const salaryInput = document.createElement('input');
+              salaryInput.type = 'password';
+              salaryInput.step = '0.01';
+              salaryInput.className = 'form-control salary-input';
+              salaryInput.name = 'salary';
+              salaryInput.value = emp.salary;
+              salaryInput.required = true;
+              inputGroup.appendChild(salaryInput);
+              const toggleBtn = document.createElement('button');
+              toggleBtn.type = 'button';
+              toggleBtn.className = 'btn btn-terracotta-outline toggle-salary';
+              toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+              toggleBtn.addEventListener('click', function() {
                 const hidden = salaryInput.getAttribute('type') === 'password';
                 salaryInput.setAttribute('type', hidden ? 'number' : 'password');
                 toggleBtn.innerHTML = hidden ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
               });
+              inputGroup.appendChild(toggleBtn);
+              td.appendChild(inputGroup);
+            } else {
+              const span = document.createElement('span');
+              span.className = 'salary-hidden';
+              span.textContent = '****';
+              td.appendChild(span);
             }
+            row.appendChild(td);
 
-            saveBtn.addEventListener('click', () => {
+            // Salary Type
+            td = document.createElement('td');
+            const selectType = document.createElement('select');
+            selectType.className = 'form-select form-select-sm';
+            selectType.name = 'salary_type';
+            const optDihadi = document.createElement('option');
+            optDihadi.value = 'dihadi';
+            optDihadi.textContent = 'Dihadi';
+            if (emp.salary_type === 'dihadi') optDihadi.selected = true;
+            selectType.appendChild(optDihadi);
+            td.appendChild(selectType);
+            row.appendChild(td);
+
+            // Allotted Hours
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'number';
+            input.step = '0.1';
+            input.className = 'form-control form-control-sm';
+            input.name = 'allotted_hours';
+            input.value = emp.allotted_hours;
+            input.required = true;
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Paid Sunday Allowance
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control form-control-sm';
+            input.name = 'paid_sunday_allowance';
+            input.value = emp.paid_sunday_allowance;
+            input.min = '0';
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Pay Sunday
+            td = document.createElement('td');
+            const selectSun = document.createElement('select');
+            selectSun.className = 'form-select form-select-sm';
+            selectSun.name = 'pay_sunday';
+            const optYes = document.createElement('option');
+            optYes.value = '1';
+            optYes.textContent = 'Yes';
+            if (emp.pay_sunday) optYes.selected = true;
+            selectSun.appendChild(optYes);
+            const optNo = document.createElement('option');
+            optNo.value = '0';
+            optNo.textContent = 'No';
+            if (!emp.pay_sunday) optNo.selected = true;
+            selectSun.appendChild(optNo);
+            td.appendChild(selectSun);
+            row.appendChild(td);
+
+            // Leave Start Months
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control form-control-sm';
+            input.name = 'leave_start_months';
+            input.value = emp.leave_start_months;
+            input.min = '0';
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Join Date
+            td = document.createElement('td');
+            input = document.createElement('input');
+            input.type = 'date';
+            input.className = 'form-control form-control-sm';
+            input.name = 'date_of_joining';
+            input.value = joinDate;
+            input.required = true;
+            td.appendChild(input);
+            row.appendChild(td);
+
+            // Active
+            td = document.createElement('td');
+            const selectActive = document.createElement('select');
+            selectActive.className = 'form-select form-select-sm';
+            selectActive.name = 'is_active';
+            const optActive = document.createElement('option');
+            optActive.value = '1';
+            optActive.textContent = 'Active';
+            if (emp.is_active) optActive.selected = true;
+            selectActive.appendChild(optActive);
+            const optInactive = document.createElement('option');
+            optInactive.value = '0';
+            optInactive.textContent = 'Inactive';
+            if (!emp.is_active) optInactive.selected = true;
+            selectActive.appendChild(optInactive);
+            td.appendChild(selectActive);
+            row.appendChild(td);
+
+            // Save Button
+            td = document.createElement('td');
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.className = 'btn btn-sm btn-terracotta';
+            saveBtn.textContent = 'Save';
+            saveBtn.addEventListener('click', function() {
               const inputs = row.querySelectorAll('input,select');
               const payload = {};
-              inputs.forEach(i => payload[i.name] = i.type==='checkbox'? i.checked : i.value);
+              inputs.forEach(function(i) {
+                payload[i.name] = i.type === 'checkbox' ? i.checked : i.value;
+              });
               const original = saveBtn.innerHTML;
               saveBtn.disabled = true;
               saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-              fetch(`/operator/departments/employees/${emp.id}/update`, {
+              fetch('/operator/departments/employees/' + emp.id + '/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
               })
-              .then(r => r.json())
-              .then(res => {
+              .then(function(r) { return r.json(); })
+              .then(function(res) {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = original;
                 if (res.success) showToast('Saved successfully', false);
                 else showToast(res.error || 'Error', true);
               })
-              .catch(() => {
+              .catch(function() {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = original;
                 showToast('Error', true);
               });
             });
+            td.appendChild(saveBtn);
+            row.appendChild(td);
+
             tbody.appendChild(row);
           });
           table.appendChild(tbody);
@@ -685,5 +1115,5 @@
   }
 </script>
 <script src="/public/js/salaryToggle.js"></script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

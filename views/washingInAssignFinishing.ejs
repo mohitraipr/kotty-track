@@ -1,43 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Assign to Finishing - Washing In</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 5 CSS & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <style>
-    body { background-color: #f8f9fa; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Assign to Finishing - Washing In' }) %>
+<%- include('partials/navbar', { dashboardUrl: '/washingin' }) %>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-tasks"></i> Assign to Finishing
-      </a>
-      <div class="ms-auto">
-        <a href="/washingin" class="btn btn-outline-light btn-sm me-2">
-          <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="/logout" class="btn btn-danger btn-sm">
-          <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
-      </div>
+<!-- Main Content -->
+<div class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/washingin">Washing In</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <span>Assign to Finishing</span>
     </div>
-  </nav>
 
-  <div class="container my-4">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Assign to Finishing</h1>
+      <p class="page-subtitle">Assign partial sizes to finishing operators from washing in queue</p>
+    </div>
+
     <!-- Flash Messages -->
     <% if (error && error.length > 0) { %>
       <% error.forEach(function(msg){ %>
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <i class="bi bi-exclamation-circle me-2"></i>
           <%= msg %>
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -46,160 +31,475 @@
     <% if (success && success.length > 0) { %>
       <% success.forEach(function(msg){ %>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
+          <i class="bi bi-check-circle me-2"></i>
           <%= msg %>
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
       <% }) %>
     <% } %>
 
-    <h2 class="mb-3"><i class="fas fa-tasks"></i> Assign Partial Sizes to Finishing</h2>
-
-    <!-- Search Field -->
-    <div class="mb-3">
-      <input type="text" id="searchInput" class="form-control" placeholder="Search by lot or SKU..." />
-    </div>
-
-    <!-- Container for available washing_in_data for assignment -->
-    <div id="assignmentsContainer"></div>
-
-    <!-- Assignment Form -->
-    <form id="finishingAssignForm" class="mt-3">
-      <div class="row mb-3">
-        <div class="col-md-4">
-          <label for="target_day" class="form-label">Target Day (optional)</label>
-          <input type="date" id="target_day" name="target_day" class="form-control" />
+    <!-- Search Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row align-items-end">
+          <div class="col-md-8 col-lg-6">
+            <label for="searchInput" class="form-label">Search by Lot or SKU</label>
+            <div class="input-group">
+              <span class="input-group-text" style="background: var(--bg-card); border-color: var(--border-light);">
+                <i class="bi bi-search text-muted"></i>
+              </span>
+              <input type="text" id="searchInput" class="form-control form-input" placeholder="Enter lot number or SKU..." style="border-left: 0;" />
+            </div>
+          </div>
         </div>
       </div>
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-paper-plane"></i> Submit Assignments
-      </button>
+    </div>
+
+    <!-- Assignments Container -->
+    <div id="assignmentsContainer">
+      <!-- Dynamic content will be loaded here -->
+      <div class="text-center py-5">
+        <div class="spinner mx-auto mb-3" style="width: 32px; height: 32px;"></div>
+        <p class="text-muted">Loading available assignments...</p>
+      </div>
+    </div>
+
+    <!-- Assignment Form -->
+    <form id="finishingAssignForm" class="mt-4">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="bi bi-calendar-check me-2 text-terracotta"></i>
+            Assignment Options
+          </h3>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4">
+              <div class="form-group mb-0">
+                <label for="target_day" class="form-label">Target Day <span class="text-muted">(optional)</span></label>
+                <input type="date" id="target_day" name="target_day" class="form-control form-input" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end gap-3">
+          <a href="/washingin" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Back to Dashboard
+          </a>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send"></i>
+            Submit Assignments
+          </button>
+        </div>
+      </div>
     </form>
+
   </div>
+</div>
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    let finishingUsers = [];
-    let allData = []; // Data format: [{ washing_in_data_id, lot_no, sku, sizes: [{size_label, pieces}] }, ...]
-    const searchInput = document.getElementById('searchInput');
-    const assignmentsContainer = document.getElementById('assignmentsContainer');
-    const finishingAssignForm = document.getElementById('finishingAssignForm');
+<!-- Custom Page Styles -->
+<style>
+  /* Override main-content for full-width layout without sidebar */
+  .main-content {
+    margin-left: 0 !important;
+  }
 
-    async function fetchFinishingUsers() {
-      try {
-        const resp = await fetch('/washingin/assign-finishing/users', { credentials: 'same-origin' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        finishingUsers = json.data || [];
-      } catch (err) {
-        console.error('[ERROR] fetchFinishingUsers =>', err);
-      }
+  /* Search input group styling */
+  .input-group .form-input {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .input-group-text {
+    border-color: var(--border-light);
+  }
+
+  /* Assignment cards styling */
+  .assignment-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: all var(--transition-fast);
+  }
+
+  .assignment-card:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-medium);
+  }
+
+  .assignment-card-header {
+    background: var(--gray-50);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .assignment-card-header .lot-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .assignment-card-header .badge-lot {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .assignment-card-header .badge-sku {
+    background: var(--gray-200);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .assignment-card-body {
+    padding: 0;
+  }
+
+  .assignment-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .assignment-table th {
+    padding: 12px 20px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .assignment-table td {
+    padding: 14px 20px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .assignment-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .assignment-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .size-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--charcoal);
+    color: var(--text-inverse);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .pieces-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+
+  .pieces-count i {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Custom select styling */
+  .finishing-select {
+    width: 100%;
+    max-width: 220px;
+    padding: 8px 36px 8px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a5650' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .finishing-select:hover {
+    border-color: var(--border-medium);
+  }
+
+  .finishing-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  /* Empty state */
+  .empty-assignment-state {
+    text-align: center;
+    padding: 60px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+  }
+
+  .empty-assignment-state i {
+    font-size: 48px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .empty-assignment-state h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-assignment-state p {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .assignment-card-header {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
-    async function fetchUnassignedData() {
-      try {
-        const resp = await fetch('/washingin/assign-finishing/data', { credentials: 'same-origin' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        allData = json.data || [];
-        renderData();
-      } catch (err) {
-        console.error('[ERROR] fetchUnassignedData =>', err);
-        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading data.</div>';
-      }
+    .assignment-table {
+      display: block;
+      overflow-x: auto;
     }
 
-    function renderData() {
-      assignmentsContainer.innerHTML = '';
-      const filterVal = searchInput.value.trim().toLowerCase();
-      const filtered = allData.filter(d => (`${d.lot_no} ${d.sku}`).toLowerCase().includes(filterVal));
-      if (!filtered.length) {
-        assignmentsContainer.innerHTML = '<div class="alert alert-info">No data found.</div>';
-        return;
-      }
-      filtered.forEach(entry => {
-        const card = document.createElement('div');
-        card.classList.add('card', 'mb-3');
-        card.innerHTML = `
-          <div class="card-header bg-secondary text-white">
-            <strong>Lot:</strong> ${entry.lot_no} | <strong>SKU:</strong> ${entry.sku}
-          </div>
-          <div class="card-body">
-            <table class="table table-sm table-bordered">
-              <thead class="table-light">
-                <tr>
-                  <th>Size Label</th>
-                  <th>Pieces</th>
-                  <th>Assign Finishing User</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-fin-${entry.washing_in_data_id}"></tbody>
-            </table>
-          </div>
-        `;
-        assignmentsContainer.appendChild(card);
-        const tbody = document.getElementById(`tbody-fin-${entry.washing_in_data_id}`);
-        entry.sizes.forEach(sz => {
-          const tr = document.createElement('tr');
-          const userOptions = finishingUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
-          tr.innerHTML = `
-            <td>${sz.size_label}</td>
-            <td>${sz.pieces}</td>
-            <td>
-              <select class="form-select finishingSelect">
-                <option value="">--No Assignment--</option>
-                ${userOptions}
-              </select>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
+    .finishing-select {
+      max-width: 100%;
+    }
+  }
+</style>
+
+<!-- Page JavaScript -->
+<script>
+  let finishingUsers = [];
+  let allData = []; // Data format: [{ washing_in_data_id, lot_no, sku, sizes: [{size_label, pieces}] }, ...]
+  const searchInput = document.getElementById('searchInput');
+  const assignmentsContainer = document.getElementById('assignmentsContainer');
+  const finishingAssignForm = document.getElementById('finishingAssignForm');
+
+  async function fetchFinishingUsers() {
+    try {
+      const resp = await fetch('/washingin/assign-finishing/users', { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      finishingUsers = json.data || [];
+    } catch (err) {
+      console.error('[ERROR] fetchFinishingUsers =>', err);
+    }
+  }
+
+  async function fetchUnassignedData() {
+    try {
+      const resp = await fetch('/washingin/assign-finishing/data', { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      allData = json.data || [];
+      renderData();
+    } catch (err) {
+      console.error('[ERROR] fetchUnassignedData =>', err);
+      assignmentsContainer.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error loading data. Please refresh the page.</div>';
+    }
+  }
+
+  function renderData() {
+    assignmentsContainer.innerHTML = '';
+    const filterVal = searchInput.value.trim().toLowerCase();
+    const filtered = allData.filter(d => (d.lot_no + ' ' + d.sku).toLowerCase().includes(filterVal));
+
+    if (!filtered.length) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty-assignment-state';
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-inbox';
+      const h4 = document.createElement('h4');
+      h4.textContent = 'No Assignments Found';
+      const p = document.createElement('p');
+      p.textContent = filterVal ? 'No items match your search criteria.' : 'All items have been assigned or there are no pending items.';
+      emptyDiv.appendChild(icon);
+      emptyDiv.appendChild(h4);
+      emptyDiv.appendChild(p);
+      assignmentsContainer.appendChild(emptyDiv);
+      return;
+    }
+
+    filtered.forEach(entry => {
+      const card = document.createElement('div');
+      card.classList.add('assignment-card');
+
+      // Create header
+      const header = document.createElement('div');
+      header.className = 'assignment-card-header';
+      const lotInfo = document.createElement('div');
+      lotInfo.className = 'lot-info';
+
+      const lotBadge = document.createElement('span');
+      lotBadge.className = 'badge-lot';
+      const lotIcon = document.createElement('i');
+      lotIcon.className = 'bi bi-box-seam me-1';
+      lotBadge.appendChild(lotIcon);
+      lotBadge.appendChild(document.createTextNode('Lot: ' + entry.lot_no));
+
+      const skuBadge = document.createElement('span');
+      skuBadge.className = 'badge-sku';
+      const skuIcon = document.createElement('i');
+      skuIcon.className = 'bi bi-upc me-1';
+      skuBadge.appendChild(skuIcon);
+      skuBadge.appendChild(document.createTextNode('SKU: ' + entry.sku));
+
+      lotInfo.appendChild(lotBadge);
+      lotInfo.appendChild(skuBadge);
+      header.appendChild(lotInfo);
+
+      // Create body with table
+      const body = document.createElement('div');
+      body.className = 'assignment-card-body';
+
+      const table = document.createElement('table');
+      table.className = 'assignment-table';
+
+      const thead = document.createElement('thead');
+      const theadRow = document.createElement('tr');
+      ['Size', 'Pieces', 'Assign Finishing User'].forEach((text, idx) => {
+        const th = document.createElement('th');
+        if (idx === 0) th.style.width = '120px';
+        if (idx === 1) th.style.width = '120px';
+        th.textContent = text;
+        theadRow.appendChild(th);
       });
-    }
+      thead.appendChild(theadRow);
 
-    searchInput.addEventListener('input', renderData);
+      const tbody = document.createElement('tbody');
+      tbody.id = 'tbody-fin-' + entry.washing_in_data_id;
 
-    finishingAssignForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const target_day = document.getElementById('target_day').value;
-      // Build finishingAssignments object: { userId: [ { washing_in_data_id, size_label }, ... ] }
-      const finalObj = {};
-      allData.forEach(entry => {
-        const tableBody = document.getElementById(`tbody-fin-${entry.washing_in_data_id}`);
-        if (!tableBody) return;
-        const rows = tableBody.querySelectorAll('tr');
-        rows.forEach(r => {
-  const size_label = r.cells[0].textContent.trim(); // Changed from sizeLabel to size_label
-  const selectElem = r.cells[2].querySelector('select');
-  const userId = selectElem.value;
-  if (userId) {
-    if (!finalObj[userId]) finalObj[userId] = [];
-    finalObj[userId].push({
-      washing_in_data_id: entry.washing_in_data_id,
-      size_label // Now this matches the variable name
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      body.appendChild(table);
+
+      card.appendChild(header);
+      card.appendChild(body);
+      assignmentsContainer.appendChild(card);
+
+      // Populate tbody
+      entry.sizes.forEach(sz => {
+        const tr = document.createElement('tr');
+
+        // Size cell
+        const tdSize = document.createElement('td');
+        const sizeBadge = document.createElement('span');
+        sizeBadge.className = 'size-badge';
+        sizeBadge.textContent = sz.size_label;
+        tdSize.appendChild(sizeBadge);
+
+        // Pieces cell
+        const tdPieces = document.createElement('td');
+        const piecesSpan = document.createElement('span');
+        piecesSpan.className = 'pieces-count';
+        const piecesIcon = document.createElement('i');
+        piecesIcon.className = 'bi bi-layers';
+        piecesSpan.appendChild(piecesIcon);
+        piecesSpan.appendChild(document.createTextNode(sz.pieces));
+        tdPieces.appendChild(piecesSpan);
+
+        // Select cell
+        const tdSelect = document.createElement('td');
+        const select = document.createElement('select');
+        select.className = 'finishing-select finishingSelect';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '-- No Assignment --';
+        select.appendChild(defaultOption);
+        finishingUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          select.appendChild(opt);
+        });
+        tdSelect.appendChild(select);
+
+        tr.appendChild(tdSize);
+        tr.appendChild(tdPieces);
+        tr.appendChild(tdSelect);
+        tbody.appendChild(tr);
+      });
     });
   }
-});
+
+  searchInput.addEventListener('input', renderData);
+
+  finishingAssignForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target_day = document.getElementById('target_day').value;
+    // Build finishingAssignments object: { userId: [ { washing_in_data_id, size_label }, ... ] }
+    const finalObj = {};
+    allData.forEach(entry => {
+      const tableBody = document.getElementById('tbody-fin-' + entry.washing_in_data_id);
+      if (!tableBody) return;
+      const rows = tableBody.querySelectorAll('tr');
+      rows.forEach(r => {
+        const size_label = r.cells[0].textContent.trim(); // Changed from sizeLabel to size_label
+        const selectElem = r.cells[2].querySelector('select');
+        const userId = selectElem.value;
+        if (userId) {
+          if (!finalObj[userId]) finalObj[userId] = [];
+          finalObj[userId].push({
+            washing_in_data_id: entry.washing_in_data_id,
+            size_label // Now this matches the variable name
+          });
+        }
       });
-      const payload = { target_day, finishingAssignments: finalObj };
-      try {
-        const resp = await fetch('/washingin/assign-finishing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          credentials: 'same-origin'
-        });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        window.location.reload();
-      } catch (err) {
-        console.error('[ERROR] finishingAssign submission =>', err);
-      }
     });
+    const payload = { target_day, finishingAssignments: finalObj };
+    try {
+      const resp = await fetch('/washingin/assign-finishing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin'
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      window.location.reload();
+    } catch (err) {
+      console.error('[ERROR] finishingAssign submission =>', err);
+    }
+  });
 
-    (async () => {
-      await fetchFinishingUsers();
-      await fetchUnassignedData();
-    })();
-  </script>
+  (async () => {
+    await fetchFinishingUsers();
+    await fetchUnassignedData();
+  })();
+</script>
 
-</html>
+<%- include('partials/footer') %>

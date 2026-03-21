@@ -1,93 +1,157 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Stitching Rates</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Stitching Rates</span>
-    <a href="/operator" class="btn btn-outline-light btn-sm">Dashboard</a>
-  </div>
-</nav>
-<div class="container mt-4">
-  <% if (error && error.length) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
-  <% if (success && success.length) { %>
-    <div class="alert alert-success"><%= success %></div>
-  <% } %>
+<%- include('partials/header', { pageTitle: 'Stitching Rate Config' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
 
-  <div class="mb-4">
-    <form method="POST" action="/stitchingdashboard/payments/rates/upload" enctype="multipart/form-data" class="row g-2 align-items-center">
-      <div class="col-md-5">
-        <input type="file" name="excelFile" accept=".xls,.xlsx" class="form-control" required
-               data-bs-toggle="tooltip" data-bs-placement="top" title="Select the Excel file containing SKU and Rate columns">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-upload"></i> Upload Excel
-        </button>
-      </div>
-      <div class="col-auto">
-        <a href="/stitchingdashboard/payments/rates/template" class="btn btn-outline-secondary">
-          <i class="bi bi-download"></i> Download Template
+<!-- Main Content -->
+<div class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1200px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Stitching Rates</h1>
+          <p class="page-subtitle">Configure SKU pricing and operation rates</p>
+        </div>
+        <a href="/operator" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i> Dashboard
         </a>
       </div>
-    </form>
-    <small class="text-muted">Use the template format to prepare rates and upload to update SKU pricing.</small>
-  </div>
+    </div>
 
-  <h5>Existing SKU Rates</h5>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>SKU</th>
-        <th style="width:200px">Rate</th>
-        <th style="width:100px"></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% skuRows.forEach(function(r){ %>
-        <tr>
-          <form method="POST" action="/stitchingdashboard/payments/rates/update" class="row g-2">
-            <td><%= r.sku %><input type="hidden" name="sku" value="<%= r.sku %>"></td>
-            <td><input type="number" step="0.01" name="rate" value="<%= r.rate %>" class="form-control"></td>
-            <td><button type="submit" class="btn btn-sm btn-primary">Save</button></td>
-          </form>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-
-  <hr>
-  <form method="POST" action="/stitchingdashboard/payments/rates">
-    <div class="row">
-      <div class="col-md-6">
-        <h5>SKU Rates (Text)</h5>
-        <textarea name="skuRates" class="form-control" rows="10"><% skuRows.forEach(function(r){ %><%= r.sku %>:<%= r.rate %>\n<% }) %></textarea>
+    <!-- Alerts -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <%= error %>
       </div>
-      <div class="col-md-6">
-        <h5>Operation Rates</h5>
-        <textarea name="opRates" class="form-control" rows="10"><% opRows.forEach(function(r){ %><%= r.operation %>:<%= r.rate %>\n<% }) %></textarea>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i>
+        <%= success %>
+      </div>
+    <% } %>
+
+    <!-- Upload Section -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-cloud-upload me-2"></i>Bulk Upload Rates</h2>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/stitchingdashboard/payments/rates/upload" enctype="multipart/form-data">
+          <div class="row align-items-end g-3">
+            <div class="col-md-6">
+              <label class="form-label">Select Excel File</label>
+              <input type="file" name="excelFile" accept=".xls,.xlsx" class="form-control" required
+                     data-bs-toggle="tooltip" data-bs-placement="top" title="Select the Excel file containing SKU and Rate columns">
+            </div>
+            <div class="col-auto">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-upload"></i> Upload Excel
+              </button>
+            </div>
+            <div class="col-auto">
+              <a href="/stitchingdashboard/payments/rates/template" class="btn btn-secondary">
+                <i class="bi bi-download"></i> Download Template
+              </a>
+            </div>
+          </div>
+        </form>
+        <p class="text-muted mt-3 mb-0" style="font-size: var(--text-sm);">
+          <i class="bi bi-info-circle me-1"></i>
+          Use the template format to prepare rates and upload to update SKU pricing.
+        </p>
       </div>
     </div>
-    <button type="submit" class="btn btn-success mt-3">
-      <i class="bi bi-save"></i> Save All
-    </button>
-  </form>
+
+    <!-- Existing SKU Rates Table -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-tag me-2"></i>Existing SKU Rates</h2>
+        <span class="badge badge-neutral"><%= skuRows.length %> SKUs</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-container" style="border: none; border-radius: 0;">
+          <table class="table mb-0">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th style="width: 200px;">Rate</th>
+                <th style="width: 100px;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (skuRows.length === 0) { %>
+                <tr>
+                  <td colspan="3" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>
+                    No SKU rates configured yet
+                  </td>
+                </tr>
+              <% } else { %>
+                <% skuRows.forEach(function(r){ %>
+                  <tr>
+                    <form method="POST" action="/stitchingdashboard/payments/rates/update">
+                      <td>
+                        <code style="background: var(--gray-100); padding: 4px 8px; border-radius: var(--radius-sm); font-family: var(--font-mono);"><%= r.sku %></code>
+                        <input type="hidden" name="sku" value="<%= r.sku %>">
+                      </td>
+                      <td>
+                        <div class="input-group">
+                          <span class="input-group-text" style="background: var(--gray-50); border-color: var(--border-light);">Rs.</span>
+                          <input type="number" step="0.01" name="rate" value="<%= r.rate %>" class="form-control" style="border-color: var(--border-light);">
+                        </div>
+                      </td>
+                      <td>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                          <i class="bi bi-check-lg"></i> Save
+                        </button>
+                      </td>
+                    </form>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Text Update Section -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-pencil-square me-2"></i>Bulk Rate Configuration</h2>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/stitchingdashboard/payments/rates">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <label class="form-label">
+                <i class="bi bi-upc-scan me-1"></i> SKU Rates (Text)
+              </label>
+              <textarea name="skuRates" class="form-control" rows="12" placeholder="Format: SKU:RATE (one per line)&#10;Example:&#10;SKU001:150&#10;SKU002:200"><% skuRows.forEach(function(r){ %><%= r.sku %>:<%= r.rate %>
+<% }) %></textarea>
+              <small class="text-muted">Enter one SKU:Rate pair per line</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">
+                <i class="bi bi-gear me-1"></i> Operation Rates
+              </label>
+              <textarea name="opRates" class="form-control" rows="12" placeholder="Format: OPERATION:RATE (one per line)&#10;Example:&#10;Hemming:25&#10;ButtonStitch:30"><% opRows.forEach(function(r){ %><%= r.operation %>:<%= r.rate %>
+<% }) %></textarea>
+              <small class="text-muted">Enter one Operation:Rate pair per line</small>
+            </div>
+          </div>
+          <div class="mt-4 pt-3" style="border-top: 1px solid var(--border-light);">
+            <button type="submit" class="btn btn-success btn-lg">
+              <i class="bi bi-save"></i> Save All Rates
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
-</script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

@@ -1,44 +1,195 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Edit Attendance</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand"><%= employee.name %> - Edit Attendance</span>
-    <div class="ms-auto">
-      <a href="/operator/supervisors/<%= employee.supervisor_id %>/employees" class="btn btn-outline-light btn-sm me-2">Back</a>
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+<%- include('partials/header', { pageTitle: 'Edit Attendance' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container" style="max-width: 600px; margin: 0 auto;">
+
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/operator/dashboard">Dashboard</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <a href="/operator/supervisors">Supervisors</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <a href="/operator/supervisors/<%= employee.supervisor_id %>/employees">Employees</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <span>Edit Attendance</span>
     </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title"><%= employee.name %></h1>
+      <p class="page-subtitle">Edit attendance record for this employee</p>
+    </div>
+
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
+
+    <!-- Edit Attendance Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-calendar-check me-2" style="color: var(--terracotta);"></i>
+          Attendance Details
+        </h2>
+        <span class="badge badge-info">
+          <i class="bi bi-pencil-square me-1"></i>
+          <%= 35 - editCount %> edits remaining
+        </span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/operator/employees/<%= employee.id %>/edit" id="editAttendanceForm">
+          <input type="hidden" name="date" value="<%= date %>">
+
+          <!-- Date Field (Read-only) -->
+          <div class="form-group">
+            <label class="form-label">
+              <i class="bi bi-calendar3 me-1"></i>
+              Date
+            </label>
+            <input type="text" class="form-input" value="<%= date %>" disabled style="background: var(--gray-100); cursor: not-allowed;">
+            <small style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 4px; display: block;">
+              The date cannot be changed
+            </small>
+          </div>
+
+          <!-- Punch In Field -->
+          <div class="form-group">
+            <label class="form-label">
+              <i class="bi bi-box-arrow-in-right me-1" style="color: var(--success);"></i>
+              Punch In
+            </label>
+            <input
+              type="time"
+              name="punch_in"
+              class="form-input"
+              value="<%= attendance ? attendance.punch_in : '' %>"
+              id="punchInTime"
+            >
+          </div>
+
+          <!-- Punch Out Field -->
+          <div class="form-group">
+            <label class="form-label">
+              <i class="bi bi-box-arrow-right me-1" style="color: var(--danger);"></i>
+              Punch Out
+            </label>
+            <input
+              type="time"
+              name="punch_out"
+              class="form-input"
+              value="<%= attendance ? attendance.punch_out : '' %>"
+              id="punchOutTime"
+            >
+          </div>
+
+          <!-- Duration Display -->
+          <div class="form-group" id="durationDisplay" style="display: none;">
+            <label class="form-label">
+              <i class="bi bi-clock-history me-1" style="color: var(--info);"></i>
+              Duration
+            </label>
+            <div class="duration-value" style="padding: 10px 14px; background: var(--info-light); border-radius: var(--radius-md); color: var(--info); font-weight: 500;">
+              <span id="calculatedDuration">--</span>
+            </div>
+          </div>
+
+          <!-- Edit Limit Warning -->
+          <% if(editCount >= 30 && editCount < 35) { %>
+            <div class="alert alert-warning" style="margin-bottom: 20px;">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <div>
+                <strong>Warning:</strong> You have only <%= 35 - editCount %> edit(s) remaining for this employee.
+              </div>
+            </div>
+          <% } %>
+
+          <% if(editCount >= 35) { %>
+            <div class="alert alert-danger" style="margin-bottom: 20px;">
+              <i class="bi bi-x-circle-fill me-2"></i>
+              <div>
+                <strong>Edit Limit Reached:</strong> You have used all 35 edits for this employee. No further edits are allowed.
+              </div>
+            </div>
+          <% } %>
+
+          <!-- Form Actions -->
+          <div class="d-flex gap-3 justify-content-between align-items-center" style="margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-light);">
+            <a href="/operator/supervisors/<%= employee.supervisor_id %>/employees" class="btn btn-secondary">
+              <i class="bi bi-arrow-left"></i>
+              Back to Employees
+            </a>
+            <button type="submit" class="btn btn-primary" <% if(editCount >= 35){ %> disabled style="opacity: 0.5; cursor: not-allowed;" <% } %>>
+              <i class="bi bi-check-lg"></i>
+              Update Attendance
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Info Card -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-body" style="padding: 16px 22px;">
+        <div class="d-flex align-items-start gap-3">
+          <div style="width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--terracotta-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i class="bi bi-info-circle" style="color: var(--terracotta); font-size: 18px;"></i>
+          </div>
+          <div>
+            <h3 style="font-family: var(--font-display); font-size: var(--text-base); margin-bottom: 4px;">Edit Policy</h3>
+            <p style="color: var(--text-secondary); font-size: var(--text-sm); margin: 0;">
+              Each employee's attendance can be edited up to 35 times. This limit helps maintain data integrity and audit compliance.
+              Contact your administrator if you need additional edits.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
-</nav>
-<div class="container my-4">
-  <%- include('partials/flashMessages') %>
-  <form method="POST" action="/operator/employees/<%= employee.id %>/edit" class="mb-3">
-    <input type="hidden" name="date" value="<%= date %>">
-    <div class="mb-3">
-      <label class="form-label">Date</label>
-      <input type="text" class="form-control" value="<%= date %>" disabled>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Punch In</label>
-      <input type="time" name="punch_in" class="form-control" value="<%= attendance ? attendance.punch_in : '' %>">
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Punch Out</label>
-      <input type="time" name="punch_out" class="form-control" value="<%= attendance ? attendance.punch_out : '' %>">
-    </div>
-    <button type="submit" class="btn btn-primary" <% if(editCount >= 35){ %> disabled <% } %> >Update</button>
-    <span class="ms-2">Remaining edits: <%= 35 - editCount %></span>
-  </form>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</main>
+
+<script>
+// Calculate and display duration between punch in and punch out
+document.addEventListener('DOMContentLoaded', function() {
+  const punchInInput = document.getElementById('punchInTime');
+  const punchOutInput = document.getElementById('punchOutTime');
+  const durationDisplay = document.getElementById('durationDisplay');
+  const calculatedDuration = document.getElementById('calculatedDuration');
+
+  function calculateDuration() {
+    const punchIn = punchInInput.value;
+    const punchOut = punchOutInput.value;
+
+    if (punchIn && punchOut) {
+      const [inHours, inMinutes] = punchIn.split(':').map(Number);
+      const [outHours, outMinutes] = punchOut.split(':').map(Number);
+
+      let totalInMinutes = inHours * 60 + inMinutes;
+      let totalOutMinutes = outHours * 60 + outMinutes;
+
+      // Handle overnight shifts
+      if (totalOutMinutes < totalInMinutes) {
+        totalOutMinutes += 24 * 60;
+      }
+
+      const diffMinutes = totalOutMinutes - totalInMinutes;
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+
+      calculatedDuration.textContent = hours + ' hours ' + minutes + ' minutes';
+      durationDisplay.style.display = 'block';
+    } else {
+      durationDisplay.style.display = 'none';
+    }
+  }
+
+  punchInInput.addEventListener('change', calculateDuration);
+  punchOutInput.addEventListener('change', calculateDuration);
+
+  // Calculate on load if values exist
+  calculateDuration();
+});
+</script>
+
+<%- include('partials/footer') %>

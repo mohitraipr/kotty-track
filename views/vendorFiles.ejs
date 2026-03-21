@@ -2,43 +2,160 @@
   pageTitle: 'Vendor Files',
   additionalCSS: [],
   inlineStyles: `
-    .stat-chip { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--bg-tertiary); color: var(--text-secondary); font-weight: 600; }
-    .file-pill { padding: 0.35rem 0.65rem; border-radius: 10px; font-size: 0.85rem; }
-    .file-pill.image { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
-    .file-pill.zip { background: rgba(16, 185, 129, 0.12); color: #059669; }
-    .file-pill.excel { background: rgba(234, 179, 8, 0.16); color: #b45309; }
-    .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
-    .image-card { border: 1px solid var(--border-light); border-radius: 12px; padding: 0.85rem; background: var(--bg-secondary); }
-    .image-card h6 { font-size: 0.95rem; margin: 0; word-break: break-word; }
-    .section-title { font-weight: 700; font-size: 1.1rem; }
-    .progress-wrapper { border: 1px dashed var(--border-light); padding: 0.75rem; border-radius: 12px; background: var(--bg-secondary); }
-    .progress-meta { font-size: 0.85rem; color: var(--text-secondary); }
+    /* Stat Chips */
+    .stat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-full);
+      background: var(--cream-dark);
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: var(--text-sm);
+      border: 1px solid var(--border-light);
+    }
+    .stat-chip i {
+      color: var(--terracotta);
+    }
+
+    /* File Type Pills */
+    .file-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 500;
+    }
+    .file-pill.image {
+      background: var(--info-light);
+      color: var(--info);
+    }
+    .file-pill.zip {
+      background: var(--success-light);
+      color: var(--success);
+    }
+    .file-pill.excel {
+      background: var(--warning-light);
+      color: var(--warning);
+    }
+
+    /* File Grid for Image Selection */
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    /* Image Card */
+    .image-card {
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      background: var(--bg-card);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .image-card:hover {
+      border-color: var(--terracotta-light);
+      box-shadow: var(--shadow-sm);
+    }
+    .image-card.selected,
+    .image-card:has(input:checked) {
+      border-color: var(--terracotta);
+      background: var(--terracotta-bg);
+    }
+    .image-card h6 {
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      margin: 0;
+      word-break: break-word;
+      color: var(--text-primary);
+    }
+
+    /* Progress Wrapper */
+    .progress-wrapper {
+      border: 1px dashed var(--border-medium);
+      padding: 1rem;
+      border-radius: var(--radius-lg);
+      background: var(--cream-dark);
+    }
+    .progress-meta {
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+    }
+
+    /* Section Title */
+    .section-title {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: var(--text-lg);
+      color: var(--text-primary);
+    }
+
+    /* Custom Progress Bar */
+    .progress {
+      background-color: var(--cream-darker);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    .progress-bar {
+      background-color: var(--terracotta);
+      transition: width 0.3s ease;
+    }
+
+    /* List Group Styling */
+    .list-group-item {
+      background: var(--bg-card);
+      border-color: var(--border-light);
+    }
+    .list-group-item:hover {
+      background: var(--cream-dark);
+    }
+
+    /* Form Text Helper */
+    .form-text {
+      color: var(--text-muted);
+      font-size: var(--text-xs);
+    }
   `
 }) %>
 
 <%- include('partials/navbar', { user }) %>
 <%- include('partials/sidebar', { user, req }) %>
 
-<main class="kotty-main">
-  <div class="content-wrapper">
+<main class="main-content">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Page Header -->
     <div class="page-header">
-      <div>
-        <h1 class="page-title">Vendor Files</h1>
-        <p class="page-subtitle mb-0">Upload ZIPs, Excel sheets, and images to S3 by date and generate SKU-linked downloads.</p>
-      </div>
-      <div class="d-flex gap-2 flex-wrap">
-        <span class="stat-chip"><i class="bi bi-calendar3"></i> <%= selectedDate %></span>
-        <span class="stat-chip"><i class="bi bi-folder"></i> <%= selectedFolder || 'No folder selected' %></span>
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Vendor Files</h1>
+          <p class="page-subtitle mb-0">Upload ZIPs, Excel sheets, and images to S3 by date and generate SKU-linked downloads.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="stat-chip"><i class="bi bi-calendar3"></i> <%= selectedDate %></span>
+          <span class="stat-chip"><i class="bi bi-folder"></i> <%= selectedFolder || 'No folder selected' %></span>
+        </div>
       </div>
     </div>
 
+    <!-- Flash Messages -->
     <%- include('partials/flashMessages') %>
 
+    <!-- Workspace & Upload Section -->
     <div class="row g-4">
+      <!-- Left Column: Workspace & Create Folder -->
       <div class="col-xl-5">
-        <div class="card">
+        <!-- Workspace Card -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Workspace</h5>
+          </div>
           <div class="card-body">
-            <h5 class="card-title mb-3">Workspace</h5>
             <form class="row g-3" method="get" action="/vendor-files">
               <div class="col-md-6">
                 <label for="selectedDate" class="form-label">Date</label>
@@ -57,7 +174,7 @@
                 </select>
               </div>
               <div class="col-12 d-flex justify-content-between align-items-center">
-                <div class="text-muted small">Everything stays organized behind date folders in S3.</div>
+                <div class="form-text">Everything stays organized behind date folders in S3.</div>
                 <button class="btn btn-primary" type="submit">
                   <i class="bi bi-arrow-repeat me-2"></i>Load
                 </button>
@@ -66,9 +183,12 @@
           </div>
         </div>
 
+        <!-- Create Folder Card -->
         <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Create Folder</h5>
+          </div>
           <div class="card-body">
-            <h5 class="card-title mb-3">Create Folder</h5>
             <form method="post" action="/vendor-files/folders" class="row g-3">
               <input type="hidden" name="date" value="<%= selectedDate %>">
               <div class="col-12">
@@ -76,7 +196,7 @@
                 <input type="text" id="folderName" name="folderName" class="form-control" placeholder="e.g. VendorA" required>
               </div>
               <div class="col-12 d-flex justify-content-end">
-                <button class="btn btn-outline-primary" type="submit">
+                <button class="btn btn-secondary" type="submit">
                   <i class="bi bi-folder-plus me-2"></i>Create
                 </button>
               </div>
@@ -85,20 +205,21 @@
         </div>
       </div>
 
+      <!-- Right Column: Upload Files -->
       <div class="col-xl-7">
         <div class="card">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-              <div>
-                <h5 class="card-title mb-1">Upload Files</h5>
-                <p class="text-muted small mb-0">Allowed: ZIP archives, Excel/CSV sheets, and images. Uploads stay inside the selected date & folder.</p>
-              </div>
+          <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 w-100">
+              <h5 class="card-title mb-0">Upload Files</h5>
               <div class="d-flex gap-2">
                 <span class="file-pill image">Images: <span id="statImages"><%= stats.images %></span></span>
                 <span class="file-pill zip">ZIP: <span id="statZips"><%= stats.zips %></span></span>
                 <span class="file-pill excel">Excel: <span id="statExcel"><%= stats.excel %></span></span>
               </div>
             </div>
+          </div>
+          <div class="card-body">
+            <p class="form-text mb-3">Allowed: ZIP archives, Excel/CSV sheets, and images. Uploads stay inside the selected date & folder.</p>
             <form method="post" action="/vendor-files/upload" enctype="multipart/form-data" class="row g-3" id="vendorUploadForm">
               <input type="hidden" name="date" value="<%= selectedDate %>">
               <div class="col-md-6">
@@ -131,7 +252,7 @@
                     </div>
                     <span class="progress-meta" id="uploadPercent">0%</span>
                   </div>
-                  <div class="progress-meta mt-2" id="uploadMeta">Waiting to start…</div>
+                  <div class="progress-meta mt-2" id="uploadMeta">Waiting to start...</div>
                 </div>
               </div>
             </form>
@@ -140,23 +261,26 @@
       </div>
     </div>
 
+    <!-- Files Table Card -->
     <div class="card mt-4">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 w-100">
           <div>
             <h5 class="card-title mb-1">Files in <%= selectedFolder || 'this date' %></h5>
-            <p class="text-muted small mb-0">Total files: <strong id="statTotal"><%= stats.total %></strong>. Downloads stream directly from S3.</p>
+            <p class="form-text mb-0">Total files: <strong id="statTotal"><%= stats.total %></strong>. Downloads stream directly from S3.</p>
           </div>
           <div class="d-flex gap-2">
             <% if (selectedFolder) { %>
-              <a class="btn btn-outline-secondary" href="/vendor-files/download-folder?date=<%= selectedDate %>&folder=<%= encodeURIComponent(selectedFolder) %>">
+              <a class="btn btn-secondary" href="/vendor-files/download-folder?date=<%= selectedDate %>&folder=<%= encodeURIComponent(selectedFolder) %>">
                 <i class="bi bi-folder-symlink me-1"></i>Download folder
               </a>
             <% } %>
           </div>
         </div>
+      </div>
+      <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table align-middle">
+          <table class="table align-middle mb-0">
             <thead>
               <tr>
                 <th>Name</th>
@@ -169,7 +293,7 @@
             <tbody id="fileTableBody">
               <% if (files.length === 0) { %>
                 <tr>
-                  <td colspan="5" class="text-center text-muted">No files yet for this date/folder. Create a folder and upload to get started.</td>
+                  <td colspan="5" class="text-center py-4" style="color: var(--text-muted);">No files yet for this date/folder. Create a folder and upload to get started.</td>
                 </tr>
               <% } else { %>
                 <% files.forEach(file => { %>
@@ -183,13 +307,13 @@
                       <% } else if (file.type === 'excel') { %>
                         <span class="file-pill excel">Excel</span>
                       <% } else { %>
-                        <span class="badge bg-secondary-subtle text-secondary">File</span>
+                        <span class="badge badge-neutral">File</span>
                       <% } %>
                     </td>
                     <td><%= file.sizeLabel %></td>
                     <td><%= file.lastModifiedLabel %></td>
                     <td class="text-end">
-                      <a class="btn btn-sm btn-outline-primary" href="<%= file.downloadPath %>">
+                      <a class="btn btn-sm btn-secondary" href="<%= file.downloadPath %>">
                         <i class="bi bi-download me-1"></i>Download
                       </a>
                     </td>
@@ -202,15 +326,18 @@
       </div>
     </div>
 
+    <!-- Assignments Card -->
     <div class="card mt-4">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 w-100">
           <div>
             <h5 class="card-title mb-1">Assignments</h5>
-            <p class="text-muted small mb-0">Share a folder or a specific file with another role/user. Assignees will see the item in their own "Assigned to you" list.</p>
+            <p class="form-text mb-0">Share a folder or a specific file with another role/user. Assignees will see the item in their own "Assigned to you" list.</p>
           </div>
-          <div class="text-muted small">Uploader name is tagged automatically for folder uploads.</div>
+          <div class="form-text">Uploader name is tagged automatically for folder uploads.</div>
         </div>
+      </div>
+      <div class="card-body">
         <form class="row g-3" id="assignmentForm">
           <input type="hidden" name="date" value="<%= selectedDate %>">
           <div class="col-md-4">
@@ -253,7 +380,7 @@
             </select>
           </div>
           <div class="col-md-4 d-flex align-items-end justify-content-end">
-            <button class="btn btn-success w-100" type="submit" <%= folders.length === 0 ? 'disabled' : '' %>>
+            <button class="btn btn-primary w-100" type="submit" <%= folders.length === 0 ? 'disabled' : '' %>>
               <i class="bi bi-person-plus me-2"></i>Share
             </button>
           </div>
@@ -261,25 +388,32 @@
             <div id="assignmentAlert" class="alert d-none mb-0" role="alert"></div>
           </div>
         </form>
-        <div class="mt-4">
-          <h6 class="mb-2">Assigned to you</h6>
+
+        <!-- Assigned to You Section -->
+        <div class="mt-4 pt-4" style="border-top: 1px solid var(--border-light);">
+          <h6 class="section-title mb-3">Assigned to you</h6>
           <% if (myAssignments.length === 0) { %>
-            <div class="alert alert-light border mb-0">Nothing assigned to you yet.</div>
+            <div class="alert alert-info mb-0" style="background: var(--cream-dark); border: 1px solid var(--border-light); color: var(--text-secondary);">
+              <i class="bi bi-info-circle me-2"></i>Nothing assigned to you yet.
+            </div>
           <% } else { %>
             <div class="list-group">
               <% myAssignments.forEach(item => { %>
                 <div class="list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2">
                   <div>
-                    <div class="fw-semibold"><%= item.itemName %> <span class="badge bg-light text-dark text-uppercase ms-2"><%= item.itemType %></span></div>
-                    <div class="text-muted small">Folder: <%= item.folderName %> | Date: <%= item.dateKey %> | Assigned by: <%= item.assignedByName %></div>
+                    <div class="fw-semibold">
+                      <%= item.itemName %>
+                      <span class="badge badge-primary ms-2" style="text-transform: uppercase;"><%= item.itemType %></span>
+                    </div>
+                    <div class="form-text">Folder: <%= item.folderName %> | Date: <%= item.dateKey %> | Assigned by: <%= item.assignedByName %></div>
                   </div>
                   <div class="d-flex gap-2">
                     <% if (item.itemType === 'folder') { %>
-                      <a class="btn btn-sm btn-outline-primary" href="/vendor-files/download-folder?date=<%= item.dateKey %>&folder=<%= encodeURIComponent(item.folderName) %>">
+                      <a class="btn btn-sm btn-primary" href="/vendor-files/download-folder?date=<%= item.dateKey %>&folder=<%= encodeURIComponent(item.folderName) %>">
                         <i class="bi bi-download me-1"></i>Download
                       </a>
                     <% } else { %>
-                      <a class="btn btn-sm btn-outline-primary" href="/vendor-files/download?key=<%= encodeURIComponent(item.s3Key) %>&date=<%= item.dateKey %>">
+                      <a class="btn btn-sm btn-primary" href="/vendor-files/download?key=<%= encodeURIComponent(item.s3Key) %>&date=<%= item.dateKey %>">
                         <i class="bi bi-download me-1"></i>Download
                       </a>
                     <% } %>
@@ -292,40 +426,44 @@
       </div>
     </div>
 
+    <!-- Excel Export Card -->
     <div class="card mt-4">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 w-100">
           <div>
             <h5 class="card-title mb-1">Excel Download from Images</h5>
-            <p class="text-muted small mb-0">Select any images in this folder to build an Excel sheet with SKU in column A and image links across numbered columns.</p>
-            <p class="text-muted small mb-0">Use file names like <code>SKU (1).jpg</code>, <code>SKU (2).jpg</code> to map sequence positions.</p>
+            <p class="form-text mb-0">Select any images in this folder to build an Excel sheet with SKU in column A and image links across numbered columns.</p>
+            <p class="form-text mb-0">Use file names like <code style="background: var(--cream-darker); padding: 2px 6px; border-radius: 4px;">SKU (1).jpg</code>, <code style="background: var(--cream-darker); padding: 2px 6px; border-radius: 4px;">SKU (2).jpg</code> to map sequence positions.</p>
           </div>
           <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="selectAllImages">
+            <input class="form-check-input" type="checkbox" id="selectAllImages" style="border-color: var(--terracotta);">
             <label class="form-check-label" for="selectAllImages">Select all</label>
           </div>
         </div>
-
+      </div>
+      <div class="card-body">
         <% if (imageFiles.length === 0) { %>
-          <div class="alert alert-light border mb-0">No images detected for this folder.</div>
+          <div class="alert alert-info mb-0" style="background: var(--cream-dark); border: 1px solid var(--border-light); color: var(--text-secondary);">
+            <i class="bi bi-image me-2"></i>No images detected for this folder.
+          </div>
         <% } else { %>
           <form id="excelExportForm" method="post" action="/vendor-files/export-excel">
             <input type="hidden" name="date" value="<%= selectedDate %>">
             <input type="hidden" name="folder" value="<%= selectedFolder %>">
             <input type="hidden" name="selectedKeys" id="selectedKeys">
-            <div class="file-grid mb-3">
+            <div class="file-grid mb-4">
               <% imageFiles.forEach(img => { %>
                 <label class="image-card form-check d-flex align-items-start gap-3">
-                  <input class="form-check-input image-checkbox mt-1" type="checkbox" value="<%= img.key %>">
+                  <input class="form-check-input image-checkbox mt-1" type="checkbox" value="<%= img.key %>" style="border-color: var(--terracotta);">
                   <div>
                     <h6><%= img.name %></h6>
-                    <div class="text-muted small">Updated <%= img.lastModifiedLabel %></div>
+                    <div class="form-text">Updated <%= img.lastModifiedLabel %></div>
                   </div>
                 </label>
               <% }) %>
             </div>
             <div class="d-flex justify-content-end">
-              <button class="btn btn-success" type="submit">
+              <button class="btn btn-primary" type="submit">
                 <i class="bi bi-file-earmark-spreadsheet me-2"></i>Download Excel
               </button>
             </div>
@@ -333,6 +471,7 @@
         <% } %>
       </div>
     </div>
+
   </div>
 </main>
 
@@ -359,14 +498,14 @@
     const assignmentItem = document.getElementById('assignmentItem');
     const assignmentFolder = document.getElementById('assignmentFolder');
     const assignmentAlert = document.getElementById('assignmentAlert');
-    const DIRECT_MAX_BYTES = 5 * 1024 * 1024 * 1024; // mirror server limit for direct PUT uploads
+    const DIRECT_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 
     const formatBytes = (bytes) => {
       if (!bytes && bytes !== 0) return '0 B';
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
     };
 
     const toggleProgress = (visible) => {
@@ -377,10 +516,10 @@
     const updateProgress = (uploaded, total, currentFileIndex, totalFiles) => {
       if (!progressBar || !progressPercent || !progressMeta) return;
       const percent = total ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
-      progressBar.style.width = `${percent}%`;
-      progressBar.textContent = `${percent}%`;
-      progressPercent.textContent = `${percent}%`;
-      progressMeta.textContent = `Uploaded ${formatBytes(uploaded)} of ${formatBytes(total)} (${currentFileIndex}/${totalFiles} files)`;
+      progressBar.style.width = percent + '%';
+      progressBar.textContent = percent + '%';
+      progressPercent.textContent = percent + '%';
+      progressMeta.textContent = 'Uploaded ' + formatBytes(uploaded) + ' of ' + formatBytes(total) + ' (' + currentFileIndex + '/' + totalFiles + ' files)';
     };
 
     const uploadViaProxy = async (files, folder, isFolderUpload) => {
@@ -477,45 +616,89 @@
               updateProgress(uploaded, totalSize, i + 1, uploads.length);
               resolve();
             } else {
-              reject(new Error(`Upload failed for ${file?.name || upload.name}`));
+              reject(new Error('Upload failed for ' + (file?.name || upload.name)));
             }
           };
-          xhr.onerror = () => reject(new Error(`Network error for ${file?.name || upload.name}`));
+          xhr.onerror = () => reject(new Error('Network error for ' + (file?.name || upload.name)));
           xhr.send(file);
         });
       }
 
-      progressMeta.textContent = `Finished ${uploads.length} file(s).`;
+      progressMeta.textContent = 'Finished ' + uploads.length + ' file(s).';
       setTimeout(() => toggleProgress(false), 1500);
     };
 
     const refreshFileTable = async (folder) => {
       if (!fileTableBody || !folder) return;
-      const resp = await fetch(`/vendor-files/list?date=${selectedDate}&folder=${encodeURIComponent(folder)}`);
+      const resp = await fetch('/vendor-files/list?date=' + selectedDate + '&folder=' + encodeURIComponent(folder));
       if (!resp.ok) return;
       const data = await resp.json();
       const files = data.files || [];
 
-      fileTableBody.innerHTML = files.length === 0
-        ? '<tr><td colspan="5" class="text-center text-muted">No files yet for this date/folder. Create a folder and upload to get started.</td></tr>'
-        : files.map(file => `
-          <tr>
-            <td>${file.name}</td>
-            <td>
-              ${file.type === 'image' ? '<span class="file-pill image">Image</span>' : ''}
-              ${file.type === 'zip' ? '<span class="file-pill zip">ZIP</span>' : ''}
-              ${file.type === 'excel' ? '<span class="file-pill excel">Excel</span>' : ''}
-              ${!['image','zip','excel'].includes(file.type) ? '<span class="badge bg-secondary-subtle text-secondary">File</span>' : ''}
-            </td>
-            <td>${file.sizeLabel}</td>
-            <td>${file.lastModifiedLabel}</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="${file.downloadPath}">
-                <i class="bi bi-download me-1"></i>Download
-              </a>
-            </td>
-          </tr>
-        `).join('');
+      // Build rows using DOM methods for safety
+      fileTableBody.replaceChildren();
+
+      if (files.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        td.className = 'text-center py-4';
+        td.style.color = 'var(--text-muted)';
+        td.textContent = 'No files yet for this date/folder. Create a folder and upload to get started.';
+        tr.appendChild(td);
+        fileTableBody.appendChild(tr);
+      } else {
+        files.forEach(file => {
+          const tr = document.createElement('tr');
+
+          // Name cell
+          const nameTd = document.createElement('td');
+          nameTd.textContent = file.name;
+          tr.appendChild(nameTd);
+
+          // Type cell
+          const typeTd = document.createElement('td');
+          const pill = document.createElement('span');
+          pill.className = 'file-pill ' + file.type;
+          if (file.type === 'image') {
+            pill.textContent = 'Image';
+          } else if (file.type === 'zip') {
+            pill.textContent = 'ZIP';
+          } else if (file.type === 'excel') {
+            pill.textContent = 'Excel';
+          } else {
+            pill.className = 'badge badge-neutral';
+            pill.textContent = 'File';
+          }
+          typeTd.appendChild(pill);
+          tr.appendChild(typeTd);
+
+          // Size cell
+          const sizeTd = document.createElement('td');
+          sizeTd.textContent = file.sizeLabel;
+          tr.appendChild(sizeTd);
+
+          // Last Modified cell
+          const modTd = document.createElement('td');
+          modTd.textContent = file.lastModifiedLabel;
+          tr.appendChild(modTd);
+
+          // Actions cell
+          const actionTd = document.createElement('td');
+          actionTd.className = 'text-end';
+          const btn = document.createElement('a');
+          btn.className = 'btn btn-sm btn-secondary';
+          btn.href = file.downloadPath;
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-download me-1';
+          btn.appendChild(icon);
+          btn.appendChild(document.createTextNode('Download'));
+          actionTd.appendChild(btn);
+          tr.appendChild(actionTd);
+
+          fileTableBody.appendChild(tr);
+        });
+      }
 
       const images = files.filter(f => f.type === 'image').length;
       const zips = files.filter(f => f.type === 'zip').length;
@@ -528,12 +711,17 @@
 
       // Also refresh assignment item list so new uploads can be shared immediately.
       if (assignmentItem) {
-        assignmentItem.innerHTML = '<option value="folder|">Entire folder</option>';
+        assignmentItem.replaceChildren();
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = 'folder|';
+        defaultOpt.textContent = 'Entire folder';
+        assignmentItem.appendChild(defaultOpt);
+
         files.forEach(f => {
           const opt = document.createElement('option');
-          opt.value = `file|${encodeURIComponent(f.key)}`;
+          opt.value = 'file|' + encodeURIComponent(f.key);
           opt.dataset.label = f.name;
-          opt.textContent = `File: ${f.name}`;
+          opt.textContent = 'File: ' + f.name;
           assignmentItem.appendChild(opt);
         });
       }
@@ -570,7 +758,7 @@
           await refreshFileTable(folder);
         } catch (err) {
           console.error(err);
-          progressMeta.textContent = `${err.message}. Retrying through server proxy…`;
+          progressMeta.textContent = err.message + '. Retrying through server proxy...';
           toggleProgress(true);
           try {
             await uploadViaProxy(files, folder, isFolderUpload);
@@ -600,10 +788,10 @@
       });
     }
 
-    const setAssignmentAlert = (message, variant = 'success') => {
+    const setAssignmentAlert = (message, variant) => {
       if (!assignmentAlert) return;
       assignmentAlert.textContent = message;
-      assignmentAlert.className = `alert alert-${variant}`;
+      assignmentAlert.className = 'alert alert-' + (variant || 'success');
       assignmentAlert.classList.remove('d-none');
     };
 
@@ -612,7 +800,9 @@
         event.preventDefault();
         const folder = assignmentFolder?.value;
         const selection = assignmentItem?.value || '';
-        const [itemType, encodedKey] = selection.split('|');
+        const parts = selection.split('|');
+        const itemType = parts[0];
+        const encodedKey = parts[1] || '';
         const assignedUserId = assignmentUser?.value;
         const itemName = assignmentItem?.selectedOptions?.[0]?.dataset?.label || folder;
 
@@ -627,11 +817,11 @@
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
             body: JSON.stringify({
               date: selectedDate,
-              folder,
-              itemType,
-              assignedUserId,
-              s3Key: itemType === 'file' ? decodeURIComponent(encodedKey || '') : undefined,
-              itemName
+              folder: folder,
+              itemType: itemType,
+              assignedUserId: assignedUserId,
+              s3Key: itemType === 'file' ? decodeURIComponent(encodedKey) : undefined,
+              itemName: itemName
             })
           });
 
@@ -667,22 +857,30 @@
       const exportForm = document.getElementById('excelExportForm');
       const selectedKeysInput = document.getElementById('selectedKeys');
 
-      dateInput?.addEventListener('change', () => dateInput.form.submit());
-      folderSelect?.addEventListener('change', () => folderSelect.form.submit());
+      if (dateInput) {
+        dateInput.addEventListener('change', function() { dateInput.form.submit(); });
+      }
+      if (folderSelect) {
+        folderSelect.addEventListener('change', function() { folderSelect.form.submit(); });
+      }
 
-      selectAll?.addEventListener('change', () => {
-        imageCheckboxes.forEach(cb => { cb.checked = selectAll.checked; });
-      });
+      if (selectAll) {
+        selectAll.addEventListener('change', function() {
+          imageCheckboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+        });
+      }
 
-      exportForm?.addEventListener('submit', (e) => {
-        const chosen = imageCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
-        if (!chosen.length) {
-          e.preventDefault();
-          alert('Please select at least one image to export.');
-          return;
-        }
-        selectedKeysInput.value = JSON.stringify(chosen);
-      });
+      if (exportForm) {
+        exportForm.addEventListener('submit', function(e) {
+          const chosen = imageCheckboxes.filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.value; });
+          if (!chosen.length) {
+            e.preventDefault();
+            alert('Please select at least one image to export.');
+            return;
+          }
+          selectedKeysInput.value = JSON.stringify(chosen);
+        });
+      }
     });
   `
 }) %>

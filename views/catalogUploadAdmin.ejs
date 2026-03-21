@@ -1,221 +1,550 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Admin Dashboard: Catalog Uploads</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
-  <!-- Bootstrap & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<%- include('partials/header', { pageTitle: 'Catalog Uploads Admin' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/admin' }) %>
 
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f8f9fa;
-      color: #333;
-    }
-    .wrapper {
-      max-width: 1100px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-    }
-    .page-header { margin-bottom: 1.5rem; }
-    .page-header h1 {
-      font-weight: 600;
-      font-size: 1.75rem;
-    }
-    .card {
-      border: none;
-      border-radius: 0.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      margin-bottom: 1.5rem;
-    }
-    .card-header {
-      background: #fff;
-      border-bottom: 1px solid #e9ecef;
-      font-weight: 600;
-    }
-    .table-container {
-      max-height: 500px;
-      overflow-y: auto;
-    }
-    thead th {
-      position: sticky;
-      top: 0;
-      background: #fff;
-      z-index: 1;
-    }
-    #tableSearch { max-width: 200px; }
-    #userSelect { max-width: 100%; }
-  </style>
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
+<style>
+  /* Page Container */
+  .admin-container {
+    padding-top: calc(var(--navbar-height) + 28px);
+    padding-bottom: 40px;
+    min-height: 100vh;
+  }
+
+  .content-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-header-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .page-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-lg);
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .page-subtitle {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* Cards */
+  .kotty-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .kotty-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .kotty-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: var(--gray-50);
+  }
+
+  .kotty-card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .kotty-card-title i {
+    color: var(--terracotta);
+  }
+
+  .kotty-card-body {
+    padding: 22px;
+  }
+
+  /* User Select Dropdown */
+  .user-select-wrapper {
+    min-width: 160px;
+  }
+
+  .user-select-wrapper select {
+    width: 100%;
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a5650' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+    cursor: pointer;
+  }
+
+  .user-select-wrapper select:hover {
+    border-color: var(--border-medium);
+  }
+
+  .user-select-wrapper select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  /* Chart Container */
+  .chart-container {
+    position: relative;
+    padding: 16px;
+  }
+
+  /* Table Container */
+  .table-wrapper {
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  .uploads-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .uploads-table th {
+    padding: 14px 18px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .uploads-table td {
+    padding: 14px 18px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .uploads-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .uploads-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Marketplace Badge */
+  .marketplace-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+  }
+
+  /* Username Badge */
+  .username-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: var(--text-xs);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    background: var(--info-light);
+    color: var(--info);
+  }
+
+  /* Download Button */
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: var(--success-light);
+    color: var(--success);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+  }
+
+  .btn-download:hover {
+    background: var(--success);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  /* Search Input */
+  .search-wrapper {
+    position: relative;
+    width: 220px;
+  }
+
+  .search-wrapper input {
+    width: 100%;
+    padding: 10px 14px 10px 38px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .search-wrapper input:hover {
+    border-color: var(--border-medium);
+  }
+
+  .search-wrapper input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .search-wrapper input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .search-wrapper i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+  }
+
+  .empty-state i {
+    font-size: 48px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Filename truncation */
+  .filename-cell {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Responsive */
+  @media (max-width: 992px) {
+    .content-wrapper {
+      padding: 0 16px;
+    }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .page-title {
+      font-size: var(--text-2xl);
+    }
+
+    .uploads-table th,
+    .uploads-table td {
+      padding: 12px;
+    }
+
+    .search-wrapper {
+      width: 100%;
+    }
+
+    .filename-cell {
+      max-width: 150px;
+    }
+  }
+</style>
+
+<div class="admin-container">
+  <div class="content-wrapper">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-content">
+        <div class="page-icon">
+          <i class="bi bi-pie-chart-fill"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Catalog Uploads Admin</h1>
+          <p class="page-subtitle">View and manage catalog uploads across all users</p>
+        </div>
       </div>
-    </div>
-  </nav>
-
-  <div class="wrapper">
-    <div class="page-header d-flex justify-content-between align-items-center">
-      <h1>
-        <i class="bi bi-pie-chart-fill text-primary me-2"></i>
-        Catalog Uploads Admin
-      </h1>
       <% if (error && error.length) { %>
-        <div class="alert alert-danger mb-0"><%= error %></div>
+        <div class="alert alert-danger mb-0">
+          <i class="bi bi-exclamation-circle me-2"></i>
+          <%= error %>
+        </div>
       <% } %>
     </div>
 
     <div class="row g-4">
-      <!-- PIE CHART: per-marketplace for selected user -->
+      <!-- PIE CHART: Per-marketplace for selected user -->
       <div class="col-lg-4">
-        <div class="card">
-          <div class="card-header d-flex align-items-center justify-content-between">
-            <span>By Marketplace (User)</span>
-            <select id="userSelect" class="form-select form-select-sm">
-              <!-- Filled by JS -->
-            </select>
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <span class="kotty-card-title">
+              <i class="bi bi-graph-up"></i>
+              By Marketplace
+            </span>
+            <div class="user-select-wrapper">
+              <select id="userSelect">
+                <!-- Filled by JS -->
+              </select>
+            </div>
           </div>
-          <div class="card-body p-3">
-            <canvas id="uploadsPieChart" height="200"></canvas>
+          <div class="kotty-card-body">
+            <div class="chart-container">
+              <canvas id="uploadsPieChart" height="220"></canvas>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- UPLOADS TABLE -->
       <div class="col-lg-8">
-        <div class="card">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span>All Uploads</span>
-            <input
-              type="text"
-              id="tableSearch"
-              class="form-control form-control-sm"
-              placeholder="Search…">
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <span class="kotty-card-title">
+              <i class="bi bi-table"></i>
+              All Uploads
+            </span>
+            <div class="search-wrapper">
+              <i class="bi bi-search"></i>
+              <input type="text" id="tableSearch" placeholder="Search uploads...">
+            </div>
           </div>
-          <div class="card-body p-0 table-container">
-            <table class="table table-striped mb-0">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>User</th>
-                  <th>Marketplace</th>
-                  <th>Filename</th>
-                  <th>Download</th>
-                </tr>
-              </thead>
-              <tbody id="uploadsTable">
-                <% files.forEach(f => { %>
+          <div class="table-wrapper">
+            <% if (files && files.length > 0) { %>
+              <table class="uploads-table">
+                <thead>
                   <tr>
-                    <td><%= new Date(f.uploaded_at).toLocaleDateString() %></td>
-                    <td><%= new Date(f.uploaded_at).toLocaleTimeString() %></td>
-                    <td><%= f.username %></td>
-                    <td><%= f.marketplace %></td>
-                    <td><%= f.original_filename %></td>
-                    <td>
-                      <a
-                        href="/catalogUpload/download/<%= f.id %>"
-                        class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-download"></i>
-                      </a>
-                    </td>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Marketplace</th>
+                    <th>Filename</th>
+                    <th>Action</th>
                   </tr>
-                <% }) %>
-              </tbody>
-            </table>
+                </thead>
+                <tbody id="uploadsTable">
+                  <% files.forEach(f => { %>
+                    <tr>
+                      <td><%= new Date(f.uploaded_at).toLocaleDateString() %></td>
+                      <td><%= new Date(f.uploaded_at).toLocaleTimeString() %></td>
+                      <td>
+                        <span class="username-badge">
+                          <i class="bi bi-person"></i>
+                          <%= f.username %>
+                        </span>
+                      </td>
+                      <td>
+                        <span class="marketplace-badge">
+                          <%= f.marketplace %>
+                        </span>
+                      </td>
+                      <td class="filename-cell" title="<%= f.original_filename %>">
+                        <%= f.original_filename %>
+                      </td>
+                      <td>
+                        <a href="/catalogUpload/download/<%= f.id %>" class="btn-download" title="Download file">
+                          <i class="bi bi-download"></i>
+                        </a>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            <% } else { %>
+              <div class="empty-state">
+                <i class="bi bi-cloud-upload"></i>
+                <h3 class="empty-state-title">No Uploads Found</h3>
+                <p class="empty-state-text">No catalog files have been uploaded yet.</p>
+              </div>
+            <% } %>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <script>
-    // Filter table rows
-    document.getElementById('tableSearch').addEventListener('input', function() {
-      const q = this.value.toLowerCase();
-      document.querySelectorAll('#uploadsTable tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
+<script>
+  // Filter table rows
+  document.getElementById('tableSearch').addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#uploadsTable tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
+  });
 
-    // Prepare aggregation data: list of { marketplace, username, count }
-    const rawAgg = <%- JSON.stringify(aggData) %>;
+  // Prepare aggregation data: list of { marketplace, username, count }
+  const rawAgg = <%- JSON.stringify(aggData) %>;
 
-    // Build mapping: user -> [ { marketplace, count } ]
-    const byUser = rawAgg.reduce((map, r) => {
-      if (!map[r.username]) map[r.username] = [];
-      map[r.username].push({ marketplace: r.marketplace, count: r.count });
-      return map;
-    }, {});
+  // Build mapping: user -> [ { marketplace, count } ]
+  const byUser = rawAgg.reduce((map, r) => {
+    if (!map[r.username]) map[r.username] = [];
+    map[r.username].push({ marketplace: r.marketplace, count: r.count });
+    return map;
+  }, {});
 
-    const userNames = Object.keys(byUser);
+  const userNames = Object.keys(byUser);
 
-    // Populate user dropdown
-    const sel = document.getElementById('userSelect');
-    userNames.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u;
-      opt.textContent = u;
-      sel.appendChild(opt);
-    });
+  // Populate user dropdown
+  const sel = document.getElementById('userSelect');
+  userNames.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u;
+    opt.textContent = u;
+    sel.appendChild(opt);
+  });
 
-    // Chart.js pie chart
-    const ctx     = document.getElementById('uploadsPieChart').getContext('2d');
-    let pieChart  = null;
+  // Chart.js pie chart with Kotty Track colors
+  const ctx = document.getElementById('uploadsPieChart').getContext('2d');
+  let pieChart = null;
 
-    function updateChart(username) {
-      const data = byUser[username] || [];
-      const labels = data.map(d => d.marketplace);
-      const counts = data.map(d => d.count);
-      const colors = [
-        '#4e73df','#1cc88a','#36b9cc',
-        '#f6c23e','#e74a3b','#858796'
-      ].slice(0, labels.length);
+  function updateChart(username) {
+    const data = byUser[username] || [];
+    const labels = data.map(d => d.marketplace);
+    const counts = data.map(d => d.count);
 
-      const cfg = {
-        type: 'pie',
-        data: { labels, datasets: [{ data: counts, backgroundColor: colors }] },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth:12, padding:8 } }
+    // Kotty Track inspired color palette
+    const colors = [
+      '#c45c3a',  // Terracotta
+      '#2d8a5f',  // Success green
+      '#3a7ec4',  // Info blue
+      '#c4873a',  // Warning amber
+      '#a34a2d',  // Terracotta dark
+      '#78746a',  // Gray
+      '#d4826a',  // Terracotta light
+      '#5a9a7f'   // Teal
+    ].slice(0, labels.length);
+
+    const cfg = {
+      type: 'pie',
+      data: {
+        labels,
+        datasets: [{
+          data: counts,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 12,
+              font: {
+                family: "'Outfit', sans-serif",
+                size: 12
+              },
+              color: '#5a5650'
+            }
           }
         }
-      };
-
-      if (pieChart) {
-        pieChart.config.data = cfg.data;
-        pieChart.update();
-      } else {
-        pieChart = new Chart(ctx, cfg);
       }
+    };
+
+    if (pieChart) {
+      pieChart.config.data = cfg.data;
+      pieChart.update();
+    } else {
+      pieChart = new Chart(ctx, cfg);
     }
+  }
 
-    // Initialize
-    if (userNames.length) {
-      sel.value = userNames[0];
-      updateChart(userNames[0]);
-    }
+  // Initialize
+  if (userNames.length) {
+    sel.value = userNames[0];
+    updateChart(userNames[0]);
+  }
 
-    // On change
-    sel.addEventListener('change', () => updateChart(sel.value));
-  </script>
+  // On change
+  sel.addEventListener('change', () => updateChart(sel.value));
+</script>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-</html>
+<%- include('partials/footer') %>

@@ -1,1220 +1,1202 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Operator Dashboard - Kotty Track</title>
+<%- include('partials/header', { pageTitle: 'Operator Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css">
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════════
+     OPERATOR DASHBOARD - Kotty Track Design System
+     Industrial Textile Elegance
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-  <style>
-    :root {
-      --primary: #1e40af;
-      --primary-light: #3b82f6;
-      --primary-dark: #1e3a8a;
-      --accent: #0891b2;
-      --success: #059669;
-      --warning: #d97706;
-      --danger: #dc2626;
-      --surface: #ffffff;
-      --surface-elevated: #ffffff;
-      --background: #f8fafc;
-      --background-subtle: #f1f5f9;
-      --text-primary: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #94a3b8;
-      --border: #e2e8f0;
-      --border-light: #f1f5f9;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
-      --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 16px;
+  :root {
+    --charcoal: #1a1a1a;
+    --charcoal-light: #2d2d2d;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-light: #d4826a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --success-light: #e8f5ef;
+    --warning: #c4873a;
+    --warning-light: #fef3e2;
+    --danger: #c23b22;
+    --danger-light: #fdeaea;
+    --info: #3a7bc4;
+    --info-light: #e8f1fb;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border: #e5e0d8;
+    --border-light: #f0ebe3;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    background: var(--cream);
+    min-height: 100vh;
+  }
+
+  /* Main Layout */
+  .dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2.25rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+
+  .page-subtitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out 0.1s backwards;
+  }
+
+  .stat-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    position: relative;
+    transition: all 0.25s ease;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--terracotta);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+  }
+
+  .stat-card:hover::before {
+    opacity: 1;
+  }
+
+  .stat-card:nth-child(1)::before { background: var(--terracotta); }
+  .stat-card:nth-child(2)::before { background: var(--info); }
+  .stat-card:nth-child(3)::before { background: var(--success); }
+  .stat-card:nth-child(4)::before { background: var(--warning); }
+
+  .stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2.5rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    line-height: 1;
+  }
+
+  .stat-card:nth-child(1) .stat-value { color: var(--terracotta); }
+  .stat-card:nth-child(2) .stat-value { color: var(--info); }
+  .stat-card:nth-child(3) .stat-value { color: var(--success); }
+  .stat-card:nth-child(4) .stat-value { color: var(--warning); }
+
+  /* Info Banner */
+  .info-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, var(--cream-dark) 0%, white 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--terracotta);
+    border-radius: var(--radius-md);
+    margin-bottom: 32px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    animation: fadeInUp 0.5s ease-out 0.15s backwards;
+  }
+
+  .info-banner i {
+    font-size: 1.25rem;
+    color: var(--terracotta);
+    flex-shrink: 0;
+  }
+
+  .info-banner strong {
+    color: var(--charcoal);
+  }
+
+  /* Section Header */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .section-title i {
+    color: var(--terracotta);
+    font-size: 1.1rem;
+  }
+
+  /* Action Categories */
+  .action-categories {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.5s ease-out 0.2s backwards;
+  }
+
+  .action-category {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: all 0.25s ease;
+  }
+
+  .action-category:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .category-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+
+  .category-icon.production { background: #fef0eb; color: var(--terracotta); }
+  .category-icon.inventory { background: var(--success-light); color: var(--success); }
+  .category-icon.washing { background: var(--info-light); color: var(--info); }
+  .category-icon.reports { background: var(--warning-light); color: var(--warning); }
+  .category-icon.hr { background: #fce7f3; color: #be185d; }
+  .category-icon.management { background: #ede9fe; color: #7c3aed; }
+
+  .category-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--charcoal);
+  }
+
+  .category-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+
+  .action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 10px;
+    background: var(--cream);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    text-align: center;
+  }
+
+  .action-card:hover {
+    background: white;
+    border-color: var(--terracotta-light);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+  }
+
+  .action-card:hover i {
+    color: var(--terracotta);
+  }
+
+  .action-card i {
+    font-size: 1.3rem;
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+  }
+
+  .action-card-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  /* Panel Card */
+  .panel-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 24px;
+    animation: fadeInUp 0.5s ease-out 0.25s backwards;
+  }
+
+  .panel-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+  }
+
+  .panel-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .panel-title i {
+    color: var(--terracotta);
+  }
+
+  .panel-body {
+    padding: 24px;
+  }
+
+  /* Forms & Inputs */
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    padding: 8px 14px;
+    background: white;
+    transition: all 0.2s ease;
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+    outline: none;
+  }
+
+  .form-select {
+    cursor: pointer;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Tables */
+  .kotty-table {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .kotty-table thead th {
+    background: var(--cream);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 12px 14px;
+    white-space: nowrap;
+  }
+
+  .kotty-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+    color: var(--text-primary);
+  }
+
+  .kotty-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  /* Tabulator Overrides */
+  .tabulator {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    background: white;
+  }
+
+  .tabulator .tabulator-header {
+    background: var(--cream);
+    border-bottom: 2px solid var(--border);
+  }
+
+  .tabulator .tabulator-header .tabulator-col {
+    background: transparent;
+    border-right: 1px solid var(--border-light);
+  }
+
+  .tabulator .tabulator-header .tabulator-col-content {
+    padding: 12px 14px;
+  }
+
+  .tabulator .tabulator-header .tabulator-col-title {
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+  }
+
+  .tabulator-row {
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .tabulator-row:hover {
+    background: var(--cream) !important;
+  }
+
+  .tabulator-cell {
+    padding: 12px 14px !important;
+    border-right: none !important;
+  }
+
+  .tabulator-footer {
+    background: var(--cream);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Badges */
+  .badge-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .badge-success { background: var(--success-light); color: var(--success); }
+  .badge-warning { background: var(--warning-light); color: var(--warning); }
+  .badge-danger { background: var(--danger-light); color: var(--danger); }
+  .badge-info { background: var(--info-light); color: var(--info); }
+
+  /* SKU Insights Split */
+  .sku-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  .sku-column h6 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sku-column h6.top { color: var(--success); }
+  .sku-column h6.bottom { color: var(--warning); }
+
+  /* Back to Top */
+  #backToTop {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 48px;
+    height: 48px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-lg);
+    transition: all 0.25s ease;
+    z-index: 999;
+    font-size: 1.1rem;
+  }
+
+  #backToTop:hover {
+    background: var(--terracotta-dark);
+    transform: translateY(-3px);
+  }
+
+  /* Modal Overrides */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .modal-header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+    font-size: 1.25rem;
+    color: var(--charcoal);
+  }
+
+  .modal-body {
+    padding: 24px;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .modal-body p {
+    margin-bottom: 10px;
+    color: var(--text-secondary);
+  }
+
+  .modal-body strong {
+    color: var(--charcoal);
+  }
+
+  /* Animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    .action-categories {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .sku-split {
+      grid-template-columns: 1fr;
+    }
+  }
 
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--background);
-      color: var(--text-primary);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
+  @media (max-width: 768px) {
+    .dashboard-container {
+      padding: 20px 16px;
     }
 
-    /* Top Navigation */
-    .top-nav {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 64px;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--primary);
-      text-decoration: none;
-    }
-
-    .nav-brand-icon {
-      width: 36px;
-      height: 36px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 18px;
-    }
-
-    .nav-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .nav-user {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      background: var(--background-subtle);
-      border-radius: 20px;
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-
-    .nav-user-avatar {
-      width: 28px;
-      height: 28px;
-      background: var(--primary);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .btn-logout {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-weight: 500;
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .btn-logout:hover {
-      background: var(--danger);
-      border-color: var(--danger);
-      color: white;
-    }
-
-    /* Main Container */
-    .main-container {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 32px 24px;
-    }
-
-    /* Page Header */
-    .page-header {
-      margin-bottom: 32px;
-      animation: fadeInUp 0.4s ease-out;
-    }
-
-    .page-title {
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 4px;
-      letter-spacing: -0.5px;
-    }
-
-    .page-subtitle {
-      font-size: 15px;
-      color: var(--text-secondary);
-    }
-
-    /* Stats Row */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-      margin-bottom: 32px;
-      animation: fadeInUp 0.4s ease-out 0.1s backwards;
+    .stats-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
     }
 
     .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 20px 24px;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.2s;
-    }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: var(--primary);
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .stat-card:hover {
-      box-shadow: var(--shadow-md);
-      transform: translateY(-2px);
-    }
-
-    .stat-card:hover::before {
-      opacity: 1;
-    }
-
-    .stat-card:nth-child(1)::before { background: var(--primary); }
-    .stat-card:nth-child(2)::before { background: var(--accent); }
-    .stat-card:nth-child(3)::before { background: var(--success); }
-    .stat-card:nth-child(4)::before { background: var(--warning); }
-
-    .stat-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
+      padding: 18px 20px;
     }
 
     .stat-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--text-primary);
-      line-height: 1;
+      font-size: 2rem;
     }
 
-    .stat-card:nth-child(1) .stat-value { color: var(--primary); }
-    .stat-card:nth-child(2) .stat-value { color: var(--accent); }
-    .stat-card:nth-child(3) .stat-value { color: var(--success); }
-    .stat-card:nth-child(4) .stat-value { color: var(--warning); }
-
-    /* Quick Actions Section */
-    .section {
-      margin-bottom: 32px;
-      animation: fadeInUp 0.4s ease-out 0.2s backwards;
-    }
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .section-title i {
-      color: var(--text-muted);
-      font-size: 18px;
-    }
-
-    /* Action Categories */
-    .action-category {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-
-    .category-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border-light);
-    }
-
-    .category-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-    }
-
-    .category-icon.production { background: #dbeafe; color: var(--primary); }
-    .category-icon.inventory { background: #d1fae5; color: var(--success); }
-    .category-icon.washing { background: #e0f2fe; color: var(--accent); }
-    .category-icon.reports { background: #fef3c7; color: var(--warning); }
-    .category-icon.hr { background: #fce7f3; color: #db2777; }
-    .category-icon.management { background: #ede9fe; color: #7c3aed; }
-
-    .category-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
+    .page-title {
+      font-size: 1.75rem;
     }
 
     .category-actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(2, 1fr);
     }
 
-    .action-card {
-      display: flex;
+    .panel-header {
       flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 16px 12px;
-      background: var(--background-subtle);
-      border: 1px solid transparent;
-      border-radius: var(--radius-md);
-      text-decoration: none;
-      color: var(--text-primary);
-      transition: all 0.2s;
-      text-align: center;
+      align-items: flex-start;
     }
+  }
+</style>
 
-    .action-card:hover {
-      background: var(--surface);
-      border-color: var(--primary-light);
-      box-shadow: var(--shadow-md);
-      transform: translateY(-2px);
-      color: var(--primary);
-    }
+<% const isMohit = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
 
-    .action-card i {
-      font-size: 22px;
-      color: var(--text-secondary);
-      transition: color 0.2s;
-    }
+<div class="dashboard-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Operator Dashboard</h1>
+    <p class="page-subtitle">Production tracking and management overview</p>
+  </div>
 
-    .action-card:hover i {
-      color: var(--primary);
-    }
-
-    .action-card-title {
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 1.3;
-    }
-
-    /* Cards Panel */
-    .card-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      margin-bottom: 24px;
-      animation: fadeInUp 0.4s ease-out 0.3s backwards;
-    }
-
-    .card-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .card-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0;
-    }
-
-    .card-title i {
-      color: var(--primary);
-    }
-
-    .card-body {
-      padding: 20px;
-    }
-
-    /* Tables */
-    .table {
-      font-size: 13px;
-      margin-bottom: 0;
-    }
-
-    .table thead th {
-      background: var(--background-subtle);
-      border-bottom: 2px solid var(--border);
-      color: var(--text-secondary);
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 12px;
-    }
-
-    .table tbody td {
-      padding: 12px;
-      border-bottom: 1px solid var(--border-light);
-      vertical-align: middle;
-    }
-
-    .table tbody tr:hover {
-      background: var(--background-subtle);
-    }
-
-    .table tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    /* Tabulator Styles */
-    .tabulator {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      font-family: inherit;
-      font-size: 13px;
-    }
-
-    .tabulator .tabulator-header {
-      background: var(--background-subtle);
-      border-bottom: 2px solid var(--border);
-    }
-
-    .tabulator .tabulator-header .tabulator-col {
-      background: transparent;
-      border-right: 1px solid var(--border);
-    }
-
-    .tabulator .tabulator-header .tabulator-col-content {
-      padding: 12px;
-    }
-
-    .tabulator .tabulator-header .tabulator-col-title {
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-secondary);
-    }
-
-    .tabulator-row {
-      border-bottom: 1px solid var(--border-light);
-    }
-
-    .tabulator-row:hover {
-      background: var(--background-subtle) !important;
-    }
-
-    .tabulator-cell {
-      padding: 12px !important;
-    }
-
-    /* Form Controls */
-    .form-control, .form-select {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      padding: 8px 12px;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .form-control:focus, .form-select:focus {
-      border-color: var(--primary-light);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
-    .btn-primary {
-      background: var(--primary);
-      border-color: var(--primary);
-      font-weight: 500;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-dark);
-      border-color: var(--primary-dark);
-    }
-
-    /* Badges */
-    .badge {
-      font-weight: 500;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-    }
-
-    /* Alert */
-    .info-banner {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 18px;
-      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-      border: 1px solid #bfdbfe;
-      border-radius: var(--radius-md);
-      margin-bottom: 24px;
-      font-size: 13px;
-      color: var(--primary-dark);
-    }
-
-    .info-banner i {
-      font-size: 18px;
-      color: var(--primary);
-    }
-
-    /* Back to Top */
-    #backToTop {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 44px;
-      height: 44px;
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: 50%;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: var(--shadow-lg);
-      transition: all 0.2s;
-      z-index: 999;
-    }
-
-    #backToTop:hover {
-      background: var(--primary-dark);
-      transform: translateY(-3px);
-    }
-
-    /* Modal */
-    .modal-content {
-      border: none;
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-    }
-
-    .modal-header {
-      border-bottom: 1px solid var(--border);
-      padding: 16px 20px;
-    }
-
-    .modal-title {
-      font-weight: 600;
-      font-size: 16px;
-    }
-
-    .modal-body {
-      padding: 20px;
-    }
-
-    /* Animations */
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* Responsive */
-    @media (max-width: 1024px) {
-      .stats-row {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 768px) {
-      .top-nav {
-        padding: 0 16px;
-      }
-
-      .main-container {
-        padding: 20px 16px;
-      }
-
-      .stats-row {
-        grid-template-columns: 1fr;
-        gap: 12px;
-      }
-
-      .stat-card {
-        padding: 16px 20px;
-      }
-
-      .stat-value {
-        font-size: 28px;
-      }
-
-      .category-actions {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .nav-user {
-        display: none;
-      }
-
-      .page-title {
-        font-size: 24px;
-      }
-
-      .card-header {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-    }
-  </style>
-</head>
-<body>
-  <% const isMohit = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
-  <% const userInitial = (user?.username || 'O')[0].toUpperCase(); %>
-
-  <!-- Navigation -->
-  <nav class="top-nav">
-    <a href="/operator/dashboard" class="nav-brand">
-      <div class="nav-brand-icon">
-        <i class="bi bi-box-seam-fill"></i>
-      </div>
-      Kotty Track
-    </a>
-    <div class="nav-actions">
-      <div class="nav-user">
-        <div class="nav-user-avatar"><%= userInitial %></div>
-        <span><%= user?.username || 'Operator' %></span>
-      </div>
-      <a href="/logout" class="btn-logout">
-        <i class="bi bi-box-arrow-right"></i>
-        Logout
-      </a>
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Kits</div>
+      <div class="stat-value"><%= lotCount %></div>
     </div>
-  </nav>
-
-  <!-- Main Content -->
-  <div class="main-container">
-    <!-- Page Header -->
-    <div class="page-header">
-      <h1 class="page-title">Operator Dashboard</h1>
-      <p class="page-subtitle">Production tracking and management overview</p>
+    <div class="stat-card">
+      <div class="stat-label">Cut Pieces</div>
+      <div class="stat-value"><%= totalPiecesCut %></div>
     </div>
+    <div class="stat-card">
+      <div class="stat-label">Finished</div>
+      <div class="stat-value"><%= totalFinished %></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Users</div>
+      <div class="stat-value"><%= userCount %></div>
+    </div>
+  </div>
 
-    <!-- Stats Row -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Total Kits</div>
-        <div class="stat-value"><%= lotCount %></div>
+  <!-- Info Banner -->
+  <div class="info-banner">
+    <i class="bi bi-lightbulb"></i>
+    <span>Need to update stitching rates? Use the <strong>Rates</strong> action in Management section to download template and upload pricing.</span>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="section-header">
+    <h2 class="section-title"><i class="bi bi-grid-3x3-gap"></i> Quick Actions</h2>
+  </div>
+
+  <div class="action-categories">
+    <!-- Production -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon production"><i class="bi bi-gear-fill"></i></div>
+        <span class="category-title">Production</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Cut Pieces</div>
-        <div class="stat-value"><%= totalPiecesCut %></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Finished</div>
-        <div class="stat-value"><%= totalFinished %></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Users</div>
-        <div class="stat-value"><%= userCount %></div>
+      <div class="category-actions">
+        <a href="/operator/dashboard" class="action-card">
+          <i class="bi bi-speedometer2"></i>
+          <span class="action-card-title">Dashboard</span>
+        </a>
+        <a href="/operator/editcuttinglots" class="action-card">
+          <i class="bi bi-scissors"></i>
+          <span class="action-card-title">Edit Lots</span>
+        </a>
+        <a href="/operator/dashboard/download-all-lots" class="action-card">
+          <i class="bi bi-download"></i>
+          <span class="action-card-title">Export All</span>
+        </a>
+        <a href="/search-dashboard" class="action-card">
+          <i class="bi bi-search"></i>
+          <span class="action-card-title">Search</span>
+        </a>
       </div>
     </div>
 
-    <!-- Info Banner -->
-    <div class="info-banner">
-      <i class="bi bi-lightbulb"></i>
-      <span>Need to update stitching rates? Use the <strong>Rates</strong> action in Management section to download template and upload pricing.</span>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="section">
-      <div class="section-header">
-        <h2 class="section-title"><i class="bi bi-grid-3x3-gap"></i> Quick Actions</h2>
+    <!-- Inventory & Stock -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon inventory"><i class="bi bi-box-seam-fill"></i></div>
+        <span class="category-title">Inventory & Stock</span>
       </div>
-
-      <!-- Production -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon production"><i class="bi bi-gear"></i></div>
-          <span class="category-title">Production</span>
-        </div>
-        <div class="category-actions">
-          <a href="/operator/dashboard" class="action-card">
-            <i class="bi bi-speedometer2"></i>
-            <span class="action-card-title">Dashboard</span>
-          </a>
-          <a href="/operator/editcuttinglots" class="action-card">
-            <i class="bi bi-scissors"></i>
-            <span class="action-card-title">Edit Lots</span>
-          </a>
-          <a href="/operator/dashboard/download-all-lots" class="action-card">
-            <i class="bi bi-download"></i>
-            <span class="action-card-title">Export All</span>
-          </a>
-          <a href="/search-dashboard" class="action-card">
-            <i class="bi bi-search"></i>
-            <span class="action-card-title">Search</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Inventory & Stock -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon inventory"><i class="bi bi-box-seam"></i></div>
-          <span class="category-title">Inventory & Stock</span>
-        </div>
-        <div class="category-actions">
-          <a href="/easyecom/stock-market" class="action-card">
-            <i class="bi bi-bag-x"></i>
-            <span class="action-card-title">Out-of-stock</span>
-          </a>
-          <a href="/webhook/logs" class="action-card">
-            <i class="bi bi-plug"></i>
-            <span class="action-card-title">Inventory Hooks</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Washing -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon washing"><i class="bi bi-droplet"></i></div>
-          <span class="category-title">Washing</span>
-        </div>
-        <div class="category-actions">
-          <a href="/assign-to-washing" class="action-card">
-            <i class="bi bi-droplet"></i>
-            <span class="action-card-title">Assign Washing</span>
-          </a>
-          <a href="/operator/editwashingassignments" class="action-card">
-            <i class="bi bi-pencil-square"></i>
-            <span class="action-card-title">Edit Wash</span>
-          </a>
-          <a href="/operator/dashboard/washing-summary/download" class="action-card">
-            <i class="bi bi-calendar-range"></i>
-            <span class="action-card-title">Wash Monthly</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Reports -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon reports"><i class="bi bi-file-earmark-bar-graph"></i></div>
-          <span class="category-title">Reports</span>
-        </div>
-        <div class="category-actions">
-          <a href="/operator/dashboard/pic-report" class="action-card">
-            <i class="bi bi-file-earmark-check"></i>
-            <span class="action-card-title">PIC Report</span>
-          </a>
-          <a href="/operator/dashboard/pic-size-report" class="action-card">
-            <i class="bi bi-file-earmark-spreadsheet"></i>
-            <span class="action-card-title">Size PIC Report</span>
-          </a>
-          <a href="/operator/dashboard/employees/download" class="action-card">
-            <i class="bi bi-file-earmark-excel"></i>
-            <span class="action-card-title">Employee Excel</span>
-          </a>
-          <a href="/operator/dashboard/lot-departments/download" class="action-card">
-            <i class="bi bi-exclamation-diamond"></i>
-            <span class="action-card-title">Lot Dept Counts</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- HR & Finance -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon hr"><i class="bi bi-people"></i></div>
-          <span class="category-title">HR & Finance</span>
-        </div>
-        <div class="category-actions">
-          <a href="/operator/departments" class="action-card">
-            <i class="bi bi-wallet2"></i>
-            <span class="action-card-title">Salaries</span>
-          </a>
-          <a href="/operator/supervisors" class="action-card">
-            <i class="bi bi-clock"></i>
-            <span class="action-card-title">Attendance</span>
-          </a>
-          <a href="/stitchingdashboard/payments/rates" class="action-card">
-            <i class="bi bi-currency-rupee"></i>
-            <span class="action-card-title">Rates</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Management -->
-      <div class="action-category">
-        <div class="category-header">
-          <div class="category-icon management"><i class="bi bi-kanban"></i></div>
-          <span class="category-title">Management</span>
-        </div>
-        <div class="category-actions">
-          <a href="/operator/stitching-tat" class="action-card">
-            <i class="bi bi-hourglass-split"></i>
-            <span class="action-card-title">Stitching TAT</span>
-          </a>
-          <a href="/po-creator/operator/dashboard" class="action-card">
-            <i class="bi bi-box-seam"></i>
-            <span class="action-card-title">PO Management</span>
-          </a>
-          <a href="/returns/dashboard" class="action-card">
-            <i class="bi bi-arrow-return-left"></i>
-            <span class="action-card-title">Returns</span>
-          </a>
-          <% if (isMohit) { %>
-          <a href="#session-usage" class="action-card">
-            <i class="bi bi-stopwatch"></i>
-            <span class="action-card-title">Account Usage</span>
-          </a>
-          <% } %>
-        </div>
+      <div class="category-actions">
+        <a href="/easyecom/stock-market" class="action-card">
+          <i class="bi bi-bag-x"></i>
+          <span class="action-card-title">Out-of-stock</span>
+        </a>
+        <a href="/webhook/logs" class="action-card">
+          <i class="bi bi-plug"></i>
+          <span class="action-card-title">Inventory Hooks</span>
+        </a>
       </div>
     </div>
 
-    <% if (isMohit) { %>
-    <!-- Account Usage Panel (Mohit only) -->
-    <div class="card-panel" id="session-usage">
-      <div class="card-header">
-        <h2 class="card-title"><i class="bi bi-stopwatch"></i> Account Usage Overview</h2>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <select id="sessionRange" class="form-select form-select-sm" style="width: auto;">
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
-          <button class="btn btn-sm btn-primary" type="button" id="refreshSessionUsage">
-            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-          </button>
-        </div>
+    <!-- Washing -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon washing"><i class="bi bi-droplet-fill"></i></div>
+        <span class="category-title">Washing</span>
       </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table" id="sessionUsageTable">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>User</th>
-                <th>Sessions</th>
-                <th>Time Used</th>
-                <th>Last Active</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <div id="sessionUsageEmpty" class="text-muted small d-none">No account usage logged for the selected range.</div>
-        </div>
-        <p class="text-muted small mb-0 mt-3">Time used counts activity from login until logout or the most recent page view.</p>
-      </div>
-    </div>
-    <% } %>
-
-    <!-- SKU Insights Panel -->
-    <div class="card-panel">
-      <div class="card-header">
-        <h2 class="card-title"><i class="bi bi-bar-chart-line"></i> SKU Insights</h2>
-        <form method="GET" action="/operator/dashboard" class="d-flex gap-2 flex-wrap">
-          <input type="date" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>" style="width: auto;">
-          <input type="date" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>" style="width: auto;">
-          <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-        </form>
-      </div>
-      <div class="card-body">
-        <div class="row">
-          <div class="col-lg-6 mb-4 mb-lg-0">
-            <h6 class="mb-3" style="color: var(--success);"><i class="bi bi-arrow-up-square me-1"></i> Top 10 SKUs</h6>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Pieces</th>
-                    <th>% Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% advancedAnalytics.top10SKUs.forEach(item => {
-                       const pct = advancedAnalytics.totalCut > 0
-                         ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
-                         : "0.00";
-                  %>
-                  <tr>
-                    <td><strong><%= item.sku %></strong></td>
-                    <td><%= item.total.toLocaleString() %></td>
-                    <td><span class="badge bg-success"><%= pct %>%</span></td>
-                  </tr>
-                  <% }); %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div class="col-lg-6">
-            <h6 class="mb-3" style="color: var(--warning);"><i class="bi bi-arrow-down-square me-1"></i> Bottom 10 SKUs</h6>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Pieces</th>
-                    <th>% Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% advancedAnalytics.bottom10SKUs.forEach(item => {
-                       const pct = advancedAnalytics.totalCut > 0
-                         ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
-                         : "0.00";
-                  %>
-                  <tr>
-                    <td><strong><%= item.sku %></strong></td>
-                    <td><%= item.total.toLocaleString() %></td>
-                    <td><span class="badge bg-warning text-dark"><%= pct %>%</span></td>
-                  </tr>
-                  <% }); %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <div class="category-actions">
+        <a href="/assign-to-washing" class="action-card">
+          <i class="bi bi-droplet"></i>
+          <span class="action-card-title">Assign Washing</span>
+        </a>
+        <a href="/operator/editwashingassignments" class="action-card">
+          <i class="bi bi-pencil-square"></i>
+          <span class="action-card-title">Edit Wash</span>
+        </a>
+        <a href="/operator/dashboard/washing-summary/download" class="action-card">
+          <i class="bi bi-calendar-range"></i>
+          <span class="action-card-title">Wash Monthly</span>
+        </a>
       </div>
     </div>
 
-    <!-- Pendency Panel -->
-    <div class="card-panel">
-      <div class="card-header">
-        <h2 class="card-title"><i class="bi bi-hourglass-split"></i> Pendency</h2>
-        <select id="deptFilter" class="form-select form-select-sm" style="width: auto;">
-          <option value="all">All Departments</option>
-          <option value="stitching">Stitching</option>
-          <option value="assembly">Assembly</option>
-          <option value="washing">Washing</option>
-          <option value="washing_in">Washing In</option>
-          <option value="finishing">Finishing</option>
+    <!-- Reports -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon reports"><i class="bi bi-file-earmark-bar-graph-fill"></i></div>
+        <span class="category-title">Reports</span>
+      </div>
+      <div class="category-actions">
+        <a href="/operator/dashboard/pic-report" class="action-card">
+          <i class="bi bi-file-earmark-check"></i>
+          <span class="action-card-title">PIC Report</span>
+        </a>
+        <a href="/operator/dashboard/pic-size-report" class="action-card">
+          <i class="bi bi-file-earmark-spreadsheet"></i>
+          <span class="action-card-title">Size PIC Report</span>
+        </a>
+        <a href="/operator/dashboard/employees/download" class="action-card">
+          <i class="bi bi-file-earmark-excel"></i>
+          <span class="action-card-title">Employee Excel</span>
+        </a>
+        <a href="/operator/dashboard/lot-departments/download" class="action-card">
+          <i class="bi bi-exclamation-diamond"></i>
+          <span class="action-card-title">Lot Dept Counts</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- HR & Finance -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon hr"><i class="bi bi-people-fill"></i></div>
+        <span class="category-title">HR & Finance</span>
+      </div>
+      <div class="category-actions">
+        <a href="/operator/departments" class="action-card">
+          <i class="bi bi-wallet2"></i>
+          <span class="action-card-title">Salaries</span>
+        </a>
+        <a href="/operator/supervisors" class="action-card">
+          <i class="bi bi-clock"></i>
+          <span class="action-card-title">Attendance</span>
+        </a>
+        <a href="/stitchingdashboard/payments/rates" class="action-card">
+          <i class="bi bi-currency-rupee"></i>
+          <span class="action-card-title">Rates</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Management -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon management"><i class="bi bi-kanban-fill"></i></div>
+        <span class="category-title">Management</span>
+      </div>
+      <div class="category-actions">
+        <a href="/operator/stitching-tat" class="action-card">
+          <i class="bi bi-hourglass-split"></i>
+          <span class="action-card-title">Stitching TAT</span>
+        </a>
+        <a href="/po-creator/operator/dashboard" class="action-card">
+          <i class="bi bi-box-seam"></i>
+          <span class="action-card-title">PO Management</span>
+        </a>
+        <a href="/returns/dashboard" class="action-card">
+          <i class="bi bi-arrow-return-left"></i>
+          <span class="action-card-title">Returns</span>
+        </a>
+        <% if (isMohit) { %>
+        <a href="#session-usage" class="action-card">
+          <i class="bi bi-stopwatch"></i>
+          <span class="action-card-title">Account Usage</span>
+        </a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <% if (isMohit) { %>
+  <!-- Account Usage Panel -->
+  <div class="panel-card" id="session-usage">
+    <div class="panel-header">
+      <h2 class="panel-title"><i class="bi bi-stopwatch"></i> Account Usage Overview</h2>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <select id="sessionRange" class="form-select form-select-sm" style="width: auto;">
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
         </select>
-      </div>
-      <div class="card-body">
-        <div id="pendencyTable"></div>
+        <button class="btn-kotty btn-kotty-primary" type="button" id="refreshSessionUsage">
+          <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
       </div>
     </div>
+    <div class="panel-body">
+      <div class="table-responsive">
+        <table class="kotty-table" id="sessionUsageTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>User</th>
+              <th>Sessions</th>
+              <th>Time Used</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div id="sessionUsageEmpty" class="text-muted small d-none py-3 text-center">No account usage logged for the selected range.</div>
+      </div>
+      <p class="text-muted small mb-0 mt-3">Time used counts activity from login until logout or the most recent page view.</p>
+    </div>
   </div>
+  <% } %>
 
-  <!-- Back to Top Button -->
-  <button id="backToTop" aria-label="Back to top">
-    <i class="bi bi-arrow-up"></i>
-  </button>
-
-  <!-- Lot Details Modal -->
-  <div class="modal fade" id="lotModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Lot Details</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+  <!-- SKU Insights Panel -->
+  <div class="panel-card">
+    <div class="panel-header">
+      <h2 class="panel-title"><i class="bi bi-bar-chart-line"></i> SKU Insights</h2>
+      <form method="GET" action="/operator/dashboard" class="d-flex gap-2 flex-wrap">
+        <input type="date" name="startDate" class="form-control form-control-sm" value="<%= query.startDate || '' %>" style="width: auto;">
+        <input type="date" name="endDate" class="form-control form-control-sm" value="<%= query.endDate || '' %>" style="width: auto;">
+        <button type="submit" class="btn-kotty btn-kotty-primary">Apply</button>
+      </form>
+    </div>
+    <div class="panel-body">
+      <div class="sku-split">
+        <div class="sku-column">
+          <h6 class="top"><i class="bi bi-arrow-up-square-fill"></i> Top 10 SKUs</h6>
+          <div class="table-responsive">
+            <table class="kotty-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Pieces</th>
+                  <th>% Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% advancedAnalytics.top10SKUs.forEach(item => {
+                     const pct = advancedAnalytics.totalCut > 0
+                       ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                       : "0.00";
+                %>
+                <tr>
+                  <td><strong><%= item.sku %></strong></td>
+                  <td><%= item.total.toLocaleString() %></td>
+                  <td><span class="badge-kotty badge-success"><%= pct %>%</span></td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="modal-body" id="lotModalBody">
-          <div class="text-center py-4">
-            <div class="spinner-border text-primary"></div>
-            <p class="mt-2 text-muted">Loading...</p>
+        <div class="sku-column">
+          <h6 class="bottom"><i class="bi bi-arrow-down-square-fill"></i> Bottom 10 SKUs</h6>
+          <div class="table-responsive">
+            <table class="kotty-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Pieces</th>
+                  <th>% Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% advancedAnalytics.bottom10SKUs.forEach(item => {
+                     const pct = advancedAnalytics.totalCut > 0
+                       ? ((item.total / advancedAnalytics.totalCut) * 100).toFixed(2)
+                       : "0.00";
+                %>
+                <tr>
+                  <td><strong><%= item.sku %></strong></td>
+                  <td><%= item.total.toLocaleString() %></td>
+                  <td><span class="badge-kotty badge-warning"><%= pct %>%</span></td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+  <!-- Pendency Panel -->
+  <div class="panel-card">
+    <div class="panel-header">
+      <h2 class="panel-title"><i class="bi bi-hourglass-split"></i> Pendency</h2>
+      <select id="deptFilter" class="form-select form-select-sm" style="width: auto;">
+        <option value="all">All Departments</option>
+        <option value="stitching">Stitching</option>
+        <option value="assembly">Assembly</option>
+        <option value="washing">Washing</option>
+        <option value="washing_in">Washing In</option>
+        <option value="finishing">Finishing</option>
+      </select>
+    </div>
+    <div class="panel-body">
+      <div id="pendencyTable"></div>
+    </div>
+  </div>
+</div>
 
-  <script>
-    const backToTopBtn = document.getElementById('backToTop');
-    const sessionRange = document.getElementById('sessionRange');
-    const refreshSessionUsage = document.getElementById('refreshSessionUsage');
-    const sessionUsageTableBody = document.querySelector('#sessionUsageTable tbody');
-    const sessionUsageEmpty = document.getElementById('sessionUsageEmpty');
+<!-- Back to Top Button -->
+<button id="backToTop" aria-label="Back to top">
+  <i class="bi bi-arrow-up"></i>
+</button>
 
-    // Back to top button
-    window.addEventListener('scroll', () => {
-      backToTopBtn.style.display = window.pageYOffset > 300 ? 'flex' : 'none';
-    });
+<!-- Lot Details Modal -->
+<div class="modal fade" id="lotModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Lot Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="lotModalBody">
+        <div class="text-center py-4">
+          <div class="spinner-border" style="color: var(--terracotta);"></div>
+          <p class="mt-2 text-muted">Loading...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-    backToTopBtn.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+<%- include('partials/footer') %>
 
-    // Account usage table (Mohit only)
-    function formatDuration(seconds) {
-      if (seconds === undefined || seconds === null) return '—';
-      const totalSeconds = Math.max(0, Math.round(seconds));
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      if (hours === 0 && minutes === 0) return Math.max(1, Math.ceil(totalSeconds / 60)) + 'm';
-      if (hours === 0) return minutes + 'm';
-      return hours + 'h ' + minutes.toString().padStart(2, '0') + 'm';
+<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+
+<script>
+  const backToTopBtn = document.getElementById('backToTop');
+  const sessionRange = document.getElementById('sessionRange');
+  const refreshSessionUsage = document.getElementById('refreshSessionUsage');
+  const sessionUsageTableBody = document.querySelector('#sessionUsageTable tbody');
+  const sessionUsageEmpty = document.getElementById('sessionUsageEmpty');
+
+  // Back to top button
+  window.addEventListener('scroll', () => {
+    backToTopBtn.style.display = window.pageYOffset > 300 ? 'flex' : 'none';
+  });
+
+  backToTopBtn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // Account usage table (Mohit only)
+  function formatDuration(seconds) {
+    if (seconds === undefined || seconds === null) return '—';
+    const totalSeconds = Math.max(0, Math.round(seconds));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours === 0 && minutes === 0) return Math.max(1, Math.ceil(totalSeconds / 60)) + 'm';
+    if (hours === 0) return minutes + 'm';
+    return hours + 'h ' + minutes.toString().padStart(2, '0') + 'm';
+  }
+
+  function formatDate(dateValue) {
+    if (!dateValue) return '—';
+    return new Date(dateValue).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+  }
+
+  function formatDateTime(dateValue) {
+    if (!dateValue) return '—';
+    return new Date(dateValue).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+  }
+
+  async function loadSessionUsage() {
+    if (!sessionRange || !sessionUsageTableBody) return;
+    if (sessionUsageEmpty) sessionUsageEmpty.classList.add('d-none');
+
+    while (sessionUsageTableBody.firstChild) {
+      sessionUsageTableBody.removeChild(sessionUsageTableBody.firstChild);
     }
+    const loadingRow = document.createElement('tr');
+    const loadingCell = document.createElement('td');
+    loadingCell.setAttribute('colspan', '5');
+    loadingCell.className = 'text-center text-muted py-4';
+    loadingCell.textContent = 'Loading usage…';
+    loadingRow.appendChild(loadingCell);
+    sessionUsageTableBody.appendChild(loadingRow);
 
-    function formatDate(dateValue) {
-      if (!dateValue) return '—';
-      return new Date(dateValue).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-    }
+    try {
+      const days = sessionRange.value;
+      const response = await fetch('/operator/dashboard/api/session-usage?days=' + days);
+      const payload = await response.json();
+      const rows = Array.isArray(payload && payload.data) ? payload.data : [];
 
-    function formatDateTime(dateValue) {
-      if (!dateValue) return '—';
-      return new Date(dateValue).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
-    }
-
-    async function loadSessionUsage() {
-      if (!sessionRange || !sessionUsageTableBody) return;
-      if (sessionUsageEmpty) sessionUsageEmpty.classList.add('d-none');
-
-      // Show loading state safely
       while (sessionUsageTableBody.firstChild) {
         sessionUsageTableBody.removeChild(sessionUsageTableBody.firstChild);
       }
-      const loadingRow = document.createElement('tr');
-      const loadingCell = document.createElement('td');
-      loadingCell.setAttribute('colspan', '5');
-      loadingCell.className = 'text-center text-muted py-4';
-      loadingCell.textContent = 'Loading usage…';
-      loadingRow.appendChild(loadingCell);
-      sessionUsageTableBody.appendChild(loadingRow);
 
-      try {
-        const days = sessionRange.value;
-        const response = await fetch('/operator/dashboard/api/session-usage?days=' + days);
-        const payload = await response.json();
-        const rows = Array.isArray(payload && payload.data) ? payload.data : [];
+      if (!rows.length) {
+        if (sessionUsageEmpty) sessionUsageEmpty.classList.remove('d-none');
+        return;
+      }
 
-        // Clear loading state
-        while (sessionUsageTableBody.firstChild) {
-          sessionUsageTableBody.removeChild(sessionUsageTableBody.firstChild);
+      rows.forEach(function(row) {
+        const tr = document.createElement('tr');
+
+        const dateCell = document.createElement('td');
+        dateCell.textContent = formatDate(row.loginDate);
+        tr.appendChild(dateCell);
+
+        const userCell = document.createElement('td');
+        const strong = document.createElement('strong');
+        strong.textContent = row.username;
+        userCell.appendChild(strong);
+        tr.appendChild(userCell);
+
+        const sessionsCell = document.createElement('td');
+        sessionsCell.textContent = row.sessionCount;
+        tr.appendChild(sessionsCell);
+
+        const timeCell = document.createElement('td');
+        timeCell.textContent = formatDuration(row.totalSeconds);
+        tr.appendChild(timeCell);
+
+        const lastActiveCell = document.createElement('td');
+        lastActiveCell.textContent = formatDateTime(row.lastActivityAt);
+        tr.appendChild(lastActiveCell);
+
+        sessionUsageTableBody.appendChild(tr);
+      });
+    } catch (error) {
+      console.error('Unable to load session usage:', error);
+      while (sessionUsageTableBody.firstChild) {
+        sessionUsageTableBody.removeChild(sessionUsageTableBody.firstChild);
+      }
+      const errorRow = document.createElement('tr');
+      const errorCell = document.createElement('td');
+      errorCell.setAttribute('colspan', '5');
+      errorCell.className = 'text-danger text-center py-4';
+      errorCell.textContent = 'Unable to load account usage right now.';
+      errorRow.appendChild(errorCell);
+      sessionUsageTableBody.appendChild(errorRow);
+    }
+  }
+
+  if (sessionRange) {
+    loadSessionUsage();
+    sessionRange.addEventListener('change', loadSessionUsage);
+  }
+
+  if (refreshSessionUsage) {
+    refreshSessionUsage.addEventListener('click', loadSessionUsage);
+  }
+
+  // Pendency table
+  const deptFilter = document.getElementById('deptFilter');
+  const table = new Tabulator("#pendencyTable", {
+    layout: "fitColumns",
+    pagination: "local",
+    paginationSize: 50,
+    ajaxURL: "/operator/dashboard/api/pendency?dept=all",
+    placeholder: "No pendency data available",
+    columns: [
+      {
+        title: "Lot No",
+        field: "lot_no",
+        width: 150,
+        formatter: function(cell) {
+          const lotNo = cell.getValue();
+          const link = document.createElement('a');
+          link.href = '#';
+          link.style.cssText = 'color: var(--terracotta); font-weight: 600; text-decoration: none;';
+          link.textContent = lotNo;
+          link.onmouseover = function() { this.style.textDecoration = 'underline'; };
+          link.onmouseout = function() { this.style.textDecoration = 'none'; };
+          link.onclick = function(e) {
+            e.preventDefault();
+            showLotDetails(lotNo);
+          };
+          return link;
+        }
+      },
+      { title: "Username", field: "username", width: 150 },
+      { title: "Assigned", field: "assigned", width: 120 },
+      { title: "Completed", field: "completed", width: 120 },
+      {
+        title: "Pending",
+        field: "pending",
+        width: 120,
+        formatter: function(cell) {
+          const val = cell.getValue();
+          const span = document.createElement('span');
+          span.className = 'badge-kotty';
+          if (val > 100) {
+            span.classList.add('badge-danger');
+          } else if (val > 50) {
+            span.classList.add('badge-warning');
+          } else {
+            span.classList.add('badge-success');
+          }
+          span.textContent = val;
+          return span;
+        }
+      }
+    ]
+  });
+
+  deptFilter.addEventListener('change', function(e) {
+    const dept = e.target.value;
+    table.setData('/operator/dashboard/api/pendency?dept=' + dept);
+  });
+
+  // Show lot details in modal
+  function showLotDetails(lotNo) {
+    const modal = new bootstrap.Modal(document.getElementById('lotModal'));
+    const modalBody = document.getElementById('lotModalBody');
+
+    while (modalBody.firstChild) {
+      modalBody.removeChild(modalBody.firstChild);
+    }
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'text-center py-4';
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner-border';
+    spinner.style.color = 'var(--terracotta)';
+    loadingDiv.appendChild(spinner);
+    const loadingText = document.createElement('p');
+    loadingText.className = 'mt-2 text-muted';
+    loadingText.textContent = 'Loading...';
+    loadingDiv.appendChild(loadingText);
+    modalBody.appendChild(loadingDiv);
+
+    modal.show();
+
+    fetch('/operator/dashboard/api/lot?lotNo=' + lotNo)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        while (modalBody.firstChild) {
+          modalBody.removeChild(modalBody.firstChild);
         }
 
-        if (!rows.length) {
-          if (sessionUsageEmpty) sessionUsageEmpty.classList.remove('d-none');
+        if (data.error) {
+          const alert = document.createElement('div');
+          alert.className = 'alert alert-danger';
+          alert.textContent = data.error;
+          modalBody.appendChild(alert);
           return;
         }
 
-        rows.forEach(function(row) {
-          const tr = document.createElement('tr');
+        const row = document.createElement('div');
+        row.className = 'row';
 
-          const dateCell = document.createElement('td');
-          dateCell.textContent = formatDate(row.loginDate);
-          tr.appendChild(dateCell);
+        const col1 = document.createElement('div');
+        col1.className = 'col-md-6';
+        col1.innerHTML = '<p><strong>Lot No:</strong> ' + (data.lot_no || 'N/A') + '</p>' +
+                        '<p><strong>SKU:</strong> ' + (data.sku || 'N/A') + '</p>' +
+                        '<p><strong>Total Pieces:</strong> ' + (data.total_pieces || 'N/A') + '</p>' +
+                        '<p><strong>Type:</strong> ' + (data.lot_type || 'N/A') + '</p>';
 
-          const userCell = document.createElement('td');
-          const strong = document.createElement('strong');
-          strong.textContent = row.username;
-          userCell.appendChild(strong);
-          tr.appendChild(userCell);
+        const col2 = document.createElement('div');
+        col2.className = 'col-md-6';
+        col2.innerHTML = '<p><strong>Status:</strong> <span class="badge-kotty badge-info">' + (data.status || 'N/A') + '</span></p>' +
+                        '<p><strong>Created:</strong> ' + (data.created_at ? new Date(data.created_at).toLocaleDateString() : 'N/A') + '</p>' +
+                        '<p><strong>Department:</strong> ' + (data.current_department || 'N/A') + '</p>';
 
-          const sessionsCell = document.createElement('td');
-          sessionsCell.textContent = row.sessionCount;
-          tr.appendChild(sessionsCell);
-
-          const timeCell = document.createElement('td');
-          timeCell.textContent = formatDuration(row.totalSeconds);
-          tr.appendChild(timeCell);
-
-          const lastActiveCell = document.createElement('td');
-          lastActiveCell.textContent = formatDateTime(row.lastActivityAt);
-          tr.appendChild(lastActiveCell);
-
-          sessionUsageTableBody.appendChild(tr);
-        });
-      } catch (error) {
-        console.error('Unable to load session usage:', error);
-        while (sessionUsageTableBody.firstChild) {
-          sessionUsageTableBody.removeChild(sessionUsageTableBody.firstChild);
+        row.appendChild(col1);
+        row.appendChild(col2);
+        modalBody.appendChild(row);
+      })
+      .catch(function(err) {
+        while (modalBody.firstChild) {
+          modalBody.removeChild(modalBody.firstChild);
         }
-        const errorRow = document.createElement('tr');
-        const errorCell = document.createElement('td');
-        errorCell.setAttribute('colspan', '5');
-        errorCell.className = 'text-danger text-center py-4';
-        errorCell.textContent = 'Unable to load account usage right now.';
-        errorRow.appendChild(errorCell);
-        sessionUsageTableBody.appendChild(errorRow);
-      }
-    }
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger';
+        alert.textContent = 'Error loading lot details';
+        modalBody.appendChild(alert);
+      });
+  }
 
-    if (sessionRange) {
-      loadSessionUsage();
-      sessionRange.addEventListener('change', loadSessionUsage);
-    }
-
-    if (refreshSessionUsage) {
-      refreshSessionUsage.addEventListener('click', loadSessionUsage);
-    }
-
-    // Pendency table
-    const deptFilter = document.getElementById('deptFilter');
-    const table = new Tabulator("#pendencyTable", {
-      layout: "fitColumns",
-      pagination: "local",
-      paginationSize: 50,
-      ajaxURL: "/operator/dashboard/api/pendency?dept=all",
-      placeholder: "No pendency data available",
-      columns: [
-        {
-          title: "Lot No",
-          field: "lot_no",
-          width: 150,
-          formatter: function(cell) {
-            const lotNo = cell.getValue();
-            const link = document.createElement('a');
-            link.href = '#';
-            link.className = 'text-primary fw-semibold';
-            link.textContent = lotNo;
-            link.onclick = function(e) {
-              e.preventDefault();
-              showLotDetails(lotNo);
-            };
-            return link;
-          }
-        },
-        { title: "Username", field: "username", width: 150 },
-        { title: "Assigned", field: "assigned", width: 120 },
-        { title: "Completed", field: "completed", width: 120 },
-        {
-          title: "Pending",
-          field: "pending",
-          width: 120,
-          formatter: function(cell) {
-            const val = cell.getValue();
-            const span = document.createElement('span');
-            span.className = 'badge';
-            if (val > 100) {
-              span.classList.add('bg-danger');
-            } else if (val > 50) {
-              span.classList.add('bg-warning', 'text-dark');
-            } else {
-              span.classList.add('bg-success');
-            }
-            span.textContent = val;
-            return span;
-          }
-        }
-      ]
-    });
-
-    deptFilter.addEventListener('change', function(e) {
-      const dept = e.target.value;
-      table.setData('/operator/dashboard/api/pendency?dept=' + dept);
-    });
-
-    // Show lot details in modal
-    function showLotDetails(lotNo) {
-      const modal = new bootstrap.Modal(document.getElementById('lotModal'));
-      const modalBody = document.getElementById('lotModalBody');
-
-      // Clear and show loading
-      while (modalBody.firstChild) {
-        modalBody.removeChild(modalBody.firstChild);
-      }
-      const loadingDiv = document.createElement('div');
-      loadingDiv.className = 'text-center py-4';
-      const spinner = document.createElement('div');
-      spinner.className = 'spinner-border text-primary';
-      loadingDiv.appendChild(spinner);
-      const loadingText = document.createElement('p');
-      loadingText.className = 'mt-2 text-muted';
-      loadingText.textContent = 'Loading...';
-      loadingDiv.appendChild(loadingText);
-      modalBody.appendChild(loadingDiv);
-
-      modal.show();
-
-      fetch('/operator/dashboard/api/lot?lotNo=' + lotNo)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          while (modalBody.firstChild) {
-            modalBody.removeChild(modalBody.firstChild);
-          }
-
-          if (data.error) {
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-danger';
-            alert.textContent = data.error;
-            modalBody.appendChild(alert);
-            return;
-          }
-
-          const row = document.createElement('div');
-          row.className = 'row';
-
-          const col1 = document.createElement('div');
-          col1.className = 'col-md-6';
-          col1.innerHTML = '<p><strong>Lot No:</strong> ' + (data.lot_no || 'N/A') + '</p>' +
-                          '<p><strong>SKU:</strong> ' + (data.sku || 'N/A') + '</p>' +
-                          '<p><strong>Total Pieces:</strong> ' + (data.total_pieces || 'N/A') + '</p>' +
-                          '<p><strong>Type:</strong> ' + (data.lot_type || 'N/A') + '</p>';
-
-          const col2 = document.createElement('div');
-          col2.className = 'col-md-6';
-          col2.innerHTML = '<p><strong>Status:</strong> <span class="badge bg-info">' + (data.status || 'N/A') + '</span></p>' +
-                          '<p><strong>Created:</strong> ' + (data.created_at ? new Date(data.created_at).toLocaleDateString() : 'N/A') + '</p>' +
-                          '<p><strong>Department:</strong> ' + (data.current_department || 'N/A') + '</p>';
-
-          row.appendChild(col1);
-          row.appendChild(col2);
-          modalBody.appendChild(row);
-        })
-        .catch(function(err) {
-          while (modalBody.firstChild) {
-            modalBody.removeChild(modalBody.firstChild);
-          }
-          const alert = document.createElement('div');
-          alert.className = 'alert alert-danger';
-          alert.textContent = 'Error loading lot details';
-          modalBody.appendChild(alert);
-        });
-    }
-
-    window.showLotDetails = showLotDetails;
-  </script>
-</body>
-</html>
+  window.showLotDetails = showLotDetails;
+</script>

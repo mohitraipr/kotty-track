@@ -1,56 +1,246 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EasyEcom Orders & Inventory</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    body { background-color: #f5f7fb; }
-    .card { box-shadow: 0 6px 18px rgba(0,0,0,0.05); }
-    .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-    .dot-green { background-color: #28a745; }
-    .dot-orange { background-color: #fd7e14; }
-    .dot-red { background-color: #dc3545; }
-    .muted-label { font-size: 0.9rem; color: #6c757d; }
-    #status-banner { display: none; }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">EasyEcom Ops</span>
-    <div class="ms-auto d-flex align-items-center gap-2">
-      <% if (user) { %>
-        <span class="text-light small">Signed in as <strong><%= user.username || user.name %></strong></span>
-      <% } %>
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
-<div class="container py-4">
+<%- include('partials/header', { pageTitle: 'EasyEcom Ops' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/easyecom/ops' }) %>
+
+<style>
+  /* Page-specific styles */
+  .status-dot {
+    height: 10px;
+    width: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .dot-green { background-color: var(--success); }
+  .dot-orange { background-color: var(--warning); }
+  .dot-red { background-color: var(--danger); }
+
+  #status-banner {
+    display: none;
+    position: fixed;
+    top: calc(var(--navbar-height) + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    min-width: 300px;
+    max-width: 500px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .easyecom-content {
+    margin-top: var(--navbar-height);
+    padding: 28px;
+    min-height: calc(100vh - var(--navbar-height));
+    background: var(--bg-page);
+  }
+
+  @media (max-width: 768px) {
+    .easyecom-content {
+      padding: 20px 16px;
+    }
+  }
+
+  /* Override Bootstrap table styles for Kotty theme */
+  .table-light {
+    background: var(--gray-50) !important;
+  }
+
+  .table-light th {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light) !important;
+  }
+
+  .table td {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+    vertical-align: middle;
+  }
+
+  .table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* Scrollable table containers */
+  .table-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .table-scroll-sm {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  /* Badge adjustments */
+  .badge.text-bg-light {
+    background: var(--gray-100) !important;
+    color: var(--text-secondary) !important;
+  }
+
+  .badge.text-bg-secondary {
+    background: var(--gray-200) !important;
+    color: var(--text-secondary) !important;
+  }
+
+  .badge.text-bg-danger {
+    background: var(--danger-light) !important;
+    color: var(--danger) !important;
+  }
+
+  .badge.bg-primary {
+    background: var(--terracotta-bg) !important;
+    color: var(--terracotta) !important;
+  }
+
+  .badge.bg-light {
+    background: var(--gray-100) !important;
+    color: var(--text-secondary) !important;
+  }
+
+  /* Form enhancements */
+  .form-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .form-control, .form-select {
+    font-family: var(--font-body);
+    border-color: var(--border-light);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Muted label styling */
+  .muted-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Button group enhancements */
+  .btn-group .btn {
+    font-family: var(--font-body);
+  }
+
+  .btn-group .btn-primary {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+  }
+
+  .btn-group .btn-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+  }
+
+  .btn-group .btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-medium);
+  }
+
+  .btn-group .btn-outline-secondary:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+    border-color: var(--border-dark);
+  }
+
+  /* Card styling overrides */
+  .card {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    background: var(--bg-card);
+  }
+
+  .card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin-bottom: 0;
+  }
+
+  .card-body {
+    padding: 22px;
+  }
+
+  /* Button variations */
+  .btn-success {
+    background: var(--success);
+    border-color: var(--success);
+  }
+
+  .btn-success:hover {
+    background: #247a52;
+    border-color: #247a52;
+  }
+
+  .btn-outline-primary {
+    color: var(--terracotta);
+    border-color: var(--terracotta);
+  }
+
+  .btn-outline-primary:hover {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: white;
+  }
+
+  .btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-medium);
+  }
+
+  .btn-outline-secondary:hover {
+    background: var(--gray-100);
+    color: var(--text-primary);
+    border-color: var(--border-dark);
+  }
+</style>
+
+<div class="easyecom-content">
   <div id="status-banner" class="alert" role="alert"></div>
-  <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
+
+  <!-- Page Header -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
     <div>
-      <h3 class="mb-0">Orders & Inventory Health</h3>
-      <p class="text-muted mb-0">Realtime monitoring powered by EasyEcom webhooks and analytics.</p>
+      <h1 class="page-title mb-1">Orders & Inventory Health</h1>
+      <p class="page-subtitle mb-0">Realtime monitoring powered by EasyEcom webhooks and analytics.</p>
     </div>
     <div class="btn-group" role="group">
-      <button id="refresh-now" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat me-1"></i>Refresh now</button>
-      <button id="toggle-auto" class="btn btn-outline-secondary btn-sm" data-enabled="true"><i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: On</button>
+      <button id="refresh-now" class="btn btn-primary btn-sm">
+        <i class="bi bi-arrow-repeat me-1"></i>Refresh now
+      </button>
+      <button id="toggle-auto" class="btn btn-outline-secondary btn-sm" data-enabled="true">
+        <i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: On
+      </button>
     </div>
   </div>
 
-  <div class="row g-3 mb-3">
+  <!-- Filter & Rule Cards Row -->
+  <div class="row g-3 mb-4">
+    <!-- Filters Card -->
     <div class="col-lg-4">
       <div class="card h-100">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="card-title mb-0">Filters</h5>
-            <span class="badge bg-light text-dark">Period: <span id="period-label"><%= period.label %></span></span>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title">Filters</h5>
+            <span class="badge bg-light">Period: <span id="period-label"><%= period.label %></span></span>
           </div>
           <form id="filter-form" class="row g-2">
             <div class="col-12">
@@ -82,7 +272,7 @@
                 <option value="red">At risk</option>
               </select>
             </div>
-            <div class="col-12 d-flex gap-2">
+            <div class="col-12 d-flex gap-2 mt-2">
               <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Apply</button>
               <button type="button" id="clear-filters" class="btn btn-outline-secondary btn-sm">Reset</button>
             </div>
@@ -90,11 +280,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Replenishment Rule Card -->
     <div class="col-lg-4">
       <div class="card h-100">
         <div class="card-body">
-          <h5 class="card-title">Replenishment rule</h5>
-          <p class="muted-label">Save thresholds to influence reorder signals.</p>
+          <h5 class="card-title mb-2">Replenishment rule</h5>
+          <p class="muted-label mb-3">Save thresholds to influence reorder signals.</p>
           <form id="rule-form" class="row g-2">
             <div class="col-6">
               <label class="form-label">SKU *</label>
@@ -112,18 +304,22 @@
               <label class="form-label">Making time (days)</label>
               <input name="making_time_days" type="number" class="form-control form-control-sm" min="0" step="1">
             </div>
-            <div class="col-12">
-              <button class="btn btn-success btn-sm w-100" type="submit"><i class="bi bi-save me-1"></i>Save rule</button>
+            <div class="col-12 mt-2">
+              <button class="btn btn-success btn-sm w-100" type="submit">
+                <i class="bi bi-save me-1"></i>Save rule
+              </button>
             </div>
           </form>
         </div>
       </div>
     </div>
+
+    <!-- Health Check Card -->
     <div class="col-lg-4">
       <div class="card h-100">
         <div class="card-body">
-          <h5 class="card-title">Inventory health check</h5>
-          <p class="muted-label">Force a recalculation for a SKU/warehouse pairing.</p>
+          <h5 class="card-title mb-2">Inventory health check</h5>
+          <p class="muted-label mb-3">Force a recalculation for a SKU/warehouse pairing.</p>
           <form id="health-form" class="row g-2">
             <div class="col-5">
               <label class="form-label">SKU *</label>
@@ -145,8 +341,10 @@
                 <% }); %>
               </select>
             </div>
-            <div class="col-12">
-              <button class="btn btn-outline-primary btn-sm w-100" type="submit"><i class="bi bi-activity me-1"></i>Refresh health</button>
+            <div class="col-12 mt-2">
+              <button class="btn btn-outline-primary btn-sm w-100" type="submit">
+                <i class="bi bi-activity me-1"></i>Refresh health
+              </button>
             </div>
           </form>
         </div>
@@ -154,19 +352,22 @@
     </div>
   </div>
 
+  <!-- Main Data Tables Row -->
   <div class="row g-3">
+    <!-- Left Column - Order Tables -->
     <div class="col-lg-8">
+      <!-- Order Momentum Card -->
       <div class="card mb-3">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <h5 class="card-title mb-0">Order momentum</h5>
+              <h5 class="card-title">Order momentum</h5>
               <small class="text-muted">Aggregated orders inside the selected window.</small>
             </div>
             <span class="badge text-bg-light">Updated <span id="summary-updated">just now</span></span>
           </div>
-          <div class="table-responsive mt-3">
-            <table class="table table-sm align-middle" id="order-summary-table">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" id="order-summary-table">
               <thead class="table-light">
                 <tr>
                   <th>SKU</th>
@@ -182,18 +383,20 @@
           </div>
         </div>
       </div>
+
+      <!-- Realtime Order Feed Card -->
       <div class="card">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <h5 class="card-title mb-0">Realtime order feed</h5>
+              <h5 class="card-title">Realtime order feed</h5>
               <small class="text-muted">Automatically refreshes every 15 seconds.</small>
             </div>
-            <span class="badge bg-dark" id="realtime-window"><%= period.label %></span>
+            <span class="badge bg-primary" id="realtime-window"><%= period.label %></span>
           </div>
-          <div class="table-responsive mt-3">
-            <table class="table table-sm align-middle" id="order-realtime-table">
-              <thead class="table-dark">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" id="order-realtime-table">
+              <thead class="table-light">
                 <tr>
                   <th>SKU</th>
                   <th>Warehouse</th>
@@ -209,15 +412,18 @@
         </div>
       </div>
     </div>
+
+    <!-- Right Column - Status & Alerts -->
     <div class="col-lg-4">
+      <!-- Inventory Status Card -->
       <div class="card mb-3">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">Inventory status</h5>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title">Inventory status</h5>
             <span class="badge text-bg-secondary" id="status-count">0 SKUs</span>
           </div>
-          <div class="table-responsive mt-3" style="max-height: 420px; overflow-y: auto;">
-            <table class="table table-sm align-middle" id="inventory-status-table">
+          <div class="table-responsive table-scroll">
+            <table class="table table-sm align-middle mb-0" id="inventory-status-table">
               <thead class="table-light">
                 <tr>
                   <th>SKU</th>
@@ -231,14 +437,16 @@
           </div>
         </div>
       </div>
+
+      <!-- Alerts Card -->
       <div class="card">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">Alerts</h5>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title">Alerts</h5>
             <span class="badge text-bg-danger" id="alert-count">0</span>
           </div>
-          <div class="table-responsive mt-3" style="max-height: 260px; overflow-y: auto;">
-            <table class="table table-sm" id="alerts-table">
+          <div class="table-responsive table-scroll-sm">
+            <table class="table table-sm mb-0" id="alerts-table">
               <thead class="table-light">
                 <tr>
                   <th>SKU</th>
@@ -283,78 +491,149 @@
   let realtimeTimer = null;
 
   function formatDate(value) {
-    if (!value) return '—';
+    if (!value) return '\u2014';
     const dt = new Date(value);
     if (Number.isNaN(dt.getTime())) return value;
     return dt.toLocaleString('en-CA', { hour12: false });
   }
 
+  function escapeHtml(text) {
+    if (text === null || text === undefined) return '\u2014';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+
   function renderOrders(rows, targetBody) {
-    targetBody.innerHTML = '';
+    targetBody.textContent = '';
     if (!rows || !rows.length) {
-      targetBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No data</td></tr>';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '6');
+      td.className = 'text-center text-muted';
+      td.textContent = 'No data';
+      tr.appendChild(td);
+      targetBody.appendChild(tr);
       return;
     }
     rows.forEach((row) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${row.sku || '—'}</td>
-        <td>${row.warehouse_id ?? '—'}</td>
-        <td>${row.marketplace_id ?? '—'}</td>
-        <td class="text-end">${row.order_count ?? 0}</td>
-        <td class="text-end">${(row.drr_per_day ?? 0).toFixed(2)}</td>
-        <td>${formatDate(row.last_order_date)}</td>
-      `;
+
+      const tdSku = document.createElement('td');
+      tdSku.textContent = row.sku || '\u2014';
+      tr.appendChild(tdSku);
+
+      const tdWarehouse = document.createElement('td');
+      tdWarehouse.textContent = row.warehouse_id ?? '\u2014';
+      tr.appendChild(tdWarehouse);
+
+      const tdMarketplace = document.createElement('td');
+      tdMarketplace.textContent = row.marketplace_id ?? '\u2014';
+      tr.appendChild(tdMarketplace);
+
+      const tdOrders = document.createElement('td');
+      tdOrders.className = 'text-end';
+      tdOrders.textContent = row.order_count ?? 0;
+      tr.appendChild(tdOrders);
+
+      const tdDrr = document.createElement('td');
+      tdDrr.className = 'text-end';
+      tdDrr.textContent = (row.drr_per_day ?? 0).toFixed(2);
+      tr.appendChild(tdDrr);
+
+      const tdLastOrder = document.createElement('td');
+      tdLastOrder.textContent = formatDate(row.last_order_date);
+      tr.appendChild(tdLastOrder);
+
       targetBody.appendChild(tr);
     });
   }
 
   function renderAlerts(rows) {
-    alertBody.innerHTML = '';
+    alertBody.textContent = '';
     if (!rows || !rows.length) {
-      alertBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No alerts</td></tr>';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '4');
+      td.className = 'text-center text-muted';
+      td.textContent = 'No alerts';
+      tr.appendChild(td);
+      alertBody.appendChild(tr);
       alertCount.textContent = '0';
       return;
     }
     rows.forEach((row) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${row.sku}</td>
-        <td>${row.warehouse_id ?? '—'}</td>
-        <td>${row.inventory ?? row.quantity ?? '—'}</td>
-        <td>${formatDate(row.created_at || row.updated_at)}</td>
-      `;
+
+      const tdSku = document.createElement('td');
+      tdSku.textContent = row.sku;
+      tr.appendChild(tdSku);
+
+      const tdWarehouse = document.createElement('td');
+      tdWarehouse.textContent = row.warehouse_id ?? '\u2014';
+      tr.appendChild(tdWarehouse);
+
+      const tdQty = document.createElement('td');
+      tdQty.textContent = row.inventory ?? row.quantity ?? '\u2014';
+      tr.appendChild(tdQty);
+
+      const tdWhen = document.createElement('td');
+      tdWhen.textContent = formatDate(row.created_at || row.updated_at);
+      tr.appendChild(tdWhen);
+
       alertBody.appendChild(tr);
     });
     alertCount.textContent = rows.length;
   }
 
   function renderStatuses(rows) {
-    statusBody.innerHTML = '';
+    statusBody.textContent = '';
     if (!rows || !rows.length) {
-      statusBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No inventory rows</td></tr>';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.setAttribute('colspan', '4');
+      td.className = 'text-center text-muted';
+      td.textContent = 'No inventory rows';
+      tr.appendChild(td);
+      statusBody.appendChild(tr);
       statusCount.textContent = '0 SKUs';
       return;
     }
     rows.forEach((row) => {
       const tr = document.createElement('tr');
       const color = row.status === 'red' ? 'dot-red' : row.status === 'orange' ? 'dot-orange' : 'dot-green';
-      tr.innerHTML = `
-        <td>${row.sku}</td>
-        <td>${row.warehouse_id ?? '—'}</td>
-        <td><span class="status-dot ${color}"></span>${row.status}</td>
-        <td class="text-end">${row.inventory ?? '—'}</td>
-      `;
+
+      const tdSku = document.createElement('td');
+      tdSku.textContent = row.sku;
+      tr.appendChild(tdSku);
+
+      const tdWarehouse = document.createElement('td');
+      tdWarehouse.textContent = row.warehouse_id ?? '\u2014';
+      tr.appendChild(tdWarehouse);
+
+      const tdStatus = document.createElement('td');
+      const dotSpan = document.createElement('span');
+      dotSpan.className = 'status-dot ' + color;
+      tdStatus.appendChild(dotSpan);
+      tdStatus.appendChild(document.createTextNode(row.status));
+      tr.appendChild(tdStatus);
+
+      const tdInventory = document.createElement('td');
+      tdInventory.className = 'text-end';
+      tdInventory.textContent = row.inventory ?? '\u2014';
+      tr.appendChild(tdInventory);
+
       statusBody.appendChild(tr);
     });
-    statusCount.textContent = `${rows.length} SKU${rows.length === 1 ? '' : 's'}`;
+    statusCount.textContent = rows.length + ' SKU' + (rows.length === 1 ? '' : 's');
   }
 
-  function showBanner(message, type = 'info') {
+  function showBanner(message, type) {
+    type = type || 'info';
     banner.textContent = message;
-    banner.className = `alert alert-${type}`;
+    banner.className = 'alert alert-' + type;
     banner.style.display = 'block';
-    setTimeout(() => { banner.style.display = 'none'; }, 4000);
+    setTimeout(function() { banner.style.display = 'none'; }, 4000);
   }
 
   function currentQuery() {
@@ -367,7 +646,8 @@
     };
   }
 
-  async function fetchJson(url, options = {}) {
+  async function fetchJson(url, options) {
+    options = options || {};
     const res = await fetch(url, options);
     if (!res.ok) {
       const errText = await res.text();
@@ -384,7 +664,7 @@
       warehouseId: query.warehouseId,
       sku: query.sku,
     });
-    const data = await fetchJson(`/api/easyecom/orders/summary?${params.toString()}`);
+    const data = await fetchJson('/api/easyecom/orders/summary?' + params.toString());
     renderOrders(data.results, summaryBody);
     periodLabel.textContent = data.period.label;
     realtimeWindow.textContent = data.period.label;
@@ -399,7 +679,7 @@
       warehouseId: query.warehouseId,
       sku: query.sku,
     });
-    const data = await fetchJson(`/api/easyecom/orders/realtime?${params.toString()}`);
+    const data = await fetchJson('/api/easyecom/orders/realtime?' + params.toString());
     renderOrders(data.results, realtimeBody);
   }
 
@@ -407,7 +687,7 @@
     const query = currentQuery();
     const params = new URLSearchParams();
     if (query.warehouseId) params.set('warehouseId', query.warehouseId);
-    const data = await fetchJson(`/api/easyecom/inventory/alerts?${params.toString()}`);
+    const data = await fetchJson('/api/easyecom/inventory/alerts?' + params.toString());
     renderAlerts(data.alerts || []);
   }
 
@@ -416,7 +696,7 @@
     const params = new URLSearchParams();
     if (query.warehouseId) params.set('warehouseId', query.warehouseId);
     if (query.status) params.set('status', query.status);
-    const data = await fetchJson(`/api/easyecom/inventory/status?${params.toString()}`);
+    const data = await fetchJson('/api/easyecom/inventory/status?' + params.toString());
     renderStatuses(data.statuses || []);
   }
 
@@ -426,7 +706,7 @@
     realtimeTimer = setInterval(refreshRealtime, 15000);
   }
 
-  document.getElementById('refresh-now').addEventListener('click', async () => {
+  document.getElementById('refresh-now').addEventListener('click', async function() {
     try {
       await Promise.all([refreshSummary(), refreshRealtime(), refreshAlerts(), refreshStatuses()]);
       showBanner('Dashboard refreshed', 'success');
@@ -436,10 +716,10 @@
     }
   });
 
-  document.getElementById('toggle-auto').addEventListener('click', (e) => {
+  document.getElementById('toggle-auto').addEventListener('click', function(e) {
     autoRefresh = !autoRefresh;
     e.target.dataset.enabled = autoRefresh;
-    e.target.innerHTML = `<i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: ${autoRefresh ? 'On' : 'Off'}`;
+    e.target.innerHTML = '<i class="bi bi-broadcast-pin me-1"></i>Auto-refresh: ' + (autoRefresh ? 'On' : 'Off');
     if (autoRefresh) {
       refreshRealtime().catch(console.error);
       scheduleRealtime();
@@ -448,7 +728,7 @@
     }
   });
 
-  document.getElementById('filter-form').addEventListener('submit', async (e) => {
+  document.getElementById('filter-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     try {
       await Promise.all([refreshSummary(), refreshRealtime(), refreshAlerts(), refreshStatuses()]);
@@ -459,7 +739,7 @@
     }
   });
 
-  document.getElementById('clear-filters').addEventListener('click', () => {
+  document.getElementById('clear-filters').addEventListener('click', function() {
     periodSelect.value = '<%= period.key %>';
     marketplaceInput.value = '';
     warehouseInput.value = '';
@@ -467,7 +747,7 @@
     invStatusInput.value = '';
   });
 
-  document.getElementById('rule-form').addEventListener('submit', async (e) => {
+  document.getElementById('rule-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const form = e.target;
     const payload = Object.fromEntries(new FormData(form).entries());
@@ -485,7 +765,7 @@
     }
   });
 
-  document.getElementById('health-form').addEventListener('submit', async (e) => {
+  document.getElementById('health-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const form = e.target;
     const payload = Object.fromEntries(new FormData(form).entries());
@@ -518,6 +798,5 @@
 
   hydrateInitial();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

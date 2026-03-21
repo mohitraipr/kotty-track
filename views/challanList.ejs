@@ -1,144 +1,193 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Challan List</title>
-  <!-- Bootstrap & Font Awesome -->
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    integrity="sha512-buD2vAa2mW1yj78BzFzM/6kWTHpveG62CmG0cy8bcS9A7cdsI1hD2eiGeBv1rCR3dOfh1JvHS5hLSG/T0YX1ZA=="
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Challan List' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/challandashboard' }) %>
 
-  <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <a class="navbar-brand" href="#">
-      <i class="fas fa-file-invoice"></i> KOTTY CHALLAN
-    </a>
-    <button
-      class="navbar-toggler"
-      type="button"
-      data-toggle="collapse"
-      data-target="#navbarNav"
-      aria-controls="navbarNav"
-      aria-expanded="false"
-      aria-label="Toggle navigation"
-    >
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <!-- Left side placeholders if needed -->
-      <ul class="navbar-nav mr-auto"></ul>
-      <!-- Right side links -->
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link" href="/challandashboard">
-            <i class="fas fa-tachometer-alt"></i>
-            Dashboard
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link active" href="/challanlist">
-            <i class="fas fa-list"></i>
-            Challan List
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="/logout" class="btn btn-sm btn-danger ml-2">
-            <i class="fas fa-sign-out-alt"></i>
-            Logout
-          </a>
-        </li>
-      </ul>
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/challandashboard">Dashboard</a>
+        <span class="separator">/</span>
+        <span>Challan List</span>
+      </div>
+      <h1 class="page-title">Challan List</h1>
+      <p class="page-subtitle">View and manage all challans</p>
     </div>
-  </nav>
-  <!-- END NAVBAR -->
 
-  <div class="container mt-3">
+    <!-- Alerts -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger">
-        <% error.forEach(msg => { %><p><%= msg %></p><% }); %>
+        <i class="bi bi-exclamation-circle"></i>
+        <div>
+          <% error.forEach(msg => { %><p class="mb-0"><%= msg %></p><% }); %>
+        </div>
       </div>
     <% } %>
     <% if (success && success.length) { %>
       <div class="alert alert-success">
-        <% success.forEach(msg => { %><p><%= msg %></p><% }); %>
+        <i class="bi bi-check-circle"></i>
+        <div>
+          <% success.forEach(msg => { %><p class="mb-0"><%= msg %></p><% }); %>
+        </div>
       </div>
     <% } %>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="mb-0">
-        <i class="fas fa-list"></i>
-        Challan List
-      </h2>
+    <!-- Search Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <form method="GET" action="/challanlist" class="d-flex flex-wrap gap-3 align-items-end">
+          <div class="flex-grow-1" style="min-width: 250px; max-width: 400px;">
+            <label class="form-label">Search Challans</label>
+            <div class="position-relative">
+              <input
+                type="text"
+                name="search"
+                value="<%= search %>"
+                class="form-input"
+                placeholder="Search by Challan No or Lot No"
+                style="padding-left: 40px;"
+              >
+              <i class="bi bi-search position-absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search"></i> Search
+          </button>
+          <% if (search) { %>
+            <a href="/challanlist" class="btn btn-secondary">
+              <i class="bi bi-x-lg"></i> Clear
+            </a>
+          <% } %>
+        </form>
+      </div>
     </div>
 
-    <form method="GET" action="/challanlist" class="form-inline my-3">
-      <input
-        type="text"
-        name="search"
-        value="<%= search %>"
-        class="form-control mr-2"
-        placeholder="Search by Challan No or Lot No"
-      >
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-search"></i> Search
-      </button>
-    </form>
-
-    <table class="table table-bordered table-striped">
-      <thead class="thead-dark">
-        <tr>
-          <th>ID</th>
-          <th>Challan No</th>
-          <th>Date</th>
-          <th>Consignee</th>
-          <th>Total Value</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
+    <!-- Challans Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-file-earmark-text me-2" style="color: var(--terracotta);"></i>
+          All Challans
+        </h2>
         <% if (challans && challans.length) { %>
-          <% challans.forEach(ch => { %>
-            <tr>
-              <td><%= ch.id %></td>
-              <td><%= ch.challan_no %></td>
-              <td>
-                <% if (ch.challan_date) { %>
-                  <%= ch.challan_date.toLocaleDateString('en-CA') %>
-                <% } else { %>
-                  --
-                <% } %>
-              </td>
-              <td><%= ch.consignee_name %></td>
-              <td><%= ch.total_amount %></td>
-              <td>
-                <a href="/challandashboard/view/<%= ch.id %>" class="btn btn-sm btn-info">
-                  <i class="fas fa-eye"></i> View/Print
-                </a>
-              </td>
-            </tr>
-          <% }); %>
-        <% } else { %>
-          <tr>
-            <td colspan="6" class="text-center">No Challans Found</td>
-          </tr>
+          <span class="badge badge-primary"><%= challans.length %> records</span>
         <% } %>
-      </tbody>
-    </table>
+      </div>
+
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Challan No</th>
+                <th>Date</th>
+                <th>Consignee</th>
+                <th>Total Value</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (challans && challans.length) { %>
+                <% challans.forEach(ch => { %>
+                  <tr>
+                    <td>
+                      <span class="badge badge-neutral">#<%= ch.id %></span>
+                    </td>
+                    <td>
+                      <span style="font-weight: 500; color: var(--text-primary);"><%= ch.challan_no %></span>
+                    </td>
+                    <td>
+                      <% if (ch.challan_date) { %>
+                        <div class="d-flex align-items-center gap-2">
+                          <i class="bi bi-calendar3" style="color: var(--text-muted); font-size: 0.875rem;"></i>
+                          <%= ch.challan_date.toLocaleDateString('en-CA') %>
+                        </div>
+                      <% } else { %>
+                        <span class="text-muted">--</span>
+                      <% } %>
+                    </td>
+                    <td><%= ch.consignee_name %></td>
+                    <td>
+                      <span style="font-weight: 500; color: var(--terracotta);">
+                        <%= ch.total_amount ? '₹' + Number(ch.total_amount).toLocaleString('en-IN') : '--' %>
+                      </span>
+                    </td>
+                    <td style="text-align: center;">
+                      <a href="/challandashboard/view/<%= ch.id %>" class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye"></i> View/Print
+                      </a>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="6">
+                    <div class="empty-state">
+                      <div class="empty-state-icon">
+                        <i class="bi bi-file-earmark-x" style="font-size: 3rem;"></i>
+                      </div>
+                      <h3 class="empty-state-title">No Challans Found</h3>
+                      <p class="empty-state-text">
+                        <% if (search) { %>
+                          No challans match your search criteria. Try adjusting your search terms.
+                        <% } else { %>
+                          There are no challans to display at the moment.
+                        <% } %>
+                      </p>
+                      <% if (search) { %>
+                        <a href="/challanlist" class="btn btn-secondary mt-3">
+                          <i class="bi bi-arrow-left"></i> Back to All Challans
+                        </a>
+                      <% } %>
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
+</main>
 
-  <!-- Bootstrap JS -->
-  <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<style>
+  /* Page-specific styles */
+  .main-content {
+    margin-left: 0 !important;
+  }
 
-</html>
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 768px) {
+    .page-header {
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+
+    .table th,
+    .table td {
+      padding: 10px 12px;
+      white-space: nowrap;
+    }
+
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 0.75rem;
+    }
+  }
+</style>
+
+<%- include('partials/footer') %>

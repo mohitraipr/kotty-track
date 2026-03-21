@@ -1,65 +1,162 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Washing Item Rates</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Washing Item Rates</span>
-    <a href="/operator" class="btn btn-outline-light btn-sm">Dashboard</a>
+<%- include('partials/header', { pageTitle: 'Washing Rate Config' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/washingdashboard' }) %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container" style="max-width: 900px;">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/washingdashboard">Washing Dashboard</a>
+        <span class="separator">/</span>
+        <span>Rate Config</span>
+      </div>
+      <h1 class="page-title">Washing Item Rates</h1>
+      <p class="page-subtitle">Configure and manage washing rates for different item types</p>
+    </div>
+
+    <!-- Alert Messages -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <span><%= error %></span>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i>
+        <span><%= success %></span>
+      </div>
+    <% } %>
+
+    <!-- Existing Rates Card -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-list-ul me-2" style="color: var(--terracotta);"></i>
+          Existing Item Rates
+        </h2>
+        <span class="badge badge-neutral"><%= items.length %> items</span>
+      </div>
+      <div class="card-body p-0">
+        <% if (items.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-currency-rupee" style="font-size: 48px;"></i>
+            </div>
+            <h3 class="empty-state-title">No Rates Configured</h3>
+            <p class="empty-state-text">Add your first item rate below to get started.</p>
+          </div>
+        <% } else { %>
+          <div class="table-container" style="border: none; border-radius: 0;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th style="width: 180px;">Rate (INR)</th>
+                  <th style="width: 100px;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% items.forEach(function(r){ %>
+                  <tr>
+                    <form method="POST" action="/washingdashboard/payments/rates/update">
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <i class="bi bi-tag text-muted"></i>
+                          <span><%= r.description %></span>
+                        </div>
+                        <input type="hidden" name="description" value="<%= r.description %>">
+                      </td>
+                      <td>
+                        <div class="input-group">
+                          <span class="input-group-text" style="background: var(--gray-100); border-color: var(--border-light); color: var(--text-secondary);">
+                            <i class="bi bi-currency-rupee"></i>
+                          </span>
+                          <input type="number" step="0.01" name="rate" value="<%= r.rate %>"
+                                 class="form-control form-input"
+                                 style="border-top-left-radius: 0; border-bottom-left-radius: 0;">
+                        </div>
+                      </td>
+                      <td>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                          <i class="bi bi-check-lg"></i>
+                          Save
+                        </button>
+                      </td>
+                    </form>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Add New Item Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-plus-circle me-2" style="color: var(--success);"></i>
+          Add New Item
+        </h2>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/washingdashboard/payments/rates/update">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Item Description</label>
+              <input type="text" name="description" placeholder="Enter item description"
+                     class="form-control form-input" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Rate (INR)</label>
+              <div class="input-group">
+                <span class="input-group-text" style="background: var(--gray-100); border-color: var(--border-light); color: var(--text-secondary);">
+                  <i class="bi bi-currency-rupee"></i>
+                </span>
+                <input type="number" step="0.01" name="rate" placeholder="0.00"
+                       class="form-control form-input"
+                       style="border-top-left-radius: 0; border-bottom-left-radius: 0;" required>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-plus-lg"></i>
+                Add
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-</nav>
-<div class="container mt-4">
-  <% if (error && error.length) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
-  <% if (success && success.length) { %>
-    <div class="alert alert-success"><%= success %></div>
-  <% } %>
+</main>
 
-  <h5>Existing Item Rates</h5>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th style="width:200px">Rate</th>
-        <th style="width:100px"></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% items.forEach(function(r){ %>
-        <tr>
-          <form method="POST" action="/washingdashboard/payments/rates/update" class="row g-2">
-            <td><%= r.description %><input type="hidden" name="description" value="<%= r.description %>"></td>
-            <td><input type="number" step="0.01" name="rate" value="<%= r.rate %>" class="form-control"></td>
-            <td><button type="submit" class="btn btn-sm btn-primary">Save</button></td>
-          </form>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
+<style>
+  /* Page-specific styles */
+  .input-group-text {
+    font-size: var(--text-sm);
+  }
 
-  <hr>
-  <h5>Add New Item</h5>
-  <form method="POST" action="/washingdashboard/payments/rates/update" class="row g-2">
-    <div class="col-md-6">
-      <input type="text" name="description" placeholder="Item description" class="form-control" required>
-    </div>
-    <div class="col-md-4">
-      <input type="number" step="0.01" name="rate" placeholder="Rate" class="form-control" required>
-    </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-success">Add</button>
-    </div>
-  </form>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+  .table td form {
+    display: contents;
+  }
+
+  .table .input-group {
+    min-width: 120px;
+  }
+
+  @media (max-width: 768px) {
+    .row.g-3 > div {
+      margin-bottom: 0.5rem;
+    }
+
+    .col-md-2 {
+      margin-top: 0.5rem;
+    }
+  }
+</style>
+
+<%- include('partials/footer') %>

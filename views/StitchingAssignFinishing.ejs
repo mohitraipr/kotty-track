@@ -1,229 +1,418 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Assign to Finishing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-  />
-  <style>
-    body {
-      background-color: #f8f9fa;
-    }
-    .main-content {
-      margin-top: 1rem;
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid px-3">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-people-carry me-1"></i> Assign to Finishing
-      </a>
-      <div class="ms-auto">
-        <a href="/stitchingdashboard" class="btn btn-outline-light btn-sm">
-          <i class="fas fa-arrow-left"></i> Back
-        </a>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'Assign Finishing' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
 
-  <div class="container main-content">
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
     <!-- Flash Messages -->
     <% if (error && error.length > 0) { %>
       <% error.forEach(function(msg){ %>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-triangle me-2"></i>
           <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="float: right;"></button>
         </div>
       <% }) %>
     <% } %>
     <% if (success && success.length > 0) { %>
       <% success.forEach(function(msg){ %>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <div class="alert alert-success" role="alert">
+          <i class="bi bi-check-circle me-2"></i>
           <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="float: right;"></button>
         </div>
       <% }) %>
     <% } %>
 
-    <h3 class="mb-3"><i class="fas fa-people-carry"></i> Assign Partial Sizes to Finishing</h3>
-
-    <!-- Search Field -->
-    <div class="mb-3">
-      <label for="searchInput" class="form-label">Search by Lot or SKU:</label>
-      <input type="text" id="searchInput" class="form-control" placeholder="Type to filter..." />
-    </div>
-
-    <!-- Container for leftover sizes -->
-    <div id="assignmentsContainer"></div>
-
-    <!-- Form for submission -->
-    <form id="assignFinishingForm" method="POST" action="/stitchingdashboard/assign-finishing" class="mt-3">
-      <div class="row mb-3">
-        <div class="col-md-4">
-          <label for="target_day" class="form-label fw-semibold">Target Day (optional)</label>
-          <input type="date" class="form-control" name="target_day" id="target_day" />
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <nav class="breadcrumbs">
+            <a href="/stitchingdashboard">Stitching</a>
+            <span class="separator">/</span>
+            <span>Assign Finishing</span>
+          </nav>
+          <h1 class="page-title">Assign to Finishing</h1>
+          <p class="page-subtitle">Assign partial sizes to finishing department</p>
+        </div>
+        <div>
+          <a href="/stitchingdashboard" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Back to Dashboard
+          </a>
         </div>
       </div>
-      <button type="submit" class="btn btn-primary">
-        <i class="fas fa-paper-plane"></i> Submit Assignments
-      </button>
-    </form>
-  </div>
+    </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    let finishingUsers = [];
-    let allData = []; // Will be an array of objects: { stitching_assignment_id, lot_no, sku, cutting_remark, sizes: [{ size_label, pieces }] }
-    const searchInput = document.getElementById('searchInput');
-    const assignmentsContainer = document.getElementById('assignmentsContainer');
-    const assignFinishingForm = document.getElementById('assignFinishingForm');
-
-    // 1) Fetch finishing users
-    async function fetchFinishingUsers() {
-      try {
-        const resp = await fetch('/stitchingdashboard/assign-finishing/users');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        finishingUsers = json.data || [];
-      } catch (err) {
-        console.error('[ERROR] fetchFinishingUsers =>', err);
-      }
-    }
-
-    // 2) Fetch leftover sizes (assign-finishing/data)
-    async function fetchUnassignedData() {
-      try {
-        const resp = await fetch('/stitchingdashboard/assign-finishing/data');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        allData = json.data || [];
-        renderData();
-      } catch (err) {
-        console.error('[ERROR] fetchUnassignedData =>', err);
-        assignmentsContainer.innerHTML = '<div class="alert alert-danger">Error loading data.</div>';
-      }
-    }
-
-    function renderData() {
-      assignmentsContainer.innerHTML = '';
-      if (!allData.length) {
-        assignmentsContainer.innerHTML = '<div class="alert alert-info">No unassigned sizes found.</div>';
-        return;
-      }
-      const filterVal = searchInput.value.trim().toLowerCase();
-      const filtered = allData.filter(entry => {
-        const combined = (entry.lot_no + ' ' + entry.sku).toLowerCase();
-        return combined.includes(filterVal);
-      });
-      if (!filtered.length) {
-        assignmentsContainer.innerHTML = '<div class="alert alert-warning">No matching results.</div>';
-        return;
-      }
-      filtered.forEach(entry => {
-        // entry: { stitching_assignment_id, lot_no, sku, cutting_remark, sizes: [ { size_label, pieces } ] }
-        const card = document.createElement('div');
-        card.classList.add('card', 'mb-3');
-        card.innerHTML = `
-          <div class="card-header">
-            <strong>Lot:</strong> ${entry.lot_no} | 
-            <strong>SKU:</strong> ${entry.sku} | 
-            <strong>Cutting Remark:</strong> ${entry.cutting_remark || 'N/A'} | 
-            <span class="badge bg-secondary">StitchAsg ID: ${entry.stitching_assignment_id}</span>
+    <!-- Search Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row align-items-end">
+          <div class="col-md-6 col-lg-4">
+            <label for="searchInput" class="form-label">Search by Lot or SKU</label>
+            <div class="input-group">
+              <span class="input-group-text" style="background: var(--bg-card); border-color: var(--border-light);">
+                <i class="bi bi-search text-muted"></i>
+              </span>
+              <input
+                type="text"
+                id="searchInput"
+                class="form-control form-input"
+                placeholder="Type to filter..."
+                style="border-left: none;"
+              />
+            </div>
           </div>
-          <div class="card-body">
-            <table class="table table-bordered">
-              <thead class="table-light">
+        </div>
+      </div>
+    </div>
+
+    <!-- Assignments Container -->
+    <div id="assignmentsContainer">
+      <!-- Cards will be populated by JavaScript -->
+    </div>
+
+    <!-- Submission Form -->
+    <form id="assignFinishingForm" method="POST" action="/stitchingdashboard/assign-finishing">
+      <div class="card mt-4">
+        <div class="card-header">
+          <h3 class="card-title">
+            <i class="bi bi-calendar-check me-2"></i>
+            Submission Details
+          </h3>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-4">
+              <div class="form-group">
+                <label for="target_day" class="form-label">Target Day (optional)</label>
+                <input
+                  type="date"
+                  class="form-control form-input"
+                  name="target_day"
+                  id="target_day"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send me-2"></i>
+            Submit Assignments
+          </button>
+        </div>
+      </div>
+    </form>
+
+  </div>
+</main>
+
+<style>
+  /* Page-specific styles */
+  .assignment-card {
+    transition: all var(--transition-fast);
+  }
+
+  .assignment-card:hover {
+    border-color: var(--border-medium);
+  }
+
+  .assignment-card .card-header {
+    background: var(--gray-50);
+  }
+
+  .assignment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: var(--text-sm);
+  }
+
+  .assignment-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .assignment-meta-item strong {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .assignment-meta-item span {
+    color: var(--text-primary);
+  }
+
+  .sizes-table {
+    margin-bottom: 0;
+  }
+
+  .sizes-table th {
+    background: var(--gray-50);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .sizes-table td {
+    padding: 14px 16px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .sizes-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .sizes-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .size-label {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .pieces-count {
+    font-weight: 600;
+    color: var(--terracotta);
+  }
+
+  .finishing-select {
+    min-width: 200px;
+  }
+
+  /* Empty state styling */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .assignment-meta {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .finishing-select {
+      min-width: 150px;
+      width: 100%;
+    }
+
+    .sizes-table th,
+    .sizes-table td {
+      padding: 10px 12px;
+    }
+  }
+</style>
+
+<script>
+  let finishingUsers = [];
+  let allData = []; // Will be an array of objects: { stitching_assignment_id, lot_no, sku, cutting_remark, sizes: [{ size_label, pieces }] }
+  const searchInput = document.getElementById('searchInput');
+  const assignmentsContainer = document.getElementById('assignmentsContainer');
+  const assignFinishingForm = document.getElementById('assignFinishingForm');
+
+  // Helper function to escape HTML to prevent XSS
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // 1) Fetch finishing users
+  async function fetchFinishingUsers() {
+    try {
+      const resp = await fetch('/stitchingdashboard/assign-finishing/users');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      finishingUsers = json.data || [];
+    } catch (err) {
+      console.error('[ERROR] fetchFinishingUsers =>', err);
+    }
+  }
+
+  // 2) Fetch leftover sizes (assign-finishing/data)
+  async function fetchUnassignedData() {
+    try {
+      const resp = await fetch('/stitchingdashboard/assign-finishing/data');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      allData = json.data || [];
+      renderData();
+    } catch (err) {
+      console.error('[ERROR] fetchUnassignedData =>', err);
+      assignmentsContainer.innerHTML = `
+        <div class="alert alert-danger">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          Error loading data. Please try again.
+        </div>
+      `;
+    }
+  }
+
+  function renderData() {
+    assignmentsContainer.innerHTML = '';
+    if (!allData.length) {
+      assignmentsContainer.innerHTML = `
+        <div class="card">
+          <div class="card-body empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
+            </div>
+            <h3 class="empty-state-title">No Unassigned Sizes</h3>
+            <p class="empty-state-text">All sizes have been assigned to finishing. Check back later.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    const filterVal = searchInput.value.trim().toLowerCase();
+    const filtered = allData.filter(entry => {
+      const combined = (entry.lot_no + ' ' + entry.sku).toLowerCase();
+      return combined.includes(filterVal);
+    });
+    if (!filtered.length) {
+      assignmentsContainer.innerHTML = `
+        <div class="alert alert-warning">
+          <i class="bi bi-search me-2"></i>
+          No matching results found for your search.
+        </div>
+      `;
+      return;
+    }
+    filtered.forEach(entry => {
+      // entry: { stitching_assignment_id, lot_no, sku, cutting_remark, sizes: [ { size_label, pieces } ] }
+      const card = document.createElement('div');
+      card.classList.add('card', 'mb-3', 'assignment-card');
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="assignment-meta">
+            <div class="assignment-meta-item">
+              <strong>Lot:</strong>
+              <span>${escapeHtml(entry.lot_no)}</span>
+            </div>
+            <div class="assignment-meta-item">
+              <strong>SKU:</strong>
+              <span>${escapeHtml(entry.sku)}</span>
+            </div>
+            <div class="assignment-meta-item">
+              <strong>Cutting Remark:</strong>
+              <span>${escapeHtml(entry.cutting_remark || 'N/A')}</span>
+            </div>
+            <div class="assignment-meta-item">
+              <span class="badge badge-neutral">ID: ${escapeHtml(String(entry.stitching_assignment_id))}</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table sizes-table">
+              <thead>
                 <tr>
                   <th>Size Label</th>
                   <th>Pieces</th>
                   <th>Finishing User</th>
                 </tr>
               </thead>
-              <tbody id="tbody-asg-${entry.stitching_assignment_id}"></tbody>
+              <tbody id="tbody-asg-${escapeHtml(String(entry.stitching_assignment_id))}"></tbody>
             </table>
           </div>
+        </div>
+      `;
+      assignmentsContainer.appendChild(card);
+      const tbody = document.getElementById(`tbody-asg-${entry.stitching_assignment_id}`);
+      entry.sizes.forEach(sz => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="size-label">${escapeHtml(sz.size_label)}</span></td>
+          <td><span class="pieces-count">${escapeHtml(String(sz.pieces))}</span></td>
+          <td>
+            <select class="form-select form-input finishing-select finishingSelect">
+              <option value="">-- Select User --</option>
+              ${
+                finishingUsers.map(u => `<option value="${escapeHtml(String(u.id))}">${escapeHtml(u.username)}</option>`).join('')
+              }
+            </select>
+          </td>
         `;
-        assignmentsContainer.appendChild(card);
-        const tbody = document.getElementById(`tbody-asg-${entry.stitching_assignment_id}`);
-        entry.sizes.forEach(sz => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${sz.size_label}</td>
-            <td>${sz.pieces}</td>
-            <td>
-              <select class="form-select finishingSelect">
-                <option value="">--Select--</option>
-                ${
-                  finishingUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')
-                }
-              </select>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
+        tbody.appendChild(tr);
       });
-    }
-
-    searchInput.addEventListener('input', () => {
-      renderData();
     });
+  }
 
-    // On form submit, build the hidden input for finishingAssignments
-    assignFinishingForm.addEventListener('submit', (e) => {
-      // Remove any existing hidden inputs
-      document.querySelectorAll('.finishingAssignmentField').forEach(el => el.remove());
+  searchInput.addEventListener('input', () => {
+    renderData();
+  });
 
-      // Build final object: { finishingUserId: [ { stitching_assignment_id, size_label }, ... ] }
-      const finalObj = {};
-      allData.forEach(entry => {
-        const sAsgId = entry.stitching_assignment_id;
-        const tbody = document.getElementById(`tbody-asg-${sAsgId}`);
-        if (!tbody) return;
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(r => {
-          const sizeLabel = r.cells[0].textContent.trim();
-          const finSelect = r.cells[2].querySelector('select.finishingSelect');
-          const finUserVal = finSelect.value;
-          if (finUserVal) {
-            if (!finalObj[finUserVal]) {
-              finalObj[finUserVal] = [];
-            }
-            finalObj[finUserVal].push({
-              stitching_assignment_id: sAsgId,
-              size_label: sizeLabel
-            });
+  // On form submit, build the hidden input for finishingAssignments
+  assignFinishingForm.addEventListener('submit', (e) => {
+    // Remove any existing hidden inputs
+    document.querySelectorAll('.finishingAssignmentField').forEach(el => el.remove());
+
+    // Build final object: { finishingUserId: [ { stitching_assignment_id, size_label }, ... ] }
+    const finalObj = {};
+    allData.forEach(entry => {
+      const sAsgId = entry.stitching_assignment_id;
+      const tbody = document.getElementById(`tbody-asg-${sAsgId}`);
+      if (!tbody) return;
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(r => {
+        const sizeLabel = r.cells[0].textContent.trim();
+        const finSelect = r.cells[2].querySelector('select.finishingSelect');
+        const finUserVal = finSelect.value;
+        if (finUserVal) {
+          if (!finalObj[finUserVal]) {
+            finalObj[finUserVal] = [];
           }
-        });
+          finalObj[finUserVal].push({
+            stitching_assignment_id: sAsgId,
+            size_label: sizeLabel
+          });
+        }
       });
-      console.log('[DEBUG] finalObj =>', finalObj);
-
-      // Create hidden input with finalObj as JSON
-      const hidden = document.createElement('input');
-      hidden.type = 'hidden';
-      hidden.name = 'finishingAssignments';
-      hidden.value = JSON.stringify(finalObj);
-      hidden.classList.add('finishingAssignmentField');
-      assignFinishingForm.appendChild(hidden);
     });
+    console.log('[DEBUG] finalObj =>', finalObj);
 
-    (async function init() {
-      await fetchFinishingUsers();
-      await fetchUnassignedData();
-    })();
-  </script>
-</body>
-</html>
+    // Create hidden input with finalObj as JSON
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'finishingAssignments';
+    hidden.value = JSON.stringify(finalObj);
+    hidden.classList.add('finishingAssignmentField');
+    assignFinishingForm.appendChild(hidden);
+  });
+
+  (async function init() {
+    await fetchFinishingUsers();
+    await fetchUnassignedData();
+  })();
+</script>
+
+<%- include('partials/footer') %>

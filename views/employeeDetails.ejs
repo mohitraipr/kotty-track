@@ -1,140 +1,670 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Employee Details</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Roboto', sans-serif; font-size: 0.95rem; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand"><%= employee.name %> (<%= employee.designation || 'N/A' %>) - Details</span>
-    <div class="ms-auto">
-      <a href="/supervisor/employees" class="btn btn-outline-light btn-sm me-2">Back</a>
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+<%- include('partials/header', { pageTitle: 'Employee Details' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  /* Page Layout */
+  .page-wrapper {
+    padding-top: var(--navbar-height, 60px);
+    min-height: 100vh;
+    background: var(--bg-page, #faf8f5);
+  }
+
+  .page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 28px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .page-title-section {
+    flex: 1;
+  }
+
+  .breadcrumb-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: var(--text-muted, #a8a49a);
+    margin-bottom: 8px;
+  }
+
+  .breadcrumb-nav a {
+    color: var(--text-secondary, #5a5650);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .breadcrumb-nav a:hover {
+    color: var(--terracotta, #c45c3a);
+  }
+
+  .breadcrumb-nav .separator {
+    color: var(--border-medium, #d4d1c9);
+  }
+
+  .page-title {
+    font-family: var(--font-display, 'DM Serif Display', serif);
+    font-size: 1.875rem;
+    color: var(--text-primary, #1a1a1a);
+    margin: 0 0 4px 0;
+  }
+
+  .page-subtitle {
+    font-size: 0.9375rem;
+    color: var(--text-secondary, #5a5650);
+    margin: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  /* Leave Balance Card */
+  .balance-card {
+    background: linear-gradient(135deg, var(--charcoal, #1a1a1a) 0%, var(--charcoal-light, #2d2d2d) 100%);
+    border-radius: var(--radius-lg, 8px);
+    padding: 24px 28px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    color: white;
+  }
+
+  .balance-icon {
+    width: 56px;
+    height: 56px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+  }
+
+  .balance-content h3 {
+    font-family: var(--font-display, 'DM Serif Display', serif);
+    font-size: 1.75rem;
+    margin: 0 0 4px 0;
+    font-weight: 400;
+  }
+
+  .balance-content p {
+    font-size: 0.875rem;
+    opacity: 0.7;
+    margin: 0;
+  }
+
+  /* Section Cards */
+  .section-card {
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border-light, #e8e6e1);
+    border-radius: var(--radius-lg, 8px);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-light, #e8e6e1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .section-title {
+    font-family: var(--font-display, 'DM Serif Display', serif);
+    font-size: 1.125rem;
+    color: var(--text-primary, #1a1a1a);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title i {
+    color: var(--terracotta, #c45c3a);
+  }
+
+  .section-body {
+    padding: 24px;
+  }
+
+  /* Form Styles */
+  .kotty-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+  }
+
+  .form-field {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .form-field.wide {
+    flex: 2;
+    min-width: 250px;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary, #5a5650);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .form-control {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    font-size: 0.9375rem;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    border: 1px solid var(--border-light, #e8e6e1);
+    border-radius: var(--radius-md, 6px);
+    background: white;
+    color: var(--text-primary, #1a1a1a);
+    transition: all 0.2s ease;
+  }
+
+  .form-control:hover {
+    border-color: var(--border-medium, #d4d1c9);
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta, #c45c3a);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+  }
+
+  .form-control::placeholder {
+    color: var(--text-muted, #a8a49a);
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 20px;
+    height: 44px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    border-radius: var(--radius-md, 6px);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta, #c45c3a);
+    color: white;
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark, #a34a2d);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(196, 92, 58, 0.25);
+  }
+
+  .btn-kotty-success {
+    background: var(--success, #2d8a5f);
+    color: white;
+  }
+
+  .btn-kotty-success:hover {
+    background: #267a53;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(45, 138, 95, 0.25);
+  }
+
+  .btn-kotty-danger {
+    background: var(--danger, #c23b22);
+    color: white;
+  }
+
+  .btn-kotty-danger:hover {
+    background: #a83320;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(194, 59, 34, 0.25);
+  }
+
+  .btn-kotty-outline {
+    background: transparent;
+    color: var(--text-primary, #1a1a1a);
+    border: 1px solid var(--border-medium, #d4d1c9);
+  }
+
+  .btn-kotty-outline:hover {
+    background: var(--gray-100, #f5f5f3);
+    border-color: var(--border-dark, #a8a49a);
+  }
+
+  /* Table Styles */
+  .kotty-table-container {
+    overflow-x: auto;
+    margin: 0 -24px -24px;
+    padding: 0 24px 24px;
+  }
+
+  .kotty-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+
+  .kotty-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #5a5650);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--gray-50, #fafaf9);
+    border-bottom: 1px solid var(--border-light, #e8e6e1);
+  }
+
+  .kotty-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light, #e8e6e1);
+    color: var(--text-primary, #1a1a1a);
+    vertical-align: middle;
+  }
+
+  .kotty-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--gray-50, #fafaf9);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted, #a8a49a);
+  }
+
+  .empty-state i {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 0.9375rem;
+  }
+
+  /* Dihadi Notice */
+  .notice-card {
+    background: var(--warning-light, #fef6e8);
+    border: 1px solid rgba(196, 135, 58, 0.2);
+    border-radius: var(--radius-lg, 8px);
+    padding: 20px 24px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .notice-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(196, 135, 58, 0.15);
+    border-radius: var(--radius-md, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warning, #c4873a);
+    font-size: 1.25rem;
+  }
+
+  .notice-content h4 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary, #1a1a1a);
+    margin: 0 0 4px 0;
+  }
+
+  .notice-content p {
+    font-size: 0.875rem;
+    color: var(--text-secondary, #5a5650);
+    margin: 0;
+  }
+
+  /* Amount Badge */
+  .amount-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: var(--radius-full, 9999px);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .amount-badge.debit {
+    background: var(--danger-light, #fdf2f0);
+    color: var(--danger, #c23b22);
+  }
+
+  .amount-badge.advance {
+    background: var(--success-light, #e8f5ee);
+    color: var(--success, #2d8a5f);
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .page-container {
+      padding: 20px 16px;
+    }
+
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .header-actions {
+      width: 100%;
+    }
+
+    .header-actions .btn-kotty {
+      flex: 1;
+    }
+
+    .balance-card {
+      padding: 20px;
+    }
+
+    .kotty-form {
+      flex-direction: column;
+    }
+
+    .form-field,
+    .form-field.wide {
+      width: 100%;
+      flex: none;
+    }
+
+    .section-body {
+      padding: 16px;
+    }
+
+    .kotty-table-container {
+      margin: 0 -16px -16px;
+      padding: 0 16px 16px;
+    }
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-title-section">
+        <nav class="breadcrumb-nav">
+          <a href="/supervisor/employees">Employees</a>
+          <span class="separator"><i class="bi bi-chevron-right"></i></span>
+          <span><%= employee.name %></span>
+        </nav>
+        <h1 class="page-title"><%= employee.name %></h1>
+        <p class="page-subtitle"><%= employee.designation || 'No designation' %> &middot; Employee Details</p>
+      </div>
+      <div class="header-actions">
+        <a href="/supervisor/employees" class="btn-kotty btn-kotty-outline">
+          <i class="bi bi-arrow-left"></i>
+          Back
+        </a>
+      </div>
+    </div>
+
+    <%- include('partials/flashMessages') %>
+
+    <% if (employee.salary_type !== 'dihadi') { %>
+      <!-- Leave Balance Card -->
+      <div class="balance-card">
+        <div class="balance-icon">
+          <i class="bi bi-calendar-check"></i>
+        </div>
+        <div class="balance-content">
+          <h3><%= leaveBalance %> days</h3>
+          <p>Available leave balance</p>
+        </div>
+      </div>
+
+      <!-- Add Leave Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            <i class="bi bi-calendar-plus"></i>
+            Add Leave
+          </h2>
+        </div>
+        <div class="section-body">
+          <form action="/supervisor/employees/<%= employee.id %>/leaves" method="POST" class="kotty-form">
+            <div class="form-field">
+              <label class="form-label">Leave Date</label>
+              <input type="date" name="leave_date" class="form-control" required>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Days</label>
+              <input type="number" step="0.5" name="days" class="form-control" placeholder="e.g., 1 or 0.5" required>
+            </div>
+            <div class="form-field wide">
+              <label class="form-label">Remark (Optional)</label>
+              <input type="text" name="remark" class="form-control" placeholder="Reason for leave">
+            </div>
+            <button type="submit" class="btn-kotty btn-kotty-primary">
+              <i class="bi bi-plus-lg"></i>
+              Add Leave
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Leave History Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2 class="section-title">
+            <i class="bi bi-clock-history"></i>
+            Leave History
+          </h2>
+        </div>
+        <div class="section-body" style="padding: 0;">
+          <% if (leaves.length > 0) { %>
+            <div class="kotty-table-container" style="margin: 0; padding: 0;">
+              <table class="kotty-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Days</th>
+                    <th>Remark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% leaves.forEach(l => { %>
+                    <tr>
+                      <td><%= l.leave_date.toLocaleDateString('en-CA') %></td>
+                      <td><%= l.days %></td>
+                      <td><%= l.remark || '-' %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <div class="empty-state">
+              <i class="bi bi-calendar-x"></i>
+              <p>No leave records found</p>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% } else { %>
+      <!-- Dihadi Notice -->
+      <div class="notice-card">
+        <div class="notice-icon">
+          <i class="bi bi-info-circle"></i>
+        </div>
+        <div class="notice-content">
+          <h4>Leave Tracking Not Available</h4>
+          <p>Leave tracking is not applicable for dihadi (daily wage) employees.</p>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Add Debit Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="bi bi-dash-circle"></i>
+          Add Debit
+        </h2>
+      </div>
+      <div class="section-body">
+        <form action="/supervisor/employees/<%= employee.id %>/debits" method="POST" class="kotty-form">
+          <div class="form-field">
+            <label class="form-label">Amount</label>
+            <input type="number" step="0.01" name="amount" class="form-control" placeholder="Enter amount" required>
+          </div>
+          <div class="form-field wide">
+            <label class="form-label">Reason (Optional)</label>
+            <input type="text" name="reason" class="form-control" placeholder="Reason for debit">
+          </div>
+          <button type="submit" class="btn-kotty btn-kotty-danger">
+            <i class="bi bi-plus-lg"></i>
+            Add Debit
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Debit History Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="bi bi-receipt"></i>
+          Debit History
+        </h2>
+      </div>
+      <div class="section-body" style="padding: 0;">
+        <% if (debits.length > 0) { %>
+          <div class="kotty-table-container" style="margin: 0; padding: 0;">
+            <table class="kotty-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% debits.forEach(d => { %>
+                  <tr>
+                    <td><%= d.added_at.toLocaleDateString('en-CA') %></td>
+                    <td><span class="amount-badge debit">-<%= d.amount %></span></td>
+                    <td><%= d.reason || '-' %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <div class="empty-state">
+            <i class="bi bi-receipt-cutoff"></i>
+            <p>No debit records found</p>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Add Advance Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="bi bi-plus-circle"></i>
+          Add Advance
+        </h2>
+      </div>
+      <div class="section-body">
+        <form action="/supervisor/employees/<%= employee.id %>/advances" method="POST" class="kotty-form">
+          <div class="form-field">
+            <label class="form-label">Amount</label>
+            <input type="number" step="0.01" name="amount" class="form-control" placeholder="Enter amount" required>
+          </div>
+          <div class="form-field wide">
+            <label class="form-label">Reason (Optional)</label>
+            <input type="text" name="reason" class="form-control" placeholder="Reason for advance">
+          </div>
+          <button type="submit" class="btn-kotty btn-kotty-success">
+            <i class="bi bi-plus-lg"></i>
+            Add Advance
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Advance History Section -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="bi bi-wallet2"></i>
+          Advance History
+        </h2>
+      </div>
+      <div class="section-body" style="padding: 0;">
+        <% if (advances.length > 0) { %>
+          <div class="kotty-table-container" style="margin: 0; padding: 0;">
+            <table class="kotty-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% advances.forEach(a => { %>
+                  <tr>
+                    <td><%= a.added_at.toLocaleDateString('en-CA') %></td>
+                    <td><span class="amount-badge advance">+<%= a.amount %></span></td>
+                    <td><%= a.reason || '-' %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <div class="empty-state">
+            <i class="bi bi-wallet"></i>
+            <p>No advance records found</p>
+          </div>
+        <% } %>
+      </div>
     </div>
   </div>
-</nav>
-<div class="container-fluid my-4">
-  <%- include('partials/flashMessages') %>
-
-  <% if (employee.salary_type !== 'dihadi') { %>
-    <h5>Leave Balance: <%= leaveBalance %> days</h5>
-    <form action="/supervisor/employees/<%= employee.id %>/leaves" method="POST" class="row g-2 mb-4">
-      <div class="col-md-3">
-        <input type="date" name="leave_date" class="form-control" required>
-      </div>
-      <div class="col-md-2">
-        <input type="number" step="0.5" name="days" class="form-control" placeholder="Days" required>
-      </div>
-      <div class="col-md-5">
-        <input type="text" name="remark" class="form-control" placeholder="Remark">
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary">Add Leave</button>
-      </div>
-    </form>
-
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Days</th>
-          <th>Remark</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% leaves.forEach(l => { %>
-          <tr>
-            <td><%= l.leave_date.toLocaleDateString('en-CA') %></td>
-            <td><%= l.days %></td>
-            <td><%= l.remark || '' %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  <% } else { %>
-    <h5>Leave tracking not available for dihadi employees.</h5>
-  <% } %>
-
-  <hr>
-  <h6>Add Debit</h6>
-  <form action="/supervisor/employees/<%= employee.id %>/debits" method="POST" class="row g-2 mb-3">
-    <div class="col-md-3">
-      <input type="number" step="0.01" name="amount" class="form-control" placeholder="Amount" required>
-    </div>
-    <div class="col-md-7">
-      <input type="text" name="reason" class="form-control" placeholder="Reason">
-    </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-danger">Add Debit</button>
-    </div>
-  </form>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Amount</th>
-        <th>Reason</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% debits.forEach(d => { %>
-        <tr>
-          <td><%= d.added_at.toLocaleDateString('en-CA') %></td>
-          <td><%= d.amount %></td>
-          <td><%= d.reason || '' %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-
-  <hr>
-  <h6>Add Advance</h6>
-  <form action="/supervisor/employees/<%= employee.id %>/advances" method="POST" class="row g-2 mb-3">
-    <div class="col-md-3">
-      <input type="number" step="0.01" name="amount" class="form-control" placeholder="Amount" required>
-    </div>
-    <div class="col-md-7">
-      <input type="text" name="reason" class="form-control" placeholder="Reason">
-    </div>
-    <div class="col-md-2">
-      <button type="submit" class="btn btn-success">Add Advance</button>
-    </div>
-  </form>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Amount</th>
-        <th>Reason</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% advances.forEach(a => { %>
-        <tr>
-          <td><%= a.added_at.toLocaleDateString('en-CA') %></td>
-          <td><%= a.amount %></td>
-          <td><%= a.reason || '' %></td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-  const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.forEach(t => new bootstrap.Tooltip(t));
-</script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

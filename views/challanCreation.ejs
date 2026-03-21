@@ -1,432 +1,471 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Delivery Challan</title>
-  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
-  <style>
-    /* Reset and Base Styling */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: 'Roboto', sans-serif;
-      font-size: 11px;
-      color: #333;
-      line-height: 1.5;
-      background-color: #f9f9f9;
-      padding: 20px;
-    }
-    .container {
-      max-width: 800px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border: 1px solid #ddd;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      display: flex;
-      flex-direction: column;
-      min-height: 90vh;
-    }
-    /* Print Button */
-    .print-btn {
-      padding: 6px 12px;
-      font-size: 11px;
-      margin-bottom: 15px;
-      cursor: pointer;
-    }
-    @media print {
-      .print-btn {
-        display: none;
-      }
-    }
-    /* Utility Classes */
-    .text-left { text-align: left; }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    
-    /* Watermark */
-    .watermark {
-      text-align: right;
-      font-size: 9px;
-      color: #aaa;
-      margin-bottom: 10px;
-    }
-    /* Header */
-    .header {
-      text-align: center;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #444;
-    }
-    .header h1 {
-      font-size: 16px;
-      text-decoration: underline;
-      letter-spacing: 1px;
-      color: #222;
-    }
-    /* Top Sender Details Section - Force one row without wrapping */
+<%- include('partials/header', { pageTitle: 'Delivery Challan' }) %>
+<%- include('partials/navbar', { user: typeof user !== 'undefined' ? user : undefined, dashboardUrl: '/challandashboard' }) %>
+
+<style>
+  /* Challan-specific styles using Kotty Theme variables */
+  .challan-container {
+    max-width: 850px;
+    margin: 0 auto;
+    background: var(--bg-card);
+    padding: 32px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Print Button Area */
+  .print-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  /* Watermark */
+  .challan-watermark {
+    text-align: right;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  /* Challan Header */
+  .challan-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--charcoal);
+  }
+
+  .challan-header h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    text-decoration: underline;
+    letter-spacing: 1px;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  /* Sender Section Top */
+  .sender-section-top {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: nowrap;
+    gap: 16px;
+  }
+
+  .sender-details-col {
+    flex: 0 0 40%;
+  }
+
+  .sender-details-col2,
+  .sender-details-col3 {
+    flex: 0 0 28%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    text-align: left;
+  }
+
+  .company-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: var(--text-lg);
+    color: var(--charcoal);
+    margin-bottom: 8px;
+  }
+
+  .company-address {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    white-space: pre-line;
+    line-height: 1.6;
+  }
+
+  /* Label-Value Pairs */
+  .label-value {
+    display: flex;
+    margin-bottom: 6px;
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .label-value .label {
+    width: 100px;
+    font-weight: 500;
+    color: var(--charcoal);
+    text-align: right;
+    margin-right: 8px;
+  }
+
+  .label-value .value {
+    flex: 1;
+    color: var(--text-primary);
+  }
+
+  /* Consignee Section */
+  .consignee-section {
+    margin-bottom: 20px;
+  }
+
+  .consignee-section table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .consignee-section td {
+    padding: 10px 12px;
+    vertical-align: top;
+  }
+
+  .consignee-section .col-label {
+    font-weight: 600;
+    border-top: 1px solid var(--charcoal);
+    padding-bottom: 6px;
+    color: var(--charcoal);
+    background: var(--cream-dark);
+  }
+
+  /* Place of Supply */
+  .supply-section {
+    font-size: var(--text-sm);
+    padding: 10px 12px;
+    border-top: 2px solid var(--charcoal);
+    border-bottom: 2px solid var(--charcoal);
+    margin-bottom: 20px;
+    background: var(--cream-dark);
+  }
+
+  .supply-section strong {
+    color: var(--charcoal);
+  }
+
+  /* Items Table */
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: var(--text-sm);
+  }
+
+  .items-table th,
+  .items-table td {
+    border: 1px solid var(--border-medium);
+    padding: 10px 8px;
+  }
+
+  .items-table th {
+    text-align: center;
+    font-weight: 600;
+    background: var(--cream-darker);
+    color: var(--charcoal);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .items-table td {
+    vertical-align: top;
+    color: var(--text-primary);
+  }
+
+  .items-table tr:nth-child(even) {
+    background: var(--gray-50);
+  }
+
+  .items-table .text-left { text-align: left; }
+  .items-table .text-center { text-align: center; }
+  .items-table .text-right { text-align: right; }
+
+  /* Summary Details */
+  .summary-details {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-medium);
+    text-align: right;
+    line-height: 1.8;
+    font-size: var(--text-sm);
+  }
+
+  .summary-details div {
+    margin: 6px 0;
+  }
+
+  .summary-details strong {
+    color: var(--charcoal);
+  }
+
+  /* Footer */
+  .challan-footer {
+    text-align: right;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    margin-top: 24px;
+    color: var(--text-primary);
+  }
+
+  .signatory {
+    margin-top: 60px;
+    width: 200px;
+    border-top: 1px solid var(--charcoal);
+    text-align: center;
+    padding-top: 8px;
+    margin-left: auto;
+    font-weight: 500;
+    color: var(--charcoal);
+  }
+
+  /* Responsive */
+  @media screen and (max-width: 768px) {
     .sender-section-top {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 15px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
     }
-    .sender-details-col {
-      flex: 0 0 43%;
-      margin-bottom: 0;
-    }
+    .sender-details-col,
     .sender-details-col2,
     .sender-details-col3 {
-      flex: 0 0 28%;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      text-align: left;
-      margin-bottom: 0;
-    }
-    /* Label-Value Pair for Fixed Alignment */
-    .label-value {
-      display: flex;
-      margin-bottom: 4px;
-      align-items: center;
+      flex: 0 0 100%;
+      margin-bottom: 16px;
     }
     .label-value .label {
-      width: 110px;  /* Fixed width for all labels */
-      font-weight: 500;
-      color: #222;
-      text-align: right;
-      margin-right: 5px;
+      width: 90px;
     }
-    .label-value .value {
-      flex: 1;
+    .challan-container {
+      padding: 20px;
+      margin: 0 12px;
     }
-    .company-name {
-      font-weight: 700;
-      font-size: 14px;
+  }
+
+  /* Print Styles */
+  @media print {
+    body {
+      background: white !important;
+      margin: 0;
+      padding: 0;
     }
-    .company-address {
-      font-size: 11px;
-      color: #555;
-      white-space: pre-line;
+    .kotty-navbar,
+    .print-actions,
+    .sidebar-overlay {
+      display: none !important;
     }
-    /* Consignee Details */
-    .consignee-section table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-      margin-bottom: 15px;
+    .main-content {
+      margin: 0 !important;
+      padding: 10px !important;
     }
-    .consignee-section td {
-      padding: 6px;
-      vertical-align: top;
-    }
-    .consignee-section .col-label {
-      font-weight: 500;
-      border-top: 1px solid #333;
-      padding-bottom: 4px;
-      color: #222;
-    }
-    /* Place of Supply */
-    .supply-section {
-      margin-top: 10px;
-      font-size: 11px;
-      padding: 6px;
-      border-top: 2px solid #000;
-      border-bottom: 2px solid #000;
-      margin-bottom: 15px;
-    }
-    /* Items Table */
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-      font-size: 11px;
-    }
-    .items-table th,
-    .items-table td {
-      border: 1px solid #ddd;
-      padding: 6px;
+    .challan-container {
+      box-shadow: none;
+      border: none;
+      padding: 15px;
+      max-width: 100%;
     }
     .items-table th {
-      text-align: center;
-      font-weight: 500;
-      background: #e8e8e8;
+      background: #e8e8e8 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .items-table td {
-      vertical-align: top;
-    }
-    .items-table .align-left { text-align: left; }
-    .items-table .align-center { text-align: center; }
-    .items-table .align-right { text-align: right; }
     .items-table tr:nth-child(even) {
-      background: #f9f9f9;
+      background: #f9f9f9 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    /* Totals Summary */
-    .summary-details {
-      margin-top: 15px;
-      padding-top: 15px;
-      border-top: 1px solid #ccc;
-      text-align: right;
-      line-height: 1.6;
-      font-size: 11px;
+    .consignee-section .col-label,
+    .supply-section {
+      background: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .summary-details div {
-      margin: 4px 0;
-    }
-    /* Footer */
-    .footer {
-      text-align: right;
-      font-size: 11px;
-      line-height: 1.5;
-      margin-top: 15px;
-    }
-    .signatory {
-      margin-top: 50px;
-      width: 200px;
-      border-top: 1px solid #333;
-      text-align: center;
-      padding-top: 5px;
-      margin-left: auto;
-    }
-    /* Responsive Adjustments */
-    @media screen and (max-width: 600px) {
-      .sender-section-top {
-        flex-wrap: wrap;
-      }
-      .sender-details-col,
-      .sender-details-col2,
-      .sender-details-col3 {
-        flex: 0 0 100%;
-        margin-bottom: 10px;
-      }
-      .items-table,
-      .consignee-section table,
-      .supply-section {
-        font-size: 10px;
-      }
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+  }
+</style>
 
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
+<!-- Main Content Area -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid py-4">
+
+    <div class="challan-container">
+      <!-- Print Actions -->
+      <div class="print-actions">
+        <button class="btn btn-secondary" onclick="window.history.back()">
+          <i class="bi bi-arrow-left me-1"></i>Back
+        </button>
+        <button class="btn btn-primary" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Print Challan
+        </button>
       </div>
-    </div>
-  </nav>
 
-  <div class="container">
-    <!-- Print Button -->
-    <button class="print-btn" onclick="window.print()">Print</button>
-    <!-- Header -->
-    <div class="header">
-      <h1>DELIVERY CHALLAN</h1>
-    </div>
-    
-    <!-- Top Sender Details Section -->
-    <div class="sender-section-top">
-      <!-- Column 1: Sender Info -->
-      <div class="sender-details-col">
-        <div class="sender-item">
+      <!-- Challan Header -->
+      <div class="challan-header">
+        <h1>DELIVERY CHALLAN</h1>
+      </div>
+
+      <!-- Top Sender Details Section -->
+      <div class="sender-section-top">
+        <!-- Column 1: Sender Info -->
+        <div class="sender-details-col">
           <div class="company-name">KOTTY LIFESTYLE<br>PRIVATE LIMITED</div>
-        </div>
-        <div class="sender-item">
           <div class="company-address">
-            GB-65, BHARAT VIHAR,
-            LAKKARPUR, FARIDABAD,
-            HARYANA, Haryana 121009
+GB-65, BHARAT VIHAR,
+LAKKARPUR, FARIDABAD,
+HARYANA, Haryana 121009
           </div>
         </div>
-      </div>
-      
-      <!-- Column 2: Sender GSTIN Details -->
-      <div class="sender-details-col2">
-        <div class="sender-item">
+
+        <!-- Column 2: Sender GSTIN Details -->
+        <div class="sender-details-col2">
           <div class="label-value">
             <div class="label">GSTIN:</div>
             <div class="value"><%= challan.sender.gstin %></div>
           </div>
-        </div>
-        <div class="sender-item">
           <div class="label-value">
             <div class="label">State:</div>
             <div class="value"><%= challan.sender.state %></div>
           </div>
-        </div>
-        <div class="sender-item">
           <div class="label-value">
             <div class="label">PAN:</div>
             <div class="value"><%= challan.sender.pan %></div>
           </div>
         </div>
-      </div>
-      
-      <!-- Column 3: Challan Details -->
-      <div class="sender-details-col3">
-        <div class="sender-item">
+
+        <!-- Column 3: Challan Details -->
+        <div class="sender-details-col3">
           <div class="label-value">
             <div class="label">Challan Date:</div>
             <div class="value"><%= challan.challanDate %></div>
           </div>
-        </div>
-        <div class="sender-item">
           <div class="label-value">
             <div class="label">Challan No.:</div>
             <div class="value"><%= challan.challanNo %></div>
           </div>
-        </div>
-        <div class="sender-item">
           <div class="label-value">
             <div class="label">Reference No.:</div>
             <div class="value"><%= challan.referenceNo ? challan.referenceNo : '-' %></div>
           </div>
-        </div>
-        <div class="sender-item">
           <div class="label-value">
             <div class="label">Challan Type:</div>
             <div class="value"><%= challan.challanType %></div>
           </div>
         </div>
       </div>
-    </div>
-    
-    <!-- Consignee Details -->
-    <% let addrLines = challan.consignee.address.split(','); %>
-    <div class="consignee-section">
-      <table>
-        <tr>
-          <td class="col-label text-left" style="width:50%;">Consignee Name</td>
-          <td class="col-label text-left" style="width:50%;">Consignee Address</td>
-          
-        </tr>
-        <tr>
-          <td class="text-left" style="vertical-align: top;">
-            <%= challan.consignee.name %><br><br>
-            <strong>Consignee GSTIN</strong><br>
-            <%= challan.consignee.gstin %>
-          </td>
-          <td class="text-left" style="vertical-align: top;">
-            <%= challan.consignee.name %><br>
-            <%= addrLines.join(' ') %><br>
-            India<br>
-            <%= challan.consignee.gstin %>
-            <br>
-            <b>vehicleNumber: </b><%= challan.vehicleNumber %>
-          </td>
-        </tr>
-      </table>
-    </div>
 
-    <!-- Place of Supply -->
-    <div class="supply-section">
-      <strong>Place of Supply:</strong> <%= challan.consignee.placeOfSupply %>
-    </div>
-
-    <!-- Items Table -->
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th class="text-left">Item</th>
-          <th class="text-center">HSN / SAC</th>
-          <th class="text-right">Quantity</th>
-          <th class="text-right">Rate / Item (₹)</th>
-          <th class="text-right">Taxable Value (₹)</th>
-          <th class="text-center">CGST (₹)</th>
-          <th class="text-center">IGST (₹)</th>
-          <th class="text-center">SGST / UTGST (₹)</th>
-          <th class="text-right">CESS (₹)</th>
-          <th class="text-right">Total (₹)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% challan.items.forEach((item, index) => { %>
-          <%
-            const typeLabel = (item.entryType || '').toUpperCase() || 'NORMAL';
-            const itemLabel = item.entryType === 'mix'
-              ? (item.customLabel || item.lot_no || 'Mix Item')
-              : `Lot: ${item.lot_no || '-'}`;
-            const skuLabel = item.sku || item.sku_override || '';
-            const qtyVal = parseFloat(item.total_pieces || 0);
-            const rateVal = parseFloat(item.rate || 200);
-            const taxableVal = parseFloat(item.taxableValue || (qtyVal * rateVal));
-          %>
+      <!-- Consignee Details -->
+      <% let addrLines = challan.consignee.address.split(','); %>
+      <div class="consignee-section">
+        <table>
           <tr>
-            <td class="text-left">
-              <div><strong><%= index + 1 %>. <%= typeLabel %></strong></div>
-              <div><%= itemLabel %></div>
-              <% if (skuLabel) { %>
-                <div class="text-muted">SKU: <%= skuLabel %></div>
-              <% } %>
+            <td class="col-label text-left" style="width:50%;">Consignee Name</td>
+            <td class="col-label text-left" style="width:50%;">Consignee Address</td>
+          </tr>
+          <tr>
+            <td class="text-left" style="vertical-align: top;">
+              <%= challan.consignee.name %><br><br>
+              <strong>Consignee GSTIN</strong><br>
+              <%= challan.consignee.gstin %>
             </td>
-            <td class="text-center"><%= item.hsnSac || '62034200' %></td>
-            <td class="text-right">
-              <%= qtyVal.toLocaleString('en-IN') %> PCS
-            </td>
-            <td class="text-right"><%= rateVal.toFixed(2) %></td>
-            <td class="text-right">
-              <%= taxableVal.toLocaleString('en-IN') %>
-            </td>
-            <td class="text-center">0.00 @0.00%</td>
-            <td class="text-center">0.00 @0.00%</td>
-            <td class="text-center">0.00 @0.00%</td>
-            <td class="text-right">0.00</td>
-            <td class="text-right">
-              <%= taxableVal.toLocaleString('en-IN') %>
+            <td class="text-left" style="vertical-align: top;">
+              <%= challan.consignee.name %><br>
+              <%= addrLines.join(' ') %><br>
+              India<br>
+              <%= challan.consignee.gstin %>
+              <br>
+              <strong>Vehicle Number: </strong><%= challan.vehicleNumber %>
             </td>
           </tr>
-        <% }); %>
-        <!-- Totals Row -->
-        <tr>
-          <td colspan="4" class="text-right" style="font-weight:bold;">Total</td>
-          <!-- Column 5: Total Taxable Value -->
-          <td class="text-right" style="font-weight:bold;">
-            <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %>
-          </td>
-          <!-- Column 6: CGST Total -->
-          <td class="text-right">0.00</td>
-          <!-- Column 7: IGST Total -->
-          <td class="text-right">0.00</td>
-          <!-- Column 8: SGST Total -->
-          <td class="text-right">0.00</td>
-          <!-- Column 9: CESS Total -->
-          <td class="text-right">0.00</td>
-          <!-- Column 10: Final Total Amount -->
-          <td class="text-right" style="font-weight:bold;">
-            <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+        </table>
+      </div>
 
-    <!-- Totals Summary -->
-    <div class="summary-details">
-      <div><strong>Taxable Amount:</strong> ₹ <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %></div>
-      <div><strong>Total Tax:</strong> ₹ 0.00</div>
-      <div><strong>Total Value:</strong> ₹ <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %></div>
-      <div style="margin-top:10px;"><strong>Total amount:</strong><br><%= challan.totalAmountInWords %></div>
-    </div>
+      <!-- Place of Supply -->
+      <div class="supply-section">
+        <strong>Place of Supply:</strong> <%= challan.consignee.placeOfSupply %>
+      </div>
 
-    <!-- Footer with Signatory -->
-    <div class="footer">
-      For <%= challan.sender.name %>
-      <div class="signatory">
-        Authorised Signatory
+      <!-- Items Table -->
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th class="text-left">Item</th>
+            <th class="text-center">HSN / SAC</th>
+            <th class="text-right">Quantity</th>
+            <th class="text-right">Rate / Item</th>
+            <th class="text-right">Taxable Value</th>
+            <th class="text-center">CGST</th>
+            <th class="text-center">IGST</th>
+            <th class="text-center">SGST / UTGST</th>
+            <th class="text-right">CESS</th>
+            <th class="text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% challan.items.forEach((item, index) => { %>
+            <%
+              const typeLabel = (item.entryType || '').toUpperCase() || 'NORMAL';
+              const itemLabel = item.entryType === 'mix'
+                ? (item.customLabel || item.lot_no || 'Mix Item')
+                : `Lot: ${item.lot_no || '-'}`;
+              const skuLabel = item.sku || item.sku_override || '';
+              const qtyVal = parseFloat(item.total_pieces || 0);
+              const rateVal = parseFloat(item.rate || 200);
+              const taxableVal = parseFloat(item.taxableValue || (qtyVal * rateVal));
+            %>
+            <tr>
+              <td class="text-left">
+                <div><strong><%= index + 1 %>. <%= typeLabel %></strong></div>
+                <div><%= itemLabel %></div>
+                <% if (skuLabel) { %>
+                  <div style="color: var(--text-muted); font-size: var(--text-xs);">SKU: <%= skuLabel %></div>
+                <% } %>
+              </td>
+              <td class="text-center"><%= item.hsnSac || '62034200' %></td>
+              <td class="text-right">
+                <%= qtyVal.toLocaleString('en-IN') %> PCS
+              </td>
+              <td class="text-right"><%= rateVal.toFixed(2) %></td>
+              <td class="text-right">
+                <%= taxableVal.toLocaleString('en-IN') %>
+              </td>
+              <td class="text-center">0.00 @0.00%</td>
+              <td class="text-center">0.00 @0.00%</td>
+              <td class="text-center">0.00 @0.00%</td>
+              <td class="text-right">0.00</td>
+              <td class="text-right">
+                <%= taxableVal.toLocaleString('en-IN') %>
+              </td>
+            </tr>
+          <% }); %>
+          <!-- Totals Row -->
+          <tr style="background: var(--cream-dark) !important;">
+            <td colspan="4" class="text-right" style="font-weight: 600;">Total</td>
+            <td class="text-right" style="font-weight: 600;">
+              <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %>
+            </td>
+            <td class="text-right">0.00</td>
+            <td class="text-right">0.00</td>
+            <td class="text-right">0.00</td>
+            <td class="text-right">0.00</td>
+            <td class="text-right" style="font-weight: 600;">
+              <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Totals Summary -->
+      <div class="summary-details">
+        <div><strong>Taxable Amount:</strong> &#8377; <%= parseFloat(challan.totalTaxableValue).toLocaleString('en-IN') %></div>
+        <div><strong>Total Tax:</strong> &#8377; 0.00</div>
+        <div><strong>Total Value:</strong> &#8377; <%= parseFloat(challan.totalAmount).toLocaleString('en-IN') %></div>
+        <div style="margin-top: 12px;"><strong>Total amount:</strong><br><%= challan.totalAmountInWords %></div>
+      </div>
+
+      <!-- Footer with Signatory -->
+      <div class="challan-footer">
+        For <%= challan.sender.name %>
+        <div class="signatory">
+          Authorised Signatory
+        </div>
       </div>
     </div>
-  </div>
 
-</html>
+  </div>
+</main>
+
+<%- include('partials/footer') %>

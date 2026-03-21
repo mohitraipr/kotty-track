@@ -1,0 +1,1195 @@
+<%- include('partials/header', { pageTitle: 'Product Links' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/dashboard' }) %>
+
+<style>
+  /* Page Layout - No sidebar for this page */
+  .page-wrapper {
+    padding-top: var(--navbar-height);
+    min-height: 100vh;
+    background: var(--bg-page);
+  }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 28px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-title i {
+    color: var(--terracotta);
+  }
+
+  .page-subtitle {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+  }
+
+  /* Cards */
+  .content-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .content-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .card-title i {
+    color: var(--terracotta);
+    font-size: 1.1em;
+  }
+
+  /* Upload Section */
+  .upload-section {
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+  }
+
+  .upload-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-md);
+  }
+
+  .upload-hint i {
+    color: var(--terracotta);
+  }
+
+  .upload-status {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    margin-top: 16px;
+    display: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .upload-status.loading {
+    background: var(--info-light);
+    color: var(--info);
+    border-left: 3px solid var(--info);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .upload-status.success {
+    background: var(--success-light);
+    color: var(--success);
+    border-left: 3px solid var(--success);
+    display: block;
+  }
+
+  .upload-status.error {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-left: 3px solid var(--danger);
+    display: block;
+  }
+
+  /* Filter and Search Section */
+  .filter-section {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .count-badge {
+    padding: 4px 12px;
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .search-stats {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+  }
+
+  /* Brand Filter Pills */
+  .brand-filter {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .brand-pill {
+    padding: 6px 14px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-light);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .brand-pill:hover {
+    border-color: var(--border-medium);
+    background: var(--gray-50);
+  }
+
+  .brand-pill.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .brand-pill.nowi {
+    border-color: #bfdbfe;
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .brand-pill.nowi:hover,
+  .brand-pill.nowi.active {
+    background: #1e40af;
+    color: white;
+    border-color: #1e40af;
+  }
+
+  .brand-pill.kotty {
+    border-color: #bbf7d0;
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .brand-pill.kotty:hover,
+  .brand-pill.kotty.active {
+    background: #166534;
+    color: white;
+    border-color: #166534;
+  }
+
+  /* Search Box */
+  .search-box {
+    position: relative;
+    min-width: 240px;
+  }
+
+  .search-box input {
+    width: 100%;
+    padding: 10px 14px 10px 42px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .search-box input:hover {
+    border-color: var(--border-medium);
+  }
+
+  .search-box input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .search-box input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .search-box i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+
+  /* Table Styles */
+  .table-wrapper {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .table-scroll {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .data-table thead th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .data-table tbody td {
+    padding: 12px 16px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .data-table tbody tr.hidden {
+    display: none;
+  }
+
+  .data-table tbody tr.match {
+    background: var(--warning-light);
+  }
+
+  .data-table tbody tr.new-row {
+    animation: rowHighlight 2s ease-out;
+  }
+
+  @keyframes rowHighlight {
+    from { background: var(--success-light); }
+    to { background: transparent; }
+  }
+
+  /* Platform Link Badges */
+  .platform-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+  }
+
+  .platform-link.amazon {
+    background: #fff3e0;
+    color: #e65100;
+  }
+  .platform-link.amazon:hover {
+    background: #ffe0b2;
+    transform: translateY(-1px);
+  }
+
+  .platform-link.myntra {
+    background: #fce4ec;
+    color: #c2185b;
+  }
+  .platform-link.myntra:hover {
+    background: #f8bbd0;
+    transform: translateY(-1px);
+  }
+
+  .platform-link.nykaa {
+    background: #f3e5f5;
+    color: #7b1fa2;
+  }
+  .platform-link.nykaa:hover {
+    background: #e1bee7;
+    transform: translateY(-1px);
+  }
+
+  .platform-link.flipkart {
+    background: #e3f2fd;
+    color: #1565c0;
+  }
+  .platform-link.flipkart:hover {
+    background: #bbdefb;
+    transform: translateY(-1px);
+  }
+
+  .no-link {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  /* SKU Badge */
+  .sku-badge {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* Brand Badge */
+  .brand-badge {
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .brand-badge.nowi {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .brand-badge.kotty {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-secondary);
+  }
+
+  .empty-state i {
+    font-size: 56px;
+    color: var(--border-medium);
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  .empty-state h4 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state p {
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  /* Buttons */
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+  }
+
+  .btn-action:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .btn-upload {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-upload:hover {
+    background: #256d4c;
+    border-color: #256d4c;
+    transform: translateY(-1px);
+  }
+
+  .btn-template {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-template:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    transform: translateY(-1px);
+  }
+
+  .btn-export {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--border-medium);
+  }
+
+  .btn-export:hover {
+    background: var(--gray-100);
+    border-color: var(--border-dark);
+  }
+
+  .btn-delete {
+    padding: 6px 10px;
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-delete:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  /* Form Controls */
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .form-control {
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:hover {
+    border-color: var(--border-medium);
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-select {
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    min-width: 140px;
+    cursor: pointer;
+  }
+
+  .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  /* Alerts */
+  .alert {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: var(--text-sm);
+    margin-bottom: 20px;
+  }
+
+  .alert-success {
+    background: var(--success-light);
+    color: var(--success);
+    border-left: 3px solid var(--success);
+  }
+
+  .alert-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-left: 3px solid var(--danger);
+  }
+
+  .alert .btn-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+  }
+
+  .alert .btn-close:hover {
+    opacity: 1;
+  }
+
+  /* Spinner */
+  .spinner-sm {
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .page-container {
+      padding: 20px;
+    }
+
+    .filter-controls {
+      width: 100%;
+      margin-left: 0;
+      margin-top: 12px;
+    }
+
+    .search-box {
+      width: 100%;
+      min-width: auto;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .page-container {
+      padding: 16px;
+    }
+
+    .content-card {
+      padding: 16px;
+    }
+
+    .form-row {
+      flex-direction: column;
+    }
+
+    .form-group {
+      width: 100%;
+    }
+
+    .btn-action {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .data-table {
+      font-size: var(--text-xs);
+    }
+
+    .platform-link {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .filter-section {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .title-with-badge {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <!-- Alerts -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <span><%= error %></span>
+        <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i>
+        <span><%= success %></span>
+        <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
+      </div>
+    <% } %>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="bi bi-link-45deg"></i>
+        Product Links
+      </h1>
+      <p class="page-subtitle">Manage product links across e-commerce platforms</p>
+    </div>
+
+    <!-- Upload Section (Operator Only) -->
+    <% if (user.roleName === 'operator') { %>
+    <div class="content-card">
+      <div class="upload-section">
+        <h2 class="card-title">
+          <i class="bi bi-cloud-upload"></i>
+          Upload Product Links
+        </h2>
+
+        <form id="uploadForm" style="margin-top: 20px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="brandSelect">Brand</label>
+              <select name="brand" id="brandSelect" class="form-select" required>
+                <option value="nowi">NOWI</option>
+                <option value="kotty">KOTTY</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 200px;">
+              <label for="excelFile">Excel File</label>
+              <input type="file" name="excelFile" id="excelFile" class="form-control" accept=".xlsx,.xls" required>
+            </div>
+            <button type="submit" id="uploadBtn" class="btn-action btn-upload">
+              <i class="bi bi-upload"></i>
+              Upload
+            </button>
+            <a href="/product-links/template" class="btn-action btn-template">
+              <i class="bi bi-download"></i>
+              Template
+            </a>
+            <a href="/product-links/export" class="btn-action btn-export">
+              <i class="bi bi-file-earmark-excel"></i>
+              Export All
+            </a>
+          </div>
+        </form>
+
+        <div id="uploadStatus" class="upload-status"></div>
+
+        <div class="upload-hint">
+          <i class="bi bi-info-circle"></i>
+          Select brand, then upload Excel with columns: SKU | Amazon | Myntra | Nykaa | Flipkart
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- Product Links Table -->
+    <div class="content-card">
+      <div class="filter-section">
+        <div class="title-with-badge">
+          <h2 class="card-title">
+            <i class="bi bi-table"></i>
+            Product Links
+          </h2>
+          <span class="count-badge" id="totalBadge"><%= links.length %> total</span>
+          <span class="search-stats" id="searchStats"></span>
+        </div>
+
+        <div class="filter-controls">
+          <div class="brand-filter" id="brandFilter">
+            <button type="button" class="brand-pill active" data-brand="all">
+              All (<span class="count"><%= links.length %></span>)
+            </button>
+            <% brands.forEach(function(b) { %>
+              <button type="button" class="brand-pill <%= b %>" data-brand="<%= b %>">
+                <%= b.toUpperCase() %> (<span class="count"><%= brandCounts[b] || 0 %></span>)
+              </button>
+            <% }); %>
+          </div>
+          <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchInput" placeholder="Search SKU..." autocomplete="off">
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display: <%= links.length === 0 ? 'block' : 'none' %>;">
+        <i class="bi bi-inbox"></i>
+        <h4>No product links yet</h4>
+        <% if (user.roleName === 'operator') { %>
+          <p>Upload an Excel file to get started</p>
+        <% } else { %>
+          <p>Product links will appear here once uploaded</p>
+        <% } %>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrapper" id="tableContainer" style="display: <%= links.length === 0 ? 'none' : 'block' %>;">
+        <div class="table-scroll">
+          <table class="data-table" id="linksTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Brand</th>
+                <th>SKU</th>
+                <th>Amazon</th>
+                <th>Myntra</th>
+                <th>Nykaa</th>
+                <th>Flipkart</th>
+                <% if (user.roleName === 'operator') { %><th>Action</th><% } %>
+              </tr>
+            </thead>
+            <tbody id="linksBody">
+              <%
+                const ensureUrl = (url) => {
+                  if (!url) return null;
+                  return url.startsWith('http') ? url : 'https://' + url;
+                };
+                links.forEach((link, index) => {
+              %>
+              <tr data-sku="<%= link.sku.toLowerCase() %>" data-brand="<%= link.brand %>" data-id="<%= link.id %>">
+                <td class="row-num"><%= index + 1 %></td>
+                <td><span class="brand-badge <%= link.brand %>"><%= link.brand.toUpperCase() %></span></td>
+                <td><span class="sku-badge"><%= link.sku %></span></td>
+                <td>
+                  <% if (link.amazon_link) { %>
+                    <a href="<%= ensureUrl(link.amazon_link) %>" target="_blank" class="platform-link amazon">
+                      <i class="bi bi-box-arrow-up-right"></i> View
+                    </a>
+                  <% } else { %>
+                    <span class="no-link">-</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (link.myntra_link) { %>
+                    <a href="<%= ensureUrl(link.myntra_link) %>" target="_blank" class="platform-link myntra">
+                      <i class="bi bi-box-arrow-up-right"></i> View
+                    </a>
+                  <% } else { %>
+                    <span class="no-link">-</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (link.nykaa_link) { %>
+                    <a href="<%= ensureUrl(link.nykaa_link) %>" target="_blank" class="platform-link nykaa">
+                      <i class="bi bi-box-arrow-up-right"></i> View
+                    </a>
+                  <% } else { %>
+                    <span class="no-link">-</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (link.flipkart_link) { %>
+                    <a href="<%= ensureUrl(link.flipkart_link) %>" target="_blank" class="platform-link flipkart">
+                      <i class="bi bi-box-arrow-up-right"></i> View
+                    </a>
+                  <% } else { %>
+                    <span class="no-link">-</span>
+                  <% } %>
+                </td>
+                <% if (user.roleName === 'operator') { %>
+                <td>
+                  <button type="button" class="btn-delete delete-btn" data-id="<%= link.id %>">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+                <% } %>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const isOperator = <%= user.roleName === 'operator' %>;
+    const searchInput = document.getElementById('searchInput');
+    const table = document.getElementById('linksTable');
+    const tbody = document.getElementById('linksBody');
+    const searchStats = document.getElementById('searchStats');
+    const brandButtons = document.querySelectorAll('#brandFilter .brand-pill');
+    const totalBadge = document.getElementById('totalBadge');
+    const emptyState = document.getElementById('emptyState');
+    const tableContainer = document.getElementById('tableContainer');
+
+    let currentBrand = 'all';
+
+    // Helper to ensure URL has protocol
+    function ensureUrl(url) {
+      if (!url) return null;
+      return url.startsWith('http') ? url : 'https://' + url;
+    }
+
+    // Filter table
+    function filterTable() {
+      const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+      const rows = tbody.querySelectorAll('tr');
+      let visibleCount = 0;
+      let num = 1;
+
+      rows.forEach(function(row) {
+        const sku = row.getAttribute('data-sku') || '';
+        const brand = row.getAttribute('data-brand') || '';
+
+        const matchesBrand = currentBrand === 'all' || brand === currentBrand;
+        const matchesSearch = !query || sku.indexOf(query) !== -1;
+        const matches = matchesBrand && matchesSearch;
+
+        if (matches) {
+          row.classList.remove('hidden');
+          row.classList.toggle('match', query.length > 0);
+          row.querySelector('.row-num').textContent = num++;
+          visibleCount++;
+        } else {
+          row.classList.add('hidden');
+          row.classList.remove('match');
+        }
+      });
+
+      if (searchStats) {
+        const total = rows.length;
+        if (query || currentBrand !== 'all') {
+          searchStats.textContent = '(showing ' + visibleCount + ' of ' + total + ')';
+        } else {
+          searchStats.textContent = '';
+        }
+      }
+    }
+
+    // Update brand counts in filter buttons
+    function updateBrandCounts(counts, total) {
+      document.querySelector('#brandFilter .brand-pill[data-brand="all"] .count').textContent = total;
+      Object.keys(counts).forEach(function(brand) {
+        const btn = document.querySelector('#brandFilter .brand-pill.' + brand + ' .count');
+        if (btn) btn.textContent = counts[brand];
+      });
+      totalBadge.textContent = total + ' total';
+    }
+
+    // Create table row - using DOM methods for safety
+    function createRow(link, index) {
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-sku', link.sku.toLowerCase());
+      tr.setAttribute('data-brand', link.brand);
+      tr.setAttribute('data-id', link.id);
+      tr.classList.add('new-row');
+
+      // Row number
+      const tdNum = document.createElement('td');
+      tdNum.className = 'row-num';
+      tdNum.textContent = index;
+      tr.appendChild(tdNum);
+
+      // Brand
+      const tdBrand = document.createElement('td');
+      const brandSpan = document.createElement('span');
+      brandSpan.className = 'brand-badge ' + link.brand;
+      brandSpan.textContent = link.brand.toUpperCase();
+      tdBrand.appendChild(brandSpan);
+      tr.appendChild(tdBrand);
+
+      // SKU
+      const tdSku = document.createElement('td');
+      const skuSpan = document.createElement('span');
+      skuSpan.className = 'sku-badge';
+      skuSpan.textContent = link.sku;
+      tdSku.appendChild(skuSpan);
+      tr.appendChild(tdSku);
+
+      // Platform links helper
+      function createPlatformCell(url, platformClass) {
+        const td = document.createElement('td');
+        if (url) {
+          const a = document.createElement('a');
+          a.href = ensureUrl(url);
+          a.target = '_blank';
+          a.className = 'platform-link ' + platformClass;
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-box-arrow-up-right';
+          a.appendChild(icon);
+          a.appendChild(document.createTextNode(' View'));
+          td.appendChild(a);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'no-link';
+          span.textContent = '-';
+          td.appendChild(span);
+        }
+        return td;
+      }
+
+      tr.appendChild(createPlatformCell(link.amazon_link, 'amazon'));
+      tr.appendChild(createPlatformCell(link.myntra_link, 'myntra'));
+      tr.appendChild(createPlatformCell(link.nykaa_link, 'nykaa'));
+      tr.appendChild(createPlatformCell(link.flipkart_link, 'flipkart'));
+
+      // Action (operator only)
+      if (isOperator) {
+        const tdAction = document.createElement('td');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-delete delete-btn';
+        btn.setAttribute('data-id', link.id);
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-trash';
+        btn.appendChild(icon);
+        tdAction.appendChild(btn);
+        tr.appendChild(tdAction);
+      }
+
+      return tr;
+    }
+
+    // Search input handler
+    if (searchInput) {
+      searchInput.addEventListener('input', filterTable);
+      searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          this.value = '';
+          filterTable();
+        }
+      });
+    }
+
+    // Brand filter handlers
+    brandButtons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        brandButtons.forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        currentBrand = this.getAttribute('data-brand');
+        filterTable();
+      });
+    });
+
+    // AJAX Upload (operator only)
+    if (isOperator) {
+      const uploadForm = document.getElementById('uploadForm');
+      const uploadBtn = document.getElementById('uploadBtn');
+      const uploadStatus = document.getElementById('uploadStatus');
+      const excelFile = document.getElementById('excelFile');
+
+      uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(uploadForm);
+
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = '';
+        const spinner1 = document.createElement('span');
+        spinner1.className = 'spinner-sm';
+        uploadBtn.appendChild(spinner1);
+        uploadBtn.appendChild(document.createTextNode(' Uploading...'));
+
+        uploadStatus.className = 'upload-status loading';
+        uploadStatus.textContent = '';
+        const spinner2 = document.createElement('span');
+        spinner2.className = 'spinner-sm';
+        uploadStatus.appendChild(spinner2);
+        uploadStatus.appendChild(document.createTextNode(' Uploading and processing file...'));
+
+        fetch('/product-links/upload', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' },
+          body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-upload';
+          uploadBtn.appendChild(icon);
+          uploadBtn.appendChild(document.createTextNode(' Upload'));
+          excelFile.value = '';
+
+          if (data.success) {
+            uploadStatus.className = 'upload-status success';
+            uploadStatus.textContent = data.message;
+
+            // Update the table with new data for this brand
+            const brand = document.getElementById('brandSelect').value;
+
+            // Remove existing rows for this brand
+            const existingRows = tbody.querySelectorAll('tr[data-brand="' + brand + '"]');
+            existingRows.forEach(function(row) { row.remove(); });
+
+            // Add new rows
+            data.links.forEach(function(link, i) {
+              const row = createRow(link, i + 1);
+              tbody.appendChild(row);
+            });
+
+            // Update counts
+            updateBrandCounts(data.brandCounts, data.totalCount);
+
+            // Show table if it was hidden
+            if (data.totalCount > 0) {
+              emptyState.style.display = 'none';
+              tableContainer.style.display = 'block';
+            }
+
+            // Reapply filter
+            filterTable();
+
+            // Auto-hide success message after 5 seconds
+            setTimeout(function() {
+              uploadStatus.style.display = 'none';
+            }, 5000);
+          } else {
+            uploadStatus.className = 'upload-status error';
+            uploadStatus.textContent = data.error || data.message || 'Upload failed';
+          }
+        })
+        .catch(function(err) {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-upload';
+          uploadBtn.appendChild(icon);
+          uploadBtn.appendChild(document.createTextNode(' Upload'));
+          uploadStatus.className = 'upload-status error';
+          uploadStatus.textContent = 'Upload failed: ' + err.message;
+        });
+      });
+
+      // AJAX Delete
+      tbody.addEventListener('click', function(e) {
+        const btn = e.target.closest('.delete-btn');
+        if (!btn) return;
+
+        if (!confirm('Delete this product link?')) return;
+
+        const id = btn.getAttribute('data-id');
+        const row = btn.closest('tr');
+
+        btn.disabled = true;
+        btn.textContent = '';
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-sm';
+        btn.appendChild(spinner);
+
+        fetch('/product-links/' + id + '/delete', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' }
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (data.success) {
+            row.remove();
+            // Update counts
+            const allRows = tbody.querySelectorAll('tr');
+            const total = allRows.length;
+            const counts = {};
+            allRows.forEach(function(r) {
+              const b = r.getAttribute('data-brand');
+              counts[b] = (counts[b] || 0) + 1;
+            });
+            updateBrandCounts(counts, total);
+            filterTable();
+
+            if (total === 0) {
+              emptyState.style.display = 'block';
+              tableContainer.style.display = 'none';
+            }
+          } else {
+            btn.disabled = false;
+            btn.textContent = '';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-trash';
+            btn.appendChild(icon);
+            alert(data.error || 'Delete failed');
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.textContent = '';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-trash';
+          btn.appendChild(icon);
+          alert('Delete failed: ' + err.message);
+        });
+      });
+    }
+  })();
+</script>
+
+<%- include('partials/footer') %>

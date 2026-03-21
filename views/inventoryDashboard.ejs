@@ -1,136 +1,342 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Store Inventory</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    .low-stock { background-color: #f8d7da; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">Store Employee</a>
-    <div class="ms-auto">
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
-<div class="container my-4">
-  <%- include('partials/flashMessages') %>
-  <ul class="nav nav-tabs" id="invTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="add-tab" data-bs-toggle="tab" data-bs-target="#addTab" type="button" role="tab">Add Quantity</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatchTab" type="button" role="tab">Dispatch Goods</button>
-    </li>
-  </ul>
-  <div class="tab-content mt-3">
-    <div class="tab-pane fade show active" id="addTab" role="tabpanel">
-      <form action="/inventory/add" method="POST" class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">Item</label>
-          <select name="goods_id" class="form-select" required>
-            <% goods.forEach(g => { %>
-              <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Quantity</label>
-          <input type="number" name="quantity" class="form-control" required min="1">
-        </div>
-        <div class="col-md-3 align-self-end">
-          <button type="submit" class="btn btn-primary">Add</button>
-        </div>
-      </form>
-    </div>
-    <div class="tab-pane fade" id="dispatchTab" role="tabpanel">
-      <form action="/inventory/dispatch" method="POST" class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">Item</label>
-          <select name="goods_id" class="form-select" required>
-            <% goods.forEach(g => { %>
-              <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Quantity</label>
-          <input type="number" name="quantity" class="form-control" required min="1">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Remark</label>
-          <input type="text" name="remark" class="form-control">
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-warning">Dispatch</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<%- include('partials/header', { pageTitle: 'Inventory Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/inventory/dashboard' }) %>
 
-  <h4 class="mt-4">Current Inventory</h4>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Description</th>
-          <th>Size</th>
-          <th>Unit</th>
-          <th>Qty</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% goods.forEach(g => { %>
-          <tr class="<%= g.qty == 100 ? 'low-stock' : '' %>">
-            <td><%= g.description_of_goods %></td>
-            <td><%= g.size %></td>
-            <td><%= g.unit %></td>
-            <td><%= g.qty %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
 
-  <div class="d-flex justify-content-between mt-3">
-    <a href="/inventory/download/incoming" class="btn btn-success btn-sm">Download Incoming Excel</a>
-    <a href="/inventory/download/dispatched" class="btn btn-success btn-sm">Download Dispatched Excel</a>
-  </div>
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
 
-  <h4 class="mt-4">Recent Dispatches</h4>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Item</th>
-          <th>Qty</th>
-          <th>Remark</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% dispatched.forEach(d => { %>
-          <tr>
-            <td><%= d.description_of_goods %> - <%= d.size %> <%= d.unit %></td>
-            <td><%= d.quantity %></td>
-            <td><%= d.remark || '' %></td>
-            <td><%= d.dispatched_at.toLocaleString('en-CA', { hour12: false }) %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Inventory Dashboard</h1>
+          <p class="page-subtitle">Manage store inventory - add quantities and dispatch goods</p>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/inventory/download/incoming" class="btn btn-secondary">
+            <i class="bi bi-download me-1"></i> Incoming Excel
+          </a>
+          <a href="/inventory/download/dispatched" class="btn btn-secondary">
+            <i class="bi bi-download me-1"></i> Dispatched Excel
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs Section -->
+    <div class="card mb-4">
+      <div class="card-header" style="padding: 0; border-bottom: none;">
+        <ul class="nav nav-tabs kotty-tabs" id="invTabs" role="tablist" style="border-bottom: none; padding: 0 8px;">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="add-tab" data-bs-toggle="tab" data-bs-target="#addTab" type="button" role="tab" aria-controls="addTab" aria-selected="true">
+              <i class="bi bi-plus-circle me-2"></i>Add Quantity
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatchTab" type="button" role="tab" aria-controls="dispatchTab" aria-selected="false">
+              <i class="bi bi-truck me-2"></i>Dispatch Goods
+            </button>
+          </li>
+        </ul>
+      </div>
+      <div class="card-body">
+        <div class="tab-content" id="invTabsContent">
+          <!-- Add Quantity Tab -->
+          <div class="tab-pane fade show active" id="addTab" role="tabpanel" aria-labelledby="add-tab">
+            <form action="/inventory/add" method="POST">
+              <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                  <label class="form-label">Select Item</label>
+                  <select name="goods_id" class="form-select" required>
+                    <option value="">Choose an item...</option>
+                    <% goods.forEach(g => { %>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Quantity</label>
+                  <input type="number" name="quantity" class="form-control" required min="1" placeholder="Enter quantity">
+                </div>
+                <div class="col-md-3">
+                  <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-plus-lg me-1"></i> Add Stock
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <!-- Dispatch Goods Tab -->
+          <div class="tab-pane fade" id="dispatchTab" role="tabpanel" aria-labelledby="dispatch-tab">
+            <form action="/inventory/dispatch" method="POST">
+              <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                  <label class="form-label">Select Item</label>
+                  <select name="goods_id" class="form-select" required>
+                    <option value="">Choose an item...</option>
+                    <% goods.forEach(g => { %>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Quantity</label>
+                  <input type="number" name="quantity" class="form-control" required min="1" placeholder="Qty">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Remark</label>
+                  <input type="text" name="remark" class="form-control" placeholder="Optional remark">
+                </div>
+                <div class="col-md-2">
+                  <button type="submit" class="btn btn-dispatch w-100">
+                    <i class="bi bi-box-arrow-right me-1"></i> Dispatch
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Inventory Section -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-box-seam me-2" style="color: var(--terracotta);"></i>
+          Current Inventory
+        </h2>
+        <span class="badge badge-neutral"><%= goods.length %> items</span>
+      </div>
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <div class="table-responsive">
+          <table class="table" id="inventoryTable">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Size</th>
+                <th>Unit</th>
+                <th style="text-align: right;">Quantity</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (goods.length === 0) { %>
+                <tr>
+                  <td colspan="4" class="text-center py-4">
+                    <div class="empty-state">
+                      <i class="bi bi-inbox" style="font-size: 2.5rem; color: var(--text-muted);"></i>
+                      <p class="mt-2 mb-0" style="color: var(--text-secondary);">No inventory items found</p>
+                    </div>
+                  </td>
+                </tr>
+              <% } else { %>
+                <% goods.forEach(g => { %>
+                  <tr class="<%= g.qty <= 100 ? 'low-stock-row' : '' %>">
+                    <td>
+                      <span class="fw-medium"><%= g.description_of_goods %></span>
+                    </td>
+                    <td><%= g.size %></td>
+                    <td><%= g.unit %></td>
+                    <td style="text-align: right;">
+                      <% if (g.qty <= 100) { %>
+                        <span class="badge badge-danger">
+                          <i class="bi bi-exclamation-triangle me-1"></i><%= g.qty %>
+                        </span>
+                      <% } else if (g.qty <= 500) { %>
+                        <span class="badge badge-warning"><%= g.qty %></span>
+                      <% } else { %>
+                        <span class="badge badge-success"><%= g.qty %></span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Dispatches Section -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-clock-history me-2" style="color: var(--terracotta);"></i>
+          Recent Dispatches
+        </h2>
+        <span class="badge badge-neutral"><%= dispatched.length %> records</span>
+      </div>
+      <div class="table-container" style="border: none; border-radius: 0;">
+        <div class="table-responsive">
+          <table class="table" id="dispatchTable">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th style="text-align: center;">Quantity</th>
+                <th>Remark</th>
+                <th>Date & Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (dispatched.length === 0) { %>
+                <tr>
+                  <td colspan="4" class="text-center py-4">
+                    <div class="empty-state">
+                      <i class="bi bi-truck" style="font-size: 2.5rem; color: var(--text-muted);"></i>
+                      <p class="mt-2 mb-0" style="color: var(--text-secondary);">No recent dispatches</p>
+                    </div>
+                  </td>
+                </tr>
+              <% } else { %>
+                <% dispatched.forEach(d => { %>
+                  <tr>
+                    <td>
+                      <span class="fw-medium"><%= d.description_of_goods %></span>
+                      <span class="text-muted"> - <%= d.size %> <%= d.unit %></span>
+                    </td>
+                    <td style="text-align: center;">
+                      <span class="badge badge-primary"><%= d.quantity %></span>
+                    </td>
+                    <td>
+                      <% if (d.remark) { %>
+                        <span class="text-secondary"><%= d.remark %></span>
+                      <% } else { %>
+                        <span class="text-muted">-</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <span class="text-secondary">
+                        <i class="bi bi-calendar3 me-1"></i>
+                        <%= d.dispatched_at.toLocaleString('en-CA', { hour12: false }) %>
+                      </span>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</main>
+
+<style>
+  /* Kotty Track Inventory Dashboard Styles */
+
+  /* Tab Navigation */
+  .kotty-tabs {
+    background: transparent;
+    gap: 4px;
+  }
+
+  .kotty-tabs .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    padding: 16px 20px;
+    border-radius: 0;
+    transition: all var(--transition-fast);
+  }
+
+  .kotty-tabs .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--cream-dark);
+    border-color: transparent;
+  }
+
+  .kotty-tabs .nav-link.active {
+    color: var(--terracotta);
+    border-bottom-color: var(--terracotta);
+    background: transparent;
+  }
+
+  /* Low Stock Row Highlight */
+  .low-stock-row {
+    background-color: var(--danger-light) !important;
+  }
+
+  .low-stock-row:hover {
+    background-color: #fce8e5 !important;
+  }
+
+  /* Form Control Enhancements */
+  .form-control, .form-select {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: var(--text-base);
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    background-color: var(--bg-card);
+  }
+
+  .form-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  /* Dispatch Button */
+  .btn-dispatch {
+    background: var(--warning);
+    border-color: var(--warning);
+    color: white;
+  }
+
+  .btn-dispatch:hover {
+    background: #b37a34;
+    border-color: #b37a34;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Table Row Transitions */
+  .table tbody tr {
+    transition: background-color var(--transition-fast);
+  }
+
+  /* Font Weight Utility */
+  .fw-medium {
+    font-weight: 500;
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .page-header .d-flex {
+      flex-direction: column;
+      align-items: flex-start !important;
+    }
+
+    .page-header .d-flex > div:last-child {
+      width: 100%;
+    }
+
+    .page-header .btn {
+      flex: 1;
+    }
+
+    .kotty-tabs .nav-link {
+      padding: 12px 16px;
+      font-size: var(--text-xs);
+    }
+  }
+</style>
+
+<%- include('partials/footer') %>

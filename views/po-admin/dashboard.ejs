@@ -1,1132 +1,741 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PO Admin Dashboard - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f1f5f9; color: #0f172a; }
-    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 18px 28px; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
-    .nav-brand { font-size: 20px; font-weight: 700; color: #0f172a; }
-    .container-main { max-width: 1800px; margin: 0 auto; padding: 28px; }
-    .card-surface { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05); }
-    .section-title { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
-    .section-subtitle { color: #64748b; font-size: 14px; }
-    .form-label { font-weight: 600; color: #0f172a; margin-bottom: 6px; }
-    .form-control, .form-select { border-radius: 10px; border: 1px solid #cbd5f5; padding: 10px 12px; }
-    .form-control:focus, .form-select:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
-    .btn-primary { background: #2563eb; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 600; }
-    .btn-outline { border: 1px solid #cbd5f5; color: #1e293b; padding: 10px 18px; border-radius: 10px; font-weight: 600; background: white; }
-    .badge-soft { background: #e0f2fe; color: #0369a1; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-    .progress { height: 10px; border-radius: 999px; }
-    .upload-status { font-size: 13px; color: #475569; }
-    .table-wrapper { max-height: 420px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
-    table { margin: 0; }
-    thead th { position: sticky; top: 0; background: #f8fafc; font-weight: 600; font-size: 13px; color: #334155; }
-    tbody td { font-size: 13px; color: #0f172a; }
-    .stat-pill { background: #f1f5f9; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 12px; color: #475569; }
-    .tab-pane { padding-top: 18px; }
-    .column-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .validation-list { max-height: 160px; overflow: auto; border: 1px dashed #cbd5f5; border-radius: 10px; padding: 10px; background: #f8fafc; }
-    .validation-list li { font-size: 12px; color: #1e293b; margin-bottom: 6px; }
-    .validation-list li:last-child { margin-bottom: 0; }
-  </style>
-</head>
-<body>
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <span class="nav-brand">PO Admin Dashboard</span>
-      <div>
-        <a href="/po-admin/lot-entries" class="btn btn-outline me-2"><i class="bi bi-archive"></i> Lot Entries</a>
-        <a href="/po-admin/api-dashboard" class="btn btn-outline me-2"><i class="bi bi-braces"></i> API Dashboard</a>
-        <a href="/dashboard" class="btn btn-outline me-2"><i class="bi bi-grid"></i> Main Dashboard</a>
-        <form action="/logout" method="POST" class="d-inline">
-          <button type="submit" class="btn btn-outline"><i class="bi bi-box-arrow-right"></i> Logout</button>
-        </form>
-      </div>
-    </div>
-  </nav>
+<%- include('../partials/header', { pageTitle: 'PO Admin Dashboard' }) %>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/po-admin/dashboard' }) %>
 
-  <div class="container-main">
-    <div class="mb-4">
-      <h1 class="section-title">Upload Marketplace Master & PO Data</h1>
-      <p class="section-subtitle">Manage master data and PO uploads with live progress, duplicate control, and full search.</p>
-    </div>
+<style>
+  .po-admin-content {
+    padding: 28px;
+    min-height: calc(100vh - var(--navbar-height));
+    margin-top: var(--navbar-height);
+    background: var(--bg-page);
+  }
+  .po-admin-header { margin-bottom: 28px; }
+  .po-admin-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+  .po-admin-subtitle { font-size: var(--text-base); color: var(--text-secondary); }
+  .po-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition-fast);
+  }
+  .po-card:hover { box-shadow: var(--shadow-md); }
+  .po-card-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .po-card-subtitle { font-size: var(--text-sm); color: var(--text-secondary); }
+  .po-tabs { border-bottom: 1px solid var(--border-light); margin-bottom: 0; }
+  .po-tabs .nav-link {
+    font-family: var(--font-body);
+    font-weight: 500;
+    color: var(--text-secondary);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 12px 20px;
+    transition: all var(--transition-fast);
+    background: transparent;
+  }
+  .po-tabs .nav-link:hover { color: var(--terracotta); border-bottom-color: var(--terracotta-light); }
+  .po-tabs .nav-link.active { color: var(--terracotta); border-bottom-color: var(--terracotta); background: transparent; }
+  .po-tabs .nav-link i { margin-right: 6px; }
+  .po-form-label {
+    font-family: var(--font-body);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    font-size: var(--text-sm);
+  }
+  .po-form-control {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    transition: all var(--transition-fast);
+  }
+  .po-form-control:hover { border-color: var(--border-medium); }
+  .po-form-control:focus { border-color: var(--terracotta); box-shadow: 0 0 0 3px var(--terracotta-bg); outline: none; }
+  .po-btn-primary {
+    background: var(--terracotta);
+    border: none;
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast);
+  }
+  .po-btn-primary:hover { background: var(--terracotta-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .po-btn-outline {
+    border: 1px solid var(--border-medium);
+    color: var(--text-primary);
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    background: var(--bg-card);
+    transition: all var(--transition-fast);
+  }
+  .po-btn-outline:hover { background: var(--gray-100); border-color: var(--border-dark); }
+  .po-btn-danger {
+    background: var(--danger);
+    border: none;
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: var(--text-sm);
+  }
+  .po-btn-danger:hover { background: #a32f1a; }
+  .po-badge {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .po-stat-pill {
+    background: var(--cream-dark);
+    border-radius: var(--radius-full);
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .po-progress { height: 8px; border-radius: var(--radius-full); background: var(--gray-200); overflow: hidden; }
+  .po-progress .progress-bar { background: var(--terracotta); border-radius: var(--radius-full); transition: width 0.5s var(--ease-out); }
+  .po-status { font-size: var(--text-sm); color: var(--text-secondary); }
+  .po-table-wrapper {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+  }
+  .po-table-wrapper table { margin: 0; }
+  .po-table-wrapper thead th {
+    position: sticky;
+    top: 0;
+    background: var(--cream-dark);
+    font-weight: 600;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .po-table-wrapper tbody td {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .po-table-wrapper tbody tr:hover { background: var(--gray-50); }
+  .po-column-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .po-validation-list {
+    max-height: 160px;
+    overflow: auto;
+    border: 1px dashed var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    background: var(--cream);
+  }
+  .po-validation-list li { font-size: var(--text-xs); color: var(--text-primary); margin-bottom: 6px; }
+  .po-validation-list li:last-child { margin-bottom: 0; }
+  .po-modal .modal-content { border-radius: var(--radius-xl); border: none; box-shadow: var(--shadow-xl); }
+  .po-modal .modal-header { border-bottom: 1px solid var(--border-light); padding: 20px 24px; }
+  .po-modal .modal-title { font-family: var(--font-display); font-size: var(--text-xl); }
+  .po-modal .modal-body { padding: 24px; }
+  .po-modal .modal-footer { border-top: 1px solid var(--border-light); padding: 16px 24px; background: var(--gray-50); }
+  .po-modal-danger .modal-header { background: var(--danger); color: white; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+  .quick-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  .tab-pane { padding-top: 24px; }
+  @media (max-width: 768px) {
+    .po-admin-content { padding: 16px; }
+    .po-admin-title { font-size: var(--text-2xl); }
+    .quick-actions { flex-direction: column; }
+    .quick-actions .po-btn-outline { width: 100%; }
+  }
+</style>
 
-    <ul class="nav nav-tabs" id="poAdminTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="master-tab" data-bs-toggle="tab" data-bs-target="#master" type="button" role="tab">
-          <i class="bi bi-stack"></i> Master Data
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po" type="button" role="tab">
-          <i class="bi bi-receipt"></i> PO Uploads
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="keys-tab" data-bs-toggle="tab" data-bs-target="#keys" type="button" role="tab">
-          <i class="bi bi-key"></i> API Keys
-        </button>
-      </li>
-    </ul>
+<div class="po-admin-content">
+  <div class="po-admin-header">
+    <h1 class="po-admin-title">PO Admin Dashboard</h1>
+    <p class="po-admin-subtitle">Manage master data and PO uploads with live progress, duplicate control, and full search.</p>
+  </div>
 
-    <div class="tab-content" id="poAdminTabContent">
-      <div class="tab-pane fade show active" id="master" role="tabpanel">
-        <div class="row g-4">
-          <div class="col-lg-4">
-            <div class="d-flex flex-column gap-4">
-              <div class="card-surface">
-              <div class="mb-3">
-                <div class="section-title">Master Data Upload</div>
-                <div class="section-subtitle">Unique SKU values are enforced per marketplace.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Marketplace</label>
-                <select class="form-select" id="masterMarketplace"></select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Upload Excel (.xlsx)</label>
-                <input type="file" class="form-control" id="masterFile" accept=".xlsx">
-              </div>
-              <div class="mb-3">
-                <button class="btn btn-primary w-100" id="masterUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload Master Data</button>
-              </div>
-              <div class="mb-3">
-                <div class="progress">
-                  <div class="progress-bar" id="masterProgress" role="progressbar" style="width: 0%"></div>
-                </div>
-                <div class="upload-status mt-2" id="masterStatus">Awaiting upload.</div>
-              </div>
-              <div>
-                <div class="form-label">Expected Columns</div>
-                <div class="column-list" id="masterColumns"></div>
-              </div>
-              </div>
-              <div class="card-surface">
-                <div class="mb-3">
-                  <div class="section-title">Master Data Update</div>
-                  <div class="section-subtitle">Upload a sheet with SKU/ASIN and only the fields you want to change.</div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Upload Excel (.xlsx)</label>
-                  <input type="file" class="form-control" id="masterUpdateFile" accept=".xlsx">
-                </div>
-                <div class="mb-3">
-                  <button class="btn btn-primary w-100" id="masterUpdateBtn">
-                    <i class="bi bi-pencil-square"></i> Update Master Data
-                  </button>
-                </div>
-                <div class="mb-3">
-                  <div class="progress">
-                    <div class="progress-bar" id="masterUpdateProgress" role="progressbar" style="width: 0%"></div>
-                  </div>
-                  <div class="upload-status mt-2" id="masterUpdateStatus">Awaiting update upload.</div>
-                </div>
-                <div class="mb-3">
-                  <button class="btn btn-outline w-100" id="masterDownloadBtn">
-                    <i class="bi bi-download"></i> Download Master Data
-                  </button>
-                  <div class="upload-status mt-2">Exports the full master data for the selected marketplace.</div>
-                </div>
-              </div>
-              <div class="card-surface">
-                <div class="mb-3">
-                  <div class="section-title">Delete Master Column</div>
-                  <div class="section-subtitle">Remove a column from every master data row for this marketplace.</div>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label">Column</label>
-                  <select class="form-select" id="masterDeleteColumn">
-                    <option value="">Select column</option>
-                  </select>
-                </div>
-                <div class="mb-3">
-                  <button class="btn btn-danger w-100" id="masterDeleteBtn">
-                    <i class="bi bi-trash"></i> Delete Column
-                  </button>
-                </div>
-                <div class="upload-status mt-2" id="masterDeleteStatus">No deletions yet.</div>
-                <div class="section-subtitle mt-2">SKU and required identifier columns cannot be deleted.</div>
-              </div>
-              <div class="card-surface">
-                <div class="mb-3">
-                  <div class="section-title text-danger">Delete All Master Data</div>
-                  <div class="section-subtitle">Permanently remove ALL master data for this marketplace.</div>
-                </div>
-                <div class="mb-3">
-                  <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllMasterModal">
-                    <i class="bi bi-exclamation-triangle"></i> Delete All Master Data
-                  </button>
-                </div>
-              </div>
+  <div class="quick-actions">
+    <a href="/po-admin/lot-entries" class="po-btn-outline"><i class="bi bi-archive"></i> Lot Entries</a>
+    <a href="/po-admin/api-dashboard" class="po-btn-outline"><i class="bi bi-braces"></i> API Dashboard</a>
+    <a href="/dashboard" class="po-btn-outline"><i class="bi bi-grid"></i> Main Dashboard</a>
+  </div>
+
+  <ul class="nav po-tabs" id="poAdminTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="master-tab" data-bs-toggle="tab" data-bs-target="#master" type="button" role="tab"><i class="bi bi-stack"></i> Master Data</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po" type="button" role="tab"><i class="bi bi-receipt"></i> PO Uploads</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="keys-tab" data-bs-toggle="tab" data-bs-target="#keys" type="button" role="tab"><i class="bi bi-key"></i> API Keys</button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="poAdminTabContent">
+    <div class="tab-pane fade show active" id="master" role="tabpanel">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="d-flex flex-column gap-4">
+            <div class="po-card">
+              <div class="mb-3"><div class="po-card-title">Master Data Upload</div><div class="po-card-subtitle">Unique SKU values are enforced per marketplace.</div></div>
+              <div class="mb-3"><label class="po-form-label">Marketplace</label><select class="form-select po-form-control" id="masterMarketplace"></select></div>
+              <div class="mb-3"><label class="po-form-label">Upload Excel (.xlsx)</label><input type="file" class="form-control po-form-control" id="masterFile" accept=".xlsx"></div>
+              <div class="mb-3"><button class="po-btn-primary w-100" id="masterUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload Master Data</button></div>
+              <div class="mb-3"><div class="po-progress"><div class="progress-bar" id="masterProgress" role="progressbar" style="width: 0%"></div></div><div class="po-status mt-2" id="masterStatus">Awaiting upload.</div></div>
+              <div><div class="po-form-label">Expected Columns</div><div class="po-column-list" id="masterColumns"></div></div>
             </div>
-          </div>
-          <div class="col-lg-8">
-            <div class="card-surface">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <div class="section-title">Master Data Library</div>
-                  <div class="section-subtitle">Search and review all stored SKUs.</div>
-                </div>
-                <span class="stat-pill" id="masterCount">0 records</span>
-              </div>
-              <div class="d-flex gap-2 mb-3">
-                <input type="text" class="form-control" id="masterSearch" placeholder="Search by SKU or any column value">
-                <button class="btn btn-outline" id="masterSearchBtn"><i class="bi bi-search"></i></button>
-              </div>
-              <div class="table-wrapper">
-                <table class="table table-sm align-middle">
-                  <thead>
-                    <tr id="masterTableHead"></tr>
-                  </thead>
-                  <tbody id="masterTableBody"></tbody>
-                </table>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mt-3">
-                <button class="btn btn-outline" id="masterPrev"><i class="bi bi-chevron-left"></i> Prev</button>
-                <span class="section-subtitle" id="masterPage">Page 1</span>
-                <button class="btn btn-outline" id="masterNext">Next <i class="bi bi-chevron-right"></i></button>
-              </div>
+            <div class="po-card">
+              <div class="mb-3"><div class="po-card-title">Master Data Update</div><div class="po-card-subtitle">Upload a sheet with SKU/ASIN and only the fields you want to change.</div></div>
+              <div class="mb-3"><label class="po-form-label">Upload Excel (.xlsx)</label><input type="file" class="form-control po-form-control" id="masterUpdateFile" accept=".xlsx"></div>
+              <div class="mb-3"><button class="po-btn-primary w-100" id="masterUpdateBtn"><i class="bi bi-pencil-square"></i> Update Master Data</button></div>
+              <div class="mb-3"><div class="po-progress"><div class="progress-bar" id="masterUpdateProgress" role="progressbar" style="width: 0%"></div></div><div class="po-status mt-2" id="masterUpdateStatus">Awaiting update upload.</div></div>
+              <div class="mb-3"><button class="po-btn-outline w-100" id="masterDownloadBtn"><i class="bi bi-download"></i> Download Master Data</button><div class="po-status mt-2">Exports the full master data for the selected marketplace.</div></div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="tab-pane fade" id="po" role="tabpanel">
-        <div class="row g-4">
-          <div class="col-lg-4">
-            <div class="card-surface">
-              <div class="mb-3">
-                <div class="section-title">PO Upload</div>
-                <div class="section-subtitle">All rows are stored as uploaded.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Marketplace</label>
-                <select class="form-select" id="poMarketplace"></select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Upload Excel (.xlsx)</label>
-                <input type="file" class="form-control" id="poFile" accept=".xlsx">
-              </div>
-              <div class="mb-3">
-                <button class="btn btn-primary w-100" id="poUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload PO Sheet</button>
-              </div>
-              <div class="mb-3">
-                <div class="progress">
-                  <div class="progress-bar" id="poProgress" role="progressbar" style="width: 0%"></div>
-                </div>
-                <div class="upload-status mt-2" id="poStatus">Awaiting upload.</div>
-              </div>
-              <div class="mb-3">
-                <button class="btn btn-outline w-100" data-bs-toggle="modal" data-bs-target="#poDeleteModal">
-                  <i class="bi bi-trash"></i> Delete PO
-                </button>
-                <div class="upload-status mt-2" id="poDeleteStatus">No deletions yet.</div>
-              </div>
-              <div class="mb-3">
-                <button class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllPosModal">
-                  <i class="bi bi-exclamation-triangle"></i> Delete All POs
-                </button>
-              </div>
-              <div class="mb-3">
-                <div class="form-label">PO Validation Summary</div>
-                <div class="upload-status" id="poValidationSummary">No validation run yet.</div>
-                <div class="mt-2">
-                  <div class="section-subtitle">Missing in master data</div>
-                  <ul class="list-unstyled validation-list mb-2" id="poMissingList"></ul>
-                </div>
-                <div>
-                  <div class="section-subtitle">Updated master data values</div>
-                  <ul class="list-unstyled validation-list" id="poChangedList"></ul>
-                </div>
-              </div>
-              <div>
-                <div class="form-label">Expected Columns</div>
-                <div class="column-list" id="poColumns"></div>
-              </div>
+            <div class="po-card">
+              <div class="mb-3"><div class="po-card-title">Delete Master Column</div><div class="po-card-subtitle">Remove a column from every master data row for this marketplace.</div></div>
+              <div class="mb-3"><label class="po-form-label">Column</label><select class="form-select po-form-control" id="masterDeleteColumn"><option value="">Select column</option></select></div>
+              <div class="mb-3"><button class="po-btn-danger w-100" id="masterDeleteBtn"><i class="bi bi-trash"></i> Delete Column</button></div>
+              <div class="po-status mt-2" id="masterDeleteStatus">No deletions yet.</div><div class="po-card-subtitle mt-2">SKU and required identifier columns cannot be deleted.</div>
             </div>
-          </div>
-          <div class="col-lg-8">
-            <div class="card-surface">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <div class="section-title">PO Upload History</div>
-                  <div class="section-subtitle">Search and review all PO rows.</div>
-                </div>
-                <span class="stat-pill" id="poCount">0 records</span>
-              </div>
-              <div class="d-flex gap-2 mb-3">
-                <input type="text" class="form-control" id="poSearch" placeholder="Search by any column value">
-                <button class="btn btn-outline" id="poSearchBtn"><i class="bi bi-search"></i></button>
-              </div>
-              <div class="table-wrapper">
-                <table class="table table-sm align-middle">
-                  <thead>
-                    <tr id="poTableHead"></tr>
-                  </thead>
-                  <tbody id="poTableBody"></tbody>
-                </table>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mt-3">
-                <button class="btn btn-outline" id="poPrev"><i class="bi bi-chevron-left"></i> Prev</button>
-                <span class="section-subtitle" id="poPage">Page 1</span>
-                <button class="btn btn-outline" id="poNext">Next <i class="bi bi-chevron-right"></i></button>
-              </div>
+            <div class="po-card">
+              <div class="mb-3"><div class="po-card-title text-danger">Delete All Master Data</div><div class="po-card-subtitle">Permanently remove ALL master data for this marketplace.</div></div>
+              <div class="mb-3"><button class="po-btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllMasterModal"><i class="bi bi-exclamation-triangle"></i> Delete All Master Data</button></div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="tab-pane fade" id="keys" role="tabpanel">
-        <div class="row g-4">
-          <div class="col-lg-4">
-            <div class="card-surface">
-              <div class="mb-3">
-                <div class="section-title">Create API Key</div>
-                <div class="section-subtitle">Generate access keys for the PO lookup API.</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Key Name</label>
-                <input type="text" class="form-control" id="apiKeyName" placeholder="e.g. Partner App">
-              </div>
-              <div class="mb-3">
-                <button class="btn btn-primary w-100" id="apiKeyCreateBtn"><i class="bi bi-plus-circle"></i> Create Key</button>
-              </div>
-              <div class="upload-status" id="apiKeyStatus">No keys created in this session.</div>
-            </div>
+        <div class="col-lg-8">
+          <div class="po-card">
+            <div class="d-flex justify-content-between align-items-center mb-3"><div><div class="po-card-title">Master Data Library</div><div class="po-card-subtitle">Search and review all stored SKUs.</div></div><span class="po-stat-pill" id="masterCount">0 records</span></div>
+            <div class="d-flex gap-2 mb-3"><input type="text" class="form-control po-form-control" id="masterSearch" placeholder="Search by SKU or any column value"><button class="po-btn-outline" id="masterSearchBtn"><i class="bi bi-search"></i></button></div>
+            <div class="po-table-wrapper"><table class="table table-sm align-middle"><thead><tr id="masterTableHead"></tr></thead><tbody id="masterTableBody"></tbody></table></div>
+            <div class="d-flex justify-content-between align-items-center mt-3"><button class="po-btn-outline" id="masterPrev"><i class="bi bi-chevron-left"></i> Prev</button><span class="po-card-subtitle" id="masterPage">Page 1</span><button class="po-btn-outline" id="masterNext">Next <i class="bi bi-chevron-right"></i></button></div>
           </div>
-          <div class="col-lg-8">
-            <div class="card-surface">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <div class="section-title">Active Keys</div>
-                  <div class="section-subtitle">Use the prefix to identify keys in use.</div>
-                </div>
-                <span class="stat-pill" id="apiKeyCount">0 keys</span>
-              </div>
-              <div class="table-wrapper">
-                <table class="table table-sm align-middle">
-                  <thead>
-                    <tr>
-                      <th>Key Name</th>
-                      <th>Key Prefix</th>
-                      <th>Created At</th>
-                    </tr>
-                  </thead>
-                  <tbody id="apiKeyTableBody"></tbody>
-                </table>
-              </div>
-            </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="po" role="tabpanel">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="po-card">
+            <div class="mb-3"><div class="po-card-title">PO Upload</div><div class="po-card-subtitle">All rows are stored as uploaded.</div></div>
+            <div class="mb-3"><label class="po-form-label">Marketplace</label><select class="form-select po-form-control" id="poMarketplace"></select></div>
+            <div class="mb-3"><label class="po-form-label">Upload Excel (.xlsx)</label><input type="file" class="form-control po-form-control" id="poFile" accept=".xlsx"></div>
+            <div class="mb-3"><button class="po-btn-primary w-100" id="poUploadBtn"><i class="bi bi-cloud-arrow-up"></i> Upload PO Sheet</button></div>
+            <div class="mb-3"><div class="po-progress"><div class="progress-bar" id="poProgress" role="progressbar" style="width: 0%"></div></div><div class="po-status mt-2" id="poStatus">Awaiting upload.</div></div>
+            <div class="mb-3"><button class="po-btn-outline w-100" data-bs-toggle="modal" data-bs-target="#poDeleteModal"><i class="bi bi-trash"></i> Delete PO</button><div class="po-status mt-2" id="poDeleteStatus">No deletions yet.</div></div>
+            <div class="mb-3"><button class="po-btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteAllPosModal"><i class="bi bi-exclamation-triangle"></i> Delete All POs</button></div>
+            <div class="mb-3"><div class="po-form-label">PO Validation Summary</div><div class="po-status" id="poValidationSummary">No validation run yet.</div><div class="mt-2"><div class="po-card-subtitle">Missing in master data</div><ul class="list-unstyled po-validation-list mb-2" id="poMissingList"></ul></div><div><div class="po-card-subtitle">Updated master data values</div><ul class="list-unstyled po-validation-list" id="poChangedList"></ul></div></div>
+            <div><div class="po-form-label">Expected Columns</div><div class="po-column-list" id="poColumns"></div></div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="po-card">
+            <div class="d-flex justify-content-between align-items-center mb-3"><div><div class="po-card-title">PO Upload History</div><div class="po-card-subtitle">Search and review all PO rows.</div></div><span class="po-stat-pill" id="poCount">0 records</span></div>
+            <div class="d-flex gap-2 mb-3"><input type="text" class="form-control po-form-control" id="poSearch" placeholder="Search by any column value"><button class="po-btn-outline" id="poSearchBtn"><i class="bi bi-search"></i></button></div>
+            <div class="po-table-wrapper"><table class="table table-sm align-middle"><thead><tr id="poTableHead"></tr></thead><tbody id="poTableBody"></tbody></table></div>
+            <div class="d-flex justify-content-between align-items-center mt-3"><button class="po-btn-outline" id="poPrev"><i class="bi bi-chevron-left"></i> Prev</button><span class="po-card-subtitle" id="poPage">Page 1</span><button class="po-btn-outline" id="poNext">Next <i class="bi bi-chevron-right"></i></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="keys" role="tabpanel">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="po-card">
+            <div class="mb-3"><div class="po-card-title">Create API Key</div><div class="po-card-subtitle">Generate access keys for the PO lookup API.</div></div>
+            <div class="mb-3"><label class="po-form-label">Key Name</label><input type="text" class="form-control po-form-control" id="apiKeyName" placeholder="e.g. Partner App"></div>
+            <div class="mb-3"><button class="po-btn-primary w-100" id="apiKeyCreateBtn"><i class="bi bi-plus-circle"></i> Create Key</button></div>
+            <div class="po-status" id="apiKeyStatus">No keys created in this session.</div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="po-card">
+            <div class="d-flex justify-content-between align-items-center mb-3"><div><div class="po-card-title">Active Keys</div><div class="po-card-subtitle">Use the prefix to identify keys in use.</div></div><span class="po-stat-pill" id="apiKeyCount">0 keys</span></div>
+            <div class="po-table-wrapper"><table class="table table-sm align-middle"><thead><tr><th>Key Name</th><th>Key Prefix</th><th>Created At</th></tr></thead><tbody id="apiKeyTableBody"></tbody></table></div>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <div class="modal fade" id="poDeleteModal" tabindex="-1" aria-labelledby="poDeleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="poDeleteModalLabel">Delete PO</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="poDeleteNumber" class="form-label">PO Number</label>
-            <input type="text" class="form-control" id="poDeleteNumber" placeholder="Enter PO number">
-          </div>
-          <div class="mb-3">
-            <div class="upload-status" id="poDeleteSummary">Enter a PO number to preview.</div>
-            <div class="d-flex justify-content-between mt-2">
-              <span class="section-subtitle">Total quantity</span>
-              <span class="stat-pill" id="poDeleteTotal">-</span>
-            </div>
-            <div class="d-flex justify-content-between mt-2">
-              <span class="section-subtitle">Rows found</span>
-              <span class="stat-pill" id="poDeleteRows">-</span>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" id="poDeleteCheckBtn">
-            <i class="bi bi-search"></i> Check PO
-          </button>
-          <button type="button" class="btn btn-danger" id="poDeleteConfirmBtn" disabled>
-            <i class="bi bi-trash"></i> Delete PO
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+<!-- Modals -->
+<div class="modal fade po-modal" id="poDeleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Delete PO</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="po-form-label">PO Number</label><input type="text" class="form-control po-form-control" id="poDeleteNumber" placeholder="Enter PO number"></div><div class="mb-3"><div class="po-status" id="poDeleteSummary">Enter a PO number to preview.</div><div class="d-flex justify-content-between mt-2"><span class="po-card-subtitle">Total quantity</span><span class="po-stat-pill" id="poDeleteTotal">-</span></div><div class="d-flex justify-content-between mt-2"><span class="po-card-subtitle">Rows found</span><span class="po-stat-pill" id="poDeleteRows">-</span></div></div></div><div class="modal-footer"><button type="button" class="po-btn-outline" id="poDeleteCheckBtn"><i class="bi bi-search"></i> Check PO</button><button type="button" class="po-btn-danger" id="poDeleteConfirmBtn" disabled><i class="bi bi-trash"></i> Delete PO</button></div></div></div></div>
 
-  <div class="modal fade" id="masterDeleteModal" tabindex="-1" aria-labelledby="masterDeleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="masterDeleteModalLabel">Delete Master Column</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-2">This will permanently remove the column from all master data records.</p>
-          <p class="fw-semibold mb-0">Column: <span id="masterDeleteColumnName">-</span></p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="masterDeleteConfirmBtn">
-            <i class="bi bi-trash"></i> Confirm Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="modal fade po-modal" id="masterDeleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Delete Master Column</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-2">This will permanently remove the column from all master data records.</p><p class="fw-semibold mb-0">Column: <span id="masterDeleteColumnName">-</span></p></div><div class="modal-footer"><button type="button" class="po-btn-outline" data-bs-dismiss="modal">Cancel</button><button type="button" class="po-btn-danger" id="masterDeleteConfirmBtn"><i class="bi bi-trash"></i> Confirm Delete</button></div></div></div></div>
 
-  <div class="modal fade" id="deleteAllMasterModal" tabindex="-1" aria-labelledby="deleteAllMasterModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title" id="deleteAllMasterModalLabel"><i class="bi bi-exclamation-triangle"></i> Delete All Master Data</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-3 text-danger fw-semibold">This will permanently delete ALL master data for the selected marketplace. This action cannot be undone!</p>
-          <p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllMasterMarketplaceName">-</span></p>
-          <p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllMasterCount">-</span></p>
-          <div class="mb-3">
-            <label class="form-label">Type the marketplace name to confirm:</label>
-            <input type="text" class="form-control" id="deleteAllMasterConfirmInput" placeholder="Type marketplace name">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="deleteAllMasterConfirmBtn" disabled>
-            <i class="bi bi-trash"></i> Delete All Master Data
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="modal fade po-modal po-modal-danger" id="deleteAllMasterModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Delete All Master Data</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-3 text-danger fw-semibold">This will permanently delete ALL master data for the selected marketplace. This action cannot be undone!</p><p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllMasterMarketplaceName">-</span></p><p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllMasterCount">-</span></p><div class="mb-3"><label class="po-form-label">Type the marketplace name to confirm:</label><input type="text" class="form-control po-form-control" id="deleteAllMasterConfirmInput" placeholder="Type marketplace name"></div></div><div class="modal-footer"><button type="button" class="po-btn-outline" data-bs-dismiss="modal">Cancel</button><button type="button" class="po-btn-danger" id="deleteAllMasterConfirmBtn" disabled><i class="bi bi-trash"></i> Delete All Master Data</button></div></div></div></div>
 
-  <div class="modal fade" id="deleteAllPosModal" tabindex="-1" aria-labelledby="deleteAllPosModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title" id="deleteAllPosModalLabel"><i class="bi bi-exclamation-triangle"></i> Delete All POs</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-3 text-danger fw-semibold">This will permanently delete ALL PO uploads for the selected marketplace. This action cannot be undone!</p>
-          <p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllPosMarketplaceName">-</span></p>
-          <p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllPosCount">-</span></p>
-          <div class="mb-3">
-            <label class="form-label">Type the marketplace name to confirm:</label>
-            <input type="text" class="form-control" id="deleteAllPosConfirmInput" placeholder="Type marketplace name">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="deleteAllPosConfirmBtn" disabled>
-            <i class="bi bi-trash"></i> Delete All POs
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="modal fade po-modal po-modal-danger" id="deleteAllPosModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Delete All POs</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="mb-3 text-danger fw-semibold">This will permanently delete ALL PO uploads for the selected marketplace. This action cannot be undone!</p><p class="mb-2">Marketplace: <span class="fw-bold" id="deleteAllPosMarketplaceName">-</span></p><p class="mb-2">Records to delete: <span class="fw-bold" id="deleteAllPosCount">-</span></p><div class="mb-3"><label class="po-form-label">Type the marketplace name to confirm:</label><input type="text" class="form-control po-form-control" id="deleteAllPosConfirmInput" placeholder="Type marketplace name"></div></div><div class="modal-footer"><button type="button" class="po-btn-outline" data-bs-dismiss="modal">Cancel</button><button type="button" class="po-btn-danger" id="deleteAllPosConfirmBtn" disabled><i class="bi bi-trash"></i> Delete All POs</button></div></div></div></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
-    const masterState = { page: 1, search: '' };
-    const poState = { page: 1, search: '' };
-    const apiKeyState = { keys: [] };
-    const poDeleteState = { rowCount: 0, totalQuantity: 0 };
-    const masterDeleteState = { columnName: '' };
+<script>
+const marketplaces = <%- JSON.stringify(marketplaces || []) %>;
+const masterState = { page: 1, search: '' };
+const poState = { page: 1, search: '' };
+const apiKeyState = { keys: [] };
+const poDeleteState = { rowCount: 0, totalQuantity: 0 };
+const masterDeleteState = { columnName: '' };
 
-    function populateMarketplaceOptions(selectElement) {
-      selectElement.innerHTML = '';
-      marketplaces.forEach((marketplace, index) => {
-        const option = document.createElement('option');
-        option.value = marketplace.id;
-        option.textContent = marketplace.name;
-        if (index === 0) option.selected = true;
-        selectElement.appendChild(option);
-      });
+function populateMarketplaceOptions(sel) {
+  sel.textContent = '';
+  marketplaces.forEach((m, i) => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function renderApiKeys() {
+  const body = document.getElementById('apiKeyTableBody');
+  body.textContent = '';
+  apiKeyState.keys.forEach(key => {
+    const row = document.createElement('tr');
+    const td1 = document.createElement('td'); td1.textContent = key.keyName;
+    const td2 = document.createElement('td'); td2.textContent = key.keyPrefix;
+    const td3 = document.createElement('td'); td3.textContent = new Date(key.createdAt).toLocaleString();
+    row.appendChild(td1); row.appendChild(td2); row.appendChild(td3);
+    body.appendChild(row);
+  });
+  document.getElementById('apiKeyCount').textContent = apiKeyState.keys.length + ' keys';
+}
+
+async function loadApiKeys() {
+  try {
+    const res = await fetch('/po-admin/api/keys', { headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    const data = await res.json();
+    apiKeyState.keys = data.keys || [];
+    renderApiKeys();
+  } catch (e) { console.error('Failed to load API keys', e); }
+}
+
+async function createApiKey() {
+  const nameInput = document.getElementById('apiKeyName');
+  const status = document.getElementById('apiKeyStatus');
+  const keyName = nameInput.value.trim();
+  if (!keyName) { status.textContent = 'Please enter a key name.'; return; }
+  status.textContent = 'Creating key...';
+  try {
+    const res = await fetch('/po-admin/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ keyName }) });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || 'Unable to create key.'; return; }
+    status.textContent = 'Key created: ' + data.accessKey + ' (save this now)';
+    nameInput.value = '';
+    await loadApiKeys();
+  } catch (e) { console.error('Failed to create API key', e); status.textContent = 'Unable to create key.'; }
+}
+
+function renderColumnList(target, columns) {
+  target.textContent = '';
+  if (!columns || columns.length === 0) {
+    const span = document.createElement('span');
+    span.className = 'po-card-subtitle';
+    span.textContent = 'No columns configured.';
+    target.appendChild(span);
+    return;
+  }
+  columns.forEach(col => {
+    const badge = document.createElement('span');
+    badge.className = 'po-badge';
+    badge.textContent = col;
+    target.appendChild(badge);
+  });
+}
+
+function getMarketplaceById(id) { return marketplaces.find(m => m.id === Number(id)); }
+
+function buildTableColumns(baseCols, rows) {
+  const colSet = new Set(baseCols || []);
+  rows.forEach(row => { Object.keys(row.data || {}).forEach(k => colSet.add(k)); });
+  return Array.from(colSet);
+}
+
+function renderTable(headTarget, bodyTarget, columns, rows, options) {
+  headTarget.textContent = '';
+  bodyTarget.textContent = '';
+  const showDelete = options && options.showDelete === true;
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.setAttribute('colspan', '100');
+    td.className = 'text-center text-muted py-4';
+    td.textContent = 'No records found.';
+    tr.appendChild(td);
+    bodyTarget.appendChild(tr);
+    return;
+  }
+  columns.forEach(col => {
+    const th = document.createElement('th');
+    const wrap = document.createElement('div');
+    wrap.className = 'd-flex align-items-center gap-2';
+    const label = document.createElement('span');
+    label.textContent = col;
+    wrap.appendChild(label);
+    if (showDelete) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-link btn-sm text-danger p-0 master-delete-column-btn';
+      btn.dataset.column = col;
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-trash';
+      btn.appendChild(icon);
+      wrap.appendChild(btn);
     }
-
-    function renderApiKeys() {
-      const body = document.getElementById('apiKeyTableBody');
-      body.innerHTML = '';
-      apiKeyState.keys.forEach(key => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${key.keyName}</td>
-          <td>${key.keyPrefix}</td>
-          <td>${new Date(key.createdAt).toLocaleString()}</td>
-        `;
-        body.appendChild(row);
-      });
-      document.getElementById('apiKeyCount').textContent = `${apiKeyState.keys.length} keys`;
-    }
-
-    async function loadApiKeys() {
-      try {
-        const res = await fetch('/po-admin/api/keys', { headers: { Accept: 'application/json' } });
-        if (!res.ok) return;
-        const data = await res.json();
-        apiKeyState.keys = data.keys || [];
-        renderApiKeys();
-      } catch (error) {
-        console.error('Failed to load API keys', error);
-      }
-    }
-
-    async function createApiKey() {
-      const nameInput = document.getElementById('apiKeyName');
-      const status = document.getElementById('apiKeyStatus');
-      const keyName = nameInput.value.trim();
-      if (!keyName) {
-        status.textContent = 'Please enter a key name.';
-        return;
-      }
-
-      status.textContent = 'Creating key...';
-      try {
-        const res = await fetch('/po-admin/api/keys', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ keyName })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          status.textContent = data.error || 'Unable to create key.';
-          return;
-        }
-        status.textContent = `Key created: ${data.accessKey} (save this now)`;
-        nameInput.value = '';
-        await loadApiKeys();
-      } catch (error) {
-        console.error('Failed to create API key', error);
-        status.textContent = 'Unable to create key.';
-      }
-    }
-
-    function renderColumnList(target, columns) {
-      target.innerHTML = '';
-      if (!columns || columns.length === 0) {
-        target.innerHTML = '<span class="section-subtitle">No columns configured.</span>';
-        return;
-      }
-      columns.forEach(column => {
-        const badge = document.createElement('span');
-        badge.className = 'badge-soft';
-        badge.textContent = column;
-        target.appendChild(badge);
-      });
-    }
-
-    function getMarketplaceById(id) {
-      return marketplaces.find(marketplace => marketplace.id === Number(id));
-    }
-
-    function buildTableColumns(baseColumns, rows) {
-      const columnSet = new Set(baseColumns || []);
-      rows.forEach(row => {
-        Object.keys(row.data || {}).forEach(key => columnSet.add(key));
-      });
-      return Array.from(columnSet);
-    }
-
-    function renderTable(headTarget, bodyTarget, columns, rows, options = {}) {
-      headTarget.innerHTML = '';
-      bodyTarget.innerHTML = '';
-      const showDelete = options.showDelete === true;
-
-      if (!rows.length) {
-        bodyTarget.innerHTML = '<tr><td colspan="100%" class="text-center text-muted py-4">No records found.</td></tr>';
-        return;
-      }
-
-      columns.forEach(column => {
-        const th = document.createElement('th');
-        const headerWrap = document.createElement('div');
-        headerWrap.className = 'd-flex align-items-center gap-2';
-
-        const label = document.createElement('span');
-        label.textContent = column;
-        headerWrap.appendChild(label);
-
-        if (showDelete) {
-          const deleteButton = document.createElement('button');
-          deleteButton.type = 'button';
-          deleteButton.className = 'btn btn-link btn-sm text-danger p-0 master-delete-column-btn';
-          deleteButton.dataset.column = column;
-          deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
-          headerWrap.appendChild(deleteButton);
-        }
-
-        th.appendChild(headerWrap);
-        headTarget.appendChild(th);
-      });
-
-      rows.forEach(row => {
-        const tr = document.createElement('tr');
-        columns.forEach(column => {
-          const td = document.createElement('td');
-          const value = row.data?.[column] ?? '';
-          td.textContent = value;
-          tr.appendChild(td);
-        });
-        bodyTarget.appendChild(tr);
-      });
-    }
-
-    async function loadMasterData() {
-      const marketplaceId = document.getElementById('masterMarketplace').value;
-      if (!marketplaceId) return;
-
-      const response = await fetch(`/po-admin/api/master-data?marketplaceId=${marketplaceId}&search=${encodeURIComponent(masterState.search)}&page=${masterState.page}`);
-      if (!response.ok) return;
-      const data = await response.json();
-
-      const marketplace = getMarketplaceById(marketplaceId);
-      const columns = buildTableColumns(marketplace?.masterColumns || [], data.rows || []);
-      updateMasterDeleteOptions(columns);
-      renderTable(
-        document.getElementById('masterTableHead'),
-        document.getElementById('masterTableBody'),
-        columns,
-        data.rows || [],
-        { showDelete: true }
-      );
-      document.getElementById('masterCount').textContent = `${data.total || 0} records`;
-      document.getElementById('masterPage').textContent = `Page ${data.page || 1}`;
-    }
-
-    async function loadPoData() {
-      const marketplaceId = document.getElementById('poMarketplace').value;
-      if (!marketplaceId) return;
-
-      const response = await fetch(`/po-admin/api/po-data?marketplaceId=${marketplaceId}&search=${encodeURIComponent(poState.search)}&page=${poState.page}`);
-      if (!response.ok) return;
-      const data = await response.json();
-
-      const marketplace = getMarketplaceById(marketplaceId);
-      const columns = buildTableColumns(marketplace?.poColumns || [], data.rows || []);
-      renderTable(
-        document.getElementById('poTableHead'),
-        document.getElementById('poTableBody'),
-        columns,
-        data.rows || []
-      );
-      document.getElementById('poCount').textContent = `${data.total || 0} records`;
-      document.getElementById('poPage').textContent = `Page ${data.page || 1}`;
-    }
-
-    function updateColumnDisplays() {
-      const masterMarketplace = getMarketplaceById(document.getElementById('masterMarketplace').value);
-      const poMarketplace = getMarketplaceById(document.getElementById('poMarketplace').value);
-      renderColumnList(document.getElementById('masterColumns'), masterMarketplace?.masterColumns || []);
-      renderColumnList(document.getElementById('poColumns'), poMarketplace?.poColumns || []);
-    }
-
-    function updateMasterDeleteOptions(columns) {
-      const select = document.getElementById('masterDeleteColumn');
-      const currentValue = select.value;
-      select.innerHTML = '<option value="">Select column</option>';
-      (columns || []).forEach(column => {
-        const option = document.createElement('option');
-        option.value = column;
-        option.textContent = column;
-        if (column === currentValue) {
-          option.selected = true;
-        }
-        select.appendChild(option);
-      });
-    }
-
-    function openMasterDeleteModal(columnName) {
-      const statusTarget = document.getElementById('masterDeleteStatus');
-      if (!columnName) {
-        statusTarget.textContent = 'Please select a column to delete.';
-        return;
-      }
-      masterDeleteState.columnName = columnName;
-      const select = document.getElementById('masterDeleteColumn');
-      if (select) {
-        select.value = columnName;
-      }
-      document.getElementById('masterDeleteColumnName').textContent = columnName;
-      const modal = new bootstrap.Modal(document.getElementById('masterDeleteModal'));
-      modal.show();
-    }
-
-    function uploadFile({ fileInput, marketplaceSelect, progressBar, statusTarget, endpoint, onSuccess }) {
-      const file = fileInput.files[0];
-      if (!file) {
-        statusTarget.textContent = 'Please select an .xlsx file first.';
-        return;
-      }
-
-      const marketplaceId = marketplaceSelect.value;
-      if (!marketplaceId) {
-        statusTarget.textContent = 'Please select a marketplace.';
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('marketplaceId', marketplaceId);
-
-      const request = new XMLHttpRequest();
-      request.open('POST', endpoint, true);
-
-      request.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          progressBar.style.width = `${percent}%`;
-          statusTarget.textContent = `Uploading... ${percent}%`;
-        }
-      });
-
-      request.onload = () => {
-        progressBar.style.width = '100%';
-        if (request.status >= 200 && request.status < 300) {
-          const response = JSON.parse(request.responseText || '{}');
-          onSuccess(response);
-        } else {
-          const error = JSON.parse(request.responseText || '{}');
-          statusTarget.textContent = error.error || 'Upload failed.';
-        }
-        setTimeout(() => {
-          progressBar.style.width = '0%';
-        }, 1500);
-      };
-
-      request.onerror = () => {
-        statusTarget.textContent = 'Upload failed. Please try again.';
-        progressBar.style.width = '0%';
-      };
-
-      request.send(formData);
-    }
-
-    function renderValidationList(target, items, emptyMessage) {
-      target.innerHTML = '';
-      if (!items || items.length === 0) {
-        const li = document.createElement('li');
-        li.textContent = emptyMessage;
-        target.appendChild(li);
-        return;
-      }
-      items.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = item;
-        target.appendChild(li);
-      });
-    }
-
-    function updatePoValidationSummary(response, marketplaceName) {
-      const updatedCount = response.updatedCount || 0;
-      const missingCount = response.missingIdentifiers?.length || 0;
-      const summary = `${marketplaceName}: ${updatedCount} master records updated. ${missingCount} identifiers missing in master data.`;
-      document.getElementById('poValidationSummary').textContent = summary;
-
-      const missingItems = (response.missingIdentifiers || []).map(item => `${item}`);
-      renderValidationList(document.getElementById('poMissingList'), missingItems, 'No missing identifiers detected.');
-
-      const changedItems = (response.changeSummaries || []).map(change => {
-        const changeText = change.changes
-          .map(item => `${item.field}: "${item.from || '-'}" → "${item.to || '-'}"`)
-          .join('; ');
-        return `${change.identifier}: ${changeText}`;
-      });
-      if (response.changesTruncated) {
-        changedItems.push('Additional changes are available but truncated in this summary.');
-      }
-      renderValidationList(document.getElementById('poChangedList'), changedItems, 'No master data updates were required.');
-    }
-
-    function resetPoDeleteSummary() {
-      poDeleteState.rowCount = 0;
-      poDeleteState.totalQuantity = 0;
-      document.getElementById('poDeleteSummary').textContent = 'Enter a PO number to preview.';
-      document.getElementById('poDeleteTotal').textContent = '-';
-      document.getElementById('poDeleteRows').textContent = '-';
-      document.getElementById('poDeleteConfirmBtn').disabled = true;
-    }
-
-    function clearPoDeleteTotals() {
-      poDeleteState.rowCount = 0;
-      poDeleteState.totalQuantity = 0;
-      document.getElementById('poDeleteTotal').textContent = '-';
-      document.getElementById('poDeleteRows').textContent = '-';
-      document.getElementById('poDeleteConfirmBtn').disabled = true;
-    }
-
-    async function loadPoDeleteSummary() {
-      const marketplaceId = document.getElementById('poMarketplace').value;
-      const poNumber = document.getElementById('poDeleteNumber').value.trim();
-      const summary = document.getElementById('poDeleteSummary');
-      if (!marketplaceId || !poNumber) {
-        summary.textContent = 'Please select a marketplace and enter a PO number.';
-        return;
-      }
-
-      summary.textContent = 'Checking PO...';
-      try {
-        const response = await fetch(`/po-admin/api/po-summary?marketplaceId=${marketplaceId}&poNumber=${encodeURIComponent(poNumber)}`);
-        const data = await response.json();
-        if (!response.ok) {
-          summary.textContent = data.error || 'Unable to fetch PO summary.';
-          clearPoDeleteTotals();
-          return;
-        }
-        poDeleteState.rowCount = data.rowCount || 0;
-        poDeleteState.totalQuantity = data.totalQuantity || 0;
-        document.getElementById('poDeleteTotal').textContent = poDeleteState.totalQuantity;
-        document.getElementById('poDeleteRows').textContent = poDeleteState.rowCount;
-        summary.textContent = poDeleteState.rowCount
-          ? 'Review the totals and confirm deletion.'
-          : 'No PO rows found for this number.';
-        document.getElementById('poDeleteConfirmBtn').disabled = poDeleteState.rowCount === 0;
-      } catch (error) {
-        console.error('Failed to load PO summary', error);
-        summary.textContent = 'Unable to fetch PO summary.';
-        clearPoDeleteTotals();
-      }
-    }
-
-    async function deletePo() {
-      const marketplaceId = document.getElementById('poMarketplace').value;
-      const poNumber = document.getElementById('poDeleteNumber').value.trim();
-      const statusTarget = document.getElementById('poDeleteStatus');
-      if (!marketplaceId || !poNumber) {
-        statusTarget.textContent = 'Please select a marketplace and enter a PO number.';
-        return;
-      }
-
-      statusTarget.textContent = 'Deleting PO...';
-      try {
-        const response = await fetch('/po-admin/api/delete-po', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ marketplaceId, poNumber })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          statusTarget.textContent = data.error || 'Unable to delete PO.';
-          return;
-        }
-        statusTarget.textContent = `Deleted ${data.deletedCount || 0} rows. Total qty removed: ${data.totalQuantity || 0}.`;
-        resetPoDeleteSummary();
-        document.getElementById('poDeleteNumber').value = '';
-        loadPoData();
-      } catch (error) {
-        console.error('Failed to delete PO', error);
-        statusTarget.textContent = 'Unable to delete PO.';
-      }
-    }
-
-    async function deleteMasterColumn() {
-      const marketplaceId = document.getElementById('masterMarketplace').value;
-      const columnName = masterDeleteState.columnName;
-      const statusTarget = document.getElementById('masterDeleteStatus');
-
-      if (!marketplaceId || !columnName) {
-        statusTarget.textContent = 'Please select a column to delete.';
-        return;
-      }
-
-      statusTarget.textContent = `Deleting column "${columnName}"...`;
-      try {
-        const response = await fetch('/po-admin/api/delete-master-column', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ marketplaceId, columnName })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          statusTarget.textContent = data.error || 'Unable to delete column.';
-          return;
-        }
-
-        const marketplace = getMarketplaceById(marketplaceId);
-        if (marketplace && Array.isArray(data.masterColumns)) {
-          marketplace.masterColumns = data.masterColumns;
-        }
-
-        statusTarget.textContent = `Deleted "${columnName}" from ${data.updatedRows || 0} master records.`;
-        updateColumnDisplays();
-        await loadMasterData();
-      } catch (error) {
-        console.error('Failed to delete master column', error);
-        statusTarget.textContent = 'Unable to delete column.';
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const masterMarketplace = document.getElementById('masterMarketplace');
-      const poMarketplace = document.getElementById('poMarketplace');
-
-      populateMarketplaceOptions(masterMarketplace);
-      populateMarketplaceOptions(poMarketplace);
-      updateColumnDisplays();
-      loadMasterData();
-      loadPoData();
-      renderValidationList(document.getElementById('poMissingList'), [], 'No validation run yet.');
-      renderValidationList(document.getElementById('poChangedList'), [], 'No validation run yet.');
-
-      masterMarketplace.addEventListener('change', () => {
-        masterState.page = 1;
-        updateColumnDisplays();
-        loadMasterData();
-      });
-
-      poMarketplace.addEventListener('change', () => {
-        poState.page = 1;
-        updateColumnDisplays();
-        loadPoData();
-        resetPoDeleteSummary();
-      });
-
-      document.getElementById('masterUploadBtn').addEventListener('click', () => {
-        uploadFile({
-          fileInput: document.getElementById('masterFile'),
-          marketplaceSelect: masterMarketplace,
-          progressBar: document.getElementById('masterProgress'),
-          statusTarget: document.getElementById('masterStatus'),
-          endpoint: '/po-admin/upload-master',
-          onSuccess: (response) => {
-            const duplicateCount = response.skippedDuplicates?.length || 0;
-            const existingCount = response.skippedExisting?.length || 0;
-            document.getElementById('masterStatus').textContent = `Inserted ${response.insertedCount || 0} rows. Skipped ${existingCount} existing SKUs and ${duplicateCount} duplicate SKUs.`;
-            loadMasterData();
-          }
-        });
-      });
-
-      document.getElementById('masterUpdateBtn').addEventListener('click', () => {
-        uploadFile({
-          fileInput: document.getElementById('masterUpdateFile'),
-          marketplaceSelect: masterMarketplace,
-          progressBar: document.getElementById('masterUpdateProgress'),
-          statusTarget: document.getElementById('masterUpdateStatus'),
-          endpoint: '/po-admin/upload-master-update',
-          onSuccess: (response) => {
-            const missingCount = response.missingIdentifiers?.length || 0;
-            const unchangedCount = response.unchangedCount || 0;
-            const skippedEmpty = response.skippedEmpty || 0;
-            document.getElementById('masterUpdateStatus').textContent = `Updated ${response.updatedCount || 0} records. Missing ${missingCount}, unchanged ${unchangedCount}, skipped ${skippedEmpty} empty rows.`;
-            loadMasterData();
-          }
-        });
-      });
-
-      document.getElementById('masterDownloadBtn').addEventListener('click', () => {
-        const marketplaceId = masterMarketplace.value;
-        if (!marketplaceId) return;
-        window.location.href = `/po-admin/download-master?marketplaceId=${marketplaceId}`;
-      });
-
-      document.getElementById('poUploadBtn').addEventListener('click', () => {
-        uploadFile({
-          fileInput: document.getElementById('poFile'),
-          marketplaceSelect: poMarketplace,
-          progressBar: document.getElementById('poProgress'),
-          statusTarget: document.getElementById('poStatus'),
-          endpoint: '/po-admin/upload-po',
-          onSuccess: (response) => {
-            const duplicateCount = response.skippedDuplicateCount || 0;
-            document.getElementById('poStatus').textContent = `Inserted ${response.insertedCount || 0} rows. Skipped ${duplicateCount} duplicate rows.`;
-            const marketplaceName = getMarketplaceById(poMarketplace.value)?.name || 'Marketplace';
-            updatePoValidationSummary(response, marketplaceName);
-            loadPoData();
-          }
-        });
-      });
-
-      document.getElementById('masterSearchBtn').addEventListener('click', () => {
-        masterState.search = document.getElementById('masterSearch').value.trim();
-        masterState.page = 1;
-        loadMasterData();
-      });
-
-      document.getElementById('poSearchBtn').addEventListener('click', () => {
-        poState.search = document.getElementById('poSearch').value.trim();
-        poState.page = 1;
-        loadPoData();
-      });
-
-      document.getElementById('masterPrev').addEventListener('click', () => {
-        if (masterState.page > 1) {
-          masterState.page -= 1;
-          loadMasterData();
-        }
-      });
-
-      document.getElementById('masterNext').addEventListener('click', () => {
-        masterState.page += 1;
-        loadMasterData();
-      });
-
-      document.getElementById('poPrev').addEventListener('click', () => {
-        if (poState.page > 1) {
-          poState.page -= 1;
-          loadPoData();
-        }
-      });
-
-      document.getElementById('poNext').addEventListener('click', () => {
-        poState.page += 1;
-        loadPoData();
-      });
-
-      document.getElementById('poDeleteCheckBtn').addEventListener('click', loadPoDeleteSummary);
-      document.getElementById('poDeleteConfirmBtn').addEventListener('click', deletePo);
-      document.getElementById('poDeleteNumber').addEventListener('input', () => {
-        resetPoDeleteSummary();
-      });
-
-      document.getElementById('masterDeleteBtn').addEventListener('click', () => {
-        const columnName = document.getElementById('masterDeleteColumn').value;
-        openMasterDeleteModal(columnName);
-      });
-
-      document.getElementById('masterTableHead').addEventListener('click', (event) => {
-        const deleteButton = event.target.closest('.master-delete-column-btn');
-        if (!deleteButton) return;
-        openMasterDeleteModal(deleteButton.dataset.column);
-      });
-
-      document.getElementById('masterDeleteConfirmBtn').addEventListener('click', async () => {
-        const modalElement = document.getElementById('masterDeleteModal');
-        const modalInstance = bootstrap.Modal.getInstance(modalElement);
-        if (modalInstance) {
-          modalInstance.hide();
-        }
-        await deleteMasterColumn();
-      });
-
-      document.getElementById('apiKeyCreateBtn').addEventListener('click', createApiKey);
-      loadApiKeys();
-      resetPoDeleteSummary();
-
-      // Delete All Master Data Modal
-      const deleteAllMasterModal = document.getElementById('deleteAllMasterModal');
-      const deleteAllMasterConfirmInput = document.getElementById('deleteAllMasterConfirmInput');
-      const deleteAllMasterConfirmBtn = document.getElementById('deleteAllMasterConfirmBtn');
-
-      deleteAllMasterModal.addEventListener('show.bs.modal', async () => {
-        const marketplaceId = document.getElementById('masterMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        document.getElementById('deleteAllMasterMarketplaceName').textContent = marketplace?.name || '-';
-        deleteAllMasterConfirmInput.value = '';
-        deleteAllMasterConfirmBtn.disabled = true;
-
-        try {
-          const res = await fetch(`/po-admin/api/master-data?marketplaceId=${marketplaceId}&page=1`);
-          const data = await res.json();
-          document.getElementById('deleteAllMasterCount').textContent = data.total || 0;
-        } catch (error) {
-          document.getElementById('deleteAllMasterCount').textContent = 'Error loading count';
-        }
-      });
-
-      deleteAllMasterConfirmInput.addEventListener('input', () => {
-        const marketplaceId = document.getElementById('masterMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        const inputValue = deleteAllMasterConfirmInput.value.trim().toLowerCase();
-        deleteAllMasterConfirmBtn.disabled = inputValue !== (marketplace?.name || '').toLowerCase();
-      });
-
-      deleteAllMasterConfirmBtn.addEventListener('click', async () => {
-        const marketplaceId = document.getElementById('masterMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        deleteAllMasterConfirmBtn.disabled = true;
-        deleteAllMasterConfirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
-
-        try {
-          const res = await fetch('/po-admin/api/delete-all-master', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ marketplaceId, confirmName: marketplace?.name })
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            alert(data.error || 'Failed to delete master data');
-          } else {
-            alert(`Deleted ${data.deletedCount} master data records for ${data.marketplace}`);
-            loadMasterData();
-          }
-        } catch (error) {
-          alert('Failed to delete master data');
-        }
-
-        deleteAllMasterConfirmBtn.innerHTML = '<i class="bi bi-trash"></i> Delete All Master Data';
-        const modalInstance = bootstrap.Modal.getInstance(deleteAllMasterModal);
-        if (modalInstance) modalInstance.hide();
-      });
-
-      // Delete All POs Modal
-      const deleteAllPosModal = document.getElementById('deleteAllPosModal');
-      const deleteAllPosConfirmInput = document.getElementById('deleteAllPosConfirmInput');
-      const deleteAllPosConfirmBtn = document.getElementById('deleteAllPosConfirmBtn');
-
-      deleteAllPosModal.addEventListener('show.bs.modal', async () => {
-        const marketplaceId = document.getElementById('poMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        document.getElementById('deleteAllPosMarketplaceName').textContent = marketplace?.name || '-';
-        deleteAllPosConfirmInput.value = '';
-        deleteAllPosConfirmBtn.disabled = true;
-
-        try {
-          const res = await fetch(`/po-admin/api/po-data?marketplaceId=${marketplaceId}&page=1`);
-          const data = await res.json();
-          document.getElementById('deleteAllPosCount').textContent = data.total || 0;
-        } catch (error) {
-          document.getElementById('deleteAllPosCount').textContent = 'Error loading count';
-        }
-      });
-
-      deleteAllPosConfirmInput.addEventListener('input', () => {
-        const marketplaceId = document.getElementById('poMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        const inputValue = deleteAllPosConfirmInput.value.trim().toLowerCase();
-        deleteAllPosConfirmBtn.disabled = inputValue !== (marketplace?.name || '').toLowerCase();
-      });
-
-      deleteAllPosConfirmBtn.addEventListener('click', async () => {
-        const marketplaceId = document.getElementById('poMarketplace').value;
-        const marketplace = getMarketplaceById(marketplaceId);
-        deleteAllPosConfirmBtn.disabled = true;
-        deleteAllPosConfirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
-
-        try {
-          const res = await fetch('/po-admin/api/delete-all-pos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ marketplaceId, confirmName: marketplace?.name })
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            alert(data.error || 'Failed to delete PO data');
-          } else {
-            alert(`Deleted ${data.deletedCount} PO records for ${data.marketplace}`);
-            loadPoData();
-          }
-        } catch (error) {
-          alert('Failed to delete PO data');
-        }
-
-        deleteAllPosConfirmBtn.innerHTML = '<i class="bi bi-trash"></i> Delete All POs';
-        const modalInstance = bootstrap.Modal.getInstance(deleteAllPosModal);
-        if (modalInstance) modalInstance.hide();
-      });
+    th.appendChild(wrap);
+    headTarget.appendChild(th);
+  });
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    columns.forEach(col => {
+      const td = document.createElement('td');
+      td.textContent = row.data && row.data[col] !== undefined ? row.data[col] : '';
+      tr.appendChild(td);
     });
-  </script>
-</body>
-</html>
+    bodyTarget.appendChild(tr);
+  });
+}
+
+async function loadMasterData() {
+  const mId = document.getElementById('masterMarketplace').value;
+  if (!mId) return;
+  const res = await fetch('/po-admin/api/master-data?marketplaceId=' + mId + '&search=' + encodeURIComponent(masterState.search) + '&page=' + masterState.page);
+  if (!res.ok) return;
+  const data = await res.json();
+  const m = getMarketplaceById(mId);
+  const cols = buildTableColumns(m ? m.masterColumns : [], data.rows || []);
+  updateMasterDeleteOptions(cols);
+  renderTable(document.getElementById('masterTableHead'), document.getElementById('masterTableBody'), cols, data.rows || [], { showDelete: true });
+  document.getElementById('masterCount').textContent = (data.total || 0) + ' records';
+  document.getElementById('masterPage').textContent = 'Page ' + (data.page || 1);
+}
+
+async function loadPoData() {
+  const mId = document.getElementById('poMarketplace').value;
+  if (!mId) return;
+  const res = await fetch('/po-admin/api/po-data?marketplaceId=' + mId + '&search=' + encodeURIComponent(poState.search) + '&page=' + poState.page);
+  if (!res.ok) return;
+  const data = await res.json();
+  const m = getMarketplaceById(mId);
+  const cols = buildTableColumns(m ? m.poColumns : [], data.rows || []);
+  renderTable(document.getElementById('poTableHead'), document.getElementById('poTableBody'), cols, data.rows || [], {});
+  document.getElementById('poCount').textContent = (data.total || 0) + ' records';
+  document.getElementById('poPage').textContent = 'Page ' + (data.page || 1);
+}
+
+function updateColumnDisplays() {
+  const mm = getMarketplaceById(document.getElementById('masterMarketplace').value);
+  const pm = getMarketplaceById(document.getElementById('poMarketplace').value);
+  renderColumnList(document.getElementById('masterColumns'), mm ? mm.masterColumns : []);
+  renderColumnList(document.getElementById('poColumns'), pm ? pm.poColumns : []);
+}
+
+function updateMasterDeleteOptions(cols) {
+  const sel = document.getElementById('masterDeleteColumn');
+  const cur = sel.value;
+  sel.textContent = '';
+  const defOpt = document.createElement('option');
+  defOpt.value = '';
+  defOpt.textContent = 'Select column';
+  sel.appendChild(defOpt);
+  (cols || []).forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    if (c === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function openMasterDeleteModal(colName) {
+  const st = document.getElementById('masterDeleteStatus');
+  if (!colName) { st.textContent = 'Please select a column to delete.'; return; }
+  masterDeleteState.columnName = colName;
+  const sel = document.getElementById('masterDeleteColumn');
+  if (sel) sel.value = colName;
+  document.getElementById('masterDeleteColumnName').textContent = colName;
+  new bootstrap.Modal(document.getElementById('masterDeleteModal')).show();
+}
+
+function uploadFile(opts) {
+  const file = opts.fileInput.files[0];
+  if (!file) { opts.statusTarget.textContent = 'Please select an .xlsx file first.'; return; }
+  const mId = opts.marketplaceSelect.value;
+  if (!mId) { opts.statusTarget.textContent = 'Please select a marketplace.'; return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('marketplaceId', mId);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', opts.endpoint, true);
+  xhr.upload.addEventListener('progress', function(e) {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      opts.progressBar.style.width = pct + '%';
+      opts.statusTarget.textContent = 'Uploading... ' + pct + '%';
+    }
+  });
+  xhr.onload = function() {
+    opts.progressBar.style.width = '100%';
+    if (xhr.status >= 200 && xhr.status < 300) {
+      const resp = JSON.parse(xhr.responseText || '{}');
+      opts.onSuccess(resp);
+    } else {
+      const err = JSON.parse(xhr.responseText || '{}');
+      opts.statusTarget.textContent = err.error || 'Upload failed.';
+    }
+    setTimeout(function() { opts.progressBar.style.width = '0%'; }, 1500);
+  };
+  xhr.onerror = function() { opts.statusTarget.textContent = 'Upload failed. Please try again.'; opts.progressBar.style.width = '0%'; };
+  xhr.send(fd);
+}
+
+function renderValidationList(target, items, emptyMsg) {
+  target.textContent = '';
+  if (!items || items.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = emptyMsg;
+    target.appendChild(li);
+    return;
+  }
+  items.forEach(function(item) {
+    const li = document.createElement('li');
+    li.textContent = item;
+    target.appendChild(li);
+  });
+}
+
+function updatePoValidationSummary(resp, mName) {
+  const updated = resp.updatedCount || 0;
+  const missing = resp.missingIdentifiers ? resp.missingIdentifiers.length : 0;
+  document.getElementById('poValidationSummary').textContent = mName + ': ' + updated + ' master records updated. ' + missing + ' identifiers missing in master data.';
+  var missingItems = (resp.missingIdentifiers || []).map(function(i) { return String(i); });
+  renderValidationList(document.getElementById('poMissingList'), missingItems, 'No missing identifiers detected.');
+  var changedItems = (resp.changeSummaries || []).map(function(ch) {
+    var txt = ch.changes.map(function(c) { return c.field + ': "' + (c.from || '-') + '" -> "' + (c.to || '-') + '"'; }).join('; ');
+    return ch.identifier + ': ' + txt;
+  });
+  if (resp.changesTruncated) changedItems.push('Additional changes are available but truncated in this summary.');
+  renderValidationList(document.getElementById('poChangedList'), changedItems, 'No master data updates were required.');
+}
+
+function resetPoDeleteSummary() {
+  poDeleteState.rowCount = 0;
+  poDeleteState.totalQuantity = 0;
+  document.getElementById('poDeleteSummary').textContent = 'Enter a PO number to preview.';
+  document.getElementById('poDeleteTotal').textContent = '-';
+  document.getElementById('poDeleteRows').textContent = '-';
+  document.getElementById('poDeleteConfirmBtn').disabled = true;
+}
+
+function clearPoDeleteTotals() {
+  poDeleteState.rowCount = 0;
+  poDeleteState.totalQuantity = 0;
+  document.getElementById('poDeleteTotal').textContent = '-';
+  document.getElementById('poDeleteRows').textContent = '-';
+  document.getElementById('poDeleteConfirmBtn').disabled = true;
+}
+
+async function loadPoDeleteSummary() {
+  const mId = document.getElementById('poMarketplace').value;
+  const poNum = document.getElementById('poDeleteNumber').value.trim();
+  const sum = document.getElementById('poDeleteSummary');
+  if (!mId || !poNum) { sum.textContent = 'Please select a marketplace and enter a PO number.'; return; }
+  sum.textContent = 'Checking PO...';
+  try {
+    const res = await fetch('/po-admin/api/po-summary?marketplaceId=' + mId + '&poNumber=' + encodeURIComponent(poNum));
+    const data = await res.json();
+    if (!res.ok) { sum.textContent = data.error || 'Unable to fetch PO summary.'; clearPoDeleteTotals(); return; }
+    poDeleteState.rowCount = data.rowCount || 0;
+    poDeleteState.totalQuantity = data.totalQuantity || 0;
+    document.getElementById('poDeleteTotal').textContent = poDeleteState.totalQuantity;
+    document.getElementById('poDeleteRows').textContent = poDeleteState.rowCount;
+    sum.textContent = poDeleteState.rowCount ? 'Review the totals and confirm deletion.' : 'No PO rows found for this number.';
+    document.getElementById('poDeleteConfirmBtn').disabled = poDeleteState.rowCount === 0;
+  } catch (e) { console.error('Failed to load PO summary', e); sum.textContent = 'Unable to fetch PO summary.'; clearPoDeleteTotals(); }
+}
+
+async function deletePo() {
+  const mId = document.getElementById('poMarketplace').value;
+  const poNum = document.getElementById('poDeleteNumber').value.trim();
+  const st = document.getElementById('poDeleteStatus');
+  if (!mId || !poNum) { st.textContent = 'Please select a marketplace and enter a PO number.'; return; }
+  st.textContent = 'Deleting PO...';
+  try {
+    const res = await fetch('/po-admin/api/delete-po', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ marketplaceId: mId, poNumber: poNum }) });
+    const data = await res.json();
+    if (!res.ok) { st.textContent = data.error || 'Unable to delete PO.'; return; }
+    st.textContent = 'Deleted ' + (data.deletedCount || 0) + ' rows. Total qty removed: ' + (data.totalQuantity || 0) + '.';
+    resetPoDeleteSummary();
+    document.getElementById('poDeleteNumber').value = '';
+    loadPoData();
+  } catch (e) { console.error('Failed to delete PO', e); st.textContent = 'Unable to delete PO.'; }
+}
+
+async function deleteMasterColumn() {
+  const mId = document.getElementById('masterMarketplace').value;
+  const colName = masterDeleteState.columnName;
+  const st = document.getElementById('masterDeleteStatus');
+  if (!mId || !colName) { st.textContent = 'Please select a column to delete.'; return; }
+  st.textContent = 'Deleting column "' + colName + '"...';
+  try {
+    const res = await fetch('/po-admin/api/delete-master-column', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ marketplaceId: mId, columnName: colName }) });
+    const data = await res.json();
+    if (!res.ok) { st.textContent = data.error || 'Unable to delete column.'; return; }
+    const m = getMarketplaceById(mId);
+    if (m && Array.isArray(data.masterColumns)) m.masterColumns = data.masterColumns;
+    st.textContent = 'Deleted "' + colName + '" from ' + (data.updatedRows || 0) + ' master records.';
+    updateColumnDisplays();
+    await loadMasterData();
+  } catch (e) { console.error('Failed to delete master column', e); st.textContent = 'Unable to delete column.'; }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const masterMarketplace = document.getElementById('masterMarketplace');
+  const poMarketplace = document.getElementById('poMarketplace');
+  populateMarketplaceOptions(masterMarketplace);
+  populateMarketplaceOptions(poMarketplace);
+  updateColumnDisplays();
+  loadMasterData();
+  loadPoData();
+  renderValidationList(document.getElementById('poMissingList'), [], 'No validation run yet.');
+  renderValidationList(document.getElementById('poChangedList'), [], 'No validation run yet.');
+
+  masterMarketplace.addEventListener('change', function() { masterState.page = 1; updateColumnDisplays(); loadMasterData(); });
+  poMarketplace.addEventListener('change', function() { poState.page = 1; updateColumnDisplays(); loadPoData(); resetPoDeleteSummary(); });
+
+  document.getElementById('masterUploadBtn').addEventListener('click', function() {
+    uploadFile({ fileInput: document.getElementById('masterFile'), marketplaceSelect: masterMarketplace, progressBar: document.getElementById('masterProgress'), statusTarget: document.getElementById('masterStatus'), endpoint: '/po-admin/upload-master', onSuccess: function(resp) {
+      var dup = resp.skippedDuplicates ? resp.skippedDuplicates.length : 0;
+      var ex = resp.skippedExisting ? resp.skippedExisting.length : 0;
+      document.getElementById('masterStatus').textContent = 'Inserted ' + (resp.insertedCount || 0) + ' rows. Skipped ' + ex + ' existing SKUs and ' + dup + ' duplicate SKUs.';
+      loadMasterData();
+    }});
+  });
+
+  document.getElementById('masterUpdateBtn').addEventListener('click', function() {
+    uploadFile({ fileInput: document.getElementById('masterUpdateFile'), marketplaceSelect: masterMarketplace, progressBar: document.getElementById('masterUpdateProgress'), statusTarget: document.getElementById('masterUpdateStatus'), endpoint: '/po-admin/upload-master-update', onSuccess: function(resp) {
+      var miss = resp.missingIdentifiers ? resp.missingIdentifiers.length : 0;
+      var unch = resp.unchangedCount || 0;
+      var skip = resp.skippedEmpty || 0;
+      document.getElementById('masterUpdateStatus').textContent = 'Updated ' + (resp.updatedCount || 0) + ' records. Missing ' + miss + ', unchanged ' + unch + ', skipped ' + skip + ' empty rows.';
+      loadMasterData();
+    }});
+  });
+
+  document.getElementById('masterDownloadBtn').addEventListener('click', function() {
+    var mId = masterMarketplace.value;
+    if (!mId) return;
+    window.location.href = '/po-admin/download-master?marketplaceId=' + mId;
+  });
+
+  document.getElementById('poUploadBtn').addEventListener('click', function() {
+    uploadFile({ fileInput: document.getElementById('poFile'), marketplaceSelect: poMarketplace, progressBar: document.getElementById('poProgress'), statusTarget: document.getElementById('poStatus'), endpoint: '/po-admin/upload-po', onSuccess: function(resp) {
+      var dup = resp.skippedDuplicateCount || 0;
+      document.getElementById('poStatus').textContent = 'Inserted ' + (resp.insertedCount || 0) + ' rows. Skipped ' + dup + ' duplicate rows.';
+      var mName = (getMarketplaceById(poMarketplace.value) || {}).name || 'Marketplace';
+      updatePoValidationSummary(resp, mName);
+      loadPoData();
+    }});
+  });
+
+  document.getElementById('masterSearchBtn').addEventListener('click', function() { masterState.search = document.getElementById('masterSearch').value.trim(); masterState.page = 1; loadMasterData(); });
+  document.getElementById('poSearchBtn').addEventListener('click', function() { poState.search = document.getElementById('poSearch').value.trim(); poState.page = 1; loadPoData(); });
+  document.getElementById('masterPrev').addEventListener('click', function() { if (masterState.page > 1) { masterState.page--; loadMasterData(); } });
+  document.getElementById('masterNext').addEventListener('click', function() { masterState.page++; loadMasterData(); });
+  document.getElementById('poPrev').addEventListener('click', function() { if (poState.page > 1) { poState.page--; loadPoData(); } });
+  document.getElementById('poNext').addEventListener('click', function() { poState.page++; loadPoData(); });
+  document.getElementById('poDeleteCheckBtn').addEventListener('click', loadPoDeleteSummary);
+  document.getElementById('poDeleteConfirmBtn').addEventListener('click', deletePo);
+  document.getElementById('poDeleteNumber').addEventListener('input', resetPoDeleteSummary);
+  document.getElementById('masterDeleteBtn').addEventListener('click', function() { openMasterDeleteModal(document.getElementById('masterDeleteColumn').value); });
+  document.getElementById('masterTableHead').addEventListener('click', function(e) { var btn = e.target.closest('.master-delete-column-btn'); if (btn) openMasterDeleteModal(btn.dataset.column); });
+  document.getElementById('masterDeleteConfirmBtn').addEventListener('click', async function() { var el = document.getElementById('masterDeleteModal'); var inst = bootstrap.Modal.getInstance(el); if (inst) inst.hide(); await deleteMasterColumn(); });
+  document.getElementById('apiKeyCreateBtn').addEventListener('click', createApiKey);
+  loadApiKeys();
+  resetPoDeleteSummary();
+
+  // Delete All Master Modal
+  var delMasterModal = document.getElementById('deleteAllMasterModal');
+  var delMasterInput = document.getElementById('deleteAllMasterConfirmInput');
+  var delMasterBtn = document.getElementById('deleteAllMasterConfirmBtn');
+  delMasterModal.addEventListener('show.bs.modal', async function() {
+    var mId = document.getElementById('masterMarketplace').value;
+    var m = getMarketplaceById(mId);
+    document.getElementById('deleteAllMasterMarketplaceName').textContent = m ? m.name : '-';
+    delMasterInput.value = '';
+    delMasterBtn.disabled = true;
+    try { var r = await fetch('/po-admin/api/master-data?marketplaceId=' + mId + '&page=1'); var d = await r.json(); document.getElementById('deleteAllMasterCount').textContent = d.total || 0; } catch (e) { document.getElementById('deleteAllMasterCount').textContent = 'Error'; }
+  });
+  delMasterInput.addEventListener('input', function() { var mId = document.getElementById('masterMarketplace').value; var m = getMarketplaceById(mId); delMasterBtn.disabled = delMasterInput.value.trim().toLowerCase() !== (m ? m.name : '').toLowerCase(); });
+  delMasterBtn.addEventListener('click', async function() {
+    var mId = document.getElementById('masterMarketplace').value;
+    var m = getMarketplaceById(mId);
+    delMasterBtn.disabled = true;
+    delMasterBtn.textContent = 'Deleting...';
+    try {
+      var r = await fetch('/po-admin/api/delete-all-master', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marketplaceId: mId, confirmName: m ? m.name : '' }) });
+      var d = await r.json();
+      if (!r.ok) alert(d.error || 'Failed'); else { alert('Deleted ' + d.deletedCount + ' records for ' + d.marketplace); loadMasterData(); }
+    } catch (e) { alert('Failed'); }
+    delMasterBtn.textContent = 'Delete All Master Data';
+    var inst = bootstrap.Modal.getInstance(delMasterModal);
+    if (inst) inst.hide();
+  });
+
+  // Delete All POs Modal
+  var delPosModal = document.getElementById('deleteAllPosModal');
+  var delPosInput = document.getElementById('deleteAllPosConfirmInput');
+  var delPosBtn = document.getElementById('deleteAllPosConfirmBtn');
+  delPosModal.addEventListener('show.bs.modal', async function() {
+    var mId = document.getElementById('poMarketplace').value;
+    var m = getMarketplaceById(mId);
+    document.getElementById('deleteAllPosMarketplaceName').textContent = m ? m.name : '-';
+    delPosInput.value = '';
+    delPosBtn.disabled = true;
+    try { var r = await fetch('/po-admin/api/po-data?marketplaceId=' + mId + '&page=1'); var d = await r.json(); document.getElementById('deleteAllPosCount').textContent = d.total || 0; } catch (e) { document.getElementById('deleteAllPosCount').textContent = 'Error'; }
+  });
+  delPosInput.addEventListener('input', function() { var mId = document.getElementById('poMarketplace').value; var m = getMarketplaceById(mId); delPosBtn.disabled = delPosInput.value.trim().toLowerCase() !== (m ? m.name : '').toLowerCase(); });
+  delPosBtn.addEventListener('click', async function() {
+    var mId = document.getElementById('poMarketplace').value;
+    var m = getMarketplaceById(mId);
+    delPosBtn.disabled = true;
+    delPosBtn.textContent = 'Deleting...';
+    try {
+      var r = await fetch('/po-admin/api/delete-all-pos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marketplaceId: mId, confirmName: m ? m.name : '' }) });
+      var d = await r.json();
+      if (!r.ok) alert(d.error || 'Failed'); else { alert('Deleted ' + d.deletedCount + ' PO records for ' + d.marketplace); loadPoData(); }
+    } catch (e) { alert('Failed'); }
+    delPosBtn.textContent = 'Delete All POs';
+    var inst = bootstrap.Modal.getInstance(delPosModal);
+    if (inst) inst.hide();
+  });
+});
+</script>
+
+<%- include('../partials/footer') %>

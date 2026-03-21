@@ -1,169 +1,314 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Finishing Challan – <%= entry.lot_no %></title>
+<% const pageTitle = 'Finishing Challan - ' + entry.lot_no; %>
+<%- include('partials/header') %>
 
-  <!-- -----------  PRINT & LAYOUT SET‑UP ----------- -->
-  <style>
-    @page       { size: A4; margin: 10mm; }
-    @media print {
-      html,body { height: 100%; overflow: hidden; }
-      .no-print { display:none !important; }
+<!-- Print-specific styles -->
+<style>
+  @page { size: A4; margin: 10mm; }
+  @media print {
+    html, body { height: 100%; overflow: hidden; }
+    .kotty-navbar, .no-print, .sidebar-overlay { display: none !important; }
+    body { padding-top: 0 !important; background: #fff !important; }
+    .challan-wrap {
+      box-shadow: none !important;
+      margin: 0 !important;
+      max-width: 100% !important;
     }
+  }
 
-    /* -------------  BASE STYLES ------------- */
-    *               { box-sizing:border-box; }
-    body            {
-      margin:0; padding:0;
-      font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
-      font-size:13px; line-height:1.4;
-      background:linear-gradient(135deg,#e4f5ec 0%,#fff0f6 100%);
-    }
-    .challan-wrap   {
-      max-width:800px;
-      margin:20px auto;
-      background:#fff;
-      border-radius:8px;
-      box-shadow:0 2px 6px rgba(0,0,0,.12);
-      padding:24px 32px;
-    }
-    h1,h2,h3        { margin:0; font-weight:600; }
-    h1              { font-size:20px; letter-spacing:.5px; }
-    .meta, .meta td { font-size:13px; }
-    .meta           { width:100%; margin-top:12px; border-collapse:collapse; }
-    .meta td        { padding:4px 0; }
-    .section-title  { margin:22px 0 8px; font-size:15px; border-bottom:1px solid #ddd; padding-bottom:4px; }
-    table.list      { width:100%; border-collapse:collapse; }
-    table.list th,
-    table.list td   { border:1px solid #ccc; padding:6px 8px; text-align:center; }
-    table.list th   { background:#f1f1f1; font-weight:600; }
-    .tot-row td     { font-weight:600; }
+  /* Challan Container */
+  .challan-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    padding: 32px;
+  }
 
-    /* -------------  FOOTERS & SIGN‑OFF ------------- */
-    .signatures     { display:flex; justify-content:space-between; margin-top:40px; }
-    .sig-box        { width:32%; text-align:center; border-top:1px solid #000; padding-top:4px; }
+  /* Header Section */
+  .challan-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--terracotta);
+  }
 
-    /* -------------  BUTTONS ------------- */
-    .btn-print      {
-      display:inline-block; padding:6px 12px; margin-bottom:16px;
-      font-size:13px; border:none; border-radius:4px;
-      background:#007bff; color:#fff; cursor:pointer; transition:background .2s;
-    }
-    .btn-print:hover{ background:#0056b3; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+  .challan-header h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--charcoal);
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
 
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
-      </div>
-    </div>
-  </nav>
+  .challan-header h2 {
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    color: var(--terracotta);
+    font-weight: 500;
+    margin: 0;
+  }
 
-  <% const pad = n => (n<10?'0':'')+n; %>
+  /* Meta Table */
+  .meta-table {
+    width: 100%;
+    margin: 20px 0;
+    border-collapse: collapse;
+  }
+
+  .meta-table td {
+    padding: 8px 12px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+
+  .meta-table td:nth-child(odd) {
+    font-weight: 600;
+    color: var(--text-primary);
+    width: 15%;
+  }
+
+  .meta-table td:nth-child(even) {
+    width: 35%;
+  }
+
+  .meta-table tr {
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .meta-table tr:last-child {
+    border-bottom: none;
+  }
+
+  /* Section Title */
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--charcoal);
+    margin: 28px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-medium);
+  }
+
+  /* Data Tables */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+
+  .data-table th,
+  .data-table td {
+    border: 1px solid var(--border-medium);
+    padding: 10px 12px;
+    text-align: center;
+    font-size: var(--text-sm);
+  }
+
+  .data-table th {
+    background: var(--cream-dark);
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+  }
+
+  .data-table td {
+    color: var(--text-secondary);
+  }
+
+  .data-table .total-row td {
+    font-weight: 600;
+    background: var(--terracotta-bg);
+    color: var(--terracotta-dark);
+  }
+
+  /* Image Section */
+  .challan-image {
+    margin: 20px 0;
+    text-align: center;
+  }
+
+  .challan-image img {
+    max-width: 100%;
+    max-height: 250px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Signatures */
+  .signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 48px;
+    padding-top: 16px;
+  }
+
+  .sig-box {
+    width: 30%;
+    text-align: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--charcoal);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  /* Print Button */
+  .btn-print {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-family: var(--font-body);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--terracotta);
+    color: white;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    margin-bottom: 20px;
+  }
+
+  .btn-print:hover {
+    background: var(--terracotta-dark);
+  }
+
+  /* Page Layout */
+  .page-content {
+    padding: 24px;
+    padding-top: calc(var(--navbar-height) + 24px);
+    min-height: 100vh;
+    background: var(--bg-page);
+  }
+
+  /* Dispatch Info */
+  .dispatch-info {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--cream-dark);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+  }
+
+  .dispatch-info strong {
+    color: var(--terracotta);
+  }
+</style>
+
+<% const dashboardUrl = '/finishingdashboard'; %>
+<%- include('partials/navbar', { dashboardUrl: dashboardUrl }) %>
+
+<div class="page-content">
   <div class="challan-wrap">
-    <!-- -----------  HEADER  ----------- -->
-    <button class="btn-print no-print" onclick="window.print()">Print</button>
-    <h1 style="text-align:center;">KOTTY LIFESTYLE</h1>
-    <h2 style="text-align:center; font-size:16px; margin-top:4px;">Finishing Challan</h2>
+    <% const pad = n => (n < 10 ? '0' : '') + n; %>
 
-    <!-- -----------  META  ----------- -->
-    <table class="meta">
-        <tr>
-          <td><strong>Challan ID:</strong></td>
-          <td>#<%= entry.id %></td>
-          <td><strong>Date:</strong></td>
-          <td>
-            <% const d = new Date(entry.created_at); %>
-            <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
-          </td>
-        </tr>
+    <!-- Print Button -->
+    <button class="btn-print no-print" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print Challan
+    </button>
+
+    <!-- Header -->
+    <div class="challan-header">
+      <h1>KOTTY LIFESTYLE</h1>
+      <h2>Finishing Challan</h2>
+    </div>
+
+    <!-- Meta Information -->
+    <table class="meta-table">
       <tr>
-        <td><strong>Lot No:</strong></td><td><%= entry.lot_no %></td>
-        <td><strong>SKU:</strong></td><td><%= entry.sku %></td>
+        <td>Challan ID:</td>
+        <td>#<%= entry.id %></td>
+        <td>Date:</td>
+        <td>
+          <% const d = new Date(entry.created_at); %>
+          <%= pad(d.getDate()) %>-<%= pad(d.getMonth() + 1) %>-<%= d.getFullYear() %>
+        </td>
       </tr>
       <tr>
-        <td><strong>Total Pieces:</strong></td><td><%= entry.total_pieces %></td>
-        <td><strong>Created By:</strong></td><td><%= user.username %></td>
+        <td>Lot No:</td>
+        <td><%= entry.lot_no %></td>
+        <td>SKU:</td>
+        <td><%= entry.sku %></td>
       </tr>
       <tr>
-        <td><strong>Remark:</strong></td>
+        <td>Total Pieces:</td>
+        <td><%= entry.total_pieces %></td>
+        <td>Created By:</td>
+        <td><%= user.username %></td>
+      </tr>
+      <tr>
+        <td>Remark:</td>
         <td colspan="3">
           <%= entry.cutting_remark || '—' %>
           <% if (dispatches && dispatches.length) { %>
-            <br>Dispatched:<br>
-            <% dispatches.forEach((d, idx) => { const dt = new Date(d.sent_at); %>
-              - <%= d.destination %> (<%= pad(dt.getDate()) %>-<%= pad(dt.getMonth()+1) %>-<%= dt.getFullYear() %>)<br>
-            <% }) %>
+            <div class="dispatch-info">
+              <strong>Dispatched:</strong><br>
+              <% dispatches.forEach((disp, idx) => {
+                const dt = new Date(disp.sent_at);
+              %>
+                - <%= disp.destination %> (<%= pad(dt.getDate()) %>-<%= pad(dt.getMonth() + 1) %>-<%= dt.getFullYear() %>)<br>
+              <% }) %>
+            </div>
           <% } %>
         </td>
       </tr>
     </table>
 
-    <!-- -----------  IMAGE (OPTIONAL) ----------- -->
+    <!-- Image (Optional) -->
     <% if (entry.image_url) { %>
-      <div style="margin:16px 0; text-align:center;">
-        <img src="<%= entry.image_url %>" alt="Attached Image" style="max-width:100%; max-height:250px; border:1px solid #ccc; border-radius:4px;">
+      <div class="challan-image">
+        <img src="<%= entry.image_url %>" alt="Attached Image">
       </div>
     <% } %>
 
-    <!-- -----------  SIZE BREAKDOWN  ----------- -->
-    <h3 class="section-title">Size Breakdown</h3>
-    <table class="list">
+    <!-- Size Breakdown -->
+    <h3 class="section-title">Size Breakdown</h3>
+    <table class="data-table">
       <thead>
         <tr>
-          <th>Sl No.</th>
-          <th>Size Label</th>
+          <th>Sl No.</th>
+          <th>Size Label</th>
           <th>Pieces</th>
         </tr>
       </thead>
       <tbody>
         <% let grandTot = 0; %>
-        <% sizes.forEach((sz,i)=>{ grandTot += sz.pieces; %>
+        <% sizes.forEach((sz, i) => { grandTot += sz.pieces; %>
           <tr>
-            <td><%= i+1 %></td>
+            <td><%= i + 1 %></td>
             <td><%= sz.size_label %></td>
             <td><%= sz.pieces %></td>
           </tr>
         <% }); %>
-        <tr class="tot-row">
+        <tr class="total-row">
           <td colspan="2">Total</td>
           <td><%= grandTot %></td>
         </tr>
       </tbody>
     </table>
 
-    <!-- -----------  UPDATE LOG  ----------- -->
+    <!-- Update Log -->
     <% if (updates.length) { %>
-      <h3 class="section-title">Updates (Log)</h3>
-      <table class="list">
+      <h3 class="section-title">Updates (Log)</h3>
+      <table class="data-table">
         <thead>
           <tr>
-            <th>Sl No.</th>
+            <th>Sl No.</th>
             <th>Date &amp; Time</th>
             <th>Size</th>
-            <th>Pieces Added</th>
+            <th>Pieces Added</th>
           </tr>
         </thead>
         <tbody>
-          <% updates.forEach((u,i)=>{ %>
+          <% updates.forEach((u, i) => { %>
             <tr>
-              <td><%= i+1 %></td>
+              <td><%= i + 1 %></td>
               <td>
                 <% const up = new Date(u.updated_at); %>
-                <%= pad(up.getDate()) %>-<%= pad(up.getMonth()+1) %>-<%= up.getFullYear() %>
+                <%= pad(up.getDate()) %>-<%= pad(up.getMonth() + 1) %>-<%= up.getFullYear() %>
                 <%= pad(up.getHours()) %>:<%= pad(up.getMinutes()) %>
               </td>
               <td><%= u.size_label %></td>
@@ -174,18 +319,13 @@
       </table>
     <% } %>
 
-    <!-- -----------  SIGNATURES  ----------- -->
+    <!-- Signatures -->
     <div class="signatures">
-      <div class="sig-box">Issued By</div>
-      <div class="sig-box">Checked By</div>
-      <div class="sig-box">Received By</div>
+      <div class="sig-box">Issued By</div>
+      <div class="sig-box">Checked By</div>
+      <div class="sig-box">Received By</div>
     </div>
   </div>
+</div>
 
-  <!-- -----------  OPTIONAL: AUTO‑PRINT ON LOAD -----------
-  <script>
-    window.addEventListener('load',()=>window.print());
-  </script>
-  ---------------------------------------------- -->
-
-</html>
+<%- include('partials/footer') %>

@@ -3,255 +3,307 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventory Snapshots | Operations Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <title>Inventory Snapshots | Kotty Track</title>
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+
   <style>
     :root {
-      --bg-primary: #0a0e14;
-      --bg-secondary: #131920;
-      --bg-card: #1a2028;
-      --bg-row-hover: #232d3a;
-      --border-color: #2a3544;
-      --text-primary: #e6edf3;
-      --text-secondary: #8b949e;
-      --text-muted: #6e7681;
-      --accent-blue: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-amber: #d29922;
-      --accent-red: #f85149;
-      --accent-purple: #a371f7;
-      --warehouse-delhi: #f97316;
-      --warehouse-faridabad: #06b6d4;
-      --font-display: 'DM Sans', sans-serif;
-      --font-mono: 'IBM Plex Mono', monospace;
+      /* Kotty Track Design System */
+      --charcoal: #1a1a1a;
+      --charcoal-light: #2d2d2d;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --terracotta: #c45c3a;
+      --terracotta-light: #d4826a;
+      --terracotta-dark: #a34a2d;
+      --terracotta-bg: rgba(196, 92, 58, 0.08);
+
+      /* Semantic */
+      --success: #2d8a5f;
+      --success-light: #e8f5ee;
+      --warning: #c4873a;
+      --warning-light: #fef6e8;
+      --danger: #c23b22;
+      --danger-light: #fdf2f0;
+
+      /* Warehouse Colors */
+      --delhi: #d97706;
+      --delhi-bg: #fef3e2;
+      --faridabad: #0891b2;
+      --faridabad-bg: #e0f7fa;
+
+      /* Neutrals */
+      --gray-50: #fafaf9;
+      --gray-100: #f5f5f3;
+      --gray-200: #e8e6e1;
+      --gray-300: #d4d1c9;
+      --gray-400: #a8a49a;
+      --gray-500: #78746a;
+      --gray-600: #5a5650;
+
+      /* Typography */
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, sans-serif;
+
+      /* Shadows */
+      --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+      --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+      --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
     }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: var(--font-display);
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      font-family: var(--font-body);
+      background: var(--cream);
+      color: var(--charcoal);
+      line-height: 1.6;
       min-height: 100vh;
-      line-height: 1.5;
     }
 
-    /* Subtle grid background */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .dashboard {
-      position: relative;
-      z-index: 1;
-      max-width: 1600px;
+    /* =====================
+       LAYOUT
+       ===================== */
+    .page-container {
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 32px 28px;
     }
 
-    /* Header */
-    .header {
+    /* =====================
+       HEADER
+       ===================== */
+    .page-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 32px;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: 20px;
     }
 
-    .header-left h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+    .header-content h1 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 400;
+      color: var(--charcoal);
       margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      letter-spacing: -0.01em;
     }
 
-    .header-left h1::before {
-      content: '';
-      display: inline-block;
-      width: 4px;
-      height: 28px;
-      background: linear-gradient(180deg, var(--accent-blue), var(--accent-purple));
-      border-radius: 2px;
-    }
-
-    .header-subtitle {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-      font-family: var(--font-mono);
+    .header-content p {
+      font-size: 0.95rem;
+      color: var(--gray-600);
     }
 
     .header-actions {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
-    /* Buttons */
+    /* =====================
+       BUTTONS
+       ===================== */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 10px 18px;
-      font-family: var(--font-display);
+      font-family: var(--font-body);
       font-size: 0.875rem;
       font-weight: 500;
-      border-radius: 8px;
-      border: none;
+      border-radius: 6px;
+      border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       text-decoration: none;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--accent-green) 0%, #2ea043 100%);
+      background: var(--terracotta);
       color: white;
-      box-shadow: 0 2px 8px rgba(63, 185, 80, 0.3);
+      border-color: var(--terracotta);
     }
 
     .btn-primary:hover {
+      background: var(--terracotta-dark);
       transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(63, 185, 80, 0.4);
+      box-shadow: var(--shadow-md);
     }
 
     .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
+      background: white;
+      color: var(--charcoal);
+      border-color: var(--gray-300);
     }
 
     .btn-secondary:hover {
-      background: var(--bg-row-hover);
-      border-color: var(--accent-blue);
+      background: var(--gray-100);
+      border-color: var(--gray-400);
     }
 
-    .btn-danger {
-      background: transparent;
-      color: var(--accent-red);
-      border: 1px solid var(--accent-red);
+    .btn-success {
+      background: var(--success);
+      color: white;
     }
 
-    .btn-danger:hover {
-      background: rgba(248, 81, 73, 0.1);
+    .btn-success:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
     }
 
-    .btn i {
-      font-size: 1.1em;
+    .btn-outline-danger {
+      background: white;
+      color: var(--danger);
+      border-color: var(--danger);
     }
 
-    /* Stats Cards */
+    .btn-outline-danger:hover {
+      background: var(--danger-light);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Progress inline */
+    .progress-inline {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+    }
+
+    .progress-inline.active { display: flex; }
+
+    .progress-track {
+      width: 100px;
+      height: 4px;
+      background: var(--gray-200);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--terracotta);
+      transition: width 0.3s ease;
+    }
+
+    .progress-label {
+      font-size: 0.75rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* =====================
+       STATS GRID
+       ===================== */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 500px) {
+      .stats-grid { grid-template-columns: 1fr; }
     }
 
     .stat-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
-      animation: slideUp 0.5s ease-out backwards;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 20px 22px;
+      transition: all 0.2s ease;
     }
 
-    .stat-card:nth-child(1) { animation-delay: 0.1s; }
-    .stat-card:nth-child(2) { animation-delay: 0.15s; }
-    .stat-card:nth-child(3) { animation-delay: 0.2s; }
-    .stat-card:nth-child(4) { animation-delay: 0.25s; }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-      opacity: 0.6;
+    .stat-card:hover {
+      border-color: var(--gray-300);
+      box-shadow: var(--shadow-sm);
     }
 
     .stat-label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--text-muted);
+      color: var(--gray-500);
       margin-bottom: 8px;
     }
 
     .stat-value {
-      font-family: var(--font-mono);
-      font-size: 1.75rem;
-      font-weight: 600;
-      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 2rem;
+      color: var(--charcoal);
+      line-height: 1;
     }
 
-    .stat-card.delhi .stat-value { color: var(--warehouse-delhi); }
-    .stat-card.faridabad .stat-value { color: var(--warehouse-faridabad); }
+    .stat-card.delhi .stat-value { color: var(--delhi); }
+    .stat-card.faridabad .stat-value { color: var(--faridabad); }
 
-    /* Table Container */
-    .table-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
+    /* =====================
+       DATA TABLE
+       ===================== */
+    .table-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
       overflow: hidden;
-      animation: slideUp 0.6s ease-out 0.3s backwards;
     }
 
     .table-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border-color);
-      background: var(--bg-secondary);
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--gray-200);
     }
 
     .table-title {
-      font-size: 0.9rem;
-      font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--charcoal);
     }
 
     .table-title i {
-      color: var(--accent-blue);
+      color: var(--terracotta);
     }
 
-    .live-indicator {
+    .live-badge {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.75rem;
-      color: var(--accent-green);
-      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--success);
     }
 
     .live-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--accent-green);
+      width: 6px;
+      height: 6px;
+      background: var(--success);
       border-radius: 50%;
       animation: pulse 2s infinite;
     }
@@ -261,419 +313,385 @@
       50% { opacity: 0.5; transform: scale(0.9); }
     }
 
-    /* Data Table */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
     .data-table {
       width: 100%;
       border-collapse: collapse;
     }
 
-    .data-table thead {
-      background: var(--bg-secondary);
-    }
-
     .data-table th {
-      padding: 14px 20px;
+      padding: 12px 20px;
       text-align: left;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .data-table tbody tr {
-      border-bottom: 1px solid var(--border-color);
-      transition: background 0.15s ease;
-      animation: fadeIn 0.4s ease-out backwards;
-    }
-
-    .data-table tbody tr:nth-child(1) { animation-delay: 0.35s; }
-    .data-table tbody tr:nth-child(2) { animation-delay: 0.38s; }
-    .data-table tbody tr:nth-child(3) { animation-delay: 0.41s; }
-    .data-table tbody tr:nth-child(4) { animation-delay: 0.44s; }
-    .data-table tbody tr:nth-child(5) { animation-delay: 0.47s; }
-    .data-table tbody tr:nth-child(n+6) { animation-delay: 0.5s; }
-
-    .data-table tbody tr:hover {
-      background: var(--bg-row-hover);
-    }
-
-    .data-table tbody tr:last-child {
-      border-bottom: none;
+      color: var(--gray-500);
+      background: var(--gray-50);
+      border-bottom: 1px solid var(--gray-200);
     }
 
     .data-table td {
       padding: 14px 20px;
       font-size: 0.875rem;
+      border-bottom: 1px solid var(--gray-100);
+      vertical-align: middle;
     }
 
-    /* Cell Styles */
+    .data-table tbody tr:last-child td { border-bottom: none; }
+
+    .data-table tbody tr:hover { background: var(--gray-50); }
+
+    /* Cell styles */
     .cell-time {
-      font-family: var(--font-mono);
       font-size: 0.8rem;
-      color: var(--text-secondary);
+      color: var(--gray-600);
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
 
     .cell-sku {
-      font-family: var(--font-mono);
       font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: 0.02em;
+      color: var(--charcoal);
+      font-family: var(--font-body);
     }
 
-    .cell-warehouse {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .warehouse-badge {
+    .warehouse-tag {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 12px;
+      padding: 5px 12px;
       border-radius: 20px;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 500;
     }
 
-    .warehouse-badge.delhi {
-      background: rgba(249, 115, 22, 0.15);
-      color: var(--warehouse-delhi);
-      border: 1px solid rgba(249, 115, 22, 0.3);
+    .warehouse-tag.delhi {
+      background: var(--delhi-bg);
+      color: var(--delhi);
     }
 
-    .warehouse-badge.faridabad {
-      background: rgba(6, 182, 212, 0.15);
-      color: var(--warehouse-faridabad);
-      border: 1px solid rgba(6, 182, 212, 0.3);
+    .warehouse-tag.faridabad {
+      background: var(--faridabad-bg);
+      color: var(--faridabad);
     }
 
-    .warehouse-badge.unknown {
-      background: rgba(110, 118, 129, 0.15);
-      color: var(--text-muted);
-      border: 1px solid rgba(110, 118, 129, 0.3);
-    }
-
-    .warehouse-badge i {
-      font-size: 0.9em;
+    .warehouse-tag.unknown {
+      background: var(--gray-100);
+      color: var(--gray-500);
     }
 
     .cell-inventory {
-      font-family: var(--font-mono);
       font-weight: 600;
-      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
     }
 
-    .inventory-high { color: var(--accent-green); }
-    .inventory-medium { color: var(--accent-amber); }
-    .inventory-low { color: var(--accent-red); }
+    .inv-high { color: var(--success); }
+    .inv-medium { color: var(--warning); }
+    .inv-low { color: var(--danger); }
 
-    .cell-status {
-      display: inline-block;
-    }
-
-    .status-pill {
+    .status-chip {
       display: inline-flex;
-      align-items: center;
       padding: 4px 10px;
       border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 500;
+      font-size: 0.7rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
     }
 
-    .status-active {
-      background: rgba(63, 185, 80, 0.15);
-      color: var(--accent-green);
-    }
+    .status-active { background: var(--success-light); color: var(--success); }
+    .status-inactive { background: var(--gray-200); color: var(--gray-600); }
+    .status-pending { background: var(--warning-light); color: var(--warning); }
+    .status-default { background: var(--gray-100); color: var(--gray-500); }
 
-    .status-inactive {
-      background: rgba(248, 81, 73, 0.15);
-      color: var(--accent-red);
-    }
-
-    .status-pending {
-      background: rgba(210, 153, 34, 0.15);
-      color: var(--accent-amber);
-    }
-
-    .status-default {
-      background: rgba(139, 148, 158, 0.15);
-      color: var(--text-secondary);
-    }
-
-    /* Empty State */
+    /* Empty state */
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
-      color: var(--text-muted);
+      padding: 60px 24px;
+      color: var(--gray-500);
     }
 
     .empty-state i {
-      font-size: 3rem;
+      font-size: 48px;
+      opacity: 0.3;
       margin-bottom: 16px;
-      opacity: 0.5;
     }
 
-    /* Progress Bar */
-    .progress-container {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 16px;
-      background: var(--bg-secondary);
-      border-radius: 8px;
+    .empty-state p {
+      font-size: 0.95rem;
     }
 
-    .progress-container.active {
-      display: flex;
-    }
-
-    .progress-bar-track {
-      flex: 1;
-      height: 6px;
-      background: var(--border-color);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-      border-radius: 3px;
-      transition: width 0.3s ease;
-    }
-
-    .progress-text {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-secondary);
-      min-width: 120px;
-    }
-
-    /* Animations */
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .dashboard {
-        padding: 16px;
-      }
-
-      .header {
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .header-actions {
-        flex-wrap: wrap;
-      }
-
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .data-table th,
-      .data-table td {
-        padding: 12px;
-      }
-
-      .cell-time {
-        font-size: 0.7rem;
-      }
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--border-color);
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--text-muted);
-    }
-
-    /* Download Modal */
+    /* =====================
+       MODAL
+       ===================== */
     .modal-overlay {
-      display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(26, 26, 26, 0.6);
       backdrop-filter: blur(4px);
-      z-index: 1000;
-      justify-content: center;
+      display: flex;
       align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.25s ease;
     }
 
     .modal-overlay.active {
-      display: flex;
+      opacity: 1;
+      visibility: visible;
     }
 
-    .modal-content {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 32px;
+    .modal-box {
+      background: white;
+      border-radius: 14px;
+      width: 100%;
       max-width: 420px;
-      width: 90%;
-      text-align: center;
-      animation: modalSlideIn 0.3s ease-out;
+      padding: 28px;
+      box-shadow: var(--shadow-lg);
+      transform: scale(0.95) translateY(10px);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    @keyframes modalSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-20px) scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
+    .modal-overlay.active .modal-box {
+      transform: scale(1) translateY(0);
     }
 
     .modal-icon {
-      width: 64px;
-      height: 64px;
-      background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
-      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      background: var(--terracotta-bg);
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 20px;
-      font-size: 28px;
-      color: white;
+      color: var(--terracotta);
+      font-size: 24px;
     }
 
     .modal-icon.loading {
-      animation: pulse 1.5s infinite;
+      animation: iconPulse 1.5s infinite;
+    }
+
+    @keyframes iconPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
 
     .modal-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 8px;
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      text-align: center;
+      color: var(--charcoal);
+      margin-bottom: 6px;
     }
 
     .modal-subtitle {
-      color: var(--text-secondary);
       font-size: 0.9rem;
+      text-align: center;
+      color: var(--gray-600);
       margin-bottom: 24px;
     }
 
+    /* Warehouse selector */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-bottom: 8px;
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 12px 16px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      background: white;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a5650' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+
+    .form-select:focus {
+      outline: none;
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px var(--terracotta-bg);
+    }
+
+    /* Source options */
+    .source-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .source-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .source-option:hover { border-color: var(--gray-400); }
+
+    .source-option.selected {
+      border-color: var(--success);
+      background: var(--success-light);
+    }
+
+    .source-option input { margin-top: 2px; }
+
+    .source-option span {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .source-option strong {
+      font-size: 0.875rem;
+      color: var(--charcoal);
+    }
+
+    .source-option small {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+
+    /* Modal stats */
     .modal-stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .modal-stat {
-      background: var(--bg-secondary);
-      border-radius: 8px;
+      gap: 12px;
       padding: 16px;
+      background: var(--gray-50);
+      border-radius: 8px;
+      margin-bottom: 20px;
     }
 
     .modal-stat-label {
       font-size: 0.7rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 4px;
+      letter-spacing: 0.05em;
+      color: var(--gray-500);
     }
 
     .modal-stat-value {
-      font-family: var(--font-mono);
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--accent-blue);
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      color: var(--charcoal);
     }
 
+    /* Modal progress */
     .modal-progress {
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .modal-progress-bar {
-      height: 8px;
-      background: var(--border-color);
-      border-radius: 4px;
+      height: 6px;
+      background: var(--gray-200);
+      border-radius: 3px;
       overflow: hidden;
       margin-bottom: 8px;
     }
 
     .modal-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
-      border-radius: 4px;
-      transition: width 0.3s ease;
-      width: 0%;
+      background: var(--terracotta);
+      border-radius: 3px;
+      transition: width 0.4s ease;
     }
 
     .modal-progress-text {
-      font-family: var(--font-mono);
       font-size: 0.8rem;
-      color: var(--text-secondary);
+      color: var(--gray-600);
+      text-align: center;
     }
 
+    /* Modal actions */
     .modal-actions {
       display: flex;
-      gap: 12px;
-      justify-content: center;
+      gap: 10px;
+      justify-content: flex-end;
     }
 
-    .modal-actions .btn {
-      min-width: 120px;
+    /* =====================
+       ANIMATIONS
+       ===================== */
+    .fade-in {
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =====================
+       RESPONSIVE
+       ===================== */
+    @media (max-width: 768px) {
+      .page-container { padding: 20px 16px; }
+
+      .page-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .header-actions {
+        justify-content: flex-start;
+      }
+
+      .header-content h1 { font-size: 1.5rem; }
+
+      .data-table th,
+      .data-table td { padding: 12px 14px; }
     }
   </style>
 </head>
 <body>
-  <div class="dashboard">
+  <div class="page-container">
     <!-- Header -->
-    <header class="header">
-      <div class="header-left">
+    <header class="page-header fade-in">
+      <div class="header-content">
         <h1>Inventory Snapshots</h1>
-        <p class="header-subtitle">Real-time warehouse inventory tracking</p>
+        <p>Real-time warehouse inventory tracking</p>
       </div>
       <div class="header-actions">
         <% if (typeof username !== 'undefined' && username !== 'vinaykumar') { %>
-        <div id="clearStatus" class="progress-container">
-          <div class="progress-bar-track">
-            <div id="clearProgress" class="progress-bar-fill" style="width: 0%"></div>
+        <div id="clearStatus" class="progress-inline">
+          <div class="progress-track">
+            <div id="clearProgress" class="progress-fill" style="width: 0%"></div>
           </div>
-          <span id="clearText" class="progress-text">Processing...</span>
+          <span id="clearText" class="progress-label">Processing...</span>
         </div>
-        <button id="clearBtn" class="btn btn-danger" onclick="clearRawData()">
+        <button id="clearBtn" class="btn btn-outline-danger" onclick="clearRawData()">
           <i class="bi bi-trash3"></i> Clear Raw Data
         </button>
         <% } %>
-        <button id="downloadBtn" class="btn btn-primary" onclick="startDownload()">
-          <i class="bi bi-file-earmark-spreadsheet"></i> Download Excel
+        <button class="btn btn-success" onclick="startDownload()">
+          <i class="bi bi-download"></i> Download Excel
         </button>
         <a href="/webhook/order/logs" class="btn btn-secondary">
           <i class="bi bi-box-seam"></i> Order Logs
@@ -681,14 +699,13 @@
       </div>
     </header>
 
-    <!-- Stats Cards -->
+    <!-- Stats -->
     <%
       const delhiCount = logs.filter(l => l.warehouse_name === 'Delhi' || l.warehouse_id == 176318).length;
       const faridabadCount = logs.filter(l => l.warehouse_name === 'Faridabad' || l.warehouse_id == 173983).length;
       const totalInventory = logs.reduce((sum, l) => sum + (Number(l.inventory) || 0), 0);
-      const activeCount = logs.filter(l => l.sku_status && l.sku_status.toLowerCase().includes('active')).length;
     %>
-    <div class="stats-grid">
+    <div class="stats-grid fade-in" style="animation-delay: 0.1s;">
       <div class="stat-card">
         <div class="stat-label">Total Records</div>
         <div class="stat-value"><%= logs.length %></div>
@@ -708,17 +725,18 @@
     </div>
 
     <!-- Data Table -->
-    <div class="table-container">
+    <div class="table-card fade-in" style="animation-delay: 0.2s;">
       <div class="table-header">
         <span class="table-title">
-          <i class="bi bi-database"></i> Recent Snapshots
+          <i class="bi bi-database"></i>
+          Recent Snapshots
         </span>
-        <span class="live-indicator">
+        <span class="live-badge">
           <span class="live-dot"></span>
-          LIVE DATA
+          Live Data
         </span>
       </div>
-      <div style="overflow-x: auto;">
+      <div class="table-wrapper">
         <table class="data-table">
           <thead>
             <tr>
@@ -735,7 +753,7 @@
                 const warehouseName = log.warehouse_name || (log.warehouse_id == 176318 ? 'Delhi' : log.warehouse_id == 173983 ? 'Faridabad' : 'Unknown');
                 const warehouseClass = warehouseName.toLowerCase() === 'delhi' ? 'delhi' : warehouseName.toLowerCase() === 'faridabad' ? 'faridabad' : 'unknown';
                 const inventory = log.inventory != null ? Number(log.inventory) : null;
-                const inventoryClass = inventory === null ? '' : inventory >= 50 ? 'inventory-high' : inventory >= 10 ? 'inventory-medium' : 'inventory-low';
+                const inventoryClass = inventory === null ? '' : inventory >= 50 ? 'inv-high' : inventory >= 10 ? 'inv-medium' : 'inv-low';
                 const status = log.sku_status || 'N/A';
                 const statusLower = status.toLowerCase();
                 const statusClass = statusLower.includes('active') ? 'status-active' : statusLower.includes('inactive') || statusLower.includes('disabled') ? 'status-inactive' : statusLower.includes('pending') ? 'status-pending' : 'status-default';
@@ -748,7 +766,7 @@
                 <td class="cell-time"><%= timeStr %></td>
                 <td class="cell-sku"><%= log.sku %></td>
                 <td>
-                  <span class="warehouse-badge <%= warehouseClass %>">
+                  <span class="warehouse-tag <%= warehouseClass %>">
                     <i class="bi bi-building"></i>
                     <%= warehouseName %>
                   </span>
@@ -756,8 +774,8 @@
                 <td class="cell-inventory <%= inventoryClass %>">
                   <%= inventory !== null ? inventory.toLocaleString() : 'N/A' %>
                 </td>
-                <td class="cell-status">
-                  <span class="status-pill <%= statusClass %>"><%= status %></span>
+                <td>
+                  <span class="status-chip <%= statusClass %>"><%= status %></span>
                 </td>
               </tr>
               <% }); %>
@@ -779,32 +797,50 @@
 
   <!-- Download Modal -->
   <div id="downloadModal" class="modal-overlay">
-    <div class="modal-content">
+    <div class="modal-box">
       <div id="modalIcon" class="modal-icon">
         <i class="bi bi-file-earmark-spreadsheet"></i>
       </div>
-      <h3 id="modalTitle" class="modal-title">Download Inventory Data</h3>
-      <p id="modalSubtitle" class="modal-subtitle">Preparing your export...</p>
+      <h3 id="modalTitle" class="modal-title">Download Inventory</h3>
+      <p id="modalSubtitle" class="modal-subtitle">Select options and download</p>
 
       <% if (typeof username !== 'undefined' && username === 'vinaykumar') { %>
-      <div id="warehouseSelector" class="warehouse-selector" style="margin: 16px 0;">
-        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 13px;">
-          Select Warehouse <span style="color: var(--accent-red);">*</span>
-        </label>
-        <select id="warehouseSelect" style="width: 100%; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 14px;">
-          <option value="">-- Select Warehouse --</option>
+      <div class="form-group">
+        <label class="form-label">Warehouse <span style="color: var(--danger);">*</span></label>
+        <select id="warehouseSelect" class="form-select">
+          <option value="">— Select Warehouse —</option>
           <option value="176318">Delhi</option>
           <option value="173983">Faridabad</option>
         </select>
       </div>
+
+      <div class="form-group">
+        <label class="form-label">Download Source</label>
+        <div class="source-options">
+          <label class="source-option">
+            <input type="radio" name="downloadSource" value="database" checked>
+            <span>
+              <strong>Database</strong>
+              <small>Webhook data (actual only)</small>
+            </span>
+          </label>
+          <label class="source-option selected">
+            <input type="radio" name="downloadSource" value="live">
+            <span>
+              <strong style="color: var(--success);">Live CSV</strong>
+              <small>Includes virtual inventory</small>
+            </span>
+          </label>
+        </div>
+      </div>
       <% } %>
 
-      <div id="modalStats" class="modal-stats">
-        <div class="modal-stat">
+      <div id="modalStats" class="modal-stats" style="display: none;">
+        <div>
           <div class="modal-stat-label">Total Records</div>
           <div id="statRecords" class="modal-stat-value">--</div>
         </div>
-        <div class="modal-stat">
+        <div>
           <div class="modal-stat-label">Est. Time</div>
           <div id="statTime" class="modal-stat-value">--</div>
         </div>
@@ -812,9 +848,9 @@
 
       <div id="modalProgress" class="modal-progress" style="display: none;">
         <div class="modal-progress-bar">
-          <div id="modalProgressFill" class="modal-progress-fill"></div>
+          <div id="modalProgressFill" class="modal-progress-fill" style="width: 0%;"></div>
         </div>
-        <div id="modalProgressText" class="modal-progress-text">Starting download...</div>
+        <div id="modalProgressText" class="modal-progress-text">Starting...</div>
       </div>
 
       <div id="modalActions" class="modal-actions">
@@ -831,6 +867,15 @@
     let selectedWarehouse = '';
     const isVinay = <%= typeof username !== 'undefined' && username === 'vinaykumar' ? 'true' : 'false' %>;
 
+    // Source option selection
+    document.querySelectorAll('.source-option').forEach(opt => {
+      opt.addEventListener('click', function() {
+        document.querySelectorAll('.source-option').forEach(o => o.classList.remove('selected'));
+        this.classList.add('selected');
+        this.querySelector('input').checked = true;
+      });
+    });
+
     async function startDownload() {
       const modal = document.getElementById('downloadModal');
       const icon = document.getElementById('modalIcon');
@@ -838,32 +883,44 @@
       const subtitle = document.getElementById('modalSubtitle');
       const stats = document.getElementById('modalStats');
       const progress = document.getElementById('modalProgress');
-      const actions = document.getElementById('modalActions');
       const confirmBtn = document.getElementById('confirmDownloadBtn');
       const warehouseSelect = document.getElementById('warehouseSelect');
 
-      // Show modal
       modal.classList.add('active');
 
-      // For vinaykumar, wait for warehouse selection
       if (isVinay && warehouseSelect) {
         icon.classList.remove('loading');
-        title.textContent = 'Select Warehouse';
-        subtitle.textContent = 'Choose a warehouse to download inventory data';
+        title.textContent = 'Download Inventory';
+        subtitle.textContent = 'Select warehouse and download source';
         stats.style.display = 'none';
         progress.style.display = 'none';
         confirmBtn.disabled = true;
 
-        // Watch for warehouse selection
-        warehouseSelect.onchange = async function() {
-          if (this.value) {
-            selectedWarehouse = this.value;
-            await fetchRecordCount();
-          } else {
+        const updateState = async () => {
+          if (!warehouseSelect.value) {
             confirmBtn.disabled = true;
             stats.style.display = 'none';
+            return;
+          }
+          selectedWarehouse = warehouseSelect.value;
+          const downloadSourceRadio = document.querySelector('input[name="downloadSource"]:checked');
+          const isLive = downloadSourceRadio && downloadSourceRadio.value === 'live';
+
+          if (isLive) {
+            const name = selectedWarehouse === '176318' ? 'Delhi' : 'Faridabad';
+            title.textContent = 'Live Inventory Download';
+            subtitle.innerHTML = 'Fetch <strong>' + name + '</strong> from EasyEcom API';
+            document.getElementById('statRecords').textContent = '~95,000';
+            document.getElementById('statTime').textContent = '~3-5 min';
+            stats.style.display = 'grid';
+            confirmBtn.disabled = false;
+          } else {
+            await fetchRecordCount();
           }
         };
+
+        warehouseSelect.onchange = updateState;
+        document.querySelectorAll('input[name="downloadSource"]').forEach(r => r.onchange = updateState);
         return;
       }
 
@@ -878,46 +935,34 @@
       const confirmBtn = document.getElementById('confirmDownloadBtn');
 
       icon.classList.add('loading');
-      title.textContent = 'Preparing Download';
-      subtitle.textContent = 'Counting records...';
+      title.textContent = 'Preparing...';
+      subtitle.textContent = 'Counting records';
       confirmBtn.disabled = true;
 
       try {
-        // Get record count (with warehouse filter for vinaykumar)
-        let countUrl = '/webhook/logs/download-count';
-        if (selectedWarehouse) {
-          countUrl += '?warehouse_id=' + selectedWarehouse;
-        }
-        const res = await fetch(countUrl, {
-          headers: { 'Accept': 'application/json' }
-        });
+        let url = '/webhook/logs/download-count';
+        if (selectedWarehouse) url += '?warehouse_id=' + selectedWarehouse;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
 
-        if (data.error) {
-          throw new Error(data.error);
-        }
+        if (data.error) throw new Error(data.error);
 
         downloadRecordCount = data.total;
+        const estSec = Math.ceil(data.total / 10000);
+        const estStr = estSec < 60 ? estSec + 's' : Math.ceil(estSec / 60) + 'm';
 
-        // Estimate time (roughly 10k records per second)
-        const estSeconds = Math.ceil(data.total / 10000);
-        const estTimeStr = estSeconds < 60
-          ? estSeconds + 's'
-          : Math.ceil(estSeconds / 60) + 'm';
-
-        // Update modal
         icon.classList.remove('loading');
-        const warehouseName = selectedWarehouse === '176318' ? 'Delhi' : selectedWarehouse === '173983' ? 'Faridabad' : 'All';
-        title.textContent = 'Download Inventory Data';
-        subtitle.textContent = selectedWarehouse ? 'Ready to export ' + warehouseName + ' warehouse data' : 'Ready to export all inventory snapshots';
+        const name = selectedWarehouse === '176318' ? 'Delhi' : selectedWarehouse === '173983' ? 'Faridabad' : 'All';
+        title.textContent = 'Ready to Download';
+        subtitle.textContent = name + ' warehouse · ' + data.total.toLocaleString() + ' records';
         document.getElementById('statRecords').textContent = data.total.toLocaleString();
-        document.getElementById('statTime').textContent = '~' + estTimeStr;
+        document.getElementById('statTime').textContent = '~' + estStr;
         stats.style.display = 'grid';
         confirmBtn.disabled = false;
       } catch (err) {
         icon.classList.remove('loading');
         title.textContent = 'Error';
-        subtitle.textContent = err.message || 'Failed to prepare download';
+        subtitle.textContent = err.message;
       }
     }
 
@@ -926,7 +971,6 @@
     }
 
     function confirmDownload() {
-      const modal = document.getElementById('downloadModal');
       const icon = document.getElementById('modalIcon');
       const title = document.getElementById('modalTitle');
       const subtitle = document.getElementById('modalSubtitle');
@@ -936,47 +980,49 @@
       const progressText = document.getElementById('modalProgressText');
       const actions = document.getElementById('modalActions');
 
-      // Update UI for downloading state
+      const sourceRadio = document.querySelector('input[name="downloadSource"]:checked');
+      const source = sourceRadio ? sourceRadio.value : 'database';
+      const isLive = source === 'live';
+      const warehouseName = selectedWarehouse === '176318' ? 'delhi' : selectedWarehouse === '173983' ? 'faridabad' : '';
+
+      if (isLive) {
+        startLiveFetch(warehouseName);
+        return;
+      }
+
       icon.classList.add('loading');
       title.textContent = 'Downloading...';
-      subtitle.textContent = 'Generating Excel file with ' + downloadRecordCount.toLocaleString() + ' records';
+      subtitle.textContent = 'Generating Excel with ' + downloadRecordCount.toLocaleString() + ' records';
       stats.style.display = 'none';
       progress.style.display = 'block';
       actions.style.display = 'none';
 
-      // Simulate progress (since we can't track actual download progress)
-      let fakeProgress = 0;
-      const progressInterval = setInterval(function() {
-        fakeProgress += Math.random() * 15;
-        if (fakeProgress > 90) fakeProgress = 90;
-        progressFill.style.width = fakeProgress + '%';
-        progressText.textContent = 'Processing ' + Math.round(fakeProgress) + '%...';
+      let pct = 0;
+      const interval = setInterval(() => {
+        pct += Math.random() * 15;
+        if (pct > 90) pct = 90;
+        progressFill.style.width = pct + '%';
+        progressText.textContent = 'Processing ' + Math.round(pct) + '%...';
       }, 500);
 
-      // Start actual download (with warehouse filter if selected)
       const link = document.createElement('a');
       let downloadUrl = '/webhook/logs/download-excel';
-      if (selectedWarehouse) {
-        downloadUrl += '?warehouse_id=' + selectedWarehouse;
-      }
+      if (selectedWarehouse) downloadUrl += '?warehouse_id=' + selectedWarehouse;
       link.href = downloadUrl;
-      const warehouseSuffix = selectedWarehouse === '176318' ? '_delhi' : selectedWarehouse === '173983' ? '_faridabad' : '';
-      link.download = 'inventory_adjustment' + warehouseSuffix + '.xlsx';
+      link.download = 'inventory_' + warehouseName + '.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      // Complete after estimated time
       const estMs = Math.max(3000, Math.ceil(downloadRecordCount / 10) + 2000);
-      setTimeout(function() {
-        clearInterval(progressInterval);
+      setTimeout(() => {
+        clearInterval(interval);
         progressFill.style.width = '100%';
         progressText.textContent = 'Download started!';
         icon.classList.remove('loading');
-        title.textContent = 'Download Complete';
-        subtitle.textContent = 'Your file should be downloading now';
-
-        setTimeout(function() {
+        title.textContent = 'Complete!';
+        subtitle.textContent = 'Check your downloads folder';
+        setTimeout(() => {
           closeDownloadModal();
           actions.style.display = 'flex';
           progress.style.display = 'none';
@@ -985,40 +1031,120 @@
       }, estMs);
     }
 
+    async function startLiveFetch(warehouseName) {
+      const icon = document.getElementById('modalIcon');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const stats = document.getElementById('modalStats');
+      const progress = document.getElementById('modalProgress');
+      const progressFill = document.getElementById('modalProgressFill');
+      const progressText = document.getElementById('modalProgressText');
+      const actions = document.getElementById('modalActions');
+
+      icon.classList.add('loading');
+      title.textContent = 'Fetching Inventory...';
+      subtitle.textContent = 'Connecting to EasyEcom API';
+      stats.style.display = 'none';
+      progress.style.display = 'block';
+      progressFill.style.width = '0%';
+      progressText.textContent = 'Starting...';
+      actions.style.display = 'none';
+
+      try {
+        const response = await fetch('/webhook/logs/download-live?warehouse=' + warehouseName, { credentials: 'include' });
+        if (!response.ok) throw new Error('Server error: ' + response.status);
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedBytes = 0;
+        let rowCount = 0;
+        const startTime = Date.now();
+        const estimatedBytes = warehouseName === 'faridabad' ? 5000000 : 3000000;
+
+        subtitle.textContent = 'Streaming data...';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          receivedBytes += value.length;
+
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] === 10) rowCount++;
+          }
+
+          const pct = Math.min(95, Math.round((receivedBytes / estimatedBytes) * 100));
+          progressFill.style.width = pct + '%';
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          progressText.textContent = rowCount.toLocaleString() + ' SKUs (' + elapsed + 's)';
+        }
+
+        const blob = new Blob(chunks, { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+        progressFill.style.width = '100%';
+        icon.classList.remove('loading');
+        title.textContent = 'Ready!';
+        subtitle.innerHTML = '<strong style="color: var(--success);">' + rowCount.toLocaleString() + ' SKUs</strong> fetched in ' + elapsed + 's';
+        progressText.textContent = (blob.size / 1024).toFixed(0) + ' KB';
+
+        const filename = 'inventory_' + warehouseName + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+        actions.innerHTML = `
+          <button class="btn btn-secondary" onclick="closeDownloadModal()">Close</button>
+          <a href="${url}" download="${filename}" class="btn btn-primary" style="text-decoration: none;">
+            <i class="bi bi-download"></i> Download CSV
+          </a>
+        `;
+        actions.style.display = 'flex';
+
+      } catch (err) {
+        console.error('Error:', err);
+        icon.classList.remove('loading');
+        title.textContent = 'Failed';
+        subtitle.textContent = err.message || 'Connection error';
+        progressText.textContent = '';
+        actions.innerHTML = `
+          <button class="btn btn-secondary" onclick="closeDownloadModal()">Close</button>
+          <button class="btn btn-primary" onclick="confirmDownload()">Retry</button>
+        `;
+        actions.style.display = 'flex';
+      }
+    }
+
     async function clearRawData() {
       const btn = document.getElementById('clearBtn');
       const status = document.getElementById('clearStatus');
       const progress = document.getElementById('clearProgress');
       const text = document.getElementById('clearText');
 
-      if (!btn || !status || !progress || !text) return;
+      if (!btn) return;
 
       btn.disabled = true;
-      btn.textContent = 'Checking...';
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Checking...';
 
       try {
-        const countRes = await fetch('/webhook/clear-raw/inventory/count', {
-          headers: { 'Accept': 'application/json' }
-        });
+        const countRes = await fetch('/webhook/clear-raw/inventory/count', { headers: { 'Accept': 'application/json' } });
         const countData = await countRes.json();
 
         if (countData.error) {
-          alert('Permission Denied: ' + (countData.message || countData.error));
+          alert('Permission Denied');
           btn.disabled = false;
-          btn.textContent = 'No Permission';
+          btn.innerHTML = '<i class="bi bi-x-circle"></i> No Permission';
           return;
         }
 
         if (countData.total === 0) {
-          btn.textContent = 'Already Clean';
-          btn.classList.remove('btn-danger');
+          btn.innerHTML = '<i class="bi bi-check-circle"></i> Already Clean';
+          btn.classList.remove('btn-outline-danger');
           btn.classList.add('btn-secondary');
           return;
         }
 
-        if (!confirm('Clear raw JSON data from ' + countData.total.toLocaleString() + ' inventory snapshots?\n\nThis frees disk space but cannot be undone.')) {
+        if (!confirm('Clear raw JSON from ' + countData.total.toLocaleString() + ' records?\n\nThis frees disk space but cannot be undone.')) {
           btn.disabled = false;
-          btn.textContent = 'Clear Raw Data';
+          btn.innerHTML = '<i class="bi bi-trash3"></i> Clear Raw Data';
           return;
         }
 
@@ -1039,36 +1165,31 @@
           });
           const data = await res.json();
 
-          if (data.error) {
-            throw new Error(data.message || data.error);
-          }
+          if (data.error) throw new Error(data.message);
 
           totalCleared += data.cleared;
 
-          if (data.done) {
+          if (data.done || data.remaining === 0) {
             progress.style.width = '100%';
-            text.textContent = 'Done! Cleared ' + totalCleared.toLocaleString() + ' rows';
-
-            setTimeout(function() {
+            text.textContent = 'Done! ' + totalCleared.toLocaleString() + ' cleared';
+            setTimeout(() => {
               status.classList.remove('active');
-              btn.style.display = 'inline-flex';
-              btn.textContent = 'Cleared!';
-              btn.classList.remove('btn-danger');
+              btn.style.display = 'flex';
+              btn.disabled = false;
+              btn.innerHTML = '<i class="bi bi-check-circle"></i> Cleared';
+              btn.classList.remove('btn-outline-danger');
               btn.classList.add('btn-secondary');
-            }, 1500);
+            }, 2000);
             break;
           }
         }
       } catch (err) {
-        progress.style.width = '100%';
-        text.textContent = err.message || 'Failed to clear data';
-
-        setTimeout(function() {
-          status.classList.remove('active');
-          btn.style.display = 'inline-flex';
-          btn.disabled = false;
-          btn.textContent = 'Retry';
-        }, 2000);
+        console.error('Error:', err);
+        status.classList.remove('active');
+        btn.style.display = 'flex';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-x-circle"></i> Error';
+        alert('Error: ' + err.message);
       }
     }
   </script>

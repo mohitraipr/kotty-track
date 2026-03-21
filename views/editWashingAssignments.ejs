@@ -1,51 +1,291 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Edit Washing Assignments</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Edit Washing Assignments' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container">
-    <a class="navbar-brand" href="#">Edit Washing Assignments</a>
-    <div class="ms-auto">
-      <a href="/operator/dashboard" class="btn btn-outline-light btn-sm">
-        <i class="bi bi-arrow-left"></i> Dashboard
-      </a>
+<style>
+  /* Page Layout */
+  .page-wrapper {
+    padding-top: var(--navbar-height);
+    min-height: 100vh;
+    background: var(--bg-page);
+  }
+
+  .page-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .page-subtitle {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+  }
+
+  /* Card Styles */
+  .kotty-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+  }
+
+  .kotty-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kotty-card-header h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+    flex: 1;
+  }
+
+  .kotty-card-header i {
+    color: var(--terracotta);
+    font-size: 20px;
+  }
+
+  .kotty-card-body {
+    padding: 22px;
+  }
+
+  /* Form Controls */
+  .form-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-label i {
+    color: var(--terracotta);
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235a5650' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 12px;
+    cursor: pointer;
+  }
+
+  .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .form-select:hover {
+    border-color: var(--terracotta-light);
+  }
+
+  /* Assignment List Container */
+  #assignmentListContainer {
+    min-height: 100px;
+  }
+
+  #assignmentListContainer .spinner-border {
+    color: var(--terracotta);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+  }
+
+  .empty-state i {
+    font-size: 48px;
+    color: var(--gray-300);
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+
+  /* Loading State */
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+  }
+
+  .loading-state .spinner-border {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+    margin-bottom: 16px;
+  }
+
+  /* Alert Styles */
+  .alert-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid rgba(194, 59, 34, 0.2);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .alert-danger i {
+    font-size: 20px;
+  }
+
+  /* Modal Customization */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--gray-50);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--terracotta);
+  }
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .btn-close {
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+  }
+
+  .btn-close:hover {
+    opacity: 1;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .page-container {
+      padding: 20px 16px;
+    }
+
+    .page-title {
+      font-size: var(--text-2xl);
+    }
+
+    .kotty-card-body {
+      padding: 16px;
+    }
+
+    .kotty-card-header {
+      padding: 14px 16px;
+    }
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Edit Washing Assignments</h1>
+      <p class="page-subtitle">Select a washer to view and edit their assignments</p>
+    </div>
+
+    <!-- Washer Selection Card -->
+    <div class="kotty-card">
+      <div class="kotty-card-header">
+        <i class="bi bi-person-fill"></i>
+        <h2>Select Washer</h2>
+      </div>
+      <div class="kotty-card-body">
+        <label for="washerSelect" class="form-label">
+          <i class="bi bi-person-badge"></i> Choose a washer to view assignments
+        </label>
+        <select id="washerSelect" class="form-select">
+          <option value="">-- Select Washer --</option>
+          <% washers.forEach(function(w){ %>
+            <option value="<%= w.id %>"><%= w.username %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <!-- Assignment List Container -->
+    <div id="assignmentListContainer">
+      <div class="empty-state">
+        <i class="bi bi-clipboard-data"></i>
+        <p>Select a washer above to view their assignments</p>
+      </div>
     </div>
   </div>
-</nav>
-<div class="container mt-4">
-  <div class="card mb-4">
-    <div class="card-body">
-      <label for="washerSelect" class="form-label fw-bold">
-        <i class="bi bi-person-fill"></i> Select Washer
-      </label>
-      <select id="washerSelect" class="form-select">
-        <option value="">-- Select Washer --</option>
-        <% washers.forEach(function(w){ %>
-          <option value="<%= w.id %>"><%= w.username %></option>
-        <% }) %>
-      </select>
-    </div>
-  </div>
-  <div id="assignmentListContainer"></div>
 </div>
 
+<!-- Edit Assignment Modal -->
 <div class="modal fade" id="editAssignmentModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Edit Assignment</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title">
+          <i class="bi bi-pencil-square"></i>
+          Edit Assignment
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body" id="editAssignmentModalBody"></div>
+      <div class="modal-body" id="editAssignmentModalBody">
+        <div class="loading-state">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p>Loading form...</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -57,18 +297,47 @@
     const editModal = new bootstrap.Modal(document.getElementById('editAssignmentModal'));
     const editModalBody = document.getElementById('editAssignmentModalBody');
 
+    // Helper to safely set HTML content from trusted server responses
+    function setTrustedHTML(element, html) {
+      // Content is from our own server endpoints, not user input
+      element.innerHTML = html;
+    }
+
     washerSelect.addEventListener('change', function(){
       const id = washerSelect.value;
-      if(!id){ assignmentListContainer.innerHTML=''; return; }
+      if(!id){
+        setTrustedHTML(assignmentListContainer, `
+          <div class="empty-state">
+            <i class="bi bi-clipboard-data"></i>
+            <p>Select a washer above to view their assignments</p>
+          </div>
+        `);
+        return;
+      }
       loadAssignmentList(id);
     });
 
     function loadAssignmentList(id){
-      assignmentListContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div></div>';
+      setTrustedHTML(assignmentListContainer, `
+        <div class="loading-state">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p>Loading assignments...</p>
+        </div>
+      `);
       fetch(`/operator/editwashingassignments/assignment-list?washerId=${id}`)
         .then(res=>res.text())
-        .then(html=>{ assignmentListContainer.innerHTML=html; attachEditButtons(id); })
-        .catch(err=>{ console.error(err); assignmentListContainer.innerHTML='<div class="alert alert-danger">Failed to load assignments.</div>'; });
+        .then(html=>{ setTrustedHTML(assignmentListContainer, html); attachEditButtons(id); })
+        .catch(err=>{
+          console.error(err);
+          setTrustedHTML(assignmentListContainer, `
+            <div class="alert-danger">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <span>Failed to load assignments. Please try again.</span>
+            </div>
+          `);
+        });
     }
 
     function attachEditButtons(id){
@@ -82,11 +351,18 @@
     }
 
     function loadEditForm(washerId, assignmentId){
-      editModalBody.innerHTML = '<div class="text-center p-3"><div class="spinner-border"></div></div>';
+      setTrustedHTML(editModalBody, `
+        <div class="loading-state">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p>Loading form...</p>
+        </div>
+      `);
       fetch(`/operator/editwashingassignments/edit-form?washerId=${washerId}&assignmentId=${assignmentId}`)
         .then(res=>res.text())
         .then(html=>{
-          editModalBody.innerHTML = html;
+          setTrustedHTML(editModalBody, html);
           const form = editModalBody.querySelector('#updateAssignmentForm');
           form.addEventListener('submit', function(e){
             e.preventDefault();
@@ -103,10 +379,17 @@
           });
           editModal.show();
         })
-        .catch(err=>{ console.error(err); editModalBody.innerHTML='<div class="alert alert-danger">Failed to load form.</div>'; });
+        .catch(err=>{
+          console.error(err);
+          setTrustedHTML(editModalBody, `
+            <div class="alert-danger">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <span>Failed to load form. Please try again.</span>
+            </div>
+          `);
+        });
     }
   });
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-</html>
+<%- include('partials/footer') %>

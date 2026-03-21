@@ -1,171 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>KOTTY Bulk Upload & Assignment Dashboard</title>
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png">
-  <!-- Bootstrap CSS CDN -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <style>
-    /* Global Styles */
-    body {
-      font-family: 'Roboto', sans-serif;
-      background: #f4f6f9;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 1200px;
-    }
-    /* Navbar */
-    .navbar {
-      background-color: #ffffff;
-    }
-    .navbar-brand img {
-      height: 40px;
-      margin-right: 8px;
-    }
-    /* Hero Section */
-    .hero {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: #fff;
-      padding: 3rem 2rem;
-      text-align: center;
-      border-radius: 10px;
-      margin-bottom: 2rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    .hero h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-    .hero p {
-      font-size: 1.125rem;
-    }
-    /* Card Styles */
-    .card {
-      border: none;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      background: #fff;
-    }
-    .card-header {
-      background-color: #fff;
-      border-bottom: 1px solid #eee;
-      padding: 1rem 1.5rem;
-    }
-    .card-header h2 {
-      font-size: 1.25rem;
-      margin: 0;
-      font-weight: 500;
-    }
-    .card-body {
-      padding: 1.5rem;
-    }
-    /* Buttons */
-    .btn-custom {
-      background: #28a745;
-      border: none;
-      color: #fff;
-      transition: background 0.3s;
-    }
-    .btn-custom:hover {
-      background: #218838;
-    }
-    .btn-download {
-      background: #007bff;
-      border: none;
-      color: #fff;
-      transition: background 0.3s;
-    }
-    .btn-download:hover {
-      background: #0069d9;
-    }
-    /* Flash Messages */
-    .alert {
-      border-radius: 10px;
-    }
-    /* Footer */
-    footer {
-      text-align: center;
-      margin-top: 3rem;
-      padding: 1rem;
-      color: #6c757d;
-      font-size: 0.875rem;
-    }
-    @media (max-width: 767px) {
-      .hero h1 {
-        font-size: 2rem;
-      }
-      .hero p {
-        font-size: 1rem;
-      }
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+<%- include('partials/header', { pageTitle: 'Bulk Upload' }) %>
+<%- include('partials/navbar', { user: typeof user !== 'undefined' ? user : {} }) %>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light shadow-sm mb-4">
-    <div class="container">
-      <a class="navbar-brand" href="#">
-        <img src="https://cdn.staticans.com/image/catalog/brandstore/kotty/892-1720722600-favicon-2.png" alt="KOTTY Logo">
-        KOTTY
-      </a>
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container" style="max-width: 1000px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <nav class="breadcrumbs">
+        <a href="/dashboard">Dashboard</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span>Bulk Upload</span>
+      </nav>
+      <h1 class="page-title">Bulk Upload & Assignment</h1>
+      <p class="page-subtitle">Manage your uploads and assignments with ease</p>
     </div>
-  </nav>
-
-  <div class="container my-4">
-    <!-- Hero Section -->
-    <section class="hero">
-      <h1>Bulk Upload & Assignment Dashboard</h1>
-      <p>Manage your uploads and assignments with ease.</p>
-    </section>
 
     <!-- Flash Messages -->
     <% if (error && error.length) { %>
-      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle-fill me-2"></i>
         <%= error %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
     <% if (success && success.length) { %>
-      <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle-fill me-2"></i>
         <%= success %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
-    <!-- Main Content -->
+    <!-- Main Content Cards -->
     <div class="row g-4">
       <!-- Bulk Create Lots Section -->
       <div class="col-md-6">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header">
-            <h2>Bulk Create Lots</h2>
+            <h2 class="card-title">
+              <i class="bi bi-box-seam me-2 text-terracotta"></i>
+              Bulk Create Lots
+            </h2>
           </div>
           <div class="card-body">
-            <p>
-              <a href="/bulk-upload/template" class="btn btn-download">
-                <i class="bi bi-download me-2"></i> Download Excel Template for Lots
-              </a>
+            <p class="mb-3" style="color: var(--text-secondary);">
+              Upload an Excel file to create multiple lots at once. Download the template first to ensure proper formatting.
             </p>
+
+            <div class="mb-4">
+              <a href="/bulk-upload/template" class="btn btn-outline w-100">
+                <i class="bi bi-download"></i>
+                Download Excel Template for Lots
+              </a>
+            </div>
+
             <form action="/bulk-upload/upload-lots" method="POST" enctype="multipart/form-data">
-              <div class="mb-3">
-                <label for="excelFile" class="form-label">Select Excel File</label>
-                <input type="file" name="excelFile" id="excelFile" class="form-control" required>
+              <div class="form-group">
+                <label for="excelFile" class="form-label">
+                  <i class="bi bi-file-earmark-excel text-success me-2"></i>
+                  Select Excel File
+                </label>
+                <input type="file" name="excelFile" id="excelFile" class="form-control form-input" accept=".xlsx,.xls" required>
               </div>
-              <button type="submit" class="btn btn-custom w-100">Upload Lots</button>
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-cloud-arrow-up"></i>
+                Upload Lots
+              </button>
             </form>
           </div>
         </div>
@@ -173,35 +72,85 @@
 
       <!-- Bulk Assign Lots Section -->
       <div class="col-md-6">
-        <div class="card">
+        <div class="card h-100">
           <div class="card-header">
-            <h2>Bulk Assign Lots to Stitching</h2>
+            <h2 class="card-title">
+              <i class="bi bi-people me-2 text-terracotta"></i>
+              Bulk Assign Lots to Stitching
+            </h2>
           </div>
           <div class="card-body">
-            <p>
-              <a href="/bulk-assign/template" class="btn btn-download">
-                <i class="bi bi-download me-2"></i> Download Excel Template for Assignments
-              </a>
+            <p class="mb-3" style="color: var(--text-secondary);">
+              Assign multiple lots to stitching operators at once. Download the template for the correct format.
             </p>
+
+            <div class="mb-4">
+              <a href="/bulk-assign/template" class="btn btn-outline w-100">
+                <i class="bi bi-download"></i>
+                Download Excel Template for Assignments
+              </a>
+            </div>
+
             <form action="/bulk-assign" method="POST" enctype="multipart/form-data">
-              <div class="mb-3">
-                <label for="assignmentFile" class="form-label">Select Assignment Excel File</label>
-                <input type="file" name="excelFile" id="assignmentFile" class="form-control" required>
+              <div class="form-group">
+                <label for="assignmentFile" class="form-label">
+                  <i class="bi bi-file-earmark-excel text-success me-2"></i>
+                  Select Assignment Excel File
+                </label>
+                <input type="file" name="excelFile" id="assignmentFile" class="form-control form-input" accept=".xlsx,.xls" required>
               </div>
-              <button type="submit" class="btn btn-custom w-100">Upload Assignments</button>
+              <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-cloud-arrow-up"></i>
+                Upload Assignments
+              </button>
             </form>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Instructions Card -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-info-circle me-2"></i>
+          Instructions
+        </h2>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6">
+            <h6 style="font-family: var(--font-display); color: var(--terracotta); margin-bottom: 12px;">
+              For Bulk Lot Creation:
+            </h6>
+            <ul style="color: var(--text-secondary); padding-left: 20px; margin-bottom: 0;">
+              <li>Download the Excel template first</li>
+              <li>Fill in the lot details according to the template format</li>
+              <li>Ensure all required fields are filled</li>
+              <li>Upload the completed Excel file</li>
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <h6 style="font-family: var(--font-display); color: var(--terracotta); margin-bottom: 12px;">
+              For Bulk Assignments:
+            </h6>
+            <ul style="color: var(--text-secondary); padding-left: 20px; margin-bottom: 0;">
+              <li>Download the assignment template</li>
+              <li>Enter lot numbers and operator details</li>
+              <li>Verify operator names match existing records</li>
+              <li>Upload the completed assignment file</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer -->
-    <footer>
+    <div class="text-center mt-4 mb-3" style="color: var(--text-muted); font-size: var(--text-sm);">
       <p>&copy; <%= new Date().getFullYear() %> KOTTY. All rights reserved.</p>
-    </footer>
+    </div>
+
   </div>
+</main>
 
-  <!-- Bootstrap Bundle with Popper -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-</html>
+<%- include('partials/footer') %>

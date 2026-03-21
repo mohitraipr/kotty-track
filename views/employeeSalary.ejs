@@ -1,50 +1,137 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Salary Details</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark mb-4">
-  <div class="container-fluid">
-    <span class="navbar-brand">Salary - <%= employee.name %></span>
-    <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+<%- include('partials/header', { pageTitle: 'Employee Salary' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width); margin: 0 auto;">
+    <%- include('partials/flashMessages') %>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/supervisor/employees">Employees</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span><%= employee.name %></span>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span>Salary</span>
+      </div>
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+          <h1 class="page-title">Salary Records</h1>
+          <p class="page-subtitle">View and download salary records for <%= employee.name %></p>
+        </div>
+        <a href="/supervisor/employees" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i>
+          Back to Employees
+        </a>
+      </div>
+    </div>
+
+    <!-- Employee Info Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <div class="user-avatar" style="width: 48px; height: 48px; font-size: 1.25rem; background: var(--terracotta);">
+            <%= employee.name ? employee.name.charAt(0).toUpperCase() : 'E' %>
+          </div>
+          <div>
+            <h5 class="mb-1 font-display" style="font-size: var(--text-xl);"><%= employee.name %></h5>
+            <span class="badge badge-primary">
+              <i class="bi bi-person-badge me-1"></i>
+              Employee ID: <%= employee.id %>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Salary Records Table -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-wallet2 me-2" style="color: var(--terracotta);"></i>
+          Salary History
+        </h2>
+        <span class="badge badge-neutral">
+          <%= salaries.length %> Record<%= salaries.length !== 1 ? 's' : '' %>
+        </span>
+      </div>
+
+      <% if (salaries.length > 0) { %>
+        <div class="table-container" style="border: none; border-radius: 0;">
+          <div class="table-responsive">
+            <table class="table mb-0">
+              <thead>
+                <tr>
+                  <th>
+                    <i class="bi bi-calendar3 me-1"></i>
+                    Month
+                  </th>
+                  <th>
+                    <i class="bi bi-cash-stack me-1"></i>
+                    Gross
+                  </th>
+                  <th>
+                    <i class="bi bi-dash-circle me-1"></i>
+                    Deduction
+                  </th>
+                  <th>
+                    <i class="bi bi-cash-coin me-1"></i>
+                    Net Pay
+                  </th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% salaries.forEach(s => { %>
+                  <tr>
+                    <td>
+                      <span class="fw-medium"><%= s.month %></span>
+                    </td>
+                    <td>
+                      <span class="text-success fw-medium">
+                        <i class="bi bi-currency-rupee"></i><%= parseFloat(s.gross).toLocaleString('en-IN') %>
+                      </span>
+                    </td>
+                    <td>
+                      <span class="text-danger">
+                        <i class="bi bi-currency-rupee"></i><%= parseFloat(s.deduction).toLocaleString('en-IN') %>
+                      </span>
+                    </td>
+                    <td>
+                      <span class="fw-semibold" style="color: var(--terracotta);">
+                        <i class="bi bi-currency-rupee"></i><%= parseFloat(s.net).toLocaleString('en-IN') %>
+                      </span>
+                    </td>
+                    <td class="text-center">
+                      <a href="/supervisor/employees/<%= employee.id %>/salary/download?month=<%= s.month %>"
+                         class="btn btn-sm btn-success"
+                         title="Download PDF">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>
+                        Download PDF
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% } else { %>
+        <!-- Empty State -->
+        <div class="card-body">
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-wallet2" style="font-size: 3rem;"></i>
+            </div>
+            <h3 class="empty-state-title">No Salary Records</h3>
+            <p class="empty-state-text">
+              There are no salary records available for this employee yet.
+            </p>
+          </div>
+        </div>
+      <% } %>
+    </div>
   </div>
-</nav>
-<div class="container">
-  <%- include('partials/flashMessages') %>
-  <h4>Salary Records</h4>
-  <table class="table table-bordered">
-    <thead>
-      <tr>
-        <th>Month</th>
-        <th>Gross</th>
-        <th>Deduction</th>
-        <th>Net</th>
-        <th>Download</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% salaries.forEach(s => { %>
-        <tr>
-          <td><%= s.month %></td>
-          <td><%= s.gross %></td>
-          <td><%= s.deduction %></td>
-          <td><%= s.net %></td>
-          <td>
-            <a href="/supervisor/employees/<%= employee.id %>/salary/download?month=<%= s.month %>" class="btn btn-sm btn-success">PDF</a>
-          </td>
-        </tr>
-      <% }) %>
-    </tbody>
-  </table>
-  <a href="/supervisor/employees" class="btn btn-secondary">Back</a>
-</div>
-</body>
-</html>
+</main>
+
+<%- include('partials/footer') %>

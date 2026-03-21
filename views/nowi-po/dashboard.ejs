@@ -1,151 +1,198 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nowi PO Dashboard - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; }
-    .top-nav { background: white; border-bottom: 2px solid #e2e8f0; padding: 16px 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .nav-brand { font-size: 20px; font-weight: 700; color: #1e293b; }
-    .container-main { max-width: 1200px; margin: 0 auto; padding: 24px; }
-    .page-title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-    .page-subtitle { font-size: 14px; color: #64748b; margin-bottom: 24px; }
-    .stat-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: white; }
-    .stat-card h3 { font-size: 14px; color: #64748b; margin-bottom: 8px; }
-    .stat-card .stat-value { font-size: 20px; font-weight: 700; }
-    .card { border: 1px solid #e2e8f0; border-radius: 10px; }
-    .card-title { font-weight: 600; }
-    .table-responsive { max-height: 320px; }
-    .btn-logout { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; }
-    .btn-logout:hover { background: #dc2626; }
-  </style>
-</head>
-<body>
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <span class="nav-brand">Nowi PO Dashboard</span>
-      <form action="/logout" method="POST">
-        <button type="submit" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Logout</button>
-      </form>
-    </div>
-  </nav>
+<%- include('../partials/header', { pageTitle: 'Nowi PO Dashboard' }) %>
 
-  <div class="container-main">
-    <h1 class="page-title">Welcome, <%= user.username %></h1>
-    <p class="page-subtitle">Upload SKU mappings and generate vendor PO sheets.</p>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/nowi-po/dashboard' }) %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1200px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Welcome, <%= user.username %></h1>
+      <p class="page-subtitle">Upload SKU mappings and generate vendor PO sheets.</p>
+    </div>
 
     <%- include('../partials/flashMessages') %>
 
-    <div class="row g-3 mb-4">
+    <!-- Stats Row -->
+    <div class="row g-4 mb-4">
       <div class="col-md-6">
         <div class="stat-card">
-          <h3>SKU Mappings</h3>
-          <div class="stat-value"><%= mappingCount %> entries</div>
+          <div class="d-flex align-items-center gap-3">
+            <div class="stat-icon" style="width: 48px; height: 48px; background: var(--terracotta-bg); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+              <i class="bi bi-file-earmark-spreadsheet" style="font-size: 24px; color: var(--terracotta);"></i>
+            </div>
+            <div>
+              <div class="stat-label">SKU Mappings</div>
+              <div class="stat-value"><%= mappingCount %> entries</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="col-md-6">
         <div class="stat-card">
-          <h3>Vendor POs</h3>
-          <div class="stat-value"><%= poCount %> created</div>
+          <div class="d-flex align-items-center gap-3">
+            <div class="stat-icon" style="width: 48px; height: 48px; background: var(--success-light); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+              <i class="bi bi-file-earmark-check" style="font-size: 24px; color: var(--success);"></i>
+            </div>
+            <div>
+              <div class="stat-label">Vendor POs</div>
+              <div class="stat-value"><%= poCount %> created</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="row g-4">
+    <!-- Upload Cards -->
+    <div class="row g-4 mb-4">
       <div class="col-lg-6">
-        <div class="card p-4 h-100">
-          <h5 class="card-title mb-3"><i class="bi bi-cloud-upload"></i> Upload SKU Mapping Sheet</h5>
-          <p class="text-muted mb-3">Required columns: SKU, Vendor Name, Product Code. Optional: Color, Link, Image, Weight.</p>
-          <form action="/nowi-po/mappings/upload" method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-              <input class="form-control" type="file" name="mappingFile" accept=".xlsx,.xls" required>
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div style="width: 40px; height: 40px; background: var(--info-light); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-cloud-upload" style="font-size: 20px; color: var(--info);"></i>
+              </div>
+              <h5 class="card-title mb-0">Upload SKU Mapping Sheet</h5>
             </div>
-            <button type="submit" class="btn btn-primary">Upload Mapping</button>
-          </form>
-          <% if (mappingCount > 0) { %>
-            <button type="button" class="btn btn-danger mt-2" data-bs-toggle="modal" data-bs-target="#deleteMappingsModal">
-              <i class="bi bi-trash"></i> Delete All Mappings
-            </button>
-          <% } %>
+            <p class="text-secondary mb-3" style="font-size: var(--text-sm);">
+              Required columns: SKU, Vendor Name, Product Code. Optional: Color, Link, Image, Weight.
+            </p>
+            <form action="/nowi-po/mappings/upload" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <input class="form-control form-input" type="file" name="mappingFile" accept=".xlsx,.xls" required>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-upload"></i> Upload Mapping
+                </button>
+                <% if (mappingCount > 0) { %>
+                  <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteMappingsModal">
+                    <i class="bi bi-trash"></i> Delete All Mappings
+                  </button>
+                <% } %>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
       <div class="col-lg-6">
-        <div class="card p-4 h-100">
-          <h5 class="card-title mb-3"><i class="bi bi-file-earmark-plus"></i> Upload SKU/Size/Quantity Sheet</h5>
-          <p class="text-muted mb-3">Required columns: SKU, Size, Quantity. This will generate vendor POs.</p>
-          <form action="/nowi-po/po/upload" method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-              <input class="form-control" type="file" name="poFile" accept=".xlsx,.xls" required>
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div style="width: 40px; height: 40px; background: var(--success-light); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-file-earmark-plus" style="font-size: 20px; color: var(--success);"></i>
+              </div>
+              <h5 class="card-title mb-0">Upload SKU/Size/Quantity Sheet</h5>
             </div>
-            <button type="submit" class="btn btn-success">Generate Vendor POs</button>
-          </form>
+            <p class="text-secondary mb-3" style="font-size: var(--text-sm);">
+              Required columns: SKU, Size, Quantity. This will generate vendor POs.
+            </p>
+            <form action="/nowi-po/po/upload" method="POST" enctype="multipart/form-data">
+              <div class="mb-3">
+                <input class="form-control form-input" type="file" name="poFile" accept=".xlsx,.xls" required>
+              </div>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-lightning"></i> Generate Vendor POs
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="card mt-4">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title mb-0">Recent Vendor POs</h5>
-          <a href="/nowi-po/po" class="btn btn-outline-secondary btn-sm">View All</a>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
+    <!-- Recent POs Table -->
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Recent Vendor POs</h5>
+        <a href="/nowi-po/po" class="btn btn-secondary btn-sm">
+          <i class="bi bi-list"></i> View All
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 320px;">
+          <table class="table table-hover align-middle mb-0">
             <thead>
               <tr>
                 <th>PO Number</th>
                 <th>Vendor Name</th>
                 <th>Created At</th>
-                <th></th>
+                <th class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
               <% if (recentPos.length === 0) { %>
                 <tr>
-                  <td colspan="4" class="text-center text-muted">No POs created yet.</td>
+                  <td colspan="4">
+                    <div class="empty-state py-4">
+                      <div class="empty-state-icon">
+                        <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                      </div>
+                      <div class="empty-state-title">No POs created yet</div>
+                      <div class="empty-state-text">Upload a SKU/Size/Quantity sheet to generate your first vendor PO.</div>
+                    </div>
+                  </td>
                 </tr>
+              <% } else { %>
+                <% recentPos.forEach(po => { %>
+                  <tr>
+                    <td>
+                      <span class="badge badge-primary">
+                        <%= po.po_number || ('NOWI-PO-' + po.id) %>
+                      </span>
+                    </td>
+                    <td><%= po.vendor_name %></td>
+                    <td>
+                      <span class="text-secondary">
+                        <%= new Date(po.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) %>
+                      </span>
+                    </td>
+                    <td class="text-end">
+                      <a href="/nowi-po/po/<%= po.id %>" class="btn btn-outline btn-sm">
+                        <i class="bi bi-eye"></i> View
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
               <% } %>
-              <% recentPos.forEach(po => { %>
-                <tr>
-                  <td><%= po.po_number || ('NOWI-PO-' + po.id) %></td>
-                  <td><%= po.vendor_name %></td>
-                  <td><%= new Date(po.created_at).toLocaleDateString('en-IN') %></td>
-                  <td class="text-end"><a href="/nowi-po/po/<%= po.id %>" class="btn btn-sm btn-outline-primary">View</a></td>
-                </tr>
-              <% }) %>
             </tbody>
           </table>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Delete All Mappings Modal -->
-  <div class="modal fade" id="deleteMappingsModal" tabindex="-1" aria-labelledby="deleteMappingsModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="deleteMappingsModalLabel">Confirm Delete All SKU Mappings</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete <strong>all <%= mappingCount %> SKU mappings</strong>? This action cannot be undone.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <form action="/nowi-po/mappings/delete-all" method="POST" style="display:inline;">
-            <button type="submit" class="btn btn-danger">Delete All Mappings</button>
-          </form>
-        </div>
+  </div>
+</main>
+
+<!-- Delete All Mappings Modal -->
+<div class="modal fade" id="deleteMappingsModal" tabindex="-1" aria-labelledby="deleteMappingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius: var(--radius-xl); overflow: hidden;">
+      <div class="modal-header" style="background: var(--danger-light); border-bottom: 1px solid var(--border-light);">
+        <h5 class="modal-title" id="deleteMappingsModalLabel" style="font-family: var(--font-display);">
+          <i class="bi bi-exclamation-triangle text-danger me-2"></i>
+          Confirm Delete All SKU Mappings
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">
+          Are you sure you want to delete <strong class="text-danger"><%= mappingCount %> SKU mappings</strong>?
+          This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer" style="background: var(--gray-50);">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x"></i> Cancel
+        </button>
+        <form action="/nowi-po/mappings/delete-all" method="POST" style="display: inline;">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash"></i> Delete All Mappings
+          </button>
+        </form>
       </div>
     </div>
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<%- include('../partials/footer') %>

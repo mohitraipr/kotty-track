@@ -1,181 +1,442 @@
 <!-- views/fabricInvoiceRolls.ejs -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Fabric Invoice Rolls</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .printable-area {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-        }
-        @media print {
-            .no-print {
-                display: none;
-            }
-        }
-    </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/fabric-manager/dashboard">
-                <i class="fas fa-file-invoice"></i> Fabric Invoice Rolls
-            </a>
-            <div class="ms-auto">
-                <span class="navbar-text me-3">
-                    Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
-                </span>
-                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">
-                    <i class="fas fa-tachometer-alt"></i> Dashboard
-                </a>
-                <a href="/logout" class="btn btn-outline-light">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
-            </div>
+<%- include('partials/header', { pageTitle: 'Fabric Invoice Rolls' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/fabric-manager/dashboard' }) %>
+
+<style>
+  .invoice-hero {
+    background: linear-gradient(135deg, var(--charcoal) 0%, #2d2d2d 100%);
+    color: var(--cream);
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+  }
+
+  .invoice-hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    margin: 0;
+  }
+
+  .invoice-badge {
+    background: var(--terracotta);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .info-card {
+    background: var(--cream);
+    border: 1px solid rgba(26, 26, 26, 0.1);
+    border-radius: 12px;
+    padding: 1.5rem;
+    height: 100%;
+  }
+
+  .info-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+
+  .info-value {
+    font-size: 1rem;
+    color: var(--charcoal);
+    font-weight: 500;
+  }
+
+  .rolls-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .rolls-table thead {
+    background: var(--charcoal);
+    color: var(--cream);
+  }
+
+  .rolls-table thead th {
+    font-weight: 500;
+    font-size: 0.875rem;
+    padding: 1rem;
+    border: none;
+    white-space: nowrap;
+  }
+
+  .rolls-table tbody td {
+    padding: 0.875rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba(26, 26, 26, 0.08);
+  }
+
+  .rolls-table tbody tr:hover {
+    background: rgba(196, 92, 58, 0.05);
+  }
+
+  .rolls-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .action-card {
+    background: white;
+    border: 1px solid rgba(26, 26, 26, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .action-card-header {
+    background: var(--charcoal);
+    color: var(--cream);
+    padding: 1rem 1.25rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .action-card-body {
+    padding: 1.25rem;
+  }
+
+  .form-label-custom {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--charcoal);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-control-custom,
+  .form-select-custom {
+    border: 1px solid rgba(26, 26, 26, 0.2);
+    border-radius: 8px;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+
+  .form-control-custom:focus,
+  .form-select-custom:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.15);
+    outline: none;
+  }
+
+  .btn-terracotta {
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-terracotta:hover {
+    background: #b5533a;
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  .btn-outline-charcoal {
+    border: 1px solid var(--charcoal);
+    color: var(--charcoal);
+    background: transparent;
+    padding: 0.625rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-outline-charcoal:hover {
+    background: var(--charcoal);
+    color: var(--cream);
+  }
+
+  .bulk-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+  }
+
+  .bulk-action-btn.primary {
+    background: rgba(196, 92, 58, 0.1);
+    color: var(--terracotta);
+    border: 1px solid rgba(196, 92, 58, 0.2);
+  }
+
+  .bulk-action-btn.primary:hover {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .bulk-action-btn.secondary {
+    background: rgba(26, 26, 26, 0.05);
+    color: var(--charcoal);
+    border: 1px solid rgba(26, 26, 26, 0.1);
+  }
+
+  .bulk-action-btn.secondary:hover {
+    background: var(--charcoal);
+    color: var(--cream);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #666;
+  }
+
+  .empty-state i {
+    font-size: 3rem;
+    color: #ccc;
+    margin-bottom: 1rem;
+  }
+
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+
+    .invoice-hero {
+      background: none !important;
+      color: var(--charcoal) !important;
+      padding: 1rem 0 !important;
+      border-bottom: 2px solid var(--charcoal);
+    }
+
+    .rolls-table thead {
+      background: #f5f5f5 !important;
+      color: var(--charcoal) !important;
+    }
+
+    body {
+      background: white !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .invoice-hero h1 {
+      font-size: 1.5rem;
+    }
+
+    .info-card {
+      padding: 1rem;
+    }
+
+    .rolls-table thead th,
+    .rolls-table tbody td {
+      padding: 0.625rem 0.5rem;
+      font-size: 0.8rem;
+    }
+  }
+</style>
+
+<!-- Invoice Hero Section -->
+<div class="invoice-hero no-print">
+  <div class="container">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h1><i class="bi bi-file-earmark-text me-2"></i>Fabric Invoice Rolls</h1>
+        <p class="mb-0 mt-2 opacity-75">Invoice #<%= invoice.invoice_no %></p>
+      </div>
+      <span class="invoice-badge">
+        <i class="bi bi-stack me-1"></i> <%= rolls.length %> Roll<%= rolls.length !== 1 ? 's' : '' %>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="container py-4">
+  <!-- Include Flash Messages Partial -->
+  <%- include('partials/flashMessages') %>
+
+  <!-- Invoice Information Cards -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="info-card">
+        <h6 class="mb-3" style="font-family: 'DM Serif Display', serif; color: var(--charcoal);">
+          <i class="bi bi-building me-2"></i>Vendor Information
+        </h6>
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="info-label">Vendor Name</div>
+            <div class="info-value"><%= invoice.vendor_name %></div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Invoice Date</div>
+            <div class="info-value"><%= invoice.date_invoice.toLocaleDateString('en-CA') %></div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Received Date</div>
+            <div class="info-value"><%= invoice.date_received.toLocaleDateString('en-CA') %></div>
+          </div>
         </div>
-    </nav>
-
-    <div class="container my-4">
-        <!-- Include Flash Messages Partial -->
-        <%- include('partials/flashMessages') %>
-
-        <div class="printable-area shadow-sm p-4 bg-white rounded">
-            <h2 class="mb-4"><i class="fas fa-file-alt"></i> Rolls for Invoice: <%= invoice.invoice_no %></h2>
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <p><strong>Vendor Name:</strong> <%= invoice.vendor_name %></p>
-                    <p><strong>Date Invoice:</strong> <%= invoice.date_invoice.toLocaleDateString('en-CA') %></p>
-                    <p><strong>Date Received:</strong> <%= invoice.date_received.toLocaleDateString('en-CA') %></p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>Total Roll Quantity:</strong> <%= invoice.total_roll_quantity %></p>
-                    <p><strong>Fabric Type:</strong> <%= invoice.fabric_type || 'N/A' %></p>
-                    <p><strong>Invoice Weight:</strong> <%= invoice.invoice_weight || 'N/A' %></p>
-                    <p><strong>Short Weight:</strong> <%= invoice.short_weight || 'N/A' %></p>
-                    <p><strong>Received Weight:</strong> <%= invoice.received_weight || 'N/A' %></p>
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-                <div>
-                    <a href="/fabric-manager/invoice/<%= invoice.id %>/download-rolls" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-download"></i> Download Rolls as Excel
-                    </a>
-                </div>
-                <div>
-                    <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
-                        <i class="fas fa-print"></i> Print
-                    </button>
-                </div>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover">
-                    <thead class="table-dark">
-                        <tr>
-                            <th><i class="fas fa-hashtag"></i> ID</th>
-                            <th><i class="fas fa-sort-numeric-down"></i> Roll No</th>
-                            <th><i class="fas fa-weight-hanging"></i> Per Roll Weight</th>
-                            <th><i class="fas fa-palette"></i> Color</th>
-                            <th><i class="fas fa-box-open"></i> GR No by Vendor</th>
-                            <th><i class="fas fa-ruler-combined"></i> Unit</th>
-                            <th><i class="fas fa-user"></i> Created By</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (rolls.length === 0) { %>
-                            <tr>
-                                <td colspan="7" class="text-center">No Rolls Found for this Invoice.</td>
-                            </tr>
-                        <% } else { %>
-                            <% rolls.forEach(roll => { %>
-                                <tr>
-                                    <td><%= roll.id %></td>
-                                    <td><%= roll.roll_no %></td>
-                                    <td><%= roll.per_roll_weight %></td>
-                                    <td><%= roll.color || 'N/A' %></td>
-                                    <td><%= roll.gr_no_by_vendor || 'N/A' %></td>
-                                    <td><%= roll.unit %></td>
-                                    <td><%= roll.created_by %></td>
-                                </tr>
-                            <% }) %>
-                        <% } %>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="row g-4 no-print">
-                <div class="col-lg-7">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-primary text-white">
-                            <i class="fas fa-plus-circle"></i> Add Roll Manually
-                        </div>
-                        <div class="card-body">
-                            <form action="/fabric-manager/insert/roll" method="POST" class="row g-3">
-                                <input type="hidden" name="invoice_id" value="<%= invoice.id %>">
-                                <div class="col-md-6">
-                                    <label for="roll_no" class="form-label">Roll Number</label>
-                                    <input type="number" class="form-control" id="roll_no" name="roll_no" min="1" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="per_roll_weight" class="form-label">Per Roll Weight</label>
-                                    <input type="number" step="0.01" class="form-control" id="per_roll_weight" name="per_roll_weight" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="color" class="form-label">Color</label>
-                                    <input type="text" class="form-control" id="color" name="color" placeholder="Optional">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="gr_no_by_vendor" class="form-label">GR No by Vendor</label>
-                                    <input type="text" class="form-control" id="gr_no_by_vendor" name="gr_no_by_vendor" placeholder="Optional">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="unit" class="form-label">Unit</label>
-                                    <select id="unit" name="unit" class="form-select" required>
-                                        <option value="" disabled selected>Select Unit</option>
-                                        <option value="METER">METER</option>
-                                        <option value="KG">KG</option>
-                                    </select>
-                                </div>
-                                <div class="col-12 text-end">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save"></i> Add Roll
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-5">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-light">
-                            <i class="fas fa-upload"></i> Bulk Actions
-                        </div>
-                        <div class="card-body d-flex flex-column gap-2">
-                            <a href="/fabric-manager/bulk-upload/rolls" class="btn btn-outline-primary">
-                                <i class="fas fa-file-excel"></i> Bulk Upload Fabric Invoice Rolls
-                            </a>
-                            <a href="/fabric-manager/dashboard" class="btn btn-outline-success">
-                                <i class="fas fa-arrow-left"></i> Back to Dashboard
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="info-card">
+        <h6 class="mb-3" style="font-family: 'DM Serif Display', serif; color: var(--charcoal);">
+          <i class="bi bi-box-seam me-2"></i>Fabric Details
+        </h6>
+        <div class="row g-3">
+          <div class="col-6">
+            <div class="info-label">Total Rolls</div>
+            <div class="info-value"><%= invoice.total_roll_quantity %></div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Fabric Type</div>
+            <div class="info-value"><%= invoice.fabric_type || 'N/A' %></div>
+          </div>
+          <div class="col-4">
+            <div class="info-label">Invoice Weight</div>
+            <div class="info-value"><%= invoice.invoice_weight || 'N/A' %></div>
+          </div>
+          <div class="col-4">
+            <div class="info-label">Short Weight</div>
+            <div class="info-value"><%= invoice.short_weight || 'N/A' %></div>
+          </div>
+          <div class="col-4">
+            <div class="info-label">Received Weight</div>
+            <div class="info-value"><%= invoice.received_weight || 'N/A' %></div>
+          </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 no-print">
+    <a href="/fabric-manager/invoice/<%= invoice.id %>/download-rolls" class="btn-outline-charcoal" style="text-decoration: none;">
+      <i class="bi bi-download me-2"></i>Download Excel
+    </a>
+    <button class="btn-outline-charcoal" onclick="window.print()">
+      <i class="bi bi-printer me-2"></i>Print
+    </button>
+  </div>
+
+  <!-- Rolls Table -->
+  <div class="rolls-table mb-4">
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead>
+          <tr>
+            <th><i class="bi bi-hash me-1"></i>ID</th>
+            <th><i class="bi bi-123 me-1"></i>Roll No</th>
+            <th><i class="bi bi-speedometer2 me-1"></i>Weight</th>
+            <th><i class="bi bi-palette me-1"></i>Color</th>
+            <th><i class="bi bi-upc me-1"></i>GR No</th>
+            <th><i class="bi bi-rulers me-1"></i>Unit</th>
+            <th><i class="bi bi-person me-1"></i>Created By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (rolls.length === 0) { %>
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <i class="bi bi-inbox"></i>
+                  <p class="mb-0">No rolls found for this invoice.</p>
+                  <small>Add rolls using the form below.</small>
+                </div>
+              </td>
+            </tr>
+          <% } else { %>
+            <% rolls.forEach(roll => { %>
+              <tr>
+                <td><strong>#<%= roll.id %></strong></td>
+                <td><%= roll.roll_no %></td>
+                <td><%= roll.per_roll_weight %></td>
+                <td><%= roll.color || '<span class="text-muted">N/A</span>' %></td>
+                <td><%= roll.gr_no_by_vendor || '<span class="text-muted">N/A</span>' %></td>
+                <td><span class="badge bg-secondary"><%= roll.unit %></span></td>
+                <td><%= roll.created_by %></td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Action Cards Row -->
+  <div class="row g-4 no-print">
+    <!-- Add Roll Form -->
+    <div class="col-lg-7">
+      <div class="action-card h-100">
+        <div class="action-card-header">
+          <i class="bi bi-plus-circle"></i>
+          Add Roll Manually
+        </div>
+        <div class="action-card-body">
+          <form action="/fabric-manager/insert/roll" method="POST">
+            <input type="hidden" name="invoice_id" value="<%= invoice.id %>">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="roll_no" class="form-label-custom">Roll Number</label>
+                <input type="number" class="form-control form-control-custom" id="roll_no" name="roll_no" min="1" required>
+              </div>
+              <div class="col-md-6">
+                <label for="per_roll_weight" class="form-label-custom">Per Roll Weight</label>
+                <input type="number" step="0.01" class="form-control form-control-custom" id="per_roll_weight" name="per_roll_weight" required>
+              </div>
+              <div class="col-md-6">
+                <label for="color" class="form-label-custom">Color</label>
+                <input type="text" class="form-control form-control-custom" id="color" name="color" placeholder="Optional">
+              </div>
+              <div class="col-md-6">
+                <label for="gr_no_by_vendor" class="form-label-custom">GR No by Vendor</label>
+                <input type="text" class="form-control form-control-custom" id="gr_no_by_vendor" name="gr_no_by_vendor" placeholder="Optional">
+              </div>
+              <div class="col-md-6">
+                <label for="unit" class="form-label-custom">Unit</label>
+                <select id="unit" name="unit" class="form-select form-select-custom" required>
+                  <option value="" disabled selected>Select Unit</option>
+                  <option value="METER">METER</option>
+                  <option value="KG">KG</option>
+                </select>
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn-terracotta w-100">
+                  <i class="bi bi-plus-lg me-2"></i>Add Roll
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <!-- Bulk Actions -->
+    <div class="col-lg-5">
+      <div class="action-card h-100">
+        <div class="action-card-header">
+          <i class="bi bi-lightning"></i>
+          Quick Actions
+        </div>
+        <div class="action-card-body d-flex flex-column gap-3">
+          <a href="/fabric-manager/bulk-upload/rolls" class="bulk-action-btn primary">
+            <i class="bi bi-file-earmark-excel"></i>
+            Bulk Upload Fabric Invoice Rolls
+          </a>
+          <a href="/fabric-manager/dashboard" class="bulk-action-btn secondary">
+            <i class="bi bi-arrow-left"></i>
+            Back to Dashboard
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

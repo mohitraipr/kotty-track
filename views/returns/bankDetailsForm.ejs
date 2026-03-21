@@ -3,299 +3,747 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#c45c3a">
   <title>Enter Bank Details - Kotty Returns</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Preconnect to CDNs for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+  <!-- Google Fonts - DM Serif Display + Outfit -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
+    /* CSS Variables - Kotty Design System */
+    :root {
+      --charcoal: #1a1a1a;
+      --charcoal-light: #2d2d2d;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --cream-darker: #e5dfd4;
+      --terracotta: #c45c3a;
+      --terracotta-light: #d4826a;
+      --terracotta-dark: #a34a2d;
+      --terracotta-bg: rgba(196, 92, 58, 0.08);
+
+      --success: #2d8a5f;
+      --success-light: #e8f5ee;
+      --danger: #c23b22;
+      --danger-light: #fdf2f0;
+
+      --gray-100: #f5f5f3;
+      --gray-200: #e8e6e1;
+      --gray-300: #d4d1c9;
+      --gray-400: #a8a49a;
+      --gray-500: #78746a;
+      --gray-600: #5a5650;
+
+      --text-primary: #1a1a1a;
+      --text-secondary: #5a5650;
+      --text-muted: #a8a49a;
+
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-xl: 12px;
+      --radius-2xl: 16px;
+
+      --shadow-sm: 0 2px 4px rgba(26, 26, 26, 0.06);
+      --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+      --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
+      --shadow-xl: 0 16px 48px rgba(26, 26, 26, 0.16);
+
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-fast: 150ms var(--ease-out);
+      --transition-base: 200ms var(--ease-out);
+    }
+
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      line-height: 1.6;
+      color: var(--text-primary);
+      background: linear-gradient(180deg, var(--cream) 0%, var(--cream-dark) 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 32px 16px;
     }
 
-    .form-container {
-      max-width: 480px;
+    .form-wrapper {
       width: 100%;
-      background: white;
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      max-width: 460px;
     }
 
-    .logo {
+    /* Brand Header */
+    .brand-header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
-    .logo-text {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1e293b;
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      background: var(--charcoal);
+      border-radius: var(--radius-xl);
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-md);
     }
 
-    .form-title {
-      font-size: 24px;
-      font-weight: 700;
-      text-align: center;
-      color: #1e293b;
-      margin-bottom: 8px;
+    .brand-logo span {
+      font-family: var(--font-display);
+      font-size: 26px;
+      color: white;
     }
 
-    .form-subtitle {
-      text-align: center;
-      color: #64748b;
-      margin-bottom: 24px;
-      font-size: 14px;
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 28px;
+      color: var(--charcoal);
+      letter-spacing: 0.02em;
     }
 
-    .refund-info {
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 24px;
-    }
-
-    .refund-info .label {
-      font-size: 12px;
-      color: #64748b;
+    .brand-tagline {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
-    .refund-info .value {
+    /* Main Card */
+    .form-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-2xl);
+      box-shadow: var(--shadow-xl);
+      overflow: hidden;
+    }
+
+    .form-card-body {
+      padding: 36px 32px;
+    }
+
+    @media (max-width: 480px) {
+      .form-card-body {
+        padding: 28px 20px;
+      }
+    }
+
+    /* Page Title */
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      color: var(--text-primary);
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      text-align: center;
+      color: var(--text-secondary);
       font-size: 15px;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Refund Info Box */
+    .refund-info {
+      background: linear-gradient(135deg, var(--cream) 0%, var(--cream-dark) 100%);
+      border: 1px solid var(--cream-darker);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .refund-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .refund-info-item {
+      text-align: left;
+    }
+
+    .refund-info-item:last-child {
+      text-align: right;
+    }
+
+    .refund-label {
+      font-size: 11px;
       font-weight: 600;
-      color: #1e293b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
     }
 
-    .refund-info .amount {
-      font-size: 24px;
-      font-weight: 700;
-      color: #22c55e;
+    .refund-value {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-primary);
     }
 
-    .payment-options {
-      margin-bottom: 24px;
+    .refund-amount {
+      font-family: var(--font-display);
+      font-size: 28px;
+      color: var(--success);
     }
 
-    .payment-option {
-      border: 2px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
+    /* Divider */
+    .section-divider {
       display: flex;
       align-items: center;
       gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--gray-200);
+    }
+
+    .section-divider span {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    /* Error Message */
+    .error-message {
+      background: var(--danger-light);
+      color: var(--danger);
+      padding: 14px 16px;
+      border-radius: var(--radius-lg);
+      border-left: 3px solid var(--danger);
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-message i {
+      margin-right: 8px;
+    }
+
+    /* Payment Options */
+    .payment-options {
+      margin-bottom: 28px;
+    }
+
+    .payment-option {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      border: 2px solid var(--gray-200);
+      border-radius: var(--radius-xl);
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      background: white;
     }
 
     .payment-option:hover {
-      border-color: #2563eb;
+      border-color: var(--gray-300);
+      background: var(--gray-100);
     }
 
     .payment-option.selected {
-      border-color: #2563eb;
-      background: #eff6ff;
+      border-color: var(--terracotta);
+      background: var(--terracotta-bg);
     }
 
     .payment-option input[type="radio"] {
       display: none;
     }
 
-    .payment-option .icon {
-      width: 48px;
-      height: 48px;
-      background: #f8fafc;
-      border-radius: 12px;
+    .payment-option .icon-wrapper {
+      width: 52px;
+      height: 52px;
+      background: var(--cream);
+      border-radius: var(--radius-lg);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
-      color: #2563eb;
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
     }
 
-    .payment-option .info h4 {
-      margin: 0;
+    .payment-option.selected .icon-wrapper {
+      background: var(--terracotta);
+    }
+
+    .payment-option .icon-wrapper i {
+      font-size: 24px;
+      color: var(--terracotta);
+      transition: color var(--transition-fast);
+    }
+
+    .payment-option.selected .icon-wrapper i {
+      color: white;
+    }
+
+    .payment-option .option-info h4 {
+      margin: 0 0 4px 0;
+      font-family: var(--font-body);
       font-size: 16px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--text-primary);
     }
 
-    .payment-option .info p {
+    .payment-option .option-info p {
       margin: 0;
       font-size: 13px;
-      color: #64748b;
+      color: var(--text-secondary);
+      line-height: 1.4;
     }
 
+    .payment-option .option-info .badge {
+      display: inline-block;
+      background: var(--success-light);
+      color: var(--success);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-top: 6px;
+    }
+
+    /* Form Sections */
     .form-section {
       display: none;
     }
 
     .form-section.active {
       display: block;
+      animation: fadeIn 0.3s var(--ease-out);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Form Fields */
+    .form-group {
+      margin-bottom: 20px;
     }
 
     .form-label {
+      display: block;
+      font-size: 14px;
       font-weight: 500;
-      color: #1e293b;
-      margin-bottom: 6px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
     }
 
-    .form-control {
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
+    .form-label .required {
+      color: var(--terracotta);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-family: var(--font-body);
       font-size: 15px;
+      color: var(--text-primary);
+      background: white;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-lg);
+      transition: all var(--transition-fast);
     }
 
-    .form-control:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    .form-input:hover {
+      border-color: var(--gray-300);
     }
 
+    .form-input:focus {
+      outline: none;
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 4px var(--terracotta-bg);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    /* Submit Button */
     .submit-btn {
       width: 100%;
-      padding: 14px;
-      background: #2563eb;
+      padding: 18px 24px;
+      background: var(--terracotta);
       color: white;
       border: none;
-      border-radius: 12px;
+      border-radius: var(--radius-lg);
+      font-family: var(--font-body);
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
     }
 
     .submit-btn:hover {
-      background: #1d4ed8;
+      background: var(--terracotta-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(196, 92, 58, 0.35);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0);
     }
 
     .submit-btn:disabled {
-      background: #94a3b8;
+      background: var(--gray-400);
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
+    .submit-btn i {
+      font-size: 18px;
+    }
+
+    /* Security Note */
     .secure-note {
-      text-align: center;
-      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--gray-200);
       font-size: 13px;
-      color: #64748b;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      text-align: center;
     }
 
     .secure-note i {
-      color: #22c55e;
+      color: var(--success);
+      font-size: 18px;
+      flex-shrink: 0;
     }
 
-    .error-message {
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      display: none;
+    /* Footer */
+    .form-footer {
+      text-align: center;
+      padding: 20px 24px 28px;
+      background: var(--cream);
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .form-footer p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .form-footer a {
+      color: var(--terracotta);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color var(--transition-fast);
+    }
+
+    .form-footer a:hover {
+      color: var(--terracotta-dark);
+      text-decoration: underline;
+    }
+
+    /* Trust Badges */
+    .trust-badges {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .trust-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .trust-badge i {
+      font-size: 20px;
+      color: var(--gray-500);
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Button text elements for JS manipulation */
+    .btn-icon {
+      display: inline-flex;
+    }
+
+    .btn-text {
+      display: inline;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 480px) {
+      body {
+        padding: 20px 12px;
+      }
+
+      .brand-header {
+        margin-bottom: 20px;
+      }
+
+      .brand-logo {
+        width: 48px;
+        height: 48px;
+      }
+
+      .brand-logo span {
+        font-size: 22px;
+      }
+
+      .brand-name {
+        font-size: 24px;
+      }
+
+      .page-title {
+        font-size: 24px;
+      }
+
+      .refund-info {
+        padding: 18px;
+      }
+
+      .refund-amount {
+        font-size: 24px;
+      }
+
+      .payment-option {
+        padding: 16px;
+        gap: 12px;
+      }
+
+      .payment-option .icon-wrapper {
+        width: 44px;
+        height: 44px;
+      }
+
+      .payment-option .icon-wrapper i {
+        font-size: 20px;
+      }
+
+      .trust-badges {
+        gap: 20px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="form-container">
-    <div class="logo">
-      <span class="logo-text">KOTTY</span>
+  <div class="form-wrapper">
+    <!-- Brand Header -->
+    <div class="brand-header">
+      <div class="brand-logo">
+        <span>K</span>
+      </div>
+      <div class="brand-name">KOTTY</div>
+      <div class="brand-tagline">Premium Fashion</div>
     </div>
 
-    <h1 class="form-title">Refund Bank Details</h1>
-    <p class="form-subtitle">Please provide your payment details to receive your refund</p>
+    <!-- Main Form Card -->
+    <div class="form-card">
+      <div class="form-card-body">
+        <h1 class="page-title">Refund Details</h1>
+        <p class="page-subtitle">Please provide your payment details to receive your refund securely</p>
 
-    <div class="refund-info">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div>
-          <div class="label">Return ID</div>
-          <div class="value"><%= returnData.return_id %></div>
+        <!-- Refund Information -->
+        <div class="refund-info">
+          <div class="refund-info-row">
+            <div class="refund-info-item">
+              <div class="refund-label">Return ID</div>
+              <div class="refund-value"><%= returnData.return_id %></div>
+            </div>
+            <div class="refund-info-item">
+              <div class="refund-label">Refund Amount</div>
+              <div class="refund-amount"><%= returnData.refund_amount ? '\u20B9' + parseFloat(returnData.refund_amount).toLocaleString('en-IN') : 'Pending' %></div>
+            </div>
+          </div>
         </div>
-        <div class="text-end">
-          <div class="label">Refund Amount</div>
-          <div class="amount"><%= returnData.refund_amount ? '₹' + parseFloat(returnData.refund_amount).toLocaleString('en-IN') : 'Pending' %></div>
+
+        <div class="section-divider">
+          <span>Select Payment Method</span>
         </div>
+
+        <!-- Error Message -->
+        <div class="error-message" id="errorMessage">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="errorText"></span>
+        </div>
+
+        <form id="bankDetailsForm" action="/returns/bank-details/<%= token %>" method="POST">
+          <!-- Payment Method Selection -->
+          <div class="payment-options">
+            <label class="payment-option selected" onclick="selectPayment('upi')">
+              <input type="radio" name="payment_method" value="upi" checked>
+              <div class="icon-wrapper">
+                <i class="bi bi-phone"></i>
+              </div>
+              <div class="option-info">
+                <h4>UPI</h4>
+                <p>Receive refund to your UPI ID</p>
+                <span class="badge">Fastest - Same Day</span>
+              </div>
+            </label>
+
+            <label class="payment-option" onclick="selectPayment('bank')">
+              <input type="radio" name="payment_method" value="bank">
+              <div class="icon-wrapper">
+                <i class="bi bi-bank"></i>
+              </div>
+              <div class="option-info">
+                <h4>Bank Account</h4>
+                <p>Receive refund via NEFT/IMPS (2-3 business days)</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- UPI Section -->
+          <div class="form-section active" id="upiSection">
+            <div class="form-group">
+              <label class="form-label">UPI ID <span class="required">*</span></label>
+              <input type="text" class="form-input" name="upi_id" id="upiId"
+                     placeholder="yourname@upi or 9876543210@paytm" autocomplete="off">
+              <p class="form-hint">Examples: name@okicici, name@ybl, 9876543210@paytm</p>
+            </div>
+          </div>
+
+          <!-- Bank Account Section -->
+          <div class="form-section" id="bankSection">
+            <div class="form-group">
+              <label class="form-label">Account Holder Name <span class="required">*</span></label>
+              <input type="text" class="form-input" name="account_holder_name"
+                     placeholder="As per bank records" autocomplete="name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bank Name <span class="required">*</span></label>
+              <input type="text" class="form-input" name="bank_name"
+                     placeholder="e.g., HDFC Bank, SBI" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Number <span class="required">*</span></label>
+              <input type="text" class="form-input" name="account_number"
+                     placeholder="Your bank account number" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm Account Number <span class="required">*</span></label>
+              <input type="text" class="form-input" name="account_number_confirm"
+                     placeholder="Re-enter account number" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label class="form-label">IFSC Code <span class="required">*</span></label>
+              <input type="text" class="form-input" name="ifsc_code"
+                     placeholder="e.g., HDFC0001234" style="text-transform: uppercase;" autocomplete="off">
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn" id="submitBtn">
+            <i class="bi bi-shield-check btn-icon" id="submitIcon"></i>
+            <span class="btn-text" id="submitText">Submit Details</span>
+          </button>
+
+          <div class="secure-note">
+            <i class="bi bi-lock-fill"></i>
+            <span>Your details are encrypted and securely stored. They will only be used for processing this refund.</span>
+          </div>
+        </form>
+      </div>
+
+      <div class="form-footer">
+        <p>Need help? Contact us at <a href="mailto:support@kotty.in">support@kotty.in</a></p>
       </div>
     </div>
 
-    <div class="error-message" id="errorMessage"></div>
-
-    <form id="bankDetailsForm" action="/returns/bank-details/<%= token %>" method="POST">
-      <div class="payment-options">
-        <label class="payment-option selected" onclick="selectPayment('upi')">
-          <input type="radio" name="payment_method" value="upi" checked>
-          <div class="icon"><i class="bi bi-phone"></i></div>
-          <div class="info">
-            <h4>UPI</h4>
-            <p>Receive refund to your UPI ID (Fastest - Same day)</p>
-          </div>
-        </label>
-
-        <label class="payment-option" onclick="selectPayment('bank')">
-          <input type="radio" name="payment_method" value="bank">
-          <div class="icon"><i class="bi bi-bank"></i></div>
-          <div class="info">
-            <h4>Bank Account</h4>
-            <p>Receive refund via NEFT/IMPS (2-3 business days)</p>
-          </div>
-        </label>
+    <!-- Trust Badges -->
+    <div class="trust-badges">
+      <div class="trust-badge">
+        <i class="bi bi-shield-lock-fill"></i>
+        <span>256-bit SSL</span>
       </div>
-
-      <!-- UPI Section -->
-      <div class="form-section active" id="upiSection">
-        <div class="mb-3">
-          <label class="form-label">UPI ID *</label>
-          <input type="text" class="form-control" name="upi_id" id="upiId" placeholder="yourname@upi or 9876543210@paytm">
-          <small class="text-muted">Examples: name@okicici, name@ybl, 9876543210@paytm</small>
-        </div>
+      <div class="trust-badge">
+        <i class="bi bi-patch-check-fill"></i>
+        <span>Verified</span>
       </div>
-
-      <!-- Bank Section -->
-      <div class="form-section" id="bankSection">
-        <div class="mb-3">
-          <label class="form-label">Account Holder Name *</label>
-          <input type="text" class="form-control" name="account_holder_name" placeholder="As per bank records">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Bank Name *</label>
-          <input type="text" class="form-control" name="bank_name" placeholder="e.g., HDFC Bank, SBI">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Account Number *</label>
-          <input type="text" class="form-control" name="account_number" placeholder="Your bank account number" inputmode="numeric">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Confirm Account Number *</label>
-          <input type="text" class="form-control" name="account_number_confirm" placeholder="Re-enter account number" inputmode="numeric">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">IFSC Code *</label>
-          <input type="text" class="form-control" name="ifsc_code" placeholder="e.g., HDFC0001234" style="text-transform: uppercase;">
-        </div>
+      <div class="trust-badge">
+        <i class="bi bi-bank2"></i>
+        <span>RBI Compliant</span>
       </div>
-
-      <button type="submit" class="submit-btn" id="submitBtn">
-        <i class="bi bi-shield-check me-2"></i>Submit Details
-      </button>
-
-      <p class="secure-note">
-        <i class="bi bi-lock-fill me-1"></i>
-        Your details are securely stored and will only be used for processing this refund.
-      </p>
-    </form>
+    </div>
   </div>
 
   <script>
     function selectPayment(method) {
-      // Update radio buttons
-      document.querySelectorAll('.payment-option').forEach(el => {
+      // Update radio buttons and selection state
+      document.querySelectorAll('.payment-option').forEach(function(el) {
         el.classList.remove('selected');
         el.querySelector('input').checked = false;
       });
@@ -307,66 +755,79 @@
       document.getElementById('bankSection').classList.toggle('active', method === 'bank');
     }
 
+    function setButtonLoading(isLoading) {
+      var submitBtn = document.getElementById('submitBtn');
+      var submitIcon = document.getElementById('submitIcon');
+      var submitText = document.getElementById('submitText');
+
+      if (isLoading) {
+        submitBtn.disabled = true;
+        submitIcon.className = 'spinner';
+        submitText.textContent = 'Submitting...';
+      } else {
+        submitBtn.disabled = false;
+        submitIcon.className = 'bi bi-shield-check btn-icon';
+        submitText.textContent = 'Submit Details';
+      }
+    }
+
     document.getElementById('bankDetailsForm').addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      const submitBtn = document.getElementById('submitBtn');
-      const errorMessage = document.getElementById('errorMessage');
-      const formData = new FormData(this);
-      const data = Object.fromEntries(formData);
+      var errorMessage = document.getElementById('errorMessage');
+      var errorText = document.getElementById('errorText');
+      var formData = new FormData(this);
+      var data = Object.fromEntries(formData);
 
       errorMessage.style.display = 'none';
 
       // Validation
       if (data.payment_method === 'upi') {
         if (!data.upi_id || !data.upi_id.includes('@')) {
-          errorMessage.textContent = 'Please enter a valid UPI ID (e.g., name@upi)';
+          errorText.textContent = 'Please enter a valid UPI ID (e.g., name@upi)';
           errorMessage.style.display = 'block';
           return;
         }
       } else {
         if (!data.account_holder_name || !data.bank_name || !data.account_number || !data.ifsc_code) {
-          errorMessage.textContent = 'Please fill all bank details';
+          errorText.textContent = 'Please fill all bank details';
           errorMessage.style.display = 'block';
           return;
         }
         if (data.account_number !== data.account_number_confirm) {
-          errorMessage.textContent = 'Account numbers do not match';
+          errorText.textContent = 'Account numbers do not match';
           errorMessage.style.display = 'block';
           return;
         }
         if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(data.ifsc_code)) {
-          errorMessage.textContent = 'Please enter a valid IFSC code';
+          errorText.textContent = 'Please enter a valid IFSC code';
           errorMessage.style.display = 'block';
           return;
         }
       }
 
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Submitting...';
+      setButtonLoading(true);
 
       try {
-        const response = await fetch(this.action, {
+        var response = await fetch(this.action, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
 
-        const result = await response.json();
+        var result = await response.json();
 
         if (result.success) {
           window.location.href = this.action + '/success';
         } else {
-          errorMessage.textContent = result.message || 'Failed to submit details';
+          errorText.textContent = result.message || 'Failed to submit details';
           errorMessage.style.display = 'block';
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Submit Details';
+          setButtonLoading(false);
         }
       } catch (error) {
-        errorMessage.textContent = 'Network error. Please try again.';
+        errorText.textContent = 'Network error. Please try again.';
         errorMessage.style.display = 'block';
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Submit Details';
+        setButtonLoading(false);
       }
     });
   </script>

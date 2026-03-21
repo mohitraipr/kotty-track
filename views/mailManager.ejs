@@ -1,336 +1,606 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mail Manager - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-  <style>
-    .email-row { cursor: pointer; transition: background-color 0.15s; }
-    .email-row:hover { background-color: #f8f9fa; }
-    .email-row.selected { background-color: #e7f3ff; }
-    .classification-badge { font-size: 0.75rem; }
-    .badge-initial { background-color: #0d6efd; }
-    .badge-closed { background-color: #198754; }
-    .badge-proceeding { background-color: #ffc107; color: #000; }
-    .badge-replied { background-color: #20c997; }
-    .badge-error { background-color: #dc3545; }
-    .badge-unknown { background-color: #6c757d; }
-    .email-checkbox { width: 18px; height: 18px; cursor: pointer; }
-    .bulk-actions { display: none; }
-    .bulk-actions.show { display: flex; }
-    .email-preview { max-height: 400px; overflow-y: auto; }
-    .video-card { border-left: 4px solid #198754; }
-    .upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 2rem; text-align: center; transition: all 0.2s; }
-    .upload-zone.drag-over { border-color: #0d6efd; background-color: #e7f3ff; }
-    .mapping-info { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-  </style>
-</head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand"><i class="bi bi-envelope-paper me-2"></i>Mail Manager</span>
-    <div class="d-flex align-items-center gap-3">
-      <a href="/video-finder" class="btn btn-outline-light btn-sm">
-        <i class="bi bi-camera-video me-1"></i>Video Finder
-      </a>
-      <span class="text-white"><%= user?.username %></span>
-    </div>
-  </div>
-</nav>
+<%- include('partials/header', { pageTitle: 'Mail Manager' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/mail-manager' }) %>
 
-<div class="container-fluid py-4">
-  <div class="row g-4">
-    <!-- Left Column: Mapping & Search -->
-    <div class="col-lg-4">
-      <!-- Zoho Status -->
-      <div class="card mb-3">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="fw-semibold">Zoho Mail Status</span>
-            <% if (zohoStatus.connected) { %>
-              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Connected</span>
-            <% } else if (zohoStatus.configured) { %>
-              <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Not Connected</span>
-            <% } else { %>
-              <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Not Configured</span>
+<style>
+  /* Mail Manager - Page Specific Styles */
+  .mail-manager-page {
+    padding-top: calc(var(--navbar-height) + 1.5rem);
+    min-height: 100vh;
+  }
+
+  /* Email List Styles */
+  .email-row {
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
+  }
+  .email-row:hover {
+    background-color: var(--cream-dark);
+    border-left-color: var(--terracotta-light);
+  }
+  .email-row.selected {
+    background-color: var(--terracotta-bg);
+    border-left-color: var(--terracotta);
+  }
+
+  /* Classification Badges */
+  .classification-badge {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-full);
+  }
+  .badge-initial { background-color: var(--info); color: white; }
+  .badge-closed { background-color: var(--success); color: white; }
+  .badge-proceeding { background-color: var(--warning); color: white; }
+  .badge-replied { background-color: #20c997; color: white; }
+  .badge-error { background-color: var(--danger); color: white; }
+  .badge-unknown { background-color: var(--gray-400); color: white; }
+
+  /* Checkbox Styling */
+  .email-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--terracotta);
+  }
+
+  /* Bulk Actions */
+  .bulk-actions { display: none; }
+  .bulk-actions.show { display: flex; }
+
+  /* Email Preview */
+  .email-preview {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  /* Video Card */
+  .video-card {
+    border-left: 4px solid var(--success);
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    border: 2px dashed var(--border-medium);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    transition: all var(--transition-base);
+    cursor: pointer;
+    background: var(--cream);
+  }
+  .upload-zone:hover {
+    border-color: var(--terracotta-light);
+    background: var(--terracotta-bg);
+  }
+  .upload-zone.drag-over {
+    border-color: var(--terracotta);
+    background-color: var(--terracotta-bg);
+  }
+
+  /* Mapping Info Banner */
+  .mapping-info {
+    background: linear-gradient(135deg, var(--terracotta) 0%, var(--terracotta-dark) 100%);
+  }
+
+  /* Card Enhancements */
+  .kotty-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  .kotty-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid var(--border-light);
+    font-weight: 500;
+    color: var(--text-primary);
+    padding: 1rem 1.25rem;
+  }
+  .kotty-card .card-header i {
+    color: var(--terracotta);
+  }
+  .kotty-card .card-body {
+    padding: 1.25rem;
+  }
+
+  /* Status Badge */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  .status-badge.connected {
+    background: var(--success-light);
+    color: var(--success);
+  }
+  .status-badge.warning {
+    background: var(--warning-light);
+    color: var(--warning);
+  }
+  .status-badge.error {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+
+  /* Button Styles */
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+  }
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .btn-kotty-primary:disabled {
+    background: var(--gray-300);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .btn-kotty-outline {
+    background: transparent;
+    color: var(--terracotta);
+    border: 1px solid var(--terracotta);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: all var(--transition-fast);
+  }
+  .btn-kotty-outline:hover {
+    background: var(--terracotta-bg);
+    color: var(--terracotta-dark);
+  }
+
+  /* Form Controls */
+  .form-control-kotty {
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast);
+    background: var(--bg-card);
+  }
+  .form-control-kotty:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    outline: none;
+  }
+
+  /* Section Header */
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  /* Quick Action Buttons */
+  .quick-action-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: var(--text-xs);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-medium);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+  }
+  .quick-action-btn:hover {
+    background: var(--cream-dark);
+    color: var(--text-primary);
+    border-color: var(--border-dark);
+  }
+  .quick-action-btn.btn-date {
+    border-color: var(--info);
+    color: var(--info);
+  }
+  .quick-action-btn.btn-date:hover {
+    background: var(--info-light);
+  }
+  .quick-action-btn.btn-sync {
+    border-color: var(--warning);
+    color: var(--warning);
+  }
+  .quick-action-btn.btn-sync:hover {
+    background: var(--warning-light);
+  }
+
+  /* Email Counter Badge */
+  .email-counter {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  /* Stat Box */
+  .stat-box {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    text-align: center;
+    background: var(--cream);
+  }
+  .stat-box .stat-value {
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+  .stat-box .stat-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+  .stat-box.success .stat-value { color: var(--success); }
+  .stat-box.info .stat-value { color: var(--info); }
+  .stat-box.primary .stat-value { color: var(--terracotta); }
+  .stat-box.warning .stat-value { color: var(--warning); }
+  .stat-box.danger .stat-value { color: var(--danger); }
+  .stat-box.muted .stat-value { color: var(--text-secondary); }
+
+  /* Alert Styles */
+  .alert-kotty {
+    border-radius: var(--radius-md);
+    border: none;
+    padding: 0.75rem 1rem;
+    font-size: var(--text-sm);
+  }
+  .alert-kotty.alert-success {
+    background: var(--success-light);
+    color: var(--success);
+  }
+  .alert-kotty.alert-warning {
+    background: var(--warning-light);
+    color: var(--warning);
+  }
+  .alert-kotty.alert-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+
+  /* Progress Bar */
+  .progress-kotty {
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--cream-dark);
+    overflow: hidden;
+  }
+  .progress-kotty .progress-bar {
+    background: var(--terracotta);
+  }
+
+  /* Reply Log */
+  .reply-log {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: var(--text-sm);
+    background: var(--cream);
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 992px) {
+    .mail-manager-page {
+      padding-top: calc(var(--navbar-height) + 1rem);
+    }
+  }
+</style>
+
+<main class="mail-manager-page">
+  <div class="container-fluid px-4">
+    <div class="row g-4">
+      <!-- Left Column: Mapping & Search -->
+      <div class="col-lg-4">
+        <!-- Zoho Status -->
+        <div class="kotty-card mb-3">
+          <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Zoho Mail Status</span>
+              <% if (zohoStatus.connected) { %>
+                <span class="status-badge connected"><i class="bi bi-check-circle"></i>Connected</span>
+              <% } else if (zohoStatus.configured) { %>
+                <span class="status-badge warning"><i class="bi bi-exclamation-triangle"></i>Not Connected</span>
+              <% } else { %>
+                <span class="status-badge error"><i class="bi bi-x-circle"></i>Not Configured</span>
+              <% } %>
+            </div>
+            <% if (!zohoStatus.configured) { %>
+              <small class="text-muted d-block mt-2">Set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN env vars</small>
             <% } %>
           </div>
-          <% if (!zohoStatus.configured) { %>
-            <small class="text-muted d-block mt-2">Set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN env vars</small>
-          <% } %>
-        </div>
-      </div>
-
-      <!-- Excel Mapping Upload -->
-      <div class="card mb-3">
-        <div class="card-header bg-white">
-          <i class="bi bi-file-earmark-spreadsheet me-2"></i>Order-to-AWB Mapping
-        </div>
-        <div class="card-body">
-          <div id="uploadZone" class="upload-zone mb-3">
-            <i class="bi bi-cloud-upload fs-2 text-muted"></i>
-            <p class="mb-1">Drop Excel file here or click to browse</p>
-            <small class="text-muted">Columns needed: Order ID, AWB</small>
-            <input type="file" id="mappingFile" accept=".xlsx,.xls,.csv" class="d-none">
-          </div>
-          <div id="mappingStatus" class="<%= mappingCount > 0 ? '' : 'd-none' %>">
-            <div class="mapping-info text-white p-3 rounded mb-2">
-              <div class="d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-database me-2"></i><span id="mappingCountDisplay"><%= mappingCount %></span> mappings loaded</span>
-                <button class="btn btn-sm btn-outline-light" onclick="clearMapping()">Clear</button>
-              </div>
-            </div>
-          </div>
-          <div id="uploadProgress" class="d-none">
-            <div class="progress">
-              <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%">Uploading...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Manual AWB Lookup -->
-      <div class="card mb-3">
-        <div class="card-header bg-white">
-          <i class="bi bi-search me-2"></i>AWB Lookup
-        </div>
-        <div class="card-body">
-          <div class="input-group">
-            <input type="text" id="lookupOrderId" class="form-control" placeholder="Enter Order ID...">
-            <button class="btn btn-primary" onclick="lookupAwb()">Lookup</button>
-          </div>
-          <div id="lookupResult" class="mt-2 d-none"></div>
-        </div>
-      </div>
-
-      <!-- Email Search -->
-      <div class="card">
-        <div class="card-header bg-white">
-          <i class="bi bi-envelope-open me-2"></i>Search Emails
-        </div>
-        <div class="card-body">
-          <div class="input-group mb-2">
-            <input type="text" id="emailSearch" class="form-control" placeholder="Search emails (e.g., CCTV, order ID)..." value="cctv">
-            <button class="btn btn-primary" onclick="searchEmails()">
-              <i class="bi bi-search"></i>
-            </button>
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-6">
-              <label class="form-label small text-muted mb-1">From Date</label>
-              <input type="date" id="searchDateFrom" class="form-control form-control-sm">
-            </div>
-            <div class="col-6">
-              <label class="form-label small text-muted mb-1">To Date</label>
-              <input type="date" id="searchDateTo" class="form-control form-control-sm">
-            </div>
-          </div>
-          <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadInbox()">Load Inbox</button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="searchEmails('cctv')">CCTV Requests</button>
-            <button class="btn btn-sm btn-outline-info" onclick="setDateToday()">Today</button>
-            <button class="btn btn-sm btn-outline-info" onclick="setDateLastWeek()">Last 7 Days</button>
-            <button class="btn btn-sm btn-outline-warning" onclick="syncFromSent()" title="Mark emails as replied based on sent folder">
-              <i class="bi bi-arrow-repeat me-1"></i>Sync Sent
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Middle Column: Email List -->
-    <div class="col-lg-4">
-      <div class="card h-100">
-        <div class="card-header bg-white">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span><i class="bi bi-inbox me-2"></i>Emails</span>
-            <span id="emailCount" class="badge bg-secondary">0</span>
-          </div>
-          <!-- Bulk Actions -->
-          <div id="bulkActions" class="bulk-actions gap-2 flex-wrap">
-            <button class="btn btn-sm btn-outline-primary" onclick="selectAllInitial()">
-              <i class="bi bi-check-all me-1"></i>Select Initial
-            </button>
-            <button class="btn btn-sm btn-success" onclick="startBulkReply()" id="bulkReplyBtn" disabled>
-              <i class="bi bi-send me-1"></i>Bulk Reply (<span id="selectedCount">0</span>)
-            </button>
-            <button class="btn btn-sm btn-outline-info" onclick="exportSelected()" id="exportBtn" disabled>
-              <i class="bi bi-download me-1"></i>Export
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">Clear</button>
-          </div>
-        </div>
-        <div class="card-body p-0" style="max-height: 65vh; overflow-y: auto;">
-          <div id="emailList">
-            <div class="text-center text-muted p-4">
-              <i class="bi bi-envelope-slash fs-1"></i>
-              <p class="mt-2">Search for emails to get started</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Column: Email Details & Reply -->
-    <div class="col-lg-4">
-      <div id="emailDetails" class="d-none">
-        <!-- Email Header -->
-        <div class="card mb-3">
-          <div class="card-header bg-white">
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <h6 id="detailSubject" class="mb-1">Subject</h6>
-                <small id="detailFrom" class="text-muted">From</small>
-              </div>
-              <span id="detailClassification" class="badge"></span>
-            </div>
-          </div>
-          <div class="card-body email-preview">
-            <div id="detailContent"></div>
-          </div>
         </div>
 
-        <!-- Extracted Details -->
-        <div class="card mb-3">
-          <div class="card-header bg-white">
-            <i class="bi bi-info-circle me-2"></i>Extracted Details
+        <!-- Excel Mapping Upload -->
+        <div class="kotty-card mb-3">
+          <div class="card-header">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Order-to-AWB Mapping
           </div>
           <div class="card-body">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="form-label small text-muted">Order ID <span class="text-primary">(key for AWB lookup)</span></label>
-                <input type="text" id="extractedOrderId" class="form-control form-control-sm fw-bold" readonly>
-              </div>
-              <div class="col-6">
-                <label class="form-label small text-muted">Outbound AWB <span class="text-success">(from mapping)</span></label>
-                <div class="input-group input-group-sm">
-                  <input type="text" id="extractedOutboundAwb" class="form-control fw-bold">
-                  <button class="btn btn-outline-primary" onclick="findVideosForEmail()" title="Search videos">
-                    <i class="bi bi-camera-video"></i>
-                  </button>
+            <div id="uploadZone" class="upload-zone mb-3">
+              <i class="bi bi-cloud-upload fs-2" style="color: var(--terracotta);"></i>
+              <p class="mb-1 mt-2" style="color: var(--text-primary);">Drop Excel file here or click to browse</p>
+              <small class="text-muted">Columns needed: Order ID, AWB</small>
+              <input type="file" id="mappingFile" accept=".xlsx,.xls,.csv" class="d-none">
+            </div>
+            <div id="mappingStatus" class="<%= mappingCount > 0 ? '' : 'd-none' %>">
+              <div class="mapping-info text-white p-3 rounded mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span><i class="bi bi-database me-2"></i><span id="mappingCountDisplay"><%= mappingCount %></span> mappings loaded</span>
+                  <button class="btn btn-sm btn-light" onclick="clearMapping()">Clear</button>
                 </div>
               </div>
-              <div class="col-6">
-                <label class="form-label small text-muted">Return AWB <span class="text-danger">(not for video search)</span></label>
-                <input type="text" id="extractedReturnAwb" class="form-control form-control-sm text-muted" readonly>
-              </div>
-              <div class="col-6">
-                <label class="form-label small text-muted">Ticket</label>
-                <input type="text" id="extractedTicket" class="form-control form-control-sm" readonly>
-              </div>
             </div>
-            <div id="mappingWarning" class="alert alert-warning mt-2 mb-0 py-2 d-none">
-              <i class="bi bi-exclamation-triangle me-1"></i>
-              <span id="mappingWarningText">Upload Excel mapping to lookup AWB from Order ID</span>
+            <div id="uploadProgress" class="d-none">
+              <div class="progress-kotty">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+              </div>
+              <small class="text-muted d-block text-center mt-2">Uploading...</small>
             </div>
           </div>
         </div>
 
-        <!-- Found Videos -->
-        <div id="videoResults" class="card mb-3 d-none">
-          <div class="card-header bg-white">
-            <i class="bi bi-film me-2"></i>Found Videos
-          </div>
-          <div class="card-body" id="videoList"></div>
-        </div>
-
-        <!-- Reply Section -->
-        <div class="card">
-          <div class="card-header bg-white">
-            <i class="bi bi-reply me-2"></i>Send Reply
+        <!-- Manual AWB Lookup -->
+        <div class="kotty-card mb-3">
+          <div class="card-header">
+            <i class="bi bi-search me-2"></i>AWB Lookup
           </div>
           <div class="card-body">
-            <button id="sendReplyBtn" class="btn btn-success w-100" onclick="sendReply()" disabled>
-              <i class="bi bi-send me-2"></i>Send Reply with Video Links
-            </button>
-            <div id="replyStatus" class="mt-2 d-none"></div>
+            <div class="input-group">
+              <input type="text" id="lookupOrderId" class="form-control form-control-kotty" placeholder="Enter Order ID...">
+              <button class="btn btn-kotty-primary" onclick="lookupAwb()">Lookup</button>
+            </div>
+            <div id="lookupResult" class="mt-2 d-none"></div>
+          </div>
+        </div>
+
+        <!-- Email Search -->
+        <div class="kotty-card">
+          <div class="card-header">
+            <i class="bi bi-envelope-open me-2"></i>Search Emails
+          </div>
+          <div class="card-body">
+            <div class="input-group mb-3">
+              <input type="text" id="emailSearch" class="form-control form-control-kotty" placeholder="Search emails (e.g., CCTV, order ID)..." value="cctv">
+              <button class="btn btn-kotty-primary" onclick="searchEmails()">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">From Date</label>
+                <input type="date" id="searchDateFrom" class="form-control form-control-kotty form-control-sm">
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">To Date</label>
+                <input type="date" id="searchDateTo" class="form-control form-control-kotty form-control-sm">
+              </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="quick-action-btn" onclick="loadInbox()">Load Inbox</button>
+              <button class="quick-action-btn" onclick="searchEmails('cctv')">CCTV Requests</button>
+              <button class="quick-action-btn btn-date" onclick="setDateToday()">Today</button>
+              <button class="quick-action-btn btn-date" onclick="setDateLastWeek()">Last 7 Days</button>
+              <button class="quick-action-btn btn-sync" onclick="syncFromSent()" title="Mark emails as replied based on sent folder">
+                <i class="bi bi-arrow-repeat me-1"></i>Sync Sent
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Placeholder when no email selected -->
-      <div id="noEmailSelected" class="text-center text-muted p-4">
-        <i class="bi bi-cursor fs-1"></i>
-        <p class="mt-2">Select an email to view details</p>
+      <!-- Middle Column: Email List -->
+      <div class="col-lg-4">
+        <div class="kotty-card h-100">
+          <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span><i class="bi bi-inbox me-2"></i>Emails</span>
+              <span id="emailCount" class="email-counter">0</span>
+            </div>
+            <!-- Bulk Actions -->
+            <div id="bulkActions" class="bulk-actions gap-2 flex-wrap">
+              <button class="btn btn-sm btn-kotty-outline" onclick="selectAllInitial()">
+                <i class="bi bi-check-all me-1"></i>Select Initial
+              </button>
+              <button class="btn btn-sm btn-success" onclick="startBulkReply()" id="bulkReplyBtn" disabled>
+                <i class="bi bi-send me-1"></i>Bulk Reply (<span id="selectedCount">0</span>)
+              </button>
+              <button class="btn btn-sm btn-kotty-outline" onclick="exportSelected()" id="exportBtn" disabled>
+                <i class="bi bi-download me-1"></i>Export
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">Clear</button>
+            </div>
+          </div>
+          <div class="card-body p-0" style="max-height: 65vh; overflow-y: auto;">
+            <div id="emailList">
+              <div class="text-center p-4" style="color: var(--text-muted);">
+                <i class="bi bi-envelope-slash fs-1"></i>
+                <p class="mt-2 mb-0">Search for emails to get started</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Email Details & Reply -->
+      <div class="col-lg-4">
+        <div id="emailDetails" class="d-none">
+          <!-- Email Header -->
+          <div class="kotty-card mb-3">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h6 id="detailSubject" class="mb-1" style="font-family: var(--font-body); font-weight: 600;">Subject</h6>
+                  <small id="detailFrom" class="text-muted">From</small>
+                </div>
+                <span id="detailClassification" class="badge classification-badge"></span>
+              </div>
+            </div>
+            <div class="card-body email-preview">
+              <div id="detailContent"></div>
+            </div>
+          </div>
+
+          <!-- Extracted Details -->
+          <div class="kotty-card mb-3">
+            <div class="card-header">
+              <i class="bi bi-info-circle me-2"></i>Extracted Details
+            </div>
+            <div class="card-body">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small text-muted">Order ID <span style="color: var(--terracotta);">(key for AWB lookup)</span></label>
+                  <input type="text" id="extractedOrderId" class="form-control form-control-kotty form-control-sm fw-bold" readonly>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small text-muted">Outbound AWB <span style="color: var(--success);">(from mapping)</span></label>
+                  <div class="input-group input-group-sm">
+                    <input type="text" id="extractedOutboundAwb" class="form-control form-control-kotty fw-bold">
+                    <button class="btn btn-kotty-outline" onclick="findVideosForEmail()" title="Search videos">
+                      <i class="bi bi-camera-video"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small text-muted">Return AWB <span style="color: var(--danger);">(not for video search)</span></label>
+                  <input type="text" id="extractedReturnAwb" class="form-control form-control-kotty form-control-sm text-muted" readonly>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small text-muted">Ticket</label>
+                  <input type="text" id="extractedTicket" class="form-control form-control-kotty form-control-sm" readonly>
+                </div>
+              </div>
+              <div id="mappingWarning" class="alert-kotty alert-warning mt-3 mb-0 py-2 d-none">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="mappingWarningText">Upload Excel mapping to lookup AWB from Order ID</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Found Videos -->
+          <div id="videoResults" class="kotty-card mb-3 d-none">
+            <div class="card-header">
+              <i class="bi bi-film me-2"></i>Found Videos
+            </div>
+            <div class="card-body" id="videoList"></div>
+          </div>
+
+          <!-- Reply Section -->
+          <div class="kotty-card">
+            <div class="card-header">
+              <i class="bi bi-reply me-2"></i>Send Reply
+            </div>
+            <div class="card-body">
+              <button id="sendReplyBtn" class="btn btn-success w-100" onclick="sendReply()" disabled>
+                <i class="bi bi-send me-2"></i>Send Reply with Video Links
+              </button>
+              <div id="replyStatus" class="mt-2 d-none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Placeholder when no email selected -->
+        <div id="noEmailSelected" class="text-center p-4" style="color: var(--text-muted);">
+          <i class="bi bi-cursor fs-1"></i>
+          <p class="mt-2 mb-0">Select an email to view details</p>
+        </div>
       </div>
     </div>
   </div>
-</div>
+</main>
 
 <!-- Bulk Reply Progress Modal -->
 <div class="modal fade" id="bulkReplyModal" tabindex="-1" data-bs-backdrop="static">
   <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Bulk Reply Progress</h5>
+    <div class="modal-content" style="border-radius: var(--radius-lg); border: none;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-light); background: var(--cream);">
+        <h5 class="modal-title" style="font-family: var(--font-display);"><i class="bi bi-send me-2" style="color: var(--terracotta);"></i>Bulk Reply Progress</h5>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="padding: 1.5rem;">
         <div id="bulkProgress">
           <div class="mb-3">
-            <div class="d-flex justify-content-between mb-1">
-              <span>Progress</span>
-              <span id="bulkProgressText">0 / 0</span>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">Progress</span>
+              <span id="bulkProgressText" class="text-muted">0 / 0</span>
             </div>
-            <div class="progress">
+            <div class="progress-kotty">
               <div id="bulkProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
             </div>
           </div>
           <div class="row g-2 text-center mb-3">
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatSuccess" class="fs-5 fw-bold text-success">0</div>
-                <small class="text-muted">Replied</small>
+              <div class="stat-box success">
+                <div id="bulkStatSuccess" class="stat-value">0</div>
+                <div class="stat-label">Replied</div>
               </div>
             </div>
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatNoOrderId" class="fs-5 fw-bold text-info">0</div>
-                <small class="text-muted">No Order</small>
+              <div class="stat-box info">
+                <div id="bulkStatNoOrderId" class="stat-value">0</div>
+                <div class="stat-label">No Order</div>
               </div>
             </div>
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatNoMapping" class="fs-5 fw-bold text-primary">0</div>
-                <small class="text-muted">No AWB</small>
+              <div class="stat-box primary">
+                <div id="bulkStatNoMapping" class="stat-value">0</div>
+                <div class="stat-label">No AWB</div>
               </div>
             </div>
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatNoVideo" class="fs-5 fw-bold text-warning">0</div>
-                <small class="text-muted">No Video</small>
+              <div class="stat-box warning">
+                <div id="bulkStatNoVideo" class="stat-value">0</div>
+                <div class="stat-label">No Video</div>
               </div>
             </div>
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatFailed" class="fs-5 fw-bold text-danger">0</div>
-                <small class="text-muted">Failed</small>
+              <div class="stat-box danger">
+                <div id="bulkStatFailed" class="stat-value">0</div>
+                <div class="stat-label">Failed</div>
               </div>
             </div>
             <div class="col-4 col-md-2">
-              <div class="border rounded p-2">
-                <div id="bulkStatSkipped" class="fs-5 fw-bold text-secondary">0</div>
-                <small class="text-muted">Skipped</small>
+              <div class="stat-box muted">
+                <div id="bulkStatSkipped" class="stat-value">0</div>
+                <div class="stat-label">Skipped</div>
               </div>
             </div>
           </div>
-          <div id="bulkReplyLog" class="border rounded p-2" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+          <div id="bulkReplyLog" class="reply-log">
             <div class="text-muted text-center">Waiting to start...</div>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="cancelBulkReply()" id="bulkCancelBtn">Cancel</button>
-        <button type="button" class="btn btn-primary d-none" onclick="closeBulkModal()" id="bulkDoneBtn">Done</button>
+      <div class="modal-footer" style="border-top: 1px solid var(--border-light); background: var(--cream);">
+        <button type="button" class="btn btn-outline-secondary" onclick="cancelBulkReply()" id="bulkCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-kotty-primary d-none" onclick="closeBulkModal()" id="bulkDoneBtn">Done</button>
       </div>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // Current state
 let currentEmail = null;
@@ -431,13 +701,13 @@ async function lookupAwb() {
 
     resultDiv.classList.remove('d-none');
     if (data.found) {
-      resultDiv.innerHTML = '<div class="alert alert-success mb-0 py-2">AWB: <strong>' + data.awb + '</strong></div>';
+      resultDiv.innerHTML = '<div class="alert-kotty alert-success mb-0 py-2">AWB: <strong>' + data.awb + '</strong></div>';
     } else {
-      resultDiv.innerHTML = '<div class="alert alert-warning mb-0 py-2">' + (data.error || 'No AWB found') + '</div>';
+      resultDiv.innerHTML = '<div class="alert-kotty alert-warning mb-0 py-2">' + (data.error || 'No AWB found') + '</div>';
     }
   } catch (err) {
     resultDiv.classList.remove('d-none');
-    resultDiv.innerHTML = '<div class="alert alert-danger mb-0 py-2">Lookup failed</div>';
+    resultDiv.innerHTML = '<div class="alert-kotty alert-danger mb-0 py-2">Lookup failed</div>';
   }
 }
 
@@ -499,7 +769,7 @@ async function searchEmails(query, append = false) {
   if (!append) {
     lastSearchQuery = searchQuery;
     lastSearchStart = 0;
-    document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+    document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border" style="color: var(--terracotta);"></div></div>';
   }
 
   try {
@@ -524,7 +794,7 @@ async function searchEmails(query, append = false) {
 
     renderEmailList(emailData, emails.length >= 200); // Show load more if we got full page
   } catch (err) {
-    document.getElementById('emailList').innerHTML = '<div class="alert alert-danger m-3">Search failed: ' + err.message + '</div>';
+    document.getElementById('emailList').innerHTML = '<div class="alert-kotty alert-danger m-3">Search failed: ' + err.message + '</div>';
   }
 }
 
@@ -535,7 +805,7 @@ async function loadMoreEmails() {
 }
 
 async function loadInbox() {
-  document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+  document.getElementById('emailList').innerHTML = '<div class="text-center p-4"><div class="spinner-border" style="color: var(--terracotta);"></div></div>';
 
   try {
     const res = await fetch('/mail-manager/emails/inbox');
@@ -543,7 +813,7 @@ async function loadInbox() {
 
     renderEmailList(data.emails || []);
   } catch (err) {
-    document.getElementById('emailList').innerHTML = '<div class="alert alert-danger m-3">Failed to load inbox: ' + err.message + '</div>';
+    document.getElementById('emailList').innerHTML = '<div class="alert-kotty alert-danger m-3">Failed to load inbox: ' + err.message + '</div>';
   }
 }
 
@@ -558,7 +828,7 @@ function renderEmailList(emails, showLoadMore = false) {
   document.getElementById('bulkActions').classList.toggle('show', emails.length > 0);
 
   if (!emails.length) {
-    list.innerHTML = '<div class="text-center text-muted p-4"><i class="bi bi-inbox fs-1"></i><p class="mt-2">No emails found</p></div>';
+    list.innerHTML = '<div class="text-center p-4" style="color: var(--text-muted);"><i class="bi bi-inbox fs-1"></i><p class="mt-2 mb-0">No emails found</p></div>';
     return;
   }
 
@@ -580,7 +850,7 @@ function renderEmailList(emails, showLoadMore = false) {
       <div class="flex-grow-1 overflow-hidden" onclick="loadEmailDetails('${email.messageId}', this.parentElement, '${escapeHtml(email.subject || '')}', '${escapeHtml(email.fromAddress || email.sender || '')}', '${escapeHtml(email.toAddress || '')}')">
         <div class="d-flex justify-content-between align-items-start">
           <div class="flex-grow-1 overflow-hidden">
-            <div class="fw-semibold text-truncate">${escapeHtml(email.subject || '(No Subject)')}</div>
+            <div class="fw-semibold text-truncate" style="color: var(--text-primary);">${escapeHtml(email.subject || '(No Subject)')}</div>
             <small class="text-muted">${escapeHtml(email.fromAddress || email.sender || '')}</small>
           </div>
           <span class="badge classification-badge badge-${badgeClass}">${badgeText}${repliedInfo}</span>
@@ -594,7 +864,7 @@ function renderEmailList(emails, showLoadMore = false) {
   if (showLoadMore) {
     html += `
       <div class="text-center p-3">
-        <button class="btn btn-outline-primary btn-sm" onclick="loadMoreEmails()">
+        <button class="btn btn-kotty-outline btn-sm" onclick="loadMoreEmails()">
           <i class="bi bi-arrow-down-circle me-1"></i>Load More Emails
         </button>
       </div>
@@ -686,7 +956,7 @@ async function findVideosForEmail() {
   const videoList = document.getElementById('videoList');
 
   videoResults.classList.remove('d-none');
-  videoList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> Searching S3...</div>';
+  videoList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" style="color: var(--terracotta);"></div> Searching S3...</div>';
 
   try {
     const res = await fetch('/mail-manager/find-videos', {
@@ -713,10 +983,10 @@ async function findVideosForEmail() {
           <div class="card-body py-2">
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <div class="fw-semibold">${escapeHtml(v.filename)}</div>
+                <div class="fw-semibold" style="color: var(--text-primary);">${escapeHtml(v.filename)}</div>
                 <small class="text-muted">${formatSize(v.size)}</small>
               </div>
-              <a href="${v.url}" target="_blank" class="btn btn-sm btn-outline-primary">
+              <a href="${v.url}" target="_blank" class="btn btn-sm btn-kotty-outline">
                 <i class="bi bi-download"></i>
               </a>
             </div>
@@ -729,11 +999,11 @@ async function findVideosForEmail() {
       showToast('Found ' + foundVideos.length + ' video(s) for AWB ' + data.awb, 'success');
     } else {
       foundVideos = [];
-      videoList.innerHTML = '<div class="alert alert-warning mb-0">' + (data.error || 'No videos found') + '</div>';
+      videoList.innerHTML = '<div class="alert-kotty alert-warning mb-0">' + (data.error || 'No videos found') + '</div>';
       document.getElementById('sendReplyBtn').disabled = true;
     }
   } catch (err) {
-    videoList.innerHTML = '<div class="alert alert-danger mb-0">Search failed: ' + err.message + '</div>';
+    videoList.innerHTML = '<div class="alert-kotty alert-danger mb-0">Search failed: ' + err.message + '</div>';
   }
 }
 
@@ -783,16 +1053,16 @@ async function sendReply() {
 
     status.classList.remove('d-none');
     if (data.success) {
-      status.innerHTML = '<div class="alert alert-success mb-0 py-2"><i class="bi bi-check-circle me-2"></i>Reply sent successfully! (Order: ' + escapeHtml(data.orderId || orderId) + ', AWB: ' + escapeHtml(data.awb || outboundAwb) + ')</div>';
+      status.innerHTML = '<div class="alert-kotty alert-success mb-0 py-2"><i class="bi bi-check-circle me-2"></i>Reply sent successfully! (Order: ' + escapeHtml(data.orderId || orderId) + ', AWB: ' + escapeHtml(data.awb || outboundAwb) + ')</div>';
       btn.innerHTML = '<i class="bi bi-check me-2"></i>Sent';
     } else {
-      status.innerHTML = '<div class="alert alert-danger mb-0 py-2">' + (data.error || 'Failed to send') + '</div>';
+      status.innerHTML = '<div class="alert-kotty alert-danger mb-0 py-2">' + (data.error || 'Failed to send') + '</div>';
       btn.innerHTML = '<i class="bi bi-send me-2"></i>Send Reply with Video Links';
       btn.disabled = false;
     }
   } catch (err) {
     status.classList.remove('d-none');
-    status.innerHTML = '<div class="alert alert-danger mb-0 py-2">Error: ' + err.message + '</div>';
+    status.innerHTML = '<div class="alert-kotty alert-danger mb-0 py-2">Error: ' + err.message + '</div>';
     btn.innerHTML = '<i class="bi bi-send me-2"></i>Send Reply with Video Links';
     btn.disabled = false;
   } finally {
@@ -815,11 +1085,13 @@ function formatSize(bytes) {
 }
 
 function showToast(message, type = 'info') {
-  // Simple alert-based toast (can be replaced with Bootstrap toast)
+  // Simple alert-based toast
   const alertDiv = document.createElement('div');
-  alertDiv.className = 'alert alert-' + type + ' alert-dismissible fade show position-fixed';
-  alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
-  alertDiv.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  const bgColor = type === 'success' ? 'var(--success-light)' : type === 'danger' ? 'var(--danger-light)' : type === 'warning' ? 'var(--warning-light)' : 'var(--info-light)';
+  const textColor = type === 'success' ? 'var(--success)' : type === 'danger' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--info)';
+  alertDiv.className = 'alert alert-dismissible fade show position-fixed';
+  alertDiv.style.cssText = `top: 80px; right: 20px; z-index: 9999; min-width: 250px; border-radius: var(--radius-md); border: none; background: ${bgColor}; color: ${textColor};`;
+  alertDiv.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert" style="filter: brightness(0.5);"></button>';
   document.body.appendChild(alertDiv);
   setTimeout(() => alertDiv.remove(), 4000);
 }
@@ -983,7 +1255,7 @@ async function startBulkReply() {
     if (data.hasMappingLoaded) {
       statusMsg += ` | Mapping: ${data.mappingCount} entries`;
     } else {
-      statusMsg += ` | <span class="text-warning">No mapping loaded!</span>`;
+      statusMsg += ` | <span style="color: var(--warning);">No mapping loaded!</span>`;
     }
     logDiv.innerHTML = `<div>${statusMsg}</div>`;
     document.getElementById('bulkStatSkipped').textContent = data.alreadyReplied;
@@ -999,7 +1271,7 @@ async function startBulkReply() {
     const data = JSON.parse(e.data);
     const successCount = parseInt(document.getElementById('bulkStatSuccess').textContent) + 1;
     document.getElementById('bulkStatSuccess').textContent = successCount;
-    logDiv.innerHTML += `<div class="text-success"><i class="bi bi-check-circle me-1"></i>${escapeHtml(data.orderId || '')} → ${escapeHtml(data.awb)} - Replied</div>`;
+    logDiv.innerHTML += `<div style="color: var(--success);"><i class="bi bi-check-circle me-1"></i>${escapeHtml(data.orderId || '')} → ${escapeHtml(data.awb)} - Replied</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
   });
 
@@ -1007,7 +1279,7 @@ async function startBulkReply() {
     const data = JSON.parse(e.data);
     const failedCount = parseInt(document.getElementById('bulkStatFailed').textContent) + 1;
     document.getElementById('bulkStatFailed').textContent = failedCount;
-    logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-x-circle me-1"></i>Failed: ${escapeHtml(data.error || 'Unknown error')}</div>`;
+    logDiv.innerHTML += `<div style="color: var(--danger);"><i class="bi bi-x-circle me-1"></i>Failed: ${escapeHtml(data.error || 'Unknown error')}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
   });
 
@@ -1047,7 +1319,7 @@ async function startBulkReply() {
       const data = JSON.parse(e.data);
       errMsg = data.message || errMsg;
     } catch {}
-    logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${escapeHtml(errMsg)}</div>`;
+    logDiv.innerHTML += `<div style="color: var(--danger);"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${escapeHtml(errMsg)}</div>`;
     logDiv.scrollTop = logDiv.scrollHeight;
   });
 
@@ -1055,7 +1327,7 @@ async function startBulkReply() {
     if (bulkEventSource) {
       bulkEventSource.close();
       bulkEventSource = null;
-      logDiv.innerHTML += `<div class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Connection lost</div>`;
+      logDiv.innerHTML += `<div style="color: var(--danger);"><i class="bi bi-exclamation-triangle me-1"></i>Connection lost</div>`;
       document.getElementById('bulkCancelBtn').classList.add('d-none');
       document.getElementById('bulkDoneBtn').classList.remove('d-none');
     }
@@ -1066,7 +1338,7 @@ function cancelBulkReply() {
   if (bulkEventSource) {
     bulkEventSource.close();
     bulkEventSource = null;
-    document.getElementById('bulkReplyLog').innerHTML += '<div class="text-warning"><i class="bi bi-x-circle me-1"></i>Cancelled by user</div>';
+    document.getElementById('bulkReplyLog').innerHTML += '<div style="color: var(--warning);"><i class="bi bi-x-circle me-1"></i>Cancelled by user</div>';
     document.getElementById('bulkCancelBtn').classList.add('d-none');
     document.getElementById('bulkDoneBtn').classList.remove('d-none');
   }
@@ -1079,5 +1351,5 @@ function closeBulkModal() {
   clearSelection();
 }
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

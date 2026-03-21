@@ -1,40 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Supervisors</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Supervisors</span>
-    <div class="ms-auto">
-      <a href="/operator/dashboard" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+<%- include('partials/header', { pageTitle: 'Supervisors' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1200px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/operator/dashboard">Dashboard</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span>Supervisors</span>
+      </div>
+      <h1 class="page-title">Supervisors</h1>
+      <p class="page-subtitle">Manage and view all supervisors and their assigned employees</p>
     </div>
+
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
+
+    <!-- Supervisors Table Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-people-fill text-terracotta me-2"></i>
+          All Supervisors
+        </h2>
+        <span class="badge badge-neutral">
+          <%= supervisors.length %> supervisor<%= supervisors.length !== 1 ? 's' : '' %>
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <% if (supervisors.length === 0) { %>
+          <!-- Empty State -->
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-people" style="font-size: 48px;"></i>
+            </div>
+            <h3 class="empty-state-title">No Supervisors Found</h3>
+            <p class="empty-state-text">There are no supervisors assigned yet. Supervisors will appear here once they are added to the system.</p>
+          </div>
+        <% } else { %>
+          <div class="table-container" style="border: none; border-radius: 0;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Supervisor</th>
+                  <th style="width: 180px;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% supervisors.forEach(function(s, index){ %>
+                <tr>
+                  <td>
+                    <span class="text-muted"><%= index + 1 %></span>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="user-avatar" style="background: var(--terracotta); color: white; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 500;">
+                        <%= s.name ? s.name.charAt(0).toUpperCase() : 'S' %>
+                      </div>
+                      <div>
+                        <div class="fw-semibold" style="color: var(--text-primary);"><%= s.name %></div>
+                        <div class="text-muted" style="font-size: 0.875rem;">
+                          <i class="bi bi-person-badge me-1"></i><%= s.username %>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <a href="/operator/supervisors/<%= s.id %>/employees" class="btn btn-primary btn-sm">
+                      <i class="bi bi-people me-1"></i>View Employees
+                    </a>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Quick Stats (Optional enhancement) -->
+    <div class="row mt-4">
+      <div class="col-md-4">
+        <div class="stat-card">
+          <div class="stat-label">Total Supervisors</div>
+          <div class="stat-value"><%= supervisors.length %></div>
+        </div>
+      </div>
+    </div>
+
   </div>
-</nav>
-<div class="container my-4">
-  <%- include('partials/flashMessages') %>
-  <table class="table table-bordered">
-    <thead>
-      <tr><th>Name</th><th>Action</th></tr>
-    </thead>
-    <tbody>
-      <% supervisors.forEach(function(s){ %>
-      <tr>
-        <td><%= s.name %> (<%= s.username %>)</td>
-        <td><a href="/operator/supervisors/<%= s.id %>/employees" class="btn btn-sm btn-primary">View Employees</a></td>
-      </tr>
-      <% }) %>
-    </tbody>
-  </table>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</main>
+
+<%- include('partials/footer') %>

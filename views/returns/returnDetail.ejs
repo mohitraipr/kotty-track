@@ -1,448 +1,509 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= title %> - Kotty Track</title>
+<%- include('../partials/header', { pageTitle: 'Return Details' }) %>
+<%- include('../partials/navbar', { user: user, dashboardUrl: '/returns/dashboard' }) %>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Return Detail Page Styles */
+  .return-page-container {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 28px;
+    margin-top: var(--navbar-height);
+    min-height: calc(100vh - var(--navbar-height));
+  }
 
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f8f9fa;
-      padding-top: 70px;
+  .back-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: var(--text-sm);
+    transition: color var(--transition-fast);
+  }
+
+  .back-link:hover {
+    color: var(--terracotta);
+    text-decoration: none;
+  }
+
+  .return-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .return-id {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .badge-status {
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .badge-pending_review { background: var(--warning-light); color: var(--warning); }
+  .badge-approved { background: var(--info-light); color: var(--info); }
+  .badge-pickup_scheduled { background: #e0e7ff; color: #4338ca; }
+  .badge-picked_up { background: #c7d2fe; color: #4338ca; }
+  .badge-in_transit { background: var(--info-light); color: var(--info); }
+  .badge-received { background: var(--success-light); color: var(--success); }
+  .badge-refund_pending { background: var(--warning-light); color: var(--warning); }
+  .badge-refund_processing { background: var(--warning-light); color: var(--warning); }
+  .badge-refunded { background: var(--success-light); color: var(--success); }
+  .badge-rejected { background: var(--danger-light); color: var(--danger); }
+  .badge-cancelled { background: var(--gray-200); color: var(--text-secondary); }
+
+  .badge-prepaid { background: var(--success-light); color: var(--success); }
+  .badge-cod { background: var(--warning-light); color: var(--warning); }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+  }
+
+  .info-item label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .info-item .value {
+    font-size: var(--text-base);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .timeline {
+    position: relative;
+    padding-left: 30px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-light);
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 20px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--terracotta);
+    border: 2px solid var(--bg-card);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .timeline-item.completed::before { background: var(--success); }
+  .timeline-item.pending::before { background: var(--border-light); }
+
+  .timeline-date {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+
+  .timeline-action {
+    font-weight: 500;
+    color: var(--text-primary);
+    text-transform: capitalize;
+  }
+
+  .timeline-actor {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .items-table th {
+    text-align: left;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .items-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .items-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .items-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .bank-details-box {
+    background: var(--gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+
+  .refund-form {
+    background: var(--success-light);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+  }
+
+  .eligibility-info {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+  }
+
+  .eligibility-info.eligible {
+    background: var(--success-light);
+    border: 1px solid var(--success);
+    color: var(--success);
+  }
+
+  .eligibility-info.not-eligible {
+    background: var(--danger-light);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+  }
+
+  /* Modal Customizations */
+  .modal-content {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .modal-header {
+    border-bottom: 1px solid var(--border-light);
+    padding: 20px 24px;
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .modal-footer {
+    border-top: 1px solid var(--border-light);
+    padding: 16px 24px;
+    background: var(--gray-50);
+  }
+
+  .order-result {
+    padding: 14px 18px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    background: var(--bg-card);
+  }
+
+  .order-result:hover {
+    border-color: var(--terracotta);
+    background: var(--terracotta-bg);
+    transform: translateY(-1px);
+  }
+
+  /* Dropdown Styling */
+  .dropdown-menu {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+  }
+
+  .dropdown-item {
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast);
+  }
+
+  .dropdown-item:hover {
+    background: var(--gray-100);
+  }
+
+  .dropdown-item.text-danger:hover {
+    background: var(--danger-light);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .return-page-container {
+      padding: 20px 16px;
     }
 
-    .top-nav {
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 16px 24px;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .nav-brand {
-      font-size: 20px;
-      font-weight: 600;
-      color: #1e293b;
-      text-decoration: none;
-    }
-
-    .container-main {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .back-link {
-      color: #64748b;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
-      font-size: 14px;
-    }
-
-    .back-link:hover { color: #2563eb; }
-
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 24px;
-    }
-
-    .return-id {
-      font-size: 28px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .card {
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    }
-
-    .card-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #e2e8f0;
-      font-weight: 600;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .card-body { padding: 20px; }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 20px;
-    }
-
-    .info-item label {
-      font-size: 12px;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .info-item .value {
-      font-size: 15px;
-      font-weight: 500;
-      color: #1e293b;
-    }
-
-    .badge-status {
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .badge-pending_review { background: #fef3c7; color: #92400e; }
-    .badge-approved { background: #dbeafe; color: #1d4ed8; }
-    .badge-pickup_scheduled { background: #e0e7ff; color: #4338ca; }
-    .badge-picked_up { background: #c7d2fe; color: #4338ca; }
-    .badge-in_transit { background: #bfdbfe; color: #1e40af; }
-    .badge-received { background: #d1fae5; color: #065f46; }
-    .badge-refund_pending { background: #fef3c7; color: #92400e; }
-    .badge-refunded { background: #dcfce7; color: #166534; }
-    .badge-rejected { background: #fee2e2; color: #991b1b; }
-
-    .badge-prepaid { background: #dcfce7; color: #166534; }
-    .badge-cod { background: #fef3c7; color: #92400e; }
-
-    .timeline {
-      position: relative;
-      padding-left: 30px;
-    }
-
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 10px;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: #e2e8f0;
-    }
-
-    .timeline-item {
-      position: relative;
-      padding-bottom: 20px;
-    }
-
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: -24px;
-      top: 4px;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #2563eb;
-      border: 2px solid white;
-    }
-
-    .timeline-item.completed::before { background: #22c55e; }
-    .timeline-item.pending::before { background: #e2e8f0; }
-
-    .timeline-date {
-      font-size: 12px;
-      color: #64748b;
-    }
-
-    .timeline-action {
-      font-weight: 500;
-      color: #1e293b;
-    }
-
-    .timeline-actor {
-      font-size: 13px;
-      color: #64748b;
-    }
-
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .items-table th {
-      text-align: left;
-      padding: 12px;
-      background: #f8fafc;
-      font-size: 12px;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-
-    .items-table td {
-      padding: 12px;
-      border-bottom: 1px solid #e2e8f0;
+    .return-header {
+      flex-direction: column;
     }
 
     .action-buttons {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
+      width: 100%;
     }
 
-    .spin {
-      animation: spin 1s linear infinite;
+    .action-buttons .btn {
+      flex: 1;
+      min-width: 120px;
     }
 
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+    .return-id {
+      font-size: var(--text-2xl);
     }
+  }
+</style>
 
-    .bank-details-box {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 16px;
-    }
+<div class="return-page-container">
+  <a href="/returns/dashboard" class="back-link">
+    <i class="bi bi-arrow-left"></i> Back to Returns Dashboard
+  </a>
 
-    .refund-form {
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 8px;
-      padding: 20px;
-    }
-
-    .eligibility-info {
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-    }
-
-    .eligibility-info.eligible {
-      background: #dcfce7;
-      border: 1px solid #bbf7d0;
-      color: #166534;
-    }
-
-    .eligibility-info.not-eligible {
-      background: #fee2e2;
-      border: 1px solid #fecaca;
-      color: #991b1b;
-    }
-  </style>
-</head>
-<body>
-  <nav class="top-nav">
-    <a href="/operator/dashboard" class="nav-brand">
-      <i class="bi bi-box-seam me-2"></i>Kotty Track
-    </a>
+  <div class="return-header">
     <div>
-      <a href="/returns/dashboard" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i> Back to Returns
-      </a>
+      <h1 class="return-id"><%= returnData.return_id %></h1>
+      <span class="badge-status badge-<%= returnData.status %>">
+        <%= (returnData.status || '').replace(/_/g, ' ').toUpperCase() %>
+      </span>
     </div>
-  </nav>
+    <div class="action-buttons">
+      <% if (returnData.status === 'pending_review') { %>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#quickApproveModal">
+          <i class="bi bi-lightning me-1"></i> Quick Approve
+        </button>
+        <button class="btn btn-outline-danger" onclick="rejectReturn()">
+          <i class="bi bi-x-lg me-1"></i> Reject
+        </button>
+      <% } %>
+      <% if (returnData.status === 'approved') { %>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAwbModal">
+          <i class="bi bi-truck me-1"></i> Add AWB & Schedule
+        </button>
+        <button class="btn btn-outline" onclick="quickTransition('picked_up')">
+          <i class="bi bi-fast-forward me-1"></i> Skip to Picked
+        </button>
+      <% } %>
+      <% if (returnData.status === 'pickup_scheduled') { %>
+        <button class="btn btn-primary" onclick="quickTransition('picked_up')">
+          <i class="bi bi-box-seam me-1"></i> Mark Picked Up
+        </button>
+        <button class="btn btn-outline" onclick="quickTransition('received')">
+          <i class="bi bi-fast-forward me-1"></i> Skip to Received
+        </button>
+      <% } %>
+      <% if (['picked_up', 'in_transit'].includes(returnData.status)) { %>
+        <button class="btn btn-primary" onclick="quickTransition('received')">
+          <i class="bi bi-inbox me-1"></i> Mark Received
+        </button>
+      <% } %>
+      <% if (returnData.status === 'refund_pending') { %>
+        <% if (returnData.order_type === 'cod') { %>
+        <button class="btn btn-secondary" style="background: var(--warning); border-color: var(--warning); color: white;" onclick="sendBankLink()">
+          <i class="bi bi-link me-1"></i> Send Bank Link
+        </button>
+        <% } %>
+      <% } %>
 
-  <div class="container-main">
-    <a href="/returns/dashboard" class="back-link">
-      <i class="bi bi-arrow-left"></i> Back to Returns Dashboard
-    </a>
-
-    <div class="page-header">
-      <div>
-        <h1 class="return-id"><%= returnData.return_id %></h1>
-        <span class="badge-status badge-<%= returnData.status %>">
-          <%= (returnData.status || '').replace(/_/g, ' ').toUpperCase() %>
-        </span>
-      </div>
-      <div class="action-buttons">
-        <% if (returnData.status === 'pending_review') { %>
-          <!-- Quick Approve with AWB option -->
-          <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#quickApproveModal">
-            <i class="bi bi-lightning me-1"></i> Quick Approve
-          </button>
-          <button class="btn btn-outline-danger" onclick="rejectReturn()">
-            <i class="bi bi-x-lg me-1"></i> Reject
-          </button>
-        <% } %>
-        <% if (returnData.status === 'approved') { %>
-          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAwbModal">
-            <i class="bi bi-truck me-1"></i> Add AWB & Schedule
-          </button>
-          <button class="btn btn-outline-primary" onclick="quickTransition('picked_up')">
-            <i class="bi bi-fast-forward me-1"></i> Skip to Picked
-          </button>
-        <% } %>
-        <% if (returnData.status === 'pickup_scheduled') { %>
-          <button class="btn btn-primary" onclick="quickTransition('picked_up')">
-            <i class="bi bi-box-seam me-1"></i> Mark Picked Up
-          </button>
-          <button class="btn btn-outline-primary" onclick="quickTransition('received')">
-            <i class="bi bi-fast-forward me-1"></i> Skip to Received
-          </button>
-        <% } %>
-        <% if (['picked_up', 'in_transit'].includes(returnData.status)) { %>
-          <button class="btn btn-primary" onclick="quickTransition('received')">
-            <i class="bi bi-inbox me-1"></i> Mark Received
-          </button>
-        <% } %>
-        <% if (returnData.status === 'refund_pending') { %>
-          <% if (returnData.order_type === 'cod') { %>
-          <button class="btn btn-warning" onclick="sendBankLink()">
-            <i class="bi bi-link me-1"></i> Send Bank Link
-          </button>
+      <!-- Quick Actions dropdown for other transitions -->
+      <% if (!['refunded', 'cancelled', 'rejected', 'pending_review'].includes(returnData.status)) { %>
+      <div class="dropdown d-inline-block">
+        <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          <i class="bi bi-three-dots me-1"></i> More
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <% if (returnData.status === 'approved') { %>
+          <li><a class="dropdown-item" href="#" onclick="quickTransition('pickup_scheduled'); return false;"><i class="bi bi-truck me-2 text-terracotta"></i>Mark Pickup Scheduled</a></li>
           <% } %>
-        <% } %>
-
-        <!-- Quick Actions dropdown for other transitions -->
-        <% if (!['refunded', 'cancelled', 'rejected', 'pending_review'].includes(returnData.status)) { %>
-        <div class="dropdown d-inline-block">
-          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            <i class="bi bi-three-dots me-1"></i> More
-          </button>
-          <ul class="dropdown-menu">
-            <% if (returnData.status === 'approved') { %>
-            <li><a class="dropdown-item" href="#" onclick="quickTransition('pickup_scheduled'); return false;"><i class="bi bi-truck me-2"></i>Mark Pickup Scheduled</a></li>
-            <% } %>
-            <% if (['pickup_scheduled', 'picked_up'].includes(returnData.status)) { %>
-            <li><a class="dropdown-item" href="#" onclick="quickTransition('in_transit'); return false;"><i class="bi bi-arrow-right me-2"></i>Mark In Transit</a></li>
-            <% } %>
-            <% if (returnData.status === 'received' || returnData.status === 'refund_pending') { %>
-            <li><a class="dropdown-item" href="#" onclick="quickTransition('refund_processing'); return false;"><i class="bi bi-cash me-2"></i>Mark Processing</a></li>
-            <% } %>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-danger" href="#" onclick="quickTransition('cancelled'); return false;"><i class="bi bi-x-circle me-2"></i>Cancel Return</a></li>
-          </ul>
-        </div>
-        <% } %>
+          <% if (['pickup_scheduled', 'picked_up'].includes(returnData.status)) { %>
+          <li><a class="dropdown-item" href="#" onclick="quickTransition('in_transit'); return false;"><i class="bi bi-arrow-right me-2 text-terracotta"></i>Mark In Transit</a></li>
+          <% } %>
+          <% if (returnData.status === 'received' || returnData.status === 'refund_pending') { %>
+          <li><a class="dropdown-item" href="#" onclick="quickTransition('refund_processing'); return false;"><i class="bi bi-cash me-2 text-terracotta"></i>Mark Processing</a></li>
+          <% } %>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-danger" href="#" onclick="quickTransition('cancelled'); return false;"><i class="bi bi-x-circle me-2"></i>Cancel Return</a></li>
+        </ul>
       </div>
+      <% } %>
     </div>
+  </div>
 
-    <div class="row">
-      <div class="col-lg-8">
-        <!-- Order Info -->
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-bag me-2"></i>Order Information</span>
-            <div>
-              <% if (!returnData.shopify_order_id) { %>
-              <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#linkOrderModal">
-                <i class="bi bi-link-45deg me-1"></i> Link Order
-              </button>
-              <% } %>
-              <span class="badge-status badge-<%= returnData.order_type %>">
-                <%= (returnData.order_type || '').toUpperCase() %>
-              </span>
-            </div>
-          </div>
-          <div class="card-body">
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <!-- Order Info -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-bag me-2 text-terracotta"></i>Order Information</span>
+          <div class="d-flex align-items-center gap-2">
             <% if (!returnData.shopify_order_id) { %>
-            <div class="alert alert-warning mb-3">
-              <i class="bi bi-exclamation-triangle me-2"></i>
-              No Shopify order linked. Click "Link Order" to connect this return to a Shopify order.
-            </div>
+            <button class="btn btn-sm btn-outline" data-bs-toggle="modal" data-bs-target="#linkOrderModal">
+              <i class="bi bi-link-45deg me-1"></i> Link Order
+            </button>
             <% } %>
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Shopify Order</label>
-                <div class="value"><%= returnData.shopify_order_name || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Customer Name</label>
-                <div class="value"><%= returnData.customer_name || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Phone</label>
-                <div class="value"><%= returnData.customer_phone || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Email</label>
-                <div class="value"><%= returnData.customer_email || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Order Date</label>
-                <div class="value"><%= formatDate(returnData.order_date) %></div>
-              </div>
-              <div class="info-item">
-                <label>Delivery Date</label>
-                <div class="value"><%= formatDate(returnData.delivery_date) %></div>
-              </div>
-              <div class="info-item">
-                <label>Original Total</label>
-                <div class="value"><%= formatCurrency(returnData.original_total) %></div>
-              </div>
-              <div class="info-item">
-                <label>Refund Amount</label>
-                <div class="value" style="color: #22c55e; font-size: 18px;">
-                  <%= formatCurrency(returnData.refund_amount) %>
-                </div>
+            <span class="badge-status badge-<%= returnData.order_type %>">
+              <%= (returnData.order_type || '').toUpperCase() %>
+            </span>
+          </div>
+        </div>
+        <div class="card-body">
+          <% if (!returnData.shopify_order_id) { %>
+          <div class="alert alert-warning mb-4">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            No Shopify order linked. Click "Link Order" to connect this return to a Shopify order.
+          </div>
+          <% } %>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Shopify Order</label>
+              <div class="value"><%= returnData.shopify_order_name || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Customer Name</label>
+              <div class="value"><%= returnData.customer_name || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Phone</label>
+              <div class="value"><%= returnData.customer_phone || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Email</label>
+              <div class="value"><%= returnData.customer_email || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Order Date</label>
+              <div class="value"><%= formatDate(returnData.order_date) %></div>
+            </div>
+            <div class="info-item">
+              <label>Delivery Date</label>
+              <div class="value"><%= formatDate(returnData.delivery_date) %></div>
+            </div>
+            <div class="info-item">
+              <label>Original Total</label>
+              <div class="value"><%= formatCurrency(returnData.original_total) %></div>
+            </div>
+            <div class="info-item">
+              <label>Refund Amount</label>
+              <div class="value" style="color: var(--success); font-size: var(--text-lg);">
+                <%= formatCurrency(returnData.refund_amount) %>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Return Details -->
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-arrow-return-left me-2"></i>Return Details</span>
-          </div>
-          <div class="card-body">
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Return Type</label>
-                <div class="value"><%= (returnData.return_type || '').replace(/_/g, ' ') %></div>
-              </div>
-              <div class="info-item">
-                <label>Reason</label>
-                <div class="value"><%= returnData.return_reason || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>AWB Number</label>
-                <div class="value"><%= returnData.awb_number || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Courier</label>
-                <div class="value"><%= returnData.courier_name || '-' %></div>
-              </div>
-              <div class="info-item">
-                <label>Requested On</label>
-                <div class="value"><%= formatDate(returnData.requested_at, 'long') %></div>
-              </div>
-              <div class="info-item">
-                <label>Approved On</label>
-                <div class="value"><%= formatDate(returnData.approved_at, 'long') %></div>
-              </div>
-            </div>
-            <% if (returnData.customer_notes) { %>
-            <div class="mt-3">
-              <label class="form-label text-muted small">Customer Notes</label>
-              <div class="p-3 bg-light rounded"><%= returnData.customer_notes %></div>
-            </div>
-            <% } %>
-          </div>
+      <!-- Return Details -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-arrow-return-left me-2 text-terracotta"></i>Return Details</span>
         </div>
-
-        <!-- Return Items -->
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-box me-2"></i>Return Items (<%= items.length %>)</span>
+        <div class="card-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Return Type</label>
+              <div class="value" style="text-transform: capitalize;"><%= (returnData.return_type || '').replace(/_/g, ' ') %></div>
+            </div>
+            <div class="info-item">
+              <label>Reason</label>
+              <div class="value"><%= returnData.return_reason || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>AWB Number</label>
+              <div class="value"><%= returnData.awb_number || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Courier</label>
+              <div class="value"><%= returnData.courier_name || '-' %></div>
+            </div>
+            <div class="info-item">
+              <label>Requested On</label>
+              <div class="value"><%= formatDate(returnData.requested_at, 'long') %></div>
+            </div>
+            <div class="info-item">
+              <label>Approved On</label>
+              <div class="value"><%= formatDate(returnData.approved_at, 'long') %></div>
+            </div>
           </div>
-          <div class="card-body p-0">
+          <% if (returnData.customer_notes) { %>
+          <div class="mt-4">
+            <label class="form-label text-secondary" style="font-size: var(--text-sm);">Customer Notes</label>
+            <div class="p-3 rounded-lg" style="background: var(--gray-50); border: 1px solid var(--border-light);"><%= returnData.customer_notes %></div>
+          </div>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- Return Items -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-box me-2 text-terracotta"></i>Return Items (<%= items.length %>)</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
             <table class="items-table">
               <thead>
                 <tr>
@@ -461,664 +522,655 @@
                     <div class="fw-medium"><%= item.product_name || '-' %></div>
                     <small class="text-muted"><%= item.variant_title || '' %></small>
                   </td>
-                  <td><%= item.sku %></td>
+                  <td><code style="background: var(--gray-100); padding: 2px 6px; border-radius: var(--radius-sm); font-size: var(--text-xs);"><%= item.sku %></code></td>
                   <td><%= item.size || '-' %></td>
-                  <td><%= item.return_quantity %> / <%= item.ordered_quantity %></td>
+                  <td><span class="text-terracotta fw-medium"><%= item.return_quantity %></span> / <%= item.ordered_quantity %></td>
                   <td><%= formatCurrency(item.unit_price) %></td>
-                  <td><%= formatCurrency(item.refund_amount || (item.unit_price * item.return_quantity)) %></td>
+                  <td class="fw-medium" style="color: var(--success);"><%= formatCurrency(item.refund_amount || (item.unit_price * item.return_quantity)) %></td>
                 </tr>
                 <% }) %>
               </tbody>
             </table>
           </div>
         </div>
-
-        <!-- Refund Processing (if status is refund_pending) -->
-        <% if (returnData.status === 'refund_pending' || returnData.status === 'refund_processing') { %>
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-cash me-2"></i>Process Refund</span>
-          </div>
-          <div class="card-body">
-            <div class="eligibility-info <%= refundEligibility.eligible ? 'eligible' : 'not-eligible' %>">
-              <i class="bi <%= refundEligibility.eligible ? 'bi-check-circle' : 'bi-x-circle' %> me-2"></i>
-              <%= refundEligibility.reason %>
-            </div>
-
-            <% if (refundEligibility.eligible) { %>
-            <form id="refundForm">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">Refund Method</label>
-                  <select class="form-select" name="refund_method" id="refundMethod" required>
-                    <% if (returnData.order_type === 'prepaid') { %>
-                    <option value="shopify_refund">Shopify Refund (Original Payment Method)</option>
-                    <% } else { %>
-                    <option value="upi">UPI Transfer</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <% } %>
-                  </select>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Amount</label>
-                  <input type="text" class="form-control" value="<%= formatCurrency(returnData.refund_amount) %>" disabled>
-                </div>
-
-                <% if (returnData.order_type === 'cod') { %>
-                <div class="col-md-6">
-                  <label class="form-label">Transaction Reference (UPI Ref / NEFT ID)</label>
-                  <input type="text" class="form-control" name="transaction_reference" placeholder="Enter UPI reference number">
-                </div>
-                <% } %>
-
-                <div class="col-12">
-                  <label class="form-label">Notes (Optional)</label>
-                  <textarea class="form-control" name="notes" rows="2" placeholder="Any notes about this refund"></textarea>
-                </div>
-
-                <div class="col-12">
-                  <button type="submit" class="btn btn-success btn-lg">
-                    <i class="bi bi-check-lg me-2"></i>Process Refund
-                  </button>
-                </div>
-              </div>
-            </form>
-            <% } %>
-          </div>
-        </div>
-        <% } %>
-
-        <!-- Bank Details (if COD and available) -->
-        <% if (returnData.order_type === 'cod' && bankDetails) { %>
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-bank me-2"></i>Bank Details</span>
-            <% if (bankDetails.submitted_at) { %>
-            <span class="badge bg-success">Submitted</span>
-            <% } else { %>
-            <span class="badge bg-warning">Pending</span>
-            <% } %>
-          </div>
-          <div class="card-body">
-            <% if (bankDetails.submitted_at) { %>
-            <div class="bank-details-box">
-              <% if (bankDetails.upi_id) { %>
-              <div class="info-item mb-3">
-                <label>UPI ID</label>
-                <div class="value"><%= bankDetails.upi_id %></div>
-              </div>
-              <% } else { %>
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="info-item mb-3">
-                    <label>Account Holder</label>
-                    <div class="value"><%= bankDetails.account_holder_name %></div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="info-item mb-3">
-                    <label>Bank</label>
-                    <div class="value"><%= bankDetails.bank_name %></div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="info-item mb-3">
-                    <label>Account Number</label>
-                    <div class="value"><%= maskAccountNumber(bankDetails.account_number) %></div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="info-item">
-                    <label>IFSC Code</label>
-                    <div class="value"><%= bankDetails.ifsc_code %></div>
-                  </div>
-                </div>
-              </div>
-              <% } %>
-            </div>
-            <% } else { %>
-            <p class="text-muted mb-0">Bank details not yet submitted by customer.</p>
-            <button class="btn btn-outline-warning mt-2" onclick="sendBankLink()">
-              <i class="bi bi-link me-1"></i> Send Bank Details Link
-            </button>
-            <% } %>
-          </div>
-        </div>
-        <% } %>
       </div>
 
-      <div class="col-lg-4">
-        <!-- Update AWB -->
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-truck me-2"></i>Shipping Info</span>
-          </div>
-          <div class="card-body">
-            <form id="awbForm">
-              <div class="mb-3">
-                <label class="form-label">AWB Number</label>
-                <input type="text" class="form-control" name="awb_number" value="<%= returnData.awb_number || '' %>" placeholder="Enter AWB number">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Courier</label>
-                <input type="text" class="form-control" name="courier_name" value="<%= returnData.courier_name || '' %>" placeholder="e.g., Delhivery">
-              </div>
-              <button type="submit" class="btn btn-outline-primary btn-sm">Update AWB</button>
-            </form>
-          </div>
+      <!-- Refund Processing (if status is refund_pending) -->
+      <% if (returnData.status === 'refund_pending' || returnData.status === 'refund_processing') { %>
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-cash me-2 text-terracotta"></i>Process Refund</span>
         </div>
-
-        <!-- Audit Log / Timeline -->
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-clock-history me-2"></i>Activity Log</span>
+        <div class="card-body">
+          <div class="eligibility-info <%= refundEligibility.eligible ? 'eligible' : 'not-eligible' %>">
+            <i class="bi <%= refundEligibility.eligible ? 'bi-check-circle-fill' : 'bi-x-circle-fill' %>"></i>
+            <%= refundEligibility.reason %>
           </div>
-          <div class="card-body">
-            <div class="timeline">
-              <% auditLog.forEach(log => { %>
-              <div class="timeline-item completed">
-                <div class="timeline-date"><%= formatDate(log.created_at, 'long') %></div>
-                <div class="timeline-action"><%= (log.action || '').replace(/_/g, ' ') %></div>
-                <div class="timeline-actor">by <%= log.actor_name || log.actor_type %></div>
+
+          <% if (refundEligibility.eligible) { %>
+          <form id="refundForm">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Refund Method</label>
+                <select class="form-select" name="refund_method" id="refundMethod" required>
+                  <% if (returnData.order_type === 'prepaid') { %>
+                  <option value="shopify_refund">Shopify Refund (Original Payment Method)</option>
+                  <% } else { %>
+                  <option value="upi">UPI Transfer</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <% } %>
+                </select>
               </div>
-              <% }) %>
-              <% if (auditLog.length === 0) { %>
-              <p class="text-muted">No activity recorded</p>
+              <div class="col-md-6">
+                <label class="form-label">Amount</label>
+                <input type="text" class="form-input" value="<%= formatCurrency(returnData.refund_amount) %>" disabled style="background: var(--gray-50);">
+              </div>
+
+              <% if (returnData.order_type === 'cod') { %>
+              <div class="col-md-6">
+                <label class="form-label">Transaction Reference (UPI Ref / NEFT ID)</label>
+                <input type="text" class="form-input" name="transaction_reference" placeholder="Enter UPI reference number">
+              </div>
               <% } %>
+
+              <div class="col-12">
+                <label class="form-label">Notes (Optional)</label>
+                <textarea class="form-textarea" name="notes" rows="2" placeholder="Any notes about this refund"></textarea>
+              </div>
+
+              <div class="col-12">
+                <button type="submit" class="btn btn-success btn-lg">
+                  <i class="bi bi-check-lg me-2"></i>Process Refund
+                </button>
+              </div>
             </div>
-          </div>
+          </form>
+          <% } %>
         </div>
+      </div>
+      <% } %>
 
-        <!-- Refund Transactions -->
-        <% if (refunds.length > 0) { %>
-        <div class="card">
-          <div class="card-header">
-            <span><i class="bi bi-receipt me-2"></i>Refund Transactions</span>
-          </div>
-          <div class="card-body">
-            <% refunds.forEach(refund => { %>
-            <div class="mb-3 p-3 bg-light rounded">
-              <div class="d-flex justify-content-between">
-                <span class="fw-medium"><%= formatCurrency(refund.amount) %></span>
-                <span class="badge <%= refund.status === 'completed' ? 'bg-success' : 'bg-warning' %>">
-                  <%= refund.status %>
-                </span>
+      <!-- Bank Details (if COD and available) -->
+      <% if (returnData.order_type === 'cod' && bankDetails) { %>
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-bank me-2 text-terracotta"></i>Bank Details</span>
+          <% if (bankDetails.submitted_at) { %>
+          <span class="badge badge-success">Submitted</span>
+          <% } else { %>
+          <span class="badge badge-warning">Pending</span>
+          <% } %>
+        </div>
+        <div class="card-body">
+          <% if (bankDetails.submitted_at) { %>
+          <div class="bank-details-box">
+            <% if (bankDetails.upi_id) { %>
+            <div class="info-item mb-3">
+              <label>UPI ID</label>
+              <div class="value"><%= bankDetails.upi_id %></div>
+            </div>
+            <% } else { %>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="info-item">
+                  <label>Account Holder</label>
+                  <div class="value"><%= bankDetails.account_holder_name %></div>
+                </div>
               </div>
-              <small class="text-muted">
-                <%= refund.refund_method %> |
-                <%= formatDate(refund.processed_at) %>
-              </small>
-              <% if (refund.transaction_reference) { %>
-              <div class="small text-muted mt-1">Ref: <%= refund.transaction_reference %></div>
-              <% } %>
+              <div class="col-md-6">
+                <div class="info-item">
+                  <label>Bank</label>
+                  <div class="value"><%= bankDetails.bank_name %></div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="info-item">
+                  <label>Account Number</label>
+                  <div class="value"><%= maskAccountNumber(bankDetails.account_number) %></div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="info-item">
+                  <label>IFSC Code</label>
+                  <div class="value"><%= bankDetails.ifsc_code %></div>
+                </div>
+              </div>
+            </div>
+            <% } %>
+          </div>
+          <% } else { %>
+          <p class="text-muted mb-3">Bank details not yet submitted by customer.</p>
+          <button class="btn btn-outline" style="border-color: var(--warning); color: var(--warning);" onclick="sendBankLink()">
+            <i class="bi bi-link me-1"></i> Send Bank Details Link
+          </button>
+          <% } %>
+        </div>
+      </div>
+      <% } %>
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Update AWB -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-truck me-2 text-terracotta"></i>Shipping Info</span>
+        </div>
+        <div class="card-body">
+          <form id="awbForm">
+            <div class="form-group">
+              <label class="form-label">AWB Number</label>
+              <input type="text" class="form-input" name="awb_number" value="<%= returnData.awb_number || '' %>" placeholder="Enter AWB number">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Courier</label>
+              <input type="text" class="form-input" name="courier_name" value="<%= returnData.courier_name || '' %>" placeholder="e.g., Delhivery">
+            </div>
+            <button type="submit" class="btn btn-outline btn-sm">
+              <i class="bi bi-check me-1"></i>Update AWB
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Audit Log / Timeline -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-clock-history me-2 text-terracotta"></i>Activity Log</span>
+        </div>
+        <div class="card-body">
+          <div class="timeline">
+            <% auditLog.forEach(log => { %>
+            <div class="timeline-item completed">
+              <div class="timeline-date"><%= formatDate(log.created_at, 'long') %></div>
+              <div class="timeline-action"><%= (log.action || '').replace(/_/g, ' ') %></div>
+              <div class="timeline-actor">by <%= log.actor_name || log.actor_type %></div>
             </div>
             <% }) %>
+            <% if (auditLog.length === 0) { %>
+            <div class="empty-state" style="padding: 24px 0;">
+              <div class="empty-state-icon" style="width: 40px; height: 40px; margin-bottom: 12px;">
+                <i class="bi bi-clock" style="font-size: 32px;"></i>
+              </div>
+              <p class="text-muted mb-0">No activity recorded</p>
+            </div>
+            <% } %>
           </div>
         </div>
-        <% } %>
+      </div>
+
+      <!-- Refund Transactions -->
+      <% if (refunds.length > 0) { %>
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title"><i class="bi bi-receipt me-2 text-terracotta"></i>Refund Transactions</span>
+        </div>
+        <div class="card-body">
+          <% refunds.forEach(refund => { %>
+          <div class="mb-3 p-3 rounded-lg" style="background: var(--gray-50); border: 1px solid var(--border-light);">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-medium" style="font-size: var(--text-lg);"><%= formatCurrency(refund.amount) %></span>
+              <span class="badge <%= refund.status === 'completed' ? 'badge-success' : 'badge-warning' %>">
+                <%= refund.status %>
+              </span>
+            </div>
+            <small class="text-muted">
+              <%= refund.refund_method %> |
+              <%= formatDate(refund.processed_at) %>
+            </small>
+            <% if (refund.transaction_reference) { %>
+            <div class="small text-muted mt-1">Ref: <code><%= refund.transaction_reference %></code></div>
+            <% } %>
+          </div>
+          <% }) %>
+        </div>
+      </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Approve Modal -->
+<div class="modal fade" id="quickApproveModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-lightning text-terracotta"></i>Quick Approve</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-secondary mb-4">Approve this return and optionally add AWB to schedule pickup immediately.</p>
+
+        <div class="form-group">
+          <label class="form-label">AWB Number <span class="text-muted">(optional)</span></label>
+          <input type="text" class="form-input" id="quickApproveAwb" placeholder="Enter AWB number">
+          <small class="text-muted mt-1 d-block">Leave empty to approve without scheduling pickup</small>
+        </div>
+
+        <div class="form-group mb-0">
+          <label class="form-label">Courier</label>
+          <select class="form-select" id="quickApproveCourier">
+            <option value="">Select courier</option>
+            <option value="Delhivery">Delhivery</option>
+            <option value="BlueDart">BlueDart</option>
+            <option value="XpressBees">XpressBees</option>
+            <option value="Ekart">Ekart</option>
+            <option value="DTDC">DTDC</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="submitQuickApprove()">
+          <i class="bi bi-check-lg me-1"></i> Approve
+        </button>
       </div>
     </div>
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const returnId = <%= returnData.id %>;
+<!-- Add AWB Modal -->
+<div class="modal fade" id="addAwbModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-truck text-terracotta"></i>Add AWB & Schedule Pickup</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">AWB Number <span class="text-danger">*</span></label>
+          <input type="text" class="form-input" id="addAwbNumber" placeholder="Enter AWB number" required>
+        </div>
 
-    // ==================
-    // QUICK WORKFLOW FUNCTIONS
-    // ==================
+        <div class="form-group mb-0">
+          <label class="form-label">Courier <span class="text-danger">*</span></label>
+          <select class="form-select" id="addAwbCourier" required>
+            <option value="">Select courier</option>
+            <option value="Delhivery">Delhivery</option>
+            <option value="BlueDart">BlueDart</option>
+            <option value="XpressBees">XpressBees</option>
+            <option value="Ekart">Ekart</option>
+            <option value="DTDC">DTDC</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAddAwb()">
+          <i class="bi bi-truck me-1"></i> Schedule Pickup
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
-    async function submitQuickApprove() {
-      const awb = document.getElementById('quickApproveAwb').value.trim();
-      const courier = document.getElementById('quickApproveCourier').value;
+<!-- Link Order Modal -->
+<div class="modal fade" id="linkOrderModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-link-45deg text-terracotta"></i>Link Shopify Order</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-secondary mb-4">Search for a Shopify order by order number, email, or phone number</p>
 
-      try {
-        const res = await fetch(`/returns/${returnId}/quick-approve`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            awb_number: awb || null,
-            courier_name: courier || null
-          })
-        });
-        const data = await res.json();
+        <div class="form-group mb-4">
+          <input type="text" class="form-input" id="orderSearchInput" style="font-size: var(--text-lg); padding: 14px 18px;"
+                 placeholder="Enter order #, email, or phone number">
+        </div>
 
-        if (data.success) {
-          // Close modal
-          bootstrap.Modal.getInstance(document.getElementById('quickApproveModal')).hide();
-          alert(data.message);
-          location.reload();
-        } else {
-          alert(data.message || 'Failed to approve');
-        }
-      } catch (error) {
-        alert('Error: ' + error.message);
+        <div id="orderSearchResults" style="max-height: 400px; overflow-y: auto;">
+          <p class="text-muted text-center py-4">Enter at least 3 characters to search</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const returnId = <%= returnData.id %>;
+
+  // ==================
+  // QUICK WORKFLOW FUNCTIONS
+  // ==================
+
+  async function submitQuickApprove() {
+    const awb = document.getElementById('quickApproveAwb').value.trim();
+    const courier = document.getElementById('quickApproveCourier').value;
+
+    try {
+      const res = await fetch(`/returns/${returnId}/quick-approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          awb_number: awb || null,
+          courier_name: courier || null
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        bootstrap.Modal.getInstance(document.getElementById('quickApproveModal')).hide();
+        alert(data.message);
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to approve');
       }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  }
+
+  async function submitAddAwb() {
+    const awb = document.getElementById('addAwbNumber').value.trim();
+    const courier = document.getElementById('addAwbCourier').value;
+
+    if (!awb) {
+      alert('Please enter AWB number');
+      return;
     }
 
-    async function submitAddAwb() {
-      const awb = document.getElementById('addAwbNumber').value.trim();
-      const courier = document.getElementById('addAwbCourier').value;
+    try {
+      const res = await fetch(`/returns/${returnId}/quick-transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_status: 'pickup_scheduled',
+          awb_number: awb,
+          courier_name: courier
+        })
+      });
+      const data = await res.json();
 
-      if (!awb) {
-        alert('Please enter AWB number');
+      if (data.success) {
+        bootstrap.Modal.getInstance(document.getElementById('addAwbModal')).hide();
+        alert(`Pickup scheduled. AWB: ${awb}`);
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to schedule pickup');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  }
+
+  async function quickTransition(targetStatus) {
+    const statusLabels = {
+      'approved': 'Approved',
+      'pickup_scheduled': 'Pickup Scheduled',
+      'picked_up': 'Picked Up',
+      'in_transit': 'In Transit',
+      'received': 'Received',
+      'refund_pending': 'Refund Pending',
+      'refund_processing': 'Processing Refund',
+      'refunded': 'Refunded',
+      'cancelled': 'Cancelled'
+    };
+
+    if (!confirm(`Change status to "${statusLabels[targetStatus] || targetStatus}"?`)) return;
+
+    try {
+      const res = await fetch(`/returns/${returnId}/quick-transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_status: targetStatus })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to update status');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  }
+
+  // Legacy functions kept for compatibility
+  async function approveReturn() {
+    if (!confirm('Approve this return request?')) return;
+    const res = await fetch(`/returns/${returnId}/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) location.reload();
+    else alert(data.message || 'Failed to approve');
+  }
+
+  async function rejectReturn() {
+    const reason = prompt('Please enter rejection reason:');
+    if (!reason) return;
+    const res = await fetch(`/returns/${returnId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (data.success) location.reload();
+    else alert(data.message || 'Failed to reject');
+  }
+
+  async function initiatePickup() {
+    if (!confirm('Initiate courier pickup for this return?')) return;
+    const res = await fetch(`/returns/${returnId}/initiate-pickup`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.message);
+      location.reload();
+    } else {
+      alert(data.message || 'Failed');
+    }
+  }
+
+  async function markPicked() {
+    quickTransition('picked_up');
+  }
+
+  async function markReceived() {
+    quickTransition('received');
+  }
+
+  async function sendBankLink() {
+    const res = await fetch(`/returns/${returnId}/send-bank-link`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Bank link generated!\n\n${data.link}\n\nSend to: ${data.phone}`);
+      navigator.clipboard.writeText(data.link);
+    } else {
+      alert(data.message || 'Failed');
+    }
+  }
+
+  async function syncStatus() {
+    const btn = document.getElementById('syncStatusBtn');
+    if (!btn) return;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Syncing...';
+
+    try {
+      const res = await fetch(`/returns/${returnId}/sync-status`, { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        let message = data.message + '\n';
+
+        // Show Shopify info
+        if (data.data.shopify) {
+          if (data.data.shopify.error) {
+            message += `\nShopify: ${data.data.shopify.error}`;
+          } else {
+            message += `\nShopify: ${data.data.shopify.financial_status || 'N/A'} | Refunds: ${data.data.shopify.refunds}`;
+            if (data.data.shopify.refundDetected) {
+              message += ' (Refund detected!)';
+            }
+          }
+        }
+
+        // Show EasyEcom info
+        if (data.data.easyecom) {
+          if (data.data.easyecom.error) {
+            message += `\nEasyEcom: ${data.data.easyecom.error}`;
+          } else {
+            message += `\nEasyEcom: ${data.data.easyecom.status || 'N/A'}`;
+            if (data.data.easyecom.awbUpdated) message += ' (AWB updated!)';
+          }
+        }
+
+        // Show Courier info
+        if (data.data.courier) {
+          message += `\nCourier: ${data.data.courier.name} - AWB: ${data.data.courier.awb}`;
+        }
+
+        // If status was auto-updated
+        if (data.data.statusUpdated) {
+          alert(message);
+          location.reload();
+          return;
+        }
+
+        // Handle suggested transitions
+        if (data.suggestedTransitions && data.suggestedTransitions.length > 0) {
+          const suggestion = data.suggestedTransitions[0];
+          const shouldTransition = confirm(
+            message + `\n\nSuggestion: Move to "${suggestion.status.replace(/_/g, ' ')}"?\nReason: ${suggestion.reason}`
+          );
+
+          if (shouldTransition) {
+            await quickTransition(suggestion.status);
+            return;
+          }
+        } else {
+          alert(message);
+        }
+      } else {
+        alert(data.message || 'Failed to sync status');
+      }
+    } catch (error) {
+      alert('Error syncing status: ' + error.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
+  // AWB form
+  document.getElementById('awbForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const res = await fetch(`/returns/${returnId}/update-awb`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(formData))
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('AWB updated');
+      location.reload();
+    } else {
+      alert(data.message || 'Failed');
+    }
+  });
+
+  // Refund form
+  document.getElementById('refundForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!confirm('Process this refund? This action cannot be undone.')) return;
+
+    const formData = new FormData(e.target);
+    const res = await fetch(`/returns/${returnId}/process-refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(formData))
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('Refund processed successfully!');
+      location.reload();
+    } else {
+      alert(data.message || 'Failed to process refund');
+    }
+  });
+
+  // Link Order Modal Search
+  let searchTimeout;
+  const orderSearchInput = document.getElementById('orderSearchInput');
+  const orderSearchResults = document.getElementById('orderSearchResults');
+
+  if (orderSearchInput) {
+    orderSearchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.trim();
+
+      if (query.length < 3) {
+        orderSearchResults.innerHTML = '<p class="text-muted text-center py-4">Enter at least 3 characters to search</p>';
         return;
       }
 
-      try {
-        const res = await fetch(`/returns/${returnId}/quick-transition`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            target_status: 'pickup_scheduled',
-            awb_number: awb,
-            courier_name: courier
-          })
-        });
-        const data = await res.json();
+      orderSearchResults.innerHTML = '<p class="text-center py-4"><span class="spinner"></span> Searching...</p>';
 
-        if (data.success) {
-          bootstrap.Modal.getInstance(document.getElementById('addAwbModal')).hide();
-          alert(`Pickup scheduled. AWB: ${awb}`);
-          location.reload();
-        } else {
-          alert(data.message || 'Failed to schedule pickup');
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/returns/api/search-orders?q=${encodeURIComponent(query)}`);
+          const data = await res.json();
+
+          if (data.success && data.orders.length > 0) {
+            orderSearchResults.innerHTML = data.orders.map(order => `
+              <div class="order-result" onclick="linkOrder('${order.id}')">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong style="color: var(--text-primary);">Order ${order.name}</strong>
+                    <div class="small text-muted">${order.customer_name || order.email || ''}</div>
+                    <div class="small text-muted">${order.phone || ''}</div>
+                  </div>
+                  <div class="text-end">
+                    <div class="fw-bold" style="color: var(--terracotta);">${formatPrice(order.total_price)}</div>
+                    <div class="small text-muted">${order.line_items_count} items</div>
+                  </div>
+                </div>
+              </div>
+            `).join('');
+          } else {
+            orderSearchResults.innerHTML = '<p class="text-muted text-center py-4">No orders found</p>';
+          }
+        } catch (error) {
+          orderSearchResults.innerHTML = '<p class="text-danger text-center py-4">Failed to search orders</p>';
         }
-      } catch (error) {
-        alert('Error: ' + error.message);
-      }
-    }
+      }, 300);
+    });
+  }
 
-    async function quickTransition(targetStatus) {
-      const statusLabels = {
-        'approved': 'Approved',
-        'pickup_scheduled': 'Pickup Scheduled',
-        'picked_up': 'Picked Up',
-        'in_transit': 'In Transit',
-        'received': 'Received',
-        'refund_pending': 'Refund Pending',
-        'refund_processing': 'Processing Refund',
-        'refunded': 'Refunded',
-        'cancelled': 'Cancelled'
-      };
+  function formatPrice(price) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
+    }).format(price || 0);
+  }
 
-      if (!confirm(`Change status to "${statusLabels[targetStatus] || targetStatus}"?`)) return;
+  async function linkOrder(orderId) {
+    if (!confirm('Link this order to the return?')) return;
 
-      try {
-        const res = await fetch(`/returns/${returnId}/quick-transition`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_status: targetStatus })
-        });
-        const data = await res.json();
-
-        if (data.success) {
-          location.reload();
-        } else {
-          alert(data.message || 'Failed to update status');
-        }
-      } catch (error) {
-        alert('Error: ' + error.message);
-      }
-    }
-
-    // Legacy functions kept for compatibility
-    async function approveReturn() {
-      if (!confirm('Approve this return request?')) return;
-      const res = await fetch(`/returns/${returnId}/approve`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed to approve');
-    }
-
-    async function rejectReturn() {
-      const reason = prompt('Please enter rejection reason:');
-      if (!reason) return;
-      const res = await fetch(`/returns/${returnId}/reject`, {
+    try {
+      const res = await fetch(`/returns/${returnId}/link-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ shopify_order_id: orderId })
       });
       const data = await res.json();
-      if (data.success) location.reload();
-      else alert(data.message || 'Failed to reject');
-    }
 
-    async function initiatePickup() {
-      if (!confirm('Initiate courier pickup for this return?')) return;
-      const res = await fetch(`/returns/${returnId}/initiate-pickup`, { method: 'POST' });
-      const data = await res.json();
       if (data.success) {
         alert(data.message);
         location.reload();
       } else {
-        alert(data.message || 'Failed');
+        alert(data.message || 'Failed to link order');
       }
+    } catch (error) {
+      alert('Failed to link order');
     }
+  }
+</script>
 
-    async function markPicked() {
-      quickTransition('picked_up');
-    }
-
-    async function markReceived() {
-      quickTransition('received');
-    }
-
-    async function sendBankLink() {
-      const res = await fetch(`/returns/${returnId}/send-bank-link`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Bank link generated!\n\n${data.link}\n\nSend to: ${data.phone}`);
-        navigator.clipboard.writeText(data.link);
-      } else {
-        alert(data.message || 'Failed');
-      }
-    }
-
-    async function syncStatus() {
-      const btn = document.getElementById('syncStatusBtn');
-      if (!btn) return;
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Syncing...';
-
-      try {
-        const res = await fetch(`/returns/${returnId}/sync-status`, { method: 'POST' });
-        const data = await res.json();
-
-        if (data.success) {
-          let message = data.message + '\n';
-
-          // Show Shopify info
-          if (data.data.shopify) {
-            if (data.data.shopify.error) {
-              message += `\nShopify: ${data.data.shopify.error}`;
-            } else {
-              message += `\nShopify: ${data.data.shopify.financial_status || 'N/A'} | Refunds: ${data.data.shopify.refunds}`;
-              if (data.data.shopify.refundDetected) {
-                message += ' (Refund detected!)';
-              }
-            }
-          }
-
-          // Show EasyEcom info
-          if (data.data.easyecom) {
-            if (data.data.easyecom.error) {
-              message += `\nEasyEcom: ${data.data.easyecom.error}`;
-            } else {
-              message += `\nEasyEcom: ${data.data.easyecom.status || 'N/A'}`;
-              if (data.data.easyecom.awbUpdated) message += ' (AWB updated!)';
-            }
-          }
-
-          // Show Courier info
-          if (data.data.courier) {
-            message += `\nCourier: ${data.data.courier.name} - AWB: ${data.data.courier.awb}`;
-          }
-
-          // If status was auto-updated
-          if (data.data.statusUpdated) {
-            alert(message);
-            location.reload();
-            return;
-          }
-
-          // Handle suggested transitions
-          if (data.suggestedTransitions && data.suggestedTransitions.length > 0) {
-            const suggestion = data.suggestedTransitions[0];
-            const shouldTransition = confirm(
-              message + `\n\nSuggestion: Move to "${suggestion.status.replace(/_/g, ' ')}"?\nReason: ${suggestion.reason}`
-            );
-
-            if (shouldTransition) {
-              await quickTransition(suggestion.status);
-              return;
-            }
-          } else {
-            alert(message);
-          }
-        } else {
-          alert(data.message || 'Failed to sync status');
-        }
-      } catch (error) {
-        alert('Error syncing status: ' + error.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-      }
-    }
-
-    // AWB form
-    document.getElementById('awbForm')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const res = await fetch(`/returns/${returnId}/update-awb`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.fromEntries(formData))
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert('AWB updated');
-        location.reload();
-      } else {
-        alert(data.message || 'Failed');
-      }
-    });
-
-    // Refund form
-    document.getElementById('refundForm')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!confirm('Process this refund? This action cannot be undone.')) return;
-
-      const formData = new FormData(e.target);
-      const res = await fetch(`/returns/${returnId}/process-refund`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.fromEntries(formData))
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert('Refund processed successfully!');
-        location.reload();
-      } else {
-        alert(data.message || 'Failed to process refund');
-      }
-    });
-
-    // Link Order Modal Search
-    let searchTimeout;
-    const orderSearchInput = document.getElementById('orderSearchInput');
-    const orderSearchResults = document.getElementById('orderSearchResults');
-
-    if (orderSearchInput) {
-      orderSearchInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        const query = e.target.value.trim();
-
-        if (query.length < 3) {
-          orderSearchResults.innerHTML = '<p class="text-muted text-center">Enter at least 3 characters to search</p>';
-          return;
-        }
-
-        orderSearchResults.innerHTML = '<p class="text-center"><span class="spinner-border spinner-border-sm"></span> Searching...</p>';
-
-        searchTimeout = setTimeout(async () => {
-          try {
-            const res = await fetch(`/returns/api/search-orders?q=${encodeURIComponent(query)}`);
-            const data = await res.json();
-
-            if (data.success && data.orders.length > 0) {
-              orderSearchResults.innerHTML = data.orders.map(order => `
-                <div class="order-result" onclick="linkOrder('${order.id}')">
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                      <strong>Order ${order.name}</strong>
-                      <div class="small text-muted">${order.customer_name || order.email || ''}</div>
-                      <div class="small text-muted">${order.phone || ''}</div>
-                    </div>
-                    <div class="text-end">
-                      <div class="fw-bold">${formatPrice(order.total_price)}</div>
-                      <div class="small text-muted">${order.line_items_count} items</div>
-                    </div>
-                  </div>
-                </div>
-              `).join('');
-            } else {
-              orderSearchResults.innerHTML = '<p class="text-muted text-center">No orders found</p>';
-            }
-          } catch (error) {
-            orderSearchResults.innerHTML = '<p class="text-danger text-center">Failed to search orders</p>';
-          }
-        }, 300);
-      });
-    }
-
-    function formatPrice(price) {
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        minimumFractionDigits: 0
-      }).format(price || 0);
-    }
-
-    async function linkOrder(orderId) {
-      if (!confirm('Link this order to the return?')) return;
-
-      try {
-        const res = await fetch(`/returns/${returnId}/link-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shopify_order_id: orderId })
-        });
-        const data = await res.json();
-
-        if (data.success) {
-          alert(data.message);
-          location.reload();
-        } else {
-          alert(data.message || 'Failed to link order');
-        }
-      } catch (error) {
-        alert('Failed to link order');
-      }
-    }
-  </script>
-
-  <!-- Quick Approve Modal -->
-  <div class="modal fade" id="quickApproveModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-lightning me-2"></i>Quick Approve</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted mb-3">Approve this return and optionally add AWB to schedule pickup immediately.</p>
-
-          <div class="mb-3">
-            <label class="form-label">AWB Number <span class="text-muted">(optional)</span></label>
-            <input type="text" class="form-control" id="quickApproveAwb" placeholder="Enter AWB number">
-            <small class="text-muted">Leave empty to approve without scheduling pickup</small>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Courier</label>
-            <select class="form-select" id="quickApproveCourier">
-              <option value="">Select courier</option>
-              <option value="Delhivery">Delhivery</option>
-              <option value="BlueDart">BlueDart</option>
-              <option value="XpressBees">XpressBees</option>
-              <option value="Ekart">Ekart</option>
-              <option value="DTDC">DTDC</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-success" onclick="submitQuickApprove()">
-            <i class="bi bi-check-lg me-1"></i> Approve
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Add AWB Modal -->
-  <div class="modal fade" id="addAwbModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Add AWB & Schedule Pickup</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">AWB Number <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="addAwbNumber" placeholder="Enter AWB number" required>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Courier <span class="text-danger">*</span></label>
-            <select class="form-select" id="addAwbCourier" required>
-              <option value="">Select courier</option>
-              <option value="Delhivery">Delhivery</option>
-              <option value="BlueDart">BlueDart</option>
-              <option value="XpressBees">XpressBees</option>
-              <option value="Ekart">Ekart</option>
-              <option value="DTDC">DTDC</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" onclick="submitAddAwb()">
-            <i class="bi bi-truck me-1"></i> Schedule Pickup
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Link Order Modal -->
-  <div class="modal fade" id="linkOrderModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Link Shopify Order</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p class="text-muted mb-3">Search for a Shopify order by order number, email, or phone number</p>
-
-          <div class="mb-4">
-            <input type="text" class="form-control form-control-lg" id="orderSearchInput"
-                   placeholder="Enter order #, email, or phone number">
-          </div>
-
-          <div id="orderSearchResults" style="max-height: 400px; overflow-y: auto;">
-            <p class="text-muted text-center">Enter at least 3 characters to search</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    .order-result {
-      padding: 12px 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .order-result:hover {
-      border-color: #2563eb;
-      background: #eff6ff;
-    }
-  </style>
-</body>
-</html>
+<%- include('../partials/footer') %>

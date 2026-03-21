@@ -1,740 +1,654 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Out-of-Stock Control</title>
+<%- include('partials/header', { pageTitle: 'Out-of-Stock Control' }) %>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/kotty-theme.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
+<%- include('partials/navbar', { user: user, dashboardUrl: '/dashboard' }) %>
 
-  <style>
-    :root {
-      --color-bg-primary: #f3f6fb;
-      --color-surface: #ffffff;
-      --color-surface-alt: #eef2f7;
-      --color-border: #d0d7e2;
-      --color-text-primary: #0b122a;
-      --color-text-secondary: #1f2a3d;
-      --color-text-muted: #4b5563;
-      --color-accent: #0b5ad0;
-      --color-accent-soft: #e6efff;
-      --color-danger: #c1121f;
-      --color-danger-soft: #ffe6ea;
-      --color-warning: #2563eb;
-      --color-warning-soft: #e6efff;
-      --color-success: #0f9d58;
-      --shadow-md: 0 12px 24px rgba(11, 90, 208, 0.08);
-      --shadow-soft: 0 8px 18px rgba(11, 90, 208, 0.06);
+<style>
+  /* Page-specific styles using Kotty Track CSS variables */
+  .stock-shell {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: calc(var(--navbar-height) + 24px) 24px 40px;
+  }
+
+  /* Hero Card */
+  .hero-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    padding: 28px;
+    box-shadow: var(--shadow-md);
+    display: grid;
+    gap: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--terracotta), var(--terracotta-light));
+  }
+
+  .hero-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    color: var(--terracotta);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--text-xs);
+    background: var(--terracotta-bg);
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    width: fit-content;
+  }
+
+  h1.page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .lede-text {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: var(--text-base);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .hero-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .meta-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    background: var(--gray-50);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: var(--text-sm);
+  }
+
+  .meta-chip i {
+    color: var(--terracotta);
+    font-size: 16px;
+  }
+
+  .hero-actions {
+    display: grid;
+    gap: 16px;
+  }
+
+  .action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .control-chip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-xs);
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .control-chip label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .control-chip select {
+    flex: 1;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    padding: 8px 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: var(--font-body);
+    background: var(--bg-card);
+    min-height: 38px;
+  }
+
+  .control-chip select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  /* Stat Cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-xs);
+    transition: all var(--transition-fast);
+  }
+
+  .stat-card:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+
+  .stat-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    line-height: 1.1;
+    margin: 4px 0;
+  }
+
+  .stat-subtle {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: var(--text-sm);
+  }
+
+  /* Card Pane */
+  .card-pane {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+  }
+
+  .card-pane .card-body {
+    padding: 24px;
+  }
+
+  /* Tabs */
+  .tab-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .tab-nav {
+    background: var(--gray-100);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .tab-nav .nav-link {
+    padding: 10px 18px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    transition: all var(--transition-fast);
+  }
+
+  .tab-nav .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-card);
+  }
+
+  .tab-nav .nav-link.active {
+    background: var(--charcoal);
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: var(--text-sm);
+  }
+
+  .live-indicator i {
+    color: var(--terracotta);
+  }
+
+  /* Filter Bar */
+  .filter-bar {
+    background: var(--gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .filter-bar .stacked-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .filter-bar .label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+  }
+
+  .filter-bar .label i {
+    color: var(--terracotta);
+  }
+
+  /* Status Filter Buttons */
+  .status-filters {
+    display: flex;
+    gap: 4px;
+  }
+
+  .status-filters .btn-check + label {
+    padding: 8px 14px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  /* Search Input */
+  .search-group {
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+  }
+
+  .search-input {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-family: var(--font-body);
+    width: 100%;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .input-group-text {
+    border: 1px solid var(--border-light);
+    background: var(--gray-100);
+    color: var(--terracotta);
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    padding: 10px 14px;
+  }
+
+  .input-group .search-input {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+
+  /* Status Pills */
+  .status-pill {
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    font-size: var(--text-xs);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .status-red {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+
+  .status-purple {
+    background: var(--warning-light);
+    color: var(--warning);
+  }
+
+  .status-green {
+    background: var(--success-light);
+    color: var(--success);
+  }
+
+  /* Warehouse Pill */
+  .warehouse-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    border: 1px solid var(--border-light);
+  }
+
+  .warehouse-pill i {
+    color: var(--terracotta);
+    font-size: 12px;
+  }
+
+  /* Table Styles */
+  .table-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .table thead th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .table tbody td {
+    padding: 14px 16px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .table tbody tr.row-critical {
+    background: linear-gradient(90deg, var(--danger-light), transparent);
+  }
+
+  .table tbody tr.row-warning {
+    background: linear-gradient(90deg, var(--warning-light), transparent);
+  }
+
+  .sku-text {
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+    line-height: 1.4;
+  }
+
+  .text-faint {
+    color: var(--text-muted);
+  }
+
+  .metric-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: var(--text-sm);
+  }
+
+  /* Mobile Stack Table */
+  @media (max-width: 991.98px) {
+    .table thead {
+      display: none;
     }
 
-    body {
-      background: linear-gradient(180deg, #f9fbff 0%, var(--color-bg-primary) 100%);
-      color: var(--color-text-primary);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.55;
-      min-height: 100vh;
-      padding: 0;
-      -webkit-text-size-adjust: 100%;
-      overflow-x: hidden;
-    }
-
-    .topbar {
-      background: rgba(255, 255, 255, 0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(208, 215, 226, 0.85);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      padding-top: env(safe-area-inset-top);
-    }
-
-    .topbar .container-fluid {
-      padding: 0.85rem 1.25rem;
-      flex-wrap: nowrap;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      color: var(--color-text-primary);
-      text-decoration: none;
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    .brand .logo-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #0b122a, #0b5ad0);
+    .table.stack-table tbody {
       display: grid;
-      place-items: center;
-      color: #fff;
-      box-shadow: 0 10px 24px rgba(11, 90, 208, 0.2);
-      font-size: 1.15rem;
-      flex: 0 0 auto;
+      gap: 12px;
     }
 
-    .brand-text {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      line-height: 1.15;
-    }
-
-    .brand-title {
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-    }
-
-    .brand-subtitle {
-      color: var(--color-text-muted);
-      font-weight: 600;
-    }
-
-    .topbar-actions {
-      flex: 0 0 auto;
-      min-width: 0;
-    }
-
-    .user-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.55rem 0.95rem;
-      border-radius: 999px;
-      background: var(--color-surface-alt);
-      color: var(--color-text-secondary);
-      font-weight: 600;
-      border: 1px solid rgba(11, 90, 208, 0.14);
-      max-width: 220px;
-    }
-
-    .user-chip i { color: var(--color-accent); }
-
-    .user-chip .user-name {
-      max-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      display: inline-block;
-    }
-
-    .stock-shell {
-      max-width: 1140px;
-      margin: 0 auto;
-      width: min(1140px, 100%);
-      padding: 14px 12px calc(16px + env(safe-area-inset-bottom));
-    }
-
-    .hero-card {
-      background: #ffffff;
-      border: 1px solid rgba(11, 90, 208, 0.12);
-      border-radius: 18px;
-      padding: 1.3rem 1.15rem;
-      box-shadow: 0 10px 26px rgba(11, 26, 66, 0.06);
-      display: grid;
-      gap: 1.1rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: radial-gradient(circle at 16% 18%, rgba(11, 90, 208, 0.07), transparent 32%),
-                  radial-gradient(circle at 82% 10%, rgba(15, 157, 88, 0.06), transparent 26%);
-    }
-
-    .hero-heading {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      position: relative;
-      z-index: 1;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-weight: 700;
-      color: var(--color-accent);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.85rem;
-      background: var(--color-accent-soft);
-      padding: 0.35rem 0.75rem;
-      border-radius: 999px;
-      width: fit-content;
-    }
-
-    h1.page-title {
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      font-size: clamp(1.25rem, 3.3vw, 1.9rem);
-      margin: 0;
-    }
-
-    .lede-text {
-      color: var(--color-text-secondary);
-      font-weight: 500;
-      margin: 0;
-      line-height: 1.5;
-    }
-
-    .hero-meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 0.65rem;
-      position: relative;
-      z-index: 1;
-    }
-
-    .meta-chip {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.65rem 0.8rem;
-      border-radius: 12px;
-      border: 1px solid rgba(11, 90, 208, 0.12);
-      background: #f4f7fb;
-      color: var(--color-text-secondary);
-      font-weight: 600;
-    }
-
-    .meta-chip i { color: var(--color-accent); }
-
-    .status-helper {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      color: var(--color-text-muted);
-      font-weight: 700;
-    }
-
-    .tooltip-icon {
-      color: var(--color-text-secondary);
-      cursor: help;
-    }
-
-    .hero-actions {
-      display: grid;
-      gap: 0.75rem;
-      width: 100%;
-      position: relative;
-      z-index: 1;
-    }
-
-    .action-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .control-chip {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      padding: 0.55rem 0.75rem;
-      border-radius: 14px;
-      background: var(--color-surface);
-      border: 1px solid rgba(11, 90, 208, 0.12);
-      box-shadow: var(--shadow-soft);
-    }
-
-    .control-chip label {
-      font-weight: 700;
-      color: var(--color-text-secondary);
-      margin: 0;
-      font-size: 0.9rem;
-      white-space: nowrap;
-    }
-
-    .control-chip select {
-      border-radius: 10px;
-      border: 1px solid var(--color-border);
-      padding: 0.5rem 0.7rem;
-      font-weight: 600;
-      color: var(--color-text-primary);
-      font-size: 0.95rem;
-      min-height: 40px;
-    }
-
-    .hero-actions .btn { width: 100%; }
-
-    .stat-card {
-      border-radius: 16px;
-      border: 1px solid rgba(11, 90, 208, 0.08);
-      background: var(--color-surface);
-      box-shadow: var(--shadow-soft);
-      padding: 0.95rem 1rem;
-      display: grid;
-      gap: 0.3rem;
-    }
-
-    .stat-card .stat-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: var(--color-accent-soft);
-      color: var(--color-accent);
-      display: grid;
-      place-items: center;
-      margin-bottom: 0.25rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    }
-
-    .stat-label { color: var(--color-text-muted); font-weight: 700; font-size: 0.9rem; letter-spacing: 0.01em; }
-    .stat-value { font-size: clamp(1.4rem, 4vw, 1.9rem); font-weight: 800; letter-spacing: -0.02em; }
-    .stat-subtle { color: var(--color-text-secondary); font-weight: 600; font-size: 0.9rem; }
-
-    .card-pane {
-      background: var(--color-surface);
-      border: 1px solid rgba(11, 90, 208, 0.1);
-      border-radius: 18px;
-      box-shadow: var(--shadow-md);
-    }
-
-    .card-pane .card-body {
-      padding: 1.35rem 1.15rem;
-    }
-
-    .tab-shell {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      margin-bottom: 0.75rem;
-    }
-
-    .tab-nav {
-      background: var(--color-surface);
-      border-radius: 14px;
-      border: 1px solid rgba(11, 90, 208, 0.14);
-      padding: 0.35rem;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.35rem;
-      box-shadow: var(--shadow-soft);
-    }
-
-    .tab-nav .nav-link {
-      width: 100%;
-      text-align: center;
-      padding: 0.9rem 1rem;
-      font-weight: 700;
-      color: var(--color-text-secondary);
-      border-radius: 12px;
-      border: 1px solid rgba(11, 90, 208, 0);
-      background: linear-gradient(180deg, #f9fbff, #f3f6fb);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-    }
-
-    .tab-nav .nav-link.active {
-      background: linear-gradient(135deg, #0b122a, #0b5ad0);
-      color: #fff;
-      box-shadow: 0 10px 18px rgba(11, 90, 208, 0.25);
-      border-color: rgba(11, 90, 208, 0.22);
-    }
-
-    .status-pill {
-      padding: 0.32rem 0.75rem;
-      border-radius: 12px;
-      font-weight: 800;
-      font-size: 0.9rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      border: 1px solid transparent;
-      letter-spacing: 0.01em;
-      white-space: nowrap;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .status-pill i {
-      font-size: 0.9rem;
-    }
-
-    .status-red { background: #fff1f4; color: #b42318; border-color: rgba(212, 70, 70, 0.15); }
-    .status-purple { background: #f4edff; color: #6b21a8; border-color: rgba(124, 58, 237, 0.18); }
-    .status-green { background: #e8f5ef; color: #0f9d58; border-color: rgba(15, 157, 88, 0.2); }
-
-    .search-group { width: 100%; }
-
-    .search-input {
-      border: 1px solid var(--color-border);
-      border-radius: 12px;
-      padding: 0.85rem 1rem;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-
-    .soft-btn {
-      background: rgba(11, 90, 208, 0.08);
-      border: 1px solid rgba(11, 90, 208, 0.18);
-      color: var(--color-accent);
-      box-shadow: var(--shadow-soft);
-      min-height: 48px;
-      font-weight: 700;
-    }
-
-    .soft-btn:hover {
-      background: rgba(11, 90, 208, 0.14);
-      color: var(--color-accent);
-    }
-
-    .soft-btn:disabled {
-      opacity: 0.65;
-      cursor: not-allowed;
-    }
-
-    .btn .spinner-border {
-      width: 1rem;
-      height: 1rem;
-      border-width: 2px;
-    }
-
-    .input-group-text {
-      border-color: var(--color-border);
-      background: var(--color-accent-soft);
-      color: var(--color-accent);
-      border-radius: 12px 0 0 12px !important;
-    }
-
-    .table { color: var(--color-text-primary); font-size: 1rem; width: 100%; }
-    .table thead { display: none; }
-    .table thead th {
-      background: #f0f4f9;
-      color: var(--color-text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 0.9rem;
-      border-bottom: 1px solid var(--color-border);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .table.stack-table tbody { display: grid; gap: 0.85rem; }
     .table.stack-table tbody tr {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.55rem 0.75rem;
-      padding: 1rem 0.95rem 0.75rem;
-      border: 1px solid rgba(11, 90, 208, 0.12);
-      border-radius: 16px;
-      background: #fff;
-      box-shadow: var(--shadow-md);
-      position: relative;
-      overflow: hidden;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 12px;
+      padding: 16px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      background: var(--bg-card);
+      box-shadow: var(--shadow-xs);
     }
 
-    .table.stack-table tbody tr.row-critical { background: linear-gradient(180deg, rgba(193, 18, 31, 0.06), rgba(193, 18, 31, 0.01)); }
-    .table.stack-table tbody tr.row-warning { background: linear-gradient(180deg, rgba(11, 90, 208, 0.05), rgba(11, 90, 208, 0.01)); }
-
     .table.stack-table tbody td {
-      padding: 0.35rem 0;
-      text-align: left !important;
+      padding: 8px 0;
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.65rem;
-      width: 100%;
-      min-width: 0;
+      flex-direction: column;
+      gap: 4px;
+      border-bottom: none;
     }
 
     .table.stack-table tbody td::before {
       content: attr(data-label);
-      font-weight: 700;
-      color: var(--color-text-secondary);
-      margin-right: 0.5rem;
-      flex: 1;
-      max-width: 160px;
-      min-width: 0;
+      font-weight: 600;
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .table.stack-table tbody td:last-child {
       grid-column: 1 / -1;
-      justify-content: flex-start;
-      align-items: center;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .stock-shell {
+      padding: calc(var(--navbar-height) + 16px) 16px 32px;
     }
 
-    .sku-text {
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      line-height: 1.4;
-      min-width: 0;
+    .hero-card {
+      padding: 20px;
     }
 
-    .warehouse-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.4rem 0.7rem;
-      border-radius: 10px;
-      background: var(--color-surface-alt);
-      color: var(--color-text-secondary);
-      font-weight: 700;
-      border: 1px solid rgba(11, 90, 208, 0.12);
-
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
+    h1.page-title {
+      font-size: var(--text-2xl);
     }
 
-    .table.stack-table tbody tr .warehouse-pill {
-      background: #e6efff;
-      border-color: rgba(11, 90, 208, 0.22);
-      color: var(--color-text-primary);
-      font-weight: 700;
+    .action-row {
+      flex-direction: column;
+      align-items: stretch;
     }
 
-    .metric-label { color: var(--color-text-secondary); font-weight: 700; font-size: 0.95rem; }
-    .text-faint { color: var(--color-text-muted); }
-
-    .table-responsive { overflow: visible; }
-
-    .filter-bar {
+    .action-row .btn {
       width: 100%;
-      background: #f8fafc;
-      border: 1px solid var(--color-border);
-      border-radius: 14px;
-      padding: 0.75rem;
-      display: grid;
-      gap: 0.65rem;
+      justify-content: center;
+    }
+
+    .control-chip {
+      min-width: 100%;
+    }
+
+    .tab-nav {
+      width: 100%;
+    }
+
+    .tab-nav .nav-link {
+      flex: 1;
+      padding: 10px 12px;
+      font-size: var(--text-xs);
     }
 
     .filter-bar .stacked-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 0.65rem;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .search-group {
+      max-width: none;
+    }
+
+    .table.stack-table tbody tr {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .hero-card {
+      grid-template-columns: 1.2fr 1fr;
       align-items: center;
     }
 
-    .filter-bar .label {
-      font-weight: 700;
-      color: var(--color-text-secondary);
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
+    .hero-actions {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media print {
+    .kotty-navbar,
+    .tab-nav,
+    .input-group,
+    .hero-card {
+      display: none !important;
     }
 
-    @media (min-width: 768px) {
-      body { font-size: 17px; }
-      .hero-card { padding: 1.65rem; grid-template-columns: 1.2fr 1fr; align-items: center; }
-      .hero-actions .btn { width: auto; }
-      .search-group { max-width: 480px; }
-      .filter-bar { padding: 0.9rem 1rem; }
+    .stock-shell {
+      padding: 0;
     }
 
-    @media (min-width: 992px) {
-      .card-pane .card-body { padding: 1.4rem 1.35rem; }
-      .table-responsive { overflow-x: auto; }
-      .table { font-size: 1rem; }
-      .table thead { display: table-header-group; }
-      .table.stack-table { display: table; }
-      .table.stack-table tbody { display: table-row-group; }
-      .table.stack-table tbody tr { display: table-row; box-shadow: none; border: none; border-radius: 0; background: transparent; overflow: visible; }
-      .table.stack-table tbody td {
-        display: table-cell;
-        padding: 0.85rem 0.7rem;
-        vertical-align: middle;
-        text-align: right !important;
-      }
-      .table.stack-table tbody td:first-child,
-      .table.stack-table tbody td:nth-child(2) { text-align: left !important; }
-      .table.stack-table tbody td::before { display: none; }
-      .table.stack-table tbody td:last-child { grid-column: auto; }
-      .tab-nav { grid-template-columns: repeat(3, max-content); width: fit-content; }
-      .tab-nav .nav-link { padding-inline: 1.35rem; }
+    .status-pill {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
+  }
+</style>
 
-    @media (max-width: 575.98px) {
-      .topbar .container-fluid {
-        padding: 0.55rem 0.75rem;
-        gap: 0.5rem !important;
-      }
-
-      .brand { gap: 0.5rem; }
-      .brand .logo-mark {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        font-size: 0.95rem;
-      }
-
-      .brand-title { font-size: 0.98rem; }
-      .user-chip {
-        padding: 0.4rem 0.6rem;
-        font-size: 0.9rem;
-        gap: 0.4rem;
-        max-width: 180px;
-      }
-      .user-chip .user-name { max-width: 110px; }
-
-      .hero-card { padding: 1rem 0.9rem; gap: 0.75rem; }
-      .eyebrow { font-size: 0.78rem; }
-      h1.page-title { font-size: 1.2rem; }
-      .lede-text { font-size: 0.95rem; }
-
-      .action-row { grid-template-columns: 1fr !important; }
-      .action-row .btn { min-height: 44px; }
-
-      .control-chip { padding: 0.5rem 0.6rem; border-radius: 12px; }
-      .control-chip label { font-size: 0.85rem; }
-      .control-chip select { min-height: 42px; font-size: 0.95rem; }
-
-      .search-input { padding: 0.75rem 0.85rem; }
-      .input-group-text { padding: 0.75rem 0.85rem; }
-
-      .table.stack-table tbody tr{
-        grid-template-columns: 1fr !important;
-        gap: 0.6rem !important;
-        padding: 0.95rem 0.85rem 0.8rem !important;
-      }
-
-      .table.stack-table tbody td{
-        display: block !important;
-        padding: 0.55rem 0 !important;
-        text-align: left !important;
-      }
-
-      .table.stack-table tbody td::before{
-        display: block !important;
-        max-width: none !important;
-        margin: 0 0 0.25rem 0 !important;
-        font-size: 0.88rem;
-        opacity: 0.9;
-      }
-
-      .table.stack-table tbody td:last-child{
-        grid-column: auto !important;
-        justify-content: flex-start !important;
-        align-items: flex-start !important;
-      }
-
-      .status-pill{
-        font-size: 0.85rem !important;
-        padding: 0.35rem 0.65rem !important;
-      }
-    }
-
-    @media (max-width: 380px) {
-      .user-chip .user-name { display: none; }
-    }
-
-    @media print {
-      body { background: #fff; }
-      .topbar, .tab-nav, .input-group, .hero-card { display: none !important; }
-      .status-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .table tbody tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-  </style>
-</head>
-
-<body>
 <% const isMohitOperator = (user?.username || '').toLowerCase() === 'mohitoperator'; %>
 <% const hasWarehouseChoice = (accessibleWarehouses || []).length > 1; %>
 <% const isAllWarehousesSelected = String(selectedWarehouseId) === 'all'; %>
 
-<div class="topbar">
-  <div class="container-fluid d-flex align-items-center justify-content-between gap-3">
-    <a class="brand" href="/dashboard">
-      <span class="logo-mark">OS</span>
-      <span class="brand-text">
-        <span class="brand-title">Out-of-stock control</span>
-        <small class="brand-subtitle d-none d-sm-block">Warehouses, runway, and gaps</small>
-      </span>
-    </a>
-
-    <div class="d-flex align-items-center gap-2 topbar-actions">
-      <% if (user) { %>
-        <span class="user-chip">
-          <i class="bi bi-person-circle"></i>
-          <span class="user-name"><%= user.username || user.name %></span>
-        </span>
-      <% } %>
-
-      <a href="/logout" class="btn btn-light btn-sm d-inline-flex d-sm-none align-items-center gap-1">
-        <i class="bi bi-box-arrow-right"></i>
-      </a>
-
-      <a href="/logout" class="btn btn-outline-secondary btn-sm d-none d-sm-inline-flex align-items-center gap-2">
-        <i class="bi bi-box-arrow-right"></i>
-        Logout
-      </a>
-    </div>
-  </div>
-</div>
-
 <div class="stock-shell">
-  <div class="hero-card mb-3">
+  <!-- Hero Card -->
+  <div class="hero-card mb-4">
     <div class="hero-heading">
-      <span class="eyebrow"><i class="bi bi-activity"></i> Live runway</span>
-      <h1 class="page-title">Inventory health with warehouse focus</h1>
-      <p class="lede-text mb-1">Inventory, orders, and slow movers in one control board.</p>
+      <span class="eyebrow"><i class="bi bi-activity"></i> Live Runway</span>
+      <h1 class="page-title">Inventory Health Dashboard</h1>
+      <p class="lede-text">Monitor inventory, orders, and slow movers in one unified control board.</p>
     </div>
 
     <div class="hero-meta">
-      <div class="meta-chip"><i class="bi bi-clock-history"></i>Auto-refresh every 2 min</div>
-      <div class="meta-chip"><i class="bi bi-bezier2"></i>Linked inventory + demand signals</div>
+      <div class="meta-chip">
+        <i class="bi bi-clock-history"></i>
+        <span>Auto-refresh every 2 min</span>
+      </div>
+      <div class="meta-chip">
+        <i class="bi bi-bezier2"></i>
+        <span>Linked inventory + demand signals</span>
+      </div>
     </div>
 
     <div class="hero-actions">
       <div class="action-row">
-        <button class="btn soft-btn d-flex align-items-center justify-content-center gap-2" id="refresh-view" type="button" data-bs-toggle="tooltip" data-bs-title="Pull the latest inventory, orders, and slow movers">
+        <button class="btn btn-secondary" id="refresh-view" type="button" data-bs-toggle="tooltip" data-bs-title="Pull the latest inventory, orders, and slow movers">
           <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
           <i class="bi bi-arrow-clockwise"></i>
-          <span class="d-none d-sm-inline">Refresh view</span>
-          <span class="d-sm-none">Refresh</span>
+          <span>Refresh View</span>
         </button>
 
         <% if (isMohitOperator) { %>
-          <a class="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2" href="/easyecom/stock-market/making-time" data-bs-toggle="tooltip" data-bs-title="Upload making time rows for out-of-stock SKUs">
-            <i class="bi bi-upload"></i><span>Bulk making time</span>
+          <a class="btn btn-outline" href="/easyecom/stock-market/making-time" data-bs-toggle="tooltip" data-bs-title="Upload making time rows for out-of-stock SKUs">
+            <i class="bi bi-upload"></i>
+            <span>Bulk Making Time</span>
           </a>
-          <a class="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-2" href="/easyecom/warehouse-access" data-bs-toggle="tooltip" data-bs-title="Grant warehouse visibility to Out-of-Stock users">
-            <i class="bi bi-building-gear"></i><span>Warehouse access</span>
+          <a class="btn btn-secondary" href="/easyecom/warehouse-access" data-bs-toggle="tooltip" data-bs-title="Grant warehouse visibility to Out-of-Stock users">
+            <i class="bi bi-building-gear"></i>
+            <span>Warehouse Access</span>
           </a>
-          <button class="btn btn-outline-danger d-flex align-items-center justify-content-center gap-2" id="cleanup-health" type="button" data-bs-toggle="tooltip" data-bs-title="Remove stale health records (>30 days old with no orders)">
-            <i class="bi bi-trash3"></i><span>Cleanup stale</span>
+          <button class="btn btn-danger" id="cleanup-health" type="button" data-bs-toggle="tooltip" data-bs-title="Remove stale health records (>30 days old with no orders)">
+            <i class="bi bi-trash3"></i>
+            <span>Cleanup Stale</span>
           </button>
         <% } %>
 
-        <button class="btn btn-success d-flex align-items-center justify-content-center gap-2" id="download-excel" type="button" data-bs-toggle="tooltip" data-bs-title="Export the current filters as Excel">
+        <button class="btn btn-success" id="download-excel" type="button" data-bs-toggle="tooltip" data-bs-title="Export the current filters as Excel">
           <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-          <i class="bi bi-file-earmark-excel"></i><span>Download Excel</span>
+          <i class="bi bi-file-earmark-excel"></i>
+          <span>Download Excel</span>
         </button>
       </div>
 
       <div class="action-row">
-        <div class="control-chip w-100">
+        <div class="control-chip">
           <label for="period-select">Period</label>
           <select class="form-select" id="period-select" name="period">
             <% Object.entries(periodPresets).forEach(([key, preset]) => { %>
@@ -744,8 +658,9 @@
             <% }); %>
           </select>
         </div>
+
         <% if (hasWarehouseChoice) { %>
-          <div class="control-chip w-100">
+          <div class="control-chip">
             <label for="warehouse-select">Warehouse</label>
             <select class="form-select" id="warehouse-select" name="warehouseId" data-bs-toggle="tooltip" data-bs-title="Switch warehouses to see out-of-stock gaps per site">
               <option value="all" <%= isAllWarehousesSelected ? 'selected' : '' %>>All warehouses</option>
@@ -761,66 +676,66 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-12 col-md-4">
-      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs that will run out first based on yesterday's orders">
-        <div class="stat-icon"><i class="bi bi-thermometer-half"></i></div>
-        <div class="stat-label">Critical SKUs</div>
-        <div class="stat-value" id="metric-critical">0</div>
-        <div class="stat-subtle">Need replenishment now</div>
-      </div>
+  <!-- Stats Grid -->
+  <div class="stat-grid">
+    <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs that will run out first based on yesterday's orders">
+      <div class="stat-icon"><i class="bi bi-thermometer-half"></i></div>
+      <div class="stat-label">Critical SKUs</div>
+      <div class="stat-value" id="metric-critical">0</div>
+      <div class="stat-subtle">Need replenishment now</div>
     </div>
-    <div class="col-12 col-md-4">
-      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs trending towards risk but not yet critical">
-        <div class="stat-icon"><i class="bi bi-eye"></i></div>
-        <div class="stat-label">On watch</div>
-        <div class="stat-value" id="metric-watch">0</div>
-        <div class="stat-subtle">Monitor before they slip</div>
-      </div>
+    <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="SKUs trending towards risk but not yet critical">
+      <div class="stat-icon"><i class="bi bi-eye"></i></div>
+      <div class="stat-label">On Watch</div>
+      <div class="stat-value" id="metric-watch">0</div>
+      <div class="stat-subtle">Monitor before they slip</div>
     </div>
-    <div class="col-12 col-md-4">
-      <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="Median days left based on current run rate">
-        <div class="stat-icon"><i class="bi bi-speedometer"></i></div>
-        <div class="stat-label">Median runway</div>
-        <div class="stat-value" id="metric-runway">0d</div>
-        <div class="stat-subtle">Across SKUs in view</div>
-      </div>
+    <div class="stat-card" data-bs-toggle="tooltip" data-bs-title="Median days left based on current run rate">
+      <div class="stat-icon"><i class="bi bi-speedometer"></i></div>
+      <div class="stat-label">Median Runway</div>
+      <div class="stat-value" id="metric-runway">0d</div>
+      <div class="stat-subtle">Across SKUs in view</div>
     </div>
   </div>
 
+  <!-- Main Card with Tabs -->
   <div class="card-pane">
     <div class="card-body">
       <div class="tab-shell">
         <ul class="nav nav-pills tab-nav mb-0" id="pills-tab" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="inventory-tab" data-bs-toggle="pill" data-bs-target="#inventory" type="button" role="tab">
-              <i class="bi bi-box-seam"></i><span>Inventory</span>
+              <i class="bi bi-box-seam"></i>
+              <span>Inventory</span>
             </button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="orders-tab" data-bs-toggle="pill" data-bs-target="#orders" type="button" role="tab">
-              <i class="bi bi-cart-check"></i><span>Orders</span>
+              <i class="bi bi-cart-check"></i>
+              <span>Orders</span>
             </button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="slow-tab" data-bs-toggle="pill" data-bs-target="#slow" type="button" role="tab">
-              <i class="bi bi-hourglass-split"></i><span>Slow movers</span>
+              <i class="bi bi-hourglass-split"></i>
+              <span>Slow Movers</span>
             </button>
           </li>
         </ul>
-        <div class="d-flex align-items-center gap-2 text-secondary fw-semibold">
-          <i class="bi bi-arrow-repeat text-primary"></i>
+        <div class="live-indicator">
+          <i class="bi bi-arrow-repeat"></i>
           <span>Live sync view</span>
         </div>
       </div>
 
       <div class="tab-content" id="pills-tabContent">
+        <!-- Inventory Tab -->
         <div class="tab-pane fade show active" id="inventory" role="tabpanel">
-          <div class="filter-bar mb-3">
+          <div class="filter-bar">
             <div class="stacked-row">
               <div class="label" data-bs-toggle="tooltip" data-bs-title="Use the filters to show only critical, watch, or healthy SKUs. Colors match the runway calculation.">
                 <i class="bi bi-filter"></i>
-                Status view
+                Status View
               </div>
               <div class="btn-group status-filters" role="group" aria-label="Filter by status">
                 <input type="radio" class="btn-check" name="status-filter" id="status-all" autocomplete="off" value="all" checked>
@@ -847,9 +762,9 @@
                 <tr>
                   <th>SKU</th>
                   <th class="text-end">Inventory</th>
-                  <th class="text-end">Making time (days)</th>
-                  <th class="text-end">Yesterday orders</th>
-                  <th class="text-end">Days left</th>
+                  <th class="text-end">Making Time (days)</th>
+                  <th class="text-end">Yesterday Orders</th>
+                  <th class="text-end">Days Left</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -859,9 +774,9 @@
                   <tr data-filter="<%= `${item.sku}`.toLowerCase() %>" class="<%= item.status === 'red' ? 'row-critical' : item.status === 'purple' ? 'row-warning' : '' %>">
                     <td data-label="SKU" class="sku-text"><%= item.sku %></td>
                     <td data-label="Inventory" class="text-end"><%= item.inventory.toLocaleString() %></td>
-                    <td data-label="Making time" class="text-end"><%= item.making_time_days %></td>
-                    <td data-label="Yesterday orders" class="text-end"><%= item.yesterday_orders %></td>
-                    <td data-label="Days left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
+                    <td data-label="Making Time" class="text-end"><%= item.making_time_days %></td>
+                    <td data-label="Yesterday Orders" class="text-end"><%= item.yesterday_orders %></td>
+                    <td data-label="Days Left" class="text-end"><%= infinite ? '∞' : item.days_left.toFixed(1) %></td>
                     <td data-label="Status">
                       <% if (item.status === 'red') { %>
                         <span class="status-pill status-red"><i class="bi bi-exclamation-octagon-fill"></i>Critical</span>
@@ -878,8 +793,9 @@
           </div>
         </div>
 
+        <!-- Orders Tab -->
         <div class="tab-pane fade" id="orders" role="tabpanel">
-          <div class="filter-bar mb-3">
+          <div class="filter-bar">
             <div class="stacked-row">
               <div>
                 <div class="metric-label">
@@ -903,7 +819,7 @@
                   <th>SKU</th>
                   <th>Warehouse</th>
                   <th class="text-end">Orders (<span class="period-inline"><%= period.label %></span>)</th>
-                  <th class="text-end">Prev window</th>
+                  <th class="text-end">Prev Window</th>
                   <th class="text-end">Growth</th>
                 </tr>
               </thead>
@@ -917,7 +833,7 @@
                       <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= order.warehouse_label ?? order.warehouse_id ?? 'N/A' %></span>
                     </td>
                     <td data-label="Orders" class="text-end"><%= order.orders %></td>
-                    <td data-label="Prev window" class="text-end text-faint"><%= order.previous_orders %></td>
+                    <td data-label="Prev Window" class="text-end text-faint"><%= order.previous_orders %></td>
                     <td data-label="Growth" class="text-end">
                       <i class="bi <%= arrow %> me-1"></i>
                       <%= growth.toFixed(1) %>%
@@ -929,13 +845,14 @@
           </div>
         </div>
 
+        <!-- Slow Movers Tab -->
         <div class="tab-pane fade" id="slow" role="tabpanel">
-          <div class="filter-bar mb-3">
+          <div class="filter-bar">
             <div class="stacked-row">
               <div>
                 <div class="metric-label d-flex align-items-center gap-2">
                   <span>High inventory, low sales</span>
-                  <i class="bi bi-info-circle tooltip-icon" data-bs-toggle="tooltip" data-bs-title="Sorted by highest on-hand inventory first, then by lowest 30d and 7d orders."></i>
+                  <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" data-bs-title="Sorted by highest on-hand inventory first, then by lowest 30d and 7d orders." style="cursor: help;"></i>
                 </div>
                 <div class="text-faint">Shows SKUs (with making time set) that sold 10 or fewer units in both 7d and 30d windows.</div>
               </div>
@@ -963,7 +880,9 @@
                 <% slowMovers.forEach((row) => { %>
                   <tr data-filter="<%= `${row.sku}`.toLowerCase() %>">
                     <td data-label="SKU" class="sku-text"><%= row.sku %></td>
-                    <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= row.warehouse_label ?? row.warehouse_id ?? 'N/A' %></span></td>
+                    <td data-label="Warehouse">
+                      <span class="warehouse-pill"><i class="bi bi-geo-alt"></i><%= row.warehouse_label ?? row.warehouse_id ?? 'N/A' %></span>
+                    </td>
                     <td data-label="Inventory" class="text-end"><%= (Number(row.inventory) || 0).toLocaleString() %></td>
                     <td data-label="Orders (7d)" class="text-end"><%= row.orders_7d %></td>
                     <td data-label="Orders (30d)" class="text-end"><%= row.orders_30d %></td>
@@ -978,7 +897,6 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const initialData = {
     inventory: <%- JSON.stringify(inventory) %>,
@@ -995,9 +913,6 @@
   const refreshBtn = document.getElementById('refresh-view');
   const warehouseSelect = document.getElementById('warehouse-select');
   const statusFilterInputs = document.querySelectorAll('input[name="status-filter"]');
-
-  const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.forEach((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
 
   let inventoryRows = initialData.inventory || [];
   let orderRows = initialData.orders || [];
@@ -1081,9 +996,9 @@
         <tr data-filter="${(item.sku).toLowerCase()}" class="${label.row}">
           <td data-label="SKU" class="sku-text">${item.sku}</td>
           <td data-label="Inventory" class="text-end">${formatNumber(item.inventory)}</td>
-          <td data-label="Making time" class="text-end">${item.making_time_days}</td>
-          <td data-label="Yesterday orders" class="text-end">${item.yesterday_orders}</td>
-          <td data-label="Days left" class="text-end">${infinite ? '∞' : Number(item.days_left).toFixed(1)}</td>
+          <td data-label="Making Time" class="text-end">${item.making_time_days}</td>
+          <td data-label="Yesterday Orders" class="text-end">${item.yesterday_orders}</td>
+          <td data-label="Days Left" class="text-end">${infinite ? '∞' : Number(item.days_left).toFixed(1)}</td>
           <td data-label="Status"><span class="status-pill ${label.className}"><i class="bi ${label.icon}"></i>${label.text}</span></td>
         </tr>`;
     }).join('');
@@ -1106,7 +1021,7 @@
           <td data-label="SKU" class="sku-text">${order.sku}</td>
           <td data-label="Warehouse"><span class="warehouse-pill"><i class="bi bi-geo-alt"></i>${order.warehouse_label ?? order.warehouse_id ?? 'N/A'}</span></td>
           <td data-label="Orders" class="text-end">${order.orders}</td>
-          <td data-label="Prev window" class="text-end text-faint">${order.previous_orders}</td>
+          <td data-label="Prev Window" class="text-end text-faint">${order.previous_orders}</td>
           <td data-label="Growth" class="text-end"><i class="bi ${arrow} me-1"></i>${growth.toFixed(1)}%</td>
         </tr>`;
     }).join('');
@@ -1238,7 +1153,7 @@
 
       if (!confirm(`Delete ${stale.toLocaleString()} stale health records (>30 days old with no orders)?\n\nTotal records: ${total.toLocaleString()}`)) {
         cleanupBtn.disabled = false;
-        cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup stale</span>';
+        cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup Stale</span>';
         return;
       }
 
@@ -1248,12 +1163,13 @@
 
       alert(data.message || `Deleted ${data.deleted} stale records`);
       cleanupBtn.innerHTML = '<i class="bi bi-check-circle"></i> Done';
-      cleanupBtn.classList.replace('btn-outline-danger', 'btn-outline-success');
+      cleanupBtn.classList.remove('btn-danger');
+      cleanupBtn.classList.add('btn-success');
     } catch (err) {
       console.error('Cleanup failed:', err);
       alert('Cleanup failed: ' + err.message);
       cleanupBtn.disabled = false;
-      cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup stale</span>';
+      cleanupBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Cleanup Stale</span>';
     }
   });
 
@@ -1281,5 +1197,5 @@
   });
   startAutoRefresh();
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

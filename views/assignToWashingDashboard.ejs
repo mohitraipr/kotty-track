@@ -1,160 +1,312 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Assign Lot to Washing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Bootstrap 5 CSS & FontAwesome -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <style>
-    body { background-color: #f4f6f9; }
-    .navbar-brand { font-weight: 700; }
-    .card { margin-bottom: 1rem; }
-    .autocomplete-items {
-      position: absolute;
-      z-index: 1000;
-      width: 100%;
-      max-height: 200px;
-      overflow-y: auto;
-      background: #fff;
-      border: 1px solid #ced4da;
-      display: none;
+<% const pageTitle = 'Assign Lot to Washing'; %>
+<%- include('partials/header') %>
+<%- include('partials/navbar') %>
+
+<style>
+  /* Page-specific styles */
+  .autocomplete-items {
+    position: absolute;
+    z-index: 1000;
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    display: none;
+    box-shadow: var(--shadow-md);
+  }
+  .autocomplete-items li {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    transition: background var(--transition-fast);
+  }
+  .autocomplete-items li:hover {
+    background: var(--gray-100);
+  }
+
+  /* Accordion customization */
+  .accordion-button {
+    font-family: var(--font-body);
+    font-weight: 500;
+    background: var(--gray-50);
+    color: var(--text-primary);
+  }
+  .accordion-button:not(.collapsed) {
+    background: var(--terracotta-bg);
+    color: var(--terracotta);
+  }
+  .accordion-button:focus {
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    border-color: var(--terracotta);
+  }
+  .accordion-item {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg) !important;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .accordion-body {
+    background: var(--bg-card);
+    padding: 20px;
+  }
+
+  /* Entry card styling */
+  .entry-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: box-shadow var(--transition-fast);
+  }
+  .entry-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+  .entry-card-header {
+    background: var(--charcoal);
+    color: var(--text-inverse);
+    padding: 12px 18px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  .entry-card-body {
+    padding: 18px;
+  }
+  .entry-card-body ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .entry-card-body ul li {
+    padding: 6px 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .entry-card-body ul li:last-child {
+    border-bottom: none;
+  }
+
+  /* Size badges */
+  .size-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--gray-100);
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-right: 8px;
+    margin-bottom: 6px;
+  }
+  .size-badge strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* Page wrapper for no sidebar layout */
+  .page-wrapper {
+    margin-top: var(--navbar-height);
+    padding: 28px;
+    min-height: calc(100vh - var(--navbar-height));
+    background: var(--bg-page);
+  }
+
+  @media (max-width: 768px) {
+    .page-wrapper {
+      padding: 20px 16px;
     }
-    .autocomplete-items li { padding: 0.5rem; cursor: pointer; }
-    .autocomplete-items li:hover { background: #e9ecef; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
+  }
+</style>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-    <div class="container">
-      <a class="navbar-brand" href="#">Assign Lot to Washing</a>
-      <div class="ms-auto">
-        <a href="/logout" class="btn btn-outline-light btn-sm">
-          <i class="fas fa-sign-out-alt"></i> Logout
+<div class="page-wrapper">
+  <div class="container-fluid" style="max-width: var(--content-max-width);">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <a href="/dashboard" class="text-muted text-decoration-none" style="font-size: var(--text-sm);">
+          <i class="bi bi-house"></i> Dashboard
         </a>
+        <span class="text-muted" style="font-size: var(--text-sm);">/</span>
+        <span style="font-size: var(--text-sm); color: var(--text-secondary);">Assign to Washing</span>
       </div>
+      <h1 class="page-title">Assign Lot to Washing</h1>
+      <p class="page-subtitle">Select a Jeans Assembly operator and assign completed lots to washers</p>
     </div>
-  </nav>
 
-  <div class="container my-4">
+    <!-- Alerts -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
         <%= error[0] %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
     <% if (success && success.length) { %>
       <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
         <%= success[0] %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
     <!-- Select Jeans Assembly Operator -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-secondary text-white">
-        Select Jeans Assembly Operator
+    <div class="card mb-4">
+      <div class="card-header">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-person-gear" style="color: var(--terracotta);"></i>
+          <h2 class="card-title mb-0">Select Jeans Assembly Operator</h2>
+        </div>
       </div>
       <div class="card-body">
-        <select id="assemblyUserSelect" class="form-select">
-          <option value="">-- Select Operator --</option>
-          <% assemblyUsers.forEach(function(user){ %>
-            <option value="<%= user.id %>"><%= user.username %></option>
-          <% }); %>
-        </select>
+        <div class="form-group mb-0">
+          <select id="assemblyUserSelect" class="form-select">
+            <option value="">-- Select Operator --</option>
+            <% assemblyUsers.forEach(function(user){ %>
+              <option value="<%= user.id %>"><%= user.username %></option>
+            <% }); %>
+          </select>
+        </div>
       </div>
     </div>
 
     <!-- Accordion for Jeans Assembly records (loaded via AJAX) -->
-    <div id="accordionContainer"></div>
+    <div id="accordionContainer">
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <i class="bi bi-inbox" style="font-size: 48px;"></i>
+        </div>
+        <h3 class="empty-state-title">Select an Operator</h3>
+        <p class="empty-state-text">Choose a Jeans Assembly operator above to view their unassigned records</p>
+      </div>
+    </div>
   </div>
+</div>
 
-  <!-- Expose washers list to JavaScript -->
-  <script>
-    const washersList = <%- JSON.stringify(washers) %>;
-  </script>
+<!-- Expose washers list to JavaScript -->
+<script>
+  const washersList = <%- JSON.stringify(washers) %>;
+</script>
 
-  <!-- jQuery and Bootstrap JS -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // When the operator selects a Jeans Assembly Operator, fetch unassigned records.
-    $('#assemblyUserSelect').on('change', function(){
-      const userId = $(this).val();
-      if (!userId) {
-        $('#accordionContainer').html('');
-        return;
-      }
-      $.ajax({
-        url: '/assign-to-washing/data/' + userId,
-        method: 'GET',
-        success: function(data) {
-          let html = '';
-          if (data.length === 0) {
-            html = '<div class="alert alert-info">No unassigned jeans assembly records found for this operator.</div>';
-          } else {
-            data.forEach((group, idx) => {
-              html += `<div class="accordion mb-3" id="accordionGroup${idx}">`;
-              html += `  <div class="accordion-item">`;
-              html += `    <h2 class="accordion-header" id="heading${idx}">`;
-              html += `      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${idx}" aria-expanded="false" aria-controls="collapse${idx}">`;
-              html += `        Date: ${group.created_date}`;
-              html += `      </button>`;
-              html += `    </h2>`;
-              html += `    <div id="collapse${idx}" class="accordion-collapse collapse" aria-labelledby="heading${idx}" data-bs-parent="#accordionGroup${idx}">`;
-              html += `      <div class="accordion-body">`;
-              group.entries.forEach(function(entry) {
-                html += `<div class="card mb-3">`;
-                html += `  <div class="card-header">Lot: ${entry.lot_no} | SKU: ${entry.sku}</div>`;
-                html += `  <div class="card-body">`;
-                html += `    <p><strong>Total Pieces:</strong> ${entry.total_pieces}</p>`;
-                if (entry.sizes && entry.sizes.length) {
-                  html += `    <p><strong>Sizes:</strong></p>`;
-                  html += `    <ul>`;
-                  entry.sizes.forEach(function(sz) {
-                    html += `<li>${sz.size_label}: ${sz.pieces}</li>`;
-                  });
-                  html += `    </ul>`;
-                }
-                // Assignment form for this jeans assembly record.
-                html += `    <form method="POST" action="/assign-to-washing/assign" class="row g-3">`;
-                // Note: update the hidden field to use "jeans_assembly_data_id" instead of stitching_data_id.
-                html += `      <input type="hidden" name="jeans_assembly_data_id" value="${entry.id}">`;
-                html += `      <div class="col-md-6">`;
-                html += `        <select name="washer_id" class="form-select" required>`;
-                html += `          <option value="">-- Select Washer --</option>`;
-                washersList.forEach(function(washer) {
-                  html += `<option value="${washer.id}">${washer.username}</option>`;
-                });
-                html += `        </select>`;
-                html += `      </div>`;
-                html += `      <div class="col-md-6">`;
-                html += `        <button type="submit" class="btn btn-success w-100">Assign</button>`;
-                html += `      </div>`;
-                html += `    </form>`;
-                html += `  </div>`;
-                html += `</div>`;
-              });
-              html += `      </div>`;
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+  // When the operator selects a Jeans Assembly Operator, fetch unassigned records.
+  $('#assemblyUserSelect').on('change', function(){
+    const userId = $(this).val();
+    if (!userId) {
+      $('#accordionContainer').html(`
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i class="bi bi-inbox" style="font-size: 48px;"></i>
+          </div>
+          <h3 class="empty-state-title">Select an Operator</h3>
+          <p class="empty-state-text">Choose a Jeans Assembly operator above to view their unassigned records</p>
+        </div>
+      `);
+      return;
+    }
+
+    // Show loading state
+    $('#accordionContainer').html(`
+      <div class="text-center py-5">
+        <div class="spinner mx-auto mb-3" style="width: 32px; height: 32px;"></div>
+        <p class="text-muted">Loading records...</p>
+      </div>
+    `);
+
+    $.ajax({
+      url: '/assign-to-washing/data/' + userId,
+      method: 'GET',
+      success: function(data) {
+        let html = '';
+        if (data.length === 0) {
+          html = `
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="bi bi-check-circle" style="font-size: 48px; color: var(--success);"></i>
+              </div>
+              <h3 class="empty-state-title">All Caught Up</h3>
+              <p class="empty-state-text">No unassigned jeans assembly records found for this operator</p>
+            </div>
+          `;
+        } else {
+          data.forEach((group, idx) => {
+            html += `<div class="accordion mb-3" id="accordionGroup${idx}">`;
+            html += `  <div class="accordion-item">`;
+            html += `    <h2 class="accordion-header" id="heading${idx}">`;
+            html += `      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${idx}" aria-expanded="false" aria-controls="collapse${idx}">`;
+            html += `        <i class="bi bi-calendar3 me-2"></i> Date: ${group.created_date}`;
+            html += `        <span class="badge badge-neutral ms-2">${group.entries.length} record${group.entries.length > 1 ? 's' : ''}</span>`;
+            html += `      </button>`;
+            html += `    </h2>`;
+            html += `    <div id="collapse${idx}" class="accordion-collapse collapse" aria-labelledby="heading${idx}" data-bs-parent="#accordionGroup${idx}">`;
+            html += `      <div class="accordion-body">`;
+            group.entries.forEach(function(entry) {
+              html += `<div class="entry-card">`;
+              html += `  <div class="entry-card-header">`;
+              html += `    <i class="bi bi-box me-2"></i> Lot: ${entry.lot_no} | SKU: ${entry.sku}`;
+              html += `  </div>`;
+              html += `  <div class="entry-card-body">`;
+              html += `    <div class="d-flex align-items-center gap-2 mb-3">`;
+              html += `      <span class="text-muted" style="font-size: var(--text-sm);">Total Pieces:</span>`;
+              html += `      <span class="badge badge-primary" style="font-size: var(--text-sm);">${entry.total_pieces}</span>`;
               html += `    </div>`;
+              if (entry.sizes && entry.sizes.length) {
+                html += `    <div class="mb-3">`;
+                html += `      <p class="text-muted mb-2" style="font-size: var(--text-sm);">Size Breakdown:</p>`;
+                html += `      <div class="d-flex flex-wrap">`;
+                entry.sizes.forEach(function(sz) {
+                  html += `<span class="size-badge"><strong>${sz.size_label}:</strong> ${sz.pieces}</span>`;
+                });
+                html += `      </div>`;
+                html += `    </div>`;
+              }
+              // Assignment form for this jeans assembly record.
+              html += `    <form method="POST" action="/assign-to-washing/assign" class="row g-3 align-items-end">`;
+              // Note: update the hidden field to use "jeans_assembly_data_id" instead of stitching_data_id.
+              html += `      <input type="hidden" name="jeans_assembly_data_id" value="${entry.id}">`;
+              html += `      <div class="col-md-8">`;
+              html += `        <label class="form-label">Select Washer</label>`;
+              html += `        <select name="washer_id" class="form-select" required>`;
+              html += `          <option value="">-- Select Washer --</option>`;
+              washersList.forEach(function(washer) {
+                html += `<option value="${washer.id}">${washer.username}</option>`;
+              });
+              html += `        </select>`;
+              html += `      </div>`;
+              html += `      <div class="col-md-4">`;
+              html += `        <button type="submit" class="btn btn-primary w-100">`;
+              html += `          <i class="bi bi-arrow-right-circle"></i> Assign`;
+              html += `        </button>`;
+              html += `      </div>`;
+              html += `    </form>`;
               html += `  </div>`;
               html += `</div>`;
             });
-          }
-          $('#accordionContainer').html(html);
-        },
-        error: function(err) {
-          console.error(err);
-          $('#accordionContainer').html('<div class="alert alert-danger">Error fetching data.</div>');
+            html += `      </div>`;
+            html += `    </div>`;
+            html += `  </div>`;
+            html += `</div>`;
+          });
         }
-      });
+        $('#accordionContainer').html(html);
+      },
+      error: function(err) {
+        console.error(err);
+        $('#accordionContainer').html(`
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            Error fetching data. Please try again.
+          </div>
+        `);
+      }
     });
-  </script>
+  });
+</script>
 
-</html>
+<%- include('partials/footer') %>

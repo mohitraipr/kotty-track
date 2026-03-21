@@ -1,55 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lot Entries - Kotty Track</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #f8f9fa; color: #1e293b; padding: 20px; }
-    .top-nav { background: white; border-bottom: 1px solid #e2e8f0; padding: 16px 24px; margin: -20px -20px 20px -20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-    .back-btn { background: #6c757d; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; }
-    .back-btn:hover { background: #5c636a; color: white; }
-    .filter-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-    .table-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-    .table thead { background: #f8f9fa; }
-    .table thead th { font-weight: 600; color: #1e293b; padding: 14px; border-bottom: 2px solid #e2e8f0; }
-  </style>
-</head>
-<body>
-  <div class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4 class="mb-0"><i class="bi bi-calendar-range"></i> Lot Entries by Date</h4>
-      <a href="/operator/dashboard" class="back-btn"><i class="bi bi-arrow-left"></i> Back</a>
-    </div>
-  </div>
+<%- include('../partials/header', { pageTitle: 'Lot Entries' }) %>
+<%- include('../partials/navbar', { dashboardUrl: '/po-creator/operator/dashboard' }) %>
 
-  <div class="container-fluid">
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
     <%- include('../partials/flashMessages') %>
 
-    <div class="filter-card">
-      <form class="row g-3" method="GET" action="/po-creator/operator/lot-entries">
-        <div class="col-md-3">
-          <label class="form-label">Filter by Date</label>
-          <input type="date" name="date" class="form-control" value="<%= selectedDate %>">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <div class="breadcrumbs">
+            <a href="/po-creator/operator/dashboard">Dashboard</a>
+            <span class="separator">/</span>
+            <span>Lot Entries</span>
+          </div>
+          <h1 class="page-title">Lot Entries by Date</h1>
+          <p class="page-subtitle">View and search lot entries across all creators</p>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Search (Lot or SKU)</label>
-          <input type="text" name="search" class="form-control" value="<%= searchTerm %>" placeholder="LOT123 or SKU">
-        </div>
-        <div class="col-md-4 d-flex align-items-end">
-          <button type="submit" class="btn btn-primary me-2"><i class="bi bi-funnel"></i> Apply</button>
-          <a href="/po-creator/operator/lot-entries" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Clear</a>
-        </div>
-      </form>
+        <a href="/po-creator/operator/dashboard" class="btn btn-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
     </div>
 
-    <div class="table-card">
-      <div class="p-3 border-bottom">
-        <strong>Total Entries:</strong> <%= entries.length %>
+    <!-- Filter Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <form class="row g-3 align-items-end" method="GET" action="/po-creator/operator/lot-entries">
+          <div class="col-md-3 col-sm-6">
+            <label class="form-label">Filter by Date</label>
+            <input type="date" name="date" class="form-control" value="<%= selectedDate %>">
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <label class="form-label">Search (Lot or SKU)</label>
+            <input type="text" name="search" class="form-control" value="<%= searchTerm %>" placeholder="Enter lot code or SKU...">
+          </div>
+          <div class="col-md-5 col-sm-12">
+            <div class="d-flex gap-2 flex-wrap">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel"></i> Apply Filter
+              </button>
+              <a href="/po-creator/operator/lot-entries" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Clear
+              </a>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Results Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-calendar-range" style="color: var(--terracotta);"></i>
+          Lot Entries
+        </h2>
+        <span class="badge badge-primary">
+          <i class="bi bi-hash"></i> <%= entries.length %> entries
+        </span>
       </div>
       <div class="table-responsive">
         <table class="table mb-0">
@@ -60,32 +69,73 @@
               <th>Lot Code</th>
               <th>SKU</th>
               <th>Size</th>
-              <th>Quantity</th>
+              <th class="text-end">Quantity</th>
             </tr>
           </thead>
           <tbody>
             <% if (entries.length === 0) { %>
               <tr>
-                <td colspan="6" class="text-center py-4">No lot entries found.</td>
+                <td colspan="6" class="text-center py-5">
+                  <div style="color: var(--text-muted);">
+                    <i class="bi bi-inbox" style="font-size: 2.5rem; display: block; margin-bottom: 0.75rem;"></i>
+                    <p class="mb-0">No lot entries found.</p>
+                    <% if (selectedDate || searchTerm) { %>
+                      <p class="mb-0" style="font-size: var(--text-sm);">Try adjusting your filters.</p>
+                    <% } %>
+                  </div>
+                </td>
               </tr>
             <% } else { %>
               <% entries.forEach(entry => { %>
                 <tr>
-                  <td><%= new Date(entry.display_date || entry.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) %></td>
-                  <td><%= entry.creator_username %></td>
-                  <td><%= entry.lot_code %></td>
+                  <td>
+                    <span style="font-weight: 500;">
+                      <%= new Date(entry.display_date || entry.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) %>
+                    </span>
+                  </td>
+                  <td>
+                    <span class="badge badge-neutral">
+                      <i class="bi bi-person"></i> <%= entry.creator_username %>
+                    </span>
+                  </td>
+                  <td>
+                    <code style="background: var(--terracotta-bg); color: var(--terracotta); padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--text-sm);">
+                      <%= entry.lot_code %>
+                    </code>
+                  </td>
                   <td><%= entry.sku %></td>
-                  <td><%= entry.size || '-' %></td>
-                  <td><%= entry.quantity %></td>
+                  <td>
+                    <% if (entry.size) { %>
+                      <span class="badge badge-info"><%= entry.size %></span>
+                    <% } else { %>
+                      <span style="color: var(--text-muted);">-</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end">
+                    <span style="font-weight: 600; color: var(--text-primary);">
+                      <%= entry.quantity %>
+                    </span>
+                  </td>
                 </tr>
               <% }) %>
             <% } %>
           </tbody>
         </table>
       </div>
+      <% if (entries.length > 0) { %>
+        <div class="card-footer">
+          <div class="d-flex justify-content-between align-items-center">
+            <span style="font-size: var(--text-sm); color: var(--text-secondary);">
+              Showing <%= entries.length %> entr<%= entries.length === 1 ? 'y' : 'ies' %>
+            </span>
+            <span style="font-size: var(--text-sm); color: var(--text-muted);">
+              <i class="bi bi-info-circle"></i> All times in IST
+            </span>
+          </div>
+        </div>
+      <% } %>
     </div>
   </div>
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<%- include('../partials/footer') %>

@@ -1,435 +1,698 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Generate DC Challan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
-  <nav class="navbar navbar-expand-lg navbar-light app-navbar">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">
-        <i class="bi bi-file-earmark-text me-2"></i>Accounts DC Challan
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/purchase">
-                <i class="bi bi-cart-fill"></i> Purchase
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a class="nav-link active" href="/accounts-challan">
-              <i class="bi bi-file-earmark-text"></i> DC Challan
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan/list">
-              <i class="bi bi-list-ul"></i> Challan List
-            </a>
-          </li>
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/accounts-challan/gst">
-                <i class="bi bi-receipt"></i> GST Master
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'Generate DC Challan' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/accounts-challan' }) %>
 
-  <div class="app-shell">
+<% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width); margin: 0 auto;">
+
+    <!-- Flash Messages -->
     <% if (error && error.length) { %>
       <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle me-2"></i>
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
         <% error.forEach(msg => { %>
           <div><%= msg %></div>
         <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
+
     <% if (success && success.length) { %>
       <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle me-2"></i>
+        <i class="bi bi-check-circle-fill me-2"></i>
         <% success.forEach(msg => { %>
           <div><%= msg %></div>
         <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
     <% } %>
 
-    <!-- Tab Navigation -->
-    <ul class="nav nav-pills app-tabs mb-4">
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/purchase">
-            <i class="bi bi-cart-fill"></i> Purchase
-          </a>
-        </li>
-      <% } %>
-      <li class="nav-item">
-        <a class="nav-link active" href="/accounts-challan">
-          <i class="bi bi-file-earmark-text"></i> DC Challan
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan/list">
-          <i class="bi bi-list-ul"></i> Challan List
-        </a>
-      </li>
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan/gst">
-            <i class="bi bi-receipt"></i> GST Master
-          </a>
-        </li>
-      <% } %>
-    </ul>
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/accounts-challan">DC Challan Dashboard</a>
+      <span class="separator">/</span>
+      <span>Finalize Challan</span>
+    </div>
 
-    <!-- Hero Section -->
-    <div class="page-hero">
+    <!-- Page Header -->
+    <div class="page-header">
       <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-          <h2 class="mb-2">
-            <i class="bi bi-file-earmark-plus me-2"></i>Finalize DC Challan
-          </h2>
-          <p class="mb-0 opacity-90">Review selected lots, choose GST parties, and generate the delivery challan.</p>
+          <h1 class="page-title">
+            <i class="bi bi-file-earmark-plus me-2" style="color: var(--terracotta);"></i>
+            Finalize DC Challan
+          </h1>
+          <p class="page-subtitle">Review selected lots, choose GST parties, and generate the delivery challan.</p>
         </div>
-        <a href="/accounts-challan" class="btn btn-soft icon-btn" data-bs-toggle="tooltip" title="Back to Dashboard">
+        <a href="/accounts-challan" class="btn btn-outline">
           <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
         </a>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="card mb-4">
+      <div class="card-body py-2">
+        <ul class="nav nav-pills gap-2">
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/purchase" style="color: var(--text-secondary);">
+                <i class="bi bi-cart-fill me-1"></i> Purchase
+              </a>
+            </li>
+          <% } %>
+          <li class="nav-item">
+            <a class="nav-link active" href="/accounts-challan" style="background: var(--terracotta); color: white;">
+              <i class="bi bi-file-earmark-text me-1"></i> DC Challan
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/accounts-challan/list" style="color: var(--text-secondary);">
+              <i class="bi bi-list-ul me-1"></i> Challan List
+            </a>
+          </li>
+          <% if (isSapna) { %>
+            <li class="nav-item">
+              <a class="nav-link" href="/accounts-challan/gst" style="color: var(--text-secondary);">
+                <i class="bi bi-receipt me-1"></i> GST Master
+              </a>
+            </li>
+          <% } %>
+        </ul>
       </div>
     </div>
 
     <form action="/accounts-challan/create" method="POST">
       <input type="hidden" name="selectedRows" value='<%- JSON.stringify(selectedRows) %>'>
 
-      <div class="row">
+      <div class="row g-4">
+        <!-- Challan Details Form -->
         <div class="col-lg-4">
-          <div class="form-panel mb-3">
-            <h5 class="mb-4">
-              <i class="bi bi-file-earmark-text me-2"></i>Challan Details
-            </h5>
-            <div class="mb-3">
-              <label for="challanDate" class="form-label fw-semibold">
-                <i class="bi bi-calendar-event me-2"></i>Challan Date <span class="text-danger">*</span>
-              </label>
-              <input type="date" id="challanDate" name="challanDate" class="form-control" required data-bs-toggle="tooltip" title="Select challan date">
+          <div class="card h-100">
+            <div class="card-header">
+              <h3 class="card-title">
+                <i class="bi bi-file-earmark-text me-2" style="color: var(--terracotta);"></i>
+                Challan Details
+              </h3>
             </div>
-            <div class="mb-3">
-              <label for="senderId" class="form-label fw-semibold">
-                <i class="bi bi-send me-2"></i>Sender GST <span class="text-danger">*</span>
-              </label>
-              <select id="senderId" name="senderId" class="form-select" required data-bs-toggle="tooltip" title="Select the sender from GST master">
-                <option value="">-- Select Sender --</option>
-                <% senders.forEach(sender => { %>
-                  <option value="<%= sender.id %>">
-                    <%= sender.name %> <% if (sender.gstin) { %>(<%= sender.gstin %>)<% } %>
-                  </option>
-                <% }); %>
-              </select>
+            <div class="card-body">
+              <div class="form-group">
+                <label for="challanDate" class="form-label">
+                  <i class="bi bi-calendar-event me-1" style="color: var(--terracotta);"></i>
+                  Challan Date <span class="text-danger">*</span>
+                </label>
+                <input type="date" id="challanDate" name="challanDate" class="form-control" required>
+              </div>
+
+              <div class="form-group">
+                <label for="senderId" class="form-label">
+                  <i class="bi bi-send me-1" style="color: var(--terracotta);"></i>
+                  Sender GST <span class="text-danger">*</span>
+                </label>
+                <select id="senderId" name="senderId" class="form-control form-select" required>
+                  <option value="">-- Select Sender --</option>
+                  <% senders.forEach(sender => { %>
+                    <option value="<%= sender.id %>">
+                      <%= sender.name %> <% if (sender.gstin) { %>(<%= sender.gstin %>)<% } %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="consigneeId" class="form-label">
+                  <i class="bi bi-inbox me-1" style="color: var(--terracotta);"></i>
+                  Consignee GST <span class="text-danger">*</span>
+                </label>
+                <select id="consigneeId" name="consigneeId" class="form-control form-select" required>
+                  <option value="">-- Select Consignee --</option>
+                  <% consignees.forEach(consignee => { %>
+                    <option value="<%= consignee.id %>">
+                      <%= consignee.name %> <% if (consignee.gstin) { %>(<%= consignee.gstin %>)<% } %>
+                    </option>
+                  <% }); %>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="vehicleNumber" class="form-label">
+                  <i class="bi bi-truck me-1" style="color: var(--terracotta);"></i>
+                  Vehicle Number
+                </label>
+                <input type="text" id="vehicleNumber" name="vehicleNumber" class="form-control" placeholder="e.g., HR-26-AB-1234">
+              </div>
+
+              <div class="form-group">
+                <label for="purpose" class="form-label">
+                  <i class="bi bi-card-text me-1" style="color: var(--terracotta);"></i>
+                  Purpose
+                </label>
+                <input type="text" id="purpose" name="purpose" class="form-control" placeholder="e.g., Job Work / Transfer">
+              </div>
+
+              <div class="form-group">
+                <label for="purposePrice" class="form-label">
+                  <i class="bi bi-currency-rupee me-1" style="color: var(--terracotta);"></i>
+                  Purpose Price
+                </label>
+                <input type="number" id="purposePrice" name="purposePrice" class="form-control" step="0.01" min="0" placeholder="0.00">
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">
+                <i class="bi bi-check-circle me-2"></i>Create Challan
+              </button>
             </div>
-            <div class="mb-3">
-              <label for="consigneeId" class="form-label fw-semibold">
-                <i class="bi bi-inbox me-2"></i>Consignee GST <span class="text-danger">*</span>
-              </label>
-              <select id="consigneeId" name="consigneeId" class="form-select" required data-bs-toggle="tooltip" title="Select the consignee from GST master">
-                <option value="">-- Select Consignee --</option>
-                <% consignees.forEach(consignee => { %>
-                  <option value="<%= consignee.id %>">
-                    <%= consignee.name %> <% if (consignee.gstin) { %>(<%= consignee.gstin %>)<% } %>
-                  </option>
-                <% }); %>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="vehicleNumber" class="form-label fw-semibold">
-                <i class="bi bi-truck me-2"></i>Vehicle Number
-              </label>
-              <input type="text" id="vehicleNumber" name="vehicleNumber" class="form-control" placeholder="e.g., HR-26-AB-1234" data-bs-toggle="tooltip" title="Enter vehicle registration number">
-            </div>
-            <div class="mb-3">
-              <label for="purpose" class="form-label fw-semibold">
-                <i class="bi bi-card-text me-2"></i>Purpose
-              </label>
-              <input type="text" id="purpose" name="purpose" class="form-control" placeholder="e.g., Job Work / Transfer" data-bs-toggle="tooltip" title="Purpose of challan (Job Work, Transfer, etc.)">
-            </div>
-            <div class="mb-3">
-              <label for="purposePrice" class="form-label fw-semibold">
-                <i class="bi bi-currency-rupee me-2"></i>Purpose Price
-              </label>
-              <input type="number" id="purposePrice" name="purposePrice" class="form-control" step="0.01" min="0" placeholder="0.00" data-bs-toggle="tooltip" title="Enter price if applicable">
-            </div>
-            <button type="submit" class="btn btn-success w-100 btn-lg icon-btn">
-              <i class="bi bi-check-circle me-2"></i>Create Challan
-            </button>
           </div>
         </div>
 
+        <!-- Selected Lots Table -->
         <div class="col-lg-8">
-          <div class="surface-card table-card mb-3">
+          <div class="card mb-4">
             <div class="card-header">
               <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                  <i class="bi bi-box-seam me-2"></i>Selected Lots
-                </h5>
-                <small class="text-muted">
-                  <i class="bi bi-lock me-1"></i>Quantities are locked from dashboard
-                </small>
+                <h3 class="card-title">
+                  <i class="bi bi-box-seam me-2" style="color: var(--terracotta);"></i>
+                  Selected Lots
+                </h3>
+                <span class="badge" style="background: var(--cream-dark); color: var(--text-secondary);">
+                  <i class="bi bi-lock me-1"></i>Quantities locked from dashboard
+                </span>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-container">
+                <table class="table mb-0" id="selectedLotsTable">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Lot No</th>
+                      <th>SKU</th>
+                      <th>Total Pieces</th>
+                      <th>Type</th>
+                      <th>Challan Pieces</th>
+                    </tr>
+                  </thead>
+                  <tbody id="selectedLotsBody"></tbody>
+                </table>
+              </div>
+
+              <!-- Total Pieces Summary -->
+              <div class="card-footer d-flex justify-content-end">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="fw-semibold" style="color: var(--text-secondary);">
+                    <i class="bi bi-calculator me-2"></i>Total Pieces:
+                  </span>
+                  <span class="badge fs-6" id="totalPiecesBadge" style="background: var(--terracotta); color: white; padding: 8px 16px;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info Note -->
+          <div class="alert alert-permanent mb-4" style="background: var(--info-light); border: 1px solid var(--info); border-left: 4px solid var(--info);">
+            <i class="bi bi-info-circle me-2" style="color: var(--info);"></i>
+            <strong>Note:</strong> Challan quantities stay locked to the dashboard selections. You can switch items between Normal/Rewash here and add Mix rows below.
+          </div>
+
+          <!-- Mix Entries Section -->
+          <div class="card">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center">
+                <h3 class="card-title">
+                  <i class="bi bi-diagram-3 me-2" style="color: var(--terracotta);"></i>
+                  Mix Entries
+                </h3>
+                <span class="text-muted" style="font-size: var(--text-sm);">Use for manual mix/additional items</span>
               </div>
             </div>
             <div class="card-body">
-              <div class="table-responsive">
-                <table class="table table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th><i class="bi bi-hash me-1"></i>#</th>
-                  <th><i class="bi bi-tag me-1"></i>Lot No</th>
-                  <th><i class="bi bi-upc me-1"></i>SKU</th>
-                  <th><i class="bi bi-box me-1"></i>Total Pieces</th>
-                  <th><i class="bi bi-shuffle me-1"></i>Type</th>
-                  <th><i class="bi bi-check-circle me-1"></i>Challan Pieces</th>
-                </tr>
-              </thead>
-              <tbody id="selectedLotsBody"></tbody>
-            </table>
-          </div>
-          <div class="d-flex justify-content-end mt-3">
-            <div class="fw-bold">
-              <i class="bi bi-calculator me-2"></i>Total Pieces:
-              <span class="badge bg-primary fs-6" id="totalPiecesBadge">0</span>
-            </div>
-          </div>
-          <div class="alert alert-info border-0 mt-4 mb-0">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>Note:</strong> Challan quantities stay locked to the dashboard selections. You can switch items between Normal/Rewash here and add Mix rows below.
-          </div>
-          <div class="form-panel">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <h5 class="mb-0">
-                <i class="bi bi-diagram-3 me-2"></i>Mix Entries
-              </h5>
-              <span class="text-muted small">Use for manual mix/additional items</span>
-            </div>
-            <div class="row g-3 align-items-end">
-              <div class="col-md-5">
-                <label class="form-label fw-semibold">
-                  <i class="bi bi-pencil-square me-2"></i>Description
-                </label>
-                <input type="text" id="mixLabel" class="form-control" placeholder="Enter description">
+              <!-- Mix Entry Form -->
+              <div class="row g-3 align-items-end mb-4">
+                <div class="col-md-5">
+                  <label class="form-label">
+                    <i class="bi bi-pencil-square me-1" style="color: var(--terracotta);"></i>
+                    Description
+                  </label>
+                  <input type="text" id="mixLabel" class="form-control" placeholder="Enter description">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">
+                    <i class="bi bi-123 me-1" style="color: var(--terracotta);"></i>
+                    Quantity
+                  </label>
+                  <input type="number" id="mixQty" class="form-control" min="1" placeholder="0">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">
+                    <i class="bi bi-upc-scan me-1" style="color: var(--terracotta);"></i>
+                    SKU (optional)
+                  </label>
+                  <input type="text" id="mixSku" class="form-control" placeholder="SKU / identifier">
+                </div>
+                <div class="col-md-1">
+                  <button type="button" class="btn btn-primary w-100" id="addMixBtn">
+                    <i class="bi bi-plus-lg"></i>
+                  </button>
+                </div>
               </div>
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">
-                  <i class="bi bi-123 me-2"></i>Quantity
-                </label>
-                <input type="number" id="mixQty" class="form-control" min="1" placeholder="0">
+
+              <!-- Mix Items Table -->
+              <div class="table-container">
+                <table class="table table-sm mb-0">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Description</th>
+                      <th>SKU</th>
+                      <th>Quantity</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="mixItemsBody">
+                    <tr id="mixEmptyRow">
+                      <td colspan="5" class="text-center py-4" style="color: var(--text-muted);">
+                        <i class="bi bi-inbox me-2"></i>No mix entries added yet
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <div class="col-md-3">
-                <label class="form-label fw-semibold">
-                  <i class="bi bi-upc-scan me-2"></i>SKU (optional)
-                </label>
-                <input type="text" id="mixSku" class="form-control" placeholder="SKU / identifier">
-              </div>
-              <div class="col-md-1 d-grid">
-                <button type="button" class="btn btn-primary" id="addMixBtn">
-                  <i class="bi bi-plus-lg"></i>
-                </button>
-              </div>
-            </div>
-            <div class="table-responsive mt-3">
-              <table class="table table-sm table-striped mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>#</th>
-                    <th>Description</th>
-                    <th>SKU</th>
-                    <th>Quantity</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="mixItemsBody">
-                  <tr id="mixEmptyRow">
-                    <td colspan="5" class="text-center text-muted">No mix entries added yet</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
       </div>
-    </div>
     </form>
   </div>
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    const selectedLotsBody = document.getElementById('selectedLotsBody');
-    const mixItemsBody = document.getElementById('mixItemsBody');
-    const mixEmptyRow = document.getElementById('mixEmptyRow');
-    const totalPiecesBadge = document.getElementById('totalPiecesBadge');
-    const selectedRowsInput = document.querySelector('input[name="selectedRows"]');
+<style>
+  /* Page-specific styles */
+  .form-group {
+    margin-bottom: 1rem;
+  }
 
-    const selectedLots = (<%- JSON.stringify(selectedRows || []) %>).map((row) => {
-      const entryType = (row.entryType || row.itemType || 'normal').toString().toLowerCase();
-      return {
-        ...row,
-        entryType,
-        challan_pieces: parseInt(row.challan_pieces, 10) || 0
-      };
+  .form-label {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-control {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    outline: none;
+  }
+
+  .form-select {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    transition: all var(--transition-fast);
+    background-color: var(--bg-card);
+  }
+
+  .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    outline: none;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .table-container .table thead {
+    background: var(--cream-dark);
+  }
+
+  .table-container .table th {
+    background: var(--cream-dark);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: var(--text-xs);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .table-container .table td {
+    vertical-align: middle;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .table-container .table tbody tr:hover {
+    background: var(--cream-dark);
+  }
+
+  .nav-pills .nav-link {
+    border-radius: var(--radius-md);
+    padding: 8px 16px;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+  }
+
+  .nav-pills .nav-link:hover:not(.active) {
+    background: var(--cream-dark);
+    color: var(--terracotta);
+  }
+
+  .badge {
+    font-weight: 500;
+    border-radius: var(--radius-md);
+  }
+
+  .btn-primary {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: white;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .btn-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    padding: 10px 20px;
+  }
+
+  .btn-outline:hover {
+    background: var(--cream-dark);
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+  }
+
+  .btn-outline-danger {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .btn-outline-danger:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  .lot-type-select {
+    min-width: 100px;
+    font-size: var(--text-sm);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
+    background: var(--bg-card);
+  }
+
+  .lot-type-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 2px var(--terracotta-bg);
+    outline: none;
+  }
+
+  .challan-pieces-badge {
+    background: var(--success);
+    color: white;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+  }
+
+  .lot-number-badge {
+    background: var(--cream-darker);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+  }
+
+  .sku-code {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    background: var(--cream-dark);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+  }
+</style>
+
+<script>
+  const selectedLotsBody = document.getElementById('selectedLotsBody');
+  const mixItemsBody = document.getElementById('mixItemsBody');
+  const mixEmptyRow = document.getElementById('mixEmptyRow');
+  const totalPiecesBadge = document.getElementById('totalPiecesBadge');
+  const selectedRowsInput = document.querySelector('input[name="selectedRows"]');
+
+  const selectedLots = (<%- JSON.stringify(selectedRows || []) %>).map((row) => {
+    const entryType = (row.entryType || row.itemType || 'normal').toString().toLowerCase();
+    return {
+      ...row,
+      entryType,
+      challan_pieces: parseInt(row.challan_pieces, 10) || 0
+    };
+  });
+  const mixItems = [];
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function renderSelectedLots() {
+    while (selectedLotsBody.firstChild) {
+      selectedLotsBody.removeChild(selectedLotsBody.firstChild);
+    }
+
+    if (!selectedLots.length) {
+      const emptyRow = document.createElement('tr');
+      const emptyCell = document.createElement('td');
+      emptyCell.setAttribute('colspan', '6');
+      emptyCell.className = 'text-center py-4';
+      emptyCell.style.color = 'var(--text-muted)';
+
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-inbox me-2';
+      emptyCell.appendChild(icon);
+      emptyCell.appendChild(document.createTextNode('No lots selected'));
+
+      emptyRow.appendChild(emptyCell);
+      selectedLotsBody.appendChild(emptyRow);
+      return;
+    }
+
+    selectedLots.forEach((row, index) => {
+      const tr = document.createElement('tr');
+      const safeType = row.entryType === 'rewash' ? 'rewash' : 'normal';
+
+      // Cell 1: Index
+      const td1 = document.createElement('td');
+      const indexBadge = document.createElement('span');
+      indexBadge.className = 'lot-number-badge';
+      indexBadge.textContent = index + 1;
+      td1.appendChild(indexBadge);
+      tr.appendChild(td1);
+
+      // Cell 2: Lot No
+      const td2 = document.createElement('td');
+      const lotStrong = document.createElement('strong');
+      lotStrong.textContent = row.lot_no || '';
+      td2.appendChild(lotStrong);
+      tr.appendChild(td2);
+
+      // Cell 3: SKU
+      const td3 = document.createElement('td');
+      const skuCode = document.createElement('code');
+      skuCode.className = 'sku-code';
+      skuCode.textContent = row.sku || '';
+      td3.appendChild(skuCode);
+      tr.appendChild(td3);
+
+      // Cell 4: Total Pieces
+      const td4 = document.createElement('td');
+      td4.textContent = row.total_pieces || '';
+      tr.appendChild(td4);
+
+      // Cell 5: Type Select
+      const td5 = document.createElement('td');
+      const typeSelect = document.createElement('select');
+      typeSelect.className = 'form-select form-select-sm lot-type-select lot-type';
+
+      const optNormal = document.createElement('option');
+      optNormal.value = 'normal';
+      optNormal.textContent = 'Normal';
+      if (safeType === 'normal') optNormal.selected = true;
+      typeSelect.appendChild(optNormal);
+
+      const optRewash = document.createElement('option');
+      optRewash.value = 'rewash';
+      optRewash.textContent = 'Rewash';
+      if (safeType === 'rewash') optRewash.selected = true;
+      typeSelect.appendChild(optRewash);
+
+      typeSelect.addEventListener('change', (e) => {
+        row.entryType = e.target.value;
+        updatePayload();
+      });
+      td5.appendChild(typeSelect);
+      tr.appendChild(td5);
+
+      // Cell 6: Challan Pieces
+      const td6 = document.createElement('td');
+      const piecesBadge = document.createElement('span');
+      piecesBadge.className = 'challan-pieces-badge';
+      piecesBadge.textContent = row.challan_pieces;
+      td6.appendChild(piecesBadge);
+      tr.appendChild(td6);
+
+      selectedLotsBody.appendChild(tr);
     });
-    const mixItems = [];
+  }
 
-    function renderSelectedLots() {
-      selectedLotsBody.innerHTML = '';
-      if (!selectedLots.length) {
-        selectedLotsBody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-center text-muted py-3">
-              <i class="bi bi-inbox me-2"></i>No lots selected
-            </td>
-          </tr>
-        `;
-        return;
-      }
+  function renderMixItems() {
+    while (mixItemsBody.firstChild) {
+      mixItemsBody.removeChild(mixItemsBody.firstChild);
+    }
 
-      selectedLots.forEach((row, index) => {
-        const tr = document.createElement('tr');
-        const safeType = row.entryType === 'rewash' ? 'rewash' : 'normal';
-        tr.innerHTML = `
-          <td><span class="badge bg-secondary">${index + 1}</span></td>
-          <td><strong>${row.lot_no || ''}</strong></td>
-          <td><code>${row.sku || ''}</code></td>
-          <td>${row.total_pieces || ''}</td>
-          <td>
-            <select class="form-select form-select-sm lot-type">
-              <option value="normal" ${safeType === 'normal' ? 'selected' : ''}>Normal</option>
-              <option value="rewash" ${safeType === 'rewash' ? 'selected' : ''}>Rewash</option>
-            </select>
-          </td>
-          <td><span class="badge bg-success fs-6">${row.challan_pieces}</span></td>
-        `;
-        tr.querySelector('.lot-type').addEventListener('change', (e) => {
-          row.entryType = e.target.value;
+    if (!mixItems.length) {
+      mixItemsBody.appendChild(mixEmptyRow);
+      return;
+    }
+
+    mixItems.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+
+      // Cell 1: Index
+      const td1 = document.createElement('td');
+      const indexBadge = document.createElement('span');
+      indexBadge.className = 'lot-number-badge';
+      indexBadge.textContent = idx + 1;
+      td1.appendChild(indexBadge);
+      tr.appendChild(td1);
+
+      // Cell 2: Description
+      const td2 = document.createElement('td');
+      td2.textContent = item.customLabel;
+      tr.appendChild(td2);
+
+      // Cell 3: SKU
+      const td3 = document.createElement('td');
+      const skuCode = document.createElement('code');
+      skuCode.className = 'sku-code';
+      skuCode.textContent = item.sku || '-';
+      td3.appendChild(skuCode);
+      tr.appendChild(td3);
+
+      // Cell 4: Quantity
+      const td4 = document.createElement('td');
+      const qtyBadge = document.createElement('span');
+      qtyBadge.className = 'challan-pieces-badge';
+      qtyBadge.textContent = item.challan_pieces;
+      td4.appendChild(qtyBadge);
+      tr.appendChild(td4);
+
+      // Cell 5: Remove Button
+      const td5 = document.createElement('td');
+      td5.className = 'text-end';
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn-sm btn-outline-danger remove-mix';
+      removeBtn.setAttribute('data-idx', idx);
+      const trashIcon = document.createElement('i');
+      trashIcon.className = 'bi bi-trash';
+      removeBtn.appendChild(trashIcon);
+      removeBtn.addEventListener('click', (e) => {
+        const removeIdx = parseInt(e.currentTarget.dataset.idx, 10);
+        if (!Number.isNaN(removeIdx)) {
+          mixItems.splice(removeIdx, 1);
+          renderMixItems();
           updatePayload();
-        });
-        selectedLotsBody.appendChild(tr);
+        }
       });
-    }
+      td5.appendChild(removeBtn);
+      tr.appendChild(td5);
 
-    function renderMixItems() {
-      mixItemsBody.innerHTML = '';
-      if (!mixItems.length) {
-        mixItemsBody.appendChild(mixEmptyRow);
-        return;
-      }
-      mixItems.forEach((item, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${idx + 1}</td>
-          <td>${item.customLabel}</td>
-          <td>${item.sku || ''}</td>
-          <td>${item.challan_pieces}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-danger remove-mix" data-idx="${idx}">
-              <i class="bi bi-trash"></i>
-            </button>
-          </td>
-        `;
-        mixItemsBody.appendChild(tr);
-      });
-
-      document.querySelectorAll('.remove-mix').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          const idx = parseInt(e.currentTarget.dataset.idx, 10);
-          if (!Number.isNaN(idx)) {
-            mixItems.splice(idx, 1);
-            renderMixItems();
-            updatePayload();
-          }
-        });
-      });
-    }
-
-    function computeTotalPieces() {
-      const lotsTotal = selectedLots.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
-      const mixTotal = mixItems.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
-      return lotsTotal + mixTotal;
-    }
-
-    function updatePayload() {
-      const payload = [
-        ...selectedLots.map((row) => ({
-          ...row,
-          entryType: row.entryType || 'normal',
-          itemType: row.entryType || 'normal'
-        })),
-        ...mixItems
-      ];
-      selectedRowsInput.value = JSON.stringify(payload);
-      totalPiecesBadge.textContent = computeTotalPieces();
-    }
-
-    document.getElementById('addMixBtn').addEventListener('click', () => {
-      const label = document.getElementById('mixLabel').value.trim();
-      const qty = parseInt(document.getElementById('mixQty').value, 10);
-      const sku = document.getElementById('mixSku').value.trim();
-      if (!label) {
-        alert('Please enter a description for the mix item.');
-        return;
-      }
-      if (!qty || qty <= 0) {
-        alert('Please enter a valid quantity for the mix item.');
-        return;
-      }
-      mixItems.push({
-        entryType: 'mix',
-        itemType: 'mix',
-        customLabel: label,
-        lot_no: label,
-        sku,
-        sku_override: sku,
-        challan_pieces: qty
-      });
-      document.getElementById('mixLabel').value = '';
-      document.getElementById('mixQty').value = '';
-      document.getElementById('mixSku').value = '';
-      renderMixItems();
-      updatePayload();
+      mixItemsBody.appendChild(tr);
     });
+  }
 
-    document.querySelector('form').addEventListener('submit', () => {
-      updatePayload();
+  function computeTotalPieces() {
+    const lotsTotal = selectedLots.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
+    const mixTotal = mixItems.reduce((sum, row) => sum + (parseInt(row.challan_pieces, 10) || 0), 0);
+    return lotsTotal + mixTotal;
+  }
+
+  function updatePayload() {
+    const payload = [
+      ...selectedLots.map((row) => ({
+        ...row,
+        entryType: row.entryType || 'normal',
+        itemType: row.entryType || 'normal'
+      })),
+      ...mixItems
+    ];
+    selectedRowsInput.value = JSON.stringify(payload);
+    totalPiecesBadge.textContent = computeTotalPieces();
+  }
+
+  document.getElementById('addMixBtn').addEventListener('click', () => {
+    const label = document.getElementById('mixLabel').value.trim();
+    const qty = parseInt(document.getElementById('mixQty').value, 10);
+    const sku = document.getElementById('mixSku').value.trim();
+    if (!label) {
+      alert('Please enter a description for the mix item.');
+      return;
+    }
+    if (!qty || qty <= 0) {
+      alert('Please enter a valid quantity for the mix item.');
+      return;
+    }
+    mixItems.push({
+      entryType: 'mix',
+      itemType: 'mix',
+      customLabel: label,
+      lot_no: label,
+      sku,
+      sku_override: sku,
+      challan_pieces: qty
     });
-
-    renderSelectedLots();
+    document.getElementById('mixLabel').value = '';
+    document.getElementById('mixQty').value = '';
+    document.getElementById('mixSku').value = '';
     renderMixItems();
     updatePayload();
+  });
 
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+  document.querySelector('form').addEventListener('submit', () => {
+    updatePayload();
+  });
 
-    // Set today's date as default
-    document.getElementById('challanDate').valueAsDate = new Date();
-  </script>
-</body>
-</html>
+  renderSelectedLots();
+  renderMixItems();
+  updatePayload();
+
+  // Set today's date as default
+  document.getElementById('challanDate').valueAsDate = new Date();
+</script>
+
+<%- include('partials/footer') %>

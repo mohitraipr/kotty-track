@@ -1,87 +1,363 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Washing Payment Summary</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <style>
-    body {
-      background-color: #f8f9fa;
-      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+<% const pageTitle = 'Washing Payment Summary'; %>
+<%- include('partials/header') %>
+<%- include('partials/navbar') %>
+
+<style>
+  /* Page-specific styles */
+  .payment-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: calc(var(--navbar-height) + 28px) 24px 48px;
+  }
+
+  .page-header {
+    margin-bottom: 32px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+    margin-bottom: 16px;
+  }
+
+  .back-link:hover {
+    color: var(--terracotta);
+  }
+
+  .lot-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+    overflow: hidden;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .lot-card:hover {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .lot-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--gray-50);
+  }
+
+  .lot-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .lot-qty {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-light);
+  }
+
+  .lot-body {
+    padding: 22px;
+  }
+
+  .desc-container {
+    margin-bottom: 16px;
+  }
+
+  .desc-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .desc-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .desc-select {
+    flex: 1;
+    padding: 10px 40px 10px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a5650' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .desc-select:hover {
+    border-color: var(--border-medium);
+  }
+
+  .desc-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .remove-desc {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: var(--text-lg);
+    font-weight: 500;
+  }
+
+  .remove-desc:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  .add-desc {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--terracotta);
+    background: var(--terracotta-bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .add-desc:hover {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .lot-summary {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border-light);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  .summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .summary-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .summary-value {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+  }
+
+  .summary-value.highlight {
+    color: var(--terracotta);
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .btn-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    font-weight: 500;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-submit:hover {
+    background: #257a52;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .payment-container {
+      padding: calc(var(--navbar-height) + 20px) 16px 32px;
     }
 
-    .navbar {
-      background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+    .page-title {
+      font-size: var(--text-2xl);
     }
 
-    .card {
-      border: none;
-      border-radius: 0.75rem;
-      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    .lot-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
     }
 
-    .card-header {
-      background-color: #fff;
-      font-weight: 600;
-      border-bottom: none;
+    .lot-body {
+      padding: 16px;
     }
 
-    .add-desc,
-    .remove-desc {
-      border-radius: 0.5rem;
+    .desc-row {
+      flex-wrap: wrap;
     }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-dark">
-  <div class="container-fluid">
-    <span class="navbar-brand">Washing Payment</span>
-    <div class="d-flex gap-2 ms-auto">
-      <a href="/washingdashboard/payments" class="btn btn-outline-light btn-sm">Back</a>
-    </div>
+
+    .desc-select {
+      min-width: 100%;
+    }
+
+    .lot-summary {
+      gap: 16px;
+    }
+  }
+</style>
+
+<div class="payment-container">
+  <!-- Back Link -->
+  <a href="/washingdashboard/payments" class="back-link">
+    <i class="bi bi-arrow-left"></i>
+    Back to Payments Dashboard
+  </a>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Washing Payment Summary</h1>
+    <p class="text-secondary">Review and create invoices for selected lots</p>
   </div>
-</nav>
-<div class="container mt-4">
-<form method="POST" action="/washingdashboard/payments/create">
-  <% lots.forEach(function(l){ %>
-    <input type="hidden" name="lotIds" value="<%= l.id %>">
-    <div class="card mb-4">
-      <div class="card-header">
-        Lot <%= l.lot_no %> (Qty: <%= l.total_pieces %>)
-      </div>
-      <div class="card-body">
-        <div id="desc-container-<%= l.id %>" class="desc-container" data-lot="<%= l.id %>" data-qty="<%= l.total_pieces %>">
-          <div class="row g-2 desc-row">
-            <div class="col">
-              <select class="form-select desc-select" name="desc_<%= l.id %>[]">
+
+  <% if (lots && lots.length > 0) { %>
+  <form method="POST" action="/washingdashboard/payments/create">
+    <% lots.forEach(function(l){ %>
+      <input type="hidden" name="lotIds" value="<%= l.id %>">
+      <div class="lot-card">
+        <div class="lot-header">
+          <h3 class="lot-title">Lot <%= l.lot_no %></h3>
+          <span class="lot-qty">Quantity: <%= l.total_pieces %> pcs</span>
+        </div>
+        <div class="lot-body">
+          <div id="desc-container-<%= l.id %>" class="desc-container" data-lot="<%= l.id %>" data-qty="<%= l.total_pieces %>">
+            <div class="desc-row">
+              <select class="desc-select" name="desc_<%= l.id %>[]">
                 <option value="">Select description</option>
                 <% rates.forEach(function(r){ %>
-                  <option value="<%= r.description %>" data-rate="<%= r.rate %>"><%= r.description %> (₹<%= r.rate %>)</option>
+                  <option value="<%= r.description %>" data-rate="<%= r.rate %>"><%= r.description %> (Rs. <%= r.rate %>)</option>
                 <% }); %>
               </select>
+              <button type="button" class="remove-desc d-none">&times;</button>
             </div>
-            <div class="col-auto">
-              <button type="button" class="btn btn-outline-danger remove-desc d-none">&times;</button>
+          </div>
+          <button type="button" class="add-desc" data-lot="<%= l.id %>">
+            <i class="bi bi-plus-circle"></i>
+            Add Description
+          </button>
+          <div class="lot-summary">
+            <div class="summary-item">
+              <span class="summary-label">Total Rate</span>
+              <span class="summary-value">Rs. <span id="rate-<%= l.id %>">0</span></span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Amount</span>
+              <span class="summary-value highlight">Rs. <span id="amount-<%= l.id %>">0</span></span>
             </div>
           </div>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary add-desc" data-lot="<%= l.id %>">Add Description</button>
-        <p class="mt-2 mb-0">Total Rate: ₹<span id="rate-<%= l.id %>">0</span></p>
-        <p>Amount: ₹<span id="amount-<%= l.id %>">0</span></p>
       </div>
+    <% }); %>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-submit">
+        <i class="bi bi-receipt"></i>
+        Create Invoice
+      </button>
     </div>
-  <% }); %>
-  <div class="text-end">
-    <button type="submit" class="btn btn-success">Create Invoice</button>
+  </form>
+  <% } else { %>
+  <div class="empty-state">
+    <div class="empty-state-icon">
+      <i class="bi bi-inbox"></i>
+    </div>
+    <h3 class="empty-state-title">No Lots Selected</h3>
+    <p class="empty-state-text">Please select lots from the payments dashboard to create an invoice.</p>
   </div>
-</form>
+  <% } %>
 </div>
+
 <script>
-  const rateOptions = `<option value="">Select description</option><% rates.forEach(function(r){ %><option value="<%= r.description %>" data-rate="<%= r.rate %>"><%= r.description %> (₹<%= r.rate %>)</option><% }); %>`;
+  // Server-rendered rate options for dynamic row creation
+  const rateOptions = `<option value="">Select description</option><% rates.forEach(function(r){ %><option value="<%- r.description.replace(/'/g, "\\'") %>" data-rate="<%= r.rate %>"><%- r.description.replace(/'/g, "\\'") %> (Rs. <%= r.rate %>)</option><% }); %>`;
 
   function updateTotals(lotId){
     const container = document.getElementById('desc-container-' + lotId);
@@ -100,8 +376,8 @@
       const lotId = this.dataset.lot;
       const container = document.getElementById('desc-container-' + lotId);
       const row = document.createElement('div');
-      row.className = 'row g-2 desc-row mt-1';
-      row.innerHTML = `<div class="col"><select class="form-select desc-select" name="desc_${lotId}[]">${rateOptions}</select></div><div class="col-auto"><button type="button" class="btn btn-outline-danger remove-desc">&times;</button></div>`;
+      row.className = 'desc-row';
+      row.innerHTML = `<select class="desc-select" name="desc_${lotId}[]">${rateOptions}</select><button type="button" class="remove-desc">&times;</button>`;
       container.appendChild(row);
       row.querySelector('.desc-select').addEventListener('change', () => updateTotals(lotId));
       row.querySelector('.remove-desc').addEventListener('click', () => { row.remove(); updateTotals(lotId); });
@@ -114,5 +390,5 @@
     select.addEventListener('change', () => updateTotals(lotId));
   });
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

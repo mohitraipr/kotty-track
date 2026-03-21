@@ -4,116 +4,309 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Link Expired - Kotty Returns</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 
   <style>
+    :root {
+      /* Brand Colors */
+      --charcoal: #1a1a1a;
+      --charcoal-light: #2d2d2d;
+      --cream: #faf8f5;
+      --cream-dark: #f0ebe3;
+      --cream-darker: #e5dfd4;
+      --terracotta: #c45c3a;
+      --terracotta-dark: #a34a2d;
+
+      /* Semantic Colors */
+      --warning: #c4873a;
+      --warning-light: #fef6e8;
+      --warning-border: rgba(196, 135, 58, 0.2);
+
+      /* Text Colors */
+      --text-primary: #1a1a1a;
+      --text-secondary: #5a5650;
+      --text-muted: #a8a49a;
+
+      /* Borders & Shadows */
+      --border-light: #e8e6e1;
+      --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
+      --shadow-xl: 0 16px 48px rgba(26, 26, 26, 0.10);
+
+      /* Typography */
+      --font-display: 'DM Serif Display', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      /* Spacing & Radius */
+      --radius-lg: 8px;
+      --radius-xl: 12px;
+      --radius-2xl: 16px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
-      background: #f8fafc;
+      font-family: var(--font-body);
+      background: var(--cream);
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 24px;
+      color: var(--text-primary);
     }
 
     .expired-container {
-      max-width: 480px;
+      max-width: 440px;
       width: 100%;
-      background: white;
-      border-radius: 20px;
-      padding: 50px 40px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      background: #ffffff;
+      border-radius: var(--radius-2xl);
+      padding: 44px 40px;
+      box-shadow: var(--shadow-xl);
       text-align: center;
+      border: 1px solid var(--border-light);
+    }
+
+    .brand-header {
+      margin-bottom: 36px;
+    }
+
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .brand-logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--charcoal);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: #ffffff;
+    }
+
+    .brand-logo-text {
+      font-family: var(--font-display);
+      font-size: 24px;
+      color: var(--charcoal);
+      letter-spacing: -0.01em;
     }
 
     .expired-icon {
-      width: 100px;
-      height: 100px;
-      background: #fee2e2;
+      width: 80px;
+      height: 80px;
+      background: var(--warning-light);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0 auto 24px;
+      border: 2px solid var(--warning-border);
     }
 
     .expired-icon i {
-      font-size: 50px;
-      color: #ef4444;
+      font-size: 36px;
+      color: var(--warning);
     }
 
     .expired-title {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1e293b;
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 400;
+      color: var(--text-primary);
       margin-bottom: 12px;
+      line-height: 1.2;
     }
 
     .expired-message {
-      font-size: 16px;
-      color: #64748b;
-      margin-bottom: 32px;
-      line-height: 1.6;
+      font-family: var(--font-body);
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+      line-height: 1.7;
     }
 
     .contact-info {
-      background: #f8fafc;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
+      background: var(--cream);
+      border-radius: var(--radius-xl);
+      padding: 18px 22px;
+      margin-bottom: 28px;
+      border: 1px solid var(--border-light);
     }
 
     .contact-info p {
       margin: 0;
-      color: #64748b;
+      color: var(--text-secondary);
+      font-family: var(--font-body);
       font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .contact-info p:first-child {
+      margin-bottom: 4px;
+      font-weight: 500;
     }
 
     .contact-info a {
-      color: #2563eb;
-      font-weight: 600;
+      color: var(--terracotta);
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .contact-info a:hover {
+      color: var(--terracotta-dark);
+      text-decoration: underline;
     }
 
     .home-btn {
-      display: inline-block;
-      padding: 14px 32px;
-      background: #2563eb;
-      color: white;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 28px;
+      background: var(--charcoal);
+      color: #ffffff;
       text-decoration: none;
-      border-radius: 12px;
-      font-weight: 600;
-      transition: background 0.2s;
+      border-radius: var(--radius-lg);
+      font-family: var(--font-body);
+      font-weight: 500;
+      font-size: 15px;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
     }
 
     .home-btn:hover {
-      background: #1d4ed8;
-      color: white;
+      background: var(--charcoal-light);
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(26, 26, 26, 0.18);
+    }
+
+    .home-btn:active {
+      transform: translateY(0);
+    }
+
+    .home-btn i {
+      font-size: 18px;
+    }
+
+    .footer-text {
+      margin-top: 32px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 520px) {
+      body {
+        padding: 16px;
+      }
+
+      .expired-container {
+        padding: 32px 24px;
+        border-radius: var(--radius-xl);
+      }
+
+      .brand-header {
+        margin-bottom: 28px;
+      }
+
+      .brand-logo-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
+
+      .brand-logo-text {
+        font-size: 22px;
+      }
+
+      .expired-icon {
+        width: 72px;
+        height: 72px;
+        margin-bottom: 20px;
+      }
+
+      .expired-icon i {
+        font-size: 32px;
+      }
+
+      .expired-title {
+        font-size: 22px;
+      }
+
+      .expired-message {
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+
+      .contact-info {
+        padding: 16px 18px;
+        margin-bottom: 24px;
+      }
+
+      .home-btn {
+        width: 100%;
+        padding: 14px 24px;
+      }
+
+      .footer-text {
+        margin-top: 28px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="expired-container">
+    <div class="brand-header">
+      <a href="https://kotty.in" class="brand-logo">
+        <div class="brand-logo-icon">K</div>
+        <span class="brand-logo-text">Kotty</span>
+      </a>
+    </div>
+
     <div class="expired-icon">
-      <i class="bi bi-clock"></i>
+      <i class="bi bi-clock-history"></i>
     </div>
 
     <h1 class="expired-title">Link Expired</h1>
 
     <p class="expired-message">
-      <%= message || 'This bank details link has expired or is invalid. Please contact our support team to get a new link.' %>
+      <%= message || 'This bank details link has expired or is no longer valid. Please contact our support team to request a new link.' %>
     </p>
 
     <div class="contact-info">
-      <p>Need help? Contact us at:</p>
+      <p>Need assistance?</p>
       <p><a href="mailto:support@kotty.in">support@kotty.in</a></p>
     </div>
 
     <a href="https://kotty.in" class="home-btn">
-      <i class="bi bi-house me-2"></i>Go to Homepage
+      <i class="bi bi-house-door"></i>
+      Visit Kotty
     </a>
+
+    <p class="footer-text">Kotty Returns Portal</p>
   </div>
 </body>
 </html>

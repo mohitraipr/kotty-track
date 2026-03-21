@@ -1,166 +1,397 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Store Admin Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-  <style>
-    .low-stock { background-color: #f8d7da; }
-    .select2-container{ width:100%!important; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">Store Admin</a>
-    <div class="ms-auto">
-      <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
-<div class="container my-4">
-  <%- include('partials/flashMessages') %>
-  <ul class="nav nav-tabs" id="invTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab">Create Item</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#addTab" type="button" role="tab">Add Quantity</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatchTab" type="button" role="tab">Dispatch Goods</button>
-    </li>
-  </ul>
-  <div class="tab-content mt-3">
-    <div class="tab-pane fade show active" id="createTab" role="tabpanel">
-      <form action="/store-admin/create" method="POST" class="row g-3">
-        <div class="col-md-5">
-          <label class="form-label">Description</label>
-          <input type="text" name="description" class="form-control" required>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Size</label>
-          <input type="text" name="size" class="form-control" required>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Unit</label>
-          <select name="unit" class="form-select" required>
-            <option value="PCS">PCS</option>
-            <option value="ROLL">ROLL</option>
-          </select>
-        </div>
-        <div class="col-md-2 align-self-end">
-          <button type="submit" class="btn btn-success">Create</button>
-        </div>
-      </form>
-    </div>
-    <div class="tab-pane fade" id="addTab" role="tabpanel">
-      <form action="/inventory/add" method="POST" class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">Item</label>
-          <select id="addGoods" name="goods_id" class="form-select" required>
-            <% goods.forEach(g => { %>
-              <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Quantity</label>
-          <input type="number" name="quantity" class="form-control" required min="1">
-        </div>
-        <div class="col-md-3 align-self-end">
-          <button type="submit" class="btn btn-primary">Add</button>
-        </div>
-      </form>
-    </div>
-    <div class="tab-pane fade" id="dispatchTab" role="tabpanel">
-      <form action="/inventory/dispatch" method="POST" class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">Item</label>
-          <select id="dispatchGoods" name="goods_id" class="form-select" required>
-            <% goods.forEach(g => { %>
-              <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Quantity</label>
-          <input type="number" name="quantity" class="form-control" required min="1">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Remark</label>
-          <input type="text" name="remark" class="form-control">
-        </div>
-        <div class="col-12">
-          <button type="submit" class="btn btn-warning">Dispatch</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<%- include('partials/header', { pageTitle: 'Store Admin Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/store-admin/dashboard' }) %>
 
-  <h4 class="mt-4">Current Inventory</h4>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Description</th>
-          <th>Size</th>
-          <th>Unit</th>
-          <th>Qty</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% goods.forEach(g => { %>
-          <tr class="<%= g.qty == 100 ? 'low-stock' : '' %>">
-            <td><%= g.description_of_goods %></td>
-            <td><%= g.size %></td>
-            <td><%= g.unit %></td>
-            <td><%= g.qty %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-  <h4 class="mt-4">Recent Dispatches</h4>
-  <div class="table-responsive">
-    <table class="table table-bordered">
-      <thead>
-        <tr>
-          <th>Item</th>
-          <th>Qty</th>
-          <th>Remark</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% dispatched.forEach(d => { %>
-          <tr>
-            <td><%= d.description_of_goods %> - <%= d.size %> <%= d.unit %></td>
-            <td><%= d.quantity %></td>
-            <td><%= d.remark || '' %></td>
-            <td><%= d.dispatched_at.toLocaleString('en-CA', { hour12: false }) %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+<style>
+  /* Page Layout - No Sidebar */
+  .main-content {
+    margin-left: 0 !important;
+    padding-top: calc(var(--navbar-height) + 28px);
+  }
+
+  /* Select2 Kotty Theme */
+  .select2-container--default .select2-selection--single {
+    height: 44px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    padding: 6px 14px;
+    font-family: var(--font-body);
+  }
+
+  .select2-container--default .select2-selection--single:hover {
+    border-color: var(--border-medium);
+  }
+
+  .select2-container--default .select2-selection--single:focus,
+  .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+    outline: none;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 30px;
+    color: var(--text-primary);
+    padding-left: 0;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 42px;
+    right: 8px;
+  }
+
+  .select2-dropdown {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+
+  .select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--terracotta);
+  }
+
+  .select2-container--default .select2-results__option--selected {
+    background-color: var(--terracotta-bg);
+  }
+
+  .select2-container {
+    width: 100% !important;
+  }
+
+  /* Tab Navigation - Kotty Style */
+  .kotty-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--gray-100);
+    padding: 4px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+  }
+
+  .kotty-tab {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .kotty-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .kotty-tab.active {
+    background: var(--bg-card);
+    color: var(--terracotta);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .kotty-tab i {
+    font-size: 16px;
+  }
+
+  /* Low Stock Highlight */
+  .low-stock {
+    background-color: var(--danger-light) !important;
+  }
+
+  .low-stock td {
+    color: var(--danger);
+  }
+
+  /* Form Grid Layout */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    align-items: end;
+  }
+
+  @media (max-width: 768px) {
+    .kotty-tabs {
+      flex-direction: column;
+    }
+
+    .kotty-tab {
+      justify-content: flex-start;
+    }
+  }
+</style>
+
+<div class="main-content">
+  <div class="container" style="max-width: var(--content-max-width);">
+
+    <%- include('partials/flashMessages') %>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Store Admin</h1>
+      <p class="page-subtitle">Manage inventory items, add stock, and dispatch goods</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="kotty-tabs" id="invTabs" role="tablist">
+      <button class="kotty-tab active" id="create-tab" data-bs-toggle="tab" data-bs-target="#createTab" type="button" role="tab">
+        <i class="bi bi-plus-circle"></i>
+        <span>Create Item</span>
+      </button>
+      <button class="kotty-tab" id="add-tab" data-bs-toggle="tab" data-bs-target="#addTab" type="button" role="tab">
+        <i class="bi bi-box-arrow-in-down"></i>
+        <span>Add Quantity</span>
+      </button>
+      <button class="kotty-tab" id="dispatch-tab" data-bs-toggle="tab" data-bs-target="#dispatchTab" type="button" role="tab">
+        <i class="bi bi-truck"></i>
+        <span>Dispatch Goods</span>
+      </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Create Item Tab -->
+      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Create New Inventory Item</h3>
+          </div>
+          <div class="card-body">
+            <form action="/store-admin/create" method="POST">
+              <div class="form-grid">
+                <div class="form-group mb-0">
+                  <label class="form-label">Description</label>
+                  <input type="text" name="description" class="form-control form-input" placeholder="Enter item description" required>
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Size</label>
+                  <input type="text" name="size" class="form-control form-input" placeholder="e.g., M, L, XL" required>
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Unit</label>
+                  <select name="unit" class="form-select form-input" required>
+                    <option value="PCS">PCS</option>
+                    <option value="ROLL">ROLL</option>
+                  </select>
+                </div>
+                <div class="form-group mb-0">
+                  <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-plus-lg"></i> Create Item
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Quantity Tab -->
+      <div class="tab-pane fade" id="addTab" role="tabpanel">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Add Stock Quantity</h3>
+          </div>
+          <div class="card-body">
+            <form action="/inventory/add" method="POST">
+              <div class="form-grid">
+                <div class="form-group mb-0" style="grid-column: span 2;">
+                  <label class="form-label">Select Item</label>
+                  <select id="addGoods" name="goods_id" class="form-select" required>
+                    <% goods.forEach(g => { %>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Quantity</label>
+                  <input type="number" name="quantity" class="form-control form-input" placeholder="Enter quantity" required min="1">
+                </div>
+                <div class="form-group mb-0">
+                  <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-plus-lg"></i> Add Stock
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dispatch Goods Tab -->
+      <div class="tab-pane fade" id="dispatchTab" role="tabpanel">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Dispatch Goods</h3>
+          </div>
+          <div class="card-body">
+            <form action="/inventory/dispatch" method="POST">
+              <div class="form-grid">
+                <div class="form-group mb-0" style="grid-column: span 2;">
+                  <label class="form-label">Select Item</label>
+                  <select id="dispatchGoods" name="goods_id" class="form-select" required>
+                    <% goods.forEach(g => { %>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Quantity</label>
+                  <input type="number" name="quantity" class="form-control form-input" placeholder="Enter quantity" required min="1">
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Remark</label>
+                  <input type="text" name="remark" class="form-control form-input" placeholder="Optional remark">
+                </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-truck"></i> Dispatch
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Inventory -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-box-seam me-2" style="color: var(--terracotta);"></i>
+          Current Inventory
+        </h3>
+        <span class="badge badge-neutral"><%= goods.length %> items</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Size</th>
+              <th>Unit</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (goods.length === 0) { %>
+              <tr>
+                <td colspan="4">
+                  <div class="empty-state">
+                    <i class="bi bi-inbox empty-state-icon" style="font-size: 48px;"></i>
+                    <h4 class="empty-state-title">No Items Yet</h4>
+                    <p class="empty-state-text">Create your first inventory item using the form above.</p>
+                  </div>
+                </td>
+              </tr>
+            <% } else { %>
+              <% goods.forEach(g => { %>
+                <tr class="<%= g.qty == 100 ? 'low-stock' : '' %>">
+                  <td>
+                    <span style="font-weight: 500;"><%= g.description_of_goods %></span>
+                  </td>
+                  <td><%= g.size %></td>
+                  <td><span class="badge badge-neutral"><%= g.unit %></span></td>
+                  <td>
+                    <% if (g.qty == 100) { %>
+                      <span class="badge badge-danger">
+                        <i class="bi bi-exclamation-triangle"></i> <%= g.qty %>
+                      </span>
+                    <% } else { %>
+                      <span style="font-weight: 500;"><%= g.qty %></span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Dispatches -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-clock-history me-2" style="color: var(--terracotta);"></i>
+          Recent Dispatches
+        </h3>
+        <span class="badge badge-neutral"><%= dispatched.length %> records</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Remark</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (dispatched.length === 0) { %>
+              <tr>
+                <td colspan="4">
+                  <div class="empty-state">
+                    <i class="bi bi-truck empty-state-icon" style="font-size: 48px;"></i>
+                    <h4 class="empty-state-title">No Dispatches Yet</h4>
+                    <p class="empty-state-text">Dispatched goods will appear here.</p>
+                  </div>
+                </td>
+              </tr>
+            <% } else { %>
+              <% dispatched.forEach(d => { %>
+                <tr>
+                  <td>
+                    <span style="font-weight: 500;"><%= d.description_of_goods %></span>
+                    <span class="text-muted"> - <%= d.size %> <%= d.unit %></span>
+                  </td>
+                  <td><span class="badge badge-primary"><%= d.quantity %></span></td>
+                  <td><%= d.remark || '-' %></td>
+                  <td>
+                    <span class="text-muted" style="font-size: var(--text-sm);">
+                      <%= d.dispatched_at.toLocaleString('en-CA', { hour12: false }) %>
+                    </span>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
+
+<!-- jQuery (required for Select2) -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Select2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
 $(function(){
-  $('#addGoods').select2({ placeholder:'Select item', minimumResultsForSearch:0 });
-  $('#dispatchGoods').select2({ placeholder:'Select item', minimumResultsForSearch:0 });
+  // Initialize Select2 on both dropdowns
+  $('#addGoods').select2({ placeholder: 'Select item', minimumResultsForSearch: 0 });
+  $('#dispatchGoods').select2({ placeholder: 'Select item', minimumResultsForSearch: 0 });
+
+  // Custom tab switching to update active state on Kotty tabs
+  $('.kotty-tab').on('click', function() {
+    $('.kotty-tab').removeClass('active');
+    $(this).addClass('active');
+  });
 });
 </script>
-</body>
-</html>
+
+<%- include('partials/footer') %>

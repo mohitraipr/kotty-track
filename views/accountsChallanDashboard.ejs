@@ -1,125 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Accounts DC Challan Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
-  <nav class="navbar navbar-expand-lg navbar-light app-navbar">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">
-        <i class="bi bi-file-earmark-text me-2"></i>Accounts DC Challan
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/purchase">
-                <i class="bi bi-cart-fill"></i> Purchase
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a class="nav-link active" href="/accounts-challan">
-              <i class="bi bi-file-earmark-text"></i> DC Challan
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan/list">
-              <i class="bi bi-list-ul"></i> Challan List
-            </a>
-          </li>
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/accounts-challan/gst">
-                <i class="bi bi-receipt"></i> GST Master
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'Accounts DC Challan Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/accounts-challan' }) %>
 
-  <div class="app-shell">
+<% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width);">
+    <!-- Alerts -->
     <% if (error && error.length) { %>
-      <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <div class="alert alert-danger" role="alert">
         <i class="bi bi-exclamation-triangle me-2"></i>
-        <% error.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div>
+          <% error.forEach(msg => { %>
+            <div><%= msg %></div>
+          <% }); %>
+        </div>
       </div>
     <% } %>
     <% if (success && success.length) { %>
-      <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <div class="alert alert-success" role="alert">
         <i class="bi bi-check-circle me-2"></i>
-        <% success.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div>
+          <% success.forEach(msg => { %>
+            <div><%= msg %></div>
+          <% }); %>
+        </div>
       </div>
     <% } %>
 
     <!-- Tab Navigation -->
-    <ul class="nav nav-pills app-tabs mb-4">
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/purchase">
-            <i class="bi bi-cart-fill"></i> Purchase
+    <div class="card mb-4" style="border: none; background: var(--charcoal); padding: 8px; border-radius: var(--radius-lg);">
+      <div class="d-flex flex-wrap gap-2">
+        <% if (isSapna) { %>
+          <a href="/purchase" class="btn" style="background: transparent; color: var(--gray-400); border: 1px solid transparent; font-family: var(--font-body); font-weight: 500;">
+            <i class="bi bi-cart-fill me-2"></i>Purchase
           </a>
-        </li>
-      <% } %>
-      <li class="nav-item">
-        <a class="nav-link active" href="/accounts-challan">
-          <i class="bi bi-file-earmark-text"></i> DC Challan
+        <% } %>
+        <a href="/accounts-challan" class="btn" style="background: var(--terracotta); color: white; font-family: var(--font-body); font-weight: 500;">
+          <i class="bi bi-file-earmark-text me-2"></i>DC Challan
         </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan/list">
-          <i class="bi bi-list-ul"></i> Challan List
+        <a href="/accounts-challan/list" class="btn" style="background: transparent; color: var(--gray-400); border: 1px solid transparent; font-family: var(--font-body); font-weight: 500;">
+          <i class="bi bi-list-ul me-2"></i>Challan List
         </a>
-      </li>
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan/gst">
-            <i class="bi bi-receipt"></i> GST Master
+        <% if (isSapna) { %>
+          <a href="/accounts-challan/gst" class="btn" style="background: transparent; color: var(--gray-400); border: 1px solid transparent; font-family: var(--font-body); font-weight: 500;">
+            <i class="bi bi-receipt me-2"></i>GST Master
           </a>
-        </li>
-      <% } %>
-    </ul>
+        <% } %>
+      </div>
+    </div>
 
-    <!-- Hero Section -->
-    <div class="page-hero">
+    <!-- Page Header -->
+    <div class="page-header">
       <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-          <h2 class="mb-2">
-            <i class="bi bi-file-earmark-text me-2"></i>DC Challan Dashboard
-          </h2>
-          <p class="mb-3 opacity-90">Select cutting lots, enter quantities, and generate delivery challans.</p>
-          <div class="hero-note">
+          <h1 class="page-title">
+            <i class="bi bi-file-earmark-text me-2" style="color: var(--terracotta);"></i>DC Challan Dashboard
+          </h1>
+          <p class="page-subtitle">Select cutting lots, enter quantities, and generate delivery challans.</p>
+          <div class="badge badge-info mt-2" style="font-size: var(--text-sm); padding: 8px 14px;">
             <i class="bi bi-info-circle me-2"></i>All cutting lots are shown with issued and remaining pieces
           </div>
         </div>
-        <div class="hero-actions">
-          <button id="selectAllBtn" class="btn btn-soft icon-btn" data-bs-toggle="tooltip" title="Select or deselect all visible lots">
+        <div class="d-flex gap-2 flex-wrap">
+          <button id="selectAllBtn" class="btn btn-secondary" data-bs-toggle="tooltip" title="Select or deselect all visible lots">
             <i class="bi bi-check-all me-1"></i> Select All
           </button>
-          <button id="generateChallanBtn" class="btn btn-success icon-btn" disabled data-bs-toggle="tooltip" title="Generate challan for selected lots">
+          <button id="generateChallanBtn" class="btn btn-success" disabled data-bs-toggle="tooltip" title="Generate challan for selected lots">
             <i class="bi bi-file-earmark-plus me-1"></i> Generate Challan
           </button>
         </div>
@@ -127,112 +73,121 @@
     </div>
 
     <!-- Search Controls -->
-    <div class="search-controls mb-4">
-      <div class="row align-items-end g-3">
-        <div class="col-md-8">
-          <label class="form-label fw-semibold mb-2">
-            <i class="bi bi-search me-2"></i>Search Lots
-          </label>
-          <input
-            type="text"
-            id="searchInput"
-            class="form-control form-control-lg"
-            placeholder="Search by SKU, Lot No, or Cutting Remark..."
-            value="<%= search %>"
-            data-bs-toggle="tooltip"
-            title="Type to search lots by SKU, lot number, or remarks"
-          />
-        </div>
-        <div class="col-md-4">
-          <button class="btn btn-primary btn-lg w-100 icon-btn" id="searchBtn">
-            <i class="bi bi-search me-2"></i> Search
-          </button>
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row align-items-end g-3">
+          <div class="col-md-8">
+            <label class="form-label" style="font-weight: 500;">
+              <i class="bi bi-search me-2" style="color: var(--terracotta);"></i>Search Lots
+            </label>
+            <input
+              type="text"
+              id="searchInput"
+              class="form-input"
+              placeholder="Search by SKU, Lot No, or Cutting Remark..."
+              value="<%= search %>"
+              data-bs-toggle="tooltip"
+              title="Type to search lots by SKU, lot number, or remarks"
+            />
+          </div>
+          <div class="col-md-4">
+            <button class="btn btn-primary btn-lg w-100" id="searchBtn">
+              <i class="bi bi-search me-2"></i> Search
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Lots Table Card -->
-    <div class="surface-card table-card">
+    <div class="table-container">
       <div class="card-header">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">
-            <i class="bi bi-box-seam me-2"></i>Lots Awaiting Challan
+        <div class="d-flex justify-content-between align-items-center w-100">
+          <h5 class="card-title">
+            <i class="bi bi-box-seam me-2" style="color: var(--terracotta);"></i>Lots Awaiting Challan
           </h5>
-          <small class="text-muted">
+          <span class="text-muted" style="font-size: var(--text-sm);">
             <i class="bi bi-info-circle me-1"></i>Pick lots and set challan pieces
-          </small>
+          </span>
         </div>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-striped table-hover mb-0" id="assignmentsTable">
-            <thead class="table-light">
-              <tr>
-                <th style="width: 40px;">
-                  <input type="checkbox" id="selectAllCheckbox" data-bs-toggle="tooltip" title="Select/Deselect all">
-                </th>
-                <th><i class="bi bi-hash me-1"></i>ID</th>
-                <th><i class="bi bi-tag me-1"></i>Lot No</th>
-                <th><i class="bi bi-upc me-1"></i>SKU</th>
-            <th><i class="bi bi-box me-1"></i>Total Pieces</th>
-            <th><i class="bi bi-send me-1"></i>Issued (Normal)</th>
-            <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
-            <th><i class="bi bi-shuffle me-1"></i>Type</th>
-            <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
-                <th><i class="bi bi-scissors me-1"></i>Cutting Remark</th>
-                <th><i class="bi bi-clock me-1"></i>Created On</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (assignments && assignments.length) { %>
-                <% assignments.forEach(a => { %>
-                  <tr
-                    data-id="<%= a.cutting_id %>"
-                    data-lot="<%= a.lot_no %>"
-                    data-sku="<%= a.sku %>"
-                    data-total="<%= a.total_pieces %>"
-                    data-remaining="<%= a.remaining_pieces %>"
-                  >
-                    <td><input type="checkbox" class="rowCheckbox"></td>
-                    <td><%= a.cutting_id %></td>
-                    <td><%= a.lot_no %></td>
-                    <td><%= a.sku %></td>
-                    <td><%= a.total_pieces %></td>
-                    <td><%= a.issued_pieces %></td>
-                    <td><span class="badge badge-info"><%= a.remaining_pieces %></span></td>
-                    <td>
-                      <select class="form-select form-select-sm challan-type">
-                        <option value="normal" <%= a.remaining_pieces > 0 ? 'selected' : '' %>>Normal</option>
-                        <option value="rewash" <%= a.remaining_pieces <= 0 ? 'selected' : '' %>>Rewash</option>
-                      </select>
-                      <small class="text-muted">Rewash allows repeated lots</small>
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        class="form-control form-control-sm qty-input challan-qty"
-                        min="1"
-                        max="<%= a.total_pieces %>"
-                        value="<%= a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces %>"
-                      />
-                    </td>
-                    <td><%= a.cutting_remark %></td>
-                    <td><%= a.created_at ? new Date(a.created_at).toLocaleString() : '' %></td>
-                  </tr>
-                <% }); %>
-              <% } else { %>
-                <tr id="noRecordsRow">
-                  <td colspan="10" class="text-center">No records found.</td>
+      <div class="table-responsive">
+        <table class="table" id="assignmentsTable">
+          <thead>
+            <tr>
+              <th style="width: 40px;">
+                <input type="checkbox" id="selectAllCheckbox" data-bs-toggle="tooltip" title="Select/Deselect all" style="width: 18px; height: 18px; accent-color: var(--terracotta);">
+              </th>
+              <th><i class="bi bi-hash me-1"></i>ID</th>
+              <th><i class="bi bi-tag me-1"></i>Lot No</th>
+              <th><i class="bi bi-upc me-1"></i>SKU</th>
+              <th><i class="bi bi-box me-1"></i>Total Pieces</th>
+              <th><i class="bi bi-send me-1"></i>Issued (Normal)</th>
+              <th><i class="bi bi-box-seam me-1"></i>Remaining</th>
+              <th><i class="bi bi-shuffle me-1"></i>Type</th>
+              <th><i class="bi bi-input-cursor-text me-1"></i>Challan Qty</th>
+              <th><i class="bi bi-scissors me-1"></i>Cutting Remark</th>
+              <th><i class="bi bi-clock me-1"></i>Created On</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (assignments && assignments.length) { %>
+              <% assignments.forEach(a => { %>
+                <tr
+                  data-id="<%= a.cutting_id %>"
+                  data-lot="<%= a.lot_no %>"
+                  data-sku="<%= a.sku %>"
+                  data-total="<%= a.total_pieces %>"
+                  data-remaining="<%= a.remaining_pieces %>"
+                >
+                  <td>
+                    <input type="checkbox" class="rowCheckbox" style="width: 18px; height: 18px; accent-color: var(--terracotta);">
+                  </td>
+                  <td><span style="font-family: var(--font-mono); font-size: var(--text-sm);"><%= a.cutting_id %></span></td>
+                  <td><strong><%= a.lot_no %></strong></td>
+                  <td><%= a.sku %></td>
+                  <td><%= a.total_pieces %></td>
+                  <td><%= a.issued_pieces %></td>
+                  <td><span class="badge badge-info"><%= a.remaining_pieces %></span></td>
+                  <td>
+                    <select class="form-select challan-type" style="font-size: var(--text-sm); padding: 6px 30px 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--border-light); min-width: 100px;">
+                      <option value="normal" <%= a.remaining_pieces > 0 ? 'selected' : '' %>>Normal</option>
+                      <option value="rewash" <%= a.remaining_pieces <= 0 ? 'selected' : '' %>>Rewash</option>
+                    </select>
+                    <small class="text-muted d-block mt-1" style="font-size: var(--text-xs);">Rewash allows repeated lots</small>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      class="form-input challan-qty"
+                      min="1"
+                      max="<%= a.total_pieces %>"
+                      value="<%= a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces %>"
+                      style="width: 80px; padding: 6px 10px; font-size: var(--text-sm);"
+                    />
+                  </td>
+                  <td><%= a.cutting_remark %></td>
+                  <td style="font-size: var(--text-sm); color: var(--text-secondary);"><%= a.created_at ? new Date(a.created_at).toLocaleString() : '' %></td>
                 </tr>
-              <% } %>
-            </tbody>
-          </table>
-        </div>
+              <% }); %>
+            <% } else { %>
+              <tr id="noRecordsRow">
+                <td colspan="11" class="text-center" style="padding: 48px 24px;">
+                  <div class="empty-state">
+                    <i class="bi bi-inbox empty-state-icon" style="font-size: 48px; color: var(--text-muted);"></i>
+                    <h5 class="empty-state-title mt-3">No Records Found</h5>
+                    <p class="empty-state-text">There are no cutting lots awaiting challan at this time.</p>
+                  </div>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
       </div>
     </div>
 
     <div class="text-center my-4">
-      <button class="btn btn-outline-primary btn-lg icon-btn" id="loadMoreBtn" data-bs-toggle="tooltip" title="Load more lots">
+      <button class="btn btn-outline btn-lg" id="loadMoreBtn" data-bs-toggle="tooltip" title="Load more lots">
         <i class="bi bi-arrow-down-circle me-2"></i>Load More
       </button>
     </div>
@@ -241,160 +196,174 @@
       <input type="hidden" name="selectedRows" id="selectedRowsInput">
     </form>
   </div>
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    let currentOffset = 0;
-    let currentSearchQuery = '<%= search %>';
+<script>
+  let currentOffset = 0;
+  let currentSearchQuery = '<%= search %>';
 
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const selectAllBtn = document.getElementById('selectAllBtn');
-    const generateChallanBtn = document.getElementById('generateChallanBtn');
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
-    const searchBtn = document.getElementById('searchBtn');
-    const searchInput = document.getElementById('searchInput');
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const generateChallanBtn = document.getElementById('generateChallanBtn');
+  const loadMoreBtn = document.getElementById('loadMoreBtn');
+  const searchBtn = document.getElementById('searchBtn');
+  const searchInput = document.getElementById('searchInput');
 
-    function updateGenerateButton() {
-      const anyChecked = document.querySelectorAll('.rowCheckbox:checked').length > 0;
-      generateChallanBtn.disabled = !anyChecked;
+  function updateGenerateButton() {
+    const anyChecked = document.querySelectorAll('.rowCheckbox:checked').length > 0;
+    generateChallanBtn.disabled = !anyChecked;
+  }
+
+  function attachRowListeners() {
+    document.querySelectorAll('.rowCheckbox').forEach(cb => {
+      cb.addEventListener('change', updateGenerateButton);
+    });
+  }
+
+  function renderRows(assignments, append = false) {
+    const tbody = document.querySelector('#assignmentsTable tbody');
+    if (!append) {
+      tbody.innerHTML = '';
     }
-
-    function attachRowListeners() {
-      document.querySelectorAll('.rowCheckbox').forEach(cb => {
-        cb.addEventListener('change', updateGenerateButton);
-      });
-    }
-
-    function renderRows(assignments, append = false) {
-      const tbody = document.querySelector('#assignmentsTable tbody');
-      if (!append) {
-        tbody.innerHTML = '';
-      }
-      if (!assignments.length && !append) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center">No records found.</td></tr>';
-        return;
-      }
-
-      assignments.forEach(a => {
-        const row = document.createElement('tr');
-        row.dataset.id = a.cutting_id;
-        row.dataset.lot = a.lot_no;
-        row.dataset.sku = a.sku;
-        row.dataset.total = a.total_pieces;
-        row.dataset.remaining = a.remaining_pieces;
-        row.innerHTML = `
-          <td><input type="checkbox" class="rowCheckbox"></td>
-          <td>${a.cutting_id}</td>
-          <td>${a.lot_no}</td>
-          <td>${a.sku}</td>
-          <td>${a.total_pieces}</td>
-          <td>${a.issued_pieces}</td>
-          <td><span class="badge badge-info">${a.remaining_pieces}</span></td>
-          <td>
-            <select class="form-select form-select-sm challan-type">
-              <option value="normal" ${a.remaining_pieces > 0 ? 'selected' : ''}>Normal</option>
-              <option value="rewash" ${a.remaining_pieces <= 0 ? 'selected' : ''}>Rewash</option>
-            </select>
-            <small class="text-muted">Rewash allows repeated lots</small>
+    if (!assignments.length && !append) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="11" class="text-center" style="padding: 48px 24px;">
+            <div class="empty-state">
+              <i class="bi bi-inbox empty-state-icon" style="font-size: 48px; color: var(--text-muted);"></i>
+              <h5 class="empty-state-title mt-3">No Records Found</h5>
+              <p class="empty-state-text">There are no cutting lots awaiting challan at this time.</p>
+            </div>
           </td>
-          <td>
-            <input
-              type="number"
-              class="form-control form-control-sm qty-input challan-qty"
-              min="1"
-              max="${a.total_pieces}"
-              value="${a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces}"
-            />
-          </td>
-          <td>${a.cutting_remark || ''}</td>
-          <td>${a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>
-        `;
-        tbody.appendChild(row);
-      });
-      attachRowListeners();
-      updateGenerateButton();
+        </tr>
+      `;
+      return;
     }
 
-    selectAllBtn.addEventListener('click', () => {
-      const checkboxes = document.querySelectorAll('.rowCheckbox');
-      const shouldSelectAll = !selectAllCheckbox.checked;
-      selectAllCheckbox.checked = shouldSelectAll;
-      checkboxes.forEach(cb => cb.checked = shouldSelectAll);
-      updateGenerateButton();
+    assignments.forEach(a => {
+      const row = document.createElement('tr');
+      row.dataset.id = a.cutting_id;
+      row.dataset.lot = a.lot_no;
+      row.dataset.sku = a.sku;
+      row.dataset.total = a.total_pieces;
+      row.dataset.remaining = a.remaining_pieces;
+      row.innerHTML = `
+        <td>
+          <input type="checkbox" class="rowCheckbox" style="width: 18px; height: 18px; accent-color: var(--terracotta);">
+        </td>
+        <td><span style="font-family: var(--font-mono); font-size: var(--text-sm);">${a.cutting_id}</span></td>
+        <td><strong>${a.lot_no}</strong></td>
+        <td>${a.sku}</td>
+        <td>${a.total_pieces}</td>
+        <td>${a.issued_pieces}</td>
+        <td><span class="badge badge-info">${a.remaining_pieces}</span></td>
+        <td>
+          <select class="form-select challan-type" style="font-size: var(--text-sm); padding: 6px 30px 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--border-light); min-width: 100px;">
+            <option value="normal" ${a.remaining_pieces > 0 ? 'selected' : ''}>Normal</option>
+            <option value="rewash" ${a.remaining_pieces <= 0 ? 'selected' : ''}>Rewash</option>
+          </select>
+          <small class="text-muted d-block mt-1" style="font-size: var(--text-xs);">Rewash allows repeated lots</small>
+        </td>
+        <td>
+          <input
+            type="number"
+            class="form-input challan-qty"
+            min="1"
+            max="${a.total_pieces}"
+            value="${a.remaining_pieces > 0 ? a.remaining_pieces : a.total_pieces}"
+            style="width: 80px; padding: 6px 10px; font-size: var(--text-sm);"
+          />
+        </td>
+        <td>${a.cutting_remark || ''}</td>
+        <td style="font-size: var(--text-sm); color: var(--text-secondary);">${a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>
+      `;
+      tbody.appendChild(row);
     });
-
-    selectAllCheckbox.addEventListener('change', () => {
-      const checkboxes = document.querySelectorAll('.rowCheckbox');
-      checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
-      updateGenerateButton();
-    });
-
-    searchBtn.addEventListener('click', async () => {
-      currentOffset = 0;
-      currentSearchQuery = searchInput.value.trim();
-      const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      renderRows(data.assignments || [], false);
-    });
-
-    loadMoreBtn.addEventListener('click', async () => {
-      currentOffset += 50;
-      const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      renderRows(data.assignments || [], true);
-    });
-
-    generateChallanBtn.addEventListener('click', () => {
-      const selected = [];
-      let hasInvalid = false;
-      const rows = document.querySelectorAll('#assignmentsTable tbody tr');
-      rows.forEach(row => {
-        const checkbox = row.querySelector('.rowCheckbox');
-        if (!checkbox || !checkbox.checked) return;
-
-        const remaining = parseInt(row.dataset.remaining, 10);
-        const qtyInput = row.querySelector('.challan-qty');
-        const totalPieces = parseInt(row.dataset.total, 10);
-        const itemType = row.querySelector('.challan-type')?.value || 'normal';
-        const maxAllowed = itemType === 'rewash' ? totalPieces : remaining;
-        const qty = parseInt(qtyInput.value, 10);
-        if (!qty || qty <= 0 || qty > maxAllowed) {
-          alert(`Invalid challan pieces for lot ${row.dataset.lot}.`);
-          hasInvalid = true;
-          return;
-        }
-        selected.push({
-          cutting_id: row.dataset.id,
-          lot_no: row.dataset.lot,
-          sku: row.dataset.sku,
-          total_pieces: row.dataset.total,
-          challan_pieces: qty,
-          entryType: itemType,
-          itemType
-        });
-      });
-
-      if (hasInvalid) {
-        return;
-      }
-      if (!selected.length) {
-        alert('Please select at least one lot.');
-        return;
-      }
-
-      document.getElementById('selectedRowsInput').value = JSON.stringify(selected);
-      document.getElementById('generateForm').submit();
-    });
-
     attachRowListeners();
+    updateGenerateButton();
+  }
 
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
+  selectAllBtn.addEventListener('click', () => {
+    const checkboxes = document.querySelectorAll('.rowCheckbox');
+    const shouldSelectAll = !selectAllCheckbox.checked;
+    selectAllCheckbox.checked = shouldSelectAll;
+    checkboxes.forEach(cb => cb.checked = shouldSelectAll);
+    updateGenerateButton();
+  });
+
+  selectAllCheckbox.addEventListener('change', () => {
+    const checkboxes = document.querySelectorAll('.rowCheckbox');
+    checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+    updateGenerateButton();
+  });
+
+  searchBtn.addEventListener('click', async () => {
+    currentOffset = 0;
+    currentSearchQuery = searchInput.value.trim();
+    const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    renderRows(data.assignments || [], false);
+  });
+
+  loadMoreBtn.addEventListener('click', async () => {
+    currentOffset += 50;
+    const url = `/accounts-challan/search?search=${encodeURIComponent(currentSearchQuery)}&offset=${currentOffset}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    renderRows(data.assignments || [], true);
+  });
+
+  generateChallanBtn.addEventListener('click', () => {
+    const selected = [];
+    let hasInvalid = false;
+    const rows = document.querySelectorAll('#assignmentsTable tbody tr');
+    rows.forEach(row => {
+      const checkbox = row.querySelector('.rowCheckbox');
+      if (!checkbox || !checkbox.checked) return;
+
+      const remaining = parseInt(row.dataset.remaining, 10);
+      const qtyInput = row.querySelector('.challan-qty');
+      const totalPieces = parseInt(row.dataset.total, 10);
+      const itemType = row.querySelector('.challan-type')?.value || 'normal';
+      const maxAllowed = itemType === 'rewash' ? totalPieces : remaining;
+      const qty = parseInt(qtyInput.value, 10);
+      if (!qty || qty <= 0 || qty > maxAllowed) {
+        alert(`Invalid challan pieces for lot ${row.dataset.lot}.`);
+        hasInvalid = true;
+        return;
+      }
+      selected.push({
+        cutting_id: row.dataset.id,
+        lot_no: row.dataset.lot,
+        sku: row.dataset.sku,
+        total_pieces: row.dataset.total,
+        challan_pieces: qty,
+        entryType: itemType,
+        itemType
+      });
     });
-  </script>
-</body>
-</html>
+
+    if (hasInvalid) {
+      return;
+    }
+    if (!selected.length) {
+      alert('Please select at least one lot.');
+      return;
+    }
+
+    document.getElementById('selectedRowsInput').value = JSON.stringify(selected);
+    document.getElementById('generateForm').submit();
+  });
+
+  attachRowListeners();
+
+  // Handle Enter key in search input
+  searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      searchBtn.click();
+    }
+  });
+</script>
+
+<%- include('partials/footer') %>

@@ -1,379 +1,282 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PIC Report - Kotty Track</title>
+<%- include('partials/header', { pageTitle: 'PIC Report' }) %>
+<%- include('partials/navbar', { dashboardUrl: '/operator/dashboard' }) %>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
 
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/operator/dashboard"><i class="bi bi-house-door"></i> Dashboard</a>
+      <span class="separator">/</span>
+      <span>PIC Report</span>
+    </div>
 
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f8f9fa;
-      padding: 24px;
-    }
-
-    .container-custom {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .page-header {
-      background: white;
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
-
-    .page-header h1 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #1e293b;
-      margin-bottom: 4px;
-    }
-
-    .page-header p {
-      font-size: 14px;
-      color: #64748b;
-      margin: 0;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      color: #2563eb;
-      text-decoration: none;
-      margin-bottom: 16px;
-    }
-
-    .back-link:hover {
-      color: #1d4ed8;
-    }
-
-    .card-custom {
-      background: white;
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1e293b;
-      margin-bottom: 16px;
-    }
-
-    .form-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #475569;
-      margin-bottom: 6px;
-    }
-
-    .form-select, .form-control {
-      height: 38px;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    .form-select:focus, .form-control:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .btn-primary {
-      background: #2563eb;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .btn-primary:hover {
-      background: #1d4ed8;
-    }
-
-    .btn-secondary {
-      background: #64748b;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .btn-secondary:hover {
-      background: #475569;
-    }
-
-    .table {
-      font-size: 14px;
-    }
-
-    .table thead th {
-      background: #f8f9fa;
-      font-weight: 600;
-      color: #475569;
-      border-bottom: 2px solid #e2e8f0;
-      padding: 12px;
-    }
-
-    .table tbody td {
-      padding: 12px;
-      vertical-align: middle;
-    }
-
-    .badge {
-      font-size: 12px;
-      font-weight: 500;
-      padding: 4px 8px;
-      border-radius: 4px;
-    }
-
-    #overlaySpinner {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-    }
-
-    .spinner-content {
-      background: white;
-      padding: 32px;
-      border-radius: 8px;
-      text-align: center;
-      min-width: 280px;
-    }
-
-    .spinner-content h5 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1e293b;
-      margin-top: 16px;
-      margin-bottom: 8px;
-    }
-
-    .spinner-content p {
-      font-size: 14px;
-      color: #64748b;
-      margin: 0;
-    }
-
-    @media (max-width: 768px) {
-      body {
-        padding: 16px;
-      }
-
-      .page-header, .card-custom {
-        padding: 16px;
-      }
-    }
-  </style>
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <div class="container-custom">
-    <a href="/operator/dashboard" class="back-link">
-      <i class="bi bi-arrow-left"></i>
-      Back to Dashboard
-    </a>
-
+    <!-- Page Header -->
     <div class="page-header">
-      <h1>PIC Report</h1>
-      <p>Production In Count Report with Advanced Filtering</p>
+      <h1 class="page-title">PIC Report</h1>
+      <p class="page-subtitle">Production In Count Report with Advanced Filtering</p>
     </div>
 
-    <div class="card-custom">
-      <h2 class="card-title">Report Filters</h2>
+    <!-- Filter Card -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-funnel me-2"></i>Report Filters</h2>
+      </div>
+      <div class="card-body">
+        <form id="filterForm">
+          <div class="row g-3">
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">Lot Type</label>
+              <select name="lotType" class="form-select form-input">
+                <option value="all" <%= filters.lotType === 'all' ? 'selected' : '' %>>All</option>
+                <option value="denim" <%= filters.lotType === 'denim' ? 'selected' : '' %>>Denim</option>
+                <option value="hosiery" <%= filters.lotType === 'hosiery' ? 'selected' : '' %>>Hosiery</option>
+              </select>
+            </div>
 
-      <form id="filterForm">
-        <div class="row g-3">
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">Lot Type</label>
-            <select name="lotType" class="form-select">
-              <option value="all" <%= filters.lotType === 'all' ? 'selected' : '' %>>All</option>
-              <option value="denim" <%= filters.lotType === 'denim' ? 'selected' : '' %>>Denim</option>
-              <option value="hosiery" <%= filters.lotType === 'hosiery' ? 'selected' : '' %>>Hosiery</option>
-            </select>
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">Department</label>
+              <select name="department" class="form-select form-input">
+                <option value="all" <%= filters.department === 'all' ? 'selected' : '' %>>All</option>
+                <option value="cutting" <%= filters.department === 'cutting' ? 'selected' : '' %>>Cutting</option>
+                <option value="stitching" <%= filters.department === 'stitching' ? 'selected' : '' %>>Stitching</option>
+                <option value="assembly" <%= filters.department === 'assembly' ? 'selected' : '' %>>Assembly</option>
+                <option value="washing" <%= filters.department === 'washing' ? 'selected' : '' %>>Washing</option>
+                <option value="washing_in" <%= filters.department === 'washing_in' ? 'selected' : '' %>>Washing In</option>
+                <option value="finishing" <%= filters.department === 'finishing' ? 'selected' : '' %>>Finishing</option>
+              </select>
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">Status</label>
+              <select name="status" class="form-select form-input">
+                <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All</option>
+                <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
+                <option value="inline" <%= filters.status === 'inline' ? 'selected' : '' %>>In-Line</option>
+                <option value="completed" <%= filters.status === 'completed' ? 'selected' : '' %>>Completed</option>
+                <option value="denied" <%= filters.status === 'denied' ? 'selected' : '' %>>Denied</option>
+                <option value="not_assigned" <%= filters.status === 'not_assigned' ? 'selected' : '' %>>Not Assigned</option>
+              </select>
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">Date Filter</label>
+              <select name="dateFilter" class="form-select form-input">
+                <option value="createdAt" <%= filters.dateFilter === 'createdAt' ? 'selected' : '' %>>Created At</option>
+                <option value="assignedOn" <%= filters.dateFilter === 'assignedOn' ? 'selected' : '' %>>Assigned On</option>
+              </select>
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">Start Date</label>
+              <input type="date" name="startDate" class="form-control form-input" value="<%= filters.startDate || '' %>">
+            </div>
+
+            <div class="col-md-4 col-lg-2">
+              <label class="form-label">End Date</label>
+              <input type="date" name="endDate" class="form-control form-input" value="<%= filters.endDate || '' %>">
+            </div>
           </div>
 
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">Department</label>
-            <select name="department" class="form-select">
-              <option value="all" <%= filters.department === 'all' ? 'selected' : '' %>>All</option>
-              <option value="cutting" <%= filters.department === 'cutting' ? 'selected' : '' %>>Cutting</option>
-              <option value="stitching" <%= filters.department === 'stitching' ? 'selected' : '' %>>Stitching</option>
-              <option value="assembly" <%= filters.department === 'assembly' ? 'selected' : '' %>>Assembly</option>
-              <option value="washing" <%= filters.department === 'washing' ? 'selected' : '' %>>Washing</option>
-              <option value="washing_in" <%= filters.department === 'washing_in' ? 'selected' : '' %>>Washing In</option>
-              <option value="finishing" <%= filters.department === 'finishing' ? 'selected' : '' %>>Finishing</option>
-            </select>
+          <div class="mt-4 d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-primary" onclick="downloadReport()">
+              <i class="bi bi-download"></i>
+              Download Report
+            </button>
+            <button type="reset" class="btn btn-secondary">
+              <i class="bi bi-arrow-clockwise"></i>
+              Reset
+            </button>
           </div>
-
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">Status</label>
-            <select name="status" class="form-select">
-              <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All</option>
-              <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
-              <option value="inline" <%= filters.status === 'inline' ? 'selected' : '' %>>In-Line</option>
-              <option value="completed" <%= filters.status === 'completed' ? 'selected' : '' %>>Completed</option>
-              <option value="denied" <%= filters.status === 'denied' ? 'selected' : '' %>>Denied</option>
-              <option value="not_assigned" <%= filters.status === 'not_assigned' ? 'selected' : '' %>>Not Assigned</option>
-            </select>
-          </div>
-
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">Date Filter</label>
-            <select name="dateFilter" class="form-select">
-              <option value="createdAt" <%= filters.dateFilter === 'createdAt' ? 'selected' : '' %>>Created At</option>
-              <option value="assignedOn" <%= filters.dateFilter === 'assignedOn' ? 'selected' : '' %>>Assigned On</option>
-            </select>
-          </div>
-
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">Start Date</label>
-            <input type="date" name="startDate" class="form-control" value="<%= filters.startDate || '' %>">
-          </div>
-
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label">End Date</label>
-            <input type="date" name="endDate" class="form-control" value="<%= filters.endDate || '' %>">
-          </div>
-        </div>
-
-        <div class="mt-4 d-flex gap-2">
-          <button type="button" class="btn btn-primary" onclick="downloadReport()">
-            <i class="bi bi-download me-2"></i>Download Report
-          </button>
-          <button type="reset" class="btn btn-secondary">
-            <i class="bi bi-arrow-clockwise me-2"></i>Reset
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
 
+    <!-- Data Preview -->
     <% if (typeof rows !== 'undefined' && rows.length > 0) { %>
-    <div class="card-custom">
-      <h2 class="card-title">Data Preview (<%= rows.length %> records)</h2>
-      <div class="table-responsive">
-        <table class="table table-hover">
-          <thead>
-            <tr>
-              <th>Lot No</th>
-              <th>SKU</th>
-              <th>Total Pieces</th>
-              <th>Department</th>
-              <th>Status</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% rows.slice(0, 10).forEach(row => { %>
-            <tr>
-              <td><strong><%= row.lot_no %></strong></td>
-              <td><%= row.sku %></td>
-              <td><%= row.total_pieces %></td>
-              <td><%= row.department || 'N/A' %></td>
-              <td>
-                <% if (row.status === 'completed') { %>
-                  <span class="badge bg-success">Completed</span>
-                <% } else if (row.status === 'pending') { %>
-                  <span class="badge bg-warning">Pending</span>
-                <% } else if (row.status === 'inline') { %>
-                  <span class="badge bg-info">In-Line</span>
-                <% } else if (row.status === 'denied') { %>
-                  <span class="badge bg-danger">Denied</span>
-                <% } else { %>
-                  <span class="badge bg-secondary"><%= row.status %></span>
-                <% } %>
-              </td>
-              <td><%= row.created_at ? new Date(row.created_at).toLocaleDateString() : 'N/A' %></td>
-            </tr>
-            <% }); %>
-          </tbody>
-        </table>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-table me-2"></i>Data Preview</h2>
+        <span class="badge badge-primary"><%= rows.length %> records</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-container" style="border: none; border-radius: 0;">
+          <div class="table-responsive">
+            <table class="table mb-0">
+              <thead>
+                <tr>
+                  <th>Lot No</th>
+                  <th>SKU</th>
+                  <th>Total Pieces</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% rows.slice(0, 10).forEach(row => { %>
+                <tr>
+                  <td><strong style="color: var(--terracotta);"><%= row.lot_no %></strong></td>
+                  <td><%= row.sku %></td>
+                  <td><%= row.total_pieces %></td>
+                  <td><%= row.department || 'N/A' %></td>
+                  <td>
+                    <% if (row.status === 'completed') { %>
+                      <span class="badge badge-success">Completed</span>
+                    <% } else if (row.status === 'pending') { %>
+                      <span class="badge badge-warning">Pending</span>
+                    <% } else if (row.status === 'inline') { %>
+                      <span class="badge badge-info">In-Line</span>
+                    <% } else if (row.status === 'denied') { %>
+                      <span class="badge badge-danger">Denied</span>
+                    <% } else { %>
+                      <span class="badge badge-neutral"><%= row.status %></span>
+                    <% } %>
+                  </td>
+                  <td><%= row.created_at ? new Date(row.created_at).toLocaleDateString() : 'N/A' %></td>
+                </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <% if (rows.length > 10) { %>
-      <p class="text-muted mb-0" style="font-size: 14px;">
-        Showing first 10 of <%= rows.length %> records. Download the full report to see all data.
-      </p>
+      <div class="card-footer">
+        <p class="text-muted mb-0" style="font-size: var(--text-sm);">
+          <i class="bi bi-info-circle me-1"></i>
+          Showing first 10 of <%= rows.length %> records. Download the full report to see all data.
+        </p>
+      </div>
       <% } %>
     </div>
-    <% } %>
-  </div>
-
-  <div id="overlaySpinner">
-    <div class="spinner-content">
-      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-      <h5>Generating Report</h5>
-      <p>Please wait...</p>
+    <% } else { %>
+    <!-- Empty State -->
+    <div class="card">
+      <div class="card-body">
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i class="bi bi-file-earmark-spreadsheet" style="font-size: 48px;"></i>
+          </div>
+          <h3 class="empty-state-title">No Data Available</h3>
+          <p class="empty-state-text">Apply filters and download the report to view production data.</p>
+        </div>
+      </div>
     </div>
+    <% } %>
+
   </div>
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Loading Overlay -->
+<div id="overlaySpinner" class="loading-overlay">
+  <div class="loading-content">
+    <div class="spinner" style="width: 48px; height: 48px; border-width: 3px;"></div>
+    <h5>Generating Report</h5>
+    <p>Please wait while we prepare your data...</p>
+  </div>
+</div>
 
-  <script>
-    function showSpinner() {
-      document.getElementById('overlaySpinner').style.display = 'flex';
+<style>
+  /* Loading Overlay Styles */
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(26, 26, 26, 0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .loading-content {
+    background: var(--bg-card);
+    padding: 40px 48px;
+    border-radius: var(--radius-xl);
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+  }
+
+  .loading-content h5 {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+
+  .loading-content p {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  /* Form input focus states with terracotta */
+  .form-input:focus,
+  .form-select:focus,
+  .form-control:focus {
+    border-color: var(--terracotta) !important;
+    box-shadow: 0 0 0 3px var(--terracotta-bg) !important;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .main-content {
+      padding: 20px 16px;
     }
 
-    function hideSpinner() {
-      document.getElementById('overlaySpinner').style.display = 'none';
+    .loading-content {
+      padding: 32px;
+      margin: 0 16px;
     }
+  }
+</style>
 
-    async function downloadReport() {
-      try {
-        const form = document.getElementById('filterForm');
-        const formData = new FormData(form);
-        const params = new URLSearchParams();
+<script>
+  function showSpinner() {
+    document.getElementById('overlaySpinner').style.display = 'flex';
+  }
 
-        for (const [key, val] of formData.entries()) {
-          if (val) params.append(key, val);
-        }
-        params.set('download', '1');
+  function hideSpinner() {
+    document.getElementById('overlaySpinner').style.display = 'none';
+  }
 
-        showSpinner();
+  async function downloadReport() {
+    try {
+      const form = document.getElementById('filterForm');
+      const formData = new FormData(form);
+      const params = new URLSearchParams();
 
-        const response = await fetch('/operator/dashboard/pic-report?' + params.toString());
-        if (!response.ok) throw new Error('Server error');
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'PICReport-' + new Date().toISOString().split('T')[0] + '.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (err) {
-        alert('Error downloading report: ' + err.message);
-      } finally {
-        hideSpinner();
+      for (const [key, val] of formData.entries()) {
+        if (val) params.append(key, val);
       }
+      params.set('download', '1');
+
+      showSpinner();
+
+      const response = await fetch('/operator/dashboard/pic-report?' + params.toString());
+      if (!response.ok) throw new Error('Server error');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PICReport-' + new Date().toISOString().split('T')[0] + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Error downloading report: ' + err.message);
+    } finally {
+      hideSpinner();
     }
-  </script>
-</body>
-</html>
+  }
+</script>
+
+<%- include('partials/footer') %>

@@ -1,313 +1,658 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>KOTTY - Washing Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<%- include('partials/header', { pageTitle: 'Washing Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/washingdashboard' }) %>
 
-  <!-- Bootstrap & FontAwesome -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════════
+     WASHING DASHBOARD - Kotty Track Design System
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-  <!-- Select2 CSS (for searchable dropdown) -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
-    rel="stylesheet"
-  />
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-light: #d4826a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --success-light: #e8f5ef;
+    --warning: #c4873a;
+    --warning-light: #fef3e2;
+    --danger: #c23b22;
+    --danger-light: #fdeaea;
+    --info: #3a7bc4;
+    --info-light: #e8f1fb;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border: #e5e0d8;
+    --border-light: #f0ebe3;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
 
-  <style>
-    body {
-      background-color: #f8f9fa;
-      color: #212529;
-      min-height: 100vh;
-      display: flex;
+  body {
+    background: var(--cream);
+    min-height: 100vh;
+  }
+
+  .dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-kotty-outline {
+    background: white;
+    color: var(--charcoal);
+    border-color: var(--border);
+  }
+
+  .btn-kotty-outline:hover {
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+  }
+
+  .btn-kotty-success {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-kotty-success:hover {
+    background: #236d4a;
+    border-color: #236d4a;
+    color: white;
+  }
+
+  .btn-kotty-warning {
+    background: var(--warning);
+    color: white;
+    border-color: var(--warning);
+  }
+
+  .btn-kotty-info {
+    background: var(--info);
+    color: white;
+    border-color: var(--info);
+  }
+
+  .btn-kotty-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Tabs */
+  .kotty-tabs {
+    display: flex;
+    gap: 4px;
+    background: white;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  .kotty-tab {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kotty-tab:hover {
+    background: var(--cream);
+    color: var(--charcoal);
+  }
+
+  .kotty-tab.active {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .kotty-tab i {
+    font-size: 1rem;
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Cards */
+  .kotty-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .kotty-card-header {
+    padding: 18px 24px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .kotty-card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .kotty-card-title i {
+    color: var(--terracotta);
+  }
+
+  .kotty-card-body {
+    padding: 24px;
+  }
+
+  /* Form Styling */
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    padding: 10px 14px;
+    background: white;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+    outline: none;
+  }
+
+  /* Select2 Styling */
+  .select2-container {
+    width: 100% !important;
+  }
+
+  .select2-container--default .select2-selection--single {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    height: 42px;
+    padding: 6px 14px;
+    background: white;
+    transition: all 0.2s ease;
+  }
+
+  .select2-container--default .select2-selection--single:focus,
+  .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+    outline: none;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px;
+    color: var(--charcoal);
+    padding-left: 0;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px;
+  }
+
+  .select2-dropdown {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+  }
+
+  .select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--terracotta);
+  }
+
+  .select2-container--default .select2-search--dropdown .select2-search__field {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .select2-container--default .select2-search--dropdown .select2-search__field:focus {
+    border-color: var(--terracotta);
+    outline: none;
+  }
+
+  /* Tables */
+  .kotty-table {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .kotty-table thead th {
+    background: var(--cream);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 12px 14px;
+    text-align: left;
+  }
+
+  .kotty-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  /* Entry Cards */
+  .entry-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .entry-header {
+    padding: 16px 20px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s ease;
+  }
+
+  .entry-header:hover {
+    background: var(--cream);
+  }
+
+  .entry-header-info {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    color: var(--charcoal);
+  }
+
+  .entry-header-info strong {
+    color: var(--terracotta);
+  }
+
+  .entry-chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+  }
+
+  .entry-card.open .entry-chevron {
+    transform: rotate(180deg);
+  }
+
+  .entry-body {
+    padding: 20px;
+    border-top: 1px solid var(--border-light);
+    display: none;
+  }
+
+  .entry-card.open .entry-body {
+    display: block;
+  }
+
+  /* Search Input */
+  .search-wrapper {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  .search-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+  }
+
+  .search-wrapper input {
+    padding-left: 42px;
+  }
+
+  /* Alerts */
+  .kotty-alert {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kotty-alert-danger {
+    background: var(--danger-light);
+    border: 1px solid #f5c6c0;
+    color: var(--danger);
+  }
+
+  .kotty-alert-success {
+    background: var(--success-light);
+    border: 1px solid #b8e0cc;
+    color: var(--success);
+  }
+
+  /* Modal */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-lg);
+  }
+
+  .modal-header {
+    padding: 18px 24px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+    font-size: 1.25rem;
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--terracotta);
+  }
+
+  .modal-body {
+    padding: 24px;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-light);
+    background: var(--cream);
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .dashboard-container {
+      padding: 20px 16px;
+    }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+    }
+
+    .kotty-tabs {
       flex-direction: column;
     }
-    .card {
-      border-radius: 6px;
-      margin-bottom: 20px;
-    }
-    .navbar-brand {
-      font-weight: 500;
-      font-size: 1.2rem;
-    }
-    .main-content {
-      flex: 1 0 auto;
-    }
-    .fade-in {
-      animation: fadeIn 0.4s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    /* When using Select2, ensure the container is 100% wide in Bootstrap forms */
-    .select2-container {
-      width: 100% !important;
-    }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- NAVBAR -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid px-3">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-tshirt"></i> KOTTY
-      </a>
-      <!-- Toggler for mobile screens -->
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarContent"
-        aria-controls="navbarContent"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-          <!-- Example: Approve, etc. -->
-          <li class="nav-item me-2">
-            <a href="/washingdashboard/approve" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-check-circle"></i> Approve
-            </a>
-          </li>
-          <li class="nav-item me-2">
-            <a href="/washingdashboard/assign-washing-in" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-user-check"></i> Assign Washing-In
-            </a>
-          </li>
-          <li class="nav-item me-2">
-            <a href="/washingdashboard/payments/my-invoices" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-file-invoice"></i> Invoices
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-sm btn-danger">
-              <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
 
+    .header-actions {
+      width: 100%;
+    }
+
+    .header-actions .btn-kotty {
+      flex: 1;
+      justify-content: center;
+    }
+  }
+</style>
+
+<div class="dashboard-container">
   <!-- Flash Messages -->
-  <div class="container mt-3">
-    <% if (error && error.length > 0) { %>
-      <% error.forEach(function(msg){ %>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
-    <% if (success && success.length > 0) { %>
-      <% success.forEach(function(msg){ %>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
+  <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
+    <% error.forEach(function(msg){ %>
+      <div class="kotty-alert kotty-alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <%= msg %>
+      </div>
+    <% }) %>
+  <% } %>
+  <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
+    <% success.forEach(function(msg){ %>
+      <div class="kotty-alert kotty-alert-success">
+        <i class="bi bi-check-circle"></i>
+        <%= msg %>
+      </div>
+    <% }) %>
+  <% } %>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Washing Dashboard</h1>
+    <div class="header-actions">
+      <a href="/washingdashboard/approve" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-check-circle"></i> Approve
+      </a>
+      <a href="/washingdashboard/assign-washing-in" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-person-check"></i> Assign Washing-In
+      </a>
+      <a href="/washingdashboard/payments/my-invoices" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-file-earmark-text"></i> Invoices
+      </a>
+    </div>
   </div>
 
-  <!-- MAIN CONTENT -->
-  <div class="container my-4 main-content">
-    <h2 class="mb-4">
-      <i class="fas fa-water"></i> Washing Dashboard
-    </h2>
+  <!-- Tabs -->
+  <div class="kotty-tabs" role="tablist">
+    <button class="kotty-tab active" data-tab="create" role="tab">
+      <i class="bi bi-plus-circle"></i> Create Entry
+    </button>
+    <button class="kotty-tab" data-tab="existing" role="tab">
+      <i class="bi bi-list-ul"></i> Existing Entries
+    </button>
+  </div>
 
-    <ul class="nav nav-tabs" role="tablist">
-      <li class="nav-item">
-        <button
-          class="nav-link active"
-          data-bs-toggle="tab"
-          data-bs-target="#createTab"
-          type="button"
-          role="tab"
-        >
-          <i class="fas fa-plus-circle"></i> Create Entry
-        </button>
-      </li>
-      <li class="nav-item">
-        <button
-          class="nav-link"
-          data-bs-toggle="tab"
-          data-bs-target="#existingTab"
-          type="button"
-          role="tab"
-        >
-          <i class="fas fa-list"></i> Existing Entries
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content mt-3">
-      <!-- CREATE TAB -->
-      <div class="tab-pane fade show active" id="createTab" role="tabpanel">
-        <div class="card">
-          <div class="card-header">
-            <h4 class="mb-0">
-              <i class="fas fa-plus-circle"></i> Create New Washing Entry
-            </h4>
-          </div>
-          <div class="card-body">
-            <form
-              id="createForm"
-              action="/washingdashboard/create"
-              method="POST"
-              enctype="multipart/form-data"
-            >
-              <div class="row mb-3">
-                <!-- 1) SELECT LOT with cutting_remark in the option text -->
-                <div class="col-md-4">
-                  <label class="form-label fw-semibold">Select Lot</label>
-                  <select
-                    id="selectedLotId"
-                    name="selectedLotId"
-                    class="form-select"
-                    required
-                  >
-                    <option value="">-- Choose a lot --</option>
-                    <% lots.forEach((l) => { %>
-                      <option value="<%= l.id %>">
-                        <%= l.lot_no %> (SKU: <%= l.sku %>)
-                        <% if (l.cutting_remark) { %>
-                          - <%= l.cutting_remark %>
-                        <% } %>
-                      </option>
-                    <% }) %>
-                  </select>
-                </div>
-                <!-- REMARK -->
-                <div class="col-md-4">
-                  <label class="form-label fw-semibold">Remark (optional)</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    name="remark"
-                    placeholder="Any remarks..."
-                  />
-                </div>
-                <!-- IMAGE -->
-                <div class="col-md-4">
-                  <label class="form-label fw-semibold">Image (optional)</label>
-                  <input
-                    type="file"
-                    class="form-control"
-                    name="image_file"
-                    accept="image/*"
-                  />
-                </div>
-              </div>
-
-              <!-- Size section (hidden until user selects a lot) -->
-              <div class="mt-4" id="lotSizesContainer" style="display: none;">
-                <h5>Sizes for This Lot</h5>
-                <div class="table-responsive">
-                  <table class="table table-bordered align-middle" id="lotSizesTable">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Size Label</th>
-                        <th>Max Available</th>
-                        <th>Enter Pieces</th>
-                        <th>Assign to Washing-In (Optional)</th>
-                      </tr>
-                    </thead>
-                    <tbody></tbody>
-                  </table>
-                </div>
-                <div class="mt-2">
-                  <strong>Total Pieces Selected:</strong>
-                  <span id="createTotalPieces">0</span>
-                </div>
-              </div>
-
-              <button type="submit" class="btn btn-primary mt-3">
-                <i class="fas fa-check"></i> Create & Assign
-              </button>
-            </form>
-          </div>
-        </div>
+  <!-- CREATE TAB -->
+  <div class="tab-content active" id="createTab">
+    <div class="kotty-card">
+      <div class="kotty-card-header">
+        <h2 class="kotty-card-title">
+          <i class="bi bi-plus-circle"></i> Create New Washing Entry
+        </h2>
       </div>
+      <div class="kotty-card-body">
+        <form id="createForm" action="/washingdashboard/create" method="POST" enctype="multipart/form-data">
+          <div class="row mb-4">
+            <div class="col-md-4 mb-3 mb-md-0">
+              <label class="form-label">Select Lot</label>
+              <select id="selectedLotId" name="selectedLotId" class="form-select" required>
+                <option value="">-- Choose a lot --</option>
+                <% lots.forEach(function(l) { %>
+                  <option value="<%= l.id %>">
+                    <%= l.lot_no %> (SKU: <%= l.sku %>)
+                    <% if (l.cutting_remark) { %> - <%= l.cutting_remark %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3 mb-md-0">
+              <label class="form-label">Remark (optional)</label>
+              <input type="text" class="form-control" name="remark" placeholder="Any remarks...">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Image (optional)</label>
+              <input type="file" class="form-control" name="image_file" accept="image/*">
+            </div>
+          </div>
 
-      <!-- EXISTING ENTRIES TAB -->
-      <div class="tab-pane fade" id="existingTab" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="mb-0">
-            <i class="fas fa-list"></i> Existing Entries
-          </h4>
-          <a href="/washingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel"></i> Download Excel
-          </a>
-          <a href="/washingdashboard/download-summary" class="btn btn-success ms-2">
-            <i class="fas fa-file-excel"></i> Summary Excel
-          </a>
-        </div>
+          <div id="lotSizesContainer" style="display: none;">
+            <h6 style="font-family: 'Outfit', sans-serif; font-weight: 600; margin-bottom: 16px; color: var(--charcoal);">
+              <i class="bi bi-rulers" style="color: var(--terracotta);"></i> Sizes for This Lot
+            </h6>
+            <div class="table-responsive">
+              <table class="kotty-table" id="lotSizesTable">
+                <thead>
+                  <tr>
+                    <th>Size Label</th>
+                    <th>Max Available</th>
+                    <th>Enter Pieces</th>
+                    <th>Assign to Washing-In (Optional)</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div style="margin-top: 16px; font-family: 'Outfit', sans-serif;">
+              <strong style="color: var(--charcoal);">Total Pieces Selected:</strong>
+              <span id="createTotalPieces" style="color: var(--terracotta); font-weight: 600; font-size: 1.1rem;">0</span>
+            </div>
+          </div>
 
-        <!-- Search Input -->
-        <div class="input-group mb-3">
-          <span class="input-group-text"><i class="fas fa-search"></i></span>
-          <input
-            type="text"
-            id="searchExisting"
-            class="form-control"
-            placeholder="Search by lot or SKU..."
-          />
-        </div>
-
-        <!-- Lazy-loaded container -->
-        <div id="existingEntriesContainer" class="accordion"></div>
-        <!-- Sentinel for IntersectionObserver -->
-        <div id="loadMoreSentinel" style="height: 50px;"></div>
+          <button type="submit" class="btn-kotty btn-kotty-primary mt-4">
+            <i class="bi bi-check-lg"></i> Create & Assign
+          </button>
+        </form>
       </div>
     </div>
   </div>
 
-  <!-- UPDATE MODAL -->
-  <div
-  class="modal fade"
-  id="updateModal"
-  tabindex="-1"
-  aria-labelledby="updateModalLabel"
-  aria-hidden="true"
->
+  <!-- EXISTING ENTRIES TAB -->
+  <div class="tab-content" id="existingTab">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+      <h2 style="font-family: 'DM Serif Display', Georgia, serif; font-size: 1.25rem; margin: 0; color: var(--charcoal);">
+        <i class="bi bi-list-ul" style="color: var(--terracotta);"></i> Existing Entries
+      </h2>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="/washingdashboard/download-all" class="btn-kotty btn-kotty-success">
+          <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </a>
+        <a href="/washingdashboard/download-summary" class="btn-kotty btn-kotty-success">
+          <i class="bi bi-file-earmark-excel"></i> Summary Excel
+        </a>
+      </div>
+    </div>
+
+    <div class="search-wrapper">
+      <i class="bi bi-search"></i>
+      <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU...">
+    </div>
+
+    <div id="existingEntriesContainer"></div>
+    <div id="loadMoreSentinel" style="height: 60px;"></div>
+  </div>
+</div>
+
+<!-- UPDATE MODAL -->
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form id="updateForm" method="POST" action="">
         <div class="modal-header">
           <h5 class="modal-title" id="updateModalLabel">
-            <i class="fas fa-edit"></i> Update Washing Data
+            <i class="bi bi-pencil-square"></i> Update Washing Data
           </h5>
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-            aria-label="Close"
-          ></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <p>
-          <strong>Updating Entry ID:</strong>
-          <span id="updatingEntryId">-</span>
-          <div id="updateAlert" class="alert alert-danger d-none mt-2"></div>
-        </p>
+          <p style="margin-bottom: 16px;">
+            <strong>Updating Entry ID:</strong>
+            <span id="updatingEntryId" style="color: var(--terracotta);">-</span>
+          </p>
+          <div id="updateAlert" class="kotty-alert kotty-alert-danger d-none"></div>
           <div class="table-responsive">
-            <table class="table table-bordered align-middle" id="updateSizesTable">
-              <thead class="table-light">
+            <table class="kotty-table" id="updateSizesTable">
+              <thead>
                 <tr>
                   <th>Size Label</th>
                   <th>Already Used</th>
@@ -318,381 +663,469 @@
               <tbody></tbody>
             </table>
           </div>
-          <p class="small text-muted">
-            Leave blank or zero if no increment.
-          </p>
+          <p class="small text-muted mt-3">Leave a field blank or zero for no increment.</p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save"></i> Save Updates
+          <button type="button" class="btn-kotty btn-kotty-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-kotty btn-kotty-primary">
+            <i class="bi bi-check-lg"></i> Save Updates
           </button>
         </div>
       </form>
     </div>
   </div>
 </div>
-  <!-- JS: jQuery, Bootstrap, and Select2 -->
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-  <script>
-    $(document).ready(function() {
-      // Initialize Select2 for the lot dropdown:
-      $('#selectedLotId').select2({
-        placeholder: 'Select a lot',
-        allowClear: false,          // Force user to select from existing options
-        minimumResultsForSearch: 0  // Always show the search box
-      });
+<%- include('partials/footer') %>
 
-      const $lotSelect           = $('#selectedLotId');
-      const $lotSizesContainer   = $('#lotSizesContainer');
-      const $lotSizesTableBody   = $('#lotSizesTable tbody');
-      const $createTotalPieces   = $('#createTotalPieces');
-      const $createForm          = $('#createForm');
+<!-- Select2 CSS and JS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-      let finishingUsersCache    = []; // assignable "washing_in" users, lazy-loaded
+<script>
+  /*****************************************************
+   * TAB SWITCHING
+   *****************************************************/
+  const tabs = document.querySelectorAll('.kotty-tab');
+  const tabContents = document.querySelectorAll('.tab-content');
 
-      // On lot change => fetch size info and finishing users
-      $lotSelect.on('change', async function() {
-        const val = $(this).val();
-        if (!val) {
-          $lotSizesContainer.hide();
-          $lotSizesTableBody.empty();
-          $createTotalPieces.text('0');
-          return;
-        }
-        try {
-          // 1) fetch sizes
-          const res = await fetch(`/washingdashboard/get-lot-sizes/${val}`);
-          if (!res.ok) throw new Error('Error fetching lot sizes. Status: ' + res.status);
-          const sizesData = await res.json();
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const targetId = tab.dataset.tab + 'Tab';
+      document.getElementById(targetId).classList.add('active');
+    });
+  });
 
-          // 2) fetch finishingUsers (washing_in) if not loaded
-          if (!finishingUsersCache.length) {
-            const userRes = await fetch('/washingdashboard/create/assignable-users');
-            if (userRes.ok) {
-              const json = await userRes.json();
-              finishingUsersCache = json.data || [];
-            }
-          }
+  /*****************************************************
+   * CREATE TAB
+   *****************************************************/
+  $(document).ready(function() {
+    // Initialize Select2 for the lot dropdown
+    $('#selectedLotId').select2({
+      placeholder: 'Select a lot',
+      allowClear: false,
+      minimumResultsForSearch: 0
+    });
 
-          renderLotSizes(sizesData, finishingUsersCache);
-        } catch (err) {
-          console.error(err);
-          $lotSizesContainer.hide();
-          $lotSizesTableBody.empty();
-          $createTotalPieces.text('0');
-        }
-      });
+    let finishingUsersCache = [];
+    const $lotSelect = $('#selectedLotId');
+    const $lotSizesContainer = $('#lotSizesContainer');
+    const $lotSizesTableBody = $('#lotSizesTable tbody');
+    const $createTotalPieces = $('#createTotalPieces');
+    const $createForm = $('#createForm');
 
-      function renderLotSizes(sizes, finishingUsers) {
-        $lotSizesContainer.show();
+    // On lot change => fetch size info and finishing users
+    $lotSelect.on('change', async function() {
+      const val = $(this).val();
+      if (!val) {
+        $lotSizesContainer.hide();
         $lotSizesTableBody.empty();
+        $createTotalPieces.text('0');
+        return;
+      }
+      try {
+        // 1) fetch sizes
+        const res = await fetch('/washingdashboard/get-lot-sizes/' + val);
+        if (!res.ok) throw new Error('Error fetching lot sizes. Status: ' + res.status);
+        const sizesData = await res.json();
 
-        sizes.forEach(sz => {
-          const $tr = $(`
-            <tr>
-              <td>${sz.size_label}</td>
-              <td>${sz.remain}</td>
-              <td>
-                <input
-                  type="number"
-                  class="form-control"
-                  min="0"
-                  max="${sz.remain}"
-                  value="${sz.remain}"
-                  data-size-id="${sz.id}"
-                />
-              </td>
-              <td>
-                <select class="form-select">
-                  <option value="">--No Assignment--</option>
-                </select>
-              </td>
-            </tr>
-          `);
-          // Populate finishing users
-          const $sel = $tr.find('select');
-          finishingUsers.forEach(u => {
-            $sel.append(`<option value="${u.id}">${u.username}</option>`);
+        // 2) fetch finishingUsers (washing_in) if not loaded
+        if (!finishingUsersCache.length) {
+          const userRes = await fetch('/washingdashboard/create/assignable-users');
+          if (userRes.ok) {
+            const json = await userRes.json();
+            finishingUsersCache = json.data || [];
+          }
+        }
+
+        renderLotSizes(sizesData, finishingUsersCache);
+      } catch (err) {
+        console.error(err);
+        $lotSizesContainer.hide();
+        $lotSizesTableBody.empty();
+        $createTotalPieces.text('0');
+      }
+    });
+
+    function renderLotSizes(sizes, finishingUsers) {
+      $lotSizesContainer.show();
+      $lotSizesTableBody.empty();
+
+      sizes.forEach(sz => {
+        const tr = document.createElement('tr');
+
+        const tdLabel = document.createElement('td');
+        tdLabel.textContent = sz.size_label;
+        tr.appendChild(tdLabel);
+
+        const tdRemain = document.createElement('td');
+        tdRemain.textContent = sz.remain;
+        tr.appendChild(tdRemain);
+
+        const tdInput = document.createElement('td');
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.className = 'form-control';
+        inp.min = '0';
+        inp.max = String(sz.remain);
+        inp.value = String(sz.remain);
+        inp.dataset.sizeId = sz.id;
+        inp.addEventListener('input', updateTotal);
+        tdInput.appendChild(inp);
+        tr.appendChild(tdInput);
+
+        const tdAssign = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.className = 'form-select';
+        const optNone = document.createElement('option');
+        optNone.value = '';
+        optNone.textContent = '--No Assignment--';
+        sel.appendChild(optNone);
+        finishingUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.username;
+          sel.appendChild(opt);
+        });
+        tdAssign.appendChild(sel);
+        tr.appendChild(tdAssign);
+
+        $lotSizesTableBody.append(tr);
+      });
+      updateTotal();
+    }
+
+    function updateTotal() {
+      let sum = 0;
+      $lotSizesTableBody.find('input[type="number"]').each(function() {
+        const val = parseInt($(this).val(), 10);
+        if (!isNaN(val) && val > 0) sum += val;
+      });
+      $createTotalPieces.text(sum);
+    }
+
+    // On form submit => create hidden fields
+    $createForm.on('submit', function(e) {
+      // Remove old dynamic fields
+      $('.sizeMappingField').remove();
+      $('.assignmentField').remove();
+
+      $lotSizesTableBody.find('tr').each(function() {
+        const $row = $(this);
+        const sizeLabel = $row.children().first().text();
+        const remain = parseInt($row.children().eq(1).text(), 10);
+        const $input = $row.find('input[type="number"]');
+        let pieces = parseInt($input.val(), 10);
+        if (isNaN(pieces) || pieces < 0) pieces = 0;
+        if (pieces > remain) {
+          e.preventDefault();
+          alert('Requested ' + pieces + ', but only ' + remain + ' remain for size ' + sizeLabel + '.');
+          return false;
+        }
+        if (pieces > 0) {
+          const sizeId = $input.data('sizeId');
+          var hiddenSize = document.createElement('input');
+          hiddenSize.type = 'hidden';
+          hiddenSize.name = 'sizes[' + sizeId + ']';
+          hiddenSize.value = pieces;
+          hiddenSize.className = 'sizeMappingField';
+          $createForm.append(hiddenSize);
+        }
+        // assignment
+        const $sel = $row.find('select');
+        if ($sel.val()) {
+          const sizeId = $input.data('sizeId');
+          var hiddenAssign = document.createElement('input');
+          hiddenAssign.type = 'hidden';
+          hiddenAssign.name = 'assignments[' + sizeId + ']';
+          hiddenAssign.value = $sel.val();
+          hiddenAssign.className = 'assignmentField';
+          $createForm.append(hiddenAssign);
+        }
+      });
+    });
+  });
+
+  /*****************************************************
+   * EXISTING ENTRIES (LAZY LOAD)
+   *****************************************************/
+  let existingOffset = 0;
+  let loading = false;
+  let hasMore = true;
+  const existingContainer = document.getElementById('existingEntriesContainer');
+  const sentinel = document.getElementById('loadMoreSentinel');
+  const searchInput = document.getElementById('searchExisting');
+
+  async function loadMoreData() {
+    if (loading || !hasMore) return;
+    loading = true;
+    const searchTerm = searchInput.value.trim();
+    try {
+      const res = await fetch('/washingdashboard/list-entries?offset=' + existingOffset + '&search=' + encodeURIComponent(searchTerm));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const entries = data.data || [];
+      hasMore = data.hasMore;
+
+      entries.forEach(item => {
+        const card = document.createElement('div');
+        card.classList.add('entry-card');
+
+        const header = document.createElement('div');
+        header.classList.add('entry-header');
+        header.onclick = function() { card.classList.toggle('open'); };
+
+        const headerInfo = document.createElement('div');
+        headerInfo.classList.add('entry-header-info');
+
+        const lotLabel = document.createElement('strong');
+        lotLabel.textContent = 'Lot: ';
+        headerInfo.appendChild(lotLabel);
+        headerInfo.appendChild(document.createTextNode(item.lot_no + ' '));
+        headerInfo.appendChild(document.createTextNode('(SKU: ' + item.sku + ') - Total: ' + item.total_pieces + ' '));
+        const remarkLabel = document.createElement('b');
+        remarkLabel.textContent = 'Cutting Remark: ';
+        headerInfo.appendChild(remarkLabel);
+        headerInfo.appendChild(document.createTextNode(item.cutting_remark || ''));
+        header.appendChild(headerInfo);
+
+        const chevron = document.createElement('i');
+        chevron.classList.add('bi', 'bi-chevron-down', 'entry-chevron');
+        header.appendChild(chevron);
+        card.appendChild(header);
+
+        const body = document.createElement('div');
+        body.classList.add('entry-body');
+
+        const actions = document.createElement('div');
+        actions.className = 'd-flex justify-content-end gap-2 mb-3';
+
+        const challanBtn = document.createElement('a');
+        challanBtn.href = '/washingdashboard/challan/' + item.id;
+        challanBtn.className = 'btn-kotty btn-kotty-info btn-kotty-sm';
+        challanBtn.target = '_blank';
+        const challanIcon = document.createElement('i');
+        challanIcon.className = 'bi bi-file-text';
+        challanBtn.appendChild(challanIcon);
+        challanBtn.appendChild(document.createTextNode(' Challan'));
+        actions.appendChild(challanBtn);
+
+        const updateBtn = document.createElement('button');
+        updateBtn.className = 'btn-kotty btn-kotty-warning btn-kotty-sm';
+        updateBtn.setAttribute('data-bs-toggle', 'modal');
+        updateBtn.setAttribute('data-bs-target', '#updateModal');
+        updateBtn.setAttribute('data-entry-id', item.id);
+        const updateIcon = document.createElement('i');
+        updateIcon.className = 'bi bi-pencil';
+        updateBtn.appendChild(updateIcon);
+        updateBtn.appendChild(document.createTextNode(' Update'));
+        actions.appendChild(updateBtn);
+        body.appendChild(actions);
+
+        const info = document.createElement('p');
+        info.style.cssText = 'margin-bottom: 12px; font-family: Outfit, sans-serif; font-size: 0.9rem;';
+        const idStrong = document.createElement('strong');
+        idStrong.textContent = 'ID: ';
+        info.appendChild(idStrong);
+        info.appendChild(document.createTextNode(item.id));
+        info.appendChild(document.createElement('br'));
+        const remarkStrong = document.createElement('strong');
+        remarkStrong.textContent = 'Remark: ';
+        info.appendChild(remarkStrong);
+        info.appendChild(document.createTextNode(item.remark || 'N/A'));
+        body.appendChild(info);
+
+        if (item.image_url) {
+          const imgStrong = document.createElement('strong');
+          imgStrong.textContent = 'Image:';
+          body.appendChild(imgStrong);
+          body.appendChild(document.createElement('br'));
+          const img = document.createElement('img');
+          img.src = item.image_url;
+          img.alt = 'Washing Image';
+          img.style.cssText = 'max-height: 100px; border-radius: 6px; margin-bottom: 12px;';
+          body.appendChild(img);
+        }
+
+        const tableDiv = document.createElement('div');
+        tableDiv.className = 'table-responsive';
+        const table = document.createElement('table');
+        table.className = 'kotty-table';
+        const thead = document.createElement('thead');
+        const theadTr = document.createElement('tr');
+        const th1 = document.createElement('th');
+        th1.textContent = 'Size Label';
+        theadTr.appendChild(th1);
+        const th2 = document.createElement('th');
+        th2.textContent = 'Pieces';
+        theadTr.appendChild(th2);
+        thead.appendChild(theadTr);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        if (item.sizes && item.sizes.length) {
+          item.sizes.forEach(sz => {
+            const tr = document.createElement('tr');
+            const td1 = document.createElement('td');
+            td1.textContent = sz.size_label;
+            tr.appendChild(td1);
+            const td2 = document.createElement('td');
+            td2.textContent = sz.pieces;
+            tr.appendChild(td2);
+            tbody.appendChild(tr);
           });
+        } else {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.setAttribute('colspan', '2');
+          td.textContent = 'No sizes found.';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        tableDiv.appendChild(table);
+        body.appendChild(tableDiv);
 
-          // On input => update total
-          $tr.find('input[type="number"]').on('input', updateTotal);
-
-          $lotSizesTableBody.append($tr);
-        });
-        updateTotal();
-      }
-
-      function updateTotal() {
-        let sum = 0;
-        $lotSizesTableBody.find('input[type="number"]').each(function() {
-          const val = parseInt($(this).val(), 10);
-          if (!isNaN(val) && val > 0) sum += val;
-        });
-        $createTotalPieces.text(sum);
-      }
-
-      // On form submit => create hidden fields
-      $createForm.on('submit', function(e) {
-        // Remove old dynamic fields
-        $('.sizeMappingField').remove();
-        $('.assignmentField').remove();
-
-        $lotSizesTableBody.find('tr').each(function() {
-          const $row = $(this);
-          const sizeLabel = $row.children().first().text();
-          const remain    = parseInt($row.children().eq(1).text(), 10);
-          const $input    = $row.find('input[type="number"]');
-          let pieces      = parseInt($input.val(), 10);
-          if (isNaN(pieces) || pieces < 0) pieces = 0;
-          if (pieces > remain) {
-            e.preventDefault();
-            alert(`Requested ${pieces}, but only ${remain} remain for size ${sizeLabel}.`);
-            return false; // Stop form submission
-          }
-          if (pieces > 0) {
-            // Add hidden field for "sizes[sizeId]"
-            const sizeId = $input.data('sizeId');
-            $(`<input>`, {
-              type: 'hidden',
-              name: `sizes[${sizeId}]`,
-              value: pieces,
-              class: 'sizeMappingField'
-            }).appendTo($createForm);
-          }
-          // assignment
-          const $sel = $row.find('select');
-          if ($sel.val()) {
-            const sizeId = $input.data('sizeId');
-            $(`<input>`, {
-              type: 'hidden',
-              name: `assignments[${sizeId}]`,
-              value: $sel.val(),
-              class: 'assignmentField'
-            }).appendTo($createForm);
-          }
-        });
+        card.appendChild(body);
+        existingContainer.appendChild(card);
       });
 
-      /********************************************
-       * LAZY LOAD EXISTING ENTRIES + SEARCH
-       ********************************************/
-      let offset   = 0;
-      let loading  = false;
-      let hasMore  = true;
+      existingOffset += entries.length;
+    } catch (err) {
+      console.error('Error loading more data:', err);
+    } finally {
+      loading = false;
+    }
+  }
 
-      const $existingContainer = $('#existingEntriesContainer');
-      const $searchExisting    = $('#searchExisting');
-      const sentinel           = document.getElementById('loadMoreSentinel');
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMoreData();
+    }
+  }, { root: null, rootMargin: '0px', threshold: 0.1 });
+  observer.observe(sentinel);
 
-      async function loadMoreEntries() {
-        if (loading || !hasMore) return;
-        loading = true;
-        const term = $searchExisting.val().trim();
-        try {
-          const res = await fetch(`/washingdashboard/list-entries?offset=${offset}&search=${encodeURIComponent(term)}`);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          const items = data.data || [];
-          hasMore = data.hasMore;
+  searchInput.addEventListener('input', () => {
+    existingOffset = 0;
+    hasMore = true;
+    while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
+    loadMoreData();
+  });
 
-          items.forEach(it => {
-            const headerId   = `heading-${it.id}`;
-            const collapseId = `collapse-${it.id}`;
-            let sizeRows = '';
+  loadMoreData();
 
-            if (it.sizes && it.sizes.length) {
-              sizeRows = it.sizes.map(s => `
-                <tr>
-                  <td>${s.size_label}</td>
-                  <td>${s.pieces}</td>
-                </tr>
-              `).join('');
-            } else {
-              sizeRows = `<tr><td colspan="2">No sizes found.</td></tr>`;
-            }
+  /*****************************************************
+   * UPDATE MODAL
+   *****************************************************/
+  const updateModal = document.getElementById('updateModal');
+  const updateForm = document.getElementById('updateForm');
+  const updateSizesTable = document.getElementById('updateSizesTable');
+  const updateAlert = document.getElementById('updateAlert');
+  let currentUpdateEntryId = null;
 
-            const cardHtml = `
-              <div class="accordion-item fade-in">
-                <h2 class="accordion-header" id="${headerId}">
-                  <button
-                    class="accordion-button collapsed"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#${collapseId}"
-                    aria-expanded="false"
-                    aria-controls="${collapseId}"
-                  >
-                    <strong>Lot:</strong> ${it.lot_no} (SKU: ${it.sku}) - Total: ${it.total_pieces}&nbsp;<b>Cutting Remark:</b> ${it.cutting_remark}
-                  </button>
-                </h2>
-                <div
-                  id="${collapseId}"
-                  class="accordion-collapse collapse"
-                  aria-labelledby="${headerId}"
-                  data-bs-parent="#existingEntriesContainer"
-                >
-                  <div class="accordion-body">
-                    <div class="d-flex justify-content-end mb-3">
-                      <a
-                        href="/washingdashboard/challan/${it.id}"
-                        class="btn btn-info btn-sm me-2"
-                        target="_blank"
-                      >
-                        <i class="fas fa-file-download"></i> Challan
-                      </a>
-                      <button
-                        class="btn btn-warning btn-sm"
-                        data-bs-toggle="modal"
-                        data-bs-target="#updateModal"
-                        data-entry-id="${it.id}"
-                      >
-                        <i class="fas fa-edit"></i> Update
-                      </button>
-                    </div>
-                    <p><strong>ID:</strong> ${it.id} <br>
-                       <strong>Remark:</strong> ${it.remark || 'N/A'}<br>
-                       ${ it.image_url ? `<img src="${it.image_url}" style="max-height:150px;" alt="WashingImage">` : '' }
-                    </p>
-                    <div class="table-responsive">
-                      <table class="table table-sm table-bordered">
-                        <thead>
-                          <tr><th>Size Label</th><th>Pieces</th></tr>
-                        </thead>
-                        <tbody>${sizeRows}</tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `;
-
-            $existingContainer.append(cardHtml);
-          });
-
-          offset += items.length;
-        } catch (err) {
-          console.error(err);
-        } finally {
-          loading = false;
-        }
-      }
-
-      const observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-          loadMoreEntries();
-        }
-      }, { root: null, rootMargin: '0px', threshold: 0.1 });
-      observer.observe(sentinel);
-
-      // On search => reset
-      $searchExisting.on('input', () => {
-        offset = 0;
-        hasMore = true;
-        $existingContainer.empty();
-        loadMoreEntries();
-      });
-
-      loadMoreEntries(); // initial
-
-      /********************************************
-       * UPDATE MODAL
-       ********************************************/
-      const $updateModal      = $('#updateModal');
-    const $updateForm       = $('#updateForm');
-    const $updateSizesTable = $('#updateSizesTable tbody');
-    const $updatingEntryId  = $('#updatingEntryId');
-    const $updateAlert      = $('#updateAlert');
-
-    // When modal opens, fetch current sizes & remain
-    $updateModal.on('show.bs.modal', async function(e) {
-      const entryId = $(e.relatedTarget).data('entry-id');
-      $updatingEntryId.text(entryId);
-      $updateForm.attr('action', `/washingdashboard/update/${entryId}`);
-      $updateSizesTable.empty();
-      $updateAlert.addClass('d-none').text('');
+  if (updateModal) {
+    updateModal.addEventListener('show.bs.modal', async (event) => {
+      const button = event.relatedTarget;
+      currentUpdateEntryId = button.getAttribute('data-entry-id');
+      updateForm.action = '/washingdashboard/update/' + currentUpdateEntryId;
+      document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
+      const updateTbody = updateSizesTable.querySelector('tbody');
+      while (updateTbody.firstChild) updateTbody.removeChild(updateTbody.firstChild);
+      updateAlert.classList.add('d-none');
 
       try {
-        const res  = await fetch(`/washingdashboard/update/${entryId}/json`);
-        if (!res.ok) throw new Error('Fetch error');
+        const res = await fetch('/washingdashboard/update/' + currentUpdateEntryId + '/json');
+        if (!res.ok) throw new Error(res.status);
         const data = await res.json();
         if (!Array.isArray(data.sizes) || !data.sizes.length) {
-          $updateAlert.text('No size data available.').removeClass('d-none');
+          updateAlert.textContent = 'No size data available.';
+          updateAlert.classList.remove('d-none');
           return;
         }
 
         data.sizes.forEach(sz => {
-          const tr = $(`
-            <tr>
-              <td>${sz.size_label}</td>
-              <td>${sz.pieces}</td>
-              <td>${sz.remain}</td>
-              <td>
-                <input
-                  type="number"
-                  class="form-control"
-                  min="0"
-                  placeholder="0"
-                  data-size-id="${sz.id}"
-                  data-size-label="${sz.size_label}"
-                />
-              </td>
-            </tr>
-          `);
-          $updateSizesTable.append(tr);
+          const tr = document.createElement('tr');
+
+          const tdLabel = document.createElement('td');
+          tdLabel.textContent = sz.size_label;
+          tr.appendChild(tdLabel);
+
+          const tdUsed = document.createElement('td');
+          tdUsed.textContent = sz.pieces;
+          tr.appendChild(tdUsed);
+
+          const tdRemain = document.createElement('td');
+          tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
+          tr.appendChild(tdRemain);
+
+          const tdInput = document.createElement('td');
+          const inp = document.createElement('input');
+          inp.type = 'number';
+          inp.min = '0';
+          inp.value = '';
+          inp.classList.add('form-control');
+          inp.dataset.sizeId = sz.id;
+          inp.dataset.sizeLabel = sz.size_label;
+          tdInput.appendChild(inp);
+          tr.appendChild(tdInput);
+
+          updateTbody.appendChild(tr);
         });
       } catch (err) {
-        console.error('Error loading update data:', err);
-        $updateAlert.text('Failed to load data.').removeClass('d-none');
+        console.error(err);
+        updateAlert.textContent = 'Failed to load data.';
+        updateAlert.classList.remove('d-none');
       }
     });
 
-    // After closing, refresh your entries list if needed
-    $updateModal.on('hidden.bs.modal', function() {
-      // e.g. reload table / reset search
-      // window.location.reload();
+    updateModal.addEventListener('hidden.bs.modal', () => {
+      existingOffset = 0;
+      hasMore = true;
+      while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
+      loadMoreData();
     });
 
-    // On submit, build hidden fields by ID and then POST
-    $updateForm.on('submit', function(e) {
-      e.preventDefault();
-      $('.updateSizeMappingField').remove();
+    updateForm.addEventListener('submit', (e) => {
+      document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
+      const rows = updateSizesTable.querySelectorAll('tbody tr');
 
-      let valid = true;
-      $updateSizesTable.find('tr').each(function() {
-        const $row   = $(this);
-        const label  = $row.find('td').eq(0).text();
-        const remain = parseInt($row.find('td').eq(2).text(), 10);
-        const $inp   = $row.find('input');
-        let   val    = parseInt($inp.val()||'0',10);
-        if (isNaN(val)||val<0) val=0;
+      for (const row of rows) {
+        const lbl = row.cells[0].textContent;
+        const remain = parseInt(row.cells[2].textContent, 10);
+        const input = row.cells[3].querySelector('input');
+        let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
 
         if (val > remain) {
-          alert(`Cannot add ${val} to size [${label}]; only ${remain} remain.`);
-          valid = false;
-          return false; // break
+          alert('Cannot add ' + val + ' to size [' + lbl + ']. Max remain is ' + remain + '.');
+          e.preventDefault();
+          return;
         }
         if (val > 0) {
-          const sizeId = $inp.data('sizeId');
-          $('<input>', {
-            type:  'hidden',
-            name:  `updateSizes[${sizeId}]`,
-            value: val,
-            class: 'updateSizeMappingField'
-          }).appendTo($updateForm);
+          const sizeId = input.dataset.sizeId;
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.classList.add('updateSizeMappingField');
+          hidden.name = 'updateSizes[' + sizeId + ']';
+          hidden.value = val;
+          updateForm.appendChild(hidden);
         }
-      });
+      }
+    });
+  }
 
-      if (!valid) return;
-      this.submit();
+  /*****************************************************
+   * DISABLE SUBMIT BUTTONS AFTER CLICK
+   *****************************************************/
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', function() {
+      const submitButton = this.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
     });
-    });
-  </script>
-</body>
-</html>
+  });
+</script>

@@ -1,911 +1,1049 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>KOTTY - Stitching Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<%- include('partials/header', { pageTitle: 'Stitching Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
 
-  <!-- Bootstrap & FontAwesome -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
+<style>
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STITCHING DASHBOARD - Kotty Track Design System
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-  <style>
-    body {
-      background-color: #f8f9fa;
-      color: #212529;
-      transition: background-color 0.3s, color 0.3s;
-      min-height: 100vh;
-      display: flex;
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-light: #d4826a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --success-light: #e8f5ef;
+    --warning: #c4873a;
+    --warning-light: #fef3e2;
+    --danger: #c23b22;
+    --danger-light: #fdeaea;
+    --info: #3a7bc4;
+    --info-light: #e8f1fb;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border: #e5e0d8;
+    --border-light: #f0ebe3;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    background: var(--cream);
+    min-height: 100vh;
+  }
+
+  .dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-kotty-outline {
+    background: white;
+    color: var(--charcoal);
+    border-color: var(--border);
+  }
+
+  .btn-kotty-outline:hover {
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+  }
+
+  .btn-kotty-success {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-kotty-success:hover {
+    background: #236d4a;
+    border-color: #236d4a;
+    color: white;
+  }
+
+  .btn-kotty-warning {
+    background: var(--warning);
+    color: white;
+    border-color: var(--warning);
+  }
+
+  .btn-kotty-info {
+    background: var(--info);
+    color: white;
+    border-color: var(--info);
+  }
+
+  .btn-kotty-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Tabs */
+  .kotty-tabs {
+    display: flex;
+    gap: 4px;
+    background: white;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  .kotty-tab {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kotty-tab:hover {
+    background: var(--cream);
+    color: var(--charcoal);
+  }
+
+  .kotty-tab.active {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .kotty-tab i {
+    font-size: 1rem;
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Cards */
+  .kotty-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .kotty-card-header {
+    padding: 18px 24px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .kotty-card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .kotty-card-title i {
+    color: var(--terracotta);
+  }
+
+  .kotty-card-body {
+    padding: 24px;
+  }
+
+  /* Form Styling */
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    padding: 10px 14px;
+    background: white;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+
+  .form-control:focus, .form-select:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+    outline: none;
+  }
+
+  /* Tables */
+  .kotty-table {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .kotty-table thead th {
+    background: var(--cream);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 12px 14px;
+    text-align: left;
+  }
+
+  .kotty-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  /* Entry Cards */
+  .entry-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .entry-header {
+    padding: 16px 20px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s ease;
+  }
+
+  .entry-header:hover {
+    background: var(--cream);
+  }
+
+  .entry-header-info {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    color: var(--charcoal);
+  }
+
+  .entry-header-info strong {
+    color: var(--terracotta);
+  }
+
+  .entry-chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+  }
+
+  .entry-card.open .entry-chevron {
+    transform: rotate(180deg);
+  }
+
+  .entry-body {
+    padding: 20px;
+    border-top: 1px solid var(--border-light);
+    display: none;
+  }
+
+  .entry-card.open .entry-body {
+    display: block;
+  }
+
+  /* Search Input */
+  .search-wrapper {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  .search-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+  }
+
+  .search-wrapper input {
+    padding-left: 42px;
+  }
+
+  /* Alerts */
+  .kotty-alert {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .kotty-alert-danger {
+    background: var(--danger-light);
+    border: 1px solid #f5c6c0;
+    color: var(--danger);
+  }
+
+  .kotty-alert-success {
+    background: var(--success-light);
+    border: 1px solid #b8e0cc;
+    color: var(--success);
+  }
+
+  /* Modal */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-lg);
+  }
+
+  .modal-header {
+    padding: 18px 24px;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+    font-size: 1.25rem;
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--terracotta);
+  }
+
+  .modal-body {
+    padding: 24px;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-light);
+    background: var(--cream);
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .dashboard-container {
+      padding: 20px 16px;
+    }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+    }
+
+    .kotty-tabs {
       flex-direction: column;
     }
-    .card {
-      border-radius: 6px;
-      margin-bottom: 20px;
-    }
-    .navbar-brand {
-      font-weight: 500;
-      font-size: 1.2rem;
-    }
-    .main-content {
-      flex: 1 0 auto;
-    }
-    .fade-in {
-      animation: fadeIn 0.4s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
-    .dark-mode {
-      background-color: #121212;
-      color: #f8f9fa;
-    }
-    .dark-mode .navbar,
-    .dark-mode .nav-tabs .nav-link {
-      background-color: #1f1f1f !important;
-      color: #fff;
-    }
-    .dark-mode .navbar .navbar-toggler-icon {
-      filter: invert(1);
-    }
-    .dark-mode .card {
-      background-color: #1e1e1e;
-      color: #f8f9fa;
-      border-color: #2a2a2a;
-    }
-    .dark-mode .modal-content {
-      background-color: #1e1e1e;
-      color: #f8f9fa;
-      border-color: #2a2a2a;
-    }
-    .dark-mode .table-bordered > :not(caption) > * > * {
-      border-color: #666;
-    }
-    .dark-mode .table-light {
-      background-color: #272727;
-      color: #fff;
-    }
-    .dark-mode .btn-close {
-      filter: invert(1);
-    }
-    .dark-mode .form-control,
-    .dark-mode select, .dark-mode textarea {
-      background-color: #2b2b2b;
-      color: #f8f9fa;
-      border-color: #444;
-    }
-    .dark-mode input::placeholder {
-      color: #ccc;
-    }
-    .dark-mode .input-group-text {
-      background-color: #2b2b2b;
-      border-color: #444;
-      color: #fff;
-    }
-    .dark-mode .alert {
-      background-color: #2b2b2b;
-      color: #fff;
-      border-color: #444;
-    }
-    .dark-mode a, .dark-mode .nav-link {
-      color: #a5d6ff;
-    }
-    [data-lang="en"] {
-      display: inline;
-    }
-    [data-lang="hi"] {
-      display: none;
-    }
-    .lang-hi [data-lang="en"] {
-      display: none !important;
-    }
-    .lang-hi [data-lang="hi"] {
-      display: inline !important;
-    }
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid px-3">
-      <a class="navbar-brand" href="#">
-        <i class="fas fa-tshirt"></i>
-        <span data-lang="en">KOTTY</span>
-        <span data-lang="hi">कोटी</span>
-      </a>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarContent"
-        aria-controls="navbarContent"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-          <!-- Dark Mode Toggle -->
-          <li class="nav-item me-3">
-            <button id="darkModeToggle" class="btn btn-sm btn-outline-light">
-              <i class="fas fa-moon"></i>
-              <span data-lang="en">Dark Mode</span>
-              <span data-lang="hi">डार्क मोड</span>
-            </button>
-          </li>
-          <!-- Language Toggle -->
-          <li class="nav-item me-3">
-            <div class="d-flex align-items-center text-white">
-              <label class="me-2">
-                <input type="radio" name="language" value="en" checked /> EN
-              </label>
-              <label>
-                <input type="radio" name="language" value="hi" /> हिंदी
-              </label>
-            </div>
-          </li>
-          <!-- Conditional Navigation Link -->
-          <% if (user.username && user.username.toLowerCase().includes('hoisery')) { %>
-            <li class="nav-item me-2">
-              <a href="/stitchingdashboard/assign-finishing" class="btn btn-outline-light btn-sm">
-                <i class="fas fa-check-circle"></i>
-                <span data-lang="en">Assign Finishing</span>
-                <span data-lang="hi">फिनिशिंग सौंपें</span>
-              </a>
-            </li>
-          <% } else { %>
-            <li class="nav-item me-2">
-              <a href="/stitchingdashboard/assign-jeansassembly" class="btn btn-outline-light btn-sm">
-                <i class="fas fa-check-circle"></i>
-                <span data-lang="en">Assign Jeans Assembly</span>
-                <span data-lang="hi">जीन्स असेंबली</span>
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item me-2">
-            <a href="/stitchingdashboard/approve" class="btn btn-outline-light btn-sm">
-              <i class="fas fa-check-circle"></i>
-              <span data-lang="en">Approve</span>
-            </a>
-          </li>
-          <% if (user.id && (user.id === 6 || user.id === 35)) { %>
-            <li class="nav-item me-2">
-              <a href="/stitchingdashboard/payments/contract" class="btn btn-outline-light btn-sm">
-                <i class="fas fa-rupee-sign"></i>
-                Contract Pay
-              </a>
-            </li>
-          <% } %>
-          <% if (user.id && user.id === 8) { %>
-            <li class="nav-item me-2">
-              <a href="/stitchingdashboard/payments/operation" class="btn btn-outline-light btn-sm">
-                <i class="fas fa-tasks"></i>
-                Operation Pay
-              </a>
-            </li>
-          <% } %>
-          <!-- Logout -->
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-sm btn-danger">
-              <i class="fas fa-sign-out-alt"></i>
-              <span data-lang="en">Logout</span>
-              <span data-lang="hi">लॉगआउट</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
 
+    .header-actions {
+      width: 100%;
+    }
+
+    .header-actions .btn-kotty {
+      flex: 1;
+      justify-content: center;
+    }
+  }
+</style>
+
+<div class="dashboard-container">
   <!-- Flash Messages -->
-  <div class="container mt-3">
-    <% if (error && error.length > 0) { %>
-      <% error.forEach(function(msg){ %>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
-    <% if (success && success.length > 0) { %>
-      <% success.forEach(function(msg){ %>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <% }) %>
-    <% } %>
-  </div>
-
-  <!-- Main Content -->
-  <div class="container my-4 main-content">
-    <h2 class="mb-4">
-      <span data-lang="en">Stitching Dashboard</span>
-      <span data-lang="hi">सिलाई डैशबोर्ड</span>
-    </h2>
-
-    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link active"
-          id="create-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#createTabContent"
-          type="button"
-          role="tab"
-          aria-controls="createTabContent"
-          aria-selected="true"
-        >
-          <i class="fas fa-plus-circle"></i>
-          <span data-lang="en">Create Entry</span>
-          <span data-lang="hi">नई एंट्री</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="existing-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#existingTabContent"
-          type="button"
-          role="tab"
-          aria-controls="existingTabContent"
-          aria-selected="false"
-        >
-          <i class="fas fa-list"></i>
-          <span data-lang="en">Existing Entries</span>
-          <span data-lang="hi">मौजूदा एंट्री</span>
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content mt-3" id="dashboardTabsContent">
-      <!-- CREATE TAB -->
-      <div
-        class="tab-pane fade show active"
-        id="createTabContent"
-        role="tabpanel"
-        aria-labelledby="create-tab"
-      >
-        <div class="card">
-          <div class="card-header">
-            <h4 class="mb-0">
-              <i class="fas fa-plus-circle"></i>
-              <span data-lang="en">Create New Stitching Entry & Assign</span>
-              <span data-lang="hi">नई सिलाई एंट्री बनाएं और असाइन करें</span>
-            </h4>
-          </div>
-          <div class="card-body">
-            <form
-              id="createForm"
-              action="/stitchingdashboard/create"
-              method="POST"
-              enctype="multipart/form-data"
-            >
-              <div class="row mb-3">
-                <!-- Select Lot (SIMPLE DROPDOWN) -->
-                <div class="col-md-4 mb-3 mb-md-0">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Select Lot</span>
-                    <span data-lang="hi">लॉट चुनें</span>
-                  </label>
-                  <select
-                    id="selectedLotId"
-                    name="selectedLotId"
-                    class="form-select"
-                    required
-                  >
-                    <option value="">-- Choose a lot --</option>
-                    <% lots.forEach(function(l) { %>
-                      <option value="<%= l.id %>">
-                        <%= l.lot_no %> (SKU: <%= l.sku %>)
-                        <% if (l.cutting_remark) { %>- <%= l.cutting_remark %><% } %>
-                      </option>
-                    <% }) %>
-                  </select>
-                </div>
-
-                <!-- Remark -->
-                <div class="col-md-4 mb-3 mb-md-0">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Remark (optional)</span>
-                    <span data-lang="hi">टिप्पणी (वैकल्पिक)</span>
-                  </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    name="remark"
-                    placeholder="Any remarks..."
-                  />
-                </div>
-
-                <!-- Image -->
-                <div class="col-md-4">
-                  <label class="form-label fw-semibold">
-                    <span data-lang="en">Image (optional)</span>
-                    <span data-lang="hi">चित्र (वैकल्पिक)</span>
-                  </label>
-                  <input
-                    type="file"
-                    class="form-control"
-                    name="image_file"
-                    accept="image/*"
-                  />
-                </div>
-              </div>
-
-              <!-- Sizes -->
-              <div class="mt-4" id="lotSizesContainer" style="display:none;">
-                <h5>
-                  <span data-lang="en">Sizes for This Lot</span>
-                  <span data-lang="hi">इस लॉट के साइज़</span>
-                </h5>
-                <div class="table-responsive">
-                  <table class="table table-bordered align-middle" id="lotSizesTable">
-                    <thead class="table-light">
-                      <tr>
-                        <th>Size Label</th>
-                        <th>Max Available</th>
-                        <th>Enter Pieces</th>
-                        <th>Assign To User (Optional)</th>
-                      </tr>
-                    </thead>
-                    <tbody></tbody>
-                  </table>
-                </div>
-                <div class="mt-2">
-                  <strong>
-                    <span data-lang="en">Total Pieces Selected:</span>
-                    <span data-lang="hi">कुल टुकड़े:</span>
-                  </strong>
-                  <span id="createTotalPieces">0</span>
-                </div>
-              </div>
-
-              <button type="submit" class="btn btn-primary mt-3">
-                <i class="fas fa-check"></i>
-                <span data-lang="en">Create & Assign</span>
-                <span data-lang="hi">बनाएं और असाइन करें</span>
-              </button>
-            </form>
-          </div>
-        </div>
+  <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
+    <% error.forEach(function(msg){ %>
+      <div class="kotty-alert kotty-alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <%= msg %>
       </div>
-
-      <!-- EXISTING ENTRIES TAB -->
-      <div
-        class="tab-pane fade"
-        id="existingTabContent"
-        role="tabpanel"
-        aria-labelledby="existing-tab"
-      >
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="mb-0">
-            <i class="fas fa-list"></i>
-            <span data-lang="en">Existing Entries</span>
-            <span data-lang="hi">मौजूदा एंट्री</span>
-          </h4>
-          <a href="/stitchingdashboard/download-all" class="btn btn-success">
-            <i class="fas fa-file-excel"></i>
-            <span data-lang="en">Download Excel</span>
-            <span data-lang="hi">एक्सेल डाउनलोड</span>
-          </a>
-        </div>
-
-        <!-- Search input for existing entries -->
-        <div class="input-group mb-3">
-          <span class="input-group-text">
-            <i class="fas fa-search"></i>
-          </span>
-          <input
-            type="text"
-            id="searchExisting"
-            class="form-control"
-            placeholder="Search by lot or SKU..."
-          />
-        </div>
-
-        <!-- Container for lazy-loaded entries -->
-        <div id="existingEntriesContainer" class="accordion"></div>
-        <!-- IntersectionObserver sentinel -->
-        <div id="loadMoreSentinel" style="height: 60px;"></div>
+    <% }) %>
+  <% } %>
+  <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
+    <% success.forEach(function(msg){ %>
+      <div class="kotty-alert kotty-alert-success">
+        <i class="bi bi-check-circle"></i>
+        <%= msg %>
       </div>
+    <% }) %>
+  <% } %>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Stitching Dashboard</h1>
+    <div class="header-actions">
+      <% if (user.username && user.username.toLowerCase().includes('hoisery')) { %>
+        <a href="/stitchingdashboard/assign-finishing" class="btn-kotty btn-kotty-outline">
+          <i class="bi bi-check-circle"></i> Assign Finishing
+        </a>
+      <% } else { %>
+        <a href="/stitchingdashboard/assign-jeansassembly" class="btn-kotty btn-kotty-outline">
+          <i class="bi bi-check-circle"></i> Assign Jeans Assembly
+        </a>
+      <% } %>
+      <a href="/stitchingdashboard/approve" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-check2-all"></i> Approve
+      </a>
+      <% if (user.id && (user.id === 6 || user.id === 35)) { %>
+        <a href="/stitchingdashboard/payments/contract" class="btn-kotty btn-kotty-outline">
+          <i class="bi bi-currency-rupee"></i> Contract Pay
+        </a>
+      <% } %>
+      <% if (user.id && user.id === 8) { %>
+        <a href="/stitchingdashboard/payments/operation" class="btn-kotty btn-kotty-outline">
+          <i class="bi bi-list-task"></i> Operation Pay
+        </a>
+      <% } %>
     </div>
   </div>
 
-  <!-- UPDATE MODAL -->
-  <div
-    class="modal fade"
-    id="updateModal"
-    tabindex="-1"
-    aria-labelledby="updateModalLabel"
-    aria-hidden="true"
-  >
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <form id="updateForm" method="POST" action="">
-          <div class="modal-header">
-            <h5 class="modal-title" id="updateModalLabel">
-              <i class="fas fa-edit"></i>
-              <span data-lang="en">Update Stitching Data</span>
-              <span data-lang="hi">सिलाई डेटा अपडेट करें</span>
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+  <!-- Tabs -->
+  <div class="kotty-tabs" role="tablist">
+    <button class="kotty-tab active" data-tab="create" role="tab">
+      <i class="bi bi-plus-circle"></i> Create Entry
+    </button>
+    <button class="kotty-tab" data-tab="existing" role="tab">
+      <i class="bi bi-list-ul"></i> Existing Entries
+    </button>
+  </div>
+
+  <!-- CREATE TAB -->
+  <div class="tab-content active" id="createTab">
+    <div class="kotty-card">
+      <div class="kotty-card-header">
+        <h2 class="kotty-card-title">
+          <i class="bi bi-plus-circle"></i> Create New Stitching Entry & Assign
+        </h2>
+      </div>
+      <div class="kotty-card-body">
+        <form id="createForm" action="/stitchingdashboard/create" method="POST" enctype="multipart/form-data">
+          <div class="row mb-4">
+            <div class="col-md-4 mb-3 mb-md-0">
+              <label class="form-label">Select Lot</label>
+              <select id="selectedLotId" name="selectedLotId" class="form-select" required>
+                <option value="">-- Choose a lot --</option>
+                <% lots.forEach(function(l) { %>
+                  <option value="<%= l.id %>">
+                    <%= l.lot_no %> (SKU: <%= l.sku %>)
+                    <% if (l.cutting_remark) { %> - <%= l.cutting_remark %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-md-4 mb-3 mb-md-0">
+              <label class="form-label">Remark (optional)</label>
+              <input type="text" class="form-control" name="remark" placeholder="Any remarks...">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Image (optional)</label>
+              <input type="file" class="form-control" name="image_file" accept="image/*">
+            </div>
           </div>
-          <div class="modal-body">
-            <p>
-            <strong>
-              <span data-lang="en">Updating Entry ID:</span>
-              <span data-lang="hi">अपडेट हो रही एंट्री आईडी:</span>
-            </strong>
-            <span id="updatingEntryId">-</span>
-            <div id="updateAlert" class="alert alert-danger d-none mt-2"></div>
-          </p>
+
+          <div id="lotSizesContainer" style="display: none;">
+            <h6 style="font-family: 'Outfit', sans-serif; font-weight: 600; margin-bottom: 16px; color: var(--charcoal);">
+              <i class="bi bi-rulers" style="color: var(--terracotta);"></i> Sizes for This Lot
+            </h6>
             <div class="table-responsive">
-              <table class="table table-bordered align-middle" id="updateSizesTable">
-                <thead class="table-light">
+              <table class="kotty-table" id="lotSizesTable">
+                <thead>
                   <tr>
                     <th>Size Label</th>
-                    <th>Already Used</th>
-                    <th>Max Remain</th>
-                    <th>New Pieces (Increment)</th>
+                    <th>Max Available</th>
+                    <th>Enter Pieces</th>
+                    <th>Assign To User (Optional)</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
               </table>
             </div>
-            <p class="small text-muted">
-              <span data-lang="en">Leave a field blank or zero for no increment.</span>
-              <span data-lang="hi">0 या खाली छोड़ें तो कुछ नहीं जुड़ेगा।</span>
-            </p>
+            <div style="margin-top: 16px; font-family: 'Outfit', sans-serif;">
+              <strong style="color: var(--charcoal);">Total Pieces Selected:</strong>
+              <span id="createTotalPieces" style="color: var(--terracotta); font-weight: 600; font-size: 1.1rem;">0</span>
+            </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <span data-lang="en">Cancel</span>
-              <span data-lang="hi">रद्द करें</span>
-            </button>
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i>
-              <span data-lang="en">Save Updates</span>
-              <span data-lang="hi">सेव करें</span>
-            </button>
-          </div>
+
+          <button type="submit" class="btn-kotty btn-kotty-primary mt-4">
+            <i class="bi bi-check-lg"></i> Create & Assign
+          </button>
         </form>
       </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    /*****************************************************
-     * DARK MODE / LANGUAGE
-     *****************************************************/
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    darkModeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark-mode');
-    });
+  <!-- EXISTING ENTRIES TAB -->
+  <div class="tab-content" id="existingTab">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+      <h2 style="font-family: 'DM Serif Display', Georgia, serif; font-size: 1.25rem; margin: 0; color: var(--charcoal);">
+        <i class="bi bi-list-ul" style="color: var(--terracotta);"></i> Existing Entries
+      </h2>
+      <a href="/stitchingdashboard/download-all" class="btn-kotty btn-kotty-success">
+        <i class="bi bi-file-earmark-excel"></i> Download Excel
+      </a>
+    </div>
 
-    const langRadios = document.querySelectorAll('input[name="language"]');
-    langRadios.forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        if (e.target.value === 'hi') {
-          document.body.classList.add('lang-hi');
+    <div class="search-wrapper">
+      <i class="bi bi-search"></i>
+      <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU...">
+    </div>
+
+    <div id="existingEntriesContainer"></div>
+    <div id="loadMoreSentinel" style="height: 60px;"></div>
+  </div>
+</div>
+
+<!-- UPDATE MODAL -->
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="updateForm" method="POST" action="">
+        <div class="modal-header">
+          <h5 class="modal-title" id="updateModalLabel">
+            <i class="bi bi-pencil-square"></i> Update Stitching Data
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px;">
+            <strong>Updating Entry ID:</strong>
+            <span id="updatingEntryId" style="color: var(--terracotta);">-</span>
+          </p>
+          <div id="updateAlert" class="kotty-alert kotty-alert-danger d-none"></div>
+          <div class="table-responsive">
+            <table class="kotty-table" id="updateSizesTable">
+              <thead>
+                <tr>
+                  <th>Size Label</th>
+                  <th>Already Used</th>
+                  <th>Max Remain</th>
+                  <th>New Pieces (Increment)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="small text-muted mt-3">Leave a field blank or zero for no increment.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-kotty btn-kotty-outline" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-kotty btn-kotty-primary">
+            <i class="bi bi-check-lg"></i> Save Updates
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+
+<script>
+  /*****************************************************
+   * TAB SWITCHING
+   *****************************************************/
+  const tabs = document.querySelectorAll('.kotty-tab');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const targetId = tab.dataset.tab + 'Tab';
+      document.getElementById(targetId).classList.add('active');
+    });
+  });
+
+  /*****************************************************
+   * CREATE TAB
+   *****************************************************/
+  let assignableUsers = [];
+  const lotSelect = document.getElementById('selectedLotId');
+  const lotSizesContainer = document.getElementById('lotSizesContainer');
+  const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
+  const createTotalPiecesElem = document.getElementById('createTotalPieces');
+
+  lotSelect.addEventListener('change', async () => {
+    const val = lotSelect.value;
+    if (!val) {
+      lotSizesContainer.style.display = 'none';
+      lotSizesTableBody.textContent = '';
+      createTotalPiecesElem.textContent = '0';
+      return;
+    }
+    try {
+      const res = await fetch('/stitchingdashboard/get-lot-sizes/' + val);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const sizesData = await res.json();
+
+      if (!assignableUsers.length) {
+        const resp = await fetch('/stitchingdashboard/create/assignable-users');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        assignableUsers = json.data || [];
+      }
+
+      renderLotSizes(sizesData);
+    } catch (err) {
+      console.error('Error fetching lot sizes or users:', err);
+      lotSizesContainer.style.display = 'none';
+      while (lotSizesTableBody.firstChild) lotSizesTableBody.removeChild(lotSizesTableBody.firstChild);
+      createTotalPiecesElem.textContent = '0';
+    }
+  });
+
+  function renderLotSizes(sizesArr) {
+    lotSizesContainer.style.display = 'block';
+    while (lotSizesTableBody.firstChild) lotSizesTableBody.removeChild(lotSizesTableBody.firstChild);
+
+    sizesArr.forEach(sz => {
+      const tr = document.createElement('tr');
+
+      const tdLabel = document.createElement('td');
+      tdLabel.textContent = sz.size_label;
+      tr.appendChild(tdLabel);
+
+      const tdRemain = document.createElement('td');
+      tdRemain.textContent = sz.remain;
+      tr.appendChild(tdRemain);
+
+      const tdInput = document.createElement('td');
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.min = '0';
+      inp.max = String(sz.remain);
+      inp.value = String(sz.remain);
+      inp.classList.add('form-control');
+      inp.dataset.sizeId = sz.id;
+      inp.required = true;
+      inp.addEventListener('input', updateCreateTotal);
+      tdInput.appendChild(inp);
+      tr.appendChild(tdInput);
+
+      const tdAssign = document.createElement('td');
+      const sel = document.createElement('select');
+      sel.classList.add('form-select');
+      const optNone = document.createElement('option');
+      optNone.value = '';
+      optNone.textContent = '--No Assignment--';
+      sel.appendChild(optNone);
+      assignableUsers.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id;
+        opt.textContent = u.username;
+        sel.appendChild(opt);
+      });
+      tdAssign.appendChild(sel);
+      tr.appendChild(tdAssign);
+
+      lotSizesTableBody.appendChild(tr);
+    });
+    updateCreateTotal();
+  }
+
+  function updateCreateTotal() {
+    let sum = 0;
+    const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
+    inputs.forEach(inp => {
+      const val = parseInt(inp.value, 10);
+      if (!isNaN(val) && val > 0) {
+        sum += val;
+      }
+    });
+    createTotalPiecesElem.textContent = sum;
+  }
+
+  const createForm = document.getElementById('createForm');
+  createForm.addEventListener('submit', (e) => {
+    const val = lotSelect.value;
+    if (!val) {
+      e.preventDefault();
+      alert('Please select a lot first.');
+      return;
+    }
+
+    const rows = lotSizesTableBody.querySelectorAll('tr');
+    if (!rows.length) {
+      e.preventDefault();
+      alert('No sizes found for this lot!');
+      return;
+    }
+
+    document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
+    document.querySelectorAll('.assignmentField').forEach(el => el.remove());
+
+    for (const row of rows) {
+      const remain = parseInt(row.children[1].textContent, 10);
+      const input = row.children[2].querySelector('input');
+      let valNum = parseInt(input.value, 10);
+      if (isNaN(valNum) || valNum < 0) valNum = 0;
+      if (valNum > remain) {
+        e.preventDefault();
+        alert('Requested ' + valNum + ' but only ' + remain + ' remain for size ' + row.children[0].textContent);
+        return;
+      }
+
+      if (valNum > 0) {
+        const sizeId = input.dataset.sizeId;
+        const hiddenSize = document.createElement('input');
+        hiddenSize.type = 'hidden';
+        hiddenSize.classList.add('sizeMappingField');
+        hiddenSize.name = 'sizes[' + sizeId + ']';
+        hiddenSize.value = valNum;
+        createForm.appendChild(hiddenSize);
+      }
+
+      const sel = row.children[3].querySelector('select');
+      if (sel.value) {
+        const sizeId = input.dataset.sizeId;
+        const hiddenAssign = document.createElement('input');
+        hiddenAssign.type = 'hidden';
+        hiddenAssign.classList.add('assignmentField');
+        hiddenAssign.name = 'assignments[' + sizeId + ']';
+        hiddenAssign.value = sel.value;
+        createForm.appendChild(hiddenAssign);
+      }
+    }
+  });
+
+  /*****************************************************
+   * EXISTING ENTRIES (LAZY LOAD)
+   *****************************************************/
+  let existingOffset = 0;
+  let loading = false;
+  let hasMore = true;
+  const existingContainer = document.getElementById('existingEntriesContainer');
+  const sentinel = document.getElementById('loadMoreSentinel');
+  const searchInput = document.getElementById('searchExisting');
+
+  async function loadMoreData() {
+    if (loading || !hasMore) return;
+    loading = true;
+    const searchTerm = searchInput.value.trim();
+    try {
+      const res = await fetch('/stitchingdashboard/list-entries?offset=' + existingOffset + '&search=' + encodeURIComponent(searchTerm));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const entries = data.data || [];
+      hasMore = data.hasMore;
+
+      entries.forEach(item => {
+        const card = document.createElement('div');
+        card.classList.add('entry-card');
+
+        const header = document.createElement('div');
+        header.classList.add('entry-header');
+        header.onclick = function() { card.classList.toggle('open'); };
+
+        const headerInfo = document.createElement('div');
+        headerInfo.classList.add('entry-header-info');
+        headerInfo.innerHTML = '<strong>Lot:</strong> ' + escapeHtml(item.lot_no) + ' &nbsp; (SKU: ' + escapeHtml(item.sku) + ') &nbsp; (Total: ' + item.total_pieces + ' pcs)';
+        header.appendChild(headerInfo);
+
+        const chevron = document.createElement('i');
+        chevron.classList.add('bi', 'bi-chevron-down', 'entry-chevron');
+        header.appendChild(chevron);
+        card.appendChild(header);
+
+        const body = document.createElement('div');
+        body.classList.add('entry-body');
+
+        const actions = document.createElement('div');
+        actions.className = 'd-flex justify-content-end gap-2 mb-3';
+
+        const challanBtn = document.createElement('a');
+        challanBtn.href = '/stitchingdashboard/challan/' + item.id;
+        challanBtn.className = 'btn-kotty btn-kotty-info btn-kotty-sm';
+        challanBtn.target = '_blank';
+        challanBtn.innerHTML = '<i class="bi bi-file-text"></i> Challan';
+        actions.appendChild(challanBtn);
+
+        const updateBtn = document.createElement('button');
+        updateBtn.className = 'btn-kotty btn-kotty-warning btn-kotty-sm';
+        updateBtn.setAttribute('data-bs-toggle', 'modal');
+        updateBtn.setAttribute('data-bs-target', '#updateModal');
+        updateBtn.setAttribute('data-entry-id', item.id);
+        updateBtn.innerHTML = '<i class="bi bi-pencil"></i> Update';
+        actions.appendChild(updateBtn);
+        body.appendChild(actions);
+
+        const info = document.createElement('p');
+        info.style.cssText = 'margin-bottom: 12px; font-family: Outfit, sans-serif; font-size: 0.9rem;';
+        info.innerHTML = '<strong>ID:</strong> ' + item.id + '<br><strong>Total Pieces:</strong> ' + item.total_pieces + '<br><strong>Remark:</strong> ' + escapeHtml(item.remark || 'N/A');
+        body.appendChild(info);
+
+        if (item.image_url) {
+          const imgP = document.createElement('p');
+          imgP.innerHTML = '<strong>Image:</strong><br>';
+          const img = document.createElement('img');
+          img.src = item.image_url;
+          img.alt = 'Stitch';
+          img.style.cssText = 'max-height: 100px; border-radius: 6px;';
+          imgP.appendChild(img);
+          body.appendChild(imgP);
+        }
+
+        const tableDiv = document.createElement('div');
+        tableDiv.className = 'table-responsive';
+        const table = document.createElement('table');
+        table.className = 'kotty-table';
+        const thead = document.createElement('thead');
+        thead.innerHTML = '<tr><th>Size Label</th><th>Pieces</th></tr>';
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        if (item.sizes && item.sizes.length) {
+          item.sizes.forEach(sz => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + escapeHtml(sz.size_label) + '</td><td>' + sz.pieces + '</td>';
+            tbody.appendChild(tr);
+          });
         } else {
-          document.body.classList.remove('lang-hi');
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td colspan="2">No sizes found.</td>';
+          tbody.appendChild(tr);
         }
+        table.appendChild(tbody);
+        tableDiv.appendChild(table);
+        body.appendChild(tableDiv);
+
+        card.appendChild(body);
+        existingContainer.appendChild(card);
       });
-    });
 
-    /*****************************************************
-     * CREATE TAB
-     *****************************************************/
-    let assignableUsers = [];
-    const lotSelect = document.getElementById('selectedLotId');
-    const lotSizesContainer = document.getElementById('lotSizesContainer');
-    const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
-    const createTotalPiecesElem = document.getElementById('createTotalPieces');
+      existingOffset += entries.length;
+    } catch (err) {
+      console.error('Error loading more data:', err);
+    } finally {
+      loading = false;
+    }
+  }
 
-    // On change of lot dropdown, fetch sizes
-    lotSelect.addEventListener('change', async () => {
-      const val = lotSelect.value;
-      if (!val) {
-        lotSizesContainer.style.display = 'none';
-        lotSizesTableBody.innerHTML = '';
-        createTotalPiecesElem.textContent = '0';
-        return;
-      }
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      loadMoreData();
+    }
+  }, { root: null, rootMargin: '0px', threshold: 0.1 });
+  observer.observe(sentinel);
+
+  searchInput.addEventListener('input', () => {
+    existingOffset = 0;
+    hasMore = true;
+    while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
+    loadMoreData();
+  });
+
+  loadMoreData();
+
+  /*****************************************************
+   * UPDATE MODAL
+   *****************************************************/
+  const updateModal = document.getElementById('updateModal');
+  const updateForm = document.getElementById('updateForm');
+  const updateSizesTable = document.getElementById('updateSizesTable');
+  const updateAlert = document.getElementById('updateAlert');
+  let currentUpdateEntryId = null;
+
+  if (updateModal) {
+    updateModal.addEventListener('show.bs.modal', async (event) => {
+      const button = event.relatedTarget;
+      currentUpdateEntryId = button.getAttribute('data-entry-id');
+      updateForm.action = '/stitchingdashboard/update/' + currentUpdateEntryId;
+      document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
+      const updateTbody = updateSizesTable.querySelector('tbody');
+      while (updateTbody.firstChild) updateTbody.removeChild(updateTbody.firstChild);
+      updateAlert.classList.add('d-none');
+
       try {
-        // fetch sizes
-        const res = await fetch(`/stitchingdashboard/get-lot-sizes/${val}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const sizesData = await res.json();
-
-        // fetch assignable users if not loaded yet
-        if (!assignableUsers.length) {
-          const resp = await fetch('/stitchingdashboard/create/assignable-users');
-          if (!resp.ok) throw new Error('HTTP ' + resp.status);
-          const json = await resp.json();
-          assignableUsers = json.data || [];
-        }
-
-        renderLotSizes(sizesData);
-      } catch (err) {
-        console.error('Error fetching lot sizes or users:', err);
-        lotSizesContainer.style.display = 'none';
-        lotSizesTableBody.innerHTML = '';
-        createTotalPiecesElem.textContent = '0';
-      }
-    });
-
-    function renderLotSizes(sizesArr) {
-      lotSizesContainer.style.display = 'block';
-      lotSizesTableBody.innerHTML = '';
-      sizesArr.forEach(sz => {
-        const tr = document.createElement('tr');
-
-        // 1) Size label
-        const tdLabel = document.createElement('td');
-        tdLabel.textContent = sz.size_label;
-        tr.appendChild(tdLabel);
-
-        // 2) Max available
-        const tdRemain = document.createElement('td');
-        tdRemain.textContent = sz.remain;
-        tr.appendChild(tdRemain);
-
-        // 3) Enter pieces (default = max remain)
-        const tdInput = document.createElement('td');
-        const inp = document.createElement('input');
-        inp.type = 'number';
-        inp.min = '0';
-        inp.max = String(sz.remain);
-        inp.value = String(sz.remain); // default to remain
-        inp.classList.add('form-control');
-        inp.dataset.sizeId = sz.id;
-        inp.required = true;
-        inp.addEventListener('input', updateCreateTotal);
-        tdInput.appendChild(inp);
-        tr.appendChild(tdInput);
-
-        // 4) Assign user (optional)
-        const tdAssign = document.createElement('td');
-        const sel = document.createElement('select');
-        sel.classList.add('form-select');
-        const optNone = document.createElement('option');
-        optNone.value = '';
-        optNone.textContent = '--No Assignment--';
-        sel.appendChild(optNone);
-        assignableUsers.forEach(u => {
-          const opt = document.createElement('option');
-          opt.value = u.id;
-          opt.textContent = u.username;
-          sel.appendChild(opt);
-        });
-        tdAssign.appendChild(sel);
-        tr.appendChild(tdAssign);
-
-        lotSizesTableBody.appendChild(tr);
-      });
-      updateCreateTotal();
-    }
-
-    function updateCreateTotal() {
-      let sum = 0;
-      const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
-      inputs.forEach(inp => {
-        const val = parseInt(inp.value, 10);
-        if (!isNaN(val) && val > 0) {
-          sum += val;
-        }
-      });
-      createTotalPiecesElem.textContent = sum;
-    }
-
-    // On create form submission, build hidden fields for `sizes` and `assignments`
-    const createForm = document.getElementById('createForm');
-    createForm.addEventListener('submit', (e) => {
-      const val = lotSelect.value;
-      if (!val) {
-        e.preventDefault();
-        alert('Please select a lot first.');
-        return;
-      }
-
-      const rows = lotSizesTableBody.querySelectorAll('tr');
-      if (!rows.length) {
-        e.preventDefault();
-        alert('No sizes found for this lot!');
-        return;
-      }
-
-      // remove old hidden fields
-      document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
-      document.querySelectorAll('.assignmentField').forEach(el => el.remove());
-
-      for (const row of rows) {
-        const remain = parseInt(row.children[1].textContent, 10);
-        const input = row.children[2].querySelector('input');
-        let valNum = parseInt(input.value, 10);
-        if (isNaN(valNum) || valNum < 0) valNum = 0;
-        if (valNum > remain) {
-          e.preventDefault();
-          alert(`Requested ${valNum} but only ${remain} remain for size ${row.children[0].textContent}`);
+        const res = await fetch('/stitchingdashboard/update/' + currentUpdateEntryId + '/json');
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        if (!Array.isArray(data.sizes) || !data.sizes.length) {
+          updateAlert.textContent = 'No size data available.';
+          updateAlert.classList.remove('d-none');
           return;
         }
 
-        // sizes[sizeId] = valNum
-        if (valNum > 0) {
-          const sizeId = input.dataset.sizeId;
-          const hiddenSize = document.createElement('input');
-          hiddenSize.type = 'hidden';
-          hiddenSize.classList.add('sizeMappingField');
-          hiddenSize.name = `sizes[${sizeId}]`;
-          hiddenSize.value = valNum;
-          createForm.appendChild(hiddenSize);
-        }
+        data.sizes.forEach(sz => {
+          const tr = document.createElement('tr');
 
-        // assignments[sizeId] = userId
-        const sel = row.children[3].querySelector('select');
-        if (sel.value) {
-          const sizeId = input.dataset.sizeId;
-          const hiddenAssign = document.createElement('input');
-          hiddenAssign.type = 'hidden';
-          hiddenAssign.classList.add('assignmentField');
-          hiddenAssign.name = `assignments[${sizeId}]`;
-          hiddenAssign.value = sel.value;
-          createForm.appendChild(hiddenAssign);
-        }
-      }
-    });
+          const tdLabel = document.createElement('td');
+          tdLabel.textContent = sz.size_label;
+          tr.appendChild(tdLabel);
 
-    /*****************************************************
-     * EXISTING ENTRIES (LAZY LOAD)
-     *****************************************************/
-    let existingOffset = 0;
-    let loading = false;
-    let hasMore = true;
-    const existingContainer = document.getElementById('existingEntriesContainer');
-    const sentinel = document.getElementById('loadMoreSentinel');
-    const searchInput = document.getElementById('searchExisting');
+          const tdUsed = document.createElement('td');
+          tdUsed.textContent = sz.pieces;
+          tr.appendChild(tdUsed);
 
-    async function loadMoreData() {
-      if (loading || !hasMore) return;
-      loading = true;
-      const searchTerm = searchInput.value.trim();
-      try {
-        const res = await fetch(`/stitchingdashboard/list-entries?offset=${existingOffset}&search=${encodeURIComponent(searchTerm)}`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const entries = data.data || [];
-        hasMore = data.hasMore;
+          const tdRemain = document.createElement('td');
+          tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
+          tr.appendChild(tdRemain);
 
-        entries.forEach(item => {
-          const card = document.createElement('div');
-          card.classList.add('accordion-item', 'fade-in');
-          const headerId = `heading-${item.id}`;
-          const collapseId = `collapse-${item.id}`;
+          const tdInput = document.createElement('td');
+          const inp = document.createElement('input');
+          inp.type = 'number';
+          inp.min = '0';
+          inp.value = '';
+          inp.classList.add('form-control');
+          inp.dataset.sizeLabel = sz.size_label;
+          tdInput.appendChild(inp);
+          tr.appendChild(tdInput);
 
-          card.innerHTML = `
-            <h2 class="accordion-header" id="${headerId}">
-              <button class="accordion-button collapsed" type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#${collapseId}"
-                aria-expanded="false"
-                aria-controls="${collapseId}">
-                <strong>Lot:</strong> ${item.lot_no} &nbsp; (SKU: ${item.sku}) &nbsp; (Total Pieces: ${item.total_pieces})
-              </button>
-            </h2>
-            <div id="${collapseId}" class="accordion-collapse collapse" aria-labelledby="${headerId}" data-bs-parent="#existingEntriesContainer">
-              <div class="accordion-body">
-                <div class="d-flex justify-content-end mb-3">
-                  <a href="/stitchingdashboard/challan/${item.id}" class="btn btn-sm btn-info me-2" target="_blank">
-                    <i class="fas fa-file-download"></i> Challan
-                  </a>
-                  <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
-                    data-bs-target="#updateModal" data-entry-id="${item.id}">
-                    <i class="fas fa-edit"></i>
-                    <span data-lang="en">Update</span>
-                    <span data-lang="hi">अपडेट</span>
-                  </button>
-                </div>
-                <p class="mb-2">
-                  <strong>ID:</strong> ${item.id}<br>
-                  <strong>Total Pieces:</strong> ${item.total_pieces}<br>
-                  <strong>Remark:</strong> ${item.remark || 'N/A'}
-                </p>
-                ${
-                  item.image_url
-                    ? `<p>
-                         <strong>Image:</strong><br>
-                         <img src="${item.image_url}" alt="Stitch" style="max-height: 100px;">
-                       </p>`
-                    : ''
-                }
-                <div class="table-responsive">
-                  <table class="table table-sm table-bordered">
-                    <thead>
-                      <tr>
-                        <th>Size Label</th>
-                        <th>Pieces</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${
-                        (item.sizes && item.sizes.length)
-                          ? item.sizes.map(sz => `
-                              <tr>
-                                <td>${sz.size_label}</td>
-                                <td>${sz.pieces}</td>
-                              </tr>`).join('')
-                          : `<tr><td colspan="2">No sizes found.</td></tr>`
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          `;
-          existingContainer.appendChild(card);
+          updateTbody.appendChild(tr);
         });
-
-        existingOffset += entries.length;
       } catch (err) {
-        console.error('Error loading more data:', err);
-      } finally {
-        loading = false;
+        console.error(err);
+        updateAlert.textContent = 'Failed to load data.';
+        updateAlert.classList.remove('d-none');
       }
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        loadMoreData();
-      }
-    }, {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.1
     });
-    observer.observe(sentinel);
 
-    searchInput.addEventListener('input', () => {
+    updateModal.addEventListener('hidden.bs.modal', () => {
       existingOffset = 0;
       hasMore = true;
-      existingContainer.innerHTML = '';
+      while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
       loadMoreData();
     });
 
-    loadMoreData(); // initial load
+    updateForm.addEventListener('submit', (e) => {
+      document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
+      const rows = updateSizesTable.querySelectorAll('tbody tr');
 
-    /*****************************************************
-     * UPDATE MODAL
-     *****************************************************/
-    const updateModal = document.getElementById('updateModal');
-    const updateForm = document.getElementById('updateForm');
-    const updateSizesTable = document.getElementById('updateSizesTable');
-    const updateAlert = document.getElementById('updateAlert');
-    let currentUpdateEntryId = null;
+      for (const row of rows) {
+        const lbl = row.cells[0].textContent;
+        const remain = parseInt(row.cells[2].textContent, 10);
+        const input = row.cells[3].querySelector('input');
+        let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
 
-    if (updateModal) {
-      updateModal.addEventListener('show.bs.modal', async (event) => {
-        const button = event.relatedTarget;
-        currentUpdateEntryId = button.getAttribute('data-entry-id');
-        updateForm.action = '/stitchingdashboard/update/' + currentUpdateEntryId;
-        document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
-        updateSizesTable.querySelector('tbody').innerHTML = '';
-        updateAlert.classList.add('d-none');
-
-        try {
-          const res = await fetch(`/stitchingdashboard/update/${currentUpdateEntryId}/json`);
-          if (!res.ok) throw new Error(res.status);
-          const data = await res.json();
-          if (!Array.isArray(data.sizes) || !data.sizes.length) {
-            updateAlert.textContent = 'No size data available.';
-            updateAlert.classList.remove('d-none');
-            return;
-          }
-
-          data.sizes.forEach(sz => {
-            const tr = document.createElement('tr');
-
-            // Size Label
-            const tdLabel = document.createElement('td');
-            tdLabel.textContent = sz.size_label;
-            tr.appendChild(tdLabel);
-
-            // Already used
-            const tdUsed = document.createElement('td');
-            tdUsed.textContent = sz.pieces;
-            tr.appendChild(tdUsed);
-
-            // Max remain
-            const tdRemain = document.createElement('td');
-            tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
-            tr.appendChild(tdRemain);
-
-            // New pieces
-            const tdInput = document.createElement('td');
-            const inp = document.createElement('input');
-            inp.type = 'number';
-            inp.min = '0';
-            inp.value = '';
-            inp.classList.add('form-control');
-            inp.dataset.sizeLabel = sz.size_label;
-            tdInput.appendChild(inp);
-            tr.appendChild(tdInput);
-
-            updateSizesTable.querySelector('tbody').appendChild(tr);
-          });
-        } catch (err) {
-          console.error(err);
-          updateAlert.textContent = 'Failed to load data.';
-          updateAlert.classList.remove('d-none');
+        if (val > remain) {
+          alert('Cannot add ' + val + ' to size [' + lbl + ']. Max remain is ' + remain + '.');
+          e.preventDefault();
+          return;
         }
-      });
-
-      // after the modal closes, let's re-fetch existing entries
-      updateModal.addEventListener('hidden.bs.modal', () => {
-        existingOffset = 0;
-        hasMore = true;
-        existingContainer.innerHTML = '';
-        loadMoreData();
-      });
-
-      updateForm.addEventListener('submit', (e) => {
-        document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
-        const rows = updateSizesTable.querySelectorAll('tbody tr');
-
-        for (const row of rows) {
-          const lbl = row.cells[0].textContent;
-          const remain = parseInt(row.cells[2].textContent, 10);
-          const input = row.cells[3].querySelector('input');
-          let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
-          if (isNaN(val) || val < 0) val = 0;
-
-          if (val > remain) {
-            alert(`Cannot add ${val} to size [${lbl}]. Max remain is ${remain}.`);
-            e.preventDefault();
-            return;
-          }
-          if (val > 0) {
-            const hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.classList.add('updateSizeMappingField');
-            hidden.name = `updateSizes[size_${lbl}]`;
-            hidden.value = val;
-            updateForm.appendChild(hidden);
-          }
+        if (val > 0) {
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.classList.add('updateSizeMappingField');
+          hidden.name = 'updateSizes[size_' + lbl + ']';
+          hidden.value = val;
+          updateForm.appendChild(hidden);
         }
-      });
-    }
-
-    /*****************************************************
-     * DISABLE SUBMIT BUTTONS AFTER CLICK (Optional)
-     *****************************************************/
-    document.querySelectorAll('form').forEach(form => {
-      form.addEventListener('submit', function() {
-        const submitButton = this.querySelector('button[type="submit"]');
-        if (submitButton) {
-          submitButton.disabled = true;
-        }
-      });
+      }
     });
-  </script>
-</body>
-</html>
+  }
+
+  /*****************************************************
+   * DISABLE SUBMIT BUTTONS AFTER CLICK
+   *****************************************************/
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', function() {
+      const submitButton = this.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
+    });
+  });
+</script>

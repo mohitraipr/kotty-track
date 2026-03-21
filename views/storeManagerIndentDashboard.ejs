@@ -1,423 +1,308 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Store Manager · Indent Control</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-      integrity="sha512-1ycn6Ica9999htg3bK+0m0RwlcC4GjXnu5N219X2Dz7P+G9hbQUn7qYB6czS4fFqqTZPIYO/V+B2Bl+zYxZ3g=="
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    />
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #eff3fb;
-        --card: #ffffff;
-        --primary: #1d4ed8;
-        --text: #0f172a;
-        --muted: #475569;
-        --border: #e2e8f0;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-      }
-      .page {
-        max-width: 1300px;
-        margin: 0 auto;
-        padding: 32px 16px 64px;
-      }
-      header {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 24px;
-      }
-      h1 {
-        margin: 0;
-        font-weight: 700;
-        font-size: 2rem;
-      }
-      header .user-meta {
-        color: var(--muted);
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-      a.btn-link {
-        color: var(--primary);
-        font-weight: 600;
-        text-decoration: none;
-      }
-      a.btn-link:hover {
-        text-decoration: underline;
-      }
-      .cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 18px;
-        margin-bottom: 24px;
-      }
-      .stat-card {
-        background: var(--card);
-        border-radius: 20px;
-        padding: 20px;
-        border: 1px solid var(--border);
-        box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
-      }
-      .stat-label {
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        color: var(--muted);
-        letter-spacing: 0.08em;
-        margin-bottom: 10px;
-      }
-      .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-      }
-      .card {
-        background: var(--card);
-        border-radius: 24px;
-        padding: 24px;
-        border: 1px solid var(--border);
-        box-shadow: 0 15px 40px rgba(15, 23, 42, 0.08);
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .table-wrapper {
-        overflow-x: auto;
-      }
-      th,
-      td {
-        padding: 12px;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.95rem;
-        vertical-align: middle;
-      }
-      th {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        color: var(--muted);
-      }
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 14px;
-        border-radius: 999px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: capitalize;
-      }
-      .status-open {
-        background: rgba(249, 115, 22, 0.16);
-        color: #9a3412;
-      }
-      .status-proceeding {
-        background: rgba(8, 145, 178, 0.2);
-        color: #155e75;
-      }
-      .status-arrived {
-        background: rgba(15, 157, 88, 0.18);
-        color: #0f9d58;
-      }
-      .action-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-      }
-      .action-bar form {
-        display: inline-flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .btn {
-        border-radius: 999px;
-        border: none;
-        padding: 8px 18px;
-        font-weight: 600;
-        cursor: pointer;
-        font-size: 0.9rem;
-      }
-      .btn-primary {
-        background: linear-gradient(120deg, #2563eb, #1e40af);
-        color: #fff;
-        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
-      }
-      .btn-outline {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--muted);
-      }
-      .arrival-form {
-        display: none;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px dashed var(--border);
-      }
-      .arrival-form.active {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-      }
-      .arrival-form label {
-        display: flex;
-        flex-direction: column;
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: var(--muted);
-        gap: 6px;
-      }
-      .arrival-form input,
-      .arrival-form textarea {
-        width: 100%;
-        padding: 10px 12px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        font-family: inherit;
-      }
-      .alert {
-        border-radius: 12px;
-        padding: 12px 16px;
-        font-weight: 500;
-        margin-bottom: 16px;
-        border: 1px solid var(--border);
-      }
-      .alert-danger {
-        background: rgba(239, 68, 68, 0.12);
-        color: #b91c1c;
-        border-color: rgba(239, 68, 68, 0.3);
-      }
-      .alert-success {
-        background: rgba(15, 157, 88, 0.12);
-        color: #0f9d58;
-        border-color: rgba(15, 157, 88, 0.3);
-      }
-      .btn-close {
-        float: right;
-        border: none;
-        background: transparent;
-        font-size: 1rem;
-        cursor: pointer;
-        color: var(--muted);
-      }
-      .alert-dismissible {
-        position: relative;
-        padding-right: 2.5rem;
-      }
-      .alert-dismissible .btn-close {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        float: none;
-      }
-      .alert.fade.show {
-        opacity: 1;
-      }
-      @media (max-width: 960px) {
-        table,
-        thead,
-        tbody,
-        th,
-        td,
-        tr {
-          display: block;
-        }
-        thead {
-          display: none;
-        }
-        tr {
-          border: 1px solid var(--border);
-          margin-bottom: 12px;
-          border-radius: 18px;
-          padding: 12px;
-          background: var(--card);
-        }
-        td {
-          border: none;
-          padding: 6px 0;
-        }
-        td::before {
-          content: attr(data-label);
-          display: block;
-          font-weight: 600;
-          color: var(--muted);
-          margin-bottom: 4px;
-        }
-      }
-    </style>
-    <link rel="stylesheet" href="/css/professional.css">
-</head>
-  
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
+<%- include('partials/header', { pageTitle: 'Indent Control' }) %>
+<%- include('partials/navbar', { dashboardUrl: '/dashboard' }) %>
+
+<!-- Main Content Area (No Sidebar) -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <h1 class="page-title">Indent Control Room</h1>
+          <p class="page-subtitle">Manage inventory requests and track arrivals</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge badge-neutral" style="font-size: var(--text-sm); padding: 8px 14px;">
+            <i class="bi bi-person-fill me-1"></i>
+            <%= user.username %> &middot; Store Manager
+          </span>
+        </div>
       </div>
     </div>
-  </nav>
 
-    <div class="page">
-      <header>
-        <h1>Indent Control Room</h1>
-        <div class="user-meta">
-          <span><strong><%= user.username %></strong> &middot; Store Manager</span>
-          <a class="btn-link" href="/logout">Logout</a>
-        </div>
-      </header>
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
 
-      <%- include('partials/flashMessages'); %>
-
-      <div class="cards">
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-4 col-sm-6">
         <div class="stat-card">
-          <div class="stat-label">Open</div>
+          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--warning-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
+            <i class="bi bi-clock-history" style="font-size: 20px; color: var(--warning);"></i>
+          </div>
+          <div class="stat-label">Open Requests</div>
           <div class="stat-value"><%= stats.open || 0 %></div>
         </div>
+      </div>
+      <div class="col-md-4 col-sm-6">
         <div class="stat-card">
+          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--info-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
+            <i class="bi bi-truck" style="font-size: 20px; color: var(--info);"></i>
+          </div>
           <div class="stat-label">Proceeding</div>
-          <div class="stat-value" style="color: #0f766e"><%= stats.proceeding || 0 %></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Arrived</div>
-          <div class="stat-value" style="color: #0f9d58"><%= stats.arrived || 0 %></div>
+          <div class="stat-value" style="color: var(--info);"><%= stats.proceeding || 0 %></div>
         </div>
       </div>
-
-      <section class="card">
-        <h2 style="margin-top: 0">Latest Indent Requests</h2>
-        <p style="color: var(--muted); margin-bottom: 20px">
-          Keep the flow smooth by acknowledging requests promptly.
-        </p>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Goods &amp; Description</th>
-                <th>Quantity</th>
-                <th>Indent Filler</th>
-                <th>Dates</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (!requests || !requests.length) { %>
-              <tr>
-                <td colspan="6" style="text-align: center; padding: 32px">No requests yet.</td>
-              </tr>
-              <% } else { %>
-              <% requests.forEach(row => { %>
-              <tr>
-                <td data-label="Goods">
-                  <strong><%= row.goods_description %></strong>
-                  <div style="color: var(--muted); font-size: 0.85rem; margin-top: 4px">
-                    Used last month: <%= row.used_last_month || 0 %> · last 7 days:
-                    <%= row.used_last_seven_days || 0 %>
-                  </div>
-                </td>
-                <td data-label="Quantity"><%= row.quantity_requested %></td>
-                <td data-label="Filler">
-                  <strong><%= row.filler_name || '—' %></strong>
-                </td>
-                <td data-label="Dates">
-                  <div><small>Requested:</small> <%= row.request_date ? new Date(row.request_date).toLocaleDateString('en-IN') : '-' %></div>
-                  <div><small>Proceed:</small> <%= row.proceed_date ? new Date(row.proceed_date).toLocaleDateString('en-IN') : '-' %></div>
-                  <div><small>Arrived:</small> <%= row.arrival_date ? new Date(row.arrival_date).toLocaleDateString('en-IN') : '-' %></div>
-                </td>
-                <td data-label="Status">
-                  <span class="status-pill status-<%= row.status %>"><%= row.status %></span>
-                  <% if (row.final_quantity) { %>
-                  <div style="font-size: 0.8rem; color: var(--muted)">Final qty: <%= row.final_quantity %></div>
-                  <% } %>
-                  <% if (row.remark) { %>
-                  <div style="font-size: 0.8rem; color: var(--muted)"><%= row.remark %></div>
-                  <% } %>
-                </td>
-                <td data-label="Actions">
-                  <% if (row.status === 'arrived') { %>
-                  <div style="color: var(--muted); font-size: 0.85rem">Completed</div>
-                  <% } else { %>
-                  <div class="action-bar">
-                    <% if (row.status === 'open') { %>
-                    <form action="/indent/requests/<%= row.id %>/proceed" method="POST">
-                      <button class="btn btn-primary" type="submit">Proceed</button>
-                    </form>
-                    <% } %>
-                    <button class="btn btn-outline arrival-toggle" data-id="<%= row.id %>">
-                      Mark Arrived
-                    </button>
-                  </div>
-                  <form
-                    class="arrival-form"
-                    id="arrival-form-<%= row.id %>"
-                    action="/indent/requests/<%= row.id %>/arrive"
-                    method="POST"
-                  >
-                    <label>
-                      Arrival Date
-                      <input type="date" name="arrivalDate" required />
-                    </label>
-                    <label>
-                      Quantity Received
-                      <input type="number" step="0.01" name="finalQuantity" placeholder="Optional" />
-                    </label>
-                    <label>
-                      Remark
-                      <textarea name="remark" rows="2" placeholder="Optional"></textarea>
-                    </label>
-                    <div>
-                      <button class="btn btn-primary" type="submit">Confirm</button>
-                    </div>
-                  </form>
-                  <% } %>
-                </td>
-              </tr>
-              <% }) %>
-              <% } %>
-            </tbody>
-          </table>
+      <div class="col-md-4 col-sm-6">
+        <div class="stat-card">
+          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--success-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
+            <i class="bi bi-check-circle" style="font-size: 20px; color: var(--success);"></i>
+          </div>
+          <div class="stat-label">Arrived</div>
+          <div class="stat-value" style="color: var(--success);"><%= stats.arrived || 0 %></div>
         </div>
-      </section>
+      </div>
     </div>
-    <script>
-      document.querySelectorAll('.arrival-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const form = document.getElementById(`arrival-form-${btn.dataset.id}`);
-          if (form) {
-            form.classList.toggle('active');
-          }
-        });
-      });
-      document.querySelectorAll('.btn-close').forEach(btn => {
-        btn.addEventListener('click', () => btn.parentElement && btn.parentElement.remove());
-      });
-    </script>
-  
-</html>
+
+    <!-- Requests Table Card -->
+    <div class="card">
+      <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 4px;">Latest Indent Requests</h2>
+          <p class="text-secondary" style="font-size: var(--text-sm); margin: 0;">Keep the flow smooth by acknowledging requests promptly.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <select id="exportStatus" class="form-select" style="width: auto; min-width: 120px;">
+            <option value="">All Status</option>
+            <option value="open">Open</option>
+            <option value="proceeding">Proceeding</option>
+            <option value="arrived">Arrived</option>
+          </select>
+          <input type="date" id="exportStartDate" class="form-input" style="width: auto;" placeholder="Start Date">
+          <input type="date" id="exportEndDate" class="form-input" style="width: auto;" placeholder="End Date">
+          <button onclick="exportToExcel()" class="btn btn-primary">
+            <i class="bi bi-file-earmark-excel"></i>
+            Download Excel
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-container" style="border: none; border-radius: 0;">
+          <div style="overflow-x: auto;">
+            <table class="table" style="margin: 0;">
+              <thead>
+                <tr>
+                  <th>Goods & Description</th>
+                  <th>Quantity</th>
+                  <th>Indent Filler</th>
+                  <th>Dates</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (!requests || !requests.length) { %>
+                <tr>
+                  <td colspan="6" style="text-align: center; padding: 48px;">
+                    <div class="empty-state" style="padding: 0;">
+                      <div class="empty-state-icon">
+                        <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                      </div>
+                      <div class="empty-state-title">No requests yet</div>
+                      <div class="empty-state-text">New indent requests will appear here.</div>
+                    </div>
+                  </td>
+                </tr>
+                <% } else { %>
+                <% requests.forEach(row => { %>
+                <tr>
+                  <td data-label="Goods">
+                    <div style="font-weight: 500; color: var(--text-primary);"><%= row.goods_description %></div>
+                    <div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 4px;">
+                      Used last month: <strong><%= row.used_last_month || 0 %></strong> &middot;
+                      last 7 days: <strong><%= row.used_last_seven_days || 0 %></strong>
+                    </div>
+                  </td>
+                  <td data-label="Quantity">
+                    <span style="font-weight: 600; font-size: var(--text-lg);"><%= row.quantity_requested %></span>
+                  </td>
+                  <td data-label="Filler">
+                    <% if (row.filler_name) { %>
+                      <span style="font-weight: 500;"><%= row.filler_name %></span>
+                    <% } else { %>
+                      <span style="color: var(--text-muted);">--</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Dates">
+                    <div style="font-size: var(--text-xs); line-height: 1.8;">
+                      <div><span style="color: var(--text-muted);">Requested:</span> <%= row.request_date ? new Date(row.request_date).toLocaleDateString('en-IN') : '-' %></div>
+                      <div><span style="color: var(--text-muted);">Proceed:</span> <%= row.proceed_date ? new Date(row.proceed_date).toLocaleDateString('en-IN') : '-' %></div>
+                      <div><span style="color: var(--text-muted);">Arrived:</span> <%= row.arrival_date ? new Date(row.arrival_date).toLocaleDateString('en-IN') : '-' %></div>
+                    </div>
+                  </td>
+                  <td data-label="Status">
+                    <% if (row.status === 'open') { %>
+                      <span class="badge badge-warning"><%= row.status %></span>
+                    <% } else if (row.status === 'proceeding') { %>
+                      <span class="badge badge-info"><%= row.status %></span>
+                    <% } else if (row.status === 'arrived') { %>
+                      <span class="badge badge-success"><%= row.status %></span>
+                    <% } else { %>
+                      <span class="badge badge-neutral"><%= row.status %></span>
+                    <% } %>
+                    <% if (row.final_quantity) { %>
+                    <div style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 4px;">Final qty: <%= row.final_quantity %></div>
+                    <% } %>
+                    <% if (row.remark) { %>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;"><%= row.remark %></div>
+                    <% } %>
+                  </td>
+                  <td data-label="Actions">
+                    <% if (row.status === 'arrived') { %>
+                    <span class="badge badge-success" style="font-size: var(--text-xs);">
+                      <i class="bi bi-check-lg me-1"></i> Completed
+                    </span>
+                    <% } else { %>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                      <% if (row.status === 'open') { %>
+                      <form action="/indent/requests/<%= row.id %>/proceed" method="POST" style="margin: 0;">
+                        <button class="btn btn-primary btn-sm" type="submit">
+                          <i class="bi bi-send me-1"></i> Proceed
+                        </button>
+                      </form>
+                      <% } %>
+                      <button class="btn btn-secondary btn-sm arrival-toggle" data-id="<%= row.id %>">
+                        <i class="bi bi-box-seam me-1"></i> Mark Arrived
+                      </button>
+                    </div>
+                    <!-- Arrival Form -->
+                    <div class="arrival-form" id="arrival-form-<%= row.id %>">
+                      <form action="/indent/requests/<%= row.id %>/arrive" method="POST">
+                        <div class="row g-2">
+                          <div class="col-sm-6 col-md-4">
+                            <label class="form-label">Arrival Date</label>
+                            <input type="date" name="arrivalDate" class="form-input" required>
+                          </div>
+                          <div class="col-sm-6 col-md-4">
+                            <label class="form-label">Quantity Received</label>
+                            <input type="number" step="0.01" name="finalQuantity" class="form-input" placeholder="Optional">
+                          </div>
+                          <div class="col-sm-12 col-md-4">
+                            <label class="form-label">Remark</label>
+                            <textarea name="remark" class="form-input" rows="1" placeholder="Optional" style="resize: vertical;"></textarea>
+                          </div>
+                          <div class="col-12">
+                            <button class="btn btn-success btn-sm" type="submit">
+                              <i class="bi bi-check-lg me-1"></i> Confirm Arrival
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+                    <% } %>
+                  </td>
+                </tr>
+                <% }) %>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Additional Page Styles -->
+<style>
+  /* Arrival Form - Hidden by default */
+  .arrival-form {
+    display: none;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border-light);
+  }
+
+  .arrival-form.active {
+    display: block;
+  }
+
+  /* Mobile responsive table */
+  @media (max-width: 960px) {
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+    }
+
+    .table thead {
+      display: none;
+    }
+
+    .table tbody tr {
+      display: block;
+      border: 1px solid var(--border-light);
+      margin-bottom: 12px;
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      background: var(--bg-card);
+    }
+
+    .table tbody td {
+      display: block;
+      border: none;
+      padding: 8px 0;
+      text-align: left;
+    }
+
+    .table tbody td::before {
+      content: attr(data-label);
+      display: block;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .table tbody td[colspan] {
+      padding: 32px 16px;
+    }
+
+    .table tbody td[colspan]::before {
+      display: none;
+    }
+  }
+
+  /* Badge text transform */
+  .badge {
+    text-transform: capitalize;
+  }
+</style>
+
+<!-- Page Scripts -->
+<script>
+  // Toggle arrival form visibility
+  document.querySelectorAll('.arrival-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`arrival-form-${btn.dataset.id}`);
+      if (form) {
+        form.classList.toggle('active');
+      }
+    });
+  });
+
+  // Close button functionality for alerts
+  document.querySelectorAll('.btn-close').forEach(btn => {
+    btn.addEventListener('click', () => btn.parentElement && btn.parentElement.remove());
+  });
+
+  // Export to Excel functionality
+  function exportToExcel() {
+    const status = document.getElementById('exportStatus').value;
+    const startDate = document.getElementById('exportStartDate').value;
+    const endDate = document.getElementById('exportEndDate').value;
+
+    let url = '/indent/manage/export?';
+    const params = [];
+    if (status) params.push('status=' + encodeURIComponent(status));
+    if (startDate) params.push('startDate=' + encodeURIComponent(startDate));
+    if (endDate) params.push('endDate=' + encodeURIComponent(endDate));
+
+    window.location.href = url + params.join('&');
+  }
+</script>
+
+<%- include('partials/footer') %>

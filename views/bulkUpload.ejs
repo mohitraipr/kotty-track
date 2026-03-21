@@ -1,93 +1,105 @@
 <!-- views/bulkUpload.ejs -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Bulk Upload Fabric Invoices</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .upload-card {
-            max-width: 800px;
-            margin: 50px auto;
-        }
-    </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark no-print">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/fabric-manager/dashboard">
-                <i class="fas fa-industry"></i> Bulk Upload Fabric Invoices
-            </a>
-            <div class="ms-auto">
-                <span class="navbar-text me-3">
-                    Welcome, <strong><%= user.username %></strong> (Role: <%= user.roleName %>)
-                </span>
-                <a href="/fabric-manager/dashboard" class="btn btn-outline-light me-2">
-                    <i class="fas fa-tachometer-alt"></i> Dashboard
-                </a>
-                <a href="/logout" class="btn btn-outline-light">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
-            </div>
-        </div>
-    </nav>
+<%- include('partials/header', { pageTitle: 'Bulk Upload' }) %>
+<%- include('partials/navbar', { user: user }) %>
 
-    <!-- Main Container -->
-    <div class="container upload-card">
-        <!-- Include Flash Messages Partial -->
-        <%- include('partials/flashMessages') %>
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container" style="max-width: 800px; margin: 0 auto;">
 
-        <!-- Upload Form -->
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h4 class="card-title mb-4"><i class="fas fa-upload"></i> Bulk Upload for <%= tableName %></h4>
-                <form action="/fabric-manager/bulk-upload/invoices" method="POST" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="excelFile" class="form-label">
-                            <i class="fas fa-file-excel"></i> Upload Excel File (.xlsx)
-                        </label>
-                        <input type="file" class="form-control" id="excelFile" name="excelFile" accept=".xlsx" required>
-                        <div class="form-text">Ensure the Excel file follows the required format.</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> Upload
-                    </button>
-                    <a href="/fabric-manager/dashboard" class="btn btn-secondary">
-                        <i class="fas fa-times-circle"></i> Cancel
-                    </a>
-                </form>
-
-                <hr>
-
-                <!-- Vendor Mapping Information -->
-                <h5>Vendor Mapping</h5>
-                <p>The system will automatically match the <strong>vendor_name</strong> in your Excel file to existing vendors. If a vendor does not exist, a new vendor will be created.</p>
-                <p><strong>Note:</strong> Ensure that the <strong>vendor_name</strong> in your Excel matches the intended vendor names.</p>
-
-                <hr>
-
-                <!-- Excel Template Information -->
-                <h5>Excel Template</h5>
-                <p>Please download the Excel template to ensure correct formatting:</p>
-                <a href="/path-to-template/fabric_invoices_template.xlsx" download class="btn btn-outline-success">
-                    <i class="fas fa-download"></i> Download Template
-                </a>
-            </div>
-        </div>
+    <!-- Page Header -->
+    <div class="page-header">
+      <nav class="breadcrumbs">
+        <a href="/fabric-manager/dashboard">Dashboard</a>
+        <span class="separator"><i class="bi bi-chevron-right"></i></span>
+        <span>Bulk Upload</span>
+      </nav>
+      <h1 class="page-title">Bulk Upload Fabric Invoices</h1>
+      <p class="page-subtitle">Upload Excel files to import fabric invoice data in bulk</p>
     </div>
 
-    <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
+
+    <!-- Upload Form Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-cloud-arrow-up me-2"></i>
+          Upload for <%= tableName %>
+        </h2>
+      </div>
+      <div class="card-body">
+        <form action="/fabric-manager/bulk-upload/invoices" method="POST" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="excelFile" class="form-label">
+              <i class="bi bi-file-earmark-excel text-success me-2"></i>
+              Excel File (.xlsx)
+            </label>
+            <input type="file" class="form-control form-input" id="excelFile" name="excelFile" accept=".xlsx" required>
+            <div class="form-text text-muted mt-2" style="font-size: var(--text-sm);">
+              Ensure the Excel file follows the required format specified in the template below.
+            </div>
+          </div>
+
+          <div class="d-flex gap-3 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload"></i>
+              Upload
+            </button>
+            <a href="/fabric-manager/dashboard" class="btn btn-secondary">
+              <i class="bi bi-x-circle"></i>
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Vendor Mapping Info Card -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-diagram-3 me-2"></i>
+          Vendor Mapping
+        </h2>
+      </div>
+      <div class="card-body">
+        <p class="mb-3" style="color: var(--text-secondary);">
+          The system will automatically match the <strong class="text-terracotta">vendor_name</strong>
+          in your Excel file to existing vendors. If a vendor does not exist, a new vendor will be created.
+        </p>
+        <div class="alert alert-info mb-0" style="border-left: 3px solid var(--info);">
+          <div class="d-flex align-items-start">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <div>
+              <strong>Note:</strong> Ensure that the <strong>vendor_name</strong> in your Excel matches
+              the intended vendor names to avoid creating duplicate vendors.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Excel Template Card -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-file-earmark-spreadsheet me-2"></i>
+          Excel Template
+        </h2>
+      </div>
+      <div class="card-body">
+        <p class="mb-3" style="color: var(--text-secondary);">
+          Download the Excel template to ensure your data is formatted correctly for upload.
+        </p>
+        <a href="/path-to-template/fabric_invoices_template.xlsx" download class="btn btn-outline">
+          <i class="bi bi-download"></i>
+          Download Template
+        </a>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<%- include('partials/footer') %>

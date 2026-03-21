@@ -1,185 +1,335 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Washing Challan – <%= entry.lot_no %></title>
+<%- include('partials/header', { pageTitle: 'Washing Challan - ' + entry.lot_no }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/washingdashboard' }) %>
 
-  <!-- -----------  PRINT & LAYOUT SET‑UP ----------- -->
-  <style>
-    @page       { size: A4; margin: 10mm; }
-    @media print {
-      html,body { height: 100%; overflow: hidden; }
-      .no-print { display:none !important; }
+<!-- Print-specific styles -->
+<style>
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  @media print {
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: white !important;
+    }
+    .no-print,
+    .kotty-navbar,
+    .sidebar-overlay {
+      display: none !important;
+    }
+    .main-content {
+      padding: 0 !important;
+      margin: 0 !important;
+      background: white !important;
+    }
+    .challan-wrap {
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 !important;
+      max-width: 100% !important;
+    }
+  }
+
+  /* Challan-specific styles */
+  .challan-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: 32px 40px;
+    border: 1px solid var(--border-light);
+  }
+
+  .challan-header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--terracotta);
+  }
+
+  .challan-header h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    color: var(--charcoal);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .challan-header h2 {
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    font-weight: 500;
+    color: var(--terracotta);
+    margin: 0;
+  }
+
+  .meta-table {
+    width: 100%;
+    margin-top: 16px;
+    border-collapse: collapse;
+  }
+
+  .meta-table td {
+    padding: 8px 4px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    vertical-align: top;
+  }
+
+  .meta-table td strong {
+    color: var(--charcoal);
+    font-weight: 600;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    color: var(--charcoal);
+    margin: 28px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-medium);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8px;
+  }
+
+  .data-table th,
+  .data-table td {
+    border: 1px solid var(--border-medium);
+    padding: 10px 12px;
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+  }
+
+  .data-table th {
+    background: var(--cream-dark);
+    font-weight: 600;
+    color: var(--charcoal);
+  }
+
+  .data-table td {
+    background: var(--bg-card);
+    color: var(--text-primary);
+  }
+
+  .data-table .tot-row td {
+    font-weight: 700;
+    background: var(--terracotta-bg);
+    color: var(--charcoal);
+  }
+
+  .challan-image {
+    margin: 20px 0;
+    text-align: center;
+  }
+
+  .challan-image img {
+    max-width: 100%;
+    max-height: 250px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 48px;
+    padding-top: 16px;
+  }
+
+  .sig-box {
+    width: 30%;
+    text-align: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--charcoal);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .btn-print {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--terracotta);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-print:hover {
+    background: var(--terracotta-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-print i {
+    font-size: 1.1em;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .challan-wrap {
+      padding: 20px 16px;
+      margin: 0 16px;
     }
 
-    /* -------------  BASE STYLES ------------- */
-    *               { box-sizing:border-box; }
-    body            {
-      margin:0; padding:0;
-      font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
-      font-size:13px; line-height:1.4;
-      background:linear-gradient(135deg,#e4f5ec 0%,#fff0f6 100%);
+    .challan-header h1 {
+      font-size: var(--text-xl);
     }
-    .challan-wrap   {
-      max-width:800px;
-      margin:20px auto;
-      background:#fff;
-      border-radius:8px;
-      box-shadow:0 2px 6px rgba(0,0,0,.12);
-      padding:24px 32px;
+
+    .signatures {
+      flex-direction: column;
+      gap: 24px;
     }
-    h1,h2,h3        { margin:0; font-weight:600; }
-    h1              { font-size:20px; letter-spacing:.5px; }
-    .meta, .meta td { font-size:13px; }
-    .meta           { width:100%; margin-top:12px; border-collapse:collapse; }
-    .meta td        { padding:4px 0; }
-    .section-title  { margin:22px 0 8px; font-size:15px; border-bottom:1px solid #ddd; padding-bottom:4px; }
-    table.list      { width:100%; border-collapse:collapse; }
-    table.list th,
-    table.list td   { border:1px solid #ccc; padding:6px 8px; text-align:center; }
-    table.list th   { background:#f1f1f1; font-weight:600; }
-    .tot-row td     { font-weight:600; }
 
-    /* -------------  FOOTERS & SIGN‑OFF ------------- */
-    .signatures     { display:flex; justify-content:space-between; margin-top:40px; }
-    .sig-box        { width:32%; text-align:center; border-top:1px solid #000; padding-top:4px; }
-
-    /* -------------  BUTTONS ------------- */
-    .btn-print      {
-      display:inline-block; padding:6px 12px; margin-bottom:16px;
-      font-size:13px; border:none; border-radius:4px;
-      background:#007bff; color:#fff; cursor:pointer; transition:background .2s;
+    .sig-box {
+      width: 100%;
     }
-    .btn-print:hover{ background:#0056b3; }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
 
-  <nav class="top-nav">
-    <div class="d-flex justify-content-between align-items-center">
-      <a href="/" class="nav-brand" style="text-decoration: none;">Kotty Track</a>
-      <div>
-        <a href="/" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="bi bi-house me-1"></i>Home
-        </a>
-        <a href="/logout" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Logout
-        </a>
+    .meta-table td {
+      display: block;
+      padding: 4px 0;
+    }
+  }
+</style>
+
+<!-- Main Content Area -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid py-4" style="max-width: 900px; margin: 0 auto;">
+
+    <div class="challan-wrap">
+      <!-- Print Button -->
+      <button class="btn-print no-print" onclick="window.print()">
+        <i class="bi bi-printer"></i>
+        Print Challan
+      </button>
+
+      <!-- Challan Header -->
+      <div class="challan-header">
+        <h1>KOTTY LIFESTYLE</h1>
+        <h2>Washing Challan</h2>
       </div>
-    </div>
-  </nav>
 
-  <div class="challan-wrap">
-    <!-- -----------  HEADER  ----------- -->
-    <button class="btn-print no-print" onclick="window.print()">Print</button>
-    <h1 style="text-align:center;">KOTTY LIFESTYLE</h1>
-    <h2 style="text-align:center; font-size:16px; margin-top:4px;">Washing Challan</h2>
-
-    <!-- -----------  META  ----------- -->
-    <table class="meta">
-      <tr>
-        <td><strong>Challan ID:</strong></td>
-        <td>#<%= entry.id %></td>
-        <td><strong>Date:</strong></td>
-        <td>
-          <%
-            const d = new Date(entry.created_at);
-            const pad = n => (n<10?'0':'')+n;
-          %>
-          <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Lot No:</strong></td><td><%= entry.lot_no %></td>
-        <td><strong>SKU:</strong></td><td><%= entry.sku %></td>
-      </tr>
-      <tr>
-        <td><strong>Total Pieces:</strong></td><td><%= entry.total_pieces %></td>
-        <td><strong>Created By:</strong></td><td><%= user.username %></td>
-      </tr>
-      <tr>
-        <td><strong>Remark:</strong></td>
-        <td colspan="3"><%= entry.remark || '—' %></td>
-      </tr>
-    </table>
-
-    <!-- -----------  IMAGE (OPTIONAL) ----------- -->
-    <% if (entry.image_url) { %>
-      <div style="margin:16px 0; text-align:center;">
-        <img src="<%= entry.image_url %>" alt="Attached Image" style="max-width:100%; max-height:250px; border:1px solid #ccc; border-radius:4px;">
-      </div>
-    <% } %>
-
-    <!-- -----------  SIZE BREAKDOWN  ----------- -->
-    <h3 class="section-title">Size Breakdown</h3>
-    <table class="list">
-      <thead>
+      <!-- Meta Information -->
+      <table class="meta-table">
         <tr>
-          <th>Sl No.</th>
-          <th>Size Label</th>
-          <th>Pieces</th>
+          <td><strong>Challan ID:</strong></td>
+          <td>#<%= entry.id %></td>
+          <td><strong>Date:</strong></td>
+          <td>
+            <%
+              const d = new Date(entry.created_at);
+              const pad = n => (n<10?'0':'')+n;
+            %>
+            <%= pad(d.getDate()) %>-<%= pad(d.getMonth()+1) %>-<%= d.getFullYear() %>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        <% let grandTot = 0; %>
-        <% sizes.forEach((sz,i)=>{ grandTot += sz.pieces; %>
-          <tr>
-            <td><%= i+1 %></td>
-            <td><%= sz.size_label %></td>
-            <td><%= sz.pieces %></td>
-          </tr>
-        <% }); %>
-        <tr class="tot-row">
-          <td colspan="2">Total</td>
-          <td><%= grandTot %></td>
+        <tr>
+          <td><strong>Lot No:</strong></td>
+          <td><%= entry.lot_no %></td>
+          <td><strong>SKU:</strong></td>
+          <td><%= entry.sku %></td>
         </tr>
-      </tbody>
-    </table>
+        <tr>
+          <td><strong>Total Pieces:</strong></td>
+          <td><%= entry.total_pieces %></td>
+          <td><strong>Created By:</strong></td>
+          <td><%= user.username %></td>
+        </tr>
+        <tr>
+          <td><strong>Remark:</strong></td>
+          <td colspan="3"><%= entry.remark || '—' %></td>
+        </tr>
+      </table>
 
-    <!-- -----------  UPDATE LOG  ----------- -->
-    <% if (updates.length) { %>
-      <h3 class="section-title">Updates (Log)</h3>
-      <table class="list">
+      <!-- Image (Optional) -->
+      <% if (entry.image_url) { %>
+        <div class="challan-image">
+          <img src="<%= entry.image_url %>" alt="Attached Image">
+        </div>
+      <% } %>
+
+      <!-- Size Breakdown -->
+      <h3 class="section-title">Size Breakdown</h3>
+      <table class="data-table">
         <thead>
           <tr>
-            <th>Sl No.</th>
-            <th>Date &amp; Time</th>
-            <th>Size</th>
-            <th>Pieces Added</th>
+            <th>Sl No.</th>
+            <th>Size Label</th>
+            <th>Pieces</th>
           </tr>
         </thead>
         <tbody>
-          <% updates.forEach((u,i)=>{ %>
+          <% let grandTot = 0; %>
+          <% sizes.forEach((sz,i)=>{ grandTot += sz.pieces; %>
             <tr>
               <td><%= i+1 %></td>
-              <td>
-                <% const up = new Date(u.updated_at); %>
-                <%= pad(up.getDate()) %>-<%= pad(up.getMonth()+1) %>-<%= up.getFullYear() %>
-                <%= pad(up.getHours()) %>:<%= pad(up.getMinutes()) %>
-              </td>
-              <td><%= u.size_label %></td>
-              <td><%= u.pieces %></td>
+              <td><%= sz.size_label %></td>
+              <td><%= sz.pieces %></td>
             </tr>
           <% }); %>
+          <tr class="tot-row">
+            <td colspan="2">Total</td>
+            <td><%= grandTot %></td>
+          </tr>
         </tbody>
       </table>
-    <% } %>
 
-    <!-- -----------  SIGNATURES  ----------- -->
-    <div class="signatures">
-      <div class="sig-box">Issued By</div>
-      <div class="sig-box">Checked By</div>
-      <div class="sig-box">Received By</div>
+      <!-- Update Log -->
+      <% if (updates.length) { %>
+        <h3 class="section-title">Updates (Log)</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Sl No.</th>
+              <th>Date &amp; Time</th>
+              <th>Size</th>
+              <th>Pieces Added</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% updates.forEach((u,i)=>{ %>
+              <tr>
+                <td><%= i+1 %></td>
+                <td>
+                  <% const up = new Date(u.updated_at); %>
+                  <%= pad(up.getDate()) %>-<%= pad(up.getMonth()+1) %>-<%= up.getFullYear() %>
+                  <%= pad(up.getHours()) %>:<%= pad(up.getMinutes()) %>
+                </td>
+                <td><%= u.size_label %></td>
+                <td><%= u.pieces %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+
+      <!-- Signatures -->
+      <div class="signatures">
+        <div class="sig-box">Issued By</div>
+        <div class="sig-box">Checked By</div>
+        <div class="sig-box">Received By</div>
+      </div>
     </div>
+
   </div>
+</main>
 
-  <!-- -----------  OPTIONAL: AUTO‑PRINT ON LOAD -----------
-  <script>
-    window.addEventListener('load',()=>window.print());
-  </script>
-  ---------------------------------------------- -->
-
-</html>
+<%- include('partials/footer') %>

@@ -1,194 +1,176 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Accounts DC Challan List</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
-  <nav class="navbar navbar-expand-lg navbar-light app-navbar">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">
-        <i class="bi bi-file-earmark-text me-2"></i>Accounts DC Challan
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/purchase">
-                <i class="bi bi-cart-fill"></i> Purchase
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a class="nav-link" href="/accounts-challan">
-              <i class="bi bi-file-earmark-text"></i> DC Challan
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" href="/accounts-challan/list">
-              <i class="bi bi-list-ul"></i> Challan List
-            </a>
-          </li>
-          <% if (isSapna) { %>
-            <li class="nav-item">
-              <a class="nav-link" href="/accounts-challan/gst">
-                <i class="bi bi-receipt"></i> GST Master
-              </a>
-            </li>
-          <% } %>
-          <li class="nav-item">
-            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-2">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+<%- include('partials/header', { pageTitle: 'Accounts DC Challan List' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/accounts-challan' }) %>
 
-  <div class="app-shell">
+<% const isSapna = user && user.username && user.username.toLowerCase() === 'sapna'; %>
+
+<!-- Main Content -->
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="breadcrumbs">
+        <a href="/accounts-challan">Dashboard</a>
+        <span class="separator">/</span>
+        <span>Challan List</span>
+      </div>
+      <h1 class="page-title">DC Challan List</h1>
+      <p class="page-subtitle">Track every challan and open detailed views</p>
+    </div>
+
+    <!-- Alerts -->
     <% if (error && error.length) { %>
-      <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle me-2"></i>
-        <% error.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      <div class="alert alert-danger">
+        <i class="bi bi-exclamation-circle"></i>
+        <div>
+          <% error.forEach(msg => { %><p class="mb-0"><%= msg %></p><% }); %>
+        </div>
       </div>
     <% } %>
     <% if (success && success.length) { %>
-      <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle me-2"></i>
-        <% success.forEach(msg => { %>
-          <div><%= msg %></div>
-        <% }); %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i>
+        <div>
+          <% success.forEach(msg => { %><p class="mb-0"><%= msg %></p><% }); %>
+        </div>
       </div>
     <% } %>
 
     <!-- Tab Navigation -->
-    <ul class="nav nav-pills app-tabs mb-4">
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/purchase">
-            <i class="bi bi-cart-fill"></i> Purchase
+    <div class="card mb-4">
+      <div class="card-body" style="padding: 12px 20px;">
+        <nav class="d-flex flex-wrap gap-2">
+          <% if (isSapna) { %>
+            <a href="/purchase" class="btn btn-secondary">
+              <i class="bi bi-cart-fill"></i> Purchase
+            </a>
+          <% } %>
+          <a href="/accounts-challan" class="btn btn-secondary">
+            <i class="bi bi-file-earmark-text"></i> DC Challan
           </a>
-        </li>
-      <% } %>
-      <li class="nav-item">
-        <a class="nav-link" href="/accounts-challan">
-          <i class="bi bi-file-earmark-text"></i> DC Challan
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link active" href="/accounts-challan/list">
-          <i class="bi bi-list-ul"></i> Challan List
-        </a>
-      </li>
-      <% if (isSapna) { %>
-        <li class="nav-item">
-          <a class="nav-link" href="/accounts-challan/gst">
-            <i class="bi bi-receipt"></i> GST Master
+          <a href="/accounts-challan/list" class="btn btn-primary">
+            <i class="bi bi-list-ul"></i> Challan List
           </a>
-        </li>
-      <% } %>
-    </ul>
-
-    <!-- Hero Section -->
-    <div class="page-hero">
-      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-        <div>
-          <h2 class="mb-2">
-            <i class="bi bi-list-ul me-2"></i>DC Challan List
-          </h2>
-          <p class="mb-0 opacity-90">Track every challan and open detailed views.</p>
-        </div>
-        <a href="/accounts-challan" class="btn btn-soft icon-btn" data-bs-toggle="tooltip" title="Back to Dashboard">
-          <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
-        </a>
+          <% if (isSapna) { %>
+            <a href="/accounts-challan/gst" class="btn btn-secondary">
+              <i class="bi bi-receipt"></i> GST Master
+            </a>
+          <% } %>
+        </nav>
       </div>
     </div>
 
-    <!-- Search Section -->
-    <div class="page-actions mb-4">
-      <form method="GET" action="/accounts-challan/list" class="row g-3 align-items-end">
-        <div class="col-md-8">
-          <label class="form-label fw-semibold mb-2">
-            <i class="bi bi-search me-2"></i>Search Challans
-          </label>
-          <input
-            type="text"
-            class="form-control form-control-lg"
-            name="search"
-            placeholder="Search by challan number or lot number..."
-            value="<%= search %>"
-            data-bs-toggle="tooltip"
-            title="Type challan number or lot number to search"
-          >
-        </div>
-        <div class="col-md-4">
-          <button class="btn btn-primary btn-lg w-100 icon-btn" type="submit">
-            <i class="bi bi-search me-2"></i>Search
+    <!-- Search Card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <form method="GET" action="/accounts-challan/list" class="d-flex flex-wrap gap-3 align-items-end">
+          <div class="flex-grow-1" style="min-width: 250px; max-width: 500px;">
+            <label class="form-label">Search Challans</label>
+            <div class="position-relative">
+              <input
+                type="text"
+                name="search"
+                value="<%= search %>"
+                class="form-input"
+                placeholder="Search by challan number or lot number..."
+                style="padding-left: 40px;"
+                data-bs-toggle="tooltip"
+                title="Type challan number or lot number to search"
+              >
+              <i class="bi bi-search position-absolute" style="left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search"></i> Search
           </button>
-        </div>
-      </form>
+          <% if (search) { %>
+            <a href="/accounts-challan/list" class="btn btn-secondary">
+              <i class="bi bi-x-lg"></i> Clear
+            </a>
+          <% } %>
+        </form>
+      </div>
     </div>
 
     <!-- Challans Table -->
-    <div class="surface-card table-card">
+    <div class="card">
       <div class="card-header">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">
-            <i class="bi bi-file-earmark-text me-2"></i>Recent Challans
-          </h5>
-          <small class="text-muted">
-            <i class="bi bi-info-circle me-1"></i>Click view to open the challan PDF
-          </small>
-        </div>
+        <h2 class="card-title">
+          <i class="bi bi-file-earmark-text me-2" style="color: var(--terracotta);"></i>
+          Recent Challans
+        </h2>
+        <% if (challans && challans.length) { %>
+          <span class="badge badge-primary"><%= challans.length %> records</span>
+        <% } %>
       </div>
-      <div class="card-body p-0">
+
+      <div class="table-container" style="border: none; border-radius: 0;">
         <div class="table-responsive">
-          <table class="table table-striped table-hover mb-0">
-            <thead class="table-light">
+          <table class="table">
+            <thead>
               <tr>
-                <th><i class="bi bi-hash me-1"></i>ID</th>
-                <th><i class="bi bi-file-text me-1"></i>Challan No</th>
-                <th><i class="bi bi-calendar-event me-1"></i>Date</th>
-                <th><i class="bi bi-person me-1"></i>Consignee</th>
-                <th><i class="bi bi-currency-rupee me-1"></i>Amount</th>
-                <th><i class="bi bi-gear me-1"></i>Action</th>
+                <th>ID</th>
+                <th>Challan No</th>
+                <th>Date</th>
+                <th>Consignee</th>
+                <th>Amount</th>
+                <th style="text-align: center;">Actions</th>
               </tr>
             </thead>
             <tbody>
               <% if (challans && challans.length) { %>
                 <% challans.forEach(ch => { %>
                   <tr>
-                    <td><span class="badge bg-secondary"><%= ch.id %></span></td>
-                    <td><strong><%= ch.challan_no %></strong></td>
-                    <td><%= ch.challan_date ? ch.challan_date.toLocaleDateString('en-IN') : '' %></td>
-                    <td><%= ch.consignee_name %></td>
-                    <td><strong class="text-success">₹ <%= ch.total_amount ? parseFloat(ch.total_amount).toLocaleString('en-IN') : '0' %></strong></td>
                     <td>
-                      <a href="/accounts-challan/view/<%= ch.id %>" class="btn btn-sm btn-primary icon-btn" data-bs-toggle="tooltip" title="View challan details and PDF">
-                        <i class="bi bi-eye me-1"></i>View
+                      <span class="badge badge-neutral">#<%= ch.id %></span>
+                    </td>
+                    <td>
+                      <span style="font-weight: 500; color: var(--text-primary);"><%= ch.challan_no %></span>
+                    </td>
+                    <td>
+                      <% if (ch.challan_date) { %>
+                        <div class="d-flex align-items-center gap-2">
+                          <i class="bi bi-calendar3" style="color: var(--text-muted); font-size: 0.875rem;"></i>
+                          <%= ch.challan_date.toLocaleDateString('en-IN') %>
+                        </div>
+                      <% } else { %>
+                        <span class="text-muted">--</span>
+                      <% } %>
+                    </td>
+                    <td><%= ch.consignee_name %></td>
+                    <td>
+                      <span style="font-weight: 500; color: var(--terracotta);">
+                        <%= ch.total_amount ? '\u20B9' + Number(ch.total_amount).toLocaleString('en-IN') : '--' %>
+                      </span>
+                    </td>
+                    <td style="text-align: center;">
+                      <a href="/accounts-challan/view/<%= ch.id %>" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="View challan details and PDF">
+                        <i class="bi bi-eye"></i> View
                       </a>
                     </td>
                   </tr>
                 <% }); %>
               <% } else { %>
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">
-                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    No challans found. Try adjusting your search criteria.
+                  <td colspan="6">
+                    <div class="empty-state">
+                      <div class="empty-state-icon">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                      </div>
+                      <h3 class="empty-state-title">No Challans Found</h3>
+                      <p class="empty-state-text">
+                        <% if (search) { %>
+                          No challans match your search criteria. Try adjusting your search terms.
+                        <% } else { %>
+                          There are no challans to display at the moment.
+                        <% } %>
+                      </p>
+                      <% if (search) { %>
+                        <a href="/accounts-challan/list" class="btn btn-secondary mt-3">
+                          <i class="bi bi-arrow-left"></i> Back to All Challans
+                        </a>
+                      <% } %>
+                    </div>
                   </td>
                 </tr>
               <% } %>
@@ -197,15 +179,43 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-  </script>
-</body>
-</html>
+  </div>
+</main>
+
+<style>
+  /* Page-specific styles */
+  .main-content {
+    margin-left: 0 !important;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 768px) {
+    .page-header {
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+
+    .table th,
+    .table td {
+      padding: 10px 12px;
+      white-space: nowrap;
+    }
+
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 0.75rem;
+    }
+  }
+</style>
+
+<%- include('partials/footer') %>
