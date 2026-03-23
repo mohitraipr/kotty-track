@@ -5,6 +5,7 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const path = require('path');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 
 // Load environment variables
 // In Cloud Run, env vars are injected directly via --set-env-vars and --set-secrets
@@ -30,6 +31,18 @@ const app = express();
 
 // Trust the ALB proxy so that Express correctly identifies the protocol
 app.set('trust proxy', true);
+
+// Rate limiting for security
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // 500 requests per 15 min per IP
+    message: 'Too many requests, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Apply general rate limit to all requests
+app.use(generalLimiter);
 
 // Middleware to redirect HTTP requests to HTTPS
 /*app.use((req, res, next) => {
@@ -75,15 +88,25 @@ app.use('/returns/api', cors({
 }));
 
 // Session Configuration
+const sessionSecret = global.env.SESSION_SECRET;
+if (!sessionSecret && process.env.NODE_ENV === 'production') {
+    console.error('CRITICAL: SESSION_SECRET must be set in production!');
+    process.exit(1);
+}
+
+// Detect production environment (Cloud Run sets K_SERVICE)
+const isProduction = !!(process.env.K_SERVICE || process.env.NODE_ENV === 'production');
+
 app.use(session({
-    secret: global.env.SESSION_SECRET || 'your_session_secret',
+    secret: sessionSecret || 'dev-only-secret-not-for-production',
     resave: false,
     saveUninitialized: false,
     rolling: true, // refresh expiry on each request so active users are not logged out unexpectedly
     cookie: {
-        secure: false,           // <— force false while using http://13.203.180.77
+        secure: isProduction, // Use secure cookies in Cloud Run
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24
+        maxAge: 1000 * 60 * 60 * 24,
+        sameSite: 'lax' // CSRF protection
     }
 }));
 
@@ -108,6 +131,10 @@ app.use((req, res, next) => {
 
 // Track session activity for usage analytics
 app.use(markSessionActivity);
+
+// Track feature usage for analytics dashboard
+const { usageTrackerMiddleware } = require('./middlewares/usageTracker');
+app.use(usageTrackerMiddleware);
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
@@ -222,6 +249,9 @@ app.get('/', (req, res) => {
 
 const challanDashboardRoutes = require('./routes/challanDashboardRoutes');
 app.use('/challandashboard', challanDashboardRoutes);
+
+const productLinksRoutes = require('./routes/productLinksRoutes');
+app.use('/product-links', productLinksRoutes);
 
 app.get('/test', (req, res) => {
     res.send(`

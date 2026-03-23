@@ -42,6 +42,7 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 32px 24px;
+    padding-top: calc(60px + 32px); /* navbar height + spacing */
   }
 
   /* Page Header */
@@ -1066,9 +1067,11 @@
           inp.type = 'number';
           inp.min = '0';
           inp.value = '';
-          inp.classList.add('form-control');
+          inp.className = 'form-control';
+          inp.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid #e5e0d8; border-radius: 6px; font-size: 14px;';
           inp.dataset.sizeId = sz.id;
           inp.dataset.sizeLabel = sz.size_label;
+          inp.placeholder = '0';
           tdInput.appendChild(inp);
           tr.appendChild(tdInput);
 
