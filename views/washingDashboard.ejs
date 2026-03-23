@@ -38,6 +38,11 @@
     min-height: 100vh;
   }
 
+  /* Ensure sidebar overlay doesn't block modals */
+  .sidebar-overlay {
+    z-index: 999 !important;
+  }
+
   .dashboard-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -426,10 +431,26 @@
     color: var(--success);
   }
 
-  /* Modal */
+  /* Modal - Fix z-index and positioning */
+  .modal {
+    z-index: 1060 !important;
+  }
+
+  .modal-backdrop {
+    z-index: 1055 !important;
+  }
+
+  .modal-dialog {
+    margin: 1.75rem auto;
+    max-width: 800px;
+  }
+
   .modal-content {
     border: none;
     border-radius: var(--radius-lg);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    position: relative;
+    z-index: 1;
   }
 
   .modal-header {
@@ -455,6 +476,28 @@
   .modal-body {
     padding: 24px;
     font-family: 'Outfit', sans-serif;
+  }
+
+  .modal-body input[type="number"] {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    font-family: 'Outfit', sans-serif;
+    background: white;
+    color: var(--charcoal);
+    -moz-appearance: textfield;
+  }
+
+  .modal-body input[type="number"]:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.15);
+  }
+
+  .modal-body input[type="number"]::placeholder {
+    color: var(--text-muted);
   }
 
   .modal-footer {
