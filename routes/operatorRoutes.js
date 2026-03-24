@@ -779,6 +779,34 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
 });
 
 /**************************************************
+ * One-time migration: Fix roll total_pieces
+ * Call once: GET /operator/fix-roll-pieces
+ **************************************************/
+router.get("/fix-roll-pieces", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [result] = await pool.query(`
+      UPDATE cutting_lot_rolls r
+      JOIN (
+        SELECT cutting_lot_id, SUM(pattern_count) as sum_patterns
+        FROM cutting_lot_sizes
+        GROUP BY cutting_lot_id
+      ) s ON r.cutting_lot_id = s.cutting_lot_id
+      SET r.total_pieces = r.layers * s.sum_patterns
+      WHERE r.total_pieces = 0 OR r.total_pieces IS NULL
+    `);
+
+    res.json({
+      success: true,
+      message: `Fixed ${result.affectedRows} roll records`,
+      affectedRows: result.affectedRows
+    });
+  } catch (err) {
+    console.error("Error fixing roll pieces:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**************************************************
  * 4) CSV/Excel leftover exports – same as your code
  **************************************************/
 // e.g. /dashboard/leftovers/download, etc. unchanged
