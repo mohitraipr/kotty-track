@@ -400,6 +400,11 @@ router.post(
           'UPDATE cutting_lot_sizes SET total_pieces = pattern_count * ? WHERE cutting_lot_id = ?',
           [totalLayers, cuttingLotId]
         );
+        // Calculate total_pieces for each roll: roll.layers * sumPatterns
+        await conn.query(
+          'UPDATE cutting_lot_rolls SET total_pieces = layers * ? WHERE cutting_lot_id = ?',
+          [sumPatterns, cuttingLotId]
+        );
 
         await conn.commit();
         conn.release();

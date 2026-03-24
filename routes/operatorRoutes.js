@@ -716,6 +716,69 @@ router.get("/dashboard/washing-summary/download", isAuthenticated, isOperator, a
 });
 
 /**************************************************
+ * Roll-wise Consumption Report
+ * consumption = total_pieces / weight_used
+ **************************************************/
+router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        l.fabric_type,
+        l.lot_no,
+        l.sku,
+        l.remark AS cutting_remark,
+        r.roll_no,
+        r.layers,
+        r.total_pieces AS pieces_in_roll,
+        r.weight_used,
+        COALESCE(r.remaining_weight, 0) AS remaining_weight,
+        CASE
+          WHEN r.weight_used > 0 THEN ROUND(r.total_pieces / r.weight_used, 2)
+          ELSE 0
+        END AS consumption
+      FROM cutting_lot_rolls r
+      JOIN cutting_lots l ON r.cutting_lot_id = l.id
+      ORDER BY l.created_at DESC, r.roll_no
+    `);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Kotty Track - Consumption Report";
+    const sheet = workbook.addWorksheet("Consumption Report");
+
+    sheet.columns = [
+      { header: "Fabric Type", key: "fabric_type", width: 18 },
+      { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "SKU", key: "sku", width: 25 },
+      { header: "Cutting Remark", key: "cutting_remark", width: 30 },
+      { header: "Roll No", key: "roll_no", width: 12 },
+      { header: "Layers", key: "layers", width: 10 },
+      { header: "Pieces in Roll", key: "pieces_in_roll", width: 15 },
+      { header: "Weight Used (kg)", key: "weight_used", width: 16 },
+      { header: "Remaining Weight (kg)", key: "remaining_weight", width: 20 },
+      { header: "Consumption (pcs/kg)", key: "consumption", width: 18 }
+    ];
+
+    // Style header row
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE5E0D8' }
+    };
+
+    rows.forEach(r => sheet.addRow(r));
+
+    res.setHeader("Content-Disposition", 'attachment; filename="ConsumptionReport.xlsx"');
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error in /dashboard/consumption/download:", err);
+    return res.status(500).send("Server error");
+  }
+});
+
+/**************************************************
  * 4) CSV/Excel leftover exports – same as your code
  **************************************************/
 // e.g. /dashboard/leftovers/download, etc. unchanged
@@ -2850,5 +2913,182 @@ router.route("/urgent-tat")
     }
   });
 
+
+/**************************************************
+ * SYSTEM HEALTH DASHBOARD
+ **************************************************/
+
+const SYSTEM_FEATURES = [
+  { name: 'Cutting', path: '/cutting-manager/dashboard', table: 'cutting_lots', role: 'cutting_manager' },
+  { name: 'Stitching', path: '/stitchingdashboard', table: 'stitching_data', role: 'stitching_master' },
+  { name: 'Jeans Assembly', path: '/jeansassemblydashboard', table: 'jeans_assembly_data', role: 'jeans_assembly' },
+  { name: 'Washing', path: '/washingdashboard', table: 'washing_data', role: 'washing' },
+  { name: 'Washing In', path: '/washingin', table: 'washing_in_data', role: 'washing_in' },
+  { name: 'Finishing', path: '/finishingdashboard', table: 'finishing_data', role: 'finishing' },
+  { name: 'Fabric Manager', path: '/fabric-manager/dashboard', table: 'fabric_invoices', role: 'fabric_manager' },
+  { name: 'Inventory', path: '/easyecom/stock-market', table: 'ee_inventory_snapshots', role: 'operator' },
+  { name: 'Returns', path: '/returns/dashboard', table: 'returns', role: 'operator' },
+  { name: 'PO Creator', path: '/po-creator/dashboard', table: 'po_lot_entries', role: 'po_creator' },
+  { name: 'Challan', path: '/challandashboard', table: 'challans', role: 'operator' },
+  { name: 'Employees', path: '/operator/supervisors', table: 'employees', role: 'operator' },
+  { name: 'Product Links', path: '/product-links', table: 'product_links', role: 'operator' },
+  { name: 'Mail Manager', path: '/mail-manager', table: 'mail_replies', role: 'operator' },
+];
+
+router.get("/system-health", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    // Run ALL queries in parallel for speed
+    const [
+      dbCheck,
+      userCountResult,
+      roleCountResult,
+      sessionCountResult,
+      inventoryRawResult,
+      ordersRawResult,
+      ...featureResults
+    ] = await Promise.all([
+      pool.query('SELECT 1 as ok').catch(() => [[{ ok: 0 }]]),
+      pool.query('SELECT COUNT(*) as cnt FROM users WHERE is_active = 1').catch(() => [[{ cnt: 0 }]]),
+      pool.query('SELECT COUNT(*) as cnt FROM roles').catch(() => [[{ cnt: 0 }]]),
+      pool.query('SELECT COUNT(DISTINCT user_id) as cnt FROM user_session_logs WHERE login_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)').catch(() => [[{ cnt: 0 }]]),
+      pool.query('SELECT COUNT(*) as cnt FROM ee_inventory_snapshots WHERE raw IS NOT NULL').catch(() => [[{ cnt: 0 }]]),
+      pool.query('SELECT COUNT(*) as cnt FROM ee_orders WHERE raw IS NOT NULL').catch(() => [[{ cnt: 0 }]]),
+      // Feature table counts - all in parallel
+      ...SYSTEM_FEATURES.map(f =>
+        pool.query(`SELECT COUNT(*) as cnt FROM ${f.table}`).catch(() => [[{ cnt: 0, error: true }]])
+      )
+    ]);
+
+    const dbHealthy = dbCheck[0]?.[0]?.ok === 1;
+    const featureStats = SYSTEM_FEATURES.map((feature, i) => ({
+      ...feature,
+      rowCount: featureResults[i]?.[0]?.[0]?.cnt || 0,
+      status: featureResults[i]?.[0]?.[0]?.error ? 'error' : 'ok'
+    }));
+
+    res.render('systemHealth', {
+      user: req.session.user,
+      dbHealthy,
+      features: featureStats,
+      stats: {
+        activeUsers: userCountResult[0]?.[0]?.cnt || 0,
+        totalRoles: roleCountResult[0]?.[0]?.cnt || 0,
+        activeSessions24h: sessionCountResult[0]?.[0]?.cnt || 0,
+        inventoryRawRows: inventoryRawResult[0]?.[0]?.cnt || 0,
+        ordersRawRows: ordersRawResult[0]?.[0]?.cnt || 0
+      },
+      error: req.flash('error'),
+      success: req.flash('success')
+    });
+  } catch (err) {
+    console.error('System health error:', err);
+    req.flash('error', 'Failed to load system health');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+router.get("/system-health/api/check", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ database: 'ok', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ database: 'error', error: err.message });
+  }
+});
+
+/**************************************************
+ * DOCUMENTATION PAGE
+ **************************************************/
+
+const DOCUMENTATION = {
+  production: [
+    { name: 'Cutting', desc: 'Create cutting lots, assign to stitching', path: '/cutting-manager/dashboard', role: 'cutting_manager' },
+    { name: 'Stitching', desc: 'Track stitching, assign to assembly/washing', path: '/stitchingdashboard', role: 'stitching_master' },
+    { name: 'Jeans Assembly', desc: 'Assemble jeans components', path: '/jeansassemblydashboard', role: 'jeans_assembly' },
+    { name: 'Washing', desc: 'Manage washing process', path: '/washingdashboard', role: 'washing' },
+    { name: 'Washing In', desc: 'Handle washed items, assign to finishing', path: '/washingin', role: 'washing_in' },
+    { name: 'Finishing', desc: 'Final finishing, QC, dispatch', path: '/finishingdashboard', role: 'finishing' },
+  ],
+  features: [
+    { name: 'System Health', desc: 'Monitor database, features, and system status', path: '/operator/system-health', role: 'operator' },
+    { name: 'Usage Analytics', desc: 'Track page views by feature, daily trends, top routes. Auto-cleans data older than 7 days.', path: '/operator/usage-analytics', role: 'operator' },
+    { name: 'Fabric Manager', desc: 'Manage fabric invoices and rolls', path: '/fabric-manager/dashboard', role: 'fabric_manager' },
+    { name: 'Inventory', desc: 'Track inventory, out-of-stock alerts', path: '/easyecom/stock-market', role: 'operator' },
+    { name: 'Returns', desc: 'Process customer returns, refunds', path: '/returns/dashboard', role: 'operator' },
+    { name: 'PO Creator', desc: 'Create purchase orders', path: '/po-creator/dashboard', role: 'po_creator' },
+    { name: 'Challan', desc: 'Generate and manage challans', path: '/challandashboard', role: 'any' },
+    { name: 'Employees', desc: 'Manage employees, attendance, salaries', path: '/operator/supervisors', role: 'operator' },
+    { name: 'Product Links', desc: 'E-commerce platform links', path: '/product-links', role: 'operator/productviewer' },
+    { name: 'Mail Manager', desc: 'Zoho mail, bulk replies', path: '/mail-manager', role: 'mohitoperator' },
+    { name: 'Vendor Files', desc: 'Share files with vendors', path: '/vendor-files', role: 'vendorfiles' },
+    { name: 'Video Finder', desc: 'Search order videos', path: '/video-finder', role: 'any' },
+    { name: 'Catalog Upload', desc: 'Upload product catalogs', path: '/catalogupload', role: 'catalogUpload' },
+  ],
+  integrations: [
+    { name: 'EasyEcom', desc: 'Inventory and order sync via webhooks' },
+    { name: 'Shopify', desc: 'Order lookup, returns processing' },
+    { name: 'Zoho Mail', desc: 'Email management, bulk replies' },
+    { name: 'Google Cloud Storage', desc: 'File storage for catalogs' },
+  ],
+  roles: [
+    { name: 'admin', desc: 'Full system access' },
+    { name: 'operator', desc: 'Production oversight, reports' },
+    { name: 'cutting_manager', desc: 'Create cutting lots' },
+    { name: 'stitching_master', desc: 'Stitching operations' },
+    { name: 'jeans_assembly', desc: 'Assembly operations' },
+    { name: 'washing', desc: 'Washing operations' },
+    { name: 'washing_in', desc: 'Washing-in operations' },
+    { name: 'finishing', desc: 'Finishing operations' },
+    { name: 'fabric_manager', desc: 'Fabric inventory' },
+    { name: 'supervisor', desc: 'Employee management' },
+    { name: 'po_creator', desc: 'Purchase orders' },
+    { name: 'productviewer', desc: 'View product links' },
+  ]
+};
+
+router.get("/documentation", isAuthenticated, isOperator, async (req, res) => {
+  res.render('documentation', {
+    user: req.session.user,
+    docs: DOCUMENTATION,
+    error: req.flash('error'),
+    success: req.flash('success')
+  });
+});
+
+/**************************************************
+ * USAGE ANALYTICS
+ **************************************************/
+
+const { getUsageStats } = require('../middlewares/usageTracker');
+
+router.get("/usage-analytics", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const stats = await getUsageStats(startDate, endDate);
+
+    res.render('usageAnalytics', {
+      user: req.session.user,
+      stats,
+      startDate: startDate || '',
+      endDate: endDate || '',
+      error: req.flash('error'),
+      success: req.flash('success')
+    });
+  } catch (err) {
+    console.error('Usage analytics error:', err);
+    req.flash('error', 'Failed to load usage analytics');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+router.get("/usage-analytics/api", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const stats = await getUsageStats(startDate, endDate);
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

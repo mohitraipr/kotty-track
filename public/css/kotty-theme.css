@@ -793,21 +793,78 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ========================================
-   MODALS
+   MODALS - Bootstrap Modal Overrides
    ======================================== */
+/* Ensure Bootstrap modals appear above navbar (z-index 1000) */
+.modal {
+  z-index: 1060 !important;
+}
+
 .modal-backdrop {
+  z-index: 1055 !important;
+}
+
+.modal-dialog {
+  margin: 1.75rem auto;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: none;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  position: relative;
+}
+
+/* Ensure inputs inside modals are interactive */
+.modal-body input,
+.modal-body select,
+.modal-body textarea {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.modal-body input[type="number"],
+.modal-body input[type="text"],
+.modal-body input[type="date"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-family: var(--font-body);
+  background: white;
+  color: var(--charcoal);
+}
+
+.modal-body input:focus,
+.modal-body select:focus,
+.modal-body textarea:focus {
+  outline: none;
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.15);
+}
+
+/* Sidebar overlay should not block modals */
+.sidebar-overlay {
+  z-index: 999 !important;
+}
+
+/* Custom modal backdrop (for non-Bootstrap modals) */
+.kotty-modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(26, 26, 26, 0.5);
   backdrop-filter: blur(4px);
-  z-index: 1100;
+  z-index: 1055;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
 }
 
-.modal {
+.kotty-modal {
   background: var(--bg-card);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
@@ -816,6 +873,7 @@ h1, h2, h3, h4, h5, h6 {
   max-height: 90vh;
   overflow: hidden;
   animation: modalIn 0.3s var(--ease-out);
+  z-index: 1060;
 }
 
 @keyframes modalIn {
