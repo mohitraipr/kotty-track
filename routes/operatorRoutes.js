@@ -807,6 +807,95 @@ router.get("/fix-roll-pieces", isAuthenticated, isOperator, async (req, res) => 
 });
 
 /**************************************************
+ * Security: View failed login attempts
+ * GET /operator/security-logs
+ **************************************************/
+router.get("/security-logs", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    // Ensure table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS security_audit_log (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        event_type VARCHAR(50) NOT NULL,
+        username VARCHAR(100),
+        ip_address VARCHAR(50),
+        user_agent TEXT,
+        details JSON,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_event_type (event_type),
+        INDEX idx_ip_address (ip_address),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    const days = parseInt(req.query.days) || 7;
+
+    // Get failed login attempts grouped by IP
+    const [suspiciousIPs] = await pool.query(`
+      SELECT
+        ip_address,
+        COUNT(DISTINCT username) as unique_users_tried,
+        COUNT(*) as total_attempts,
+        GROUP_CONCAT(DISTINCT username ORDER BY username SEPARATOR ', ') as usernames,
+        MAX(created_at) as last_attempt
+      FROM security_audit_log
+      WHERE event_type = 'LOGIN_FAILED'
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY ip_address
+      HAVING COUNT(*) >= 3
+      ORDER BY total_attempts DESC
+      LIMIT 50
+    `, [days]);
+
+    // Get recent failed logins
+    const [recentFailed] = await pool.query(`
+      SELECT
+        username,
+        ip_address,
+        user_agent,
+        details,
+        created_at
+      FROM security_audit_log
+      WHERE event_type = 'LOGIN_FAILED'
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      ORDER BY created_at DESC
+      LIMIT 100
+    `, [days]);
+
+    // Get login success count by user (last 7 days)
+    const [loginStats] = await pool.query(`
+      SELECT
+        username,
+        COUNT(*) as login_count,
+        COUNT(DISTINCT ip_address) as unique_ips,
+        MAX(created_at) as last_login
+      FROM security_audit_log
+      WHERE event_type = 'LOGIN_SUCCESS'
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY username
+      ORDER BY login_count DESC
+      LIMIT 50
+    `, [days]);
+
+    res.json({
+      success: true,
+      period: `Last ${days} days`,
+      suspiciousIPs,
+      recentFailedLogins: recentFailed,
+      loginStats,
+      summary: {
+        totalFailedAttempts: recentFailed.length,
+        suspiciousIPCount: suspiciousIPs.length,
+        uniqueUsersWithLogins: loginStats.length
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching security logs:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**************************************************
  * 4) CSV/Excel leftover exports – same as your code
  **************************************************/
 // e.g. /dashboard/leftovers/download, etc. unchanged

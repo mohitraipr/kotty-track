@@ -59,9 +59,23 @@ function getDashboardForRole(roleName) {
   return dashboards[roleName];
 }
 
+// Helper to log security events
+async function logSecurityEvent(eventType, username, ip, userAgent, details = {}) {
+  try {
+    await pool.query(`
+      INSERT INTO security_audit_log (event_type, username, ip_address, user_agent, details, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `, [eventType, username || 'unknown', ip, userAgent, JSON.stringify(details)]);
+  } catch (err) {
+    console.error('Security log error:', err.message);
+  }
+}
+
 // POST /login
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const userAgent = req.headers['user-agent'] || 'unknown';
 
   if (!username || !password) {
     req.flash('error', 'Please enter both username and password.');
@@ -77,6 +91,9 @@ router.post('/login', async (req, res) => {
     `, [username]);
 
     if (users.length === 0) {
+      // Log failed attempt - user not found
+      await logSecurityEvent('LOGIN_FAILED', username, clientIP, userAgent, { reason: 'user_not_found' });
+      console.warn(`[SECURITY] Failed login - user not found: ${username} from IP: ${clientIP}`);
       req.flash('error', 'Invalid username or password.');
       return res.redirect('/login');
     }
@@ -85,9 +102,15 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      // Log failed attempt - wrong password
+      await logSecurityEvent('LOGIN_FAILED', username, clientIP, userAgent, { reason: 'invalid_password', user_id: user.id });
+      console.warn(`[SECURITY] Failed login - wrong password: ${username} from IP: ${clientIP}`);
       req.flash('error', 'Invalid username or password.');
       return res.redirect('/login');
     }
+
+    // Log successful login
+    await logSecurityEvent('LOGIN_SUCCESS', username, clientIP, userAgent, { user_id: user.id, role: user.roleName });
 
     // Set user session
     req.session.user = {
