@@ -22,3 +22,6 @@ nul
 .vscode/
 *.swp
 .env
+
+# Claude Code local settings (may contain secrets)
+.claude/settings.local.json
