@@ -521,6 +521,79 @@ router.post('/manage/items/create', isAuthenticated, isStoreManager, async (req,
   res.redirect('/indent/manage');
 });
 
+// Store manager: Add stock to an item
+router.post('/manage/stock/add', isAuthenticated, isStoreManager, async (req, res) => {
+  const goodsId = req.body.goods_id;
+  const qty = parseInt(req.body.quantity, 10);
+  const invoiceNumber = req.body.invoice_number || null;
+  const vendorName = req.body.vendor_name || null;
+  const entryDate = req.body.entry_date || null;
+  if (!goodsId || isNaN(qty) || qty <= 0) {
+    req.flash('error', 'Select an item and enter a valid quantity.');
+    return res.redirect('/indent/manage');
+  }
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    await conn.query(
+      `INSERT INTO incoming_data (goods_id, quantity, added_by, added_at, invoice_number, vendor_name, entry_date)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
+      [goodsId, qty, req.session.user.id, invoiceNumber, vendorName, entryDate]
+    );
+    await conn.query('UPDATE goods_inventory SET qty = qty + ? WHERE id = ?', [qty, goodsId]);
+    if (vendorName) {
+      await conn.query('INSERT IGNORE INTO store_vendors (name) VALUES (?)', [vendorName.trim()]);
+    }
+    await conn.commit();
+    req.flash('success', 'Stock added successfully.');
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error('Error adding stock:', err);
+    req.flash('error', 'Could not add stock.');
+  } finally {
+    if (conn) conn.release();
+  }
+  res.redirect('/indent/manage');
+});
+
+// Store manager: Dispatch stock
+router.post('/manage/stock/dispatch', isAuthenticated, isStoreManager, async (req, res) => {
+  const goodsId = req.body.goods_id;
+  const qty = parseInt(req.body.quantity, 10);
+  const remark = req.body.remark || null;
+  if (!goodsId || isNaN(qty) || qty <= 0) {
+    req.flash('error', 'Select an item and enter a valid quantity.');
+    return res.redirect('/indent/manage');
+  }
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [updateRes] = await conn.query(
+      'UPDATE goods_inventory SET qty = qty - ? WHERE id = ? AND qty >= ?', [qty, goodsId, qty]
+    );
+    if (!updateRes.affectedRows) {
+      await conn.rollback();
+      req.flash('error', 'Insufficient stock to dispatch.');
+      return res.redirect('/indent/manage');
+    }
+    await conn.query(
+      'INSERT INTO dispatched_data (goods_id, quantity, remark, dispatched_by, dispatched_at) VALUES (?, ?, ?, ?, NOW())',
+      [goodsId, qty, remark, req.session.user.id]
+    );
+    await conn.commit();
+    req.flash('success', 'Goods dispatched.');
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error('Error dispatching:', err);
+    req.flash('error', 'Could not dispatch goods.');
+  } finally {
+    if (conn) conn.release();
+  }
+  res.redirect('/indent/manage');
+});
+
 // Stock Analytics Dashboard
 router.get('/manage/analytics', isAuthenticated, isStoreManager, async (req, res) => {
   try {

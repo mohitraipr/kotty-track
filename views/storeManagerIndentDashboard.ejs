@@ -33,8 +33,14 @@
           <a href="/indent/manage/analytics" class="btn btn-secondary btn-sm">
             <i class="bi bi-bar-chart-line me-1"></i> Stock Analytics
           </a>
-          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createItemModal" onclick="document.getElementById('createItemPanel').classList.toggle('active')">
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('createItemPanel').classList.toggle('active')">
             <i class="bi bi-plus-lg me-1"></i> Create Item Type
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('addStockPanel').classList.toggle('active')">
+            <i class="bi bi-box-arrow-in-down me-1"></i> Add Stock
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dispatchPanel').classList.toggle('active')">
+            <i class="bi bi-truck me-1"></i> Dispatch
           </button>
 
           <span class="badge badge-neutral" style="font-size: var(--text-sm); padding: 8px 14px;">
@@ -84,6 +90,98 @@
               <div class="col-md-3 col-sm-12">
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
                   <i class="bi bi-check-lg me-1"></i> Create Item
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Stock Panel -->
+    <div id="addStockPanel" class="create-item-panel">
+      <div class="card" style="border: 2px solid var(--success, #2d8a5f); margin-bottom: 24px;">
+        <div class="card-header" style="background: rgba(45,138,95,0.08);">
+          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
+            <i class="bi bi-box-arrow-in-down me-2" style="color: var(--success, #2d8a5f);"></i>Add Stock
+          </h2>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('addStockPanel').classList.remove('active')" style="padding: 4px 10px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <form action="/indent/manage/stock/add" method="POST">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Select Item <span class="text-danger">*</span></label>
+                <select id="addStockItem" name="goods_id" class="form-select" required>
+                  <option value="">-- Select item --</option>
+                  <% goods.forEach(g => { %>
+                    <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                <input type="number" name="quantity" class="form-control" required min="1" placeholder="Qty">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Invoice No.</label>
+                <input type="text" name="invoice_number" class="form-control" placeholder="INV-001">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Vendor</label>
+                <input type="text" name="vendor_name" class="form-control" placeholder="Vendor name">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Date</label>
+                <input type="date" name="entry_date" class="form-control">
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-plus-lg me-1"></i> Add Stock
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dispatch Panel -->
+    <div id="dispatchPanel" class="create-item-panel">
+      <div class="card" style="border: 2px solid var(--info, #3a7bc4); margin-bottom: 24px;">
+        <div class="card-header" style="background: rgba(58,123,196,0.08);">
+          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
+            <i class="bi bi-truck me-2" style="color: var(--info, #3a7bc4);"></i>Dispatch Goods
+          </h2>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dispatchPanel').classList.remove('active')" style="padding: 4px 10px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <form action="/indent/manage/stock/dispatch" method="POST">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">Select Item <span class="text-danger">*</span></label>
+                <select id="dispatchStockItem" name="goods_id" class="form-select" required>
+                  <option value="">-- Select item --</option>
+                  <% goods.forEach(g => { %>
+                    <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                <input type="number" name="quantity" class="form-control" required min="1" placeholder="Qty">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Remark</label>
+                <input type="text" name="remark" class="form-control" placeholder="Optional remark">
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                  <i class="bi bi-truck me-1"></i> Dispatch
                 </button>
               </div>
             </div>
