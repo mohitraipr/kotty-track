@@ -82,6 +82,16 @@ async function ensureMigration() {
   }
 }
 
+// One-time: Reset all stock to 0
+router.get('/manage/reset-stock', isAuthenticated, isStoreManager, async (req, res) => {
+  try {
+    const [result] = await pool.query('UPDATE goods_inventory SET qty = 0');
+    res.json({ success: true, message: `Reset ${result.affectedRows} items to 0 stock` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Helper to get store settings
 async function getStoreSetting(key, defaultValue = 'true') {
   try {
