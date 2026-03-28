@@ -539,7 +539,7 @@ router.get('/api/items', isAuthenticated, async (req, res) => {
 
 // Toggle free-text setting
 router.post('/manage/settings', isAuthenticated, isStoreManager, async (req, res) => {
-  const { allow_freetext } = req.body;
+  const allow_freetext = req.body.allow_freetext || req.body.allowFreetext;
   try {
     await pool.query(
       `INSERT INTO store_settings (setting_key, setting_value) VALUES ('allow_freetext_indent', ?)
