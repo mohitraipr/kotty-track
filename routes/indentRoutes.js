@@ -539,12 +539,15 @@ router.get('/api/items', isAuthenticated, async (req, res) => {
 
 // Toggle free-text setting
 router.post('/manage/settings', isAuthenticated, isStoreManager, async (req, res) => {
-  const allow_freetext = req.body.allow_freetext || req.body.allowFreetext;
+  const raw = req.body.allow_freetext || req.body.allowFreetext;
+  // When checkbox is checked, Express sends ['false','true'] (hidden + checkbox). Last value wins.
+  const value = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+  const isEnabled = value === 'true' ? 'true' : 'false';
   try {
     await pool.query(
       `INSERT INTO store_settings (setting_key, setting_value) VALUES ('allow_freetext_indent', ?)
        ON DUPLICATE KEY UPDATE setting_value = ?`,
-      [allow_freetext === 'true' ? 'true' : 'false', allow_freetext === 'true' ? 'true' : 'false']
+      [isEnabled, isEnabled]
     );
     req.flash('success', 'Setting updated.');
   } catch (err) {
