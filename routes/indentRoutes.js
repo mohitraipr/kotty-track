@@ -41,6 +41,47 @@ async function logStatusChange(requestId, userId, previousStatus, newStatus, not
   }
 }
 
+// One-time migration - auto-run on first load
+let migrationRan = false;
+async function ensureMigration() {
+  if (migrationRan) return;
+  try {
+    // Check if shade column exists
+    const [cols] = await pool.query(`SHOW COLUMNS FROM goods_inventory LIKE 'shade'`);
+    if (cols.length === 0) {
+      await pool.query(`ALTER TABLE goods_inventory ADD COLUMN shade VARCHAR(100) DEFAULT NULL AFTER size`);
+    }
+    // Create store_settings
+    await pool.query(`CREATE TABLE IF NOT EXISTS store_settings (
+      setting_key VARCHAR(100) PRIMARY KEY,
+      setting_value VARCHAR(500) NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`);
+    await pool.query(`INSERT IGNORE INTO store_settings (setting_key, setting_value) VALUES ('allow_freetext_indent', 'true')`);
+    // Add columns to incoming_data
+    const [incCols] = await pool.query(`SHOW COLUMNS FROM incoming_data LIKE 'invoice_number'`);
+    if (incCols.length === 0) {
+      await pool.query(`ALTER TABLE incoming_data ADD COLUMN invoice_number VARCHAR(100) DEFAULT NULL, ADD COLUMN vendor_name VARCHAR(255) DEFAULT NULL, ADD COLUMN entry_date DATE DEFAULT NULL`);
+    }
+    // Create store_vendors
+    await pool.query(`CREATE TABLE IF NOT EXISTS store_vendors (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    // Add goods_id to indent_requests
+    const [irCols] = await pool.query(`SHOW COLUMNS FROM indent_requests LIKE 'goods_id'`);
+    if (irCols.length === 0) {
+      await pool.query(`ALTER TABLE indent_requests ADD COLUMN goods_id BIGINT UNSIGNED DEFAULT NULL AFTER filler_id`);
+    }
+    migrationRan = true;
+    console.log('Store/indent migration completed successfully');
+  } catch (err) {
+    console.error('Migration error (non-fatal):', err.message);
+    migrationRan = true; // Don't retry on every request
+  }
+}
+
 // Helper to get store settings
 async function getStoreSetting(key, defaultValue = 'true') {
   try {
@@ -53,6 +94,7 @@ async function getStoreSetting(key, defaultValue = 'true') {
 
 router.get('/', isAuthenticated, isIndentFiller, async (req, res) => {
   try {
+    await ensureMigration();
     const [[requests], [goods], allowFreetext] = await Promise.all([
       pool.query(
         `SELECT ir.*, g.shade
@@ -161,6 +203,7 @@ router.post('/create', isAuthenticated, isIndentFiller, async (req, res) => {
 
 router.get('/manage', isAuthenticated, isStoreManager, async (req, res) => {
   try {
+    await ensureMigration();
     const [[requests], [statsRows], allowFreetext, [goods]] = await Promise.all([
       pool.query(
         `SELECT ir.*, uf.username AS filler_name,
