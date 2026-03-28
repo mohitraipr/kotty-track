@@ -1,6 +1,40 @@
 <%- include('partials/header', { pageTitle: 'Indent Dashboard' }) %>
 <%- include('partials/navbar') %>
 
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+  .select2-container--default .select2-selection--single {
+    height: 44px;
+    border: 1px solid var(--border-light, #e5e0d8);
+    border-radius: 10px;
+    background: white;
+    padding: 6px 14px;
+  }
+  .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: #c45c3a;
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.15);
+  }
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 30px;
+    padding-left: 0;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 42px;
+    right: 8px;
+  }
+  .select2-dropdown {
+    border: 1px solid #e5e0d8;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #c45c3a;
+  }
+  .select2-container { width: 100% !important; }
+</style>
+
 <!-- Main Content (No Sidebar) -->
 <main class="main-content" style="margin-left: 0;">
   <div style="max-width: 1200px; margin: 0 auto;">
@@ -34,19 +68,15 @@
           Submit a clear description so the store manager can act on it quickly.
         </p>
         <form action="/indent/create" method="POST" id="indentForm">
+          <input type="hidden" name="goods_id" id="goodsId" value="" />
+          <input type="hidden" name="goodsDescription" id="goodsDesc" value="" />
           <div class="row g-4">
             <div class="col-md-6">
               <div class="form-group mb-0">
-                <label class="form-label" for="goodsDescription">Goods & Description</label>
-                <textarea
-                  class="form-control form-textarea"
-                  id="goodsDescription"
-                  name="goodsDescription"
-                  placeholder="e.g. Thread cones 40/2 for Line A"
-                  rows="3"
-                  required
-                  style="resize: vertical; min-height: 90px;"
-                ></textarea>
+                <label class="form-label" for="itemSelect">Goods & Description</label>
+                <select class="form-control" id="itemSelect" style="width: 100%;">
+                  <option></option>
+                </select>
               </div>
             </div>
             <div class="col-md-6">
@@ -157,6 +187,9 @@
                 <tr>
                   <td>
                     <strong class="text-primary"><%= item.goods_description %></strong>
+                    <% if (item.shade) { %>
+                      <br><small class="text-secondary">Shade: <%= item.shade %></small>
+                    <% } %>
                   </td>
                   <td><%= item.quantity_requested %></td>
                   <td>
@@ -201,6 +234,10 @@
   </div>
 </main>
 
+<!-- jQuery + Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <!-- Page-specific Scripts -->
 <script>
   // Set default date to today
@@ -219,8 +256,46 @@
     });
   });
 
+  // Select2 initialization
+  $(function() {
+    var allowFreetext = <%= allowFreetext ? 'true' : 'false' %>;
+
+    $('#itemSelect').select2({
+      placeholder: 'Search and select item...',
+      allowClear: true,
+      tags: allowFreetext,
+      ajax: {
+        url: '/indent/api/items',
+        dataType: 'json',
+        delay: 250,
+        data: function(params) { return { q: params.term || '' }; },
+        processResults: function(data) { return { results: data }; }
+      },
+      minimumInputLength: 1
+    }).on('select2:select', function(e) {
+      var data = e.params.data;
+      if (data.id && !isNaN(data.id)) {
+        document.getElementById('goodsId').value = data.id;
+        document.getElementById('goodsDesc').value = '';
+      } else {
+        document.getElementById('goodsId').value = '';
+        document.getElementById('goodsDesc').value = data.text || data.id;
+      }
+    }).on('select2:clear', function() {
+      document.getElementById('goodsId').value = '';
+      document.getElementById('goodsDesc').value = '';
+    });
+  });
+
   // Prevent duplicate form submissions
   document.querySelector('#indentForm').addEventListener('submit', function(e) {
+    var goodsId = document.getElementById('goodsId').value;
+    var goodsDesc = document.getElementById('goodsDesc').value;
+    if (!goodsId && !goodsDesc) {
+      e.preventDefault();
+      alert('Please select or enter an item.');
+      return false;
+    }
     const btn = this.querySelector('button[type="submit"]');
     if (btn.disabled) {
       e.preventDefault();

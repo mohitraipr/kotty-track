@@ -1,4 +1,6 @@
 <%- include('partials/header', { pageTitle: 'Indent Control' }) %>
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <%- include('partials/navbar', { dashboardUrl: '/dashboard' }) %>
 
 <!-- Main Content Area (No Sidebar) -->
@@ -12,11 +14,80 @@
           <h1 class="page-title">Indent Control Room</h1>
           <p class="page-subtitle">Manage inventory requests and track arrivals</p>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          <!-- Settings Toggle: Allow Free-Text Indent -->
+          <form action="/indent/manage/settings" method="POST" class="d-flex align-items-center gap-2" style="margin: 0;">
+            <label class="toggle-label" for="allowFreetextToggle" style="font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap;">
+              Free-Text Indent
+            </label>
+            <label class="toggle-switch">
+              <input type="hidden" name="allowFreetext" value="false">
+              <input type="checkbox" name="allowFreetext" value="true" id="allowFreetextToggle" <%= allowFreetext ? 'checked' : '' %> onchange="this.form.submit()">
+              <span class="toggle-slider"></span>
+            </label>
+          </form>
+
+          <div class="header-divider"></div>
+
+          <!-- Action Buttons -->
+          <a href="/indent/manage/analytics" class="btn btn-secondary btn-sm">
+            <i class="bi bi-bar-chart-line me-1"></i> Stock Analytics
+          </a>
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createItemModal" onclick="document.getElementById('createItemPanel').classList.toggle('active')">
+            <i class="bi bi-plus-lg me-1"></i> Create Item Type
+          </button>
+
           <span class="badge badge-neutral" style="font-size: var(--text-sm); padding: 8px 14px;">
             <i class="bi bi-person-fill me-1"></i>
             <%= user.username %> &middot; Store Manager
           </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Item Type Panel (Collapsible) -->
+    <div id="createItemPanel" class="create-item-panel">
+      <div class="card" style="border: 2px solid var(--terracotta); margin-bottom: 24px;">
+        <div class="card-header" style="background: var(--terracotta-light, rgba(188,108,37,0.08));">
+          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
+            <i class="bi bi-plus-circle me-2" style="color: var(--terracotta);"></i>Create New Item Type
+          </h2>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('createItemPanel').classList.remove('active')" style="padding: 4px 10px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <form action="/indent/manage/items/create" method="POST">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-3 col-sm-6">
+                <label class="form-label">Name <span style="color: var(--danger);">*</span></label>
+                <input type="text" name="name" class="form-input" placeholder="e.g. Button, Zipper, Thread" required>
+              </div>
+              <div class="col-md-2 col-sm-6">
+                <label class="form-label">Shade</label>
+                <input type="text" name="shade" class="form-input" placeholder="e.g. Red, Navy Blue">
+              </div>
+              <div class="col-md-2 col-sm-6">
+                <label class="form-label">Unit <span style="color: var(--danger);">*</span></label>
+                <select name="unit" class="form-select item-unit-select" required>
+                  <option value="">Select unit</option>
+                  <option value="PCS">PCS</option>
+                  <option value="ROLL">ROLL</option>
+                  <option value="CONE">CONE</option>
+                  <option value="GROSS">GROSS</option>
+                </select>
+              </div>
+              <div class="col-md-2 col-sm-6">
+                <label class="form-label">Size</label>
+                <input type="text" name="size" class="form-input" placeholder="e.g. 10mm, Large">
+              </div>
+              <div class="col-md-3 col-sm-12">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                  <i class="bi bi-check-lg me-1"></i> Create Item
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -84,6 +155,7 @@
               <thead>
                 <tr>
                   <th>Goods & Description</th>
+                  <th>Shade</th>
                   <th>Quantity</th>
                   <th>Indent Filler</th>
                   <th>Dates</th>
@@ -94,7 +166,7 @@
               <tbody>
                 <% if (!requests || !requests.length) { %>
                 <tr>
-                  <td colspan="6" style="text-align: center; padding: 48px;">
+                  <td colspan="7" style="text-align: center; padding: 48px;">
                     <div class="empty-state" style="padding: 0;">
                       <div class="empty-state-icon">
                         <i class="bi bi-inbox" style="font-size: 48px;"></i>
@@ -113,6 +185,13 @@
                       Used last month: <strong><%= row.used_last_month || 0 %></strong> &middot;
                       last 7 days: <strong><%= row.used_last_seven_days || 0 %></strong>
                     </div>
+                  </td>
+                  <td data-label="Shade">
+                    <% if (row.shade) { %>
+                      <span class="badge badge-neutral" style="font-size: var(--text-xs);"><%= row.shade %></span>
+                    <% } else { %>
+                      <span style="color: var(--text-muted);">--</span>
+                    <% } %>
                   </td>
                   <td data-label="Quantity">
                     <span style="font-weight: 600; font-size: var(--text-lg);"><%= row.quantity_requested %></span>
@@ -153,21 +232,33 @@
                     <span class="badge badge-success" style="font-size: var(--text-xs);">
                       <i class="bi bi-check-lg me-1"></i> Completed
                     </span>
-                    <% } else { %>
+
+                    <% } else if (row.status === 'open') { %>
+                    <!-- Open: Only allow Mark Proceeding -->
                     <div class="d-flex flex-wrap gap-2 align-items-center">
-                      <% if (row.status === 'open') { %>
                       <form action="/indent/requests/<%= row.id %>/proceed" method="POST" style="margin: 0;">
                         <button class="btn btn-primary btn-sm" type="submit">
-                          <i class="bi bi-send me-1"></i> Proceed
+                          <i class="bi bi-send me-1"></i> Mark Proceeding
                         </button>
                       </form>
-                      <% } %>
+                    </div>
+
+                    <% } else if (row.status === 'proceeding') { %>
+                    <!-- Proceeding: Only allow Mark Arrived -->
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
                       <button class="btn btn-secondary btn-sm arrival-toggle" data-id="<%= row.id %>">
                         <i class="bi bi-box-seam me-1"></i> Mark Arrived
                       </button>
                     </div>
                     <!-- Arrival Form -->
                     <div class="arrival-form" id="arrival-form-<%= row.id %>">
+                      <% if (row.goods_id && row.current_stock != null) { %>
+                      <div style="margin-bottom: 10px;">
+                        <span class="badge badge-info" style="font-size: var(--text-xs); padding: 5px 10px;">
+                          <i class="bi bi-box me-1"></i> Current Stock: <strong><%= row.current_stock %></strong>
+                        </span>
+                      </div>
+                      <% } %>
                       <form action="/indent/requests/<%= row.id %>/arrive" method="POST">
                         <div class="row g-2">
                           <div class="col-sm-6 col-md-4">
@@ -207,6 +298,81 @@
 
 <!-- Additional Page Styles -->
 <style>
+  /* Toggle Switch */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-medium, #ccc);
+    transition: 0.25s;
+    border-radius: 24px;
+  }
+
+  .toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.25s;
+    border-radius: 50%;
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background-color: var(--terracotta, #BC6C25);
+  }
+
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+  }
+
+  .toggle-label {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Header divider */
+  .header-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-light, #e0e0e0);
+    flex-shrink: 0;
+  }
+
+  /* Create Item Panel */
+  .create-item-panel {
+    display: none;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  .create-item-panel.active {
+    display: block;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   /* Arrival Form - Hidden by default */
   .arrival-form {
     display: none;
@@ -217,6 +383,23 @@
 
   .arrival-form.active {
     display: block;
+  }
+
+  /* Select2 styling to match design system */
+  .select2-container--default .select2-selection--single {
+    height: 38px;
+    border: 1px solid var(--border-medium, #d0d5dd);
+    border-radius: var(--radius-md, 8px);
+    padding: 4px 8px;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px;
+    color: var(--text-primary);
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px;
   }
 
   /* Mobile responsive table */
@@ -273,6 +456,7 @@
 </style>
 
 <!-- Page Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
   // Toggle arrival form visibility
   document.querySelectorAll('.arrival-toggle').forEach(btn => {
@@ -288,6 +472,14 @@
   document.querySelectorAll('.btn-close').forEach(btn => {
     btn.addEventListener('click', () => btn.parentElement && btn.parentElement.remove());
   });
+
+  // Initialize Select2 on item unit dropdown
+  if (typeof $ !== 'undefined' && $.fn.select2) {
+    $('.item-unit-select').select2({
+      placeholder: 'Select unit',
+      minimumResultsForSearch: Infinity
+    });
+  }
 
   // Export to Excel functionality
   function exportToExcel() {

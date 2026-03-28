@@ -49,10 +49,13 @@ router.get('/dashboard', isAuthenticated, isStoreEmployee, async (req, res) => {
   }
 });
 
-// POST add quantity
+// POST add quantity (with optional invoice, vendor, entry_date)
 router.post('/add', isAuthenticated, isStoreEmployee, async (req, res) => {
   const goodsId = req.body.goods_id;
   const qty = parseInt(req.body.quantity, 10);
+  const invoiceNumber = req.body.invoice_number || null;
+  const vendorName = req.body.vendor_name || null;
+  const entryDate = req.body.entry_date || null;
   if (!goodsId || isNaN(qty) || qty <= 0) {
     req.flash('error', 'Invalid quantity');
     return res.redirect('/inventory/dashboard');
@@ -61,9 +64,16 @@ router.post('/add', isAuthenticated, isStoreEmployee, async (req, res) => {
   try {
     conn = await pool.getConnection();
     await conn.beginTransaction();
-    await conn.query('INSERT INTO incoming_data (goods_id, quantity, added_by, added_at) VALUES (?, ?, ?, NOW())',
-      [goodsId, qty, req.session.user.id]);
+    await conn.query(
+      `INSERT INTO incoming_data (goods_id, quantity, added_by, added_at, invoice_number, vendor_name, entry_date)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
+      [goodsId, qty, req.session.user.id, invoiceNumber, vendorName, entryDate]
+    );
     await conn.query('UPDATE goods_inventory SET qty = qty + ? WHERE id = ?', [qty, goodsId]);
+    // Auto-register vendor for autocomplete
+    if (vendorName) {
+      await conn.query('INSERT IGNORE INTO store_vendors (name) VALUES (?)', [vendorName.trim()]);
+    }
     await conn.commit();
     req.flash('success', 'Quantity added');
   } catch (err) {
@@ -74,6 +84,21 @@ router.post('/add', isAuthenticated, isStoreEmployee, async (req, res) => {
     if (conn) conn.release();
   }
   res.redirect('/inventory/dashboard');
+});
+
+// GET vendor autocomplete API
+router.get('/api/vendors', isAuthenticated, async (req, res) => {
+  const q = req.query.q || '';
+  try {
+    const [rows] = await pool.query(
+      'SELECT name FROM store_vendors WHERE name LIKE CONCAT(\'%\', ?, \'%\') ORDER BY name LIMIT 20',
+      [q]
+    );
+    res.json(rows.map(r => ({ id: r.name, text: r.name })));
+  } catch (err) {
+    console.error('Error searching vendors:', err);
+    res.json([]);
+  }
 });
 
 // POST dispatch quantity

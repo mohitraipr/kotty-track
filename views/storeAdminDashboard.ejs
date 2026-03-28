@@ -171,25 +171,31 @@
             <form action="/store-admin/create" method="POST">
               <div class="form-grid">
                 <div class="form-group mb-0">
-                  <label class="form-label">Description</label>
-                  <input type="text" name="description" class="form-control form-input" placeholder="Enter item description" required>
+                  <label class="form-label">Name <span class="text-danger">*</span></label>
+                  <input type="text" name="description" class="form-control form-input" placeholder="Enter item name" required>
                 </div>
                 <div class="form-group mb-0">
-                  <label class="form-label">Size</label>
-                  <input type="text" name="size" class="form-control form-input" placeholder="e.g., M, L, XL" required>
+                  <label class="form-label">Shade <small class="text-muted">(optional)</small></label>
+                  <input type="text" name="shade" class="form-control form-input" placeholder="e.g., White, Black, Navy">
                 </div>
                 <div class="form-group mb-0">
-                  <label class="form-label">Unit</label>
+                  <label class="form-label">Unit <span class="text-danger">*</span></label>
                   <select name="unit" class="form-select form-input" required>
                     <option value="PCS">PCS</option>
                     <option value="ROLL">ROLL</option>
+                    <option value="CONE">CONE</option>
+                    <option value="GROSS">GROSS</option>
                   </select>
                 </div>
                 <div class="form-group mb-0">
-                  <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-plus-lg"></i> Create Item
-                  </button>
+                  <label class="form-label">Size <small class="text-muted">(optional)</small></label>
+                  <input type="text" name="size" class="form-control form-input" placeholder="e.g., M, L, XL">
                 </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-plus-lg"></i> Create Item
+                </button>
               </div>
             </form>
           </div>
@@ -209,19 +215,33 @@
                   <label class="form-label">Select Item</label>
                   <select id="addGoods" name="goods_id" class="form-select" required>
                     <% goods.forEach(g => { %>
-                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>]</option>
                     <% }) %>
                   </select>
                 </div>
                 <div class="form-group mb-0">
-                  <label class="form-label">Quantity</label>
+                  <label class="form-label">Quantity <span class="text-danger">*</span></label>
                   <input type="number" name="quantity" class="form-control form-input" placeholder="Enter quantity" required min="1">
                 </div>
                 <div class="form-group mb-0">
-                  <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-plus-lg"></i> Add Stock
-                  </button>
+                  <label class="form-label">Invoice Number</label>
+                  <input type="text" name="invoice_number" class="form-control form-input" placeholder="e.g., INV-2026-001">
                 </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Vendor Name</label>
+                  <select id="vendorSelect" name="vendor_name" class="form-select">
+                    <option value="">-- Select or type vendor --</option>
+                  </select>
+                </div>
+                <div class="form-group mb-0">
+                  <label class="form-label">Entry Date</label>
+                  <input type="date" name="entry_date" class="form-control form-input">
+                </div>
+              </div>
+              <div class="mt-3">
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-plus-lg"></i> Add Stock
+                </button>
               </div>
             </form>
           </div>
@@ -241,7 +261,7 @@
                   <label class="form-label">Select Item</label>
                   <select id="dispatchGoods" name="goods_id" class="form-select" required>
                     <% goods.forEach(g => { %>
-                      <option value="<%= g.id %>"><%= g.description_of_goods %> - <%= g.size %> - <%= g.unit %></option>
+                      <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
                     <% }) %>
                   </select>
                 </div>
@@ -278,7 +298,8 @@
         <table class="table">
           <thead>
             <tr>
-              <th>Description</th>
+              <th>Name</th>
+              <th>Shade</th>
               <th>Size</th>
               <th>Unit</th>
               <th>Quantity</th>
@@ -287,7 +308,7 @@
           <tbody>
             <% if (goods.length === 0) { %>
               <tr>
-                <td colspan="4">
+                <td colspan="5">
                   <div class="empty-state">
                     <i class="bi bi-inbox empty-state-icon" style="font-size: 48px;"></i>
                     <h4 class="empty-state-title">No Items Yet</h4>
@@ -297,14 +318,15 @@
               </tr>
             <% } else { %>
               <% goods.forEach(g => { %>
-                <tr class="<%= g.qty == 100 ? 'low-stock' : '' %>">
+                <tr class="<%= g.qty <= 100 ? 'low-stock' : '' %>">
                   <td>
                     <span style="font-weight: 500;"><%= g.description_of_goods %></span>
                   </td>
-                  <td><%= g.size %></td>
+                  <td><%= g.shade || '-' %></td>
+                  <td><%= g.size || '-' %></td>
                   <td><span class="badge badge-neutral"><%= g.unit %></span></td>
                   <td>
-                    <% if (g.qty == 100) { %>
+                    <% if (g.qty <= 100) { %>
                       <span class="badge badge-danger">
                         <i class="bi bi-exclamation-triangle"></i> <%= g.qty %>
                       </span>
@@ -382,9 +404,24 @@
 
 <script>
 $(function(){
-  // Initialize Select2 on both dropdowns
+  // Initialize Select2 on item dropdowns
   $('#addGoods').select2({ placeholder: 'Select item', minimumResultsForSearch: 0 });
   $('#dispatchGoods').select2({ placeholder: 'Select item', minimumResultsForSearch: 0 });
+
+  // Vendor autocomplete with Select2 AJAX + tags for new vendors
+  $('#vendorSelect').select2({
+    placeholder: 'Select or type vendor name',
+    tags: true,
+    allowClear: true,
+    ajax: {
+      url: '/inventory/api/vendors',
+      dataType: 'json',
+      delay: 250,
+      data: function(params) { return { q: params.term || '' }; },
+      processResults: function(data) { return { results: data }; }
+    },
+    minimumInputLength: 1
+  });
 
   // Custom tab switching to update active state on Kotty tabs
   $('.kotty-tab').on('click', function() {

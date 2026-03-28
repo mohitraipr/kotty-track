@@ -13,7 +13,7 @@ async function getGoodsCached() {
     return goodsCache.data;
   }
   const [rows] = await pool.query(
-    'SELECT * FROM goods_inventory ORDER BY description_of_goods, size'
+    'SELECT * FROM goods_inventory ORDER BY description_of_goods, shade, size'
   );
   goodsCache = { data: rows, expiry: now + CACHE_TTL_MS };
   return rows;
@@ -41,17 +41,17 @@ router.get('/dashboard', isAuthenticated, isStoreAdmin, async (req, res) => {
 
 // POST create new goods item
 router.post('/create', isAuthenticated, isStoreAdmin, async (req, res) => {
-  const { description, size, unit } = req.body;
-  if (!description || !size || !unit) {
-    req.flash('error', 'All fields are required');
+  const { description, size, unit, shade } = req.body;
+  if (!description || !unit) {
+    req.flash('error', 'Name and Unit are required');
     return res.redirect('/store-admin/dashboard');
   }
   try {
     await pool.query(
-      'INSERT INTO goods_inventory (description_of_goods, size, unit) VALUES (?, ?, ?)',
-      [description, size, unit]
+      'INSERT INTO goods_inventory (description_of_goods, size, unit, shade) VALUES (?, ?, ?, ?)',
+      [description, size || null, unit, shade || null]
     );
-    goodsCache = { data: null, expiry: 0 }; // invalidate cache so new item shows up
+    goodsCache = { data: null, expiry: 0 };
     req.flash('success', 'Item created');
     res.redirect('/store-admin/dashboard');
   } catch (err) {

@@ -1,0 +1,550 @@
+<%- include('partials/header', { pageTitle: 'Stock Analytics' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/indent/manage' }) %>
+
+<style>
+  .main-content {
+    margin-left: 0;
+    padding-top: 80px;
+    padding-bottom: 40px;
+    background: #faf8f5;
+    min-height: 100vh;
+  }
+
+  .dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Breadcrumbs */
+  .breadcrumbs {
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-size: 0.875rem;
+    color: var(--text-muted, #8a8a8a);
+    margin-bottom: 8px;
+  }
+
+  .breadcrumbs a {
+    color: var(--text-muted, #8a8a8a);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .breadcrumbs a:hover {
+    color: #c45c3a;
+  }
+
+  .breadcrumbs .separator {
+    margin: 0 6px;
+  }
+
+  .breadcrumbs .current {
+    color: #1a1a1a;
+    font-weight: 500;
+  }
+
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: var(--font-display, 'DM Serif Display', serif);
+    font-size: 2rem;
+    font-weight: 400;
+    color: #1a1a1a;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-title i {
+    color: #c45c3a;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .btn-kotty-outline {
+    background: transparent;
+    color: #1a1a1a;
+    border-color: #d4d0cc;
+  }
+
+  .btn-kotty-outline:hover {
+    background: #f0ebe5;
+    border-color: #1a1a1a;
+    color: #1a1a1a;
+  }
+
+  /* Stats Cards */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 14px;
+    padding: 22px 24px;
+    border: 1px solid #ebe7e1;
+    transition: box-shadow 0.2s;
+  }
+
+  .stat-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  .stat-card .stat-label {
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #8a8a8a;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .stat-card .stat-value {
+    font-family: var(--font-display, 'DM Serif Display', serif);
+    font-size: 2rem;
+    font-weight: 400;
+    color: #1a1a1a;
+    line-height: 1;
+  }
+
+  .stat-card.stat-danger {
+    border-left: 4px solid #c23b22;
+  }
+
+  .stat-card.stat-danger .stat-value {
+    color: #c23b22;
+  }
+
+  .stat-card.stat-warning {
+    border-left: 4px solid #e8913a;
+  }
+
+  .stat-card.stat-warning .stat-value {
+    color: #e8913a;
+  }
+
+  .stat-card.stat-terracotta {
+    border-left: 4px solid #c45c3a;
+  }
+
+  .stat-card.stat-terracotta .stat-value {
+    color: #c45c3a;
+  }
+
+  .stat-card.stat-neutral {
+    border-left: 4px solid #8a8a8a;
+  }
+
+  /* Alert Section for OOS with Requests */
+  .oos-alert-section {
+    background: #fff3ed;
+    border: 1px solid rgba(196, 92, 58, 0.25);
+    border-radius: 14px;
+    padding: 18px 24px;
+    margin-bottom: 24px;
+  }
+
+  .oos-alert-section .alert-title {
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: #c45c3a;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .oos-alert-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .oos-alert-chip {
+    background: white;
+    border: 1px solid rgba(196, 92, 58, 0.3);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-size: 0.8125rem;
+    color: #1a1a1a;
+  }
+
+  .oos-alert-chip .pending-count {
+    background: #c45c3a;
+    color: white;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+
+  /* Search Bar */
+  .search-bar {
+    position: sticky;
+    top: 60px;
+    z-index: 100;
+    background: #faf8f5;
+    padding: 16px 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ebe7e1;
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    max-width: 400px;
+  }
+
+  .search-input-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8a8a8a;
+    font-size: 1rem;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 12px 16px 12px 42px;
+    border: 1px solid #d4d0cc;
+    border-radius: 10px;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-size: 0.9375rem;
+    background: white;
+    color: #1a1a1a;
+    transition: all 0.2s;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #c45c3a;
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+  }
+
+  .search-input::placeholder {
+    color: #8a8a8a;
+  }
+
+  /* Table */
+  .table-wrapper {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid #ebe7e1;
+    overflow: hidden;
+  }
+
+  .analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    font-size: 0.875rem;
+  }
+
+  .analytics-table thead th {
+    background: #f5f1ec;
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: #5a5a5a;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #ebe7e1;
+    white-space: nowrap;
+  }
+
+  .analytics-table tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0ebe5;
+    color: #1a1a1a;
+    vertical-align: middle;
+  }
+
+  .analytics-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .analytics-table tbody tr:hover {
+    background: #faf8f5;
+  }
+
+  /* Row color coding */
+  .analytics-table tbody tr.row-oos {
+    background: rgba(194, 59, 34, 0.06);
+  }
+
+  .analytics-table tbody tr.row-oos:hover {
+    background: rgba(194, 59, 34, 0.1);
+  }
+
+  .analytics-table tbody tr.row-critical {
+    background: rgba(232, 145, 58, 0.06);
+  }
+
+  .analytics-table tbody tr.row-critical:hover {
+    background: rgba(232, 145, 58, 0.1);
+  }
+
+  /* Badges */
+  .badge-stock {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .badge-oos {
+    background: rgba(194, 59, 34, 0.12);
+    color: #c23b22;
+  }
+
+  .badge-critical {
+    background: rgba(232, 145, 58, 0.12);
+    color: #c07b2a;
+  }
+
+  .badge-healthy {
+    background: rgba(45, 138, 95, 0.12);
+    color: #2d8a5f;
+  }
+
+  .badge-pending {
+    background: #c45c3a;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .text-muted-sm {
+    color: #8a8a8a;
+    font-size: 0.8125rem;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: #8a8a8a;
+    font-family: var(--font-body, 'Outfit', sans-serif);
+    display: none;
+  }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .stats-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .stats-row {
+      grid-template-columns: 1fr;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    .analytics-table {
+      min-width: 900px;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+    }
+  }
+</style>
+
+<div class="main-content">
+  <div class="dashboard-container">
+
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/indent/manage">Store Manager</a>
+      <span class="separator">/</span>
+      <span class="current">Stock Analytics</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="bi bi-graph-up-arrow"></i>
+        Stock Analytics
+      </h1>
+      <a href="/indent/manage" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-arrow-left"></i>
+        Back to Indent
+      </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-row">
+      <div class="stat-card stat-neutral">
+        <div class="stat-label">Total Items</div>
+        <div class="stat-value"><%= stats.totalItems %></div>
+      </div>
+      <div class="stat-card stat-danger">
+        <div class="stat-label">Out of Stock</div>
+        <div class="stat-value"><%= stats.outOfStock %></div>
+      </div>
+      <div class="stat-card stat-warning">
+        <div class="stat-label">OOS with Requests</div>
+        <div class="stat-value"><%= stats.oosWithRequests %></div>
+      </div>
+      <div class="stat-card stat-terracotta">
+        <div class="stat-label">Critical (&lt;7 days)</div>
+        <div class="stat-value"><%= stats.criticalItems %></div>
+      </div>
+    </div>
+
+    <!-- OOS with Pending Requests Alert -->
+    <% const oosWithPending = analytics.filter(item => item.qty <= 0 && item.pending_requests > 0); %>
+    <% if (oosWithPending.length > 0) { %>
+      <div class="oos-alert-section">
+        <div class="alert-title">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          Out of Stock Items with Pending Requests (<%= oosWithPending.length %>)
+        </div>
+        <div class="oos-alert-list">
+          <% oosWithPending.forEach(function(item) { %>
+            <div class="oos-alert-chip">
+              <%= item.name %> - <%= item.shade %> (<%= item.size %>)
+              <span class="pending-count"><%= item.pending_requests %> req</span>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Search Bar -->
+    <div class="search-bar">
+      <div class="search-input-wrapper">
+        <i class="bi bi-search"></i>
+        <input type="text" class="search-input" id="tableSearch" placeholder="Search items by name, shade, size...">
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+      <table class="analytics-table" id="analyticsTable">
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Shade</th>
+            <th>Size</th>
+            <th>Unit</th>
+            <th>Current Stock</th>
+            <th>7-Day Usage</th>
+            <th>30-Day Usage</th>
+            <th>DRR (Daily)</th>
+            <th>Days Until OOS</th>
+            <th>Pending Requests</th>
+          </tr>
+        </thead>
+        <tbody id="analyticsBody">
+          <% analytics.forEach(function(item) { %>
+            <tr class="<%= item.qty <= 0 ? 'row-oos' : (item.days_until_oos !== null && item.days_until_oos <= 7 ? 'row-critical' : '') %>">
+              <td><strong><%= item.name %></strong></td>
+              <td><%= item.shade %></td>
+              <td><%= item.size %></td>
+              <td><%= item.unit %></td>
+              <td>
+                <% if (item.qty <= 0) { %>
+                  <span class="badge-stock badge-oos">0</span>
+                <% } else { %>
+                  <%= item.qty %>
+                <% } %>
+              </td>
+              <td><%= item.usage_7d != null ? item.usage_7d : '-' %></td>
+              <td><%= item.usage_30d != null ? item.usage_30d : '-' %></td>
+              <td><%= item.drr != null ? parseFloat(item.drr).toFixed(2) : '-' %></td>
+              <td>
+                <% if (item.days_until_oos === null) { %>
+                  <span class="badge-stock badge-healthy">&infin;</span>
+                <% } else if (item.days_until_oos <= 7) { %>
+                  <span class="badge-stock badge-critical"><%= item.days_until_oos %>d</span>
+                <% } else { %>
+                  <span class="badge-stock badge-healthy"><%= item.days_until_oos %>d</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (item.pending_requests > 0) { %>
+                  <span class="badge-pending"><%= item.pending_requests %></span>
+                <% } else { %>
+                  <span class="text-muted-sm">0</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <div class="no-results" id="noResults">
+        <i class="bi bi-search" style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i>
+        No items match your search.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Simple table search filter
+  (function() {
+    var searchInput = document.getElementById('tableSearch');
+    var tableBody = document.getElementById('analyticsBody');
+    var noResults = document.getElementById('noResults');
+
+    searchInput.addEventListener('input', function() {
+      var filter = this.value.toLowerCase().trim();
+      var rows = tableBody.querySelectorAll('tr');
+      var visibleCount = 0;
+
+      rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        if (filter === '' || text.indexOf(filter) !== -1) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    });
+  })();
+</script>
+
+<%- include('partials/footer') %>
