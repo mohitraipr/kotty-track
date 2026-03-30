@@ -28,7 +28,7 @@ router.get('/dashboard', isAuthenticated, isStoreEmployee, async (req, res) => {
         .query(
           `SELECT i.*, g.description_of_goods, g.size, g.unit
              FROM incoming_data i
-             JOIN goods_inventory g ON i.goods_id = g.id
+        LEFT JOIN goods_inventory g ON i.goods_id = g.id
             ORDER BY i.added_at DESC LIMIT 50`
         )
         .then(r => r[0]),
@@ -36,7 +36,7 @@ router.get('/dashboard', isAuthenticated, isStoreEmployee, async (req, res) => {
         .query(
           `SELECT d.*, g.description_of_goods, g.size, g.unit
              FROM dispatched_data d
-             JOIN goods_inventory g ON d.goods_id = g.id
+        LEFT JOIN goods_inventory g ON d.goods_id = g.id
             ORDER BY d.dispatched_at DESC LIMIT 50`
         )
         .then(r => r[0])
@@ -151,7 +151,7 @@ router.get('/download/incoming', isAuthenticated, isStoreEmployee, async (req, r
         .query(
           `SELECT i.*, g.description_of_goods, g.size, g.unit
              FROM incoming_data i
-             JOIN goods_inventory g ON i.goods_id = g.id
+        LEFT JOIN goods_inventory g ON i.goods_id = g.id
             ORDER BY i.added_at DESC
             LIMIT 100000`
         )

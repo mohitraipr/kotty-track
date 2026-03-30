@@ -27,7 +27,7 @@ router.get('/dashboard', isAuthenticated, isStoreAdmin, async (req, res) => {
       pool
         .query(`SELECT d.*, g.description_of_goods, g.size, g.unit
                    FROM dispatched_data d
-                   JOIN goods_inventory g ON d.goods_id = g.id
+              LEFT JOIN goods_inventory g ON d.goods_id = g.id
                   ORDER BY d.dispatched_at DESC LIMIT 50`)
         .then(r => r[0])
     ]);
@@ -48,7 +48,7 @@ router.post('/create', isAuthenticated, isStoreAdmin, async (req, res) => {
   }
   try {
     await pool.query(
-      'INSERT INTO goods_inventory (description_of_goods, size, unit, shade) VALUES (?, ?, ?, ?)',
+      'INSERT INTO goods_inventory (description_of_goods, size, unit, shade, qty) VALUES (?, ?, ?, ?, 0)',
       [description, size || null, unit, shade || null]
     );
     goodsCache = { data: null, expiry: 0 };

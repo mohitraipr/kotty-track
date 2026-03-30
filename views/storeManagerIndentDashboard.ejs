@@ -1,599 +1,498 @@
 <%- include('partials/header', { pageTitle: 'Indent Control' }) %>
-<!-- Select2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<%- include('partials/navbar', { dashboardUrl: '/dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/indent/manage' }) %>
 
-<!-- Main Content Area (No Sidebar) -->
-<main class="main-content" style="margin-left: 0;">
-  <div class="container-fluid" style="max-width: 1400px; margin: 0 auto;">
-
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-        <div>
-          <h1 class="page-title">Indent Control Room</h1>
-          <p class="page-subtitle">Manage inventory requests and track arrivals</p>
-        </div>
-        <div class="d-flex flex-wrap align-items-center gap-3">
-          <!-- Settings Toggle: Allow Free-Text Indent -->
-          <form action="/indent/manage/settings" method="POST" class="d-flex align-items-center gap-2" style="margin: 0;">
-            <label class="toggle-label" for="allowFreetextToggle" style="font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap;">
-              Free-Text Indent
-            </label>
-            <label class="toggle-switch">
-              <input type="hidden" name="allowFreetext" value="false">
-              <input type="checkbox" name="allowFreetext" value="true" id="allowFreetextToggle" <%= allowFreetext ? 'checked' : '' %> onchange="this.form.submit()">
-              <span class="toggle-slider"></span>
-            </label>
-          </form>
-
-          <div class="header-divider"></div>
-
-          <!-- Action Buttons -->
-          <a href="/indent/manage/analytics" class="btn btn-secondary btn-sm">
-            <i class="bi bi-bar-chart-line me-1"></i> Stock Analytics
-          </a>
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('createItemPanel').classList.toggle('active')">
-            <i class="bi bi-plus-lg me-1"></i> Create Item Type
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('addStockPanel').classList.toggle('active')">
-            <i class="bi bi-box-arrow-in-down me-1"></i> Add Stock
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dispatchPanel').classList.toggle('active')">
-            <i class="bi bi-truck me-1"></i> Dispatch
-          </button>
-
-          <span class="badge badge-neutral" style="font-size: var(--text-sm); padding: 8px 14px;">
-            <i class="bi bi-person-fill me-1"></i>
-            <%= user.username %> &middot; Store Manager
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Create Item Type Panel (Collapsible) -->
-    <div id="createItemPanel" class="create-item-panel">
-      <div class="card" style="border: 2px solid var(--terracotta); margin-bottom: 24px;">
-        <div class="card-header" style="background: var(--terracotta-light, rgba(188,108,37,0.08));">
-          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
-            <i class="bi bi-plus-circle me-2" style="color: var(--terracotta);"></i>Create New Item Type
-          </h2>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('createItemPanel').classList.remove('active')" style="padding: 4px 10px;">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div class="card-body">
-          <form action="/indent/manage/items/create" method="POST">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-3 col-sm-6">
-                <label class="form-label">Name <span style="color: var(--danger);">*</span></label>
-                <input type="text" name="name" class="form-input" placeholder="e.g. Button, Zipper, Thread" required>
-              </div>
-              <div class="col-md-2 col-sm-6">
-                <label class="form-label">Shade</label>
-                <input type="text" name="shade" class="form-input" placeholder="e.g. Red, Navy Blue">
-              </div>
-              <div class="col-md-2 col-sm-6">
-                <label class="form-label">Unit <span style="color: var(--danger);">*</span></label>
-                <select name="unit" class="form-select item-unit-select" required>
-                  <option value="">Select unit</option>
-                  <option value="PCS">PCS</option>
-                  <option value="ROLL">ROLL</option>
-                  <option value="CONE">CONE</option>
-                  <option value="GROSS">GROSS</option>
-                </select>
-              </div>
-              <div class="col-md-2 col-sm-6">
-                <label class="form-label">Size</label>
-                <input type="text" name="size" class="form-input" placeholder="e.g. 10mm, Large">
-              </div>
-              <div class="col-md-3 col-sm-12">
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                  <i class="bi bi-check-lg me-1"></i> Create Item
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add Stock Panel -->
-    <div id="addStockPanel" class="create-item-panel">
-      <div class="card" style="border: 2px solid var(--success, #2d8a5f); margin-bottom: 24px;">
-        <div class="card-header" style="background: rgba(45,138,95,0.08);">
-          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
-            <i class="bi bi-box-arrow-in-down me-2" style="color: var(--success, #2d8a5f);"></i>Add Stock
-          </h2>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('addStockPanel').classList.remove('active')" style="padding: 4px 10px;">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div class="card-body">
-          <form action="/indent/manage/stock/add" method="POST">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label">Select Item <span class="text-danger">*</span></label>
-                <select id="addStockItem" name="goods_id" class="form-select" required>
-                  <option value="">-- Select item --</option>
-                  <% goods.forEach(g => { %>
-                    <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="col-md-2">
-                <label class="form-label">Quantity <span class="text-danger">*</span></label>
-                <input type="number" name="quantity" class="form-control" required min="1" placeholder="Qty">
-              </div>
-              <div class="col-md-2">
-                <label class="form-label">Invoice No.</label>
-                <input type="text" name="invoice_number" class="form-control" placeholder="INV-001">
-              </div>
-              <div class="col-md-2">
-                <label class="form-label">Vendor</label>
-                <input type="text" name="vendor_name" class="form-control" placeholder="Vendor name">
-              </div>
-              <div class="col-md-2">
-                <label class="form-label">Date</label>
-                <input type="date" name="entry_date" class="form-control">
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-primary">
-                  <i class="bi bi-plus-lg me-1"></i> Add Stock
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dispatch Panel -->
-    <div id="dispatchPanel" class="create-item-panel">
-      <div class="card" style="border: 2px solid var(--info, #3a7bc4); margin-bottom: 24px;">
-        <div class="card-header" style="background: rgba(58,123,196,0.08);">
-          <h2 class="card-title" style="margin: 0; font-size: var(--text-base);">
-            <i class="bi bi-truck me-2" style="color: var(--info, #3a7bc4);"></i>Dispatch Goods
-          </h2>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dispatchPanel').classList.remove('active')" style="padding: 4px 10px;">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-        <div class="card-body">
-          <form action="/indent/manage/stock/dispatch" method="POST">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label">Select Item <span class="text-danger">*</span></label>
-                <select id="dispatchStockItem" name="goods_id" class="form-select" required>
-                  <option value="">-- Select item --</option>
-                  <% goods.forEach(g => { %>
-                    <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Quantity <span class="text-danger">*</span></label>
-                <input type="number" name="quantity" class="form-control" required min="1" placeholder="Qty">
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Remark</label>
-                <input type="text" name="remark" class="form-control" placeholder="Optional remark">
-              </div>
-              <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                  <i class="bi bi-truck me-1"></i> Dispatch
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- Flash Messages -->
-    <%- include('partials/flashMessages') %>
-
-    <!-- Stats Cards -->
-    <div class="row g-3 mb-4">
-      <div class="col-md-4 col-sm-6">
-        <div class="stat-card">
-          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--warning-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
-            <i class="bi bi-clock-history" style="font-size: 20px; color: var(--warning);"></i>
-          </div>
-          <div class="stat-label">Open Requests</div>
-          <div class="stat-value"><%= stats.open || 0 %></div>
-        </div>
-      </div>
-      <div class="col-md-4 col-sm-6">
-        <div class="stat-card">
-          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--info-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
-            <i class="bi bi-truck" style="font-size: 20px; color: var(--info);"></i>
-          </div>
-          <div class="stat-label">Proceeding</div>
-          <div class="stat-value" style="color: var(--info);"><%= stats.proceeding || 0 %></div>
-        </div>
-      </div>
-      <div class="col-md-4 col-sm-6">
-        <div class="stat-card">
-          <div class="stat-icon" style="width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--success-light); display: flex; align-items: center; justify-content: center; margin-bottom: 14px;">
-            <i class="bi bi-check-circle" style="font-size: 20px; color: var(--success);"></i>
-          </div>
-          <div class="stat-label">Arrived</div>
-          <div class="stat-value" style="color: var(--success);"><%= stats.arrived || 0 %></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Requests Table Card -->
-    <div class="card">
-      <div class="card-header" style="flex-wrap: wrap; gap: 16px;">
-        <div>
-          <h2 class="card-title" style="margin-bottom: 4px;">Latest Indent Requests</h2>
-          <p class="text-secondary" style="font-size: var(--text-sm); margin: 0;">Keep the flow smooth by acknowledging requests promptly.</p>
-        </div>
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-          <select id="exportStatus" class="form-select" style="width: auto; min-width: 120px;">
-            <option value="">All Status</option>
-            <option value="open">Open</option>
-            <option value="proceeding">Proceeding</option>
-            <option value="arrived">Arrived</option>
-          </select>
-          <input type="date" id="exportStartDate" class="form-input" style="width: auto;" placeholder="Start Date">
-          <input type="date" id="exportEndDate" class="form-input" style="width: auto;" placeholder="End Date">
-          <button onclick="exportToExcel()" class="btn btn-primary">
-            <i class="bi bi-file-earmark-excel"></i>
-            Download Excel
-          </button>
-        </div>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-container" style="border: none; border-radius: 0;">
-          <div style="overflow-x: auto;">
-            <table class="table" style="margin: 0;">
-              <thead>
-                <tr>
-                  <th>Goods & Description</th>
-                  <th>Shade</th>
-                  <th>Quantity</th>
-                  <th>Indent Filler</th>
-                  <th>Dates</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% if (!requests || !requests.length) { %>
-                <tr>
-                  <td colspan="7" style="text-align: center; padding: 48px;">
-                    <div class="empty-state" style="padding: 0;">
-                      <div class="empty-state-icon">
-                        <i class="bi bi-inbox" style="font-size: 48px;"></i>
-                      </div>
-                      <div class="empty-state-title">No requests yet</div>
-                      <div class="empty-state-text">New indent requests will appear here.</div>
-                    </div>
-                  </td>
-                </tr>
-                <% } else { %>
-                <% requests.forEach(row => { %>
-                <tr>
-                  <td data-label="Goods">
-                    <div style="font-weight: 500; color: var(--text-primary);"><%= row.goods_description %></div>
-                    <div style="color: var(--text-muted); font-size: var(--text-xs); margin-top: 4px;">
-                      Used last month: <strong><%= row.used_last_month || 0 %></strong> &middot;
-                      last 7 days: <strong><%= row.used_last_seven_days || 0 %></strong>
-                    </div>
-                  </td>
-                  <td data-label="Shade">
-                    <% if (row.shade) { %>
-                      <span class="badge badge-neutral" style="font-size: var(--text-xs);"><%= row.shade %></span>
-                    <% } else { %>
-                      <span style="color: var(--text-muted);">--</span>
-                    <% } %>
-                  </td>
-                  <td data-label="Quantity">
-                    <span style="font-weight: 600; font-size: var(--text-lg);"><%= row.quantity_requested %></span>
-                  </td>
-                  <td data-label="Filler">
-                    <% if (row.filler_name) { %>
-                      <span style="font-weight: 500;"><%= row.filler_name %></span>
-                    <% } else { %>
-                      <span style="color: var(--text-muted);">--</span>
-                    <% } %>
-                  </td>
-                  <td data-label="Dates">
-                    <div style="font-size: var(--text-xs); line-height: 1.8;">
-                      <div><span style="color: var(--text-muted);">Requested:</span> <%= row.request_date ? new Date(row.request_date).toLocaleDateString('en-IN') : '-' %></div>
-                      <div><span style="color: var(--text-muted);">Proceed:</span> <%= row.proceed_date ? new Date(row.proceed_date).toLocaleDateString('en-IN') : '-' %></div>
-                      <div><span style="color: var(--text-muted);">Arrived:</span> <%= row.arrival_date ? new Date(row.arrival_date).toLocaleDateString('en-IN') : '-' %></div>
-                    </div>
-                  </td>
-                  <td data-label="Status">
-                    <% if (row.status === 'open') { %>
-                      <span class="badge badge-warning"><%= row.status %></span>
-                    <% } else if (row.status === 'proceeding') { %>
-                      <span class="badge badge-info"><%= row.status %></span>
-                    <% } else if (row.status === 'arrived') { %>
-                      <span class="badge badge-success"><%= row.status %></span>
-                    <% } else { %>
-                      <span class="badge badge-neutral"><%= row.status %></span>
-                    <% } %>
-                    <% if (row.final_quantity) { %>
-                    <div style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 4px;">Final qty: <%= row.final_quantity %></div>
-                    <% } %>
-                    <% if (row.remark) { %>
-                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px;"><%= row.remark %></div>
-                    <% } %>
-                  </td>
-                  <td data-label="Actions">
-                    <% if (row.status === 'arrived') { %>
-                    <span class="badge badge-success" style="font-size: var(--text-xs);">
-                      <i class="bi bi-check-lg me-1"></i> Completed
-                    </span>
-
-                    <% } else if (row.status === 'open') { %>
-                    <!-- Open: Only allow Mark Proceeding -->
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                      <form action="/indent/requests/<%= row.id %>/proceed" method="POST" style="margin: 0;">
-                        <button class="btn btn-primary btn-sm" type="submit">
-                          <i class="bi bi-send me-1"></i> Mark Proceeding
-                        </button>
-                      </form>
-                    </div>
-
-                    <% } else if (row.status === 'proceeding') { %>
-                    <!-- Proceeding: Only allow Mark Arrived -->
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                      <button class="btn btn-secondary btn-sm arrival-toggle" data-id="<%= row.id %>">
-                        <i class="bi bi-box-seam me-1"></i> Mark Arrived
-                      </button>
-                    </div>
-                    <!-- Arrival Form -->
-                    <div class="arrival-form" id="arrival-form-<%= row.id %>">
-                      <% if (row.goods_id && row.current_stock != null) { %>
-                      <div style="margin-bottom: 10px;">
-                        <span class="badge badge-info" style="font-size: var(--text-xs); padding: 5px 10px;">
-                          <i class="bi bi-box me-1"></i> Current Stock: <strong><%= row.current_stock %></strong>
-                        </span>
-                      </div>
-                      <% } %>
-                      <form action="/indent/requests/<%= row.id %>/arrive" method="POST">
-                        <div class="row g-2">
-                          <div class="col-sm-6 col-md-4">
-                            <label class="form-label">Arrival Date</label>
-                            <input type="date" name="arrivalDate" class="form-input" required>
-                          </div>
-                          <div class="col-sm-6 col-md-4">
-                            <label class="form-label">Quantity Received</label>
-                            <input type="number" step="0.01" name="finalQuantity" class="form-input" placeholder="Optional">
-                          </div>
-                          <div class="col-sm-12 col-md-4">
-                            <label class="form-label">Remark</label>
-                            <textarea name="remark" class="form-input" rows="1" placeholder="Optional" style="resize: vertical;"></textarea>
-                          </div>
-                          <div class="col-12">
-                            <button class="btn btn-success btn-sm" type="submit">
-                              <i class="bi bi-check-lg me-1"></i> Confirm Arrival
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    </div>
-                    <% } %>
-                  </td>
-                </tr>
-                <% }) %>
-                <% } %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</main>
-
-<!-- Additional Page Styles -->
 <style>
-  /* Toggle Switch */
-  .toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    height: 24px;
-    flex-shrink: 0;
+  .indent-shell {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 80px 20px 40px;
   }
 
-  .toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
+  /* ---- Toolbar ---- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid #e8e3db;
+    border-radius: 10px;
   }
-
-  .toggle-slider {
-    position: absolute;
+  .toolbar-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.4rem;
+    color: #1a1a1a;
+    margin-right: auto;
+    letter-spacing: -0.01em;
+  }
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 7px;
+    border: 1px solid #d6d0c6;
+    background: #faf8f5;
+    color: #1a1a1a;
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: var(--border-medium, #ccc);
-    transition: 0.25s;
-    border-radius: 24px;
+    transition: all 0.15s ease;
+    text-decoration: none;
   }
+  .toolbar-btn:hover { border-color: #c45c3a; color: #c45c3a; background: #fef7f4; }
+  .toolbar-btn.primary { background: #c45c3a; color: #fff; border-color: #c45c3a; }
+  .toolbar-btn.primary:hover { background: #a84a2d; border-color: #a84a2d; color: #fff; }
+  .toolbar-divider { width: 1px; height: 24px; background: #e8e3db; flex-shrink: 0; }
 
-  .toggle-slider::before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.25s;
-    border-radius: 50%;
+  /* ---- Toggle ---- */
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+  .toggle-wrap label { font-family: 'Outfit', sans-serif; font-size: 0.78rem; color: #6b6560; cursor: pointer; white-space: nowrap; }
+  .toggle-track {
+    position: relative; width: 36px; height: 20px; display: inline-block;
   }
-
-  .toggle-switch input:checked + .toggle-slider {
-    background-color: var(--terracotta, #BC6C25);
-  }
-
-  .toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(20px);
-  }
-
-  .toggle-label {
+  .toggle-track input { opacity: 0; width: 0; height: 0; }
+  .toggle-track span {
+    position: absolute; inset: 0; background: #d6d0c6; border-radius: 20px; transition: 0.2s;
     cursor: pointer;
-    user-select: none;
   }
-
-  /* Header divider */
-  .header-divider {
-    width: 1px;
-    height: 28px;
-    background: var(--border-light, #e0e0e0);
-    flex-shrink: 0;
+  .toggle-track span::before {
+    content: ""; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: 0.2s;
   }
+  .toggle-track input:checked + span { background: #c45c3a; }
+  .toggle-track input:checked + span::before { transform: translateX(16px); }
 
-  /* Create Item Panel */
-  .create-item-panel {
-    display: none;
-    animation: slideDown 0.2s ease-out;
+  /* ---- Slide Panels ---- */
+  .slide-panel { display: none; margin-bottom: 20px; }
+  .slide-panel.open { display: block; animation: panelIn 0.2s ease-out; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .panel-card {
+    background: #fff;
+    border: 1px solid #e8e3db;
+    border-radius: 10px;
+    overflow: hidden;
   }
-
-  .create-item-panel.active {
-    display: block;
+  .panel-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid #f0ebe3;
+    background: #faf8f5;
   }
-
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+  .panel-card-head h3 {
+    font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600;
+    color: #1a1a1a; margin: 0; display: flex; align-items: center; gap: 8px;
   }
-
-  /* Arrival Form - Hidden by default */
-  .arrival-form {
-    display: none;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border-light);
+  .panel-card-body { padding: 18px; }
+  .panel-close {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: #8a8580; cursor: pointer; border-radius: 6px;
+    font-size: 1rem;
   }
+  .panel-close:hover { background: #f0ebe3; color: #1a1a1a; }
 
-  .arrival-form.active {
-    display: block;
+  .form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .form-col { flex: 1; min-width: 140px; }
+  .form-col.w2 { flex: 2; min-width: 200px; }
+  .form-col label { display: block; font-family: 'Outfit', sans-serif; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #8a8580; margin-bottom: 5px; }
+  .form-col label .req { color: #c23b22; }
+  .field {
+    width: 100%; padding: 9px 12px; border: 1px solid #d6d0c6; border-radius: 7px;
+    font-family: 'Outfit', sans-serif; font-size: 0.85rem; color: #1a1a1a;
+    background: #fff; transition: border-color 0.15s;
   }
+  .field:focus { outline: none; border-color: #c45c3a; box-shadow: 0 0 0 2px rgba(196,92,58,0.1); }
+  select.field { cursor: pointer; }
 
-  /* Select2 styling to match design system */
+  /* ---- Stats ---- */
+  .stats-row { display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-pill {
+    flex: 1; min-width: 140px;
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    background: #fff; border: 1px solid #e8e3db; border-radius: 10px;
+  }
+  .stat-icon-box {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;
+  }
+  .stat-icon-box.warn { background: #fef3e2; color: #c4873a; }
+  .stat-icon-box.info { background: #e8f1fb; color: #3a7bc4; }
+  .stat-icon-box.ok   { background: #e8f5ef; color: #2d8a5f; }
+  .stat-text { line-height: 1.2; }
+  .stat-text .num { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.6rem; color: #1a1a1a; }
+  .stat-text .lbl { font-family: 'Outfit', sans-serif; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8a8580; }
+
+  /* ---- Table ---- */
+  .tbl-card {
+    background: #fff; border: 1px solid #e8e3db; border-radius: 10px; overflow: hidden;
+  }
+  .tbl-head {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    padding: 16px 18px; border-bottom: 1px solid #f0ebe3;
+  }
+  .tbl-head h2 { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.15rem; color: #1a1a1a; margin: 0; }
+  .tbl-head p { font-family: 'Outfit', sans-serif; font-size: 0.78rem; color: #8a8580; margin: 2px 0 0; }
+  .tbl-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .tbl-filters select, .tbl-filters input { font-family: 'Outfit', sans-serif; font-size: 0.8rem; padding: 7px 10px; border: 1px solid #d6d0c6; border-radius: 7px; background: #faf8f5; color: #1a1a1a; }
+  .tbl-filters select:focus, .tbl-filters input:focus { outline: none; border-color: #c45c3a; }
+
+  .tbl-wrap { overflow-x: auto; }
+  table.indent-tbl { width: 100%; border-collapse: collapse; font-family: 'Outfit', sans-serif; font-size: 0.84rem; }
+  table.indent-tbl thead th {
+    padding: 10px 14px; text-align: left; font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em; color: #8a8580;
+    background: #faf8f5; border-bottom: 2px solid #e8e3db; white-space: nowrap;
+  }
+  table.indent-tbl tbody td { padding: 14px; border-bottom: 1px solid #f0ebe3; vertical-align: top; color: #1a1a1a; }
+  table.indent-tbl tbody tr:last-child td { border-bottom: none; }
+  table.indent-tbl tbody tr:hover { background: #fdfcfa; }
+
+  .goods-name { font-weight: 600; }
+  .goods-usage { font-size: 0.72rem; color: #8a8580; margin-top: 3px; }
+  .goods-usage strong { color: #5a5550; }
+
+  .shade-chip { display: inline-block; padding: 2px 10px; background: #f0ebe3; border-radius: 20px; font-size: 0.74rem; color: #5a5550; }
+  .qty-big { font-weight: 700; font-size: 1.05rem; font-family: 'DM Serif Display', Georgia, serif; }
+  .filler-name { font-weight: 500; }
+  .date-stack { font-size: 0.72rem; line-height: 1.9; color: #6b6560; }
+  .date-stack span { color: #a09a92; }
+
+  /* Badges */
+  .st { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .st-open { background: #fef3e2; color: #9a6c2f; }
+  .st-proceeding { background: #e8f1fb; color: #2a6aaf; }
+  .st-arrived { background: #e8f5ef; color: #1d6b45; }
+  .st-done { background: #e8f5ef; color: #1d6b45; font-size: 0.68rem; }
+
+  .final-info { font-size: 0.72rem; color: #8a8580; margin-top: 3px; }
+  .stock-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: #e8f1fb; border-radius: 20px; font-size: 0.72rem; color: #2a6aaf; font-weight: 500; margin-bottom: 8px; }
+
+  /* Arrival form inside table */
+  .arr-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e8e3db; }
+  .arr-form.open { display: block; }
+
+  /* Action btns */
+  .act-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 12px; font-family: 'Outfit', sans-serif; font-size: 0.76rem; font-weight: 500;
+    border-radius: 6px; border: 1px solid #d6d0c6; background: #faf8f5; color: #1a1a1a;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .act-btn:hover { border-color: #c45c3a; color: #c45c3a; }
+  .act-btn.go { background: #c45c3a; color: #fff; border-color: #c45c3a; }
+  .act-btn.go:hover { background: #a84a2d; }
+  .act-btn.confirm { background: #2d8a5f; color: #fff; border-color: #2d8a5f; }
+  .act-btn.confirm:hover { background: #236d4a; }
+
+  /* Select2 overrides */
   .select2-container--default .select2-selection--single {
-    height: 38px;
-    border: 1px solid var(--border-medium, #d0d5dd);
-    border-radius: var(--radius-md, 8px);
-    padding: 4px 8px;
+    height: 38px; border: 1px solid #d6d0c6; border-radius: 7px; padding: 4px 8px;
   }
+  .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 28px; color: #1a1a1a; }
+  .select2-container--default .select2-selection--single .select2-selection__arrow { height: 36px; }
+  .select2-container--default.select2-container--open .select2-selection--single { border-color: #c45c3a; box-shadow: 0 0 0 2px rgba(196,92,58,0.1); }
+  .select2-dropdown { border-color: #d6d0c6; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+  .select2-container--default .select2-results__option--highlighted[aria-selected] { background: #c45c3a; }
+  .select2-container { width: 100% !important; }
 
-  .select2-container--default .select2-selection--single .select2-selection__rendered {
-    line-height: 28px;
-    color: var(--text-primary);
-  }
+  /* Empty state */
+  .empty { text-align: center; padding: 56px 20px; }
+  .empty i { font-size: 44px; color: #d6d0c6; }
+  .empty h4 { font-family: 'DM Serif Display', Georgia, serif; font-size: 1.1rem; color: #1a1a1a; margin: 14px 0 4px; }
+  .empty p { font-size: 0.82rem; color: #8a8580; }
 
-  .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 36px;
-  }
-
-  /* Mobile responsive table */
-  @media (max-width: 960px) {
-    .card-header {
-      flex-direction: column;
-      align-items: flex-start !important;
+  /* Mobile */
+  @media (max-width: 860px) {
+    .indent-shell { padding: 72px 12px 24px; }
+    .toolbar { padding: 10px 12px; }
+    .stats-row { flex-direction: column; }
+    table.indent-tbl thead { display: none; }
+    table.indent-tbl tbody tr { display: block; border: 1px solid #e8e3db; border-radius: 10px; margin-bottom: 10px; padding: 14px; }
+    table.indent-tbl tbody td { display: block; border: none; padding: 6px 0; }
+    table.indent-tbl tbody td::before {
+      content: attr(data-label); display: block; font-size: 0.66rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; color: #8a8580; margin-bottom: 2px;
     }
-
-    .table thead {
-      display: none;
-    }
-
-    .table tbody tr {
-      display: block;
-      border: 1px solid var(--border-light);
-      margin-bottom: 12px;
-      border-radius: var(--radius-lg);
-      padding: 16px;
-      background: var(--bg-card);
-    }
-
-    .table tbody td {
-      display: block;
-      border: none;
-      padding: 8px 0;
-      text-align: left;
-    }
-
-    .table tbody td::before {
-      content: attr(data-label);
-      display: block;
-      font-weight: 600;
-      color: var(--text-secondary);
-      font-size: var(--text-xs);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 4px;
-    }
-
-    .table tbody td[colspan] {
-      padding: 32px 16px;
-    }
-
-    .table tbody td[colspan]::before {
-      display: none;
-    }
-  }
-
-  /* Badge text transform */
-  .badge {
-    text-transform: capitalize;
+    table.indent-tbl tbody td[colspan]::before { display: none; }
+    .form-row { flex-direction: column; }
+    .form-col { min-width: 100%; }
   }
 </style>
 
-<!-- Page Scripts -->
+<div class="indent-shell">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <span class="toolbar-title">Indent Control</span>
+
+    <form action="/indent/manage/settings" method="POST" class="toggle-wrap" style="margin:0;">
+      <label for="ftToggle">Free-text</label>
+      <div class="toggle-track">
+        <input type="hidden" name="allowFreetext" value="false">
+        <input type="checkbox" name="allowFreetext" value="true" id="ftToggle" <%= allowFreetext ? 'checked' : '' %> onchange="this.form.submit()">
+        <span></span>
+      </div>
+    </form>
+
+    <div class="toolbar-divider"></div>
+
+    <a href="/indent/manage/analytics" class="toolbar-btn"><i class="bi bi-bar-chart-line"></i> Analytics</a>
+    <button class="toolbar-btn primary" onclick="togglePanel('createItemPanel')"><i class="bi bi-plus-lg"></i> New Item</button>
+    <button class="toolbar-btn" onclick="togglePanel('addStockPanel')"><i class="bi bi-box-arrow-in-down"></i> Add Stock</button>
+  </div>
+
+  <!-- Create Item Panel -->
+  <div id="createItemPanel" class="slide-panel">
+    <div class="panel-card">
+      <div class="panel-card-head">
+        <h3><i class="bi bi-plus-circle" style="color:#c45c3a;"></i> New Item Type</h3>
+        <button class="panel-close" onclick="togglePanel('createItemPanel')"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="panel-card-body">
+        <form action="/indent/manage/items/create" method="POST">
+          <div class="form-row">
+            <div class="form-col w2">
+              <label>Name <span class="req">*</span></label>
+              <input type="text" name="description" class="field" placeholder="e.g. Button, Zipper, Thread" required>
+            </div>
+            <div class="form-col">
+              <label>Shade</label>
+              <input type="text" name="shade" class="field" placeholder="e.g. Red, Navy">
+            </div>
+            <div class="form-col">
+              <label>Unit <span class="req">*</span></label>
+              <select name="unit" class="field" required>
+                <option value="">Select</option>
+                <option value="PCS">PCS</option>
+                <option value="ROLL">ROLL</option>
+                <option value="CONE">CONE</option>
+                <option value="GROSS">GROSS</option>
+              </select>
+            </div>
+            <div class="form-col">
+              <label>Size</label>
+              <input type="text" name="size" class="field" placeholder="e.g. 10mm">
+            </div>
+            <div class="form-col" style="flex:0 0 auto;">
+              <button type="submit" class="act-btn go" style="height:38px;"><i class="bi bi-check-lg"></i> Create</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Stock Panel -->
+  <div id="addStockPanel" class="slide-panel">
+    <div class="panel-card">
+      <div class="panel-card-head">
+        <h3><i class="bi bi-box-arrow-in-down" style="color:#2d8a5f;"></i> Add Stock</h3>
+        <button class="panel-close" onclick="togglePanel('addStockPanel')"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="panel-card-body">
+        <form action="/indent/manage/stock/add" method="POST">
+          <div class="form-row">
+            <div class="form-col w2">
+              <label>Item <span class="req">*</span></label>
+              <select id="addStockItem" name="goods_id" class="field" required>
+                <option value="">Select item</option>
+                <% goods.forEach(g => { %>
+                  <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="form-col">
+              <label>Qty <span class="req">*</span></label>
+              <input type="number" name="quantity" class="field" required min="1" placeholder="0">
+            </div>
+            <div class="form-col">
+              <label>Invoice No.</label>
+              <input type="text" name="invoice_number" class="field" placeholder="INV-001">
+            </div>
+            <div class="form-col">
+              <label>Vendor</label>
+              <input type="text" name="vendor_name" class="field" placeholder="Vendor name">
+            </div>
+            <div class="form-col">
+              <label>Date</label>
+              <input type="date" name="entry_date" class="field">
+            </div>
+            <div class="form-col" style="flex:0 0 auto;">
+              <button type="submit" class="act-btn go" style="height:38px;"><i class="bi bi-plus-lg"></i> Add</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%- include('partials/flashMessages') %>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-pill">
+      <div class="stat-icon-box warn"><i class="bi bi-clock-history"></i></div>
+      <div class="stat-text"><div class="num"><%= stats.open || 0 %></div><div class="lbl">Open</div></div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-icon-box info"><i class="bi bi-arrow-repeat"></i></div>
+      <div class="stat-text"><div class="num"><%= stats.proceeding || 0 %></div><div class="lbl">Proceeding</div></div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-icon-box ok"><i class="bi bi-check2-all"></i></div>
+      <div class="stat-text"><div class="num"><%= stats.arrived || 0 %></div><div class="lbl">Arrived</div></div>
+    </div>
+  </div>
+
+  <!-- Requests Table -->
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <div>
+        <h2>Indent Requests</h2>
+        <p>Review and action incoming requests</p>
+      </div>
+      <div class="tbl-filters">
+        <select id="exportStatus">
+          <option value="">All Status</option>
+          <option value="open">Open</option>
+          <option value="proceeding">Proceeding</option>
+          <option value="arrived">Arrived</option>
+        </select>
+        <input type="date" id="exportStartDate">
+        <input type="date" id="exportEndDate">
+        <button onclick="exportToExcel()" class="toolbar-btn primary"><i class="bi bi-file-earmark-excel"></i> Export</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="indent-tbl">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Shade</th>
+            <th>Qty</th>
+            <th>Requested By</th>
+            <th>Dates</th>
+            <th>Status</th>
+            <th style="min-width:180px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!requests || !requests.length) { %>
+          <tr>
+            <td colspan="7">
+              <div class="empty">
+                <i class="bi bi-inbox"></i>
+                <h4>No requests yet</h4>
+                <p>New indent requests from fillers will appear here.</p>
+              </div>
+            </td>
+          </tr>
+          <% } else { %>
+          <% requests.forEach(row => { %>
+          <tr>
+            <td data-label="Item">
+              <div class="goods-name"><%= row.goods_description %></div>
+              <div class="goods-usage">
+                30d: <strong><%= row.used_last_month || 0 %></strong> &middot; 7d: <strong><%= row.used_last_seven_days || 0 %></strong>
+              </div>
+            </td>
+            <td data-label="Shade">
+              <% if (row.shade) { %><span class="shade-chip"><%= row.shade %></span><% } else { %><span style="color:#c4bfb8;">-</span><% } %>
+            </td>
+            <td data-label="Qty"><span class="qty-big"><%= row.quantity_requested %></span></td>
+            <td data-label="Requested By">
+              <% if (row.filler_name) { %><span class="filler-name"><%= row.filler_name %></span><% } else { %><span style="color:#c4bfb8;">-</span><% } %>
+            </td>
+            <td data-label="Dates">
+              <div class="date-stack">
+                <div><span>Req:</span> <%= row.request_date ? new Date(row.request_date).toLocaleDateString('en-IN') : '-' %></div>
+                <div><span>Pro:</span> <%= row.proceed_date ? new Date(row.proceed_date).toLocaleDateString('en-IN') : '-' %></div>
+                <div><span>Arr:</span> <%= row.arrival_date ? new Date(row.arrival_date).toLocaleDateString('en-IN') : '-' %></div>
+              </div>
+            </td>
+            <td data-label="Status">
+              <% if (row.status === 'open') { %><span class="st st-open">Open</span>
+              <% } else if (row.status === 'proceeding') { %><span class="st st-proceeding">Proceeding</span>
+              <% } else if (row.status === 'arrived') { %><span class="st st-arrived">Arrived</span>
+              <% } else { %><span class="st"><%= row.status %></span><% } %>
+              <% if (row.final_quantity) { %><div class="final-info">Final qty: <%= row.final_quantity %></div><% } %>
+              <% if (row.remark) { %><div class="final-info"><%= row.remark %></div><% } %>
+            </td>
+            <td data-label="Actions">
+              <% if (row.status === 'arrived') { %>
+                <span class="st st-done"><i class="bi bi-check-lg"></i> Done</span>
+              <% } else if (row.status === 'open') { %>
+                <form action="/indent/requests/<%= row.id %>/proceed" method="POST" style="margin:0;">
+                  <button class="act-btn go" type="submit"><i class="bi bi-send"></i> Proceed</button>
+                </form>
+              <% } else if (row.status === 'proceeding') { %>
+                <button class="act-btn" onclick="this.nextElementSibling.classList.toggle('open')"><i class="bi bi-box-seam"></i> Mark Arrived</button>
+                <div class="arr-form">
+                  <% if (row.goods_id && row.current_stock != null) { %>
+                    <div class="stock-tag"><i class="bi bi-box"></i> Stock: <strong><%= row.current_stock %></strong></div>
+                  <% } %>
+                  <form action="/indent/requests/<%= row.id %>/arrive" method="POST">
+                    <div class="form-row" style="gap:8px;">
+                      <div class="form-col">
+                        <label>Date</label>
+                        <input type="date" name="arrivalDate" class="field" required>
+                      </div>
+                      <div class="form-col">
+                        <label>Qty Received</label>
+                        <input type="number" step="0.01" name="finalQuantity" class="field" placeholder="Opt.">
+                      </div>
+                      <div class="form-col">
+                        <label>Remark</label>
+                        <input type="text" name="remark" class="field" placeholder="Opt.">
+                      </div>
+                      <div class="form-col" style="flex:0 0 auto;">
+                        <button class="act-btn confirm" type="submit"><i class="bi bi-check-lg"></i> Confirm</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              <% } %>
+            </td>
+          </tr>
+          <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-  // Toggle arrival form visibility
-  document.querySelectorAll('.arrival-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const form = document.getElementById(`arrival-form-${btn.dataset.id}`);
-      if (form) {
-        form.classList.toggle('active');
-      }
-    });
-  });
-
-  // Close button functionality for alerts
-  document.querySelectorAll('.btn-close').forEach(btn => {
-    btn.addEventListener('click', () => btn.parentElement && btn.parentElement.remove());
-  });
-
-  // Initialize Select2 on item unit dropdown
-  if (typeof $ !== 'undefined' && $.fn.select2) {
-    $('.item-unit-select').select2({
-      placeholder: 'Select unit',
-      minimumResultsForSearch: Infinity
-    });
+  function togglePanel(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('open');
   }
 
-  // Export to Excel functionality
   function exportToExcel() {
-    const status = document.getElementById('exportStatus').value;
-    const startDate = document.getElementById('exportStartDate').value;
-    const endDate = document.getElementById('exportEndDate').value;
-
-    let url = '/indent/manage/export?';
-    const params = [];
-    if (status) params.push('status=' + encodeURIComponent(status));
-    if (startDate) params.push('startDate=' + encodeURIComponent(startDate));
-    if (endDate) params.push('endDate=' + encodeURIComponent(endDate));
-
-    window.location.href = url + params.join('&');
+    var s = document.getElementById('exportStatus').value;
+    var sd = document.getElementById('exportStartDate').value;
+    var ed = document.getElementById('exportEndDate').value;
+    var p = [];
+    if (s) p.push('status=' + encodeURIComponent(s));
+    if (sd) p.push('startDate=' + encodeURIComponent(sd));
+    if (ed) p.push('endDate=' + encodeURIComponent(ed));
+    window.location.href = '/indent/manage/export?' + p.join('&');
   }
+
+  $(function() {
+    if ($.fn.select2) {
+      $('#addStockItem').select2({ placeholder: 'Select item', allowClear: true });
+    }
+  });
 </script>
 
 <%- include('partials/footer') %>

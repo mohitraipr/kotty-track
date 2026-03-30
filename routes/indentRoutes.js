@@ -43,8 +43,10 @@ async function logStatusChange(requestId, userId, previousStatus, newStatus, not
 
 // One-time migration - auto-run on first load
 let migrationRan = false;
+let migrationRunning = false;
 async function ensureMigration() {
-  if (migrationRan) return;
+  if (migrationRan || migrationRunning) return;
+  migrationRunning = true;
   try {
     // Check if shade column exists
     const [cols] = await pool.query(`SHOW COLUMNS FROM goods_inventory LIKE 'shade'`);
@@ -81,16 +83,6 @@ async function ensureMigration() {
     migrationRan = true; // Don't retry on every request
   }
 }
-
-// One-time: Reset all stock to 0
-router.get('/manage/reset-stock', isAuthenticated, isStoreManager, async (req, res) => {
-  try {
-    const [result] = await pool.query('UPDATE goods_inventory SET qty = 0');
-    res.json({ success: true, message: `Reset ${result.affectedRows} items to 0 stock` });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 // Helper to get store settings
 async function getStoreSetting(key, defaultValue = 'true') {
@@ -365,10 +357,12 @@ router.post('/requests/:id/arrive', isAuthenticated, isStoreManager, async (req,
     // Deduct dispatched quantity from goods_inventory if goods_id exists
     if (request.goods_id) {
       const deductQty = parsedQuantity || request.quantity_requested;
-      await conn.query(
-        'UPDATE goods_inventory SET qty = GREATEST(0, qty - ?) WHERE id = ?',
-        [deductQty, request.goods_id]
-      );
+      if (deductQty > 0) {
+        await conn.query(
+          'UPDATE goods_inventory SET qty = GREATEST(0, qty - ?) WHERE id = ?',
+          [deductQty, request.goods_id]
+        );
+      }
     }
 
     await conn.commit();
@@ -613,42 +607,7 @@ router.post('/manage/stock/add', isAuthenticated, isStoreManager, async (req, re
   res.redirect('/indent/manage');
 });
 
-// Store manager: Dispatch stock
-router.post('/manage/stock/dispatch', isAuthenticated, isStoreManager, async (req, res) => {
-  const goodsId = req.body.goods_id;
-  const qty = parseInt(req.body.quantity, 10);
-  const remark = req.body.remark || null;
-  if (!goodsId || isNaN(qty) || qty <= 0) {
-    req.flash('error', 'Select an item and enter a valid quantity.');
-    return res.redirect('/indent/manage');
-  }
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.beginTransaction();
-    const [updateRes] = await conn.query(
-      'UPDATE goods_inventory SET qty = qty - ? WHERE id = ? AND qty >= ?', [qty, goodsId, qty]
-    );
-    if (!updateRes.affectedRows) {
-      await conn.rollback();
-      req.flash('error', 'Insufficient stock to dispatch.');
-      return res.redirect('/indent/manage');
-    }
-    await conn.query(
-      'INSERT INTO dispatched_data (goods_id, quantity, remark, dispatched_by, dispatched_at) VALUES (?, ?, ?, ?, NOW())',
-      [goodsId, qty, remark, req.session.user.id]
-    );
-    await conn.commit();
-    req.flash('success', 'Goods dispatched.');
-  } catch (err) {
-    if (conn) await conn.rollback();
-    console.error('Error dispatching:', err);
-    req.flash('error', 'Could not dispatch goods.');
-  } finally {
-    if (conn) conn.release();
-  }
-  res.redirect('/indent/manage');
-});
+// Dispatch removed - stock deduction happens automatically when marking indent as arrived
 
 // Stock Analytics Dashboard
 router.get('/manage/analytics', isAuthenticated, isStoreManager, async (req, res) => {

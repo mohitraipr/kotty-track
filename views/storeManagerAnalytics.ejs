@@ -441,7 +441,7 @@
         <div class="oos-alert-list">
           <% oosWithPending.forEach(function(item) { %>
             <div class="oos-alert-chip">
-              <%= item.name %> - <%= item.shade %> (<%= item.size %>)
+              <%= item.name %><%= item.shade ? ' - ' + item.shade : '' %><%= item.size ? ' (' + item.size + ')' : '' %>
               <span class="pending-count"><%= item.pending_requests %> req</span>
             </div>
           <% }); %>
@@ -478,8 +478,8 @@
           <% analytics.forEach(function(item) { %>
             <tr class="<%= item.qty <= 0 ? 'row-oos' : (item.days_until_oos !== null && item.days_until_oos <= 7 ? 'row-critical' : '') %>">
               <td><strong><%= item.name %></strong></td>
-              <td><%= item.shade %></td>
-              <td><%= item.size %></td>
+              <td><%= item.shade || '-' %></td>
+              <td><%= item.size || '-' %></td>
               <td><%= item.unit %></td>
               <td>
                 <% if (item.qty <= 0) { %>
