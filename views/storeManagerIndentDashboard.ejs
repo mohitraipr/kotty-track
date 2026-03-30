@@ -55,11 +55,12 @@
   .toggle-track {
     position: relative; width: 36px; height: 20px; display: inline-block;
   }
-  .toggle-track input { opacity: 0; width: 0; height: 0; }
+  .toggle-track input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
   .toggle-track span {
     position: absolute; inset: 0; background: #d6d0c6; border-radius: 20px; transition: 0.2s;
     cursor: pointer;
   }
+  .toggle-track span:active::before { width: 18px; }
   .toggle-track span::before {
     content: ""; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px;
     background: #fff; border-radius: 50%; transition: 0.2s;
@@ -232,12 +233,12 @@
     <span class="toolbar-title">Indent Control</span>
 
     <form action="/indent/manage/settings" method="POST" class="toggle-wrap" style="margin:0;">
+      <input type="hidden" name="allowFreetext" value="false">
       <label for="ftToggle">Free-text</label>
-      <div class="toggle-track">
-        <input type="hidden" name="allowFreetext" value="false">
+      <label class="toggle-track" for="ftToggle">
         <input type="checkbox" name="allowFreetext" value="true" id="ftToggle" <%= allowFreetext ? 'checked' : '' %> onchange="this.form.submit()">
         <span></span>
-      </div>
+      </label>
     </form>
 
     <div class="toolbar-divider"></div>
