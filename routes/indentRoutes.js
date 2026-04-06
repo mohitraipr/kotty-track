@@ -65,6 +65,17 @@ async function ensureMigration() {
     if (incCols.length === 0) {
       await pool.query(`ALTER TABLE incoming_data ADD COLUMN invoice_number VARCHAR(100) DEFAULT NULL, ADD COLUMN vendor_name VARCHAR(255) DEFAULT NULL, ADD COLUMN entry_date DATE DEFAULT NULL`);
     }
+    // Add weight verification columns
+    const [wCols] = await pool.query(`SHOW COLUMNS FROM incoming_data LIKE 'weight_per_gross'`);
+    if (wCols.length === 0) {
+      await pool.query(`ALTER TABLE incoming_data
+        ADD COLUMN weight_per_gross DECIMAL(10,3) DEFAULT NULL,
+        ADD COLUMN gross_count DECIMAL(10,3) DEFAULT NULL,
+        ADD COLUMN actual_weight_kg DECIMAL(10,3) DEFAULT NULL,
+        ADD COLUMN expected_weight_kg DECIMAL(10,3) DEFAULT NULL,
+        ADD COLUMN weight_discrepancy_kg DECIMAL(10,3) DEFAULT NULL,
+        ADD COLUMN weight_check_status ENUM('ok','short','over') DEFAULT NULL`);
+    }
     // Create store_vendors
     await pool.query(`CREATE TABLE IF NOT EXISTS store_vendors (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -523,7 +534,8 @@ router.get('/api/items', isAuthenticated, async (req, res) => {
         (r.shade ? ' - ' + r.shade : '') +
         (r.size ? ' (' + r.size + ')' : '') +
         ' [' + r.unit + ']' +
-        ' (Stock: ' + r.qty + ')'
+        ' (Stock: ' + r.qty + ')',
+      unit: r.unit
     })));
   } catch (err) {
     console.error('Error searching items:', err);
@@ -578,6 +590,18 @@ router.post('/manage/stock/add', isAuthenticated, isStoreManager, async (req, re
   const invoiceNumber = req.body.invoice_number || null;
   const vendorName = req.body.vendor_name || null;
   const entryDate = req.body.entry_date || null;
+
+  const weightPerGross = sanitizeDecimal(req.body.weight_per_gross);
+  const grossCount = sanitizeDecimal(req.body.gross_count);
+  const actualWeightKg = sanitizeDecimal(req.body.actual_weight_kg);
+
+  let expectedWeightKg = null, discrepancyKg = null, weightCheckStatus = null;
+  if (weightPerGross != null && grossCount != null && actualWeightKg != null) {
+    expectedWeightKg = parseFloat(((weightPerGross * grossCount) / 1000).toFixed(3));
+    discrepancyKg = parseFloat((actualWeightKg - expectedWeightKg).toFixed(3));
+    weightCheckStatus = Math.abs(discrepancyKg) < 0.001 ? 'ok' : (discrepancyKg < 0 ? 'short' : 'over');
+  }
+
   if (!goodsId || isNaN(qty) || qty <= 0) {
     req.flash('error', 'Select an item and enter a valid quantity.');
     return res.redirect('/indent/manage');
@@ -587,9 +611,11 @@ router.post('/manage/stock/add', isAuthenticated, isStoreManager, async (req, re
     conn = await pool.getConnection();
     await conn.beginTransaction();
     await conn.query(
-      `INSERT INTO incoming_data (goods_id, quantity, added_by, added_at, invoice_number, vendor_name, entry_date)
-       VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
-      [goodsId, qty, req.session.user.id, invoiceNumber, vendorName, entryDate]
+      `INSERT INTO incoming_data (goods_id, quantity, added_by, added_at, invoice_number, vendor_name, entry_date,
+        weight_per_gross, gross_count, actual_weight_kg, expected_weight_kg, weight_discrepancy_kg, weight_check_status)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [goodsId, qty, req.session.user.id, invoiceNumber, vendorName, entryDate,
+       weightPerGross, grossCount, actualWeightKg, expectedWeightKg, discrepancyKg, weightCheckStatus]
     );
     await conn.query('UPDATE goods_inventory SET qty = qty + ? WHERE id = ?', [qty, goodsId]);
     if (vendorName) {

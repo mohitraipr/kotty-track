@@ -297,20 +297,20 @@
         <button class="panel-close" onclick="togglePanel('addStockPanel')"><i class="bi bi-x-lg"></i></button>
       </div>
       <div class="panel-card-body">
-        <form action="/indent/manage/stock/add" method="POST">
+        <form action="/indent/manage/stock/add" method="POST" id="addStockForm">
           <div class="form-row">
             <div class="form-col w2">
               <label>Item <span class="req">*</span></label>
               <select id="addStockItem" name="goods_id" class="field" required>
                 <option value="">Select item</option>
                 <% goods.forEach(g => { %>
-                  <option value="<%= g.id %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
+                  <option value="<%= g.id %>" data-unit="<%= g.unit %>"><%= g.description_of_goods %><%= g.shade ? ' - ' + g.shade : '' %><%= g.size ? ' (' + g.size + ')' : '' %> [<%= g.unit %>] (Qty: <%= g.qty %>)</option>
                 <% }) %>
               </select>
             </div>
             <div class="form-col">
               <label>Qty <span class="req">*</span></label>
-              <input type="number" name="quantity" class="field" required min="1" placeholder="0">
+              <input type="number" name="quantity" id="addStockQty" class="field" required min="1" placeholder="0">
             </div>
             <div class="form-col">
               <label>Invoice No.</label>
@@ -328,8 +328,45 @@
               <button type="submit" class="act-btn go" style="height:38px;"><i class="bi bi-plus-lg"></i> Add</button>
             </div>
           </div>
+
+          <!-- Weight Verification (shown only for GROSS unit items) -->
+          <div id="weightSection" style="display:none; margin-top:16px; padding:16px; background:#f5f1ec; border-radius:10px; border:1px solid #e8e3db;">
+            <div style="font-family:'Outfit',sans-serif; font-size:0.8125rem; font-weight:600; color:#5a5a5a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">
+              <i class="bi bi-speedometer2" style="color:#c45c3a;"></i> Weight Verification
+              <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#8a8a8a; font-size:0.75rem; margin-left:8px;">1 gross = 144 buttons</span>
+            </div>
+            <div class="form-row" style="margin-bottom:12px;">
+              <div class="form-col">
+                <label>Weight per Gross (g)</label>
+                <input type="number" name="weight_per_gross" id="wpg" class="field" min="0" step="0.001" placeholder="e.g. 300">
+              </div>
+              <div class="form-col">
+                <label>Gross Count (invoice)</label>
+                <input type="number" name="gross_count" id="gc" class="field" min="0" step="0.001" placeholder="e.g. 10">
+              </div>
+              <div class="form-col">
+                <label>Actual Total Weight (kg)</label>
+                <input type="number" name="actual_weight_kg" id="awk" class="field" min="0" step="0.001" placeholder="e.g. 3.0">
+              </div>
+            </div>
+            <div id="weightResult" style="display:none; font-family:'Outfit',sans-serif; font-size:0.875rem;">
+              <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <span style="color:#5a5a5a;">Expected: <strong id="expW">—</strong> kg</span>
+                <span style="color:#5a5a5a;">Actual: <strong id="actW">—</strong> kg</span>
+                <span style="color:#5a5a5a;">Discrepancy: <strong id="discW">—</strong> kg</span>
+                <span id="weightBadge"></span>
+              </div>
+            </div>
+          </div>
         </form>
       </div>
+
+      <style>
+        #weightBadge { display:inline-block; padding:4px 12px; border-radius:7px; font-size:0.8125rem; font-weight:600; }
+        #weightBadge.ok { background:rgba(45,138,95,0.12); color:#2d8a5f; }
+        #weightBadge.short { background:rgba(194,59,34,0.12); color:#c23b22; }
+        #weightBadge.over { background:rgba(232,145,58,0.12); color:#c07b2a; }
+      </style>
     </div>
   </div>
 
@@ -493,7 +530,70 @@
     if ($.fn.select2) {
       $('#addStockItem').select2({ placeholder: 'Select item', allowClear: true });
     }
+
+    // Show/hide weight section based on selected item unit
+    $('#addStockItem').on('change', function() {
+      var selected = $(this).find('option:selected');
+      var unit = selected.data('unit') || '';
+      if (unit.toUpperCase() === 'GROSS') {
+        document.getElementById('weightSection').style.display = 'block';
+      } else {
+        document.getElementById('weightSection').style.display = 'none';
+        clearWeightFields();
+      }
+    });
+
+    // Auto-fill qty from gross_count × 144
+    document.getElementById('gc').addEventListener('input', function() {
+      var gc = parseFloat(this.value);
+      if (!isNaN(gc) && gc > 0) {
+        document.getElementById('addStockQty').value = Math.round(gc * 144);
+      }
+      recalcWeight();
+    });
+
+    document.getElementById('wpg').addEventListener('input', recalcWeight);
+    document.getElementById('awk').addEventListener('input', recalcWeight);
   });
+
+  function recalcWeight() {
+    var wpg = parseFloat(document.getElementById('wpg').value);
+    var gc = parseFloat(document.getElementById('gc').value);
+    var awk = parseFloat(document.getElementById('awk').value);
+    var result = document.getElementById('weightResult');
+
+    if (!isNaN(wpg) && !isNaN(gc) && !isNaN(awk) && wpg > 0 && gc > 0) {
+      var expected = (wpg * gc) / 1000;
+      var disc = awk - expected;
+      document.getElementById('expW').textContent = expected.toFixed(3);
+      document.getElementById('actW').textContent = isNaN(awk) ? '—' : awk.toFixed(3);
+      document.getElementById('discW').textContent = isNaN(awk) ? '—' : (disc >= 0 ? '+' : '') + disc.toFixed(3);
+      var badge = document.getElementById('weightBadge');
+      badge.className = '';
+      if (isNaN(awk)) {
+        badge.textContent = '';
+      } else if (Math.abs(disc) < 0.001) {
+        badge.className = 'ok';
+        badge.textContent = '✓ OK';
+      } else if (disc < 0) {
+        badge.className = 'short';
+        badge.textContent = '⚠ SHORT — Vendor may have cheated!';
+      } else {
+        badge.className = 'over';
+        badge.textContent = '↑ OVER';
+      }
+      result.style.display = 'block';
+    } else {
+      result.style.display = 'none';
+    }
+  }
+
+  function clearWeightFields() {
+    document.getElementById('wpg').value = '';
+    document.getElementById('gc').value = '';
+    document.getElementById('awk').value = '';
+    document.getElementById('weightResult').style.display = 'none';
+  }
 </script>
 
 <%- include('partials/footer') %>
