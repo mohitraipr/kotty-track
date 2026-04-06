@@ -53,6 +53,11 @@ async function ensureMigration() {
     if (cols.length === 0) {
       await pool.query(`ALTER TABLE goods_inventory ADD COLUMN shade VARCHAR(100) DEFAULT NULL AFTER size`);
     }
+    // Ensure unit column is VARCHAR(50) to allow any unit value (e.g. GROSS)
+    const [unitCol] = await pool.query(`SHOW COLUMNS FROM goods_inventory LIKE 'unit'`);
+    if (unitCol.length > 0 && unitCol[0].Type && unitCol[0].Type.toLowerCase().startsWith('enum')) {
+      await pool.query(`ALTER TABLE goods_inventory MODIFY COLUMN unit VARCHAR(50) NOT NULL`);
+    }
     // Create store_settings
     await pool.query(`CREATE TABLE IF NOT EXISTS store_settings (
       setting_key VARCHAR(100) PRIMARY KEY,
