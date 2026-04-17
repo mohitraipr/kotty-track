@@ -158,6 +158,7 @@ const catalogR = require('./routes/catalogupload');
 const storeAdminRoutes = require('./routes/storeAdminRoutes');
 const stitchingPaymentRoutes = require('./routes/stitchingPaymentRoutes');
 const washingPaymentRoutes = require('./routes/washingPaymentRoutes');
+const stagePaymentRoutes = require('./routes/stagePaymentRoutes');
 
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const departmentMgmtRoutes = require('./routes/departmentMgmtRoutes');
@@ -204,6 +205,8 @@ app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
 app.use('/stitchingdashboard/payments', stitchingPaymentRoutes);
 app.use('/washingdashboard/payments', washingPaymentRoutes);
+app.use('/operator/payments', stagePaymentRoutes);
+app.use('/payments', stagePaymentRoutes);
 app.use("/operator", editCuttingLotRoutes);
 app.use('/operator', editWashingAssignmentsRoutes);
 app.use('/operator', departmentMgmtRoutes);

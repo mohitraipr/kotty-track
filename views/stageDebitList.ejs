@@ -1,0 +1,402 @@
+<%- include('partials/header', { pageTitle: 'Debit Management' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-family: 'Outfit', sans-serif;
+  }
+  .alert-success { background: #e8f5ef; color: var(--success); }
+  .alert-error { background: #fdeaea; color: var(--danger); }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+  }
+
+  .form-group { margin-bottom: 16px; }
+
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .form-control, .form-select, textarea {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    width: 100%;
+  }
+
+  .form-control:focus, .form-select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--terracotta);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-pending { background: #fef3e2; color: var(--warning); }
+  .badge-approved { background: #e8f5ef; color: var(--success); }
+  .badge-rejected { background: #fdeaea; color: var(--danger); }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  .tab.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .reason-text {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal.active { display: flex; }
+
+  .modal-content {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Debit Management</h1>
+    <a href="/operator/payments/pending" class="btn-kotty btn-outline">
+      <i class="bi bi-arrow-left"></i> Back to Payments
+    </a>
+  </div>
+
+  <% if (error && error.length) { %>
+  <div class="alert alert-error"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+  <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <!-- Create Debit Form -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-dash-circle"></i> Raise New Debit</h2>
+    </div>
+    <div class="card-body">
+      <form method="POST" action="/operator/payments/debits">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Worker *</label>
+            <select name="user_id" class="form-select" required>
+              <option value="">Select worker</option>
+              <% users.forEach(u => { %>
+              <option value="<%= u.id %>"><%= u.username %></option>
+              <% }); %>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stage *</label>
+            <select name="stage" class="form-select" required>
+              <% stages.forEach(s => { %>
+              <option value="<%= s %>"><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+              <% }); %>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Lot No (optional)</label>
+            <input type="text" name="lot_no" class="form-control" placeholder="Leave empty for general debit">
+          </div>
+          <div class="form-group">
+            <label class="form-label">SKU (optional)</label>
+            <input type="text" name="sku" class="form-control">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Qty (optional)</label>
+            <input type="number" name="qty" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rate (optional)</label>
+            <input type="number" name="rate" step="0.01" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Amount *</label>
+            <input type="number" name="amount" step="0.01" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reason *</label>
+          <textarea name="reason" rows="2" class="form-control" required placeholder="e.g., 250 pcs repair work found in washing stage"></textarea>
+        </div>
+        <button type="submit" class="btn-kotty btn-danger">
+          <i class="bi bi-plus"></i> Raise Debit
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <a href="/operator/payments/debits?status=all" class="tab <%= currentStatus === 'all' ? 'active' : '' %>">All</a>
+    <a href="/operator/payments/debits?status=pending" class="tab <%= currentStatus === 'pending' ? 'active' : '' %>">Pending</a>
+    <a href="/operator/payments/debits?status=approved" class="tab <%= currentStatus === 'approved' ? 'active' : '' %>">Approved</a>
+    <a href="/operator/payments/debits?status=rejected" class="tab <%= currentStatus === 'rejected' ? 'active' : '' %>">Rejected</a>
+  </div>
+
+  <!-- Debits Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-list"></i> Debits</h2>
+      <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= debits.length %> records</span>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Worker</th>
+            <th>Lot</th>
+            <th>Stage</th>
+            <th>Qty</th>
+            <th>Amount</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Raised By</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (debits.length === 0) { %>
+          <tr><td colspan="9" style="text-align: center; color: var(--text-secondary);">No debits found</td></tr>
+          <% } else { %>
+          <% debits.forEach(d => { %>
+          <tr>
+            <td><strong><%= d.username %></strong></td>
+            <td><%= d.lot_no || '-' %></td>
+            <td><%= d.stage %></td>
+            <td><%= d.qty || '-' %></td>
+            <td><strong><%= parseFloat(d.amount).toFixed(2) %></strong></td>
+            <td class="reason-text" title="<%= d.reason %>"><%= d.reason %></td>
+            <td><span class="badge badge-<%= d.status %>"><%= d.status %></span></td>
+            <td><%= d.raised_by_name || '-' %></td>
+            <td>
+              <% if (d.status === 'pending') { %>
+              <form method="POST" action="/operator/payments/debits/approve/<%= d.id %>" style="display: inline;">
+                <button type="submit" class="btn-kotty btn-sm btn-success" title="Approve">
+                  <i class="bi bi-check"></i>
+                </button>
+              </form>
+              <button class="btn-kotty btn-sm btn-danger" title="Reject"
+                      onclick="openRejectModal(<%= d.id %>)">
+                <i class="bi bi-x"></i>
+              </button>
+              <% } else { %>
+              <span style="color: var(--text-secondary); font-size: 0.8rem;">
+                <% if (d.approved_on) { %>
+                <%= new Date(d.approved_on).toLocaleDateString('en-IN') %>
+                <% } %>
+              </span>
+              <% } %>
+            </td>
+          </tr>
+          <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Modal -->
+<div id="rejectModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Reject Debit</h3>
+    <form id="rejectForm" method="POST">
+      <div class="form-group">
+        <label class="form-label">Rejection Reason</label>
+        <textarea name="rejection_reason" rows="3" class="form-control" placeholder="Optional reason for rejection"></textarea>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+        <button type="button" class="btn-kotty btn-outline" onclick="closeRejectModal()">Cancel</button>
+        <button type="submit" class="btn-kotty btn-danger">Reject</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openRejectModal(id) {
+  document.getElementById('rejectForm').action = '/operator/payments/debits/reject/' + id;
+  document.getElementById('rejectModal').classList.add('active');
+}
+
+function closeRejectModal() {
+  document.getElementById('rejectModal').classList.remove('active');
+}
+
+document.getElementById('rejectModal').addEventListener('click', function(e) {
+  if (e.target === this) closeRejectModal();
+});
+</script>
+
+<%- include('partials/footer') %>

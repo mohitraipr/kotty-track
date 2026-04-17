@@ -1,0 +1,350 @@
+<%- include('partials/header', { pageTitle: 'Pending Payments' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-lg { padding: 12px 24px; font-size: 1rem; }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-family: 'Outfit', sans-serif;
+  }
+  .alert-success { background: #e8f5ef; color: var(--success); }
+  .alert-error { background: #fdeaea; color: var(--danger); }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+  tr.selected { background: #e8f5ef; }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-washing { background: #ede9fe; color: #7c3aed; }
+  .badge-finishing { background: #e8f5ef; color: var(--success); }
+
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .summary-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+  }
+
+  .summary-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  .summary-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.5rem;
+    color: var(--charcoal);
+  }
+
+  .summary-bar {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 2px solid var(--success);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Pending Payments</h1>
+    <div class="btn-group">
+      <a href="/operator/payments/create" class="btn-kotty btn-primary">
+        <i class="bi bi-plus-circle"></i> Create Payment
+      </a>
+      <a href="/operator/payments/history" class="btn-kotty btn-outline">
+        <i class="bi bi-clock-history"></i> History
+      </a>
+    </div>
+  </div>
+
+  <% if (error && error.length) { %>
+  <div class="alert alert-error"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+  <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <!-- Summary by User -->
+  <% const userArr = Object.values(userTotals); %>
+  <% if (userArr.length > 0) { %>
+  <div class="summary-cards">
+    <% userArr.slice(0, 6).forEach(u => { %>
+    <div class="summary-card">
+      <div class="summary-label"><%= u.username %></div>
+      <div class="summary-value"><%= u.total.toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></div>
+      <div style="font-size: 0.8rem; color: var(--text-secondary);">
+        <%= u.count %> entries
+        <% if (u.debits > 0) { %>
+        | <span style="color: var(--danger);">Debits: <%= u.debits.toLocaleString() %></span>
+        <% } %>
+      </div>
+    </div>
+    <% }); %>
+  </div>
+  <% } %>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-body">
+      <form method="GET" class="filter-row">
+        <select name="stage" class="form-select">
+          <option value="all" <%= currentStage === 'all' ? 'selected' : '' %>>All Stages</option>
+          <% stages.forEach(s => { %>
+          <option value="<%= s %>" <%= currentStage === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }); %>
+        </select>
+        <input type="text" name="search" class="form-control" placeholder="Search..." value="<%= search %>">
+        <button type="submit" class="btn-kotty btn-primary">Filter</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payments Table -->
+  <form id="markPaidForm" method="POST" action="/operator/payments/mark-paid">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-hourglass-split"></i> Pending Payments</h2>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= payments.length %> pending</span>
+      </div>
+      <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selectAll"></th>
+              <th>Worker</th>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Stage</th>
+              <th>Qty</th>
+              <th>Base Rate</th>
+              <th>Extra</th>
+              <th>Total</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (payments.length === 0) { %>
+            <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
+            <% } else { %>
+            <% payments.forEach(p => { %>
+            <tr>
+              <td><input type="checkbox" name="paymentIds" value="<%= p.id %>" class="payment-cb"></td>
+              <td><strong><%= p.username %></strong></td>
+              <td><%= p.lot_no %></td>
+              <td><%= p.sku %></td>
+              <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
+              <td><%= p.qty.toLocaleString() %></td>
+              <td><%= parseFloat(p.base_rate).toFixed(2) %></td>
+              <td><%= parseFloat(p.extra_amount || 0).toFixed(2) %></td>
+              <td><strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong></td>
+              <td><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
+            </tr>
+            <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <% if (payments.length > 0) { %>
+    <div class="summary-bar">
+      <div>
+        <span style="font-family: 'Outfit', sans-serif;">Selected: <strong id="selectedCount">0</strong></span>
+        <span style="margin-left: 16px;">Total: <strong id="selectedTotal" style="color: var(--success);">0.00</strong></span>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <input type="text" name="notes" class="form-control" placeholder="Payment notes (optional)" style="width: 200px;">
+        <button type="submit" class="btn-kotty btn-success btn-lg" id="markPaidBtn" disabled>
+          <i class="bi bi-check2-all"></i> Mark as Paid
+        </button>
+      </div>
+    </div>
+    <% } %>
+  </form>
+</div>
+
+<script>
+const selectAll = document.getElementById('selectAll');
+const checkboxes = document.querySelectorAll('.payment-cb');
+const selectedCountEl = document.getElementById('selectedCount');
+const selectedTotalEl = document.getElementById('selectedTotal');
+const markPaidBtn = document.getElementById('markPaidBtn');
+
+const paymentAmounts = {};
+<% payments.forEach(p => { %>
+paymentAmounts['<%= p.id %>'] = <%= parseFloat(p.total_amount) %>;
+<% }); %>
+
+if (selectAll) {
+  selectAll.addEventListener('change', function() {
+    checkboxes.forEach(cb => cb.checked = this.checked);
+    updateSelection();
+  });
+}
+
+checkboxes.forEach(cb => {
+  cb.addEventListener('change', updateSelection);
+});
+
+function updateSelection() {
+  let count = 0;
+  let total = 0;
+
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      count++;
+      total += paymentAmounts[cb.value] || 0;
+    }
+  });
+
+  if (selectedCountEl) selectedCountEl.textContent = count;
+  if (selectedTotalEl) selectedTotalEl.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  if (markPaidBtn) markPaidBtn.disabled = count === 0;
+}
+</script>
+
+<%- include('partials/footer') %>

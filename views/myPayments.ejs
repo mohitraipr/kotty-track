@@ -1,0 +1,320 @@
+<%- include('partials/header', { pageTitle: 'My Payments' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+    margin-bottom: 4px;
+  }
+
+  .page-subtitle {
+    font-family: 'Outfit', sans-serif;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+  }
+
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .summary-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .summary-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+  }
+
+  .summary-card.pending::before { background: var(--warning); }
+  .summary-card.paid::before { background: var(--success); }
+  .summary-card.debits::before { background: var(--danger); }
+
+  .summary-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  .summary-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2rem;
+  }
+
+  .summary-card.pending .summary-value { color: var(--warning); }
+  .summary-card.paid .summary-value { color: var(--success); }
+  .summary-card.debits .summary-value { color: var(--danger); }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  .tab.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-pending { background: #fef3e2; color: var(--warning); }
+  .badge-paid { background: #e8f5ef; color: var(--success); }
+
+  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-washing { background: #ede9fe; color: #7c3aed; }
+  .badge-finishing { background: #e8f5ef; color: var(--success); }
+  .badge-assembly { background: #fce7f3; color: #be185d; }
+
+  .empty-state {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+  }
+
+  .debit-card {
+    background: #fdeaea;
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .debit-reason {
+    font-size: 0.85rem;
+    color: var(--charcoal);
+  }
+
+  .debit-amount {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--danger);
+  }
+
+  @media (max-width: 768px) {
+    .summary-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .page-container {
+      padding: 16px;
+      padding-top: calc(60px + 16px);
+    }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">My Payments</h1>
+    <p class="page-subtitle">View your earnings and payment history</p>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-cards">
+    <div class="summary-card pending">
+      <div class="summary-label">Pending</div>
+      <div class="summary-value"><%= summary.pending.toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></div>
+    </div>
+    <div class="summary-card paid">
+      <div class="summary-label">Paid</div>
+      <div class="summary-value"><%= summary.paid.toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></div>
+    </div>
+    <div class="summary-card debits">
+      <div class="summary-label">Debits</div>
+      <div class="summary-value"><%= summary.debits.toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></div>
+    </div>
+  </div>
+
+  <!-- Debits Section -->
+  <% if (debits.length > 0) { %>
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-exclamation-triangle" style="color: var(--danger);"></i> Approved Debits</h2>
+    </div>
+    <div class="card-body" style="padding: 16px;">
+      <% debits.forEach(d => { %>
+      <div class="debit-card">
+        <div>
+          <div class="debit-reason"><%= d.reason %></div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary);">
+            <%= d.lot_no ? 'Lot: ' + d.lot_no + ' | ' : '' %>
+            <%= d.stage %> |
+            <%= new Date(d.approved_on).toLocaleDateString('en-IN') %>
+          </div>
+        </div>
+        <div class="debit-amount">-<%= parseFloat(d.amount).toFixed(2) %></div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <a href="/payments/my-payments?status=all" class="tab <%= currentStatus === 'all' ? 'active' : '' %>">All</a>
+    <a href="/payments/my-payments?status=pending" class="tab <%= currentStatus === 'pending' ? 'active' : '' %>">Pending</a>
+    <a href="/payments/my-payments?status=paid" class="tab <%= currentStatus === 'paid' ? 'active' : '' %>">Paid</a>
+  </div>
+
+  <!-- Payments Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-wallet2"></i> Payment History</h2>
+    </div>
+    <div class="card-body">
+      <% if (payments.length === 0) { %>
+      <div class="empty-state">
+        <i class="bi bi-inbox" style="font-size: 2rem; margin-bottom: 12px; display: block;"></i>
+        No payments found
+      </div>
+      <% } else { %>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Stage</th>
+              <th>Qty</th>
+              <th>Rate</th>
+              <th>Amount</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% payments.forEach(p => { %>
+            <tr>
+              <td><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
+              <td><strong><%= p.lot_no %></strong></td>
+              <td><%= p.sku %></td>
+              <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
+              <td><%= p.qty.toLocaleString() %></td>
+              <td><%= parseFloat(p.base_rate).toFixed(2) %></td>
+              <td><strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong></td>
+              <td><span class="badge badge-<%= p.status %>"><%= p.status %></span></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

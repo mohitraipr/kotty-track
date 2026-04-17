@@ -1,0 +1,530 @@
+<%- include('partials/header', { pageTitle: 'Create Payments' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-primary:hover { background: var(--terracotta-dark); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-lg { padding: 12px 24px; font-size: 1rem; }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 0.9rem;
+  }
+
+  .form-control:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+  tr.selected { background: #e8f5ef; }
+
+  .no-rate { color: var(--danger); font-style: italic; }
+
+  .summary-bar {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 2px solid var(--terracotta);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+  }
+
+  .summary-text {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem;
+  }
+
+  .summary-amount {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.5rem;
+    color: var(--terracotta);
+  }
+
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+  }
+
+  .extra-select {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 768px) {
+    .page-container { padding: 16px; padding-top: calc(60px + 16px); }
+    .filter-row { flex-direction: column; align-items: stretch; }
+    .summary-bar { flex-direction: column; gap: 12px; }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Create Payments</h1>
+    <a href="/operator/payments/pending" class="btn-kotty btn-outline">
+      <i class="bi bi-list-check"></i> View Pending
+    </a>
+  </div>
+
+  <!-- Stage & Search -->
+  <div class="card">
+    <div class="card-body">
+      <div class="filter-row">
+        <select id="stageSelect" class="form-select" style="min-width: 150px;">
+          <option value="">Select Stage</option>
+          <% stages.forEach(s => { %>
+          <option value="<%= s %>"><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }); %>
+        </select>
+        <input type="text" id="searchInput" class="form-control" placeholder="Search lot number or SKU..."
+               style="min-width: 250px;" disabled>
+        <button id="searchBtn" class="btn-kotty btn-primary" disabled>
+          <i class="bi bi-search"></i> Search
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Eligible Lots -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-list-check"></i> Eligible Lots</h2>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div id="lotsTable">
+        <div class="loading">Select a stage to view eligible lots</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary Bar -->
+<div class="summary-bar" id="summaryBar" style="display: none;">
+  <div>
+    <span class="summary-text">Selected: <strong id="selectedCount">0</strong> lots</span>
+  </div>
+  <div style="display: flex; align-items: center; gap: 24px;">
+    <span class="summary-text">Total: <span class="summary-amount" id="selectedTotal">0.00</span></span>
+    <button id="createPaymentsBtn" class="btn-kotty btn-success btn-lg" disabled>
+      <i class="bi bi-check-circle"></i> Create Payments
+    </button>
+  </div>
+</div>
+
+<form id="paymentForm" method="POST" action="/operator/payments/create" style="display: none;">
+  <input type="hidden" name="stage" id="formStage">
+  <div id="paymentInputs"></div>
+</form>
+
+<script>
+const stageSelect = document.getElementById('stageSelect');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const lotsTable = document.getElementById('lotsTable');
+const summaryBar = document.getElementById('summaryBar');
+const selectedCountEl = document.getElementById('selectedCount');
+const selectedTotalEl = document.getElementById('selectedTotal');
+const createBtn = document.getElementById('createPaymentsBtn');
+const paymentForm = document.getElementById('paymentForm');
+const formStage = document.getElementById('formStage');
+const paymentInputs = document.getElementById('paymentInputs');
+
+let currentLots = [];
+let selectedLots = new Set();
+
+stageSelect.addEventListener('change', function() {
+  const stage = this.value;
+  searchInput.disabled = !stage;
+  searchBtn.disabled = !stage;
+  formStage.value = stage;
+  if (stage) {
+    fetchLots();
+  } else {
+    lotsTable.textContent = '';
+    const div = document.createElement('div');
+    div.className = 'loading';
+    div.textContent = 'Select a stage to view eligible lots';
+    lotsTable.appendChild(div);
+    summaryBar.style.display = 'none';
+  }
+});
+
+searchBtn.addEventListener('click', fetchLots);
+searchInput.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') fetchLots();
+});
+
+async function fetchLots() {
+  const stage = stageSelect.value;
+  const search = searchInput.value;
+
+  lotsTable.textContent = '';
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'loading';
+  loadingDiv.textContent = 'Loading...';
+  lotsTable.appendChild(loadingDiv);
+
+  try {
+    const res = await fetch('/operator/payments/api/eligible-lots?stage=' + encodeURIComponent(stage) + '&search=' + encodeURIComponent(search));
+    const data = await res.json();
+
+    if (data.error) {
+      lotsTable.textContent = '';
+      const errDiv = document.createElement('div');
+      errDiv.className = 'loading';
+      errDiv.style.color = 'var(--danger)';
+      errDiv.textContent = data.error;
+      lotsTable.appendChild(errDiv);
+      return;
+    }
+
+    currentLots = data.lots || [];
+    selectedLots.clear();
+    renderLots();
+  } catch (err) {
+    lotsTable.textContent = '';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'loading';
+    errDiv.style.color = 'var(--danger)';
+    errDiv.textContent = 'Failed to load lots';
+    lotsTable.appendChild(errDiv);
+  }
+}
+
+function renderLots() {
+  lotsTable.textContent = '';
+
+  if (!currentLots.length) {
+    const div = document.createElement('div');
+    div.className = 'loading';
+    div.textContent = 'No eligible lots found';
+    lotsTable.appendChild(div);
+    summaryBar.style.display = 'none';
+    return;
+  }
+
+  summaryBar.style.display = 'flex';
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+
+  const headers = ['', 'Lot No', 'SKU', 'Worker', 'Qty', 'Base Rate', 'Extra Jobwork', 'Total'];
+  headers.forEach(function(h, i) {
+    const th = document.createElement('th');
+    if (i === 0) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'selectAll';
+      cb.addEventListener('change', function() { toggleAll(this.checked); });
+      th.appendChild(cb);
+    } else {
+      th.textContent = h;
+    }
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  currentLots.forEach(function(lot, idx) {
+    const hasRate = lot.base_rate > 0;
+    const baseAmount = lot.base_rate * lot.qty;
+
+    const tr = document.createElement('tr');
+    tr.id = 'row-' + idx;
+    if (selectedLots.has(idx)) tr.classList.add('selected');
+    if (!hasRate) tr.style.opacity = '0.6';
+
+    // Checkbox
+    const td1 = document.createElement('td');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.disabled = !hasRate;
+    cb.checked = selectedLots.has(idx);
+    cb.addEventListener('change', function() { toggleLot(idx, this.checked); });
+    td1.appendChild(cb);
+    tr.appendChild(td1);
+
+    // Lot No
+    const td2 = document.createElement('td');
+    const strong = document.createElement('strong');
+    strong.textContent = lot.lot_no;
+    td2.appendChild(strong);
+    tr.appendChild(td2);
+
+    // SKU
+    const td3 = document.createElement('td');
+    td3.textContent = lot.sku;
+    tr.appendChild(td3);
+
+    // Worker
+    const td4 = document.createElement('td');
+    td4.textContent = lot.username;
+    tr.appendChild(td4);
+
+    // Qty
+    const td5 = document.createElement('td');
+    td5.textContent = lot.qty.toLocaleString();
+    tr.appendChild(td5);
+
+    // Base Rate
+    const td6 = document.createElement('td');
+    if (hasRate) {
+      td6.textContent = lot.base_rate.toFixed(2);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'no-rate';
+      span.textContent = 'No rate';
+      td6.appendChild(span);
+    }
+    tr.appendChild(td6);
+
+    // Extra Jobwork
+    const td7 = document.createElement('td');
+    if (lot.extra_rates && lot.extra_rates.length) {
+      const select = document.createElement('select');
+      select.className = 'form-select extra-select';
+      select.id = 'extra-' + idx;
+      select.disabled = !hasRate;
+      select.addEventListener('change', updateTotals);
+
+      const optNone = document.createElement('option');
+      optNone.value = '';
+      optNone.textContent = 'None';
+      select.appendChild(optNone);
+
+      lot.extra_rates.forEach(function(e) {
+        const opt = document.createElement('option');
+        opt.value = e.rate;
+        opt.dataset.name = e.extra_name;
+        opt.textContent = e.extra_name + ' (+' + e.rate + ')';
+        select.appendChild(opt);
+      });
+      td7.appendChild(select);
+    } else {
+      td7.textContent = '-';
+    }
+    tr.appendChild(td7);
+
+    // Total
+    const td8 = document.createElement('td');
+    td8.id = 'total-' + idx;
+    td8.textContent = hasRate ? baseAmount.toFixed(2) : '-';
+    tr.appendChild(td8);
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  lotsTable.appendChild(table);
+  updateTotals();
+}
+
+function toggleAll(checked) {
+  currentLots.forEach(function(lot, idx) {
+    if (lot.base_rate > 0) {
+      if (checked) selectedLots.add(idx);
+      else selectedLots.delete(idx);
+    }
+  });
+  renderLots();
+}
+
+function toggleLot(idx, checked) {
+  if (checked) selectedLots.add(idx);
+  else selectedLots.delete(idx);
+  var row = document.getElementById('row-' + idx);
+  if (row) row.classList.toggle('selected', checked);
+  updateTotals();
+}
+
+function updateTotals() {
+  var total = 0;
+  var count = 0;
+
+  selectedLots.forEach(function(idx) {
+    var lot = currentLots[idx];
+    if (!lot || lot.base_rate <= 0) return;
+
+    var lotTotal = lot.base_rate * lot.qty;
+    var extraSelect = document.getElementById('extra-' + idx);
+    if (extraSelect && extraSelect.value) {
+      lotTotal += parseFloat(extraSelect.value) * lot.qty;
+    }
+
+    var totalCell = document.getElementById('total-' + idx);
+    if (totalCell) totalCell.textContent = lotTotal.toFixed(2);
+    total += lotTotal;
+    count++;
+  });
+
+  selectedCountEl.textContent = count;
+  selectedTotalEl.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  createBtn.disabled = count === 0;
+}
+
+createBtn.addEventListener('click', function() {
+  if (selectedLots.size === 0) return;
+
+  paymentInputs.textContent = '';
+  var i = 0;
+
+  selectedLots.forEach(function(idx) {
+    var lot = currentLots[idx];
+    if (!lot || lot.base_rate <= 0) return;
+
+    var extraSelect = document.getElementById('extra-' + idx);
+    var extraAmount = 0;
+    var extraJson = '';
+
+    if (extraSelect && extraSelect.value) {
+      var extraRate = parseFloat(extraSelect.value);
+      var extraName = extraSelect.options[extraSelect.selectedIndex].dataset.name;
+      extraAmount = extraRate * lot.qty;
+      extraJson = JSON.stringify([{ name: extraName, rate: extraRate }]);
+    }
+
+    var fields = [
+      { name: 'payments[' + i + '][user_id]', value: lot.user_id },
+      { name: 'payments[' + i + '][username]', value: lot.username },
+      { name: 'payments[' + i + '][lot_no]', value: lot.lot_no },
+      { name: 'payments[' + i + '][sku]', value: lot.sku },
+      { name: 'payments[' + i + '][qty]', value: lot.qty },
+      { name: 'payments[' + i + '][base_rate]', value: lot.base_rate },
+      { name: 'payments[' + i + '][extra_amount]', value: extraAmount },
+      { name: 'payments[' + i + '][extra_rates_json]', value: extraJson }
+    ];
+
+    fields.forEach(function(f) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = f.name;
+      input.value = f.value;
+      paymentInputs.appendChild(input);
+    });
+
+    i++;
+  });
+
+  if (confirm('Create ' + selectedLots.size + ' payment entries for Rs. ' + selectedTotalEl.textContent + '?')) {
+    paymentForm.submit();
+  }
+});
+</script>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,422 @@
+<%- include('partials/header', { pageTitle: 'Stage Rate Configuration' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-primary:hover { background: var(--terracotta-dark); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-outline:hover { background: var(--cream-dark); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+  }
+  .alert-success { background: #e8f5ef; color: var(--success); border: 1px solid var(--success); }
+  .alert-error { background: #fdeaea; color: var(--danger); border: 1px solid var(--danger); }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+  }
+
+  .form-control:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--terracotta);
+  }
+
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .form-group { margin-bottom: 16px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-cutting { background: #fef3e2; color: var(--warning); }
+  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-washing { background: #ede9fe; color: #7c3aed; }
+  .badge-assembly { background: #fce7f3; color: #be185d; }
+  .badge-finishing { background: #e8f5ef; color: var(--success); }
+
+  .extra-rates-list {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .extra-rate-item {
+    display: inline-block;
+    background: var(--cream-dark);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal.active { display: flex; }
+
+  .modal-content {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .page-container { padding: 16px; padding-top: calc(60px + 16px); }
+    .filter-row { flex-direction: column; align-items: stretch; }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Stage Rate Configuration</h1>
+    <div class="btn-group">
+      <a href="/operator/payments/rates/template" class="btn-kotty btn-outline">
+        <i class="bi bi-download"></i> Template
+      </a>
+      <button class="btn-kotty btn-primary" onclick="document.getElementById('uploadModal').classList.add('active')">
+        <i class="bi bi-upload"></i> Upload Excel
+      </button>
+      <button class="btn-kotty btn-success" onclick="document.getElementById('addRateModal').classList.add('active')">
+        <i class="bi bi-plus"></i> Add Rate
+      </button>
+    </div>
+  </div>
+
+  <% if (error && error.length) { %>
+  <div class="alert alert-error"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+  <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-body">
+      <form method="GET" class="filter-row">
+        <select name="stage" class="form-select">
+          <option value="all" <%= currentStage === 'all' ? 'selected' : '' %>>All Stages</option>
+          <% stages.forEach(s => { %>
+          <option value="<%= s %>" <%= currentStage === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }); %>
+        </select>
+        <input type="text" name="search" class="form-control" placeholder="Search SKU..." value="<%= search %>" style="min-width: 200px;">
+        <button type="submit" class="btn-kotty btn-primary">Search</button>
+        <% if (search || currentStage !== 'all') { %>
+        <a href="/operator/payments/rates" class="btn-kotty btn-outline">Clear</a>
+        <% } %>
+      </form>
+    </div>
+  </div>
+
+  <!-- Rates Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-currency-rupee"></i> Base Rates</h2>
+      <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= rates.length %> rates</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Stage</th>
+              <th>Base Rate</th>
+              <th>Extra Jobwork</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (rates.length === 0) { %>
+            <tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">No rates configured</td></tr>
+            <% } else { %>
+            <% rates.forEach(rate => {
+              const extraKey = `${rate.sku}_${rate.stage}`;
+              const extras = extraRatesMap[extraKey] || [];
+            %>
+            <tr>
+              <td><strong><%= rate.sku %></strong></td>
+              <td><span class="badge badge-<%= rate.stage %>"><%= rate.stage %></span></td>
+              <td><%= parseFloat(rate.rate).toFixed(2) %></td>
+              <td>
+                <% if (extras.length) { %>
+                <div class="extra-rates-list">
+                  <% extras.forEach(e => { %>
+                  <span class="extra-rate-item"><%= e.extra_name %>: <%= e.rate %></span>
+                  <% }); %>
+                </div>
+                <% } else { %>
+                <span style="color: var(--text-secondary);">-</span>
+                <% } %>
+                <button class="btn-kotty btn-sm btn-outline" style="margin-top: 4px;"
+                        onclick="openExtraModal('<%= rate.sku %>', '<%= rate.stage %>')">
+                  <i class="bi bi-plus"></i> Add
+                </button>
+              </td>
+              <td>
+                <form method="POST" action="/operator/payments/rates/delete" style="display: inline;">
+                  <input type="hidden" name="id" value="<%= rate.id %>">
+                  <button type="submit" class="btn-kotty btn-sm btn-danger"
+                          onclick="return confirm('Delete this rate?')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Rate Modal -->
+<div id="addRateModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Add Base Rate</h3>
+    <form method="POST" action="/operator/payments/rates">
+      <div class="form-group">
+        <label class="form-label">SKU</label>
+        <input type="text" name="sku" class="form-control" required style="width: 100%;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stage</label>
+        <select name="stage" class="form-select" required style="width: 100%;">
+          <% stages.forEach(s => { %>
+          <option value="<%= s %>"><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rate (per piece)</label>
+        <input type="number" name="rate" step="0.01" class="form-control" required style="width: 100%;">
+      </div>
+      <div class="btn-group" style="justify-content: flex-end; margin-top: 16px;">
+        <button type="button" class="btn-kotty btn-outline" onclick="this.closest('.modal').classList.remove('active')">Cancel</button>
+        <button type="submit" class="btn-kotty btn-primary">Save Rate</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Upload Rates Excel</h3>
+    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">
+      Excel must have columns: <strong>sku</strong>, <strong>stage</strong>, <strong>rate</strong>
+    </p>
+    <form method="POST" action="/operator/payments/rates/upload" enctype="multipart/form-data">
+      <div class="form-group">
+        <input type="file" name="excelFile" accept=".xlsx,.xls" required class="form-control">
+      </div>
+      <div class="btn-group" style="justify-content: flex-end;">
+        <button type="button" class="btn-kotty btn-outline" onclick="this.closest('.modal').classList.remove('active')">Cancel</button>
+        <button type="submit" class="btn-kotty btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Extra Rate Modal -->
+<div id="extraRateModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Add Extra Jobwork Rate</h3>
+    <form method="POST" action="/operator/payments/extra-rates">
+      <input type="hidden" name="sku" id="extraSku">
+      <input type="hidden" name="stage" id="extraStage">
+      <p style="margin-bottom: 16px;">
+        SKU: <strong id="extraSkuDisplay"></strong> | Stage: <strong id="extraStageDisplay"></strong>
+      </p>
+      <div class="form-group">
+        <label class="form-label">Extra Jobwork Name</label>
+        <input type="text" name="extra_name" class="form-control" required style="width: 100%;"
+               placeholder="e.g., Special Wash, Hand Finish">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rate (additive per piece)</label>
+        <input type="number" name="rate" step="0.01" class="form-control" required style="width: 100%;">
+      </div>
+      <div class="btn-group" style="justify-content: flex-end; margin-top: 16px;">
+        <button type="button" class="btn-kotty btn-outline" onclick="this.closest('.modal').classList.remove('active')">Cancel</button>
+        <button type="submit" class="btn-kotty btn-success">Add Extra Rate</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openExtraModal(sku, stage) {
+  document.getElementById('extraSku').value = sku;
+  document.getElementById('extraStage').value = stage;
+  document.getElementById('extraSkuDisplay').textContent = sku;
+  document.getElementById('extraStageDisplay').textContent = stage;
+  document.getElementById('extraRateModal').classList.add('active');
+}
+
+// Close modal on outside click
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.remove('active');
+  });
+});
+</script>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,251 @@
+<%- include('partials/header', { pageTitle: 'Payment History' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-success { background: var(--success); color: white; }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .form-group { margin-bottom: 0; }
+
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .form-control, .form-select {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-washing { background: #ede9fe; color: #7c3aed; }
+  .badge-finishing { background: #e8f5ef; color: var(--success); }
+  .badge-assembly { background: #fce7f3; color: #be185d; }
+  .badge-cutting { background: #fef3e2; color: var(--warning); }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Payment History</h1>
+    <div class="btn-group">
+      <a href="/operator/payments/pending" class="btn-kotty btn-outline">
+        <i class="bi bi-hourglass-split"></i> Pending
+      </a>
+      <a href="/operator/payments/history/download?stage=<%= currentStage %>&startDate=<%= filters.startDate || '' %>&endDate=<%= filters.endDate || '' %>" class="btn-kotty btn-success">
+        <i class="bi bi-download"></i> Export Excel
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-body">
+      <form method="GET" class="filter-row">
+        <div class="form-group">
+          <label class="form-label">Stage</label>
+          <select name="stage" class="form-select">
+            <option value="all" <%= currentStage === 'all' ? 'selected' : '' %>>All Stages</option>
+            <% stages.forEach(s => { %>
+            <option value="<%= s %>" <%= currentStage === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Worker</label>
+          <select name="user_id" class="form-select">
+            <option value="">All Workers</option>
+            <% users.forEach(u => { %>
+            <option value="<%= u.user_id %>" <%= filters.user_id == u.user_id ? 'selected' : '' %>><%= u.username %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">From Date</label>
+          <input type="date" name="startDate" class="form-control" value="<%= filters.startDate || '' %>">
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Date</label>
+          <input type="date" name="endDate" class="form-control" value="<%= filters.endDate || '' %>">
+        </div>
+        <button type="submit" class="btn-kotty btn-primary">Filter</button>
+        <% if (filters.user_id || filters.startDate || filters.endDate || currentStage !== 'all') { %>
+        <a href="/operator/payments/history" class="btn-kotty btn-outline">Clear</a>
+        <% } %>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payments Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-clock-history"></i> Paid Payments</h2>
+      <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= payments.length %> records</span>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Paid On</th>
+            <th>Batch ID</th>
+            <th>Worker</th>
+            <th>Lot No</th>
+            <th>SKU</th>
+            <th>Stage</th>
+            <th>Qty</th>
+            <th>Base Rate</th>
+            <th>Extra</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (payments.length === 0) { %>
+          <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No paid payments found</td></tr>
+          <% } else { %>
+          <% payments.forEach(p => { %>
+          <tr>
+            <td><%= p.paid_on ? new Date(p.paid_on).toLocaleDateString('en-IN') : '-' %></td>
+            <td style="font-size: 0.75rem;"><%= p.batch_id || '-' %></td>
+            <td><strong><%= p.username %></strong></td>
+            <td><%= p.lot_no %></td>
+            <td><%= p.sku %></td>
+            <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
+            <td><%= p.qty.toLocaleString() %></td>
+            <td><%= parseFloat(p.base_rate).toFixed(2) %></td>
+            <td><%= parseFloat(p.extra_amount || 0).toFixed(2) %></td>
+            <td><strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong></td>
+          </tr>
+          <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
