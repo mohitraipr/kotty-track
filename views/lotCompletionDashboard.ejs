@@ -1,0 +1,534 @@
+<%- include('partials/header', { pageTitle: 'Lot Completion Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --charcoal-light: #2d2d2d;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --terracotta-light: #d4826a;
+    --terracotta-dark: #a84a2d;
+    --success: #2d8a5f;
+    --success-light: #e8f5ef;
+    --warning: #c4873a;
+    --warning-light: #fef3e2;
+    --danger: #c23b22;
+    --danger-light: #fdeaea;
+    --info: #3a7bc4;
+    --info-light: #e8f1fb;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-muted: #8a8a8a;
+    --border: #e5e0d8;
+    --border-light: #f0ebe3;
+    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
+    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    background: var(--cream);
+    min-height: 100vh;
+  }
+
+  .dashboard-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin-bottom: 4px;
+  }
+
+  .page-subtitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+
+  /* Average Stats Cards */
+  .avg-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .avg-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .avg-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+  }
+
+  .avg-card.stitch::before { background: var(--info); }
+  .avg-card.assembly::before { background: #7c3aed; }
+  .avg-card.wash::before { background: var(--warning); }
+  .avg-card.finish::before { background: var(--success); }
+
+  .avg-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .avg-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 2.25rem;
+    font-weight: 400;
+  }
+
+  .avg-card.stitch .avg-value { color: var(--info); }
+  .avg-card.assembly .avg-value { color: #7c3aed; }
+  .avg-card.wash .avg-value { color: var(--warning); }
+  .avg-card.finish .avg-value { color: var(--success); }
+
+  /* Filter Bar */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+
+  .filter-bar input {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 0.875rem;
+    min-width: 250px;
+  }
+
+  .filter-bar input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+  }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-kotty-outline {
+    background: white;
+    color: var(--charcoal);
+    border: 1px solid var(--border);
+  }
+
+  .btn-kotty-outline:hover {
+    background: var(--cream);
+    color: var(--charcoal);
+  }
+
+  /* Table Panel */
+  .panel-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+  }
+
+  .panel-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .panel-title i { color: var(--terracotta); }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .kotty-table {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .kotty-table thead th {
+    background: var(--cream);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 12px 14px;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .kotty-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  .lot-no {
+    font-weight: 600;
+    color: var(--charcoal);
+  }
+
+  .sku {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+  }
+
+  /* Progress Bar */
+  .progress-cell {
+    min-width: 120px;
+  }
+
+  .progress-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    background: var(--cream-dark);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-fill.stitch { background: var(--info); }
+  .progress-fill.assembly { background: #7c3aed; }
+  .progress-fill.wash { background: var(--warning); }
+  .progress-fill.finish { background: var(--success); }
+
+  .progress-pct {
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-width: 42px;
+    text-align: right;
+  }
+
+  .progress-pct.stitch { color: var(--info); }
+  .progress-pct.assembly { color: #7c3aed; }
+  .progress-pct.wash { color: var(--warning); }
+  .progress-pct.finish { color: var(--success); }
+
+  /* Pagination */
+  .pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .pagination-info {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+
+  .pagination-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .pagination-controls a {
+    font-family: 'Outfit', sans-serif;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+  }
+
+  .pagination-controls a:hover {
+    background: var(--cream);
+  }
+
+  .pagination-controls a.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .pagination-controls a.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .avg-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-container {
+      padding: 20px 16px;
+      padding-top: calc(60px + 20px);
+    }
+
+    .avg-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .page-header {
+      flex-direction: column;
+    }
+
+    .filter-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filter-bar input {
+      min-width: auto;
+      width: 100%;
+    }
+  }
+</style>
+
+<div class="dashboard-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Lot Completion Tracker</h1>
+      <p class="page-subtitle">Stage-wise production progress for all lots</p>
+    </div>
+    <a href="/operator/dashboard" class="btn-kotty btn-kotty-outline">
+      <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+  </div>
+
+  <!-- Average Stats -->
+  <div class="avg-stats">
+    <div class="avg-card stitch">
+      <div class="avg-label">Avg Stitching</div>
+      <div class="avg-value"><%= averages.stitch %>%</div>
+    </div>
+    <div class="avg-card assembly">
+      <div class="avg-label">Avg Assembly</div>
+      <div class="avg-value"><%= averages.assembly %>%</div>
+    </div>
+    <div class="avg-card wash">
+      <div class="avg-label">Avg Washing</div>
+      <div class="avg-value"><%= averages.wash %>%</div>
+    </div>
+    <div class="avg-card finish">
+      <div class="avg-label">Avg Finishing</div>
+      <div class="avg-value"><%= averages.finish %>%</div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <form class="filter-bar" method="GET" action="/operator/lot-completion">
+    <input type="text" name="search" placeholder="Search by lot number or SKU..." value="<%= search %>">
+    <button type="submit" class="btn-kotty btn-kotty-primary">
+      <i class="bi bi-search"></i> Search
+    </button>
+    <% if (search) { %>
+    <a href="/operator/lot-completion" class="btn-kotty btn-kotty-outline">Clear</a>
+    <% } %>
+    <a href="/operator/lot-completion/download?search=<%= encodeURIComponent(search) %>" class="btn-kotty btn-kotty-outline" style="margin-left: auto;">
+      <i class="bi bi-download"></i> Export Excel
+    </a>
+  </form>
+
+  <!-- Lots Table -->
+  <div class="panel-card">
+    <div class="panel-header">
+      <h2 class="panel-title"><i class="bi bi-list-check"></i> Lot Completion Status</h2>
+      <span class="text-muted" style="font-size: 0.85rem;"><%= totalCount %> lots found</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="kotty-table">
+        <thead>
+          <tr>
+            <th>Lot No</th>
+            <th>SKU</th>
+            <th>Fabric</th>
+            <th>Total Pcs</th>
+            <th>Stitching</th>
+            <th>Assembly</th>
+            <th>Washing</th>
+            <th>Finishing</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (lots.length === 0) { %>
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">No lots found</td>
+          </tr>
+          <% } else { %>
+          <% lots.forEach(lot => { %>
+          <tr>
+            <td><span class="lot-no"><%= lot.lot_no %></span></td>
+            <td><span class="sku"><%= lot.sku || '-' %></span></td>
+            <td><%= lot.fabric_type || '-' %></td>
+            <td><strong><%= lot.total_pieces.toLocaleString() %></strong></td>
+            <td class="progress-cell">
+              <div class="progress-bar-container">
+                <div class="progress-track">
+                  <div class="progress-fill stitch" style="width: <%= Math.min(100, lot.stitch_pct) %>%"></div>
+                </div>
+                <span class="progress-pct stitch"><%= lot.stitch_pct %>%</span>
+              </div>
+              <small class="text-muted"><%= lot.stitched_pieces.toLocaleString() %> pcs</small>
+            </td>
+            <td class="progress-cell">
+              <div class="progress-bar-container">
+                <div class="progress-track">
+                  <div class="progress-fill assembly" style="width: <%= Math.min(100, lot.assembly_pct) %>%"></div>
+                </div>
+                <span class="progress-pct assembly"><%= lot.assembly_pct %>%</span>
+              </div>
+              <small class="text-muted"><%= lot.assembly_pieces.toLocaleString() %> pcs</small>
+            </td>
+            <td class="progress-cell">
+              <div class="progress-bar-container">
+                <div class="progress-track">
+                  <div class="progress-fill wash" style="width: <%= Math.min(100, lot.wash_pct) %>%"></div>
+                </div>
+                <span class="progress-pct wash"><%= lot.wash_pct %>%</span>
+              </div>
+              <small class="text-muted"><%= lot.washed_pieces.toLocaleString() %> pcs</small>
+            </td>
+            <td class="progress-cell">
+              <div class="progress-bar-container">
+                <div class="progress-track">
+                  <div class="progress-fill finish" style="width: <%= Math.min(100, lot.finish_pct) %>%"></div>
+                </div>
+                <span class="progress-pct finish"><%= lot.finish_pct %>%</span>
+              </div>
+              <small class="text-muted"><%= lot.finished_pieces.toLocaleString() %> pcs</small>
+            </td>
+          </tr>
+          <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <% if (totalPages > 1) { %>
+    <div class="pagination-bar">
+      <div class="pagination-info">
+        Showing page <%= currentPage %> of <%= totalPages %> (<%= totalCount %> total lots)
+      </div>
+      <div class="pagination-controls">
+        <a href="/operator/lot-completion?page=<%= Math.max(1, currentPage - 1) %>&search=<%= encodeURIComponent(search) %>"
+           class="<%= currentPage === 1 ? 'disabled' : '' %>">
+          <i class="bi bi-chevron-left"></i> Prev
+        </a>
+        <%
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, startPage + 4);
+          if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+        %>
+        <% for (let p = startPage; p <= endPage; p++) { %>
+        <a href="/operator/lot-completion?page=<%= p %>&search=<%= encodeURIComponent(search) %>"
+           class="<%= p === currentPage ? 'active' : '' %>">
+          <%= p %>
+        </a>
+        <% } %>
+        <a href="/operator/lot-completion?page=<%= Math.min(totalPages, currentPage + 1) %>&search=<%= encodeURIComponent(search) %>"
+           class="<%= currentPage === totalPages ? 'disabled' : '' %>">
+          Next <i class="bi bi-chevron-right"></i>
+        </a>
+      </div>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

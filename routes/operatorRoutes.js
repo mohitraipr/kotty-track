@@ -3180,4 +3180,307 @@ router.get("/usage-analytics/api", isAuthenticated, isOperator, async (req, res)
   }
 });
 
+/**************************************************
+ * Lot Completion Percentage Dashboard
+ * Shows stage-wise completion % for each lot
+ **************************************************/
+router.get("/lot-completion", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const searchLike = `%${search}%`;
+
+    // Get lot completion data with stage-wise pieces
+    const [lots] = await pool.query(`
+      SELECT
+        c.id,
+        c.lot_no,
+        c.sku,
+        c.fabric_type,
+        c.total_pieces,
+        c.created_at,
+        COALESCE(sd.stitched_pieces, 0) AS stitched_pieces,
+        COALESCE(jd.assembly_pieces, 0) AS assembly_pieces,
+        COALESCE(wd.washed_pieces, 0) AS washed_pieces,
+        COALESCE(fd.finished_pieces, 0) AS finished_pieces
+      FROM cutting_lots c
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS stitched_pieces
+        FROM stitching_data
+        GROUP BY lot_no
+      ) sd ON c.lot_no = sd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS assembly_pieces
+        FROM jeans_assembly_data
+        GROUP BY lot_no
+      ) jd ON c.lot_no = jd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS washed_pieces
+        FROM washing_data
+        GROUP BY lot_no
+      ) wd ON c.lot_no = wd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS finished_pieces
+        FROM finishing_data
+        GROUP BY lot_no
+      ) fd ON c.lot_no = fd.lot_no
+      WHERE c.lot_no LIKE ? OR c.sku LIKE ?
+      ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [searchLike, searchLike, parseInt(limit), offset]);
+
+    // Get total count for pagination
+    const [[{ totalCount }]] = await pool.query(`
+      SELECT COUNT(*) AS totalCount FROM cutting_lots
+      WHERE lot_no LIKE ? OR sku LIKE ?
+    `, [searchLike, searchLike]);
+
+    // Calculate percentages and averages
+    let totalStitchPct = 0, totalAssemblyPct = 0, totalWashPct = 0, totalFinishPct = 0;
+    let validLotCount = 0;
+
+    const lotsWithPct = lots.map(lot => {
+      const total = parseFloat(lot.total_pieces) || 0;
+      if (total === 0) {
+        return {
+          ...lot,
+          stitch_pct: 0,
+          assembly_pct: 0,
+          wash_pct: 0,
+          finish_pct: 0,
+          overall_pct: 0
+        };
+      }
+
+      const stitchPct = Math.min(100, (lot.stitched_pieces / total) * 100);
+      const assemblyPct = Math.min(100, (lot.assembly_pieces / total) * 100);
+      const washPct = Math.min(100, (lot.washed_pieces / total) * 100);
+      const finishPct = Math.min(100, (lot.finished_pieces / total) * 100);
+
+      // Overall completion is based on finishing (final stage)
+      const overallPct = finishPct;
+
+      totalStitchPct += stitchPct;
+      totalAssemblyPct += assemblyPct;
+      totalWashPct += washPct;
+      totalFinishPct += finishPct;
+      validLotCount++;
+
+      return {
+        ...lot,
+        stitch_pct: stitchPct.toFixed(1),
+        assembly_pct: assemblyPct.toFixed(1),
+        wash_pct: washPct.toFixed(1),
+        finish_pct: finishPct.toFixed(1),
+        overall_pct: overallPct.toFixed(1)
+      };
+    });
+
+    // Calculate averages
+    const avgStitchPct = validLotCount > 0 ? (totalStitchPct / validLotCount).toFixed(1) : '0.0';
+    const avgAssemblyPct = validLotCount > 0 ? (totalAssemblyPct / validLotCount).toFixed(1) : '0.0';
+    const avgWashPct = validLotCount > 0 ? (totalWashPct / validLotCount).toFixed(1) : '0.0';
+    const avgFinishPct = validLotCount > 0 ? (totalFinishPct / validLotCount).toFixed(1) : '0.0';
+
+    const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+    res.render('lotCompletionDashboard', {
+      user: req.session.user,
+      lots: lotsWithPct,
+      averages: {
+        stitch: avgStitchPct,
+        assembly: avgAssemblyPct,
+        wash: avgWashPct,
+        finish: avgFinishPct
+      },
+      search,
+      currentPage: parseInt(page),
+      totalPages,
+      totalCount,
+      limit: parseInt(limit)
+    });
+  } catch (err) {
+    console.error('Error in lot-completion:', err);
+    req.flash('error', 'Failed to load lot completion data');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+router.get("/lot-completion/api", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const searchLike = `%${search}%`;
+
+    const [lots] = await pool.query(`
+      SELECT
+        c.id,
+        c.lot_no,
+        c.sku,
+        c.fabric_type,
+        c.total_pieces,
+        c.created_at,
+        COALESCE(sd.stitched_pieces, 0) AS stitched_pieces,
+        COALESCE(jd.assembly_pieces, 0) AS assembly_pieces,
+        COALESCE(wd.washed_pieces, 0) AS washed_pieces,
+        COALESCE(fd.finished_pieces, 0) AS finished_pieces
+      FROM cutting_lots c
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS stitched_pieces
+        FROM stitching_data
+        GROUP BY lot_no
+      ) sd ON c.lot_no = sd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS assembly_pieces
+        FROM jeans_assembly_data
+        GROUP BY lot_no
+      ) jd ON c.lot_no = jd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS washed_pieces
+        FROM washing_data
+        GROUP BY lot_no
+      ) wd ON c.lot_no = wd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS finished_pieces
+        FROM finishing_data
+        GROUP BY lot_no
+      ) fd ON c.lot_no = fd.lot_no
+      WHERE c.lot_no LIKE ? OR c.sku LIKE ?
+      ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [searchLike, searchLike, parseInt(limit), offset]);
+
+    const [[{ totalCount }]] = await pool.query(`
+      SELECT COUNT(*) AS totalCount FROM cutting_lots
+      WHERE lot_no LIKE ? OR sku LIKE ?
+    `, [searchLike, searchLike]);
+
+    let totalStitchPct = 0, totalAssemblyPct = 0, totalWashPct = 0, totalFinishPct = 0;
+    let validLotCount = 0;
+
+    const lotsWithPct = lots.map(lot => {
+      const total = parseFloat(lot.total_pieces) || 0;
+      if (total === 0) {
+        return { ...lot, stitch_pct: 0, assembly_pct: 0, wash_pct: 0, finish_pct: 0, overall_pct: 0 };
+      }
+
+      const stitchPct = Math.min(100, (lot.stitched_pieces / total) * 100);
+      const assemblyPct = Math.min(100, (lot.assembly_pieces / total) * 100);
+      const washPct = Math.min(100, (lot.washed_pieces / total) * 100);
+      const finishPct = Math.min(100, (lot.finished_pieces / total) * 100);
+
+      totalStitchPct += stitchPct;
+      totalAssemblyPct += assemblyPct;
+      totalWashPct += washPct;
+      totalFinishPct += finishPct;
+      validLotCount++;
+
+      return {
+        ...lot,
+        stitch_pct: stitchPct.toFixed(1),
+        assembly_pct: assemblyPct.toFixed(1),
+        wash_pct: washPct.toFixed(1),
+        finish_pct: finishPct.toFixed(1),
+        overall_pct: finishPct.toFixed(1)
+      };
+    });
+
+    res.json({
+      lots: lotsWithPct,
+      averages: {
+        stitch: validLotCount > 0 ? (totalStitchPct / validLotCount).toFixed(1) : '0.0',
+        assembly: validLotCount > 0 ? (totalAssemblyPct / validLotCount).toFixed(1) : '0.0',
+        wash: validLotCount > 0 ? (totalWashPct / validLotCount).toFixed(1) : '0.0',
+        finish: validLotCount > 0 ? (totalFinishPct / validLotCount).toFixed(1) : '0.0'
+      },
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Error in lot-completion API:', err);
+    res.status(500).json({ error: 'Failed to fetch lot completion data' });
+  }
+});
+
+router.get("/lot-completion/download", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { search = '' } = req.query;
+    const searchLike = `%${search}%`;
+
+    const [lots] = await pool.query(`
+      SELECT
+        c.lot_no,
+        c.sku,
+        c.fabric_type,
+        c.total_pieces,
+        DATE_FORMAT(c.created_at, '%Y-%m-%d') AS created_date,
+        COALESCE(sd.stitched_pieces, 0) AS stitched_pieces,
+        COALESCE(jd.assembly_pieces, 0) AS assembly_pieces,
+        COALESCE(wd.washed_pieces, 0) AS washed_pieces,
+        COALESCE(fd.finished_pieces, 0) AS finished_pieces
+      FROM cutting_lots c
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS stitched_pieces
+        FROM stitching_data GROUP BY lot_no
+      ) sd ON c.lot_no = sd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS assembly_pieces
+        FROM jeans_assembly_data GROUP BY lot_no
+      ) jd ON c.lot_no = jd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS washed_pieces
+        FROM washing_data GROUP BY lot_no
+      ) wd ON c.lot_no = wd.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(total_pieces) AS finished_pieces
+        FROM finishing_data GROUP BY lot_no
+      ) fd ON c.lot_no = fd.lot_no
+      WHERE c.lot_no LIKE ? OR c.sku LIKE ?
+      ORDER BY c.created_at DESC
+    `, [searchLike, searchLike]);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Lot Completion');
+
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Fabric', key: 'fabric_type', width: 12 },
+      { header: 'Total Pieces', key: 'total_pieces', width: 12 },
+      { header: 'Stitched', key: 'stitched_pieces', width: 12 },
+      { header: 'Stitch %', key: 'stitch_pct', width: 10 },
+      { header: 'Assembly', key: 'assembly_pieces', width: 12 },
+      { header: 'Assembly %', key: 'assembly_pct', width: 10 },
+      { header: 'Washed', key: 'washed_pieces', width: 12 },
+      { header: 'Wash %', key: 'wash_pct', width: 10 },
+      { header: 'Finished', key: 'finished_pieces', width: 12 },
+      { header: 'Finish %', key: 'finish_pct', width: 10 },
+      { header: 'Created', key: 'created_date', width: 12 }
+    ];
+
+    lots.forEach(lot => {
+      const total = parseFloat(lot.total_pieces) || 1;
+      sheet.addRow({
+        ...lot,
+        stitch_pct: ((lot.stitched_pieces / total) * 100).toFixed(1) + '%',
+        assembly_pct: ((lot.assembly_pieces / total) * 100).toFixed(1) + '%',
+        wash_pct: ((lot.washed_pieces / total) * 100).toFixed(1) + '%',
+        finish_pct: ((lot.finished_pieces / total) * 100).toFixed(1) + '%'
+      });
+    });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="lot_completion_report.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error downloading lot completion:', err);
+    req.flash('error', 'Failed to download report');
+    res.redirect('/operator/lot-completion');
+  }
+});
+
 module.exports = router;
