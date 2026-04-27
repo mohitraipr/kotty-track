@@ -1476,7 +1476,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isWashingInMaster, async (req
       SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.remark as cutting_remark,
              u_cut.username as cutting_master
       FROM cutting_lots cl
-      LEFT JOIN users u_cut ON cl.cutting_master_id = u_cut.id
+      LEFT JOIN users u_cut ON cl.user_id = u_cut.id
       WHERE cl.lot_no = ?
     `, [lotNo]);
 

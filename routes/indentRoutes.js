@@ -926,7 +926,7 @@ router.get('/recent-lots', isAuthenticated, canCreateStageIndent, async (req, re
       const [lots] = await pool.query(
         `SELECT DISTINCT lot_no
            FROM cutting_lots
-          WHERE cutting_master_id = ?
+          WHERE user_id = ?
           ORDER BY created_at DESC
           LIMIT 20`,
         [userId]

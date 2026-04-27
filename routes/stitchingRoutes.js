@@ -1440,7 +1440,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
     const [[cuttingLot]] = await pool.query(`
       SELECT cl.*, u.username as cutting_master_name
       FROM cutting_lots cl
-      LEFT JOIN users u ON cl.cutting_master_id = u.id
+      LEFT JOIN users u ON cl.user_id = u.id
       WHERE cl.lot_no = ?
     `, [lotNo]);
 
