@@ -480,7 +480,6 @@ function renderResults(results, isDateSearch = false) {
 
 // Constants
 const MAX_SINGLE_REQUEST = 500;
-let currentEventSource = null;
 let streamedResults = [];
 
 // Progress UI helpers
@@ -535,75 +534,85 @@ function appendResults(items) {
   countEl.textContent = streamedResults.length + ' result(s)';
 }
 
-// Streaming search using SSE
-function streamSearch(awbList) {
-  return new Promise((resolve, reject) => {
-    streamedResults = [];
-    document.getElementById('foundBadge').style.display = 'none';
-    document.getElementById('notFoundBadge').style.display = 'none';
-    document.getElementById('resultsBody').textContent = '';
+// Streaming search using fetch + POST (supports large AWB lists)
+let abortController = null;
 
-    const encoded = encodeURIComponent(awbList);
-    currentEventSource = new EventSource(`/video-finder/api/search-stream?awbList=${encoded}`);
+async function streamSearch(awbList) {
+  streamedResults = [];
+  document.getElementById('foundBadge').style.display = 'none';
+  document.getElementById('notFoundBadge').style.display = 'none';
+  document.getElementById('resultsBody').textContent = '';
 
-    let totalAwbs = 0;
-    let foundCount = 0;
+  abortController = new AbortController();
 
-    currentEventSource.addEventListener('start', (e) => {
-      const data = JSON.parse(e.data);
-      totalAwbs = data.total;
-      showProgress();
-      updateProgress(0, totalAwbs, 0, 0, Math.ceil(totalAwbs / data.chunkSize));
-    });
-
-    currentEventSource.addEventListener('progress', (e) => {
-      const data = JSON.parse(e.data);
-      foundCount = data.found;
-      updateProgress(data.processed, data.total, data.found, data.chunk, data.totalChunks);
-    });
-
-    currentEventSource.addEventListener('found', (e) => {
-      const data = JSON.parse(e.data);
-      appendResults(data.items);
-    });
-
-    currentEventSource.addEventListener('complete', (e) => {
-      const data = JSON.parse(e.data);
-      currentEventSource.close();
-      currentEventSource = null;
-      hideProgress();
-      updateResultBadges(data.found, data.notFound);
-      resolve(data);
-    });
-
-    currentEventSource.addEventListener('error', (e) => {
-      if (e.data) {
-        const data = JSON.parse(e.data);
-        reject(new Error(data.message));
-      } else {
-        reject(new Error('Connection lost'));
-      }
-      currentEventSource.close();
-      currentEventSource = null;
-      hideProgress();
-    });
-
-    currentEventSource.onerror = () => {
-      if (currentEventSource) {
-        currentEventSource.close();
-        currentEventSource = null;
-      }
-      hideProgress();
-      reject(new Error('Connection lost'));
-    };
+  const response = await fetch('/video-finder/api/search-stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ awbList }),
+    signal: abortController.signal,
   });
+
+  if (!response.ok) {
+    throw new Error('Search request failed: ' + response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalData = null;
+
+  showProgress();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        // Next line will be data
+      } else if (line.startsWith('data: ')) {
+        try {
+          const jsonStr = line.slice(6);
+          const data = JSON.parse(jsonStr);
+
+          if (data.total !== undefined && data.chunkSize !== undefined) {
+            // start event
+            updateProgress(0, data.total, 0, 0, Math.ceil(data.total / data.chunkSize));
+          } else if (data.processed !== undefined) {
+            // progress event
+            updateProgress(data.processed, data.total, data.found, data.chunk, data.totalChunks);
+          } else if (data.items) {
+            // found event
+            appendResults(data.items);
+          } else if (data.success !== undefined) {
+            // complete event
+            finalData = data;
+            hideProgress();
+            updateResultBadges(data.found, data.notFound);
+          } else if (data.message) {
+            // error event
+            throw new Error(data.message);
+          }
+        } catch (parseErr) {
+          // Ignore parse errors for keep-alive comments
+        }
+      }
+    }
+  }
+
+  abortController = null;
+  return finalData || { success: true, found: streamedResults.filter(r => r.found).length, total: streamedResults.length };
 }
 
 // Cancel button
 document.getElementById('cancelSearchBtn').addEventListener('click', function() {
-  if (currentEventSource) {
-    currentEventSource.close();
-    currentEventSource = null;
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
   }
   hideProgress();
   showAlert('Search cancelled', 'warning');

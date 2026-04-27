@@ -286,7 +286,8 @@ router.get('/url', isAuthenticated, allowVideoFinderAccess, async (req, res) => 
 // Chunked bulk search with Server-Sent Events (SSE) for progress
 // Use this for large searches (>500 AWBs)
 // OPTIMIZED: Pre-loads all S3 video listings once, then processes chunks against cache
-router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
+// Uses POST to avoid URL length limits with large AWB lists
+router.post('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
   // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -310,7 +311,8 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
   });
 
   try {
-    const awbListRaw = req.query.awbList || '';
+    // Support both query param (legacy) and POST body
+    const awbListRaw = req.body?.awbList || req.query.awbList || '';
     const awbs = awbListRaw
       .split(/[\n,\s|]+/)
       .map((s) => s.trim().toUpperCase())
