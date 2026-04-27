@@ -3,1047 +3,1652 @@
 
 <style>
   /* ═══════════════════════════════════════════════════════════════════════════
-     STITCHING DASHBOARD - Kotty Track Design System
+     STITCHING DASHBOARD - Mobile-First, Clean & Practical
+     Designed for factory floor workers using phones
    ═══════════════════════════════════════════════════════════════════════════ */
 
+  * { box-sizing: border-box; }
+
   :root {
-    --charcoal: #1a1a1a;
-    --cream: #faf8f5;
-    --cream-dark: #f0ebe3;
-    --terracotta: #c45c3a;
-    --terracotta-light: #d4826a;
-    --terracotta-dark: #a84a2d;
-    --success: #2d8a5f;
-    --success-light: #e8f5ef;
-    --warning: #c4873a;
-    --warning-light: #fef3e2;
-    --danger: #c23b22;
-    --danger-light: #fdeaea;
-    --info: #3a7bc4;
-    --info-light: #e8f1fb;
-    --text-primary: #1a1a1a;
-    --text-secondary: #5a5a5a;
-    --text-muted: #8a8a8a;
-    --border: #e5e0d8;
-    --border-light: #f0ebe3;
-    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
-    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 16px;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --warning: #f59e0b;
+    --warning-light: #fef3c7;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
 
   body {
-    background: var(--cream);
-    min-height: 100vh;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
 
-  .dashboard-container {
-    max-width: 1200px;
+  .container {
+    max-width: 600px;
     margin: 0 auto;
-    padding: 32px 24px;
+    padding: 16px;
+    padding-top: 76px;
   }
 
-  /* Page Header */
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .toast-container {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    width: calc(100% - 32px);
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: toastIn 0.3s ease-out;
+    pointer-events: auto;
+  }
+
+  .toast.toast-out {
+    animation: toastOut 0.25s ease-in forwards;
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
+  }
+
+  .toast-success {
+    background: #166534;
+    color: white;
+  }
+
+  .toast-error {
+    background: #991b1b;
+    color: white;
+  }
+
+  .toast-warning {
+    background: #92400e;
+    color: white;
+  }
+
+  .toast-info {
+    background: var(--primary);
+    color: white;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LOADING SPINNER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .spinner-dark {
+    border-color: rgba(0,0,0,0.1);
+    border-top-color: var(--primary);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Button loading state */
+  .btn-loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  .btn-loading .btn-text {
+    visibility: hidden;
+  }
+
+  .btn-loading .spinner {
+    position: absolute;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TOOLTIPS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .tooltip-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .tooltip-icon {
+    width: 18px;
+    height: 18px;
+    background: var(--text-light);
+    color: white;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: 6px;
+    cursor: help;
+  }
+
+  .tooltip-text {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 100;
+    max-width: 250px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  .tooltip-text::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1e293b;
+  }
+
+  .tooltip-wrapper:hover .tooltip-text,
+  .tooltip-wrapper:focus-within .tooltip-text {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
   .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 28px;
-    flex-wrap: wrap;
-    gap: 16px;
+    margin-bottom: 20px;
   }
 
   .page-title {
-    font-family: 'DM Serif Display', Georgia, serif;
-    font-size: 2rem;
-    font-weight: 400;
-    color: var(--charcoal);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
     margin: 0;
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  /* Buttons */
-  .btn-kotty {
-    font-family: 'Outfit', sans-serif;
-    font-weight: 500;
-    padding: 10px 18px;
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  .btn-payments {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    text-decoration: none;
-  }
-
-  .btn-kotty-primary {
-    background: var(--terracotta);
-    color: white;
-    border-color: var(--terracotta);
-  }
-
-  .btn-kotty-primary:hover {
-    background: var(--terracotta-dark);
-    border-color: var(--terracotta-dark);
-    color: white;
-  }
-
-  .btn-kotty-outline {
-    background: white;
-    color: var(--charcoal);
-    border-color: var(--border);
-  }
-
-  .btn-kotty-outline:hover {
-    border-color: var(--terracotta);
-    color: var(--terracotta);
-  }
-
-  .btn-kotty-success {
-    background: var(--success);
-    color: white;
-    border-color: var(--success);
-  }
-
-  .btn-kotty-success:hover {
-    background: #236d4a;
-    border-color: #236d4a;
-    color: white;
-  }
-
-  .btn-kotty-warning {
-    background: var(--warning);
-    color: white;
-    border-color: var(--warning);
-  }
-
-  .btn-kotty-info {
-    background: var(--info);
-    color: white;
-    border-color: var(--info);
-  }
-
-  .btn-kotty-sm {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-
-  /* Tabs */
-  .kotty-tabs {
-    display: flex;
-    gap: 4px;
-    background: white;
-    padding: 6px;
-    border-radius: var(--radius-md);
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--card);
+    color: var(--text);
     border: 1px solid var(--border);
-    margin-bottom: 24px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    box-shadow: var(--shadow);
+    transition: all 0.15s;
   }
 
-  .kotty-tab {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 500;
-    padding: 12px 20px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: var(--radius-sm);
+  .btn-payments:hover {
+    background: var(--bg);
+  }
+
+  .btn-payments:active {
+    transform: scale(0.98);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     STATS - Simple Row
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat-box {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s;
+  }
+
+  .stat-number {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .stat-number.updated {
+    color: var(--success);
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 4px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TABS - Simple Pills
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 14px 16px;
+    background: var(--card);
+    color: var(--text-light);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.9375rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
   }
 
-  .kotty-tab:hover {
-    background: var(--cream);
-    color: var(--charcoal);
+  .tab-btn:active {
+    transform: scale(0.98);
   }
 
-  .kotty-tab.active {
-    background: var(--terracotta);
+  .tab-btn.active {
+    background: var(--primary);
     color: white;
-  }
-
-  .kotty-tab i {
-    font-size: 1rem;
+    border-color: var(--primary);
   }
 
   .tab-content {
     display: none;
+    animation: fadeIn 0.25s ease-out;
   }
 
   .tab-content.active {
     display: block;
-    animation: fadeIn 0.3s ease;
   }
 
-  /* Cards */
-  .kotty-card {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-
-  .kotty-card-header {
-    padding: 18px 24px;
-    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
-    border-bottom: 1px solid var(--border-light);
-  }
-
-  .kotty-card-title {
-    font-family: 'DM Serif Display', Georgia, serif;
-    font-size: 1.1rem;
-    font-weight: 400;
-    color: var(--charcoal);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .kotty-card-title i {
-    color: var(--terracotta);
-  }
-
-  .kotty-card-body {
-    padding: 24px;
-  }
-
-  /* Form Styling */
-  .form-label {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-    display: block;
-  }
-
-  .form-control, .form-select {
-    font-family: 'Outfit', sans-serif;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    padding: 10px 14px;
-    background: white;
-    transition: all 0.2s ease;
-    width: 100%;
-  }
-
-  .form-control:focus, .form-select:focus {
-    border-color: var(--terracotta);
-    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
-    outline: none;
-  }
-
-  /* Tables */
-  .kotty-table {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.875rem;
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-
-  .kotty-table thead th {
-    background: var(--cream);
-    border-bottom: 2px solid var(--border);
-    color: var(--text-secondary);
-    font-weight: 600;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 12px 14px;
-    text-align: left;
-  }
-
-  .kotty-table tbody td {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border-light);
-    vertical-align: middle;
-  }
-
-  .kotty-table tbody tr:hover {
-    background: var(--cream);
-  }
-
-  /* Entry Cards */
-  .entry-card {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    margin-bottom: 12px;
-    overflow: hidden;
-  }
-
-  .entry-header {
-    padding: 16px 20px;
-    background: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: background 0.2s ease;
-  }
-
-  .entry-header:hover {
-    background: var(--cream);
-  }
-
-  .entry-header-info {
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.9rem;
-    color: var(--charcoal);
-  }
-
-  .entry-header-info strong {
-    color: var(--terracotta);
-  }
-
-  .entry-chevron {
-    color: var(--text-muted);
-    transition: transform 0.2s ease;
-  }
-
-  .entry-card.open .entry-chevron {
-    transform: rotate(180deg);
-  }
-
-  .entry-body {
-    padding: 20px;
-    border-top: 1px solid var(--border-light);
-    display: none;
-  }
-
-  .entry-card.open .entry-body {
-    display: block;
-  }
-
-  /* Search Input */
-  .search-wrapper {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .search-wrapper i {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-muted);
-  }
-
-  .search-wrapper input {
-    padding-left: 42px;
-  }
-
-  /* Alerts */
-  .kotty-alert {
-    padding: 14px 18px;
-    border-radius: var(--radius-md);
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .kotty-alert-danger {
-    background: var(--danger-light);
-    border: 1px solid #f5c6c0;
-    color: var(--danger);
-  }
-
-  .kotty-alert-success {
-    background: var(--success-light);
-    border: 1px solid #b8e0cc;
-    color: var(--success);
-  }
-
-  /* Modal */
-  .modal-content {
-    border: none;
-    border-radius: var(--radius-lg);
-  }
-
-  .modal-header {
-    padding: 18px 24px;
-    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-title {
-    font-family: 'DM Serif Display', Georgia, serif;
-    font-weight: 400;
-    font-size: 1.25rem;
-    color: var(--charcoal);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .modal-title i {
-    color: var(--terracotta);
-  }
-
-  .modal-body {
-    padding: 24px;
-    font-family: 'Outfit', sans-serif;
-  }
-
-  .modal-footer {
-    padding: 16px 24px;
-    border-top: 1px solid var(--border-light);
-    background: var(--cream);
-  }
-
-  /* Animations */
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Responsive */
-  @media (max-width: 768px) {
-    .dashboard-container {
-      padding: 20px 16px;
-    }
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SEARCH BOX - Large & Clear
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-    .page-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
+  .search-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
 
-    .page-title {
-      font-size: 1.5rem;
-    }
+  .search-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
 
-    .kotty-tabs {
-      flex-direction: column;
-    }
+  .search-input {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.125rem;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
 
-    .header-actions {
-      width: 100%;
-    }
+  .search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
 
-    .header-actions .btn-kotty {
-      flex: 1;
-      justify-content: center;
-    }
+  .search-input::placeholder {
+    color: #94a3b8;
+  }
+
+  .search-input.input-error {
+    border-color: var(--danger);
+    animation: shake 0.4s ease-out;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+
+  .btn-search {
+    width: 100%;
+    padding: 16px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s, transform 0.1s;
+    position: relative;
+  }
+
+  .btn-search:hover:not(:disabled) {
+    background: var(--primary-dark);
+  }
+
+  .btn-search:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn-search:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LOT RESULT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .lot-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .lot-header {
+    padding: 16px 20px;
+    background: linear-gradient(to right, #f1f5f9, var(--card));
+    border-bottom: 1px solid var(--border);
+  }
+
+  .lot-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .lot-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .lot-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .lot-badge.denim {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .lot-badge.hosiery {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .lot-meta {
+    font-size: 0.875rem;
+    color: var(--text-light);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SIZE GRID - Big Touch Targets
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .sizes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .size-card {
+    background: #f8fafc;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .size-card.has-qty {
+    border-color: var(--primary);
+    background: #eff6ff;
+  }
+
+  .size-card.disabled {
+    opacity: 0.5;
+  }
+
+  .size-card.input-error {
+    border-color: var(--danger);
+    background: var(--danger-light);
+  }
+
+  .size-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .size-avail {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 12px;
+  }
+
+  .size-avail .green {
+    color: var(--success);
+    font-weight: 600;
+  }
+
+  .size-input {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .size-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  .size-input:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+  }
+
+  .size-input.input-error {
+    border-color: var(--danger);
+  }
+
+  .size-error {
+    font-size: 0.7rem;
+    color: var(--danger);
+    margin-top: 6px;
+    display: none;
+  }
+
+  .size-card.input-error .size-error {
+    display: block;
+  }
+
+  .size-taken {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SUBMIT SECTION
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .submit-section {
+    padding: 20px;
+    background: #f1f5f9;
+    border-top: 1px solid var(--border);
+  }
+
+  .total-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .total-label {
+    font-size: 1rem;
+    color: var(--text-light);
+  }
+
+  .total-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--primary);
+    transition: transform 0.2s;
+  }
+
+  .total-value.pulse {
+    animation: pulse 0.3s ease-out;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  .btn-submit {
+    width: 100%;
+    padding: 18px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.15s, transform 0.1s;
+    position: relative;
+  }
+
+  .btn-submit:hover:not(:disabled) {
+    background: #15803d;
+  }
+
+  .btn-submit:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-light);
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .empty-state i {
+    font-size: 3.5rem;
+    opacity: 0.25;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .empty-state p {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+  }
+
+  .empty-state-hint {
+    font-size: 0.875rem;
+    color: var(--text-light);
+    opacity: 0.7;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     TODAY'S WORK
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .today-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .today-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f1f5f9;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .today-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .today-total {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--success);
+  }
+
+  .today-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .today-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .today-item:last-child {
+    border-bottom: none;
+  }
+
+  .today-item.new-entry {
+    background: var(--success-light);
+  }
+
+  .today-lot {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .today-sizes {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 2px;
+  }
+
+  .today-qty {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--success);
+  }
+
+  .today-time {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 2px;
+    text-align: right;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HISTORY TAB
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .history-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .history-search {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .history-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .history-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  .history-list {
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .history-item:last-child {
+    border-bottom: none;
+  }
+
+  .history-lot {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .history-sku {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 2px;
+  }
+
+  .history-qty {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .history-date {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 2px;
+    text-align: right;
+  }
+
+  .history-loading {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SKELETON LOADERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .skeleton {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .skeleton-text {
+    height: 16px;
+    margin-bottom: 8px;
+  }
+
+  .skeleton-number {
+    height: 32px;
+    width: 60px;
+    margin: 0 auto;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ALERTS (server-side)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .alert {
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .alert-success {
+    background: var(--success-light);
+    color: #166534;
+    border: 1px solid #86efac;
+  }
+
+  .alert-error {
+    background: var(--danger-light);
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+  }
+
+  /* Lot Selection List */
+  .lot-selection-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lot-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .lot-option {
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .lot-option:hover {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .lot-option-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lot-option-no {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+  }
+  .lot-option-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .lot-option-remark {
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 500;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lot-option-avail {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--success);
   }
 </style>
 
-<div class="dashboard-container">
-  <!-- Flash Messages -->
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="container">
+  <!-- Alerts -->
   <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
     <% error.forEach(function(msg){ %>
-      <div class="kotty-alert kotty-alert-danger">
-        <i class="bi bi-exclamation-circle"></i>
-        <%= msg %>
+      <div class="alert alert-error">
+        <i class="bi bi-exclamation-circle"></i> <%= msg %>
       </div>
     <% }) %>
   <% } %>
   <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
     <% success.forEach(function(msg){ %>
-      <div class="kotty-alert kotty-alert-success">
-        <i class="bi bi-check-circle"></i>
-        <%= msg %>
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i> <%= msg %>
       </div>
     <% }) %>
   <% } %>
 
-  <!-- Page Header -->
+  <!-- Header -->
   <div class="page-header">
-    <h1 class="page-title">Stitching Dashboard</h1>
-    <div class="header-actions">
-      <% if (user.username && user.username.toLowerCase().includes('hoisery')) { %>
-        <a href="/stitchingdashboard/assign-finishing" class="btn-kotty btn-kotty-outline">
-          <i class="bi bi-check-circle"></i> Assign Finishing
-        </a>
-      <% } else { %>
-        <a href="/stitchingdashboard/assign-jeansassembly" class="btn-kotty btn-kotty-outline">
-          <i class="bi bi-check-circle"></i> Assign Jeans Assembly
-        </a>
-      <% } %>
-      <a href="/stitchingdashboard/approve" class="btn-kotty btn-kotty-outline">
-        <i class="bi bi-check2-all"></i> Approve
-      </a>
-      <% if (user.id && (user.id === 6 || user.id === 35)) { %>
-        <a href="/stitchingdashboard/payments/contract" class="btn-kotty btn-kotty-outline">
-          <i class="bi bi-currency-rupee"></i> Contract Pay
-        </a>
-      <% } %>
-      <% if (user.id && user.id === 8) { %>
-        <a href="/stitchingdashboard/payments/operation" class="btn-kotty btn-kotty-outline">
-          <i class="bi bi-list-task"></i> Operation Pay
-        </a>
-      <% } %>
+    <h1 class="page-title">Stitching</h1>
+    <a href="/payments/my-payments" class="btn-payments">
+      <i class="bi bi-wallet2"></i> Payments
+    </a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-number" id="todayPieces">
+        <div class="skeleton skeleton-number"></div>
+      </div>
+      <div class="stat-label">Pieces Today</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-number" id="todayEntries">
+        <div class="skeleton skeleton-number"></div>
+      </div>
+      <div class="stat-label">Entries</div>
     </div>
   </div>
 
   <!-- Tabs -->
-  <div class="kotty-tabs" role="tablist">
-    <button class="kotty-tab active" data-tab="create" role="tab">
-      <i class="bi bi-plus-circle"></i> Create Entry
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="submit">
+      <i class="bi bi-plus-circle"></i> Submit
     </button>
-    <button class="kotty-tab" data-tab="existing" role="tab">
-      <i class="bi bi-list-ul"></i> Existing Entries
+    <button class="tab-btn" data-tab="history">
+      <i class="bi bi-clock-history"></i> History
     </button>
   </div>
 
-  <!-- CREATE TAB -->
-  <div class="tab-content active" id="createTab">
-    <div class="kotty-card">
-      <div class="kotty-card-header">
-        <h2 class="kotty-card-title">
-          <i class="bi bi-plus-circle"></i> Create New Stitching Entry & Assign
-        </h2>
+  <!-- SUBMIT TAB -->
+  <div class="tab-content active" id="submitTab">
+
+    <!-- Search -->
+    <div class="search-card">
+      <label class="search-label">
+        Enter Lot Number
+        <span class="tooltip-wrapper">
+          <span class="tooltip-icon">?</span>
+          <span class="tooltip-text">Type the lot number (e.g. AK1, SW5) and tap Search to see available sizes</span>
+        </span>
+      </label>
+      <input type="text" id="searchInput" class="search-input" placeholder="e.g. ak1, sw5" autocomplete="off" autofocus>
+      <button type="button" class="btn-search" id="btnSearch" onclick="searchLot()">
+        <span class="btn-text"><i class="bi bi-search"></i> Search Lot</span>
+      </button>
+    </div>
+
+    <!-- Lot Selection List (when multiple lots match) -->
+    <div id="lotSelectionList" style="display: none;">
+      <div class="lot-selection-header">
+        <span><i class="bi bi-list-ul"></i> Multiple lots found - Select one:</span>
       </div>
-      <div class="kotty-card-body">
-        <form id="createForm" action="/stitchingdashboard/create" method="POST" enctype="multipart/form-data">
-          <div class="row mb-4">
-            <div class="col-md-4 mb-3 mb-md-0">
-              <label class="form-label">Select Lot</label>
-              <select id="selectedLotId" name="selectedLotId" class="form-select" required>
-                <option value="">-- Choose a lot --</option>
-                <% lots.forEach(function(l) { %>
-                  <option value="<%= l.id %>">
-                    <%= l.lot_no %> (SKU: <%= l.sku %>)
-                    <% if (l.cutting_remark) { %> - <%= l.cutting_remark %><% } %>
-                  </option>
-                <% }) %>
-              </select>
-            </div>
-            <div class="col-md-4 mb-3 mb-md-0">
-              <label class="form-label">Remark (optional)</label>
-              <input type="text" class="form-control" name="remark" placeholder="Any remarks...">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Image (optional)</label>
-              <input type="file" class="form-control" name="image_file" accept="image/*">
-            </div>
-          </div>
+      <div id="lotOptions" class="lot-options"></div>
+    </div>
 
-          <div id="lotSizesContainer" style="display: none;">
-            <h6 style="font-family: 'Outfit', sans-serif; font-weight: 600; margin-bottom: 16px; color: var(--charcoal);">
-              <i class="bi bi-rulers" style="color: var(--terracotta);"></i> Sizes for This Lot
-            </h6>
-            <div class="table-responsive">
-              <table class="kotty-table" id="lotSizesTable">
-                <thead>
-                  <tr>
-                    <th>Size Label</th>
-                    <th>Max Available</th>
-                    <th>Enter Pieces</th>
-                    <th>Assign To User (Optional)</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <div style="margin-top: 16px; font-family: 'Outfit', sans-serif;">
-              <strong style="color: var(--charcoal);">Total Pieces Selected:</strong>
-              <span id="createTotalPieces" style="color: var(--terracotta); font-weight: 600; font-size: 1.1rem;">0</span>
-            </div>
+    <!-- Lot Result -->
+    <div id="lotResult" style="display: none;">
+      <div class="lot-card">
+        <div class="lot-header">
+          <div class="lot-title">
+            <span class="lot-number" id="lotNo">-</span>
+            <span class="lot-badge" id="lotType">-</span>
           </div>
-
-          <button type="submit" class="btn-kotty btn-kotty-primary mt-4">
-            <i class="bi bi-check-lg"></i> Create & Assign
+          <div class="lot-meta">
+            <span id="lotSku">-</span> &bull; Cut by <span id="lotCutter">-</span>
+          </div>
+        </div>
+        <div class="sizes-grid" id="sizesGrid"></div>
+        <div class="submit-section">
+          <div class="total-row">
+            <span class="total-label">
+              Total Pieces
+              <span class="tooltip-wrapper">
+                <span class="tooltip-icon">?</span>
+                <span class="tooltip-text">Adjust quantities if needed. Set to 0 to skip a size.</span>
+              </span>
+            </span>
+            <span class="total-value" id="totalDisplay"><span id="totalQty">0</span> pcs</span>
+          </div>
+          <button type="button" class="btn-submit" id="btnSubmit" onclick="submitStitching()">
+            <span class="btn-text"><i class="bi bi-check-circle"></i> Submit Stitching</span>
           </button>
-        </form>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- EXISTING ENTRIES TAB -->
-  <div class="tab-content" id="existingTab">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-      <h2 style="font-family: 'DM Serif Display', Georgia, serif; font-size: 1.25rem; margin: 0; color: var(--charcoal);">
-        <i class="bi bi-list-ul" style="color: var(--terracotta);"></i> Existing Entries
-      </h2>
-      <a href="/stitchingdashboard/download-all" class="btn-kotty btn-kotty-success">
-        <i class="bi bi-file-earmark-excel"></i> Download Excel
-      </a>
-    </div>
-
-    <div class="search-wrapper">
+    <!-- No Result -->
+    <div id="noResult" class="empty-state" style="display: none;">
       <i class="bi bi-search"></i>
-      <input type="text" id="searchExisting" class="form-control" placeholder="Search by lot or SKU...">
+      <p>No lot found</p>
+      <span class="empty-state-hint">Check the lot number and try again</span>
     </div>
 
-    <div id="existingEntriesContainer"></div>
-    <div id="loadMoreSentinel" style="height: 60px;"></div>
+    <!-- Today's Work -->
+    <div class="today-card" style="margin-top: 24px;">
+      <div class="today-header">
+        <span class="today-title"><i class="bi bi-check2-all"></i> Today's Work</span>
+        <span class="today-total" id="todayTotal">0 pcs</span>
+      </div>
+      <ul class="today-list" id="todayList">
+        <li class="today-item" style="justify-content: center;">
+          <div class="spinner spinner-dark"></div>
+        </li>
+      </ul>
+    </div>
   </div>
-</div>
 
-<!-- UPDATE MODAL -->
-<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <form id="updateForm" method="POST" action="">
-        <div class="modal-header">
-          <h5 class="modal-title" id="updateModalLabel">
-            <i class="bi bi-pencil-square"></i> Update Stitching Data
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p style="margin-bottom: 16px;">
-            <strong>Updating Entry ID:</strong>
-            <span id="updatingEntryId" style="color: var(--terracotta);">-</span>
-          </p>
-          <div id="updateAlert" class="kotty-alert kotty-alert-danger d-none"></div>
-          <div class="table-responsive">
-            <table class="kotty-table" id="updateSizesTable">
-              <thead>
-                <tr>
-                  <th>Size Label</th>
-                  <th>Already Used</th>
-                  <th>Max Remain</th>
-                  <th>New Pieces (Increment)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <p class="small text-muted mt-3">Leave a field blank or zero for no increment.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-kotty btn-kotty-outline" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-kotty btn-kotty-primary">
-            <i class="bi bi-check-lg"></i> Save Updates
-          </button>
-        </div>
-      </form>
+  <!-- HISTORY TAB -->
+  <div class="tab-content" id="historyTab">
+    <div class="history-card">
+      <div class="history-search">
+        <input type="text" id="historySearch" class="history-input" placeholder="Search lot or SKU...">
+      </div>
+      <div class="history-list" id="historyList"></div>
+      <div class="history-loading" id="historyLoading">
+        <div class="spinner spinner-dark"></div>
+        <span>Loading...</span>
+      </div>
     </div>
   </div>
 </div>
-
-<%- include('partials/footer') %>
 
 <script>
-  /*****************************************************
-   * TAB SWITCHING
-   *****************************************************/
-  const tabs = document.querySelectorAll('.kotty-tab');
-  const tabContents = document.querySelectorAll('.tab-content');
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TOAST NOTIFICATION SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tabContents.forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      const targetId = tab.dataset.tab + 'Tab';
-      document.getElementById(targetId).classList.add('active');
+  function showToast(message, type = 'info', duration = 3500) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+
+    const icons = {
+      success: 'bi-check-circle-fill',
+      error: 'bi-x-circle-fill',
+      warning: 'bi-exclamation-triangle-fill',
+      info: 'bi-info-circle-fill'
+    };
+
+    toast.innerHTML = '<i class="bi ' + icons[type] + '"></i> ' + message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-out');
+      setTimeout(() => toast.remove(), 250);
+    }, duration);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUTTON LOADING STATES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function setButtonLoading(btn, loading) {
+    if (loading) {
+      btn.disabled = true;
+      btn.dataset.originalHtml = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner"></div>';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB SWITCHING
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(tabId + 'Tab').classList.add('active');
+
+      if (tabId === 'history' && document.getElementById('historyList').children.length === 0) {
+        loadHistory();
+      }
     });
   });
 
-  /*****************************************************
-   * CREATE TAB
-   *****************************************************/
-  let assignableUsers = [];
-  const lotSelect = document.getElementById('selectedLotId');
-  const lotSizesContainer = document.getElementById('lotSizesContainer');
-  const lotSizesTableBody = document.querySelector('#lotSizesTable tbody');
-  const createTotalPiecesElem = document.getElementById('createTotalPieces');
+  // Escape HTML
+  function esc(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
 
-  lotSelect.addEventListener('change', async () => {
-    const val = lotSelect.value;
-    if (!val) {
-      lotSizesContainer.style.display = 'none';
-      lotSizesTableBody.textContent = '';
-      createTotalPiecesElem.textContent = '0';
+  // Current lot data
+  let currentLot = null;
+  let availableLots = [];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LOT SELECTION LIST (when multiple lots match search)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function showLotSelectionList(lots) {
+    availableLots = lots;
+    const container = document.getElementById('lotOptions');
+    container.textContent = '';
+
+    lots.forEach((lot, index) => {
+      const totalAvail = lot.sizes ? lot.sizes.reduce((sum, s) => sum + s.available_qty, 0) : 0;
+      const div = document.createElement('div');
+      div.className = 'lot-option';
+      div.onclick = () => selectLotFromList(index);
+
+      const mainDiv = document.createElement('div');
+      mainDiv.className = 'lot-option-main';
+
+      const lotNo = document.createElement('span');
+      lotNo.className = 'lot-option-no';
+      lotNo.textContent = lot.lot_no;
+      mainDiv.appendChild(lotNo);
+
+      const meta = document.createElement('span');
+      meta.className = 'lot-option-meta';
+      meta.textContent = lot.sku + ' • ' + (lot.cutting_master || '-');
+      mainDiv.appendChild(meta);
+
+      if (lot.cutting_remark) {
+        const remark = document.createElement('span');
+        remark.className = 'lot-option-remark';
+        remark.textContent = lot.cutting_remark;
+        mainDiv.appendChild(remark);
+      }
+
+      div.appendChild(mainDiv);
+
+      const avail = document.createElement('span');
+      avail.className = 'lot-option-avail';
+      avail.textContent = totalAvail + ' pcs';
+      div.appendChild(avail);
+
+      container.appendChild(div);
+    });
+
+    document.getElementById('lotSelectionList').style.display = 'block';
+  }
+
+  function selectLotFromList(index) {
+    document.getElementById('lotSelectionList').style.display = 'none';
+    currentLot = availableLots[index];
+    displaySelectedLot();
+  }
+
+  function displaySelectedLot() {
+    document.getElementById('lotNo').textContent = currentLot.lot_no.toUpperCase();
+    document.getElementById('lotSku').textContent = currentLot.sku;
+    document.getElementById('lotCutter').textContent = currentLot.cutting_master;
+
+    const badge = document.getElementById('lotType');
+    badge.textContent = currentLot.is_denim_cutter ? 'Denim' : 'Hosiery';
+    badge.className = 'lot-badge ' + (currentLot.is_denim_cutter ? 'denim' : 'hosiery');
+
+    const grid = document.getElementById('sizesGrid');
+    grid.textContent = '';
+
+    currentLot.sizes.forEach(size => {
+      const card = document.createElement('div');
+      card.className = 'size-card' + (size.available_qty === 0 ? ' disabled' : '');
+
+      const name = document.createElement('div');
+      name.className = 'size-name';
+      name.textContent = size.size_label;
+      card.appendChild(name);
+
+      const avail = document.createElement('div');
+      avail.className = 'size-avail';
+      const greenSpan = document.createElement('span');
+      greenSpan.className = 'green';
+      greenSpan.textContent = size.available_qty;
+      avail.appendChild(greenSpan);
+      avail.appendChild(document.createTextNode(' / ' + size.cut_qty));
+      card.appendChild(avail);
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'size-input qty-input';
+      input.dataset.size = size.size_label;
+      input.dataset.max = size.available_qty;
+      input.value = size.available_qty;
+      input.min = '0';
+      input.max = size.available_qty;
+      input.disabled = size.available_qty === 0;
+      input.addEventListener('input', handleQtyInput);
+      input.addEventListener('change', handleQtyInput);
+      input.addEventListener('focus', function() { this.select(); });
+      card.appendChild(input);
+
+      const errorMsg = document.createElement('div');
+      errorMsg.className = 'size-error';
+      errorMsg.textContent = 'Max: ' + size.available_qty;
+      card.appendChild(errorMsg);
+
+      if (size.taken_by && size.taken_by.length > 0) {
+        const taken = document.createElement('div');
+        taken.className = 'size-taken';
+        taken.textContent = size.taken_by.map(t => t.username + ': ' + t.qty).join(', ');
+        card.appendChild(taken);
+      }
+
+      grid.appendChild(card);
+    });
+
+    document.getElementById('lotResult').style.display = 'block';
+    updateTotal();
+    showToast('Selected: ' + currentLot.lot_no.toUpperCase(), 'success', 2000);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEARCH LOT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function searchLot() {
+    const searchInput = document.getElementById('searchInput');
+    const search = searchInput.value.trim();
+    const btn = document.getElementById('btnSearch');
+
+    // Validation
+    if (!search) {
+      searchInput.classList.add('input-error');
+      searchInput.focus();
+      showToast('Please enter a lot number', 'warning');
+      setTimeout(() => searchInput.classList.remove('input-error'), 600);
       return;
     }
+
+    document.getElementById('lotResult').style.display = 'none';
+    document.getElementById('noResult').style.display = 'none';
+    document.getElementById('lotSelectionList').style.display = 'none';
+
+    setButtonLoading(btn, true);
+
     try {
-      const res = await fetch('/stitchingdashboard/get-lot-sizes/' + val);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const sizesData = await res.json();
+      const res = await fetch('/stitchingdashboard/available-lots?search=' + encodeURIComponent(search));
+      const data = await res.json();
 
-      if (!assignableUsers.length) {
-        const resp = await fetch('/stitchingdashboard/create/assignable-users');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        assignableUsers = json.data || [];
-      }
-
-      renderLotSizes(sizesData);
-    } catch (err) {
-      console.error('Error fetching lot sizes or users:', err);
-      lotSizesContainer.style.display = 'none';
-      while (lotSizesTableBody.firstChild) lotSizesTableBody.removeChild(lotSizesTableBody.firstChild);
-      createTotalPiecesElem.textContent = '0';
-    }
-  });
-
-  function renderLotSizes(sizesArr) {
-    lotSizesContainer.style.display = 'block';
-    while (lotSizesTableBody.firstChild) lotSizesTableBody.removeChild(lotSizesTableBody.firstChild);
-
-    sizesArr.forEach(sz => {
-      const tr = document.createElement('tr');
-
-      const tdLabel = document.createElement('td');
-      tdLabel.textContent = sz.size_label;
-      tr.appendChild(tdLabel);
-
-      const tdRemain = document.createElement('td');
-      tdRemain.textContent = sz.remain;
-      tr.appendChild(tdRemain);
-
-      const tdInput = document.createElement('td');
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.min = '0';
-      inp.max = String(sz.remain);
-      inp.value = String(sz.remain);
-      inp.classList.add('form-control');
-      inp.dataset.sizeId = sz.id;
-      inp.required = true;
-      inp.addEventListener('input', updateCreateTotal);
-      tdInput.appendChild(inp);
-      tr.appendChild(tdInput);
-
-      const tdAssign = document.createElement('td');
-      const sel = document.createElement('select');
-      sel.classList.add('form-select');
-      const optNone = document.createElement('option');
-      optNone.value = '';
-      optNone.textContent = '--No Assignment--';
-      sel.appendChild(optNone);
-      assignableUsers.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value = u.id;
-        opt.textContent = u.username;
-        sel.appendChild(opt);
-      });
-      tdAssign.appendChild(sel);
-      tr.appendChild(tdAssign);
-
-      lotSizesTableBody.appendChild(tr);
-    });
-    updateCreateTotal();
-  }
-
-  function updateCreateTotal() {
-    let sum = 0;
-    const inputs = lotSizesTableBody.querySelectorAll('input[type="number"]');
-    inputs.forEach(inp => {
-      const val = parseInt(inp.value, 10);
-      if (!isNaN(val) && val > 0) {
-        sum += val;
-      }
-    });
-    createTotalPiecesElem.textContent = sum;
-  }
-
-  const createForm = document.getElementById('createForm');
-  createForm.addEventListener('submit', (e) => {
-    const val = lotSelect.value;
-    if (!val) {
-      e.preventDefault();
-      alert('Please select a lot first.');
-      return;
-    }
-
-    const rows = lotSizesTableBody.querySelectorAll('tr');
-    if (!rows.length) {
-      e.preventDefault();
-      alert('No sizes found for this lot!');
-      return;
-    }
-
-    document.querySelectorAll('.sizeMappingField').forEach(el => el.remove());
-    document.querySelectorAll('.assignmentField').forEach(el => el.remove());
-
-    for (const row of rows) {
-      const remain = parseInt(row.children[1].textContent, 10);
-      const input = row.children[2].querySelector('input');
-      let valNum = parseInt(input.value, 10);
-      if (isNaN(valNum) || valNum < 0) valNum = 0;
-      if (valNum > remain) {
-        e.preventDefault();
-        alert('Requested ' + valNum + ' but only ' + remain + ' remain for size ' + row.children[0].textContent);
+      if (!data.lots || data.lots.length === 0) {
+        document.getElementById('noResult').style.display = 'block';
+        showToast('No lot found with "' + search + '"', 'warning');
         return;
       }
 
-      if (valNum > 0) {
-        const sizeId = input.dataset.sizeId;
-        const hiddenSize = document.createElement('input');
-        hiddenSize.type = 'hidden';
-        hiddenSize.classList.add('sizeMappingField');
-        hiddenSize.name = 'sizes[' + sizeId + ']';
-        hiddenSize.value = valNum;
-        createForm.appendChild(hiddenSize);
+      // If multiple lots, show selection list
+      if (data.lots.length > 1) {
+        showLotSelectionList(data.lots);
+        showToast('Found ' + data.lots.length + ' lots - select one', 'info');
+        return;
       }
 
-      const sel = row.children[3].querySelector('select');
-      if (sel.value) {
-        const sizeId = input.dataset.sizeId;
-        const hiddenAssign = document.createElement('input');
-        hiddenAssign.type = 'hidden';
-        hiddenAssign.classList.add('assignmentField');
-        hiddenAssign.name = 'assignments[' + sizeId + ']';
-        hiddenAssign.value = sel.value;
-        createForm.appendChild(hiddenAssign);
-      }
+      currentLot = data.lots[0];
+      displaySelectedLot();
+
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    } finally {
+      setButtonLoading(btn, false);
     }
-  });
+  }
 
-  /*****************************************************
-   * EXISTING ENTRIES (LAZY LOAD)
-   *****************************************************/
-  let existingOffset = 0;
-  let loading = false;
-  let hasMore = true;
-  const existingContainer = document.getElementById('existingEntriesContainer');
-  const sentinel = document.getElementById('loadMoreSentinel');
-  const searchInput = document.getElementById('searchExisting');
+  // ═══════════════════════════════════════════════════════════════════════════
+  // QUANTITY INPUT HANDLING
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  async function loadMoreData() {
-    if (loading || !hasMore) return;
-    loading = true;
-    const searchTerm = searchInput.value.trim();
+  function handleQtyInput(e) {
+    const inp = e.target;
+    const val = parseInt(inp.value) || 0;
+    const max = parseInt(inp.dataset.max) || 0;
+    const card = inp.closest('.size-card');
+
+    // Validate
+    if (val > max) {
+      card.classList.add('input-error');
+      inp.classList.add('input-error');
+    } else {
+      card.classList.remove('input-error');
+      inp.classList.remove('input-error');
+    }
+
+    updateTotal();
+  }
+
+  // Update total with animation
+  function updateTotal() {
+    const inputs = document.querySelectorAll('.qty-input');
+    let total = 0;
+    let hasError = false;
+
+    inputs.forEach(inp => {
+      const val = parseInt(inp.value) || 0;
+      const max = parseInt(inp.dataset.max) || 0;
+      total += Math.min(val, max);
+      if (val > max) hasError = true;
+      inp.closest('.size-card').classList.toggle('has-qty', val > 0 && val <= max);
+    });
+
+    const totalEl = document.getElementById('totalQty');
+    const totalDisplay = document.getElementById('totalDisplay');
+
+    if (totalEl.textContent !== String(total)) {
+      totalEl.textContent = total;
+      totalDisplay.classList.add('pulse');
+      setTimeout(() => totalDisplay.classList.remove('pulse'), 300);
+    }
+
+    // Disable submit if errors or no qty
+    document.getElementById('btnSubmit').disabled = hasError || total === 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUBMIT STITCHING
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function submitStitching() {
+    if (!currentLot) {
+      showToast('No lot selected', 'warning');
+      return;
+    }
+
+    const inputs = document.querySelectorAll('.qty-input');
+    const sizes = [];
+    let hasError = false;
+
+    inputs.forEach(inp => {
+      const qty = parseInt(inp.value) || 0;
+      const max = parseInt(inp.dataset.max) || 0;
+      if (qty > max) hasError = true;
+      if (qty > 0 && qty <= max) {
+        sizes.push({ size: inp.dataset.size, qty: qty });
+      }
+    });
+
+    if (hasError) {
+      showToast('Fix quantity errors first', 'error');
+      return;
+    }
+
+    if (sizes.length === 0) {
+      showToast('Enter at least one size quantity', 'warning');
+      return;
+    }
+
+    const total = sizes.reduce((s, x) => s + x.qty, 0);
+    if (!confirm('Submit ' + total + ' pieces for ' + currentLot.lot_no.toUpperCase() + '?')) {
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmit');
+    setButtonLoading(btn, true);
+
     try {
-      const res = await fetch('/stitchingdashboard/list-entries?offset=' + existingOffset + '&search=' + encodeURIComponent(searchTerm));
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      const entries = data.data || [];
-      hasMore = data.hasMore;
-
-      entries.forEach(item => {
-        const card = document.createElement('div');
-        card.classList.add('entry-card');
-
-        const header = document.createElement('div');
-        header.classList.add('entry-header');
-        header.onclick = function() { card.classList.toggle('open'); };
-
-        const headerInfo = document.createElement('div');
-        headerInfo.classList.add('entry-header-info');
-        headerInfo.innerHTML = '<strong>Lot:</strong> ' + escapeHtml(item.lot_no) + ' &nbsp; (SKU: ' + escapeHtml(item.sku) + ') &nbsp; (Total: ' + item.total_pieces + ' pcs)';
-        header.appendChild(headerInfo);
-
-        const chevron = document.createElement('i');
-        chevron.classList.add('bi', 'bi-chevron-down', 'entry-chevron');
-        header.appendChild(chevron);
-        card.appendChild(header);
-
-        const body = document.createElement('div');
-        body.classList.add('entry-body');
-
-        const actions = document.createElement('div');
-        actions.className = 'd-flex justify-content-end gap-2 mb-3';
-
-        const challanBtn = document.createElement('a');
-        challanBtn.href = '/stitchingdashboard/challan/' + item.id;
-        challanBtn.className = 'btn-kotty btn-kotty-info btn-kotty-sm';
-        challanBtn.target = '_blank';
-        challanBtn.innerHTML = '<i class="bi bi-file-text"></i> Challan';
-        actions.appendChild(challanBtn);
-
-        const updateBtn = document.createElement('button');
-        updateBtn.className = 'btn-kotty btn-kotty-warning btn-kotty-sm';
-        updateBtn.setAttribute('data-bs-toggle', 'modal');
-        updateBtn.setAttribute('data-bs-target', '#updateModal');
-        updateBtn.setAttribute('data-entry-id', item.id);
-        updateBtn.innerHTML = '<i class="bi bi-pencil"></i> Update';
-        actions.appendChild(updateBtn);
-        body.appendChild(actions);
-
-        const info = document.createElement('p');
-        info.style.cssText = 'margin-bottom: 12px; font-family: Outfit, sans-serif; font-size: 0.9rem;';
-        info.innerHTML = '<strong>ID:</strong> ' + item.id + '<br><strong>Total Pieces:</strong> ' + item.total_pieces + '<br><strong>Remark:</strong> ' + escapeHtml(item.remark || 'N/A');
-        body.appendChild(info);
-
-        if (item.image_url) {
-          const imgP = document.createElement('p');
-          imgP.innerHTML = '<strong>Image:</strong><br>';
-          const img = document.createElement('img');
-          img.src = item.image_url;
-          img.alt = 'Stitch';
-          img.style.cssText = 'max-height: 100px; border-radius: 6px;';
-          imgP.appendChild(img);
-          body.appendChild(imgP);
-        }
-
-        const tableDiv = document.createElement('div');
-        tableDiv.className = 'table-responsive';
-        const table = document.createElement('table');
-        table.className = 'kotty-table';
-        const thead = document.createElement('thead');
-        thead.innerHTML = '<tr><th>Size Label</th><th>Pieces</th></tr>';
-        table.appendChild(thead);
-        const tbody = document.createElement('tbody');
-        if (item.sizes && item.sizes.length) {
-          item.sizes.forEach(sz => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + escapeHtml(sz.size_label) + '</td><td>' + sz.pieces + '</td>';
-            tbody.appendChild(tr);
-          });
-        } else {
-          const tr = document.createElement('tr');
-          tr.innerHTML = '<td colspan="2">No sizes found.</td>';
-          tbody.appendChild(tr);
-        }
-        table.appendChild(tbody);
-        tableDiv.appendChild(table);
-        body.appendChild(tableDiv);
-
-        card.appendChild(body);
-        existingContainer.appendChild(card);
+      const res = await fetch('/stitchingdashboard/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cutting_lot_id: currentLot.cutting_lot_id, sizes: sizes })
       });
 
-      existingOffset += entries.length;
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('Submitted ' + total + ' pieces!', 'success', 4000);
+        document.getElementById('searchInput').value = '';
+        document.getElementById('lotResult').style.display = 'none';
+        currentLot = null;
+        loadToday(true);
+      } else {
+        showToast(data.error || 'Submission failed', 'error');
+      }
     } catch (err) {
-      console.error('Error loading more data:', err);
+      showToast('Error: ' + err.message, 'error');
     } finally {
-      loading = false;
+      setButtonLoading(btn, false);
     }
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LOAD TODAY'S WORK
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function loadToday(highlightNew = false) {
+    try {
+      const res = await fetch('/stitchingdashboard/my-today');
+      const data = await res.json();
+
+      const piecesEl = document.getElementById('todayPieces');
+      const entriesEl = document.getElementById('todayEntries');
+
+      // Animate stat update
+      piecesEl.textContent = data.total_pieces || 0;
+      entriesEl.textContent = data.count || 0;
+      document.getElementById('todayTotal').textContent = (data.total_pieces || 0) + ' pcs';
+
+      if (highlightNew) {
+        piecesEl.classList.add('updated');
+        entriesEl.classList.add('updated');
+        setTimeout(() => {
+          piecesEl.classList.remove('updated');
+          entriesEl.classList.remove('updated');
+        }, 1500);
+      }
+
+      const list = document.getElementById('todayList');
+      list.innerHTML = '';
+
+      if (!data.completions || data.completions.length === 0) {
+        list.innerHTML = `
+          <li class="today-item" style="justify-content: center; flex-direction: column; padding: 32px;">
+            <i class="bi bi-clipboard-check" style="font-size: 2rem; opacity: 0.2; margin-bottom: 8px;"></i>
+            <span style="color: var(--text-light);">No entries today yet</span>
+          </li>`;
+        return;
+      }
+
+      data.completions.forEach((c, index) => {
+        const li = document.createElement('li');
+        li.className = 'today-item' + (highlightNew && index === 0 ? ' new-entry' : '');
+
+        const left = document.createElement('div');
+        const lot = document.createElement('div');
+        lot.className = 'today-lot';
+        lot.textContent = c.lot_no.toUpperCase();
+        left.appendChild(lot);
+
+        if (c.sizes_json) {
+          const sizes = document.createElement('div');
+          sizes.className = 'today-sizes';
+          try {
+            sizes.textContent = JSON.parse(c.sizes_json).map(s => s.size + ':' + s.qty).join(', ');
+          } catch (e) {}
+          left.appendChild(sizes);
+        }
+        li.appendChild(left);
+
+        const right = document.createElement('div');
+        right.style.textAlign = 'right';
+        const qty = document.createElement('div');
+        qty.className = 'today-qty';
+        qty.textContent = c.total_pieces + ' pcs';
+        right.appendChild(qty);
+        const time = document.createElement('div');
+        time.className = 'today-time';
+        time.textContent = new Date(c.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        right.appendChild(time);
+        li.appendChild(right);
+
+        list.appendChild(li);
+
+        // Remove highlight after a moment
+        if (highlightNew && index === 0) {
+          setTimeout(() => li.classList.remove('new-entry'), 3000);
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      showToast('Could not load today\'s data', 'error');
+    }
   }
 
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting) {
-      loadMoreData();
-    }
-  }, { root: null, rootMargin: '0px', threshold: 0.1 });
-  observer.observe(sentinel);
+  loadToday();
 
-  searchInput.addEventListener('input', () => {
-    existingOffset = 0;
-    hasMore = true;
-    while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
-    loadMoreData();
+  // Enter key search
+  document.getElementById('searchInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchLot();
+    }
   });
 
-  loadMoreData();
+  // Auto-focus search on page load
+  setTimeout(() => document.getElementById('searchInput').focus(), 300);
 
-  /*****************************************************
-   * UPDATE MODAL
-   *****************************************************/
-  const updateModal = document.getElementById('updateModal');
-  const updateForm = document.getElementById('updateForm');
-  const updateSizesTable = document.getElementById('updateSizesTable');
-  const updateAlert = document.getElementById('updateAlert');
-  let currentUpdateEntryId = null;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HISTORY TAB
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  if (updateModal) {
-    updateModal.addEventListener('show.bs.modal', async (event) => {
-      const button = event.relatedTarget;
-      currentUpdateEntryId = button.getAttribute('data-entry-id');
-      updateForm.action = '/stitchingdashboard/update/' + currentUpdateEntryId;
-      document.getElementById('updatingEntryId').textContent = currentUpdateEntryId;
-      const updateTbody = updateSizesTable.querySelector('tbody');
-      while (updateTbody.firstChild) updateTbody.removeChild(updateTbody.firstChild);
-      updateAlert.classList.add('d-none');
+  let historyOffset = 0;
+  let historyHasMore = true;
+  let historyLoadingFlag = false;
 
-      try {
-        const res = await fetch('/stitchingdashboard/update/' + currentUpdateEntryId + '/json');
-        if (!res.ok) throw new Error(res.status);
-        const data = await res.json();
-        if (!Array.isArray(data.sizes) || !data.sizes.length) {
-          updateAlert.textContent = 'No size data available.';
-          updateAlert.classList.remove('d-none');
-          return;
+  async function loadHistory() {
+    if (historyLoadingFlag || !historyHasMore) return;
+    historyLoadingFlag = true;
+    document.getElementById('historyLoading').style.display = 'flex';
+
+    try {
+      const search = document.getElementById('historySearch').value.trim();
+      const res = await fetch('/stitchingdashboard/existing?offset=' + historyOffset + '&limit=20&search=' + encodeURIComponent(search));
+      const data = await res.json();
+
+      const list = document.getElementById('historyList');
+
+      if (!data.entries || data.entries.length === 0) {
+        historyHasMore = false;
+        if (historyOffset === 0) {
+          list.innerHTML = `
+            <div style="padding: 48px 20px; text-align: center;">
+              <i class="bi bi-archive" style="font-size: 2.5rem; opacity: 0.2; display: block; margin-bottom: 12px;"></i>
+              <span style="color: var(--text-light);">No entries found</span>
+            </div>`;
         }
+      } else {
+        data.entries.forEach(e => {
+          const item = document.createElement('div');
+          item.className = 'history-item';
 
-        data.sizes.forEach(sz => {
-          const tr = document.createElement('tr');
+          const left = document.createElement('div');
+          const lot = document.createElement('div');
+          lot.className = 'history-lot';
+          lot.textContent = e.lot_no.toUpperCase();
+          left.appendChild(lot);
+          const sku = document.createElement('div');
+          sku.className = 'history-sku';
+          sku.textContent = e.sku;
+          left.appendChild(sku);
+          item.appendChild(left);
 
-          const tdLabel = document.createElement('td');
-          tdLabel.textContent = sz.size_label;
-          tr.appendChild(tdLabel);
+          const right = document.createElement('div');
+          right.style.textAlign = 'right';
+          const qty = document.createElement('div');
+          qty.className = 'history-qty';
+          qty.textContent = e.total_pieces + ' pcs';
+          right.appendChild(qty);
+          const date = document.createElement('div');
+          date.className = 'history-date';
+          date.textContent = new Date(e.created_at).toLocaleDateString('en-IN');
+          right.appendChild(date);
+          item.appendChild(right);
 
-          const tdUsed = document.createElement('td');
-          tdUsed.textContent = sz.pieces;
-          tr.appendChild(tdUsed);
-
-          const tdRemain = document.createElement('td');
-          tdRemain.textContent = (sz.remain != null) ? sz.remain : 99999;
-          tr.appendChild(tdRemain);
-
-          const tdInput = document.createElement('td');
-          const inp = document.createElement('input');
-          inp.type = 'number';
-          inp.min = '0';
-          inp.value = '';
-          inp.classList.add('form-control');
-          inp.dataset.sizeLabel = sz.size_label;
-          tdInput.appendChild(inp);
-          tr.appendChild(tdInput);
-
-          updateTbody.appendChild(tr);
+          list.appendChild(item);
         });
-      } catch (err) {
-        console.error(err);
-        updateAlert.textContent = 'Failed to load data.';
-        updateAlert.classList.remove('d-none');
+
+        historyOffset += data.entries.length;
+        historyHasMore = data.entries.length === 20;
       }
-    });
-
-    updateModal.addEventListener('hidden.bs.modal', () => {
-      existingOffset = 0;
-      hasMore = true;
-      while (existingContainer.firstChild) existingContainer.removeChild(existingContainer.firstChild);
-      loadMoreData();
-    });
-
-    updateForm.addEventListener('submit', (e) => {
-      document.querySelectorAll('.updateSizeMappingField').forEach(f => f.remove());
-      const rows = updateSizesTable.querySelectorAll('tbody tr');
-
-      for (const row of rows) {
-        const lbl = row.cells[0].textContent;
-        const remain = parseInt(row.cells[2].textContent, 10);
-        const input = row.cells[3].querySelector('input');
-        let val = parseInt(input.value.trim() === '' ? '0' : input.value, 10);
-        if (isNaN(val) || val < 0) val = 0;
-
-        if (val > remain) {
-          alert('Cannot add ' + val + ' to size [' + lbl + ']. Max remain is ' + remain + '.');
-          e.preventDefault();
-          return;
-        }
-        if (val > 0) {
-          const hidden = document.createElement('input');
-          hidden.type = 'hidden';
-          hidden.classList.add('updateSizeMappingField');
-          hidden.name = 'updateSizes[size_' + lbl + ']';
-          hidden.value = val;
-          updateForm.appendChild(hidden);
-        }
-      }
-    });
+    } catch (err) {
+      console.error(err);
+      showToast('Could not load history', 'error');
+    } finally {
+      historyLoadingFlag = false;
+      document.getElementById('historyLoading').style.display = historyHasMore ? 'flex' : 'none';
+    }
   }
 
-  /*****************************************************
-   * DISABLE SUBMIT BUTTONS AFTER CLICK
-   *****************************************************/
-  document.querySelectorAll('form').forEach(form => {
-    form.addEventListener('submit', function() {
-      const submitButton = this.querySelector('button[type="submit"]');
-      if (submitButton) {
-        submitButton.disabled = true;
-      }
-    });
+  document.getElementById('historyList').addEventListener('scroll', function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 50) {
+      loadHistory();
+    }
+  });
+
+  let searchTimeout;
+  document.getElementById('historySearch').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      historyOffset = 0;
+      historyHasMore = true;
+      document.getElementById('historyList').innerHTML = '';
+      loadHistory();
+    }, 300);
   });
 </script>
+
+<%- include('partials/footer') %>
