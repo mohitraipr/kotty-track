@@ -902,22 +902,20 @@ router.get('/recent-lots', isAuthenticated, canCreateStageIndent, async (req, re
     // Get lots based on user's stage
     if (userRole === 'stitching_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT cl.lot_no
-           FROM stitching_completions sc
-           JOIN cutting_lots cl ON sc.cutting_lot_id = cl.id
-          WHERE sc.stitching_master_id = ?
-          ORDER BY sc.created_at DESC
+        `SELECT DISTINCT lot_no
+           FROM stitching_data
+          WHERE user_id = ?
+          ORDER BY created_at DESC
           LIMIT 20`,
         [userId]
       );
       recentLots = lots.map(l => l.lot_no);
     } else if (userRole === 'finishing_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT cl.lot_no
-           FROM finishing_completions fc
-           JOIN cutting_lots cl ON fc.cutting_lot_id = cl.id
-          WHERE fc.finishing_master_id = ?
-          ORDER BY fc.created_at DESC
+        `SELECT DISTINCT lot_no
+           FROM finishing_data
+          WHERE user_id = ?
+          ORDER BY created_at DESC
           LIMIT 20`,
         [userId]
       );
@@ -934,22 +932,28 @@ router.get('/recent-lots', isAuthenticated, canCreateStageIndent, async (req, re
       recentLots = lots.map(l => l.lot_no);
     } else if (userRole === 'jeans_assembly_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT cl.lot_no
-           FROM jeans_assembly_completions jac
-           JOIN cutting_lots cl ON jac.cutting_lot_id = cl.id
-          WHERE jac.assembly_master_id = ?
-          ORDER BY jac.created_at DESC
+        `SELECT DISTINCT lot_no
+           FROM jeans_assembly_data
+          WHERE user_id = ?
+          ORDER BY created_at DESC
           LIMIT 20`,
         [userId]
       );
       recentLots = lots.map(l => l.lot_no);
     } else if (userRole === 'operator') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT cl.lot_no
-           FROM operator_completions oc
-           JOIN cutting_lots cl ON oc.cutting_lot_id = cl.id
-          WHERE oc.operator_id = ?
-          ORDER BY oc.created_at DESC
+        `SELECT DISTINCT lot_no
+           FROM stitching_data
+          ORDER BY created_at DESC
+          LIMIT 20`
+      );
+      recentLots = lots.map(l => l.lot_no);
+    } else if (userRole === 'washing_in_master') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT lot_no
+           FROM washing_in_data
+          WHERE user_id = ?
+          ORDER BY created_at DESC
           LIMIT 20`,
         [userId]
       );

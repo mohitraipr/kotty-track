@@ -1138,13 +1138,13 @@ router.get('/lot-details/:lotNo', isAuthenticated, isJeansAssemblyMaster, async 
     }
 
     const [[paymentInfo]] = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as total_paid, COUNT(*) as payment_count
+      SELECT COALESCE(SUM(total_amount), 0) as total_paid, COUNT(*) as payment_count
       FROM stage_payments
       WHERE user_id = ? AND lot_no = ? AND stage = 'jeans_assembly' AND status = 'approved'
     `, [userId, lotNo]);
 
     const [[pendingPayment]] = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as pending_amount
+      SELECT COALESCE(SUM(total_amount), 0) as pending_amount
       FROM stage_payments
       WHERE user_id = ? AND lot_no = ? AND stage = 'jeans_assembly' AND status = 'pending'
     `, [userId, lotNo]);

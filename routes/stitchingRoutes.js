@@ -1473,7 +1473,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
     // Get payment info for this user's stitching work
     const [[paymentInfo]] = await pool.query(`
       SELECT
-        COALESCE(SUM(amount), 0) as total_paid,
+        COALESCE(SUM(total_amount), 0) as total_paid,
         COUNT(*) as payment_count
       FROM stage_payments
       WHERE user_id = ? AND lot_no = ? AND stage = 'stitching' AND status = 'approved'
@@ -1481,7 +1481,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
 
     // Get pending payment (if any)
     const [[pendingPayment]] = await pool.query(`
-      SELECT COALESCE(SUM(amount), 0) as pending_amount
+      SELECT COALESCE(SUM(total_amount), 0) as pending_amount
       FROM stage_payments
       WHERE user_id = ? AND lot_no = ? AND stage = 'stitching' AND status = 'pending'
     `, [userId, lotNo]);
