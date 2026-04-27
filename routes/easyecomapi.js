@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { isAuthenticated } = require('../middlewares/auth');
 const {
   resolvePeriod,
   getOrderAggregates,
@@ -17,6 +18,9 @@ function normalizePeriod(period) {
   if (PERIOD_KEYS.has(period)) return period;
   return '1d';
 }
+
+// All routes in this file require authentication
+router.use(isAuthenticated);
 
 router.get('/orders/summary', async (req, res) => {
   try {

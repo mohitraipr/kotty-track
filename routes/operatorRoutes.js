@@ -611,6 +611,79 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
   }
 });
 
+// Debug endpoint: Check lot journey for recent lots (temporarily public for testing)
+router.get("/debug/lot-journey", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    const [lots] = await pool.query(`
+      SELECT
+        cl.lot_no,
+        cl.sku,
+        cl.total_pieces,
+        DATE_FORMAT(cl.created_at, '%Y-%m-%d') as created_date,
+        COALESCE((SELECT SUM(completed_pieces) FROM stitching_data WHERE lot_no = cl.lot_no), 0) as stitched,
+        COALESCE((SELECT SUM(completed_pieces) FROM jeans_assembly_data WHERE lot_no = cl.lot_no), 0) as assembled,
+        COALESCE((SELECT SUM(completed_pieces) FROM washing_data WHERE lot_no = cl.lot_no), 0) as washed,
+        COALESCE((SELECT SUM(completed_pieces) FROM washing_in_data WHERE lot_no = cl.lot_no), 0) as wash_in,
+        COALESCE((SELECT SUM(finished_pieces) FROM finishing_data WHERE lot_no = cl.lot_no), 0) as finished
+      FROM cutting_lots cl
+      ORDER BY cl.created_at DESC
+      LIMIT ?
+    `, [limit]);
+
+    // Analyze journey
+    const analysis = lots.map(lot => {
+      const total = lot.total_pieces;
+      const stages = [
+        { name: 'Cutting', done: total, pct: 100 },
+        { name: 'Stitching', done: lot.stitched, pct: Math.round((lot.stitched / total) * 100) },
+        { name: 'Assembly', done: lot.assembled, pct: Math.round((lot.assembled / total) * 100) },
+        { name: 'Washing', done: lot.washed, pct: Math.round((lot.washed / total) * 100) },
+        { name: 'Wash-In', done: lot.wash_in, pct: Math.round((lot.wash_in / total) * 100) },
+        { name: 'Finishing', done: lot.finished, pct: Math.round((lot.finished / total) * 100) }
+      ];
+
+      // Find current stage
+      let currentStage = 'Unknown';
+      if (lot.finished >= total) currentStage = 'Completed';
+      else if (lot.wash_in > 0) currentStage = 'Wash-In';
+      else if (lot.washed > 0) currentStage = 'Washing';
+      else if (lot.assembled > 0) currentStage = 'Assembly';
+      else if (lot.stitched > 0) currentStage = 'Stitching';
+      else currentStage = 'Cutting';
+
+      // Check for issues
+      const issues = [];
+      if (lot.stitched > total) issues.push('Stitched > Total');
+      if (lot.finished > lot.stitched && lot.stitched > 0) issues.push('Finished > Stitched');
+      if (lot.assembled > 0 && lot.stitched === 0) issues.push('Assembly without Stitching');
+
+      return {
+        lot_no: lot.lot_no,
+        sku: lot.sku,
+        total: total,
+        created: lot.created_date,
+        currentStage,
+        stages,
+        issues: issues.length > 0 ? issues : null,
+        healthy: issues.length === 0
+      };
+    });
+
+    const summary = {
+      checked: lots.length,
+      healthy: analysis.filter(a => a.healthy).length,
+      withIssues: analysis.filter(a => !a.healthy).length
+    };
+
+    res.json({ summary, lots: analysis });
+  } catch (err) {
+    console.error("Debug lot journey error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 async function buildWasherMonthlySummary(prefix) {
   // Cache the summary for 5 minutes to avoid repeated heavy queries
   return cache.fetchCached(`washerSummary-${prefix}`, async () => {
@@ -880,10 +953,24 @@ router.get("/security-logs", isAuthenticated, isOperator, async (req, res) => {
 /**************************************************
  * 6) PIC Report – corrected chain
  **************************************************/
-// Quick helper: isDenimLot
-function isDenimLot(lotNo="") {
-  const up= lotNo.toUpperCase();
-  return (up.startsWith("AK") || up.startsWith("UM"));
+// Quick helper: isDenimLot - checks lot type using flow_type, is_denim_cutter, or lot prefix
+function isDenimLot(lotOrLotNo, isDenimCutter = null, flowType = null) {
+  // If called with lot object that has flow_type or is_denim_cutter
+  if (typeof lotOrLotNo === 'object' && lotOrLotNo !== null) {
+    if (lotOrLotNo.flow_type) return lotOrLotNo.flow_type === 'denim';
+    if (lotOrLotNo.is_denim_cutter !== null && lotOrLotNo.is_denim_cutter !== undefined) {
+      return lotOrLotNo.is_denim_cutter === 1;
+    }
+    // Fallback to lot prefix
+    const up = (lotOrLotNo.lot_no || '').toUpperCase();
+    return up.startsWith("AK") || up.startsWith("UM");
+  }
+  // If called with flowType or isDenimCutter params
+  if (flowType) return flowType === 'denim';
+  if (isDenimCutter !== null && isDenimCutter !== undefined) return isDenimCutter === 1;
+  // Fallback: called with just lot_no string
+  const up = String(lotOrLotNo).toUpperCase();
+  return up.startsWith("AK") || up.startsWith("UM");
 }
 
 // Aggregates and last-assignment data for multiple lots in one go
@@ -1612,23 +1699,25 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     if (lotType === "denim") {
       lotTypeClause = `
         AND (
-          cl.lot_no LIKE 'AK%'
-          OR cl.lot_no LIKE 'UM%'
+          cl.flow_type = 'denim'
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%'))
         )
       `;
     } else if (lotType === "hosiery") {
       lotTypeClause = `
         AND (
-          cl.lot_no NOT LIKE 'AK%'
-          AND cl.lot_no NOT LIKE 'UM%'
+          cl.flow_type = 'hosiery'
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 0)
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
         )
       `;
     }
 
     // 2) Fetch all lots (ONE QUERY)
     const baseQuery = `
-      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark,
-             u.username AS created_by
+      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+             u.username AS created_by, u.is_denim_cutter
         FROM cutting_lots cl
         JOIN users u ON cl.user_id = u.id
        WHERE 1=1
@@ -1674,7 +1763,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     for (const lot of lots) {
       const lotNo = lot.lot_no;
       const totalCut = parseFloat(lot.total_pieces) || 0;
-      const denim = isDenimLot(lotNo);
+      const denim = isDenimLot(lot);
 
       // Sums
       const sums = lotSumsMap[lotNo] || {};
@@ -2006,23 +2095,25 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     if (lotType === "denim") {
       lotTypeClause = `
         AND (
-          cl.lot_no LIKE 'AK%'
-          OR cl.lot_no LIKE 'UM%'
+          cl.flow_type = 'denim'
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%'))
         )
       `;
     } else if (lotType === "hosiery") {
       lotTypeClause = `
         AND (
-          cl.lot_no NOT LIKE 'AK%'
-          AND cl.lot_no NOT LIKE 'UM%'
+          cl.flow_type = 'hosiery'
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter = 0)
+          OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
         )
       `;
     }
 
     // 2) Fetch lot/size rows (with LIMIT for performance)
     const baseQuery = `
-      SELECT cl.lot_no, cl.sku, cls.size_label, cls.total_pieces, cl.created_at, cl.remark,
-             u.username AS created_by
+      SELECT cl.lot_no, cl.sku, cls.size_label, cls.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+             u.username AS created_by, u.is_denim_cutter
         FROM cutting_lots cl
         JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
         JOIN users u ON cl.user_id = u.id
@@ -2113,7 +2204,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       const lotNo = row.lot_no;
       const sizeLabel = row.size_label;
       const totalCut = parseFloat(row.total_pieces) || 0;
-      const denim = isDenimLot(lotNo);
+      const denim = isDenimLot(lot);
 
       const sums = sizeSumsMap[`${lotNo}|${sizeLabel}`] || {};
       const stitchedQty  = sums.stitchedQty  || 0;
@@ -2360,6 +2451,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
           FROM users u
           JOIN stitching_assignments sa ON sa.user_id = u.id
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+          JOIN users cu ON cl.user_id = cu.id
          WHERE (
                 sa.isApproved IS NULL
                 OR
@@ -2367,7 +2459,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                   sa.isApproved = 1
                   AND (
                     (
-                      (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')
+                      (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
                       AND NOT EXISTS (
                         SELECT 1
                           FROM jeans_assembly_assignments ja
@@ -2378,7 +2470,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                     )
                     OR
                     (
-                      (cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
+                      (cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%'))
                       AND NOT EXISTS (
                         SELECT 1
                           FROM finishing_assignments fa
@@ -2397,13 +2489,13 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
                u.username,
                SUM(CASE WHEN sa.isApproved IS NULL THEN cl.total_pieces ELSE 0 END) AS pendingApproval,
                SUM(CASE WHEN sa.isApproved = 1 AND (
-                     ((cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%') AND NOT EXISTS (
+                     ((cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%'))) AND NOT EXISTS (
                           SELECT 1 FROM jeans_assembly_assignments ja
                            JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
                           WHERE sd.lot_no = cl.lot_no AND ja.is_approved IS NOT NULL
                      ))
                      OR
-                     ((cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%') AND NOT EXISTS (
+                     ((cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')) AND NOT EXISTS (
                           SELECT 1 FROM finishing_assignments fa
                            JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
                           WHERE sd.lot_no = cl.lot_no AND fa.is_approved IS NOT NULL
@@ -2412,6 +2504,7 @@ router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
           JOIN users u ON sa.user_id = u.id
+          JOIN users cu ON cl.user_id = cu.id
          GROUP BY sa.user_id, u.username
          HAVING pendingApproval > 0 OR inLinePieces > 0
       `);
@@ -2493,10 +2586,13 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
                cl.sku,
                cl.total_pieces,
                cl.remark AS cutting_remark,
+               cl.flow_type,
+               u.is_denim_cutter,
                asm.next_on AS asm_next_on,
                fin.next_on AS fin_next_on
           FROM stitching_assignments sa
           JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
+          JOIN users u ON cl.user_id = u.id
           LEFT JOIN (
                 SELECT sd.lot_no, MIN(ja.assigned_on) AS next_on
                   FROM jeans_assembly_assignments ja
@@ -2517,10 +2613,10 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
                 OR (
                      sa.isApproved = 1
                      AND (
-                       ( (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')
+                       ( (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
                          AND asm.next_on IS NULL )
                        OR
-                       ( (cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')
+                       ( (cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%'))
                          AND fin.next_on IS NULL )
                      )
                    )
@@ -2536,6 +2632,8 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
           sku,
           total_pieces,
           cutting_remark,
+          flow_type,
+          is_denim_cutter,
           stitchAssignedOn,
           stitchIsApproved,
           asm_next_on,
@@ -2543,7 +2641,7 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
         } = a;
 
         let nextAssignedOn = null;
-        const isDenim = isDenimLot(lot_no);
+        const isDenim = isDenimLot(lot_no, is_denim_cutter, flow_type);
         if (stitchIsApproved === 1) {
           nextAssignedOn = isDenim ? asm_next_on : fin_next_on;
         }

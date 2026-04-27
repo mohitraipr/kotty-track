@@ -76,6 +76,38 @@ async function getInvoicesMap(invoiceNos) {
  */
 
 /**
+ * POST /fabric-manager/vendor
+ * Create a new vendor (fabric managers can add vendors directly)
+ */
+router.post('/vendor', isAuthenticated, isFabricManager, async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Vendor name required' });
+        }
+
+        const vendorName = name.trim();
+
+        // Check if vendor already exists
+        const [existing] = await pool.query('SELECT id, name FROM vendors WHERE name = ?', [vendorName]);
+        if (existing.length > 0) {
+            return res.json({ id: existing[0].id, name: existing[0].name, existing: true });
+        }
+
+        // Create new vendor
+        const [result] = await pool.query('INSERT INTO vendors (name) VALUES (?)', [vendorName]);
+
+        // Invalidate vendor cache
+        vendorCache = { data: null, expiry: 0 };
+
+        return res.json({ id: result.insertId, name: vendorName });
+    } catch (err) {
+        console.error('Error creating vendor:', err);
+        return res.status(500).json({ error: 'Failed to create vendor' });
+    }
+});
+
+/**
  * GET /fabric-manager/dashboard
  * Display the Fabric Manager dashboard with all fabric invoices.
  */

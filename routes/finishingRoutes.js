@@ -5,6 +5,7 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
+const { createStagePayment } = require('../utils/stagePaymentHelper');
 
 /* ---------------------------------------------------
    MULTER FOR IMAGE UPLOAD & BULK EXCEL UPLOAD
@@ -318,104 +319,10 @@ router.post('/create', isAuthenticated, isFinishingMaster, upload.single('image_
 });
 
 /* =============================================================
-   5) APPROVAL ROUTES
+   5) OLD APPROVAL ROUTES REMOVED (2026-04-23)
+   Now using self-assign flow: /available-lots + /submit
+   See git history if rollback needed
    ============================================================= */
-router.get('/approve', isAuthenticated, isFinishingMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const [pending] = await pool.query(`
-      SELECT fa.*,
-             CASE
-               WHEN fa.stitching_assignment_id IS NOT NULL THEN 'Stitching'
-               WHEN fa.washing_in_data_id IS NOT NULL THEN 'Washing'
-             END AS department
-      FROM finishing_assignments fa
-      WHERE fa.user_id = ? AND (fa.is_approved = 0 OR fa.is_approved IS NULL)
-      ORDER BY fa.assigned_on DESC
-    `, [userId]);
-    for (let row of pending) {
-      let lotNo = null, totalPieces = 0, sizes = [];
-      if (row.stitching_assignment_id) {
-        const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [row.stitching_assignment_id]);
-        if (sd) {
-          lotNo = sd.lot_no; 
-          totalPieces = sd.total_pieces;
-          const [sizeRows] = await pool.query(`SELECT size_label, pieces FROM stitching_data_sizes WHERE stitching_data_id = ?`, [sd.id]);
-          sizes = sizeRows;
-        }
-      } else if (row.washing_in_data_id) {
-        const [[wd]] = await pool.query(`SELECT * FROM washing_in_data WHERE id = ?`, [row.washing_in_data_id]);
-        if (wd) {
-          lotNo = wd.lot_no; 
-          totalPieces = wd.total_pieces;
-          const [sizeRows] = await pool.query(`SELECT size_label, pieces FROM washing_in_data_sizes WHERE washing_in_data_id = ?`, [wd.id]);
-          sizes = sizeRows;
-        }
-      }
-      let cuttingRemark = '', cuttingSku = '';
-      if (lotNo) {
-        const [[cutData]] = await pool.query(`SELECT remark, sku FROM cutting_lots WHERE lot_no = ? LIMIT 1`, [lotNo]);
-        if (cutData) {
-          cuttingRemark = cutData.remark || '';
-          cuttingSku = cutData.sku || '';
-        }
-      }
-      row.lot_no = lotNo || 'N/A';
-      row.total_pieces = totalPieces || 0;
-      row.sizes = sizes;
-      row.cutting_remark = cuttingRemark;
-      row.cutting_sku = cuttingSku;
-    }
-    const errorMessages = req.flash('error');
-    const successMessages = req.flash('success');
-    return res.render('finishingApprove', {
-      user: req.session.user,
-      pending,
-      error: errorMessages,
-      success: successMessages
-    });
-  } catch (err) {
-    console.error('Error loading finishing approvals:', err);
-    req.flash('error', 'Error loading finishing approvals.');
-    return res.redirect('/finishingdashboard');
-  }
-});
-
-router.post('/approve/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const assignmentId = req.params.id;
-    const { assignment_remark } = req.body;
-    await pool.query(`
-      UPDATE finishing_assignments SET is_approved = 1,approved_on = NOW(), assignment_remark = ?
-      WHERE id = ? AND user_id = ?
-    `, [assignment_remark || null, assignmentId, userId]);
-    req.flash('success', 'Assignment approved successfully.');
-    return res.redirect('/finishingdashboard/approve');
-  } catch (err) {
-    console.error('Error approving finishing assignment:', err);
-    req.flash('error', 'Could not approve: ' + err.message);
-    return res.redirect('/finishingdashboard/approve');
-  }
-});
-
-router.post('/deny/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const assignmentId = req.params.id;
-    const { assignment_remark } = req.body;
-    await pool.query(`
-      UPDATE finishing_assignments SET is_approved = 2, approved_on = NOW(),assignment_remark = ?
-      WHERE id = ? AND user_id = ?
-    `, [assignment_remark || null, assignmentId, userId]);
-    req.flash('success', 'Assignment denied successfully.');
-    return res.redirect('/finishingdashboard');
-  } catch (err) {
-    console.error('Error denying finishing assignment:', err);
-    req.flash('error', 'Could not deny: ' + err.message);
-    return res.redirect('/finishingdashboard');
-  }
-});
 
 /* =============================================================
    6) UPDATE / CHALLAN / DOWNLOAD
@@ -1020,6 +927,522 @@ router.post('/bulk-dispatch-excel', isAuthenticated, isFinishingMaster, upload.s
     if (conn) { await conn.rollback(); conn.release(); }
     req.flash('error', 'Error in bulk dispatch via Excel: ' + err.message);
     return res.redirect('/finishingdashboard');
+  }
+});
+
+/*-----------------------------------------
+  SELF-ASSIGN FLOW (Stitching-style)
+  Worker picks available lot + submits in one step
+  Finishing receives from two sources:
+  - Hosiery: stitching_data (no washing stages)
+  - Denim: washing_in_data
+-----------------------------------------*/
+
+// GET /finishingdashboard/available-lots
+// Shows lots that haven't been finished yet - both hosiery (from stitching) and denim (from washing_in)
+router.get('/available-lots', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+
+    // Hosiery lots: from stitching_data where flow_type is hosiery and not yet in finishing
+    const [hosieryRows] = await pool.query(`
+      SELECT
+        sd.id,
+        sd.lot_no,
+        sd.sku,
+        sd.total_pieces,
+        sd.created_at,
+        cl.remark AS cutting_remark,
+        'hosiery' AS source_type,
+        'stitching' AS source_stage,
+        u.username AS source_master,
+        sd.total_pieces - COALESCE((
+          SELECT SUM(fd.total_pieces)
+          FROM finishing_data fd
+          WHERE fd.lot_no = sd.lot_no
+        ), 0) AS remaining_pieces
+      FROM stitching_data sd
+      JOIN users u ON sd.user_id = u.id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      WHERE (sd.lot_no LIKE ? OR sd.sku LIKE ? OR cl.remark LIKE ?)
+        AND (
+          cl.flow_type = 'hosiery'
+          OR (cl.flow_type IS NULL AND NOT EXISTS (
+            SELECT 1 FROM users cu
+            WHERE cu.id = cl.user_id AND cu.is_denim_cutter = 1
+          ))
+          OR (cl.flow_type IS NULL AND cl.user_id IS NULL AND sd.lot_no NOT REGEXP '^(AK|UM)')
+        )
+      HAVING remaining_pieces > 0
+      ORDER BY sd.created_at DESC
+      LIMIT 25
+    `, [search, search, search]);
+
+    // Denim lots: from washing_in_data where flow_type is denim and not yet in finishing
+    const [denimRows] = await pool.query(`
+      SELECT
+        wid.id,
+        wid.lot_no,
+        wid.sku,
+        wid.total_pieces,
+        wid.created_at,
+        cl.remark AS cutting_remark,
+        'denim' AS source_type,
+        'washing_in' AS source_stage,
+        u.username AS source_master,
+        wid.total_pieces - COALESCE((
+          SELECT SUM(fd.total_pieces)
+          FROM finishing_data fd
+          WHERE fd.lot_no = wid.lot_no
+        ), 0) AS remaining_pieces
+      FROM washing_in_data wid
+      JOIN users u ON wid.user_id = u.id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = wid.lot_no
+      WHERE (wid.lot_no LIKE ? OR wid.sku LIKE ? OR cl.remark LIKE ?)
+        AND (
+          cl.flow_type = 'denim'
+          OR EXISTS (
+            SELECT 1 FROM users cu
+            WHERE cu.id = cl.user_id AND cu.is_denim_cutter = 1
+          )
+          OR wid.lot_no REGEXP '^(AK|UM)'
+        )
+      HAVING remaining_pieces > 0
+      ORDER BY wid.created_at DESC
+      LIMIT 25
+    `, [search, search, search]);
+
+    const allRows = [...hosieryRows, ...denimRows].sort((a, b) =>
+      new Date(b.created_at) - new Date(a.created_at)
+    ).slice(0, 50);
+
+    return res.json({ data: allRows });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/available-lots =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /finishingdashboard/available-lot-sizes/:sourceType/:lotId
+// Get sizes for a specific lot (hosiery from stitching_data, denim from washing_in_data)
+router.get('/available-lot-sizes/:sourceType/:lotId', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const { sourceType, lotId } = req.params;
+
+    let lotNo, tableSizes, dataIdField;
+
+    if (sourceType === 'hosiery') {
+      const [[sd]] = await pool.query(`SELECT * FROM stitching_data WHERE id = ?`, [lotId]);
+      if (!sd) return res.status(404).json({ error: 'Lot not found' });
+      lotNo = sd.lot_no;
+      tableSizes = 'stitching_data_sizes';
+      dataIdField = 'stitching_data_id';
+    } else {
+      const [[wid]] = await pool.query(`SELECT * FROM washing_in_data WHERE id = ?`, [lotId]);
+      if (!wid) return res.status(404).json({ error: 'Lot not found' });
+      lotNo = wid.lot_no;
+      tableSizes = 'washing_in_data_sizes';
+      dataIdField = 'washing_in_data_id';
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        s.id,
+        s.size_label,
+        s.pieces,
+        s.pieces - COALESCE((
+          SELECT SUM(fds.pieces)
+          FROM finishing_data_sizes fds
+          JOIN finishing_data fd ON fds.finishing_data_id = fd.id
+          WHERE fd.lot_no = ? AND fds.size_label = s.size_label
+        ), 0) AS remain
+      FROM ${tableSizes} s
+      WHERE s.${dataIdField} = ?
+    `, [lotNo, lotId]);
+
+    return res.json(rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    })));
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/available-lot-sizes =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /finishingdashboard/submit
+// Self-assign + complete finishing in one step (stitching-style flow)
+router.post('/submit', isAuthenticated, isFinishingMaster, upload.single('image_file'), async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+    const { selectedLotId, sourceType, remark } = req.body;
+    const sizesObj = req.body.sizes || {};
+
+    let image_url = null;
+    if (req.file) {
+      image_url = '/uploads/' + req.file.filename;
+    }
+
+    // Calculate total pieces
+    let grandTotal = 0;
+    for (const sizeLabel of Object.keys(sizesObj)) {
+      const countVal = parseInt(sizesObj[sizeLabel], 10);
+      if (!isNaN(countVal) && countVal > 0) {
+        grandTotal += countVal;
+      }
+    }
+    if (grandTotal <= 0) {
+      return res.status(400).json({ error: 'No pieces requested.' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    let lotNo, sku, sourceDataId, tableSizes, dataIdField, previousStageMasterId, previousStageUsername;
+
+    if (sourceType === 'hosiery') {
+      const [[sd]] = await conn.query(`
+        SELECT sd.*, u.username AS stitcher_username
+        FROM stitching_data sd
+        JOIN users u ON sd.user_id = u.id
+        WHERE sd.id = ?
+      `, [selectedLotId]);
+      if (!sd) {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({ error: 'Invalid lot selection.' });
+      }
+      lotNo = sd.lot_no;
+      sku = sd.sku;
+      sourceDataId = sd.id;
+      tableSizes = 'stitching_data_sizes';
+      dataIdField = 'stitching_data_id';
+      previousStageMasterId = sd.user_id;
+      previousStageUsername = sd.stitcher_username;
+    } else {
+      const [[wid]] = await conn.query(`
+        SELECT wid.*, u.username AS washingin_master_username
+        FROM washing_in_data wid
+        JOIN users u ON wid.user_id = u.id
+        WHERE wid.id = ?
+      `, [selectedLotId]);
+      if (!wid) {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({ error: 'Invalid lot selection.' });
+      }
+      lotNo = wid.lot_no;
+      sku = wid.sku;
+      sourceDataId = wid.id;
+      tableSizes = 'washing_in_data_sizes';
+      dataIdField = 'washing_in_data_id';
+      previousStageMasterId = wid.user_id;
+      previousStageUsername = wid.washingin_master_username;
+    }
+
+    // Validate sizes against available pieces
+    const [deptRows] = await conn.query(
+      `SELECT size_label, pieces FROM ${tableSizes} WHERE ${dataIdField} = ?`,
+      [sourceDataId]
+    );
+    const deptMap = {};
+    deptRows.forEach(r => { deptMap[r.size_label] = r.pieces; });
+
+    const labels = Object.keys(sizesObj).filter(l => parseInt(sizesObj[l], 10) > 0);
+    const [usedRows] = await conn.query(
+      `SELECT fds.size_label, SUM(fds.pieces) AS used
+       FROM finishing_data_sizes fds
+       JOIN finishing_data fd ON fd.id = fds.finishing_data_id
+       WHERE fd.lot_no = ? AND fds.size_label IN (?)
+       GROUP BY fds.size_label`,
+      [lotNo, labels.length ? labels : ['']]
+    );
+    const usedMap = {};
+    usedRows.forEach(r => { usedMap[r.size_label] = r.used; });
+
+    for (const label of labels) {
+      const requested = parseInt(sizesObj[label], 10);
+      const totalDept = deptMap[label] || 0;
+      const used = usedMap[label] || 0;
+      const remain = totalDept - used;
+      if (requested > remain) {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({ error: `Cannot request ${requested} for size ${label}; only ${remain} remain.` });
+      }
+    }
+
+    // Create finishing_assignments record (auto-approved)
+    const sizesJson = JSON.stringify(labels);
+    const assignmentFields = sourceType === 'hosiery'
+      ? `(stitching_master_id, user_id, stitching_assignment_id, assigned_on, sizes_json, is_approved, approved_on)`
+      : `(washing_in_master_id, user_id, washing_in_data_id, assigned_on, sizes_json, is_approved, approved_on)`;
+
+    await conn.query(`
+      INSERT INTO finishing_assignments ${assignmentFields}
+      VALUES (?, ?, ?, NOW(), ?, 1, NOW())
+    `, [previousStageMasterId, userId, sourceDataId, sizesJson]);
+
+    // Insert finishing_data
+    const [ins] = await conn.query(
+      `INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, lotNo, sku, grandTotal, remark || null, image_url]
+    );
+    const newId = ins.insertId;
+
+    // Insert finishing_data_sizes
+    const sizeInserts = [];
+    for (const label of labels) {
+      const requested = parseInt(sizesObj[label], 10) || 0;
+      if (requested > 0) sizeInserts.push([newId, label, requested, new Date()]);
+    }
+    if (sizeInserts.length) {
+      await conn.query(
+        'INSERT INTO finishing_data_sizes (finishing_data_id, size_label, pieces, created_at) VALUES ?',
+        [sizeInserts]
+      );
+    }
+
+    // Auto-create payment for previous stage
+    if (sourceType === 'hosiery') {
+      // Hosiery: pay stitching master
+      await createStagePayment('stitching', {
+        lot_no: lotNo,
+        sku: sku,
+        qty: grandTotal,
+        user_id: previousStageMasterId,
+        username: previousStageUsername
+      });
+    } else {
+      // Denim: pay washing_in master
+      await createStagePayment('washing_in', {
+        lot_no: lotNo,
+        sku: sku,
+        qty: grandTotal,
+        user_id: previousStageMasterId,
+        username: previousStageUsername
+      });
+    }
+
+    await conn.commit();
+    conn.release();
+
+    return res.json({
+      success: true,
+      message: 'Finishing entry created successfully!',
+      finishingDataId: newId
+    });
+  } catch (err) {
+    console.error('[ERROR] POST /finishingdashboard/submit =>', err);
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    return res.status(500).json({ error: 'Error creating finishing data: ' + err.message });
+  }
+});
+
+// GET /finishingdashboard/my-today
+router.get('/my-today', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const [rows] = await pool.query(`
+      SELECT id, lot_no, sku, total_pieces, created_at
+      FROM finishing_data
+      WHERE user_id = ? AND DATE(created_at) = CURDATE()
+      ORDER BY created_at DESC
+    `, [userId]);
+
+    return res.json({
+      entries: rows,
+      total_pieces: rows.reduce((sum, r) => sum + r.total_pieces, 0),
+      count: rows.length
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /finishingdashboard/my-entries
+router.get('/my-entries', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offset = parseInt(req.query.offset) || 0;
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT fd.id, fd.lot_no, fd.sku, fd.total_pieces, fd.created_at, cl.remark as cutting_remark
+      FROM finishing_data fd
+      LEFT JOIN cutting_lots cl ON fd.lot_no = cl.lot_no
+      WHERE fd.user_id = ? AND (fd.lot_no LIKE ? OR fd.sku LIKE ?)
+    `;
+    const params = [userId, search, search];
+
+    if (startDate) { query += ` AND DATE(fd.created_at) >= ?`; params.push(startDate); }
+    if (endDate) { query += ` AND DATE(fd.created_at) <= ?`; params.push(endDate); }
+    query += ` ORDER BY fd.created_at DESC LIMIT 20 OFFSET ?`;
+    params.push(offset);
+
+    const [rows] = await pool.query(query, params);
+    return res.json({ entries: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /finishingdashboard/lot-details/:lotNo
+router.get('/lot-details/:lotNo', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const lotNo = req.params.lotNo;
+    const userId = req.session.user.id;
+
+    const [[cuttingLot]] = await pool.query(`
+      SELECT cl.*, u.username as cutting_master_name
+      FROM cutting_lots cl
+      LEFT JOIN users u ON cl.cutting_master_id = u.id
+      WHERE cl.lot_no = ?
+    `, [lotNo]);
+
+    if (!cuttingLot) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const [cuttingSizes] = await pool.query(`
+      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+    `, [cuttingLot.id]);
+
+    const [[finishingData]] = await pool.query(`
+      SELECT fd.*, u.username as finishing_master_name
+      FROM finishing_data fd
+      LEFT JOIN users u ON fd.user_id = u.id
+      WHERE fd.lot_no = ? AND fd.user_id = ?
+    `, [lotNo, userId]);
+
+    let finishingSizes = [];
+    if (finishingData) {
+      const [sizes] = await pool.query(`
+        SELECT size_label, pieces FROM finishing_sizes WHERE finishing_data_id = ?
+      `, [finishingData.id]);
+      finishingSizes = sizes;
+    }
+
+    const [[paymentInfo]] = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) as total_paid, COUNT(*) as payment_count
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'finishing' AND status = 'approved'
+    `, [userId, lotNo]);
+
+    const [[pendingPayment]] = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) as pending_amount
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'finishing' AND status = 'pending'
+    `, [userId, lotNo]);
+
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalFinishedPieces = finishingSizes.reduce((sum, s) => sum + s.pieces, 0);
+
+    res.json({
+      success: true,
+      lot: {
+        lot_no: cuttingLot.lot_no,
+        sku: cuttingLot.sku,
+        cutting_remark: cuttingLot.remark,
+        cutting_master: cuttingLot.cutting_master_name,
+        cutting_date: cuttingLot.created_at,
+        flow_type: cuttingLot.flow_type,
+        fabric_type: cuttingLot.fabric_type
+      },
+      cutting: { sizes: cuttingSizes, total_pieces: totalCutPieces },
+      finishing: {
+        data_id: finishingData?.id,
+        sizes: finishingSizes,
+        total_pieces: totalFinishedPieces,
+        pending_pieces: totalCutPieces - totalFinishedPieces,
+        created_at: finishingData?.created_at
+      },
+      payment: {
+        total_paid: paymentInfo?.total_paid || 0,
+        payment_count: paymentInfo?.payment_count || 0,
+        pending_amount: pendingPayment?.pending_amount || 0
+      }
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /lot-details =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /finishingdashboard/history-download
+router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT fd.lot_no, fd.sku, fd.total_pieces, fd.created_at,
+             cl.remark as cutting_remark, cl.fabric_type,
+             COALESCE(pay.total_paid, 0) as total_paid
+      FROM finishing_data fd
+      LEFT JOIN cutting_lots cl ON fd.lot_no = cl.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(amount) as total_paid
+        FROM stage_payments WHERE user_id = ? AND stage = 'finishing' AND status = 'approved'
+        GROUP BY lot_no
+      ) pay ON fd.lot_no = pay.lot_no
+      WHERE fd.user_id = ?
+    `;
+    const params = [userId, userId];
+
+    if (startDate) { query += ` AND DATE(fd.created_at) >= ?`; params.push(startDate); }
+    if (endDate) { query += ` AND DATE(fd.created_at) <= ?`; params.push(endDate); }
+    query += ` ORDER BY fd.created_at DESC`;
+
+    const [rows] = await pool.query(query, params);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Finishing History');
+
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Pieces', key: 'total_pieces', width: 10 },
+      { header: 'Cutting Remark', key: 'cutting_remark', width: 30 },
+      { header: 'Fabric Type', key: 'fabric_type', width: 15 },
+      { header: 'Payment (₹)', key: 'total_paid', width: 12 },
+      { header: 'Date', key: 'created_at', width: 18 }
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    rows.forEach(row => {
+      sheet.addRow({
+        lot_no: row.lot_no,
+        sku: row.sku,
+        total_pieces: row.total_pieces,
+        cutting_remark: row.cutting_remark || '-',
+        fabric_type: row.fabric_type || '-',
+        total_paid: row.total_paid,
+        created_at: row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : '-'
+      });
+    });
+
+    const filename = `finishing_history_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /history-download =>', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

@@ -160,6 +160,8 @@
 
   .shade-chip { display: inline-block; padding: 2px 10px; background: #f0ebe3; border-radius: 20px; font-size: 0.74rem; color: #5a5550; }
   .qty-big { font-weight: 700; font-size: 1.05rem; font-family: 'DM Serif Display', Georgia, serif; }
+  .lot-tag { display: inline-block; padding: 3px 10px; background: #e8f1fb; color: #3a7bc4; border-radius: 6px; font-size: 0.78rem; font-weight: 600; margin-bottom: 4px; }
+  .stage-tag { display: inline-block; padding: 2px 8px; background: #fef3e2; color: #c4873a; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
   .filler-name { font-weight: 500; }
   .date-stack { font-size: 0.72rem; line-height: 1.9; color: #6b6560; }
   .date-stack span { color: #a09a92; }
@@ -414,6 +416,7 @@
             <th>Item</th>
             <th>Shade</th>
             <th>Qty</th>
+            <th>Lot / Stage</th>
             <th>Requested By</th>
             <th>Dates</th>
             <th>Status</th>
@@ -423,7 +426,7 @@
         <tbody>
           <% if (!requests || !requests.length) { %>
           <tr>
-            <td colspan="7">
+            <td colspan="8">
               <div class="empty">
                 <i class="bi bi-inbox"></i>
                 <h4>No requests yet</h4>
@@ -444,6 +447,11 @@
               <% if (row.shade) { %><span class="shade-chip"><%= row.shade %></span><% } else { %><span style="color:#c4bfb8;">-</span><% } %>
             </td>
             <td data-label="Qty"><span class="qty-big"><%= row.quantity_requested %></span></td>
+            <td data-label="Lot / Stage">
+              <% if (row.lot_no) { %><div class="lot-tag"><%= row.lot_no.toUpperCase() %></div><% } %>
+              <% if (row.filler_stage) { %><div class="stage-tag"><%= row.filler_stage %></div><% } %>
+              <% if (!row.lot_no && !row.filler_stage) { %><span style="color:#c4bfb8;">-</span><% } %>
+            </td>
             <td data-label="Requested By">
               <% if (row.filler_name) { %><span class="filler-name"><%= row.filler_name %></span><% } else { %><span style="color:#c4bfb8;">-</span><% } %>
             </td>

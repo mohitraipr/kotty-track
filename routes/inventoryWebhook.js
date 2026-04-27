@@ -1,10 +1,34 @@
 // routes/inventoryWebhook.js
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator, isMohitOperator, allowRoles } = require('../middlewares/auth');
 const { queueHealthRefresh } = require('../utils/healthRefreshQueue');
 const ExcelJS = require('exceljs');
+
+// In-memory storage for live inventory fetch jobs
+const liveInventoryJobs = new Map();
+
+// Lock to prevent concurrent downloads per warehouse (EasyEcom rate limits)
+// Structure: { startTime, rowCount, cancelled: boolean }
+const activeDownloads = new Map();
+
+// Clean up old jobs every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [jobId, job] of liveInventoryJobs.entries()) {
+    // Remove jobs older than 1 hour
+    if (now - job.createdAt > 60 * 60 * 1000) {
+      if (job.filePath && fs.existsSync(job.filePath)) {
+        fs.unlinkSync(job.filePath);
+      }
+      liveInventoryJobs.delete(jobId);
+    }
+  }
+}, 30 * 60 * 1000);
 
 // Warehouse ID to name mapping
 const WAREHOUSE_LABELS = {
@@ -22,8 +46,8 @@ const EASY_ECOM_TOKEN = global.env.EASYEECOM_ACCESS_TOKEN;
 
 function verifyAccessToken(req, res, next) {
   if (!EASY_ECOM_TOKEN) {
-    console.warn('EASYEECOM_ACCESS_TOKEN not set; skipping token check');
-    return next();
+    console.error('EASYEECOM_ACCESS_TOKEN not configured - rejecting webhook');
+    return res.status(503).send('Webhook not configured');
   }
   const provided = req.get('Access-Token');
   if (provided && provided === EASY_ECOM_TOKEN) {
@@ -560,6 +584,442 @@ router.get('/logs/download-excel', isAuthenticated, allowRoles(LOGS_ALLOWED_ROLE
       res.status(500).json({ error: 'Failed to generate Excel file' });
     }
   }
+});
+
+// Download live inventory from EasyEcom API (includes virtual inventory)
+// Only for vinaykumar / wishlinkops role
+router.get('/logs/download-live', isAuthenticated, allowRoles(['wishlinkops', 'mohit', 'operator']), async (req, res) => {
+  try {
+    const username = req.session?.user?.username || '';
+    const userRole = req.session?.user?.role || req.session?.user?.roleName || '';
+    const isWishlinkOps = userRole === 'wishlinkops' || username.toLowerCase() === 'vinaykumar';
+
+    // Only vinaykumar can use this feature
+    if (!isWishlinkOps && username.toLowerCase() !== 'mohit') {
+      return res.status(403).json({ error: 'This feature is only available for authorized users' });
+    }
+
+    const warehouseName = req.query.warehouse; // 'delhi' or 'faridabad'
+
+    if (!warehouseName) {
+      return res.status(400).json({ error: 'warehouse parameter required (delhi or faridabad)' });
+    }
+
+    // Prevent concurrent downloads for same warehouse (EasyEcom rate limits)
+    const warehouseKey = warehouseName.toLowerCase();
+    if (activeDownloads.has(warehouseKey)) {
+      const activeInfo = activeDownloads.get(warehouseKey);
+      const elapsed = Math.round((Date.now() - activeInfo.startTime) / 1000);
+      return res.status(429).json({
+        error: `Download already in progress for ${warehouseName} (${elapsed}s elapsed, ${activeInfo.rowCount} SKUs fetched). Please wait.`
+      });
+    }
+
+    // Import the EasyEcom client
+    const { getInventoryFromApi, isConfigured } = require('../utils/easyecomReturnsClient');
+
+    if (!isConfigured(warehouseName)) {
+      return res.status(500).json({ error: `EasyEcom API not configured for warehouse: ${warehouseName}` });
+    }
+
+    // Set download lock
+    activeDownloads.set(warehouseKey, { startTime: Date.now(), rowCount: 0 });
+    console.log(`Starting live CSV inventory fetch for ${warehouseName}...`);
+
+    // Set request timeout to prevent Cloud Run from disconnecting (max 60 minutes)
+    req.setTimeout(3600000); // 60 minutes
+    res.setTimeout(3600000); // 60 minutes
+
+    // Chunked streaming approach - sends data in batches for progress visibility
+    const filename = `inventory_live_${warehouseName}_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+
+    // Write CSV header
+    res.write('Product Code*,Quantity*,Shelf Code*,Adjustment Type*,Inventory Type,Transfer to Shelf Code,Sla,Source Batch Code,Remarks,Force Allocate\n');
+
+    let rowCount = 0;
+    const startTime = Date.now();
+    const CHUNK_SIZE = 500;
+    let chunk = [];
+
+    for await (const item of getInventoryFromApi(warehouseName)) {
+      // Check for cancellation
+      const currentJob = activeDownloads.get(warehouseKey);
+      if (currentJob?.cancelled) {
+        console.log(`Download cancelled for ${warehouseName} at ${rowCount} rows`);
+        activeDownloads.delete(warehouseKey);
+        res.write(`\n# Download cancelled at ${rowCount} rows\n`);
+        return res.end();
+      }
+
+      const sku = item.sku.includes(',') ? `"${item.sku}"` : item.sku;
+      chunk.push(`${sku},${item.total_qty},default,replace,,,,,`);
+      rowCount++;
+
+      // Send chunk every CHUNK_SIZE rows
+      if (chunk.length >= CHUNK_SIZE) {
+        res.write(chunk.join('\n') + '\n');
+        chunk = [];
+      }
+
+      // Update lock with progress
+      if (rowCount % 1000 === 0) {
+        activeDownloads.set(warehouseKey, { startTime, rowCount, cancelled: false });
+      }
+
+      if (rowCount % 10000 === 0) {
+        console.log(`Live CSV: ${rowCount} rows streamed (${Math.round((Date.now() - startTime) / 1000)}s)`);
+      }
+    }
+
+    // Send remaining rows
+    if (chunk.length > 0) {
+      res.write(chunk.join('\n') + '\n');
+    }
+
+    // Release lock
+    activeDownloads.delete(warehouseKey);
+
+    res.end();
+    console.log(`Live CSV complete: ${rowCount} rows in ${Math.round((Date.now() - startTime) / 1000)}s`);
+
+  } catch (err) {
+    // Release lock on error
+    const warehouseKey = (req.query.warehouse || '').toLowerCase();
+    activeDownloads.delete(warehouseKey);
+
+    console.error('Failed to download live inventory:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to download live inventory: ' + err.message });
+    }
+  }
+});
+
+// Stop an active download
+router.post('/logs/stop-download', isAuthenticated, allowRoles(['wishlinkops', 'mohit', 'operator']), (req, res) => {
+  const warehouseName = req.query.warehouse || req.body.warehouse;
+
+  if (!warehouseName) {
+    return res.status(400).json({ error: 'warehouse parameter required' });
+  }
+
+  const warehouseKey = warehouseName.toLowerCase();
+  const activeJob = activeDownloads.get(warehouseKey);
+
+  if (!activeJob) {
+    return res.json({ success: true, message: `No active download for ${warehouseName}` });
+  }
+
+  // Mark as cancelled
+  activeJob.cancelled = true;
+  activeDownloads.set(warehouseKey, activeJob);
+
+  console.log(`Download cancelled for ${warehouseName} at ${activeJob.rowCount} rows`);
+  res.json({
+    success: true,
+    message: `Download stopped for ${warehouseName}`,
+    rowsFetched: activeJob.rowCount
+  });
+});
+
+// Check download status - returns active job or last completed job
+router.get('/logs/download-status', isAuthenticated, allowRoles(['wishlinkops', 'mohit', 'operator']), (req, res) => {
+  const warehouseName = req.query.warehouse;
+
+  if (warehouseName) {
+    const warehouseKey = warehouseName.toLowerCase();
+    const activeJob = activeDownloads.get(warehouseKey);
+
+    // Check for active download
+    if (activeJob && !activeJob.cancelled) {
+      const elapsed = Math.round((Date.now() - activeJob.startTime) / 1000);
+      return res.json({
+        active: true,
+        warehouse: warehouseName,
+        jobId: activeJob.jobId || null,
+        elapsed,
+        rowCount: activeJob.rowCount,
+        cancelled: false
+      });
+    }
+
+    // Check for recently completed job for this warehouse
+    let lastCompleted = null;
+    for (const [jobId, job] of liveInventoryJobs.entries()) {
+      if (job.warehouse?.toLowerCase() === warehouseKey) {
+        const age = Date.now() - job.createdAt;
+        if (age < 30 * 60 * 1000) { // Less than 30 minutes old
+          if (!lastCompleted || job.createdAt > lastCompleted.createdAt) {
+            lastCompleted = {
+              jobId,
+              rowCount: job.rowCount,
+              createdAt: job.createdAt,
+              ageSeconds: Math.round(age / 1000),
+              downloadUrl: `/webhook/logs/download-cached/${jobId}`
+            };
+          }
+        }
+      }
+    }
+
+    return res.json({
+      active: false,
+      warehouse: warehouseName,
+      lastCompleted
+    });
+  }
+
+  // Return all active downloads
+  const active = [];
+  for (const [wh, job] of activeDownloads.entries()) {
+    if (!job.cancelled) {
+      active.push({
+        warehouse: wh,
+        jobId: job.jobId || null,
+        elapsed: Math.round((Date.now() - job.startTime) / 1000),
+        rowCount: job.rowCount
+      });
+    }
+  }
+  res.json({ downloads: active });
+});
+
+// SSE endpoint: Fetch live inventory with real-time progress
+// If job already running for warehouse, sends current status and watches progress
+// Returns progress updates and a download link when complete
+router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohit', 'operator']), async (req, res) => {
+  const warehouseName = req.query.warehouse; // 'delhi' or 'faridabad'
+
+  if (!warehouseName || !['delhi', 'faridabad'].includes(warehouseName.toLowerCase())) {
+    return res.status(400).json({ error: 'warehouse parameter required (delhi or faridabad)' });
+  }
+
+  const warehouseKey = warehouseName.toLowerCase();
+  const { getInventoryFromApi, isConfigured } = require('../utils/easyecomReturnsClient');
+
+  if (!isConfigured(warehouseName)) {
+    return res.status(500).json({ error: `EasyEcom API not configured for warehouse: ${warehouseName}` });
+  }
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Check if there's already an active job for this warehouse
+  const existingJob = activeDownloads.get(warehouseKey);
+  if (existingJob && !existingJob.cancelled) {
+    // Attach to existing job - poll for updates
+    sendEvent('attached', {
+      jobId: existingJob.jobId,
+      warehouse: warehouseName,
+      rowCount: existingJob.rowCount,
+      elapsed: Math.round((Date.now() - existingJob.startTime) / 1000),
+      message: `Attached to running job (${existingJob.rowCount.toLocaleString()} SKUs fetched)`
+    });
+
+    // Poll for updates until job completes
+    const pollInterval = setInterval(() => {
+      const job = activeDownloads.get(warehouseKey);
+      if (!job) {
+        // Job completed - check for completed job in liveInventoryJobs
+        clearInterval(pollInterval);
+        for (const [jobId, completedJob] of liveInventoryJobs.entries()) {
+          if (completedJob.warehouse?.toLowerCase() === warehouseKey) {
+            const age = Date.now() - completedJob.createdAt;
+            if (age < 60000) { // Completed in last minute
+              sendEvent('complete', {
+                jobId,
+                warehouse: warehouseName,
+                totalSkus: completedJob.rowCount,
+                downloadUrl: `/webhook/logs/download-cached/${jobId}`,
+                message: `Download ready (${completedJob.rowCount.toLocaleString()} SKUs)`
+              });
+              res.end();
+              return;
+            }
+          }
+        }
+        sendEvent('error', { message: 'Job completed but result not found' });
+        res.end();
+      } else if (job.cancelled) {
+        clearInterval(pollInterval);
+        sendEvent('error', { message: 'Job was cancelled' });
+        res.end();
+      } else {
+        // Send progress update
+        sendEvent('progress', {
+          fetched: job.rowCount,
+          elapsed: Math.round((Date.now() - job.startTime) / 1000),
+          message: `Fetched ${job.rowCount.toLocaleString()} SKUs...`
+        });
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Cleanup on disconnect
+    req.on('close', () => clearInterval(pollInterval));
+    return;
+  }
+
+  // Generate job ID and start new job
+  const jobId = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const startTime = Date.now();
+
+  // Register in activeDownloads
+  activeDownloads.set(warehouseKey, {
+    jobId,
+    startTime,
+    rowCount: 0,
+    cancelled: false
+  });
+
+  try {
+    sendEvent('start', { jobId, warehouse: warehouseName, message: 'Starting inventory fetch...' });
+
+    // Create temp file for Excel
+    const tempDir = os.tmpdir();
+    const filePath = path.join(tempDir, `inventory_${jobId}.xlsx`);
+
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Inventory');
+
+    // Uniware format columns
+    sheet.columns = [
+      { header: 'Product Code*', key: 'product_code', width: 20 },
+      { header: 'Quantity*', key: 'quantity', width: 12 },
+      { header: 'Shelf Code*', key: 'shelf_code', width: 15 },
+      { header: 'Adjustment Type*', key: 'adjustment_type', width: 18 },
+      { header: 'Inventory Type', key: 'inventory_type', width: 15 },
+      { header: 'Transfer to Shelf Code', key: 'transfer_shelf', width: 22 },
+      { header: 'Sla', key: 'sla', width: 10 },
+      { header: 'Source Batch Code', key: 'source_batch', width: 18 },
+      { header: 'Remarks', key: 'remarks', width: 15 },
+      { header: 'Force Allocate', key: 'force_allocate', width: 15 },
+    ];
+
+    // Style header
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+
+    let rowCount = 0;
+
+    // Fetch and write data
+    for await (const item of getInventoryFromApi(warehouseName)) {
+      // Check for cancellation
+      const currentJob = activeDownloads.get(warehouseKey);
+      if (currentJob?.cancelled) {
+        activeDownloads.delete(warehouseKey);
+        sendEvent('error', { message: 'Download cancelled' });
+        res.end();
+        return;
+      }
+
+      sheet.addRow({
+        product_code: item.sku,
+        quantity: item.total_qty,
+        shelf_code: 'default',
+        adjustment_type: 'replace',
+        inventory_type: '',
+        transfer_shelf: '',
+        sla: '',
+        source_batch: '',
+        remarks: '',
+        force_allocate: '',
+      });
+      rowCount++;
+
+      // Update progress in activeDownloads
+      if (rowCount % 100 === 0) {
+        activeDownloads.set(warehouseKey, { jobId, startTime, rowCount, cancelled: false });
+      }
+
+      // Send progress every 500 rows
+      if (rowCount % 500 === 0) {
+        sendEvent('progress', {
+          fetched: rowCount,
+          message: `Fetched ${rowCount.toLocaleString()} SKUs...`,
+          elapsed: Math.round((Date.now() - startTime) / 1000)
+        });
+      }
+    }
+
+    // Remove from active downloads
+    activeDownloads.delete(warehouseKey);
+
+    // Save workbook
+    await workbook.xlsx.writeFile(filePath);
+
+    // Store job info
+    liveInventoryJobs.set(jobId, {
+      filePath,
+      warehouse: warehouseName,
+      rowCount,
+      createdAt: Date.now(),
+      username: req.session?.user?.username || 'unknown'
+    });
+
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    sendEvent('complete', {
+      jobId,
+      warehouse: warehouseName,
+      totalSkus: rowCount,
+      elapsed,
+      downloadUrl: `/webhook/logs/download-cached/${jobId}`,
+      message: `Fetched ${rowCount.toLocaleString()} SKUs in ${elapsed}s`
+    });
+
+    res.end();
+
+  } catch (err) {
+    activeDownloads.delete(warehouseKey);
+    console.error('Live fetch failed:', err);
+    sendEvent('error', { message: err.message });
+    res.end();
+  }
+});
+
+// Download cached inventory file
+router.get('/logs/download-cached/:jobId', isAuthenticated, allowRoles(['wishlinkops', 'mohit', 'operator']), (req, res) => {
+  const { jobId } = req.params;
+  const job = liveInventoryJobs.get(jobId);
+
+  if (!job || !job.filePath) {
+    return res.status(404).json({ error: 'Download not found or expired. Please fetch again.' });
+  }
+
+  if (!fs.existsSync(job.filePath)) {
+    liveInventoryJobs.delete(jobId);
+    return res.status(404).json({ error: 'File expired. Please fetch again.' });
+  }
+
+  const filename = `inventory_live_${job.warehouse}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const stream = fs.createReadStream(job.filePath);
+  stream.pipe(res);
+
+  stream.on('end', () => {
+    // Clean up file after download
+    setTimeout(() => {
+      if (fs.existsSync(job.filePath)) {
+        fs.unlinkSync(job.filePath);
+      }
+      liveInventoryJobs.delete(jobId);
+    }, 5000);
+  });
 });
 
 // View order webhook logs from database (last 200 entries)

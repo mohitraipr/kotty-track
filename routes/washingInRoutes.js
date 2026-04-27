@@ -10,6 +10,7 @@ const { pool } = require('../config/db');
 
 // If you have authentication middlewares for "washingInMaster" role:
 const { isAuthenticated, isWashingInMaster } = require('../middlewares/auth');
+const { createStagePayment } = require('../utils/stagePaymentHelper');
 
 // ----------------------------------------------
 // MULTER SETUP (for optional image uploads)
@@ -47,115 +48,10 @@ function setCached(key, val, ttl = DEFAULT_TTL) {
 }
 
 /*===================================================================
-  1) APPROVE / DENY WASHING IN ASSIGNMENTS
+  1) OLD APPROVAL ROUTES REMOVED (2026-04-23)
+  Now using self-assign flow: /available-lots + /submit
+  See git history if rollback needed
 ===================================================================*/
-
-// GET /washingin/approve
-router.get('/approve', isAuthenticated, isWashingInMaster, (req, res) => {
-  const error = req.flash('error');
-  const success = req.flash('success');
-  // Render an EJS (or any templating) page that shows "Approve washing_in_assignments"
-  return res.render('washingInApprove', {
-    user: req.session.user,
-    error,
-    success
-  });
-});
-
-// GET /washingin/approve/list
-router.get('/approve/list', isAuthenticated, isWashingInMaster, async (req, res) => {
-  try {
-    const userId     = req.session.user.id;
-    const searchTerm = req.query.search || '';
-    const searchLike = `%${searchTerm}%`;
-
-    const [rows] = await pool.query(`
-      SELECT
-        wia.id            AS assignment_id,
-        wia.sizes_json,
-        wia.assigned_on,
-        wia.is_approved,
-        wia.assignment_remark,
-
-        wd.lot_no,
-        wd.sku,
-        wd.total_pieces,               -- <- from washing_data
-
-        cl.remark       AS cutting_remark  -- <- from cutting_lots
-      FROM washing_in_assignments wia
-      JOIN washing_data wd
-        ON wia.washing_data_id = wd.id
-      LEFT JOIN cutting_lots cl
-        ON cl.lot_no = wd.lot_no
-      WHERE wia.user_id     = ?
-        AND wia.is_approved IS NULL
-        AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
-      ORDER BY wia.assigned_on DESC
-    `, [userId, searchLike, searchLike]);
-
-    return res.json({ data: rows });
-  } catch (err) {
-    console.error('[ERROR] GET /washingin/approve/list =>', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /washingin/approve-lot
-router.post('/approve-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
-  try {
-    const userId       = req.session.user.id;
-    const { assignment_id } = req.body;
-    if (!assignment_id) {
-      return res.status(400).json({ success: false, error: 'No assignment_id provided.' });
-    }
-
-    await pool.query(`
-      UPDATE washing_in_assignments
-      SET is_approved    = 1,
-          approved_on    = NOW(),
-          assignment_remark = NULL
-      WHERE id = ? AND user_id = ?
-    `, [assignment_id, userId]);
-
-    // **Return JSON** so the front‑end AJAX can see success immediately
-    return res.json({ success: true, message: 'Assignment approved successfully!' });
-  } catch (err) {
-    console.error('[ERROR] POST /washingin/approve-lot =>', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-
-// POST /washingin/deny-lot
-router.post('/deny-lot', isAuthenticated, isWashingInMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const { assignment_id, denial_remark } = req.body;
-
-    if (!assignment_id) {
-      req.flash('error', 'No assignment_id provided.');
-      return res.redirect('/washingin/approve');
-    }
-    if (!denial_remark || !denial_remark.trim()) {
-      req.flash('error', 'You must provide a remark for denial.');
-      return res.redirect('/washingin/approve');
-    }
-
-    await pool.query(`
-      UPDATE washing_in_assignments
-      SET is_approved = 0,approved_on = NOW(),
-          assignment_remark = ?
-      WHERE id = ? AND user_id = ?
-    `, [denial_remark.trim(), assignment_id, userId]);
-
-    req.flash('success', 'Assignment denied successfully.');
-    return res.redirect('/washingin/approve');
-  } catch (err) {
-    console.error('[ERROR] POST /washingin/deny-lot =>', err);
-    req.flash('error', 'Error denying assignment: ' + err.message);
-    return res.redirect('/washingin/approve');
-  }
-});
 
 /*===================================================================
   2) WASHING IN DASHBOARD: CREATE, LIST, UPDATE, CHALLAN, DOWNLOAD
@@ -1298,4 +1194,376 @@ router.post('/assign-rewash/pending/:id/complete', isAuthenticated, isWashingInM
     conn.release();
   }
 });
+
+/*-----------------------------------------
+  SELF-ASSIGN FLOW (Stitching-style)
+  Worker picks available lot + submits in one step
+-----------------------------------------*/
+
+// GET /washingin/available-lots
+// Shows denim lots with washing_data that haven't been fully processed in washing_in
+router.get('/available-lots', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+
+    const [rows] = await pool.query(`
+      SELECT
+        wd.id,
+        wd.lot_no,
+        wd.sku,
+        wd.total_pieces,
+        wd.created_at,
+        cl.remark AS cutting_remark,
+        wd.total_pieces - COALESCE((
+          SELECT SUM(wid.total_pieces)
+          FROM washing_in_data wid
+          WHERE wid.lot_no = wd.lot_no
+        ), 0) AS remaining_pieces,
+        u.username AS washing_master
+      FROM washing_data wd
+      JOIN users u ON wd.user_id = u.id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = wd.lot_no
+      WHERE (wd.lot_no LIKE ? OR wd.sku LIKE ? OR cl.remark LIKE ?)
+        AND (
+          cl.flow_type = 'denim'
+          OR EXISTS (
+            SELECT 1 FROM users cu
+            WHERE cu.id = cl.user_id AND cu.is_denim_cutter = 1
+          )
+          OR wd.lot_no REGEXP '^(AK|UM)'
+        )
+      HAVING remaining_pieces > 0
+      ORDER BY wd.created_at DESC
+      LIMIT 50
+    `, [search, search, search]);
+
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/available-lots =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingin/available-lot-sizes/:lotId
+// Get sizes for a specific washing_data lot with remaining counts for washing_in
+router.get('/available-lot-sizes/:lotId', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const lotId = req.params.lotId;
+
+    const [[wd]] = await pool.query(`SELECT * FROM washing_data WHERE id = ?`, [lotId]);
+    if (!wd) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        wds.id,
+        wds.size_label,
+        wds.pieces,
+        wds.pieces - COALESCE((
+          SELECT SUM(wids.pieces)
+          FROM washing_in_data_sizes wids
+          JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+          WHERE wid.lot_no = ? AND wids.size_label = wds.size_label
+        ), 0) AS remain
+      FROM washing_data_sizes wds
+      WHERE wds.washing_data_id = ?
+    `, [wd.lot_no, lotId]);
+
+    return res.json(rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    })));
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/available-lot-sizes/:lotId =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingin/submit
+// Self-assign + complete washing_in in one step (stitching-style flow)
+router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_file'), async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+    const { selectedLotId, remark } = req.body;
+    const sizesObj = req.body.sizes || {};
+
+    let image_url = null;
+    if (req.file) {
+      image_url = '/uploads/' + req.file.filename;
+    }
+
+    // Calculate total pieces
+    let grandTotal = 0;
+    for (const sizeId of Object.keys(sizesObj)) {
+      const countVal = parseInt(sizesObj[sizeId], 10);
+      if (!isNaN(countVal) && countVal > 0) {
+        grandTotal += countVal;
+      }
+    }
+    if (grandTotal <= 0) {
+      return res.status(400).json({ error: 'No pieces requested.' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1) Get washing_data
+    const [[wd]] = await conn.query(`SELECT * FROM washing_data WHERE id = ?`, [selectedLotId]);
+    if (!wd) {
+      await conn.rollback();
+      conn.release();
+      return res.status(400).json({ error: 'Invalid lot selection.' });
+    }
+
+    // 2) Validate sizes against available pieces
+    const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(Boolean);
+    const [sizeRows] = await conn.query(
+      `SELECT id, size_label, pieces FROM washing_data_sizes WHERE id IN (?)`,
+      [sizeIds.length ? sizeIds : [0]]
+    );
+    const sizeMap = {};
+    for (const row of sizeRows) sizeMap[row.id] = row;
+
+    const sizeLabels = sizeRows.map(r => r.size_label);
+    const [usedRows] = await conn.query(
+      `SELECT wids.size_label, COALESCE(SUM(wids.pieces), 0) AS usedCount
+       FROM washing_in_data_sizes wids
+       JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
+       WHERE wid.lot_no = ? AND wids.size_label IN (?)
+       GROUP BY wids.size_label`,
+      [wd.lot_no, sizeLabels.length ? sizeLabels : ['']]
+    );
+    const usedMap = {};
+    for (const row of usedRows) usedMap[row.size_label] = row.usedCount;
+
+    for (const sizeId of sizeIds) {
+      const row = sizeMap[sizeId];
+      if (!row) continue;
+      const requested = parseInt(sizesObj[sizeId], 10) || 0;
+      if (requested === 0) continue;
+      const used = usedMap[row.size_label] || 0;
+      const remain = row.pieces - used;
+      if (requested > remain) {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({ error: `Requested ${requested} for ${row.size_label}, but only ${remain} remain.` });
+      }
+    }
+
+    // 3) Create washing_in_assignments record (auto-approved)
+    const sizesJson = JSON.stringify(sizeRows.filter(r => parseInt(sizesObj[r.id], 10) > 0).map(r => r.size_label));
+
+    await conn.query(`
+      INSERT INTO washing_in_assignments
+        (washing_master_id, user_id, washing_data_id, assigned_on, sizes_json, is_approved, approved_on)
+      VALUES (?, ?, ?, NOW(), ?, 1, NOW())
+    `, [wd.user_id, userId, wd.id, sizesJson]);
+
+    // 4) Insert washing_in_data
+    const [dataResult] = await conn.query(`
+      INSERT INTO washing_in_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [userId, wd.lot_no, wd.sku, grandTotal, remark || null, image_url]);
+    const newId = dataResult.insertId;
+
+    // 5) Insert washing_in_data_sizes
+    for (const sizeId of sizeIds) {
+      const numVal = parseInt(sizesObj[sizeId], 10) || 0;
+      if (numVal <= 0) continue;
+      const sds = sizeMap[sizeId];
+      await conn.query(
+        `INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
+         VALUES (?, ?, ?, NOW())`,
+        [newId, sds.size_label, numVal]
+      );
+    }
+
+    // 6) Auto-create washing payment
+    const [[washingMaster]] = await conn.query(
+      `SELECT username FROM users WHERE id = ?`,
+      [wd.user_id]
+    );
+    if (washingMaster) {
+      await createStagePayment('washing', {
+        lot_no: wd.lot_no,
+        sku: wd.sku,
+        qty: grandTotal,
+        user_id: wd.user_id,
+        username: washingMaster.username
+      });
+    }
+
+    await conn.commit();
+    conn.release();
+
+    return res.json({
+      success: true,
+      message: 'Washing In entry created successfully!',
+      washingInDataId: newId
+    });
+  } catch (err) {
+    console.error('[ERROR] POST /washingin/submit =>', err);
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    return res.status(500).json({ error: 'Error creating washing_in data: ' + err.message });
+  }
+});
+
+// GET /washingin/my-today
+router.get('/my-today', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const [rows] = await pool.query(`
+      SELECT id, lot_no, sku, total_pieces, created_at
+      FROM washing_in_data
+      WHERE user_id = ? AND DATE(created_at) = CURDATE()
+      ORDER BY created_at DESC
+    `, [userId]);
+
+    return res.json({
+      entries: rows,
+      total_pieces: rows.reduce((sum, r) => sum + r.total_pieces, 0),
+      count: rows.length
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingin/my-entries
+router.get('/my-entries', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offset = parseInt(req.query.offset) || 0;
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT wid.id, wid.lot_no, wid.sku, wid.total_pieces, wid.created_at, cl.remark as cutting_remark
+      FROM washing_in_data wid
+      LEFT JOIN cutting_lots cl ON wid.lot_no = cl.lot_no
+      WHERE wid.user_id = ? AND (wid.lot_no LIKE ? OR wid.sku LIKE ?)
+    `;
+    const params = [userId, search, search];
+
+    if (startDate) { query += ` AND DATE(wid.created_at) >= ?`; params.push(startDate); }
+    if (endDate) { query += ` AND DATE(wid.created_at) <= ?`; params.push(endDate); }
+    query += ` ORDER BY wid.created_at DESC LIMIT 20 OFFSET ?`;
+    params.push(offset);
+
+    const [rows] = await pool.query(query, params);
+    return res.json({ entries: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingin/lot-details/:lotNo
+router.get('/lot-details/:lotNo', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const lotNo = req.params.lotNo;
+    const userId = req.session.user.id;
+
+    const [[lot]] = await pool.query(`
+      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.remark as cutting_remark,
+             u_cut.username as cutting_master
+      FROM cutting_lots cl
+      LEFT JOIN users u_cut ON cl.cutting_master_id = u_cut.id
+      WHERE cl.lot_no = ?
+    `, [lotNo]);
+
+    if (!lot) {
+      return res.json({ success: false, error: 'Lot not found' });
+    }
+
+    const [[stitched]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM stitching_data WHERE lot_no = ?`, [lotNo]);
+    const [[assembled]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM jeans_assembly_data WHERE lot_no = ?`, [lotNo]);
+    const [[washed]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM washing_data WHERE lot_no = ?`, [lotNo]);
+    const [[washedIn]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM washing_in_data WHERE lot_no = ?`, [lotNo]);
+    const [[finished]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM finishing_data WHERE lot_no = ?`, [lotNo]);
+
+    const [[payment]] = await pool.query(`
+      SELECT sp.status as payment_status, sp.amount as payment_amount
+      FROM stage_payments sp
+      WHERE sp.lot_no = ? AND sp.stage = 'washing_in' AND sp.user_id = ?
+      ORDER BY sp.created_at DESC LIMIT 1
+    `, [lotNo, userId]);
+
+    lot.stitched_qty = stitched.qty;
+    lot.assembly_qty = assembled.qty;
+    lot.washed_qty = washed.qty;
+    lot.washed_in_qty = washedIn.qty;
+    lot.finished_qty = finished.qty;
+    lot.payment_status = payment ? payment.payment_status : null;
+    lot.payment_amount = payment ? payment.payment_amount : 0;
+
+    return res.json({ success: true, lot });
+  } catch (err) {
+    console.error('[ERROR] GET /lot-details =>', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /washingin/history-download
+router.get('/history-download', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT wid.lot_no, wid.sku, wid.total_pieces, wid.created_at, cl.remark as cutting_remark
+      FROM washing_in_data wid
+      LEFT JOIN cutting_lots cl ON wid.lot_no = cl.lot_no
+      WHERE wid.user_id = ? AND (wid.lot_no LIKE ? OR wid.sku LIKE ?)
+    `;
+    const params = [userId, search, search];
+
+    if (startDate) { query += ` AND DATE(wid.created_at) >= ?`; params.push(startDate); }
+    if (endDate) { query += ` AND DATE(wid.created_at) <= ?`; params.push(endDate); }
+    query += ` ORDER BY wid.created_at DESC`;
+
+    const [rows] = await pool.query(query, params);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Washing In History');
+
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 25 },
+      { header: 'Pieces', key: 'total_pieces', width: 10 },
+      { header: 'Date', key: 'created_at', width: 15 },
+      { header: 'Cutting Remark', key: 'cutting_remark', width: 30 }
+    ];
+
+    rows.forEach(r => {
+      sheet.addRow({
+        lot_no: r.lot_no,
+        sku: r.sku,
+        total_pieces: r.total_pieces,
+        created_at: new Date(r.created_at).toLocaleDateString('en-IN'),
+        cutting_remark: r.cutting_remark || ''
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=washing_in_history.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /history-download =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

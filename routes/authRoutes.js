@@ -48,6 +48,7 @@ function getDashboardForRole(roleName) {
     'challan_dashboard': '/challandashboard',
     'productviewer': '/product-links',
     'wishlinkops': '/webhook/logs',
+    'videofinder': '/video-finder',
   };
 
   // If role not found, log it for debugging and return a safe default

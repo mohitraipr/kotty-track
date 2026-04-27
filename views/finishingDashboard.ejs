@@ -1,4 +1,8 @@
 <%- include('partials/header', { pageTitle: 'Finishing Dashboard' }) %>
+<!-- Select2 for indent item search -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/finishingdashboard' }) %>
 
 <style>
@@ -240,6 +244,90 @@
   .lot-option-meta { font-size: 12px; color: #6b7280; }
   .lot-option-remark { font-size: 12px; color: #3b82f6; font-weight: 500; word-break: break-word; }
   .lot-option-avail { font-size: 13px; font-weight: 600; color: #22c55e; }
+
+  /* Indent Section Styles */
+  .indent-section { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); margin-bottom: 20px; overflow: hidden; }
+  .indent-toggle { width: 100%; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; background: var(--gray-50); border: none; cursor: pointer; font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+  .indent-toggle:hover { background: var(--gray-100); }
+  .indent-toggle i { transition: transform 0.2s; }
+  .indent-toggle.open i { transform: rotate(180deg); }
+  .indent-content { display: none; padding: 20px; border-top: 1px solid var(--border-light); }
+  .indent-content.show { display: block; }
+  .indent-card { background: var(--gray-50); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px; }
+  .indent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .indent-title { font-size: var(--text-base); font-weight: 600; }
+  .btn-add-item { padding: 8px 14px; background: var(--terracotta); color: white; border: none; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+  .btn-add-item:hover { background: var(--terracotta-dark); }
+  .indent-items { display: flex; flex-direction: column; gap: 12px; }
+  .indent-item { background: white; border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px; }
+  .indent-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .indent-item-num { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+  .btn-remove-item { padding: 4px 8px; background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: var(--radius-sm); font-size: var(--text-xs); cursor: pointer; }
+  .btn-remove-item:hover { background: var(--danger); color: white; }
+  .indent-row { display: grid; grid-template-columns: 1fr 80px; gap: 10px; margin-bottom: 10px; }
+  .indent-row.single { grid-template-columns: 1fr; }
+  .indent-label { font-size: var(--text-sm); font-weight: 500; margin-bottom: 4px; display: block; }
+  .indent-select, .indent-input { width: 100%; padding: 10px; font-size: var(--text-base); border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+  .indent-select:focus, .indent-input:focus { border-color: var(--terracotta); outline: none; }
+  .btn-submit-indent { width: 100%; padding: 14px; background: var(--success); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 600; cursor: pointer; }
+  .btn-submit-indent:hover:not(:disabled) { opacity: 0.9; }
+  .btn-submit-indent:disabled { opacity: 0.6; cursor: not-allowed; }
+  .indent-requests-list { margin-top: 16px; }
+  .indent-request-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border-light); gap: 12px; }
+  .indent-request-item:last-child { border-bottom: none; }
+  .indent-request-main { flex: 1; min-width: 0; }
+  .indent-request-desc { font-size: var(--text-sm); font-weight: 500; word-break: break-word; margin-bottom: 4px; }
+  .indent-request-meta { font-size: var(--text-xs); color: var(--text-muted); }
+  .indent-request-lot { color: var(--terracotta); font-weight: 500; }
+  .indent-request-status { padding: 4px 10px; border-radius: 20px; font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; }
+  .indent-request-status.open { background: #fef3c7; color: #9a3412; }
+  .indent-request-status.proceeding { background: #cffafe; color: #155e75; }
+  .indent-request-status.arrived { background: #d1fae5; color: #065f46; }
+  .indent-empty { text-align: center; padding: 24px; color: var(--text-muted); }
+  .select2-container--default .select2-selection--single { height: auto; padding: 6px 10px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+
+  /* History Section */
+  .history-section { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); margin-bottom: 20px; overflow: hidden; }
+  .history-toggle { width: 100%; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; background: var(--gray-50); border: none; cursor: pointer; font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+  .history-toggle:hover { background: var(--gray-100); }
+  .history-content { display: none; padding: 20px; border-top: 1px solid var(--border-light); }
+  .history-content.show { display: block; }
+  .history-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .history-filters input { flex: 1; min-width: 100px; padding: 10px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+  .btn-filter, .btn-download { padding: 10px 14px; border: none; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .btn-filter { background: var(--terracotta); color: white; }
+  .btn-download { background: #059669; color: white; }
+  .history-list { max-height: 400px; overflow-y: auto; }
+  .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-light); cursor: pointer; }
+  .history-item:hover { background: var(--gray-50); margin: 0 -20px; padding-left: 20px; padding-right: 20px; }
+  .history-item:last-child { border-bottom: none; }
+  .history-lot { font-weight: 600; text-transform: uppercase; }
+  .history-meta { font-size: var(--text-xs); color: var(--text-muted); }
+  .history-remark { font-size: var(--text-xs); color: var(--terracotta); display: block; }
+  .history-qty { font-weight: 600; color: var(--success); }
+  .history-empty { text-align: center; padding: 24px; color: var(--text-muted); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-content { background: white; border-radius: var(--radius-lg); width: 100%; max-width: 500px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: var(--gray-50); }
+  .modal-title { font-size: var(--text-lg); font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section-title { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .detail-item { background: var(--gray-50); padding: 12px; border-radius: var(--radius-sm); }
+  .detail-label { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: 4px; }
+  .detail-value { font-size: var(--text-base); font-weight: 600; }
+  .detail-value.highlight { color: var(--terracotta); }
+  .detail-value.success { color: var(--success); }
+  .detail-value.warning { color: #f59e0b; }
+  .detail-remark { background: #fef3c7; padding: 12px; border-radius: var(--radius-sm); margin-top: 12px; }
+  .detail-remark-label { font-size: var(--text-xs); color: #9a3412; margin-bottom: 4px; }
+  .detail-remark-text { font-size: var(--text-base); color: #92400e; }
+  .spinner { width: 24px; height: 24px; border: 2px solid var(--gray-200); border-top-color: var(--terracotta); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 
 <div class="page-wrapper">
@@ -248,7 +336,64 @@
 
     <div class="quick-links">
       <a href="/payments/my-payments" class="quick-link"><i class="bi bi-wallet2"></i> My Payments</a>
-      <a href="/finishingdashboard/download-all" class="quick-link"><i class="bi bi-download"></i> Download Excel</a>
+      <button type="button" class="quick-link" onclick="toggleHistorySection()"><i class="bi bi-clock-history"></i> History</button>
+      <button type="button" class="quick-link" onclick="toggleIndentSection()"><i class="bi bi-box-seam"></i> Raise Indent</button>
+    </div>
+
+    <!-- History Section -->
+    <div class="history-section" id="historySection" style="display: none;">
+      <button type="button" class="history-toggle" onclick="toggleHistorySection()">
+        <span><i class="bi bi-clock-history"></i> My History</span>
+        <i class="bi bi-chevron-up"></i>
+      </button>
+      <div class="history-content show">
+        <div class="history-filters">
+          <input type="text" id="historySearch" placeholder="Search lot/SKU...">
+          <input type="date" id="historyStartDate">
+          <input type="date" id="historyEndDate">
+          <button type="button" class="btn-filter" onclick="loadHistoryEntries()"><i class="bi bi-funnel"></i> Filter</button>
+          <button type="button" class="btn-download" onclick="downloadHistory()"><i class="bi bi-download"></i> Excel</button>
+        </div>
+        <div class="history-list" id="historyList">
+          <div class="history-empty">Click Filter to load history</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lot Details Modal -->
+    <div class="modal-overlay" id="lotModal" style="display: none;" onclick="if(event.target===this)closeLotModal()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="modalLotNo">Lot Details</span>
+          <button type="button" class="modal-close" onclick="closeLotModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Indent Section -->
+    <div class="indent-section" id="indentSection" style="display: none;">
+      <button type="button" class="indent-toggle open" onclick="toggleIndentSection()">
+        <span><i class="bi bi-box-seam"></i> Material Requirement</span>
+        <i class="bi bi-chevron-up"></i>
+      </button>
+      <div class="indent-content show">
+        <div class="indent-card">
+          <div class="indent-header">
+            <span class="indent-title">Add Items</span>
+            <button type="button" class="btn-add-item" onclick="addIndentItem()"><i class="bi bi-plus"></i> Add</button>
+          </div>
+          <div class="indent-items" id="indentItems"></div>
+          <button type="button" class="btn-submit-indent" id="btnSubmitIndent" onclick="submitIndent()">
+            <i class="bi bi-send"></i> Submit Requirements
+          </button>
+        </div>
+        <div class="indent-requests-list" id="indentRequestsList">
+          <div class="indent-empty">Loading...</div>
+        </div>
+      </div>
     </div>
 
     <% if (error && error.length) { %>
@@ -579,6 +724,397 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDENT FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+var indentItemCount = 0;
+var recentLots = [];
+var indentLoaded = false;
+
+function toggleIndentSection() {
+  var section = document.getElementById('indentSection');
+  if (section.style.display === 'none') {
+    section.style.display = 'block';
+    if (!indentLoaded) {
+      loadRecentLots().then(function() { addIndentItem(); });
+      loadIndentRequests();
+      indentLoaded = true;
+    }
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+function esc(str) {
+  if (!str) return '';
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function addIndentItem() {
+  indentItemCount++;
+  var id = indentItemCount;
+  var container = document.getElementById('indentItems');
+  var item = document.createElement('div');
+  item.className = 'indent-item';
+  item.id = 'indentItem' + id;
+
+  var header = document.createElement('div');
+  header.className = 'indent-item-header';
+  var num = document.createElement('span');
+  num.className = 'indent-item-num';
+  num.textContent = 'Item #' + id;
+  header.appendChild(num);
+  var removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'btn-remove-item';
+  removeBtn.textContent = 'Remove';
+  removeBtn.onclick = function() { removeIndentItem(id); };
+  header.appendChild(removeBtn);
+  item.appendChild(header);
+
+  var row1 = document.createElement('div');
+  row1.className = 'indent-row single';
+  var div1 = document.createElement('div');
+  var label1 = document.createElement('label');
+  label1.className = 'indent-label';
+  label1.textContent = 'Item *';
+  div1.appendChild(label1);
+  var sel = document.createElement('select');
+  sel.className = 'indent-select';
+  sel.id = 'goods' + id;
+  var opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = 'Search...';
+  sel.appendChild(opt);
+  div1.appendChild(sel);
+  row1.appendChild(div1);
+  item.appendChild(row1);
+
+  var row2 = document.createElement('div');
+  row2.className = 'indent-row';
+  var div2a = document.createElement('div');
+  var label2a = document.createElement('label');
+  label2a.className = 'indent-label';
+  label2a.textContent = 'Qty *';
+  div2a.appendChild(label2a);
+  var qtyInput = document.createElement('input');
+  qtyInput.type = 'number';
+  qtyInput.className = 'indent-input';
+  qtyInput.id = 'qty' + id;
+  qtyInput.min = '1';
+  qtyInput.placeholder = 'Qty';
+  div2a.appendChild(qtyInput);
+  row2.appendChild(div2a);
+  var div2b = document.createElement('div');
+  var label2b = document.createElement('label');
+  label2b.className = 'indent-label';
+  label2b.textContent = 'Unit';
+  div2b.appendChild(label2b);
+  var unitInput = document.createElement('input');
+  unitInput.type = 'text';
+  unitInput.className = 'indent-input';
+  unitInput.id = 'unit' + id;
+  unitInput.readOnly = true;
+  unitInput.placeholder = '-';
+  div2b.appendChild(unitInput);
+  row2.appendChild(div2b);
+  item.appendChild(row2);
+
+  var row3 = document.createElement('div');
+  row3.className = 'indent-row single';
+  var div3 = document.createElement('div');
+  var label3 = document.createElement('label');
+  label3.className = 'indent-label';
+  label3.textContent = 'Lot (optional)';
+  div3.appendChild(label3);
+  var lotSel = document.createElement('select');
+  lotSel.className = 'indent-select';
+  lotSel.id = 'lot' + id;
+  var defOpt = document.createElement('option');
+  defOpt.value = '';
+  defOpt.textContent = '-- No lot --';
+  lotSel.appendChild(defOpt);
+  recentLots.forEach(function(l) {
+    var o = document.createElement('option');
+    o.value = l;
+    o.textContent = l.toUpperCase();
+    lotSel.appendChild(o);
+  });
+  div3.appendChild(lotSel);
+  row3.appendChild(div3);
+  item.appendChild(row3);
+
+  var row4 = document.createElement('div');
+  row4.className = 'indent-row single';
+  var div4 = document.createElement('div');
+  var label4 = document.createElement('label');
+  label4.className = 'indent-label';
+  label4.textContent = 'Remark (optional)';
+  div4.appendChild(label4);
+  var remarkInput = document.createElement('input');
+  remarkInput.type = 'text';
+  remarkInput.className = 'indent-input';
+  remarkInput.id = 'remark' + id;
+  remarkInput.placeholder = 'e.g. urgent';
+  div4.appendChild(remarkInput);
+  row4.appendChild(div4);
+  item.appendChild(row4);
+
+  container.appendChild(item);
+  initGoodsSelect(id);
+}
+
+function removeIndentItem(id) {
+  var item = document.getElementById('indentItem' + id);
+  if (item) item.remove();
+}
+
+function initGoodsSelect(id) {
+  var sel = document.getElementById('goods' + id);
+  if (!sel) return;
+  $(sel).select2({
+    placeholder: 'Search...',
+    allowClear: true,
+    width: '100%',
+    minimumInputLength: 1,
+    ajax: { url: '/indent/api/items', dataType: 'json', delay: 250, data: function(p) { return { q: p.term }; }, processResults: function(d) { return { results: d }; }, cache: true }
+  });
+  $(sel).on('select2:select', function(e) { if (e.params.data && e.params.data.unit) document.getElementById('unit' + id).value = e.params.data.unit; });
+  $(sel).on('select2:clear', function() { document.getElementById('unit' + id).value = ''; });
+}
+
+async function loadRecentLots() {
+  try {
+    var res = await fetch('/indent/recent-lots');
+    var data = await res.json();
+    if (data.success) recentLots = data.lots || [];
+  } catch (e) { console.error(e); }
+}
+
+async function loadIndentRequests() {
+  try {
+    var res = await fetch('/indent/my-requests?limit=15');
+    var data = await res.json();
+    var container = document.getElementById('indentRequestsList');
+    container.textContent = '';
+    if (!data.success || !data.requests || data.requests.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'indent-empty';
+      empty.textContent = 'No indent requests yet';
+      container.appendChild(empty);
+      return;
+    }
+    data.requests.forEach(function(req) {
+      var item = document.createElement('div');
+      item.className = 'indent-request-item';
+      var main = document.createElement('div');
+      main.className = 'indent-request-main';
+      var desc = document.createElement('div');
+      desc.className = 'indent-request-desc';
+      desc.textContent = req.goods_description;
+      main.appendChild(desc);
+      var meta = document.createElement('div');
+      meta.className = 'indent-request-meta';
+      meta.textContent = 'Qty: ' + req.quantity_requested;
+      if (req.lot_no) {
+        meta.appendChild(document.createTextNode(' • '));
+        var lotSpan = document.createElement('span');
+        lotSpan.className = 'indent-request-lot';
+        lotSpan.textContent = req.lot_no.toUpperCase();
+        meta.appendChild(lotSpan);
+      }
+      meta.appendChild(document.createTextNode(' • ' + new Date(req.created_at).toLocaleDateString('en-IN')));
+      main.appendChild(meta);
+      item.appendChild(main);
+      var status = document.createElement('span');
+      status.className = 'indent-request-status ' + req.status;
+      status.textContent = req.status;
+      item.appendChild(status);
+      container.appendChild(item);
+    });
+  } catch (e) {
+    console.error(e);
+    var container = document.getElementById('indentRequestsList');
+    container.textContent = '';
+    var empty = document.createElement('div');
+    empty.className = 'indent-empty';
+    empty.textContent = 'Failed to load';
+    container.appendChild(empty);
+  }
+}
+
+async function submitIndent() {
+  var items = [];
+  document.querySelectorAll('.indent-item').forEach(function(el) {
+    var id = el.id.replace('indentItem', '');
+    var goodsId = $('#goods' + id).val();
+    var goodsText = $('#goods' + id).find(':selected').text();
+    var qty = parseFloat(document.getElementById('qty' + id).value) || 0;
+    var lotNo = document.getElementById('lot' + id).value;
+    var remark = document.getElementById('remark' + id).value.trim();
+    if (goodsId && qty > 0) items.push({ goods_id: goodsId, goods_description: goodsText, quantity: qty, lot_no: lotNo || null, remark: remark || null });
+  });
+  if (items.length === 0) { alert('Add at least one item with quantity'); return; }
+  var btn = document.getElementById('btnSubmitIndent');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/indent/stage-create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) });
+    var data = await res.json();
+    if (data.success) {
+      alert('Submitted ' + data.count + ' indent request(s)!');
+      document.getElementById('indentItems').textContent = '';
+      indentItemCount = 0;
+      addIndentItem();
+      loadIndentRequests();
+    } else { alert(data.error || 'Failed'); }
+  } catch (e) { alert('Error: ' + e.message); }
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HISTORY FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleHistorySection() {
+  var section = document.getElementById('historySection');
+  if (section.style.display === 'none') {
+    section.style.display = 'block';
+    document.getElementById('indentSection').style.display = 'none';
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+async function loadHistoryEntries() {
+  var search = document.getElementById('historySearch').value;
+  var startDate = document.getElementById('historyStartDate').value;
+  var endDate = document.getElementById('historyEndDate').value;
+  var list = document.getElementById('historyList');
+  list.innerHTML = '<div class="history-empty"><div class="spinner"></div></div>';
+
+  try {
+    var url = '/finishingdashboard/my-entries?limit=100&search=' + encodeURIComponent(search);
+    if (startDate) url += '&startDate=' + startDate;
+    if (endDate) url += '&endDate=' + endDate;
+    var res = await fetch(url);
+    var data = await res.json();
+    list.textContent = '';
+
+    if (!data.entries || data.entries.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'history-empty';
+      empty.textContent = 'No entries found';
+      list.appendChild(empty);
+      return;
+    }
+
+    data.entries.forEach(function(e) {
+      var item = document.createElement('div');
+      item.className = 'history-item';
+      item.onclick = function() { showLotDetails(e.lot_no); };
+
+      var leftDiv = document.createElement('div');
+      var lotDiv = document.createElement('div');
+      lotDiv.className = 'history-lot';
+      lotDiv.textContent = e.lot_no;
+      leftDiv.appendChild(lotDiv);
+      var metaDiv = document.createElement('div');
+      metaDiv.className = 'history-meta';
+      metaDiv.textContent = e.sku + ' • ' + new Date(e.created_at).toLocaleDateString('en-IN');
+      leftDiv.appendChild(metaDiv);
+      if (e.cutting_remark) {
+        var remarkSpan = document.createElement('span');
+        remarkSpan.className = 'history-remark';
+        remarkSpan.textContent = e.cutting_remark;
+        leftDiv.appendChild(remarkSpan);
+      }
+      item.appendChild(leftDiv);
+
+      var qtySpan = document.createElement('span');
+      qtySpan.className = 'history-qty';
+      qtySpan.textContent = e.total_pieces + ' pcs';
+      item.appendChild(qtySpan);
+      list.appendChild(item);
+    });
+  } catch (e) {
+    console.error(e);
+    list.textContent = '';
+    var empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'Error loading history';
+    list.appendChild(empty);
+  }
+}
+
+function downloadHistory() {
+  var search = document.getElementById('historySearch').value;
+  var startDate = document.getElementById('historyStartDate').value;
+  var endDate = document.getElementById('historyEndDate').value;
+  var url = '/finishingdashboard/history-download?search=' + encodeURIComponent(search);
+  if (startDate) url += '&startDate=' + startDate;
+  if (endDate) url += '&endDate=' + endDate;
+  window.location.href = url;
+}
+
+async function showLotDetails(lotNo) {
+  document.getElementById('lotModal').style.display = 'flex';
+  document.getElementById('modalLotNo').textContent = lotNo.toUpperCase();
+  document.getElementById('modalBody').innerHTML = '<div class="spinner"></div>';
+
+  try {
+    var res = await fetch('/finishingdashboard/lot-details/' + encodeURIComponent(lotNo));
+    var data = await res.json();
+    if (!data.success) {
+      document.getElementById('modalBody').textContent = data.error || 'Failed to load';
+      return;
+    }
+    var lot = data.lot;
+    var html = '';
+    html += '<div class="detail-section"><div class="detail-section-title">Lot Information</div><div class="detail-grid">';
+    html += createDetailItem('SKU', lot.sku || '-');
+    html += createDetailItem('Total Cut', lot.total_pieces || 0);
+    html += createDetailItem('Cutting Master', lot.cutting_master || '-');
+    html += createDetailItem('Stitching Master', lot.stitching_master || '-');
+    html += '</div>';
+    if (lot.cutting_remark) {
+      html += '<div class="detail-remark"><div class="detail-remark-label">Cutting Remark</div><div class="detail-remark-text">' + escHtml(lot.cutting_remark) + '</div></div>';
+    }
+    html += '</div>';
+    html += '<div class="detail-section"><div class="detail-section-title">Progress</div><div class="detail-grid">';
+    html += createDetailItem('Stitched', lot.stitched_qty || 0, 'highlight');
+    html += createDetailItem('Assembled', lot.assembly_qty || 0, 'highlight');
+    html += createDetailItem('Washed', lot.washed_qty || 0, 'highlight');
+    html += createDetailItem('Finished', lot.finished_qty || 0, 'success');
+    html += '</div></div>';
+    html += '<div class="detail-section"><div class="detail-section-title">Payment (Finishing)</div><div class="detail-grid">';
+    var payClass = lot.payment_status === 'paid' ? 'success' : lot.payment_status === 'pending' ? 'warning' : '';
+    html += createDetailItem('Status', (lot.payment_status || 'N/A').toUpperCase(), payClass);
+    html += createDetailItem('Amount Paid', '₹' + (lot.payment_amount || 0));
+    html += '</div></div>';
+    document.getElementById('modalBody').innerHTML = html;
+  } catch (e) {
+    document.getElementById('modalBody').textContent = 'Error: ' + e.message;
+  }
+}
+
+function closeLotModal() {
+  document.getElementById('lotModal').style.display = 'none';
+}
+
+function createDetailItem(label, value, cls) {
+  return '<div class="detail-item"><div class="detail-label">' + escHtml(label) + '</div><div class="detail-value' + (cls ? ' ' + cls : '') + '">' + escHtml(String(value)) + '</div></div>';
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
 </script>
 
 <%- include('partials/footer') %>

@@ -226,13 +226,20 @@ router.post(
       try {
         await conn.beginTransaction();
 
+        // Get cutter's is_denim_cutter flag to set flow_type
+        const [[cutter]] = await conn.query(
+          'SELECT is_denim_cutter FROM users WHERE id = ?',
+          [userId]
+        );
+        const flowType = cutter && cutter.is_denim_cutter ? 'denim' : 'hosiery';
+
         // Insert the new cutting lot with total_pieces = 0
         const [result] = await conn.query(
           `
-          INSERT INTO cutting_lots 
-            (lot_no, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces)
-          VALUES 
-            (?, ?, ?, ?, ?, ?, ?, 0)
+          INSERT INTO cutting_lots
+            (lot_no, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces, flow_type)
+          VALUES
+            (?, ?, ?, ?, ?, ?, ?, 0, ?)
         `,
           [
             lot_no,
@@ -242,6 +249,7 @@ router.post(
             table_length ? parseFloat(table_length) : null,
             image ? image.path : null,
             userId,
+            flowType,
           ]
         );
 

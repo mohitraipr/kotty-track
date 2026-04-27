@@ -5,6 +5,7 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster } = require('../middlewares/auth');
+const { createStagePayment } = require('../utils/stagePaymentHelper');
 
 // ----------------------------
 // MULTER SETUP (for image uploads)
@@ -1174,6 +1175,492 @@ router.post('/assign-jeansassembly', isAuthenticated, isStitchingMaster, async (
     }
     req.flash('error', 'Error assigning jeans assembly: ' + err.message);
     return res.redirect('/stitchingdashboard/assign-jeansassembly');
+  }
+});
+
+// ==================================================================
+//               SELF-ASSIGNMENT ENDPOINTS (NEW)
+// ==================================================================
+
+/**
+ * GET /stitchingdashboard/available-lots
+ * Search for lots available for self-assignment
+ * Returns lots with available sizes and who has taken what
+ */
+router.get('/available-lots', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const { search } = req.query;
+    const userId = req.session.user.id;
+
+    if (!search || search.trim().length < 1) {
+      return res.json({ lots: [] });
+    }
+
+    const searchLike = `%${search.trim()}%`;
+
+    // Get lots with available sizes
+    const [lots] = await pool.query(`
+      SELECT
+        cl.id AS cutting_lot_id,
+        cl.lot_no,
+        cl.sku,
+        cl.remark AS cutting_remark,
+        cl.total_pieces AS cut_total,
+        cl.created_at AS cut_date,
+        u.username AS cutting_master,
+        u.is_denim_cutter
+      FROM cutting_lots cl
+      JOIN users u ON u.id = cl.user_id
+      WHERE (cl.lot_no LIKE ? OR cl.remark LIKE ?)
+        AND EXISTS (
+          SELECT 1 FROM v_lot_available_sizes vas
+          WHERE vas.cutting_lot_id = cl.id AND vas.available_qty > 0
+        )
+      ORDER BY cl.created_at DESC
+      LIMIT 10
+    `, [searchLike, searchLike]);
+
+    // For each lot, get size details with who took what
+    for (const lot of lots) {
+      // Get available sizes
+      const [sizes] = await pool.query(`
+        SELECT
+          vas.size_label,
+          vas.cut_qty,
+          vas.claimed_qty,
+          vas.available_qty
+        FROM v_lot_available_sizes vas
+        WHERE vas.cutting_lot_id = ?
+        ORDER BY FIELD(vas.size_label, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL', '6XL'), vas.size_label
+      `, [lot.cutting_lot_id]);
+
+      // Get who took what (for coordination)
+      const [takenBy] = await pool.query(`
+        SELECT
+          u.username,
+          sds.size_label,
+          SUM(sds.pieces) AS qty
+        FROM stitching_data sd
+        JOIN stitching_data_sizes sds ON sds.stitching_data_id = sd.id
+        JOIN users u ON u.id = sd.user_id
+        WHERE sd.lot_no = ?
+        GROUP BY u.username, sds.size_label
+      `, [lot.lot_no]);
+
+      // Map taken_by to each size
+      lot.sizes = sizes.map(s => ({
+        size_label: s.size_label,
+        cut_qty: Number(s.cut_qty),
+        claimed_qty: Number(s.claimed_qty),
+        available_qty: Number(s.available_qty),
+        taken_by: takenBy
+          .filter(t => t.size_label === s.size_label)
+          .map(t => ({ username: t.username, qty: Number(t.qty) }))
+      }));
+    }
+
+    return res.json({ lots });
+  } catch (err) {
+    console.error('[ERROR] GET /available-lots =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /stitchingdashboard/submit
+ * Self-assign and complete stitching in one step
+ * Creates both stitching_assignments and stitching_data records
+ */
+router.post('/submit', isAuthenticated, isStitchingMaster, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const { cutting_lot_id, sizes } = req.body;
+    // sizes = [{ size: "S", qty: 250 }, { size: "M", qty: 100 }]
+
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+
+    if (!cutting_lot_id || !sizes || !Array.isArray(sizes) || sizes.length === 0) {
+      return res.status(400).json({ error: 'Missing cutting_lot_id or sizes' });
+    }
+
+    // Filter out zero quantities
+    const validSizes = sizes.filter(s => s.qty > 0);
+    if (validSizes.length === 0) {
+      return res.status(400).json({ error: 'No sizes with quantity > 0' });
+    }
+
+    await conn.beginTransaction();
+
+    // Get lot details with lock
+    const [[lot]] = await conn.query(`
+      SELECT cl.*, u.username AS cutting_master, u.id AS cutting_master_id
+      FROM cutting_lots cl
+      JOIN users u ON u.id = cl.user_id
+      WHERE cl.id = ?
+      FOR UPDATE
+    `, [cutting_lot_id]);
+
+    if (!lot) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    // Get available sizes with lock
+    const [availableSizes] = await conn.query(`
+      SELECT
+        cls.size_label,
+        cls.total_pieces AS cut_qty,
+        COALESCE(SUM(sds.pieces), 0) AS used_qty,
+        cls.total_pieces - COALESCE(SUM(sds.pieces), 0) AS available_qty
+      FROM cutting_lot_sizes cls
+      LEFT JOIN stitching_data sd ON sd.lot_no = ?
+      LEFT JOIN stitching_data_sizes sds ON sds.stitching_data_id = sd.id AND sds.size_label = cls.size_label
+      WHERE cls.cutting_lot_id = ?
+      GROUP BY cls.size_label, cls.total_pieces
+      FOR UPDATE
+    `, [lot.lot_no, cutting_lot_id]);
+
+    // Validate each size
+    const availableMap = {};
+    availableSizes.forEach(s => { availableMap[s.size_label] = Number(s.available_qty); });
+
+    for (const s of validSizes) {
+      const available = availableMap[s.size] || 0;
+      if (s.qty > available) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Not enough ${s.size} available. Max: ${available}, Requested: ${s.qty}`
+        });
+      }
+    }
+
+    // 1. Create stitching_assignments record (tracking)
+    const sizesJson = JSON.stringify(validSizes.map(s => ({ size: s.size, qty: s.qty })));
+    await conn.query(`
+      INSERT INTO stitching_assignments
+        (assigner_cutting_master, user_id, cutting_lot_id, sizes_json, isApproved, assigned_on, approved_on)
+      VALUES (?, ?, ?, ?, 1, NOW(), NOW())
+    `, [lot.cutting_master_id, userId, cutting_lot_id, sizesJson]);
+
+    // 2. Create stitching_data record (completion)
+    const totalPieces = validSizes.reduce((sum, s) => sum + s.qty, 0);
+    const [dataResult] = await conn.query(`
+      INSERT INTO stitching_data (user_id, lot_no, sku, total_pieces, created_at)
+      VALUES (?, ?, ?, ?, NOW())
+    `, [userId, lot.lot_no, lot.sku, totalPieces]);
+
+    const stitchingDataId = dataResult.insertId;
+
+    // 3. Create stitching_data_sizes records
+    for (const s of validSizes) {
+      await conn.query(`
+        INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
+        VALUES (?, ?, ?)
+      `, [stitchingDataId, s.size, s.qty]);
+    }
+
+    await conn.commit();
+
+    // Auto-create cutting payment for the cutting master
+    // Payment = qty received by stitching × cutting rate
+    try {
+      await createStagePayment('cutting', {
+        lot_no: lot.lot_no,
+        sku: lot.sku,
+        qty: totalPieces,
+        user_id: lot.cutting_master_id,
+        username: lot.cutting_master
+      });
+    } catch (paymentErr) {
+      console.error('[WARN] Failed to create cutting payment:', paymentErr.message);
+      // Don't fail the submission if payment creation fails
+    }
+
+    return res.json({
+      success: true,
+      message: `Stitching completed: ${totalPieces} pieces`,
+      stitching_data_id: stitchingDataId
+    });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error('[ERROR] POST /submit =>', err);
+    return res.status(500).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * GET /stitchingdashboard/my-today
+ * Get current user's completions for today
+ */
+router.get('/my-today', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [rows] = await pool.query(`
+      SELECT
+        sd.id,
+        sd.lot_no,
+        sd.sku,
+        sd.total_pieces,
+        sd.created_at,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('size', sds.size_label, 'qty', sds.pieces))
+         FROM stitching_data_sizes sds WHERE sds.stitching_data_id = sd.id) AS sizes_json
+      FROM stitching_data sd
+      WHERE sd.user_id = ? AND DATE(sd.created_at) = CURDATE()
+      ORDER BY sd.created_at DESC
+    `, [userId]);
+
+    const totalToday = rows.reduce((sum, r) => sum + r.total_pieces, 0);
+
+    return res.json({
+      completions: rows,
+      total_pieces: totalToday,
+      count: rows.length
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /my-today =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /stitchingdashboard/lot-details/:lotNo
+ * Get comprehensive details for a lot including journey, payments, etc.
+ */
+router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const lotNo = req.params.lotNo;
+    const userId = req.session.user.id;
+
+    // Get cutting lot info
+    const [[cuttingLot]] = await pool.query(`
+      SELECT cl.*, u.username as cutting_master_name
+      FROM cutting_lots cl
+      LEFT JOIN users u ON cl.cutting_master_id = u.id
+      WHERE cl.lot_no = ?
+    `, [lotNo]);
+
+    if (!cuttingLot) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    // Get cutting sizes
+    const [cuttingSizes] = await pool.query(`
+      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+    `, [cuttingLot.id]);
+
+    // Get stitching data for this user
+    const [[stitchingData]] = await pool.query(`
+      SELECT sd.*, u.username as stitching_master_name
+      FROM stitching_data sd
+      LEFT JOIN users u ON sd.user_id = u.id
+      WHERE sd.lot_no = ? AND sd.user_id = ?
+    `, [lotNo, userId]);
+
+    // Get stitching sizes
+    let stitchingSizes = [];
+    if (stitchingData) {
+      const [sizes] = await pool.query(`
+        SELECT size_label, pieces FROM stitching_sizes WHERE stitching_data_id = ?
+      `, [stitchingData.id]);
+      stitchingSizes = sizes;
+    }
+
+    // Get payment info for this user's stitching work
+    const [[paymentInfo]] = await pool.query(`
+      SELECT
+        COALESCE(SUM(amount), 0) as total_paid,
+        COUNT(*) as payment_count
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'stitching' AND status = 'approved'
+    `, [userId, lotNo]);
+
+    // Get pending payment (if any)
+    const [[pendingPayment]] = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) as pending_amount
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'stitching' AND status = 'pending'
+    `, [userId, lotNo]);
+
+    // Calculate totals
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalStitchedPieces = stitchingSizes.reduce((sum, s) => sum + s.pieces, 0);
+
+    res.json({
+      success: true,
+      lot: {
+        lot_no: cuttingLot.lot_no,
+        sku: cuttingLot.sku,
+        cutting_remark: cuttingLot.remark,
+        cutting_master: cuttingLot.cutting_master_name,
+        cutting_date: cuttingLot.created_at,
+        flow_type: cuttingLot.flow_type,
+        fabric_type: cuttingLot.fabric_type
+      },
+      cutting: {
+        sizes: cuttingSizes,
+        total_pieces: totalCutPieces
+      },
+      stitching: {
+        stitching_data_id: stitchingData?.id,
+        sizes: stitchingSizes,
+        total_pieces: totalStitchedPieces,
+        pending_pieces: totalCutPieces - totalStitchedPieces,
+        created_at: stitchingData?.created_at
+      },
+      payment: {
+        total_paid: paymentInfo?.total_paid || 0,
+        payment_count: paymentInfo?.payment_count || 0,
+        pending_amount: pendingPayment?.pending_amount || 0
+      }
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /lot-details =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /stitchingdashboard/history-download
+ * Download stitching history as Excel
+ */
+router.get('/history-download', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT
+        sd.lot_no,
+        sd.sku,
+        sd.total_pieces,
+        sd.created_at,
+        cl.remark as cutting_remark,
+        cl.fabric_type,
+        COALESCE(pay.total_paid, 0) as total_paid
+      FROM stitching_data sd
+      LEFT JOIN cutting_lots cl ON sd.lot_no = cl.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(amount) as total_paid
+        FROM stage_payments
+        WHERE user_id = ? AND stage = 'stitching' AND status = 'approved'
+        GROUP BY lot_no
+      ) pay ON sd.lot_no = pay.lot_no
+      WHERE sd.user_id = ?
+    `;
+    const params = [userId, userId];
+
+    if (startDate) {
+      query += ` AND DATE(sd.created_at) >= ?`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      query += ` AND DATE(sd.created_at) <= ?`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY sd.created_at DESC`;
+
+    const [rows] = await pool.query(query, params);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Stitching History');
+
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Pieces', key: 'total_pieces', width: 10 },
+      { header: 'Cutting Remark', key: 'cutting_remark', width: 30 },
+      { header: 'Fabric Type', key: 'fabric_type', width: 15 },
+      { header: 'Payment (₹)', key: 'total_paid', width: 12 },
+      { header: 'Date', key: 'created_at', width: 18 }
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    rows.forEach(row => {
+      sheet.addRow({
+        lot_no: row.lot_no,
+        sku: row.sku,
+        total_pieces: row.total_pieces,
+        cutting_remark: row.cutting_remark || '-',
+        fabric_type: row.fabric_type || '-',
+        total_paid: row.total_paid,
+        created_at: row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : '-'
+      });
+    });
+
+    const filename = `stitching_history_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /history-download =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /stitchingdashboard/existing
+ * Get paginated history of user's stitching entries
+ */
+router.get('/existing', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT
+        sd.id,
+        sd.lot_no,
+        sd.sku,
+        sd.total_pieces,
+        sd.created_at,
+        cl.remark as cutting_remark
+      FROM stitching_data sd
+      LEFT JOIN cutting_lots cl ON sd.lot_no = cl.lot_no
+      WHERE sd.user_id = ?
+    `;
+    const params = [userId];
+
+    if (search) {
+      query += ` AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (startDate) {
+      query += ` AND DATE(sd.created_at) >= ?`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += ` AND DATE(sd.created_at) <= ?`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY sd.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const [rows] = await pool.query(query, params);
+
+    return res.json({ entries: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /existing =>', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

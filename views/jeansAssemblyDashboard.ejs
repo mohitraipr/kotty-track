@@ -1,4 +1,8 @@
 <%- include('partials/header', { pageTitle: 'Jeans Assembly Dashboard' }) %>
+<!-- Select2 for indent item search -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/jeansassemblydashboard' }) %>
 
 <style>
@@ -475,6 +479,73 @@
   .lot-option-meta { font-size: 12px; color: #6b7280; }
   .lot-option-remark { font-size: 12px; color: #3b82f6; font-weight: 500; word-break: break-word; }
   .lot-option-avail { font-size: 13px; font-weight: 600; color: #22c55e; }
+
+  /* Indent Tab Styles */
+  .indent-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+  .indent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .indent-title { font-size: 1rem; font-weight: 700; }
+  .btn-add-item { padding: 8px 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+  .btn-add-item:hover { background: #1d4ed8; }
+  .indent-items { display: flex; flex-direction: column; gap: 16px; }
+  .indent-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .indent-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .indent-item-num { font-size: 0.8rem; font-weight: 600; color: var(--text-light); }
+  .btn-remove-item { padding: 4px 8px; background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; font-size: 0.75rem; cursor: pointer; }
+  .btn-remove-item:hover { background: var(--danger); color: white; }
+  .indent-row { display: grid; grid-template-columns: 1fr 80px; gap: 10px; margin-bottom: 10px; }
+  .indent-row.single { grid-template-columns: 1fr; }
+  .indent-label { font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display: block; }
+  .indent-select, .indent-input { width: 100%; padding: 12px; font-size: 0.9375rem; border: 2px solid var(--border); border-radius: 10px; }
+  .indent-select:focus, .indent-input:focus { border-color: var(--primary); outline: none; }
+  .btn-submit-indent { width: 100%; padding: 16px; background: var(--success); color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 20px; }
+  .btn-submit-indent:hover:not(:disabled) { background: #15803d; }
+  .btn-submit-indent:disabled { opacity: 0.7; cursor: not-allowed; }
+  .indent-requests-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .indent-requests-header { padding: 14px 20px; background: #f1f5f9; border-bottom: 1px solid var(--border); font-weight: 700; }
+  .indent-request-item { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .indent-request-item:last-child { border-bottom: none; }
+  .indent-request-main { flex: 1; min-width: 0; }
+  .indent-request-desc { font-size: 0.9375rem; font-weight: 500; margin-bottom: 4px; word-break: break-word; }
+  .indent-request-meta { font-size: 0.8rem; color: var(--text-light); }
+  .indent-request-lot { color: var(--primary); font-weight: 500; }
+  .indent-request-status { padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .indent-request-status.open { background: #fef3c7; color: #9a3412; }
+  .indent-request-status.proceeding { background: #cffafe; color: #155e75; }
+  .indent-request-status.arrived { background: #d1fae5; color: #065f46; }
+  .indent-empty { padding: 32px 20px; text-align: center; color: var(--text-light); }
+  .indent-empty i { font-size: 2rem; opacity: 0.3; margin-bottom: 8px; display: block; }
+  .select2-container--default .select2-selection--single { height: auto; padding: 8px 12px; border: 2px solid var(--border); border-radius: 10px; }
+
+  /* History filters & download */
+  .history-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .history-filters input[type="date"] { flex: 1; min-width: 120px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.875rem; }
+  .btn-filter, .btn-download { padding: 10px 14px; border: none; border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .btn-filter { background: var(--primary); color: white; }
+  .btn-download { background: #059669; color: white; }
+  .btn-download:hover { background: #047857; }
+  .history-item.clickable { cursor: pointer; transition: background 0.15s; }
+  .history-item.clickable:hover { background: #f1f5f9; }
+
+  /* Modal overlay */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-content { background: white; border-radius: 16px; width: 100%; max-width: 500px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; }
+  .modal-title { font-size: 1.125rem; font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-light); line-height: 1; }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section-title { font-size: 0.8rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; margin-bottom: 10px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .detail-item { background: #f8fafc; padding: 12px; border-radius: 10px; }
+  .detail-label { font-size: 0.75rem; color: var(--text-light); margin-bottom: 4px; }
+  .detail-value { font-size: 0.9375rem; font-weight: 600; }
+  .detail-value.highlight { color: var(--primary); }
+  .detail-value.success { color: var(--success); }
+  .detail-value.warning { color: var(--warning); }
+  .detail-value.danger { color: var(--danger); }
+  .detail-remark { background: #fef3c7; padding: 12px; border-radius: 10px; margin-top: 12px; }
+  .detail-remark-label { font-size: 0.75rem; color: #9a3412; margin-bottom: 4px; }
+  .detail-remark-text { font-size: 0.9375rem; color: #92400e; }
 </style>
 
 <div class="toast-container" id="toastContainer"></div>
@@ -504,6 +575,9 @@
     </button>
     <button class="tab-btn" data-tab="history">
       <i class="bi bi-clock-history"></i> History
+    </button>
+    <button class="tab-btn" data-tab="indent">
+      <i class="bi bi-box-seam"></i> Indent
     </button>
   </div>
 
@@ -565,9 +639,54 @@
   <div class="tab-content" id="historyTab">
     <div class="history-search">
       <input type="text" id="historySearch" class="history-input" placeholder="Search by lot or SKU...">
+      <div class="history-filters">
+        <input type="date" id="historyStartDate" placeholder="Start Date">
+        <input type="date" id="historyEndDate" placeholder="End Date">
+        <button type="button" class="btn-filter" onclick="applyHistoryFilter()">
+          <i class="bi bi-funnel"></i> Filter
+        </button>
+        <button type="button" class="btn-download" onclick="downloadHistory()">
+          <i class="bi bi-download"></i> Excel
+        </button>
+      </div>
     </div>
     <div class="history-list" id="historyList">
       <div class="today-item" style="justify-content: center; color: var(--text-light);">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Lot Details Modal -->
+  <div class="modal-overlay" id="lotModal" style="display: none;" onclick="if(event.target===this)closeLotModal()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title" id="modalLotNo">Lot Details</span>
+        <button type="button" class="modal-close" onclick="closeLotModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div style="text-align:center; padding:20px;"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INDENT TAB -->
+  <div class="tab-content" id="indentTab">
+    <div class="indent-card">
+      <div class="indent-header">
+        <span class="indent-title"><i class="bi bi-box-seam"></i> Raise Material Requirement</span>
+        <button type="button" class="btn-add-item" onclick="addIndentItem()">
+          <i class="bi bi-plus"></i> Add Item
+        </button>
+      </div>
+      <div class="indent-items" id="indentItems"></div>
+      <button type="button" class="btn-submit-indent" id="btnSubmitIndent" onclick="submitIndent()">
+        <span class="btn-text"><i class="bi bi-send"></i> Submit Requirements</span>
+      </button>
+    </div>
+    <div class="indent-requests-card">
+      <div class="indent-requests-header"><i class="bi bi-list-check"></i> My Recent Requests</div>
+      <div id="indentRequestsList">
+        <div class="indent-empty"><div class="spinner"></div> Loading...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -904,9 +1023,14 @@ var historyOffset = 0;
 async function loadHistory(reset) {
   if (reset) historyOffset = 0;
   var search = document.getElementById('historySearch').value;
+  var startDate = document.getElementById('historyStartDate').value;
+  var endDate = document.getElementById('historyEndDate').value;
 
   try {
-    var res = await fetch('/jeansassemblydashboard/my-entries?offset=' + historyOffset + '&search=' + encodeURIComponent(search));
+    var url = '/jeansassemblydashboard/my-entries?offset=' + historyOffset + '&search=' + encodeURIComponent(search);
+    if (startDate) url += '&startDate=' + startDate;
+    if (endDate) url += '&endDate=' + endDate;
+    var res = await fetch(url);
     var data = await res.json();
 
     var list = document.getElementById('historyList');
@@ -926,7 +1050,8 @@ async function loadHistory(reset) {
 
     data.entries.forEach(function(e) {
       var div = document.createElement('div');
-      div.className = 'history-item';
+      div.className = 'history-item clickable';
+      div.onclick = function() { showLotDetails(e.lot_no); };
 
       var leftDiv = document.createElement('div');
       var lotDiv = document.createElement('div');
@@ -934,7 +1059,15 @@ async function loadHistory(reset) {
       lotDiv.textContent = e.lot_no;
       var skuDiv = document.createElement('div');
       skuDiv.className = 'today-sku';
-      skuDiv.textContent = e.sku + ' - ' + new Date(e.created_at).toLocaleDateString();
+      var dateStr = new Date(e.created_at).toLocaleDateString();
+      skuDiv.textContent = e.sku + ' - ' + dateStr;
+      if (e.cutting_remark) {
+        var remarkSpan = document.createElement('span');
+        remarkSpan.style.color = '#3b82f6';
+        remarkSpan.style.display = 'block';
+        remarkSpan.textContent = e.cutting_remark;
+        skuDiv.appendChild(remarkSpan);
+      }
       leftDiv.appendChild(lotDiv);
       leftDiv.appendChild(skuDiv);
 
@@ -953,6 +1086,70 @@ async function loadHistory(reset) {
   }
 }
 
+function applyHistoryFilter() {
+  loadHistory(true);
+}
+
+async function downloadHistory() {
+  var search = document.getElementById('historySearch').value;
+  var startDate = document.getElementById('historyStartDate').value;
+  var endDate = document.getElementById('historyEndDate').value;
+  var url = '/jeansassemblydashboard/history-download?search=' + encodeURIComponent(search);
+  if (startDate) url += '&startDate=' + startDate;
+  if (endDate) url += '&endDate=' + endDate;
+  window.location.href = url;
+}
+
+async function showLotDetails(lotNo) {
+  document.getElementById('lotModal').style.display = 'flex';
+  document.getElementById('modalLotNo').textContent = lotNo.toUpperCase();
+  document.getElementById('modalBody').innerHTML = '<div style="text-align:center; padding:20px;"><div class="spinner"></div></div>';
+  try {
+    var res = await fetch('/jeansassemblydashboard/lot-details/' + encodeURIComponent(lotNo));
+    var data = await res.json();
+    if (!data.success) { document.getElementById('modalBody').textContent = data.error || 'Failed to load'; return; }
+    var lot = data.lot;
+    var html = '';
+    html += '<div class="detail-section"><div class="detail-section-title">Lot Information</div><div class="detail-grid">';
+    html += createDetailItem('SKU', lot.sku || '-');
+    html += createDetailItem('Total Pieces', lot.total_pieces || 0);
+    html += createDetailItem('Cutting Master', lot.cutting_master || '-');
+    html += createDetailItem('Stitching Master', lot.stitching_master || '-');
+    html += '</div>';
+    if (lot.cutting_remark) { html += '<div class="detail-remark"><div class="detail-remark-label">Cutting Remark</div><div class="detail-remark-text">' + escHtml(lot.cutting_remark) + '</div></div>'; }
+    html += '</div>';
+    html += '<div class="detail-section"><div class="detail-section-title">Progress</div><div class="detail-grid">';
+    html += createDetailItem('Stitched', lot.stitched_qty || 0, 'highlight');
+    html += createDetailItem('Assembled', lot.assembly_qty || 0, 'success');
+    html += createDetailItem('Washed', lot.washed_qty || 0, 'highlight');
+    html += createDetailItem('Finished', lot.finished_qty || 0, 'success');
+    html += '</div></div>';
+    html += '<div class="detail-section"><div class="detail-section-title">Payment (Assembly)</div><div class="detail-grid">';
+    var payClass = lot.payment_status === 'paid' ? 'success' : lot.payment_status === 'pending' ? 'warning' : '';
+    html += createDetailItem('Status', (lot.payment_status || 'N/A').toUpperCase(), payClass);
+    html += createDetailItem('Amount Paid', '₹' + (lot.payment_amount || 0));
+    html += '</div></div>';
+    document.getElementById('modalBody').innerHTML = html;
+  } catch (e) {
+    document.getElementById('modalBody').textContent = 'Error: ' + e.message;
+  }
+}
+
+function closeLotModal() {
+  document.getElementById('lotModal').style.display = 'none';
+}
+
+function createDetailItem(label, value, cls) {
+  return '<div class="detail-item"><div class="detail-label">' + escHtml(label) + '</div><div class="detail-value' + (cls ? ' ' + cls : '') + '">' + escHtml(String(value)) + '</div></div>';
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
 document.getElementById('searchInput').addEventListener('keypress', function(e) {
   if (e.key === 'Enter') searchLot();
 });
@@ -965,6 +1162,258 @@ document.getElementById('historySearch').addEventListener('input', function() {
 
 loadToday();
 loadHistory(true);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDENT TAB FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+var indentItemCount = 0;
+var recentLots = [];
+
+function esc(str) {
+  if (!str) return '';
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function addIndentItem() {
+  indentItemCount++;
+  var id = indentItemCount;
+  var container = document.getElementById('indentItems');
+  var item = document.createElement('div');
+  item.className = 'indent-item';
+  item.id = 'indentItem' + id;
+
+  var header = document.createElement('div');
+  header.className = 'indent-item-header';
+  var numSpan = document.createElement('span');
+  numSpan.className = 'indent-item-num';
+  numSpan.textContent = 'Item #' + id;
+  header.appendChild(numSpan);
+  var removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'btn-remove-item';
+  removeBtn.onclick = function() { removeIndentItem(id); };
+  removeBtn.textContent = 'Remove';
+  header.appendChild(removeBtn);
+  item.appendChild(header);
+
+  var row1 = document.createElement('div');
+  row1.className = 'indent-row single';
+  var div1 = document.createElement('div');
+  var label1 = document.createElement('label');
+  label1.className = 'indent-label';
+  label1.textContent = 'Item *';
+  div1.appendChild(label1);
+  var sel = document.createElement('select');
+  sel.className = 'indent-select indent-goods-select';
+  sel.id = 'goods' + id;
+  var opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = 'Search for item...';
+  sel.appendChild(opt);
+  div1.appendChild(sel);
+  row1.appendChild(div1);
+  item.appendChild(row1);
+
+  var row2 = document.createElement('div');
+  row2.className = 'indent-row';
+  var div2a = document.createElement('div');
+  var label2a = document.createElement('label');
+  label2a.className = 'indent-label';
+  label2a.textContent = 'Quantity *';
+  div2a.appendChild(label2a);
+  var qtyInput = document.createElement('input');
+  qtyInput.type = 'number';
+  qtyInput.className = 'indent-input';
+  qtyInput.id = 'qty' + id;
+  qtyInput.min = '1';
+  qtyInput.placeholder = 'Qty';
+  div2a.appendChild(qtyInput);
+  row2.appendChild(div2a);
+  var div2b = document.createElement('div');
+  var label2b = document.createElement('label');
+  label2b.className = 'indent-label';
+  label2b.textContent = 'Unit';
+  div2b.appendChild(label2b);
+  var unitInput = document.createElement('input');
+  unitInput.type = 'text';
+  unitInput.className = 'indent-input';
+  unitInput.id = 'unit' + id;
+  unitInput.readOnly = true;
+  unitInput.placeholder = '-';
+  div2b.appendChild(unitInput);
+  row2.appendChild(div2b);
+  item.appendChild(row2);
+
+  var row3 = document.createElement('div');
+  row3.className = 'indent-row single';
+  var div3 = document.createElement('div');
+  var label3 = document.createElement('label');
+  label3.className = 'indent-label';
+  label3.textContent = 'Lot No (optional)';
+  div3.appendChild(label3);
+  var lotSel = document.createElement('select');
+  lotSel.className = 'indent-select';
+  lotSel.id = 'lot' + id;
+  var defOpt = document.createElement('option');
+  defOpt.value = '';
+  defOpt.textContent = '-- No lot --';
+  lotSel.appendChild(defOpt);
+  recentLots.forEach(function(l) {
+    var o = document.createElement('option');
+    o.value = l;
+    o.textContent = l.toUpperCase();
+    lotSel.appendChild(o);
+  });
+  div3.appendChild(lotSel);
+  row3.appendChild(div3);
+  item.appendChild(row3);
+
+  var row4 = document.createElement('div');
+  row4.className = 'indent-row single';
+  var div4 = document.createElement('div');
+  var label4 = document.createElement('label');
+  label4.className = 'indent-label';
+  label4.textContent = 'Remark (optional)';
+  div4.appendChild(label4);
+  var remarkInput = document.createElement('input');
+  remarkInput.type = 'text';
+  remarkInput.className = 'indent-input';
+  remarkInput.id = 'remark' + id;
+  remarkInput.placeholder = 'e.g. urgent';
+  div4.appendChild(remarkInput);
+  row4.appendChild(div4);
+  item.appendChild(row4);
+
+  container.appendChild(item);
+  initGoodsSelect(id);
+}
+
+function removeIndentItem(id) {
+  var item = document.getElementById('indentItem' + id);
+  if (item) item.remove();
+}
+
+function initGoodsSelect(id) {
+  var sel = document.getElementById('goods' + id);
+  if (!sel) return;
+  $(sel).select2({
+    placeholder: 'Search for item...',
+    allowClear: true,
+    width: '100%',
+    minimumInputLength: 1,
+    ajax: { url: '/indent/api/items', dataType: 'json', delay: 250, data: function(p) { return { q: p.term }; }, processResults: function(d) { return { results: d }; }, cache: true }
+  });
+  $(sel).on('select2:select', function(e) { if (e.params.data && e.params.data.unit) document.getElementById('unit' + id).value = e.params.data.unit; });
+  $(sel).on('select2:clear', function() { document.getElementById('unit' + id).value = ''; });
+}
+
+async function loadRecentLots() {
+  try {
+    var res = await fetch('/indent/recent-lots');
+    var data = await res.json();
+    if (data.success) recentLots = data.lots || [];
+  } catch (e) { console.error(e); }
+}
+
+async function loadIndentRequests() {
+  try {
+    var res = await fetch('/indent/my-requests?limit=20');
+    var data = await res.json();
+    var container = document.getElementById('indentRequestsList');
+    container.textContent = '';
+    if (!data.success || !data.requests || data.requests.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'indent-empty';
+      var icon = document.createElement('i');
+      icon.className = 'bi bi-inbox';
+      empty.appendChild(icon);
+      var span = document.createElement('span');
+      span.textContent = 'No indent requests yet';
+      empty.appendChild(span);
+      container.appendChild(empty);
+      return;
+    }
+    data.requests.forEach(function(req) {
+      var item = document.createElement('div');
+      item.className = 'indent-request-item';
+      var main = document.createElement('div');
+      main.className = 'indent-request-main';
+      var desc = document.createElement('div');
+      desc.className = 'indent-request-desc';
+      desc.textContent = req.goods_description;
+      main.appendChild(desc);
+      var meta = document.createElement('div');
+      meta.className = 'indent-request-meta';
+      meta.textContent = 'Qty: ' + req.quantity_requested;
+      if (req.lot_no) {
+        meta.appendChild(document.createTextNode(' • '));
+        var lotSpan = document.createElement('span');
+        lotSpan.className = 'indent-request-lot';
+        lotSpan.textContent = req.lot_no.toUpperCase();
+        meta.appendChild(lotSpan);
+      }
+      meta.appendChild(document.createTextNode(' • ' + new Date(req.created_at).toLocaleDateString('en-IN')));
+      main.appendChild(meta);
+      item.appendChild(main);
+      var status = document.createElement('span');
+      status.className = 'indent-request-status ' + req.status;
+      status.textContent = req.status;
+      item.appendChild(status);
+      container.appendChild(item);
+    });
+  } catch (e) {
+    console.error(e);
+    var container = document.getElementById('indentRequestsList');
+    container.textContent = '';
+    var empty = document.createElement('div');
+    empty.className = 'indent-empty';
+    var icon = document.createElement('i');
+    icon.className = 'bi bi-exclamation-circle';
+    empty.appendChild(icon);
+    var span = document.createElement('span');
+    span.textContent = 'Failed to load';
+    empty.appendChild(span);
+    container.appendChild(empty);
+  }
+}
+
+async function submitIndent() {
+  var items = [];
+  document.querySelectorAll('.indent-item').forEach(function(el) {
+    var id = el.id.replace('indentItem', '');
+    var goodsId = $('#goods' + id).val();
+    var goodsText = $('#goods' + id).find(':selected').text();
+    var qty = parseFloat(document.getElementById('qty' + id).value) || 0;
+    var lotNo = document.getElementById('lot' + id).value;
+    var remark = document.getElementById('remark' + id).value.trim();
+    if (goodsId && qty > 0) items.push({ goods_id: goodsId, goods_description: goodsText, quantity: qty, lot_no: lotNo || null, remark: remark || null });
+  });
+  if (items.length === 0) { showToast('Add at least one item with quantity', 'warning'); return; }
+  var btn = document.getElementById('btnSubmitIndent');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/indent/stage-create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) });
+    var data = await res.json();
+    if (data.success) {
+      showToast('Submitted ' + data.count + ' indent request(s)!', 'success');
+      document.getElementById('indentItems').textContent = '';
+      indentItemCount = 0;
+      addIndentItem();
+      loadIndentRequests();
+    } else { showToast(data.error || 'Failed', 'error'); }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  btn.disabled = false;
+}
+
+document.querySelector('[data-tab="indent"]').addEventListener('click', function() {
+  if (document.getElementById('indentItems').children.length === 0) {
+    loadRecentLots().then(function() { addIndentItem(); });
+    loadIndentRequests();
+  }
+});
 </script>
 
 <%- include('partials/footer') %>

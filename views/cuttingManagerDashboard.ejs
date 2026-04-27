@@ -1,4 +1,8 @@
 <%- include('partials/header', { pageTitle: 'Cutting Manager Dashboard' }) %>
+<!-- Select2 for indent item search -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/cutting-manager/dashboard' }) %>
 
 <style>
@@ -253,6 +257,24 @@
     .kotty-table thead th, .kotty-table tbody td { padding: 10px 12px; font-size: var(--text-xs); }
     .roll-section, .size-section { padding: 16px; }
   }
+  /* Indent Styles */
+  .indent-item { background: var(--gray-50); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; }
+  .indent-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .indent-item-num { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+  .indent-row { display: grid; grid-template-columns: 1fr 100px; gap: 12px; margin-bottom: 10px; }
+  .indent-row.single { grid-template-columns: 1fr; }
+  .indent-label { font-size: var(--text-sm); font-weight: 500; margin-bottom: 4px; display: block; }
+  .indent-request-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border-light); gap: 12px; }
+  .indent-request-item:last-child { border-bottom: none; }
+  .indent-request-main { flex: 1; min-width: 0; }
+  .indent-request-desc { font-size: var(--text-sm); font-weight: 500; word-break: break-word; margin-bottom: 4px; }
+  .indent-request-meta { font-size: var(--text-xs); color: var(--text-secondary); }
+  .indent-request-lot { color: var(--terracotta); font-weight: 500; }
+  .indent-request-status { padding: 4px 10px; border-radius: 20px; font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; }
+  .indent-request-status.open { background: #fef3c7; color: #9a3412; }
+  .indent-request-status.proceeding { background: #cffafe; color: #155e75; }
+  .indent-request-status.arrived { background: #d1fae5; color: #065f46; }
+  .select2-container--default .select2-selection--single { height: auto; padding: 8px 12px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
 </style>
 
 <main class="page-container">
@@ -289,6 +311,9 @@
       </button>
       <button class="kotty-tab" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
         <i class="bi bi-plus-circle-fill"></i><span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
+      </button>
+      <button class="kotty-tab" id="indent-tab" data-bs-toggle="tab" data-bs-target="#indent-panel" type="button" role="tab" aria-controls="indent-panel" aria-selected="false">
+        <i class="bi bi-box-seam"></i><span>Raise Indent</span>
       </button>
     </div>
 
@@ -417,6 +442,33 @@
 
               <button type="submit" class="kotty-btn kotty-btn-success kotty-btn-block" id="createLotBtn" disabled><i class="bi bi-check-circle"></i><span data-i18n="createLotBtn">Create Lot</span></button>
             </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- INDENT TAB PANE -->
+      <div class="tab-pane fade" id="indent-panel" role="tabpanel" aria-labelledby="indent-tab">
+        <div class="kotty-card">
+          <div class="kotty-card-header">
+            <h3><i class="bi bi-box-seam"></i> Raise Material Requirement</h3>
+          </div>
+          <div class="kotty-card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <span style="font-weight: 600;">Add Items</span>
+              <button type="button" class="kotty-btn kotty-btn-primary kotty-btn-sm" onclick="addIndentItem()"><i class="bi bi-plus"></i> Add Item</button>
+            </div>
+            <div id="indentItems" style="margin-bottom: 20px;"></div>
+            <button type="button" class="kotty-btn kotty-btn-success kotty-btn-block" id="btnSubmitIndent" onclick="submitIndent()">
+              <i class="bi bi-send"></i> Submit Requirements
+            </button>
+          </div>
+        </div>
+        <div class="kotty-card" style="margin-top: 20px;">
+          <div class="kotty-card-header">
+            <h3><i class="bi bi-list-check"></i> My Recent Requests</h3>
+          </div>
+          <div class="kotty-card-body" id="indentRequestsList">
+            <div style="text-align: center; padding: 24px; color: var(--text-muted);">Click Indent tab to load...</div>
           </div>
         </div>
       </div>
@@ -774,6 +826,236 @@ function checkRollsCompletion() {
 }
 
 document.getElementById('lotForm').addEventListener('submit', function(e) { document.getElementById('createLotBtn').disabled = true; });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDENT TAB FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+var indentItemCount = 0;
+var recentLots = [];
+var indentLoaded = false;
+
+document.getElementById('indent-tab').addEventListener('shown.bs.tab', function() {
+  if (!indentLoaded) {
+    loadRecentLots().then(function() { addIndentItem(); });
+    loadIndentRequests();
+    indentLoaded = true;
+  }
+});
+
+function esc(str) {
+  if (!str) return '';
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function addIndentItem() {
+  indentItemCount++;
+  var id = indentItemCount;
+  var container = document.getElementById('indentItems');
+  var item = document.createElement('div');
+  item.className = 'indent-item';
+  item.id = 'indentItem' + id;
+
+  var header = document.createElement('div');
+  header.className = 'indent-item-header';
+  var num = document.createElement('span');
+  num.className = 'indent-item-num';
+  num.textContent = 'Item #' + id;
+  header.appendChild(num);
+  var removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'kotty-btn kotty-btn-danger kotty-btn-sm';
+  removeBtn.textContent = 'Remove';
+  removeBtn.onclick = function() { item.remove(); };
+  header.appendChild(removeBtn);
+  item.appendChild(header);
+
+  var row1 = document.createElement('div');
+  row1.className = 'indent-row single';
+  var div1 = document.createElement('div');
+  var label1 = document.createElement('label');
+  label1.className = 'indent-label';
+  label1.textContent = 'Item *';
+  div1.appendChild(label1);
+  var sel = document.createElement('select');
+  sel.className = 'kotty-select';
+  sel.id = 'goods' + id;
+  sel.style.width = '100%';
+  var opt = document.createElement('option');
+  opt.value = '';
+  opt.textContent = 'Search for item...';
+  sel.appendChild(opt);
+  div1.appendChild(sel);
+  row1.appendChild(div1);
+  item.appendChild(row1);
+
+  var row2 = document.createElement('div');
+  row2.className = 'indent-row';
+  var div2a = document.createElement('div');
+  var label2a = document.createElement('label');
+  label2a.className = 'indent-label';
+  label2a.textContent = 'Qty *';
+  div2a.appendChild(label2a);
+  var qtyInput = document.createElement('input');
+  qtyInput.type = 'number';
+  qtyInput.className = 'kotty-input';
+  qtyInput.id = 'qty' + id;
+  qtyInput.min = '1';
+  qtyInput.placeholder = 'Qty';
+  div2a.appendChild(qtyInput);
+  row2.appendChild(div2a);
+  var div2b = document.createElement('div');
+  var label2b = document.createElement('label');
+  label2b.className = 'indent-label';
+  label2b.textContent = 'Unit';
+  div2b.appendChild(label2b);
+  var unitInput = document.createElement('input');
+  unitInput.type = 'text';
+  unitInput.className = 'kotty-input';
+  unitInput.id = 'unit' + id;
+  unitInput.readOnly = true;
+  unitInput.placeholder = '-';
+  div2b.appendChild(unitInput);
+  row2.appendChild(div2b);
+  item.appendChild(row2);
+
+  var row3 = document.createElement('div');
+  row3.className = 'indent-row single';
+  var div3 = document.createElement('div');
+  var label3 = document.createElement('label');
+  label3.className = 'indent-label';
+  label3.textContent = 'Lot (optional)';
+  div3.appendChild(label3);
+  var lotSel = document.createElement('select');
+  lotSel.className = 'kotty-select';
+  lotSel.id = 'lot' + id;
+  var defOpt = document.createElement('option');
+  defOpt.value = '';
+  defOpt.textContent = '-- No lot --';
+  lotSel.appendChild(defOpt);
+  recentLots.forEach(function(l) {
+    var o = document.createElement('option');
+    o.value = l;
+    o.textContent = l.toUpperCase();
+    lotSel.appendChild(o);
+  });
+  div3.appendChild(lotSel);
+  row3.appendChild(div3);
+  item.appendChild(row3);
+
+  var row4 = document.createElement('div');
+  row4.className = 'indent-row single';
+  var div4 = document.createElement('div');
+  var label4 = document.createElement('label');
+  label4.className = 'indent-label';
+  label4.textContent = 'Remark (optional)';
+  div4.appendChild(label4);
+  var remarkInput = document.createElement('input');
+  remarkInput.type = 'text';
+  remarkInput.className = 'kotty-input';
+  remarkInput.id = 'remark' + id;
+  remarkInput.placeholder = 'e.g. urgent';
+  div4.appendChild(remarkInput);
+  row4.appendChild(div4);
+  item.appendChild(row4);
+
+  container.appendChild(item);
+
+  $(sel).select2({
+    placeholder: 'Search...',
+    allowClear: true,
+    width: '100%',
+    minimumInputLength: 1,
+    ajax: { url: '/indent/api/items', dataType: 'json', delay: 250, data: function(p) { return { q: p.term }; }, processResults: function(d) { return { results: d }; }, cache: true }
+  });
+  $(sel).on('select2:select', function(e) { if (e.params.data && e.params.data.unit) document.getElementById('unit' + id).value = e.params.data.unit; });
+  $(sel).on('select2:clear', function() { document.getElementById('unit' + id).value = ''; });
+}
+
+async function loadRecentLots() {
+  try {
+    var res = await fetch('/indent/recent-lots');
+    var data = await res.json();
+    if (data.success) recentLots = data.lots || [];
+  } catch (e) { console.error(e); }
+}
+
+async function loadIndentRequests() {
+  try {
+    var res = await fetch('/indent/my-requests?limit=15');
+    var data = await res.json();
+    var container = document.getElementById('indentRequestsList');
+    container.textContent = '';
+    if (!data.success || !data.requests || data.requests.length === 0) {
+      container.textContent = 'No indent requests yet';
+      container.style.textAlign = 'center';
+      container.style.padding = '24px';
+      container.style.color = 'var(--text-muted)';
+      return;
+    }
+    data.requests.forEach(function(req) {
+      var item = document.createElement('div');
+      item.className = 'indent-request-item';
+      var main = document.createElement('div');
+      main.className = 'indent-request-main';
+      var desc = document.createElement('div');
+      desc.className = 'indent-request-desc';
+      desc.textContent = req.goods_description;
+      main.appendChild(desc);
+      var meta = document.createElement('div');
+      meta.className = 'indent-request-meta';
+      meta.textContent = 'Qty: ' + req.quantity_requested;
+      if (req.lot_no) {
+        meta.appendChild(document.createTextNode(' • '));
+        var lotSpan = document.createElement('span');
+        lotSpan.className = 'indent-request-lot';
+        lotSpan.textContent = req.lot_no.toUpperCase();
+        meta.appendChild(lotSpan);
+      }
+      meta.appendChild(document.createTextNode(' • ' + new Date(req.created_at).toLocaleDateString('en-IN')));
+      main.appendChild(meta);
+      item.appendChild(main);
+      var status = document.createElement('span');
+      status.className = 'indent-request-status ' + req.status;
+      status.textContent = req.status;
+      item.appendChild(status);
+      container.appendChild(item);
+    });
+  } catch (e) {
+    console.error(e);
+    document.getElementById('indentRequestsList').textContent = 'Failed to load';
+  }
+}
+
+async function submitIndent() {
+  var items = [];
+  document.querySelectorAll('.indent-item').forEach(function(el) {
+    var id = el.id.replace('indentItem', '');
+    var goodsId = $('#goods' + id).val();
+    var goodsText = $('#goods' + id).find(':selected').text();
+    var qty = parseFloat(document.getElementById('qty' + id).value) || 0;
+    var lotNo = document.getElementById('lot' + id).value;
+    var remark = document.getElementById('remark' + id).value.trim();
+    if (goodsId && qty > 0) items.push({ goods_id: goodsId, goods_description: goodsText, quantity: qty, lot_no: lotNo || null, remark: remark || null });
+  });
+  if (items.length === 0) { alert('Add at least one item with quantity'); return; }
+  var btn = document.getElementById('btnSubmitIndent');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/indent/stage-create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) });
+    var data = await res.json();
+    if (data.success) {
+      alert('Submitted ' + data.count + ' indent request(s)!');
+      document.getElementById('indentItems').textContent = '';
+      indentItemCount = 0;
+      addIndentItem();
+      loadIndentRequests();
+    } else { alert(data.error || 'Failed'); }
+  } catch (e) { alert('Error: ' + e.message); }
+  btn.disabled = false;
+}
 </script>
 
 <%- include('partials/footer') %>

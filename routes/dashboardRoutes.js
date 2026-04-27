@@ -326,7 +326,7 @@ router.get('/bulk-upload', isAuthenticated, async (req, res) => {
     return res.redirect('/dashboard');
   }
 
-  return res.render('bulk-upload', {
+  return res.render('bulkUpload', {
     user: req.session.user,
     tableName,
     errorMessage: null
@@ -345,7 +345,7 @@ router.post('/bulk-upload/:table', isAuthenticated, multerUpload.single('excelFi
 
   try {
     if (!req.file) {
-      return res.render('bulk-upload', {
+      return res.render('bulkUpload', {
         user: req.session.user,
         tableName,
         errorMessage: 'No file was uploaded.'
@@ -362,7 +362,7 @@ router.post('/bulk-upload/:table', isAuthenticated, multerUpload.single('excelFi
     );
     if (!dash.length || !dash[0].can_update) {
       fs.unlinkSync(req.file.path);
-      return res.render('bulk-upload', {
+      return res.render('bulkUpload', {
         user: req.session.user,
         tableName,
         errorMessage: 'No permission to insert data.'
@@ -417,7 +417,7 @@ router.post('/bulk-upload/:table', isAuthenticated, multerUpload.single('excelFi
       await conn.rollback();
       conn.release();
       fs.unlinkSync(req.file.path);
-      return res.render('bulk-upload', {
+      return res.render('bulkUpload', {
         user: req.session.user,
         tableName,
         errorMessage: `Bulk insert failed: ${bulkErr.message}`
@@ -432,10 +432,168 @@ router.post('/bulk-upload/:table', isAuthenticated, multerUpload.single('excelFi
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    return res.render('bulk-upload', {
+    return res.render('bulkUpload', {
       user: req.session.user,
       tableName,
       errorMessage: `Error: ${err.message}`
+    });
+  }
+});
+
+/**
+ * GET /dashboard/rejected-lots
+ * Report of all rejected lots across all stages
+ */
+router.get('/rejected-lots', isAuthenticated, async (req, res) => {
+  try {
+    const { stage = 'all', search = '', days = 30 } = req.query;
+    const daysAgo = parseInt(days) || 30;
+
+    // Query rejected lots from all stages
+    const queries = [];
+    const params = [];
+    const dateFilter = `AND approved_on >= DATE_SUB(NOW(), INTERVAL ? DAY)`;
+
+    // Stitching rejections (isApproved = 0)
+    if (stage === 'all' || stage === 'stitching') {
+      queries.push(`
+        SELECT
+          'Stitching' AS stage,
+          cl.lot_no,
+          cl.sku,
+          sa.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          u_assigner.username AS assigner,
+          sa.assignment_remark AS rejection_reason,
+          cls_total.total_pieces
+        FROM stitching_assignments sa
+        JOIN cutting_lots cl ON cl.id = sa.cutting_lot_id
+        JOIN users u_assigned ON u_assigned.id = sa.user_id
+        LEFT JOIN users u_assigner ON u_assigner.id = sa.assigner_cutting_master
+        LEFT JOIN (SELECT cutting_lot_id, SUM(total_pieces) AS total_pieces FROM cutting_lot_sizes GROUP BY cutting_lot_id) cls_total ON cls_total.cutting_lot_id = cl.id
+        WHERE sa.isApproved = 0 ${dateFilter}
+        ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    // Assembly rejections
+    if (stage === 'all' || stage === 'assembly') {
+      queries.push(`
+        SELECT
+          'Assembly' AS stage,
+          sd.lot_no,
+          sd.sku,
+          ja.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          u_assigner.username AS assigner,
+          ja.assignment_remark AS rejection_reason,
+          sd.total_pieces
+        FROM jeans_assembly_assignments ja
+        JOIN stitching_data sd ON sd.id = ja.stitching_data_id
+        JOIN users u_assigned ON u_assigned.id = ja.user_id
+        LEFT JOIN users u_assigner ON u_assigner.id = ja.assigner_stitching_master
+        WHERE ja.is_approved = 0 ${dateFilter}
+        ${search ? 'AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    // Washing rejections
+    if (stage === 'all' || stage === 'washing') {
+      queries.push(`
+        SELECT
+          'Washing' AS stage,
+          ad.lot_no,
+          ad.sku,
+          wa.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          u_assigner.username AS assigner,
+          wa.assignment_remark AS rejection_reason,
+          ad.total_pieces
+        FROM washing_assignments wa
+        JOIN assembly_data ad ON ad.id = wa.assembly_data_id
+        JOIN users u_assigned ON u_assigned.id = wa.user_id
+        LEFT JOIN users u_assigner ON u_assigner.id = wa.assigner_assembly_master
+        WHERE wa.is_approved = 0 ${dateFilter}
+        ${search ? 'AND (ad.lot_no LIKE ? OR ad.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    // Washing-In rejections
+    if (stage === 'all' || stage === 'washing_in') {
+      queries.push(`
+        SELECT
+          'Washing-In' AS stage,
+          wd.lot_no,
+          wd.sku,
+          wia.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          u_assigner.username AS assigner,
+          wia.assignment_remark AS rejection_reason,
+          wd.total_pieces
+        FROM washing_in_assignments wia
+        JOIN washing_data wd ON wd.id = wia.washing_data_id
+        JOIN users u_assigned ON u_assigned.id = wia.user_id
+        LEFT JOIN users u_assigner ON u_assigner.id = wia.assigner_washing_master
+        WHERE wia.is_approved = 0 ${dateFilter}
+        ${search ? 'AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    // Finishing rejections (is_approved = 2)
+    if (stage === 'all' || stage === 'finishing') {
+      queries.push(`
+        SELECT
+          'Finishing' AS stage,
+          COALESCE(wid.lot_no, sd.lot_no) AS lot_no,
+          COALESCE(wid.sku, sd.sku) AS sku,
+          fa.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          NULL AS assigner,
+          fa.assignment_remark AS rejection_reason,
+          COALESCE(wid.total_pieces, sd.total_pieces) AS total_pieces
+        FROM finishing_assignments fa
+        LEFT JOIN washing_in_data wid ON wid.id = fa.washing_in_data_id
+        LEFT JOIN stitching_data sd ON sd.id = fa.stitching_assignment_id
+        JOIN users u_assigned ON u_assigned.id = fa.user_id
+        WHERE fa.is_approved = 2 ${dateFilter}
+        ${search ? 'AND (COALESCE(wid.lot_no, sd.lot_no) LIKE ? OR COALESCE(wid.sku, sd.sku) LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    if (queries.length === 0) {
+      return res.render('rejectedLots', { user: req.session.user, rejectedLots: [], stage, search, days: daysAgo });
+    }
+
+    const fullQuery = queries.join(' UNION ALL ') + ' ORDER BY rejected_on DESC';
+    const [rejectedLots] = await pool.query(fullQuery, params);
+
+    res.render('rejectedLots', {
+      user: req.session.user,
+      rejectedLots,
+      stage,
+      search,
+      days: daysAgo
+    });
+  } catch (err) {
+    console.error('Error loading rejected lots:', err);
+    // Show error on the page instead of redirecting
+    res.render('rejectedLots', {
+      user: req.session.user,
+      rejectedLots: [],
+      stage: req.query.stage || 'all',
+      search: req.query.search || '',
+      days: parseInt(req.query.days) || 30,
+      error: 'Error loading data: ' + err.message
     });
   }
 });

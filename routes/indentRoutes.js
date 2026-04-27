@@ -10,6 +10,30 @@ const {
 
 const ALLOWED_STATUSES = ['open', 'proceeding', 'arrived'];
 
+// Roles allowed to create indents from stage dashboards
+const STAGE_INDENT_ROLES = ['stitching_master', 'jeans_assembly_master', 'finishing_master', 'cutting_master', 'operator', 'washing_in_master'];
+
+// Map role to stage name
+const ROLE_TO_STAGE = {
+  stitching_master: 'Stitching',
+  jeans_assembly_master: 'Jeans Assembly',
+  finishing_master: 'Finishing',
+  cutting_master: 'Cutting',
+  operator: 'Operator',
+  washing_in_master: 'Washing In'
+};
+
+// Middleware to check if user can create stage indents
+function canCreateStageIndent(req, res, next) {
+  if (!req.session.user) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  if (STAGE_INDENT_ROLES.includes(req.session.user.role)) {
+    return next();
+  }
+  return res.status(403).json({ success: false, error: 'Not authorized to create indents from stage dashboard' });
+}
+
 function sanitizeInteger(value, fallback = 0) {
   const parsed = parseInt(value, 10);
   if (Number.isNaN(parsed) || parsed < 0) {
@@ -92,6 +116,14 @@ async function ensureMigration() {
     if (irCols.length === 0) {
       await pool.query(`ALTER TABLE indent_requests ADD COLUMN goods_id BIGINT UNSIGNED DEFAULT NULL AFTER filler_id`);
     }
+    // Add lot_no and filler_stage columns for stage indent integration
+    const [lotCol] = await pool.query(`SHOW COLUMNS FROM indent_requests LIKE 'lot_no'`);
+    if (lotCol.length === 0) {
+      await pool.query(`ALTER TABLE indent_requests ADD COLUMN lot_no VARCHAR(50) DEFAULT NULL AFTER filler_id`);
+      await pool.query(`ALTER TABLE indent_requests ADD COLUMN filler_stage VARCHAR(50) DEFAULT NULL AFTER lot_no`);
+      await pool.query(`CREATE INDEX idx_indent_requests_lot ON indent_requests(lot_no)`);
+      await pool.query(`CREATE INDEX idx_indent_requests_stage ON indent_requests(filler_stage)`);
+    }
     migrationRan = true;
     console.log('Store/indent migration completed successfully');
   } catch (err) {
@@ -99,6 +131,16 @@ async function ensureMigration() {
     migrationRan = true; // Don't retry on every request
   }
 }
+
+// One-time: Reset all stock to 0
+router.get('/manage/reset-stock', isAuthenticated, isStoreManager, async (req, res) => {
+  try {
+    const [result] = await pool.query('UPDATE goods_inventory SET qty = 0');
+    res.json({ success: true, message: `Reset ${result.affectedRows} items to 0 stock` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Helper to get store settings
 async function getStoreSetting(key, defaultValue = 'true') {
@@ -733,6 +775,191 @@ router.get('/manage/analytics', isAuthenticated, isStoreManager, async (req, res
     console.error('Error loading analytics:', error);
     req.flash('error', 'Unable to load analytics.');
     res.redirect('/indent/manage');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGE WORKER INDENT ENDPOINTS
+// Allows stitching/finishing/cutting/operator to create indents from their dashboards
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /indent/stage-create - Bulk create indents from stage dashboard
+router.post('/stage-create', isAuthenticated, canCreateStageIndent, async (req, res) => {
+  const { items } = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, error: 'No items provided' });
+  }
+
+  if (items.length > 10) {
+    return res.status(400).json({ success: false, error: 'Maximum 10 items per request' });
+  }
+
+  const userId = req.session.user.id;
+  const userRole = req.session.user.role;
+  const fillerStage = ROLE_TO_STAGE[userRole] || userRole;
+  const requestDate = new Date().toISOString().split('T')[0];
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const insertedIds = [];
+
+    for (const item of items) {
+      const { goods_id, goods_description, quantity, lot_no, remark } = item;
+
+      if (!quantity || parseFloat(quantity) <= 0) {
+        continue;
+      }
+
+      let resolvedGoodsId = null;
+      let resolvedDescription = '';
+
+      if (goods_id && parseInt(goods_id, 10) > 0) {
+        const [[goodsItem]] = await conn.query('SELECT * FROM goods_inventory WHERE id = ?', [goods_id]);
+        if (goodsItem) {
+          resolvedGoodsId = goodsItem.id;
+          resolvedDescription = goodsItem.description_of_goods +
+            (goodsItem.shade ? ' - ' + goodsItem.shade : '') +
+            (goodsItem.size ? ' (' + goodsItem.size + ')' : '') +
+            ' [' + goodsItem.unit + ']';
+        }
+      } else if (goods_description && goods_description.trim()) {
+        resolvedDescription = goods_description.trim().substring(0, 255);
+      }
+
+      if (!resolvedDescription) {
+        continue;
+      }
+
+      const [result] = await conn.query(
+        `INSERT INTO indent_requests
+           (filler_id, lot_no, filler_stage, goods_id, goods_description, quantity_requested, request_date, remark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          lot_no || null,
+          fillerStage,
+          resolvedGoodsId,
+          resolvedDescription,
+          parseFloat(quantity),
+          requestDate,
+          remark ? remark.trim().substring(0, 255) : null
+        ]
+      );
+
+      insertedIds.push(result.insertId);
+    }
+
+    await conn.commit();
+
+    res.json({
+      success: true,
+      message: `Created ${insertedIds.length} indent request(s)`,
+      count: insertedIds.length
+    });
+  } catch (error) {
+    if (conn) await conn.rollback();
+    console.error('Error creating stage indents:', error);
+    res.status(500).json({ success: false, error: 'Failed to create indent requests' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// GET /indent/my-requests - Get user's recent indent requests
+router.get('/my-requests', isAuthenticated, canCreateStageIndent, async (req, res) => {
+  const userId = req.session.user.id;
+  const limit = parseInt(req.query.limit) || 20;
+
+  try {
+    const [requests] = await pool.query(
+      `SELECT id, goods_description, quantity_requested, lot_no, filler_stage, status, remark, created_at
+         FROM indent_requests
+        WHERE filler_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?`,
+      [userId, limit]
+    );
+
+    res.json({ success: true, requests });
+  } catch (error) {
+    console.error('Error fetching user indent requests:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch requests' });
+  }
+});
+
+// GET /indent/recent-lots - Get user's recent lots for dropdown
+router.get('/recent-lots', isAuthenticated, canCreateStageIndent, async (req, res) => {
+  const userId = req.session.user.id;
+  const userRole = req.session.user.role;
+
+  try {
+    let recentLots = [];
+
+    // Get lots based on user's stage
+    if (userRole === 'stitching_master') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT cl.lot_no
+           FROM stitching_completions sc
+           JOIN cutting_lots cl ON sc.cutting_lot_id = cl.id
+          WHERE sc.stitching_master_id = ?
+          ORDER BY sc.created_at DESC
+          LIMIT 20`,
+        [userId]
+      );
+      recentLots = lots.map(l => l.lot_no);
+    } else if (userRole === 'finishing_master') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT cl.lot_no
+           FROM finishing_completions fc
+           JOIN cutting_lots cl ON fc.cutting_lot_id = cl.id
+          WHERE fc.finishing_master_id = ?
+          ORDER BY fc.created_at DESC
+          LIMIT 20`,
+        [userId]
+      );
+      recentLots = lots.map(l => l.lot_no);
+    } else if (userRole === 'cutting_master') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT lot_no
+           FROM cutting_lots
+          WHERE cutting_master_id = ?
+          ORDER BY created_at DESC
+          LIMIT 20`,
+        [userId]
+      );
+      recentLots = lots.map(l => l.lot_no);
+    } else if (userRole === 'jeans_assembly_master') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT cl.lot_no
+           FROM jeans_assembly_completions jac
+           JOIN cutting_lots cl ON jac.cutting_lot_id = cl.id
+          WHERE jac.assembly_master_id = ?
+          ORDER BY jac.created_at DESC
+          LIMIT 20`,
+        [userId]
+      );
+      recentLots = lots.map(l => l.lot_no);
+    } else if (userRole === 'operator') {
+      const [lots] = await pool.query(
+        `SELECT DISTINCT cl.lot_no
+           FROM operator_completions oc
+           JOIN cutting_lots cl ON oc.cutting_lot_id = cl.id
+          WHERE oc.operator_id = ?
+          ORDER BY oc.created_at DESC
+          LIMIT 20`,
+        [userId]
+      );
+      recentLots = lots.map(l => l.lot_no);
+    }
+
+    res.json({ success: true, lots: recentLots });
+  } catch (error) {
+    console.error('Error fetching recent lots:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch lots' });
   }
 });
 

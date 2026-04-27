@@ -26,7 +26,7 @@ const connectionConfig = {
   queueLimit: 250,
   multipleStatements: false,
   connectTimeout: 10000,
-  acquireTimeout: 10000,
+  // Note: acquireTimeout is not valid in mysql2, removed to avoid warning
   debug: false
 };
 

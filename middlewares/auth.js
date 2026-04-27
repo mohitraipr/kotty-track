@@ -143,6 +143,15 @@ function isMohitOperator(req, res, next) {
   ) {
     return next();
   }
+  // Return JSON error for API requests
+  const wantsJson = req.headers.accept && req.headers.accept.includes('application/json');
+  if (wantsJson || req.xhr) {
+    return res.status(403).json({
+      error: 'Permission denied',
+      message: 'Only authorized users (mohitOperator, chandanSir, sales, sonuOpe, mam) can perform this action.',
+      allowedUsers: allowed
+    });
+  }
   req.flash('error', 'You do not have permission to view this page.');
   return res.redirect('/');
 }
@@ -170,6 +179,10 @@ function isVendorFiles(req, res, next) {
 
 function isVideoFinder(req, res, next) {
   return hasRole('videofinder')(req, res, next);
+}
+
+function isProductViewer(req, res, next) {
+  return hasRole('productviewer')(req, res, next);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +260,7 @@ module.exports = {
     isNowiPOOrganization,
     isVendorFiles,
     isVideoFinder,
+    isProductViewer,
     allowUserIds,
     allowRoles,
     allowUsernames

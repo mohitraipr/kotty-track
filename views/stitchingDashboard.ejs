@@ -1,4 +1,8 @@
 <%- include('partials/header', { pageTitle: 'Stitching Dashboard' }) %>
+<!-- Select2 for indent item search -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
 
 <style>
@@ -958,6 +962,388 @@
     font-weight: 600;
     color: var(--success);
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     INDENT TAB STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  .indent-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .indent-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .indent-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .btn-add-item {
+    padding: 8px 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+
+  .btn-add-item:hover {
+    background: var(--primary-dark);
+  }
+
+  .indent-items {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .indent-item {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+  }
+
+  .indent-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .indent-item-num {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-light);
+  }
+
+  .btn-remove-item {
+    padding: 4px 8px;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-remove-item:hover {
+    background: var(--danger);
+    color: white;
+  }
+
+  .indent-row {
+    display: grid;
+    grid-template-columns: 1fr 80px;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .indent-row.single {
+    grid-template-columns: 1fr;
+  }
+
+  .indent-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .indent-select,
+  .indent-input {
+    width: 100%;
+    padding: 12px;
+    font-size: 0.9375rem;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .indent-select:focus,
+  .indent-input:focus {
+    border-color: var(--primary);
+  }
+
+  .btn-submit-indent {
+    width: 100%;
+    padding: 16px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .btn-submit-indent:hover:not(:disabled) {
+    background: #15803d;
+  }
+
+  .btn-submit-indent:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* Recent Indent Requests */
+  .indent-requests-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .indent-requests-header {
+    padding: 14px 20px;
+    background: #f1f5f9;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .indent-request-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .indent-request-item:last-child {
+    border-bottom: none;
+  }
+
+  .indent-request-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .indent-request-desc {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+    word-break: break-word;
+  }
+
+  .indent-request-meta {
+    font-size: 0.8rem;
+    color: var(--text-light);
+  }
+
+  .indent-request-lot {
+    color: var(--primary);
+    font-weight: 500;
+  }
+
+  .indent-request-status {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .indent-request-status.open {
+    background: #fef3c7;
+    color: #9a3412;
+  }
+
+  .indent-request-status.proceeding {
+    background: #cffafe;
+    color: #155e75;
+  }
+
+  .indent-request-status.arrived {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .indent-empty {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--text-light);
+  }
+
+  .indent-empty i {
+    font-size: 2rem;
+    opacity: 0.3;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* Select2 custom styling for indent */
+  .select2-container--default .select2-selection--single {
+    height: auto;
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 1.5;
+    padding: 0;
+  }
+
+  .select2-container--default.select2-container--focus .select2-selection--single {
+    border-color: var(--primary);
+  }
+
+  /* Lot Details Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 500px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalIn 0.2s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border-radius: 16px 16px 0 0;
+  }
+  .modal-title { font-size: 1.125rem; font-weight: 700; color: var(--text); }
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    font-size: 1.25rem;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-close:hover { background: var(--border); }
+  .modal-body { padding: 20px; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section:last-child { margin-bottom: 0; }
+  .detail-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .detail-item { background: #f8fafc; padding: 12px; border-radius: 8px; }
+  .detail-item.full { grid-column: span 2; }
+  .detail-label { font-size: 0.75rem; color: var(--text-light); margin-bottom: 4px; }
+  .detail-value { font-size: 0.9375rem; font-weight: 600; color: var(--text); }
+  .detail-value.success { color: var(--success); }
+  .detail-value.primary { color: var(--primary); }
+  .detail-value.warning { color: var(--warning); }
+
+  /* History Filters */
+  .history-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+  }
+  .history-date-input {
+    padding: 10px 12px;
+    font-size: 0.875rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .history-date-input:focus { border-color: var(--primary); outline: none; }
+  .btn-filter {
+    padding: 10px 16px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-filter:hover { background: var(--primary-dark); }
+  .btn-download {
+    padding: 10px 16px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-download:hover { background: #15803d; }
+
+  /* Clickable history item */
+  .history-item.clickable { cursor: pointer; }
+  .history-item.clickable:hover { background: #eff6ff; }
+  .history-item.clickable:active { background: #dbeafe; }
 </style>
 
 <!-- Toast Container -->
@@ -1011,6 +1397,9 @@
     </button>
     <button class="tab-btn" data-tab="history">
       <i class="bi bi-clock-history"></i> History
+    </button>
+    <button class="tab-btn" data-tab="indent">
+      <i class="bi bi-box-seam"></i> Indent
     </button>
   </div>
 
@@ -1098,10 +1487,63 @@
       <div class="history-search">
         <input type="text" id="historySearch" class="history-input" placeholder="Search lot or SKU...">
       </div>
+      <div class="history-filters">
+        <input type="date" id="historyStartDate" class="history-date-input" placeholder="From">
+        <input type="date" id="historyEndDate" class="history-date-input" placeholder="To">
+        <button type="button" class="btn-filter" onclick="applyHistoryFilter()"><i class="bi bi-funnel"></i> Filter</button>
+        <button type="button" class="btn-download" onclick="downloadHistory()"><i class="bi bi-download"></i> Download</button>
+      </div>
       <div class="history-list" id="historyList"></div>
       <div class="history-loading" id="historyLoading">
         <div class="spinner spinner-dark"></div>
         <span>Loading...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lot Details Modal -->
+  <div class="modal-overlay" id="lotModal" onclick="if(event.target===this)closeLotModal()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title" id="modalLotNo">Lot Details</span>
+        <button type="button" class="modal-close" onclick="closeLotModal()"><i class="bi bi-x"></i></button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div style="text-align:center;padding:24px;"><div class="spinner spinner-dark"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INDENT TAB -->
+  <div class="tab-content" id="indentTab">
+    <!-- Create Indent Form -->
+    <div class="indent-card">
+      <div class="indent-header">
+        <span class="indent-title"><i class="bi bi-box-seam"></i> Raise Material Requirement</span>
+        <button type="button" class="btn-add-item" onclick="addIndentItem()">
+          <i class="bi bi-plus"></i> Add Item
+        </button>
+      </div>
+
+      <div class="indent-items" id="indentItems">
+        <!-- Items will be added here -->
+      </div>
+
+      <button type="button" class="btn-submit-indent" id="btnSubmitIndent" onclick="submitIndent()">
+        <span class="btn-text"><i class="bi bi-send"></i> Submit Requirements</span>
+      </button>
+    </div>
+
+    <!-- Recent Indent Requests -->
+    <div class="indent-requests-card">
+      <div class="indent-requests-header">
+        <i class="bi bi-list-check"></i> My Recent Requests
+      </div>
+      <div id="indentRequestsList">
+        <div class="indent-empty">
+          <div class="spinner spinner-dark"></div>
+          <span>Loading...</span>
+        </div>
       </div>
     </div>
   </div>
@@ -1566,14 +2008,26 @@
   let historyHasMore = true;
   let historyLoadingFlag = false;
 
-  async function loadHistory() {
-    if (historyLoadingFlag || !historyHasMore) return;
+  async function loadHistory(reset = false) {
+    if (historyLoadingFlag || (!reset && !historyHasMore)) return;
+    if (reset) {
+      historyOffset = 0;
+      historyHasMore = true;
+      document.getElementById('historyList').textContent = '';
+    }
     historyLoadingFlag = true;
     document.getElementById('historyLoading').style.display = 'flex';
 
     try {
       const search = document.getElementById('historySearch').value.trim();
-      const res = await fetch('/stitchingdashboard/existing?offset=' + historyOffset + '&limit=20&search=' + encodeURIComponent(search));
+      const startDate = document.getElementById('historyStartDate').value;
+      const endDate = document.getElementById('historyEndDate').value;
+
+      let url = '/stitchingdashboard/existing?offset=' + historyOffset + '&limit=20&search=' + encodeURIComponent(search);
+      if (startDate) url += '&startDate=' + startDate;
+      if (endDate) url += '&endDate=' + endDate;
+
+      const res = await fetch(url);
       const data = await res.json();
 
       const list = document.getElementById('historyList');
@@ -1581,16 +2035,23 @@
       if (!data.entries || data.entries.length === 0) {
         historyHasMore = false;
         if (historyOffset === 0) {
-          list.innerHTML = `
-            <div style="padding: 48px 20px; text-align: center;">
-              <i class="bi bi-archive" style="font-size: 2.5rem; opacity: 0.2; display: block; margin-bottom: 12px;"></i>
-              <span style="color: var(--text-light);">No entries found</span>
-            </div>`;
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding: 48px 20px; text-align: center;';
+          const icon = document.createElement('i');
+          icon.className = 'bi bi-archive';
+          icon.style.cssText = 'font-size: 2.5rem; opacity: 0.2; display: block; margin-bottom: 12px;';
+          empty.appendChild(icon);
+          const span = document.createElement('span');
+          span.style.color = 'var(--text-light)';
+          span.textContent = 'No entries found';
+          empty.appendChild(span);
+          list.appendChild(empty);
         }
       } else {
         data.entries.forEach(e => {
           const item = document.createElement('div');
-          item.className = 'history-item';
+          item.className = 'history-item clickable';
+          item.onclick = function() { showLotDetails(e.lot_no); };
 
           const left = document.createElement('div');
           const lot = document.createElement('div');
@@ -1599,7 +2060,7 @@
           left.appendChild(lot);
           const sku = document.createElement('div');
           sku.className = 'history-sku';
-          sku.textContent = e.sku;
+          sku.textContent = e.sku + (e.cutting_remark ? ' • ' + e.cutting_remark : '');
           left.appendChild(sku);
           item.appendChild(left);
 
@@ -1630,6 +2091,117 @@
     }
   }
 
+  function applyHistoryFilter() {
+    loadHistory(true);
+  }
+
+  function downloadHistory() {
+    const startDate = document.getElementById('historyStartDate').value;
+    const endDate = document.getElementById('historyEndDate').value;
+    let url = '/stitchingdashboard/history-download?';
+    if (startDate) url += 'startDate=' + startDate + '&';
+    if (endDate) url += 'endDate=' + endDate;
+    window.location.href = url;
+  }
+
+  // Lot Details Modal
+  async function showLotDetails(lotNo) {
+    document.getElementById('lotModal').classList.add('show');
+    document.getElementById('modalLotNo').textContent = lotNo.toUpperCase();
+    const body = document.getElementById('modalBody');
+    body.textContent = '';
+    const spinner = document.createElement('div');
+    spinner.style.cssText = 'text-align:center;padding:24px;';
+    const sp = document.createElement('div');
+    sp.className = 'spinner spinner-dark';
+    spinner.appendChild(sp);
+    body.appendChild(spinner);
+
+    try {
+      const res = await fetch('/stitchingdashboard/lot-details/' + encodeURIComponent(lotNo));
+      const data = await res.json();
+
+      body.textContent = '';
+
+      if (!data.success) {
+        body.textContent = data.error || 'Failed to load';
+        return;
+      }
+
+      // Lot Info Section
+      const lotSection = document.createElement('div');
+      lotSection.className = 'detail-section';
+      const lotTitle = document.createElement('div');
+      lotTitle.className = 'detail-section-title';
+      lotTitle.textContent = 'Lot Information';
+      lotSection.appendChild(lotTitle);
+      const lotGrid = document.createElement('div');
+      lotGrid.className = 'detail-grid';
+      lotGrid.appendChild(createDetailItem('SKU', data.lot.sku));
+      lotGrid.appendChild(createDetailItem('Fabric', data.lot.fabric_type || '-'));
+      lotGrid.appendChild(createDetailItem('Cutting Master', data.lot.cutting_master || '-'));
+      lotGrid.appendChild(createDetailItem('Cutting Date', data.lot.cutting_date ? new Date(data.lot.cutting_date).toLocaleDateString('en-IN') : '-'));
+      if (data.lot.cutting_remark) {
+        const remarkItem = createDetailItem('Cutting Remark', data.lot.cutting_remark);
+        remarkItem.classList.add('full');
+        lotGrid.appendChild(remarkItem);
+      }
+      lotSection.appendChild(lotGrid);
+      body.appendChild(lotSection);
+
+      // Stitching Progress Section
+      const stitchSection = document.createElement('div');
+      stitchSection.className = 'detail-section';
+      const stitchTitle = document.createElement('div');
+      stitchTitle.className = 'detail-section-title';
+      stitchTitle.textContent = 'Stitching Progress';
+      stitchSection.appendChild(stitchTitle);
+      const stitchGrid = document.createElement('div');
+      stitchGrid.className = 'detail-grid';
+      stitchGrid.appendChild(createDetailItem('Cut Pieces', data.cutting.total_pieces, 'primary'));
+      stitchGrid.appendChild(createDetailItem('Stitched', data.stitching.total_pieces, 'success'));
+      stitchGrid.appendChild(createDetailItem('Pending', data.stitching.pending_pieces, data.stitching.pending_pieces > 0 ? 'warning' : ''));
+      stitchGrid.appendChild(createDetailItem('Your Entry Date', data.stitching.created_at ? new Date(data.stitching.created_at).toLocaleDateString('en-IN') : '-'));
+      stitchSection.appendChild(stitchGrid);
+      body.appendChild(stitchSection);
+
+      // Payment Section
+      const paySection = document.createElement('div');
+      paySection.className = 'detail-section';
+      const payTitle = document.createElement('div');
+      payTitle.className = 'detail-section-title';
+      payTitle.textContent = 'Payment Status';
+      paySection.appendChild(payTitle);
+      const payGrid = document.createElement('div');
+      payGrid.className = 'detail-grid';
+      payGrid.appendChild(createDetailItem('Total Paid', '₹' + data.payment.total_paid, 'success'));
+      payGrid.appendChild(createDetailItem('Pending', '₹' + data.payment.pending_amount, data.payment.pending_amount > 0 ? 'warning' : ''));
+      paySection.appendChild(payGrid);
+      body.appendChild(paySection);
+
+    } catch (err) {
+      body.textContent = 'Error: ' + err.message;
+    }
+  }
+
+  function createDetailItem(label, value, valueClass) {
+    const item = document.createElement('div');
+    item.className = 'detail-item';
+    const lbl = document.createElement('div');
+    lbl.className = 'detail-label';
+    lbl.textContent = label;
+    item.appendChild(lbl);
+    const val = document.createElement('div');
+    val.className = 'detail-value' + (valueClass ? ' ' + valueClass : '');
+    val.textContent = value;
+    item.appendChild(val);
+    return item;
+  }
+
+  function closeLotModal() {
+    document.getElementById('lotModal').classList.remove('show');
+  }
+
   document.getElementById('historyList').addEventListener('scroll', function() {
     if (this.scrollTop + this.clientHeight >= this.scrollHeight - 50) {
       loadHistory();
@@ -1640,11 +2212,270 @@
   document.getElementById('historySearch').addEventListener('input', () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-      historyOffset = 0;
-      historyHasMore = true;
-      document.getElementById('historyList').innerHTML = '';
-      loadHistory();
+      loadHistory(true);
     }, 300);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INDENT TAB FUNCTIONALITY
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  let indentItemCount = 0;
+  let recentLots = [];
+
+  // Add new indent item
+  function addIndentItem() {
+    indentItemCount++;
+    const container = document.getElementById('indentItems');
+
+    const item = document.createElement('div');
+    item.className = 'indent-item';
+    item.id = 'indentItem' + indentItemCount;
+
+    item.innerHTML = `
+      <div class="indent-item-header">
+        <span class="indent-item-num">Item #${indentItemCount}</span>
+        <button type="button" class="btn-remove-item" onclick="removeIndentItem(${indentItemCount})">
+          <i class="bi bi-x"></i> Remove
+        </button>
+      </div>
+      <div class="indent-row single">
+        <div>
+          <label class="indent-label">Item *</label>
+          <select class="indent-select indent-goods-select" id="goods${indentItemCount}">
+            <option value="">Search for item...</option>
+          </select>
+        </div>
+      </div>
+      <div class="indent-row">
+        <div>
+          <label class="indent-label">Quantity *</label>
+          <input type="number" class="indent-input" id="qty${indentItemCount}" min="1" placeholder="Qty">
+        </div>
+        <div>
+          <label class="indent-label">Unit</label>
+          <input type="text" class="indent-input" id="unit${indentItemCount}" readonly placeholder="-">
+        </div>
+      </div>
+      <div class="indent-row single">
+        <div>
+          <label class="indent-label">Lot No (optional)</label>
+          <select class="indent-select" id="lot${indentItemCount}">
+            <option value="">-- No lot --</option>
+            ${recentLots.map(l => '<option value="' + esc(l) + '">' + esc(l.toUpperCase()) + '</option>').join('')}
+          </select>
+        </div>
+      </div>
+      <div class="indent-row single">
+        <div>
+          <label class="indent-label">Remark (optional)</label>
+          <input type="text" class="indent-input" id="remark${indentItemCount}" placeholder="e.g. urgent, for lot XYZ">
+        </div>
+      </div>
+    `;
+
+    container.appendChild(item);
+
+    // Initialize Select2 for goods dropdown
+    initGoodsSelect(indentItemCount);
+  }
+
+  // Remove indent item
+  function removeIndentItem(id) {
+    const item = document.getElementById('indentItem' + id);
+    if (item) {
+      item.remove();
+    }
+    updateIndentItemNumbers();
+  }
+
+  // Update item numbers after removal
+  function updateIndentItemNumbers() {
+    const items = document.querySelectorAll('.indent-item');
+    items.forEach((item, index) => {
+      const numEl = item.querySelector('.indent-item-num');
+      if (numEl) numEl.textContent = 'Item #' + (index + 1);
+    });
+  }
+
+  // Initialize Select2 for goods dropdown
+  function initGoodsSelect(id) {
+    const select = document.getElementById('goods' + id);
+    if (!select) return;
+
+    $(select).select2({
+      placeholder: 'Search for item...',
+      allowClear: true,
+      width: '100%',
+      minimumInputLength: 1,
+      ajax: {
+        url: '/indent/api/items',
+        dataType: 'json',
+        delay: 250,
+        data: function(params) {
+          return { q: params.term };
+        },
+        processResults: function(data) {
+          return { results: data };
+        },
+        cache: true
+      }
+    });
+
+    // Update unit field when item is selected
+    $(select).on('select2:select', function(e) {
+      const data = e.params.data;
+      if (data && data.unit) {
+        document.getElementById('unit' + id).value = data.unit;
+      }
+    });
+
+    $(select).on('select2:clear', function() {
+      document.getElementById('unit' + id).value = '';
+    });
+  }
+
+  // Load recent lots for dropdown
+  async function loadRecentLots() {
+    try {
+      const res = await fetch('/indent/recent-lots');
+      const data = await res.json();
+      if (data.success) {
+        recentLots = data.lots || [];
+      }
+    } catch (err) {
+      console.error('Error loading recent lots:', err);
+    }
+  }
+
+  // Load user's recent indent requests
+  async function loadIndentRequests() {
+    try {
+      const res = await fetch('/indent/my-requests?limit=20');
+      const data = await res.json();
+      const container = document.getElementById('indentRequestsList');
+
+      if (!data.success || !data.requests || data.requests.length === 0) {
+        container.innerHTML = `
+          <div class="indent-empty">
+            <i class="bi bi-inbox"></i>
+            <span>No indent requests yet</span>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      data.requests.forEach(req => {
+        const item = document.createElement('div');
+        item.className = 'indent-request-item';
+
+        const main = document.createElement('div');
+        main.className = 'indent-request-main';
+
+        const desc = document.createElement('div');
+        desc.className = 'indent-request-desc';
+        desc.textContent = req.goods_description;
+        main.appendChild(desc);
+
+        const meta = document.createElement('div');
+        meta.className = 'indent-request-meta';
+        let metaText = 'Qty: ' + req.quantity_requested;
+        if (req.lot_no) {
+          metaText += ' • <span class="indent-request-lot">' + esc(req.lot_no.toUpperCase()) + '</span>';
+        }
+        metaText += ' • ' + new Date(req.created_at).toLocaleDateString('en-IN');
+        meta.innerHTML = metaText;
+        main.appendChild(meta);
+
+        item.appendChild(main);
+
+        const status = document.createElement('span');
+        status.className = 'indent-request-status ' + req.status;
+        status.textContent = req.status;
+        item.appendChild(status);
+
+        container.appendChild(item);
+      });
+    } catch (err) {
+      console.error('Error loading indent requests:', err);
+      document.getElementById('indentRequestsList').innerHTML = `
+        <div class="indent-empty">
+          <i class="bi bi-exclamation-circle"></i>
+          <span>Failed to load requests</span>
+        </div>`;
+    }
+  }
+
+  // Submit indent requests
+  async function submitIndent() {
+    const items = [];
+    const itemElements = document.querySelectorAll('.indent-item');
+
+    itemElements.forEach(el => {
+      const id = el.id.replace('indentItem', '');
+      const goodsSelect = document.getElementById('goods' + id);
+      const qtyInput = document.getElementById('qty' + id);
+      const lotSelect = document.getElementById('lot' + id);
+      const remarkInput = document.getElementById('remark' + id);
+
+      const goodsId = $(goodsSelect).val();
+      const goodsText = $(goodsSelect).find(':selected').text();
+      const qty = parseFloat(qtyInput.value) || 0;
+      const lotNo = lotSelect.value;
+      const remark = remarkInput.value.trim();
+
+      if (goodsId && qty > 0) {
+        items.push({
+          goods_id: goodsId,
+          goods_description: goodsText,
+          quantity: qty,
+          lot_no: lotNo || null,
+          remark: remark || null
+        });
+      }
+    });
+
+    if (items.length === 0) {
+      showToast('Add at least one item with quantity', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmitIndent');
+    setButtonLoading(btn, true);
+
+    try {
+      const res = await fetch('/indent/stage-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('Submitted ' + data.count + ' indent request(s)!', 'success');
+        document.getElementById('indentItems').innerHTML = '';
+        indentItemCount = 0;
+        addIndentItem();
+        loadIndentRequests();
+      } else {
+        showToast(data.error || 'Failed to submit', 'error');
+      }
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    } finally {
+      setButtonLoading(btn, false);
+    }
+  }
+
+  // Initialize indent tab when switching to it
+  document.querySelector('[data-tab="indent"]').addEventListener('click', function() {
+    if (document.getElementById('indentItems').children.length === 0) {
+      loadRecentLots().then(() => {
+        addIndentItem();
+      });
+      loadIndentRequests();
+    }
   });
 </script>
 

@@ -35,10 +35,15 @@ app.set('trust proxy', true);
 // Rate limiting for security
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // 500 requests per 15 min per IP
+    max: 1000, // 1000 requests per 15 min per IP
     message: 'Too many requests, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
+    keyGenerator: (req) => {
+        // Use X-Forwarded-For header (Cloud Run sets this)
+        return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    },
 });
 
 // Apply general rate limit to all requests
@@ -120,6 +125,7 @@ app.set('views', path.join(__dirname, 'views'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Global Variables for Views
 app.use((req, res, next) => {
@@ -156,9 +162,8 @@ const editWashingAssignmentsRoutes = require('./routes/editWashingAssignments');
 const washingIN = require('./routes/washingInRoutes');
 const catalogR = require('./routes/catalogupload');
 const storeAdminRoutes = require('./routes/storeAdminRoutes');
-const stitchingPaymentRoutes = require('./routes/stitchingPaymentRoutes');
-const washingPaymentRoutes = require('./routes/washingPaymentRoutes');
 const stagePaymentRoutes = require('./routes/stagePaymentRoutes');
+const cuttingAnalysisRoutes = require('./routes/cuttingAnalysisRoutes');
 
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const departmentMgmtRoutes = require('./routes/departmentMgmtRoutes');
@@ -186,6 +191,7 @@ const poAdminRoutes = require('./routes/poAdminRoutes');
 const poAdminApiRoutes = require('./routes/poAdminApiRoutes');
 const returnRoutes = require('./routes/returnRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const accountsPaymentRoutes = require('./routes/accountsPaymentRoutes');
 
 // Use Routes
 // Health check for Cloud Run (must be before auth middleware)
@@ -203,10 +209,10 @@ app.use('/washingdashboard', washingRoutes);
 app.use('/', searchRoutes);
 app.use('/assign-to-washing', assigntowashingRoutes);
 app.use('/jeansassemblydashboard', jeansAssemblyRoutes);
-app.use('/stitchingdashboard/payments', stitchingPaymentRoutes);
-app.use('/washingdashboard/payments', washingPaymentRoutes);
 app.use('/operator/payments', stagePaymentRoutes);
 app.use('/payments', stagePaymentRoutes);
+app.use('/accounts/payments', accountsPaymentRoutes);
+app.use('/cutting-analysis', cuttingAnalysisRoutes);
 app.use("/operator", editCuttingLotRoutes);
 app.use('/operator', editWashingAssignmentsRoutes);
 app.use('/operator', departmentMgmtRoutes);

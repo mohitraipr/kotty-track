@@ -6,6 +6,7 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isJeansAssemblyMaster } = require('../middlewares/auth');
+const { createStagePayment } = require('../utils/stagePaymentHelper');
 
 // -------------------------------------
 // MULTER for Image Upload
@@ -720,6 +721,16 @@ router.post('/approve-lot', isAuthenticated, isJeansAssemblyMaster, async (req, 
     }
     const remark = approval_remark && approval_remark.trim() ? approval_remark.trim() : null;
 
+    // Get stitching data before updating
+    const [stitchingData] = await pool.query(`
+      SELECT jaa.stitching_assignment_id, sd.user_id, sd.lot_no, sd.sku, sd.total_pieces,
+             u.username
+      FROM jeans_assembly_assignments jaa
+      JOIN stitching_data sd ON jaa.stitching_assignment_id = sd.id
+      JOIN users u ON sd.user_id = u.id
+      WHERE jaa.id = ? AND jaa.user_id = ?
+    `, [assignment_id, userId]);
+
     await pool.query(`
       UPDATE jeans_assembly_assignments
       SET is_approved = 1,approved_on = NOW(),
@@ -727,6 +738,18 @@ router.post('/approve-lot', isAuthenticated, isJeansAssemblyMaster, async (req, 
       WHERE id = ?
         AND user_id = ?
     `, [remark, assignment_id, userId]);
+
+    // Auto-create stitching payment after approval
+    if (stitchingData.length > 0) {
+      const sd = stitchingData[0];
+      await createStagePayment('stitching', {
+        lot_no: sd.lot_no,
+        sku: sd.sku,
+        qty: sd.total_pieces,
+        user_id: sd.user_id,
+        username: sd.username
+      });
+    }
 
     return res.redirect('/jeansassemblydashboard/approve');
   } catch (err) {
@@ -785,6 +808,444 @@ router.get('/list-entries', isAuthenticated, isJeansAssemblyMaster, async (req, 
     return res.json({ data: rows, hasMore });
   } catch (err) {
     console.error('[ERROR] GET /jeansassemblydashboard/list-entries =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================================================================
+//               SELF-ASSIGNMENT ENDPOINTS
+// ==================================================================
+
+/**
+ * GET /jeansassemblydashboard/available-lots
+ * Search for denim lots available for self-assignment
+ * Returns lots that have stitching_data but haven't been fully assembled
+ */
+router.get('/available-lots', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    if (!search || search.trim().length < 1) {
+      return res.json({ lots: [] });
+    }
+
+    const searchLike = `%${search.trim()}%`;
+
+    // Get denim lots that have stitching_data with available sizes for assembly
+    const [lots] = await pool.query(`
+      SELECT
+        sd.id AS stitching_data_id,
+        sd.lot_no,
+        sd.sku,
+        sd.total_pieces AS stitched_total,
+        sd.created_at AS stitch_date,
+        cl.remark AS cutting_remark,
+        u.username AS stitching_master
+      FROM stitching_data sd
+      JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      JOIN users u ON sd.user_id = u.id
+      JOIN users cu ON cl.user_id = cu.id
+      WHERE (sd.lot_no LIKE ? OR cl.remark LIKE ?)
+        AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (sd.lot_no LIKE 'AK%' OR sd.lot_no LIKE 'UM%')))
+        AND EXISTS (
+          SELECT 1 FROM stitching_data_sizes sds
+          WHERE sds.stitching_data_id = sd.id
+            AND sds.pieces > COALESCE((
+              SELECT SUM(jads.pieces) FROM jeans_assembly_data jad
+              JOIN jeans_assembly_data_sizes jads ON jads.jeans_assembly_data_id = jad.id
+              WHERE jad.lot_no = sd.lot_no AND jads.size_label = sds.size_label
+            ), 0)
+        )
+      ORDER BY sd.created_at DESC
+      LIMIT 10
+    `, [searchLike, searchLike]);
+
+    // For each lot, get size details
+    for (const lot of lots) {
+      const [sizes] = await pool.query(`
+        SELECT
+          sds.id,
+          sds.size_label,
+          sds.pieces AS stitched_qty,
+          COALESCE((
+            SELECT SUM(jads.pieces) FROM jeans_assembly_data jad
+            JOIN jeans_assembly_data_sizes jads ON jads.jeans_assembly_data_id = jad.id
+            WHERE jad.lot_no = ? AND jads.size_label = sds.size_label
+          ), 0) AS assembled_qty,
+          sds.pieces - COALESCE((
+            SELECT SUM(jads.pieces) FROM jeans_assembly_data jad
+            JOIN jeans_assembly_data_sizes jads ON jads.jeans_assembly_data_id = jad.id
+            WHERE jad.lot_no = ? AND jads.size_label = sds.size_label
+          ), 0) AS available_qty
+        FROM stitching_data_sizes sds
+        WHERE sds.stitching_data_id = ?
+        HAVING available_qty > 0
+        ORDER BY FIELD(sds.size_label, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL', '6XL', '26', '28', '30', '32', '34', '36'), sds.size_label
+      `, [lot.lot_no, lot.lot_no, lot.stitching_data_id]);
+
+      lot.sizes = sizes.map(s => ({
+        id: s.id,
+        size_label: s.size_label,
+        pieces: Number(s.stitched_qty),
+        remain: Number(s.available_qty)
+      }));
+    }
+
+    return res.json({ lots });
+  } catch (err) {
+    console.error('[ERROR] GET /jeansassemblydashboard/available-lots =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /jeansassemblydashboard/submit
+ * Self-assign and complete assembly in one step
+ * Creates jeans_assembly_assignments (auto-approved) + jeans_assembly_data
+ */
+router.post('/submit', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+    const { selectedLotId, remark } = req.body;
+    const sizesObj = req.body.sizes || {};
+
+    if (!selectedLotId) {
+      return res.status(400).json({ error: 'Missing lot selection' });
+    }
+
+    // Calculate total from sizes object {sizeId: qty}
+    let grandTotal = 0;
+    for (const sizeId of Object.keys(sizesObj)) {
+      const qty = parseInt(sizesObj[sizeId], 10);
+      if (!isNaN(qty) && qty > 0) grandTotal += qty;
+    }
+    if (grandTotal <= 0) {
+      return res.status(400).json({ error: 'No pieces requested' });
+    }
+
+    await conn.beginTransaction();
+
+    // Get stitching data details
+    const [[sd]] = await conn.query(`
+      SELECT sd.*, u.username AS stitching_master, cl.remark AS cutting_remark
+      FROM stitching_data sd
+      JOIN users u ON sd.user_id = u.id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      WHERE sd.id = ?
+      FOR UPDATE
+    `, [selectedLotId]);
+
+    if (!sd) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Stitching data not found' });
+    }
+
+    // Get size details from IDs
+    const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(Boolean);
+    const [sizeRows] = await conn.query(
+      `SELECT id, size_label, pieces FROM stitching_data_sizes WHERE id IN (?)`,
+      [sizeIds.length ? sizeIds : [0]]
+    );
+    const sizeMap = {};
+    for (const row of sizeRows) sizeMap[row.id] = row;
+
+    // Get already used quantities
+    const sizeLabels = sizeRows.map(r => r.size_label);
+    const [usedRows] = await conn.query(
+      `SELECT jads.size_label, COALESCE(SUM(jads.pieces), 0) AS usedCount
+       FROM jeans_assembly_data_sizes jads
+       JOIN jeans_assembly_data jad ON jads.jeans_assembly_data_id = jad.id
+       WHERE jad.lot_no = ? AND jads.size_label IN (?)
+       GROUP BY jads.size_label`,
+      [sd.lot_no, sizeLabels.length ? sizeLabels : ['']]
+    );
+    const usedMap = {};
+    for (const row of usedRows) usedMap[row.size_label] = row.usedCount;
+
+    // Validate each size
+    const validSizes = [];
+    for (const sizeId of sizeIds) {
+      const row = sizeMap[sizeId];
+      if (!row) continue;
+      const requested = parseInt(sizesObj[sizeId], 10) || 0;
+      if (requested === 0) continue;
+      const used = usedMap[row.size_label] || 0;
+      const remain = row.pieces - used;
+      if (requested > remain) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Requested ${requested} for ${row.size_label}, but only ${remain} remain.`
+        });
+      }
+      validSizes.push({ size_label: row.size_label, qty: requested });
+    }
+
+    // 1. Create jeans_assembly_assignments record (auto-approved)
+    const sizesJson = JSON.stringify(validSizes.map(s => ({ size: s.size_label, qty: s.qty })));
+    const [assignResult] = await conn.query(`
+      INSERT INTO jeans_assembly_assignments
+        (stitching_master_id, user_id, stitching_assignment_id, sizes_json, is_approved, assigned_on)
+      VALUES (?, ?, ?, ?, 1, NOW())
+    `, [sd.user_id, userId, sd.id, sizesJson]);
+
+    // 2. Create jeans_assembly_data record
+    const totalPieces = validSizes.reduce((sum, s) => sum + s.qty, 0);
+    const [dataResult] = await conn.query(`
+      INSERT INTO jeans_assembly_data (user_id, lot_no, sku, total_pieces, remark, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `, [userId, sd.lot_no, sd.sku, totalPieces, remark || null]);
+
+    const assemblyDataId = dataResult.insertId;
+
+    // 3. Create jeans_assembly_data_sizes records
+    for (const s of validSizes) {
+      await conn.query(`
+        INSERT INTO jeans_assembly_data_sizes (jeans_assembly_data_id, size_label, pieces)
+        VALUES (?, ?, ?)
+      `, [assemblyDataId, s.size_label, s.qty]);
+    }
+
+    await conn.commit();
+
+    // Auto-create stitching payment
+    try {
+      await createStagePayment('stitching', {
+        lot_no: sd.lot_no,
+        sku: sd.sku,
+        qty: totalPieces,
+        user_id: sd.user_id,
+        username: sd.stitching_master
+      });
+    } catch (payErr) {
+      console.error('[WARN] Failed to create stitching payment:', payErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Assembly completed: ${totalPieces} pieces`,
+      jeans_assembly_data_id: assemblyDataId
+    });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error('[ERROR] POST /jeansassemblydashboard/submit =>', err);
+    return res.status(500).json({ error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// GET /jeansassemblydashboard/my-today
+router.get('/my-today', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [rows] = await pool.query(`
+      SELECT id, lot_no, sku, total_pieces, created_at
+      FROM jeans_assembly_data
+      WHERE user_id = ? AND DATE(created_at) = CURDATE()
+      ORDER BY created_at DESC
+    `, [userId]);
+
+    const totalToday = rows.reduce((sum, r) => sum + r.total_pieces, 0);
+
+    return res.json({
+      entries: rows,
+      total_pieces: totalToday,
+      count: rows.length
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /my-today =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jeansassemblydashboard/my-entries
+router.get('/my-entries', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = 20;
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT jad.id, jad.lot_no, jad.sku, jad.total_pieces, jad.created_at, cl.remark as cutting_remark
+      FROM jeans_assembly_data jad
+      LEFT JOIN cutting_lots cl ON jad.lot_no = cl.lot_no
+      WHERE jad.user_id = ? AND (jad.lot_no LIKE ? OR jad.sku LIKE ?)
+    `;
+    const params = [userId, search, search];
+
+    if (startDate) {
+      query += ` AND DATE(jad.created_at) >= ?`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      query += ` AND DATE(jad.created_at) <= ?`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY jad.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const [rows] = await pool.query(query, params);
+
+    return res.json({ entries: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /my-entries =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jeansassemblydashboard/lot-details/:lotNo
+router.get('/lot-details/:lotNo', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const lotNo = req.params.lotNo;
+    const userId = req.session.user.id;
+
+    const [[cuttingLot]] = await pool.query(`
+      SELECT cl.*, u.username as cutting_master_name
+      FROM cutting_lots cl
+      LEFT JOIN users u ON cl.cutting_master_id = u.id
+      WHERE cl.lot_no = ?
+    `, [lotNo]);
+
+    if (!cuttingLot) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const [cuttingSizes] = await pool.query(`
+      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+    `, [cuttingLot.id]);
+
+    const [[assemblyData]] = await pool.query(`
+      SELECT jad.*, u.username as assembly_master_name
+      FROM jeans_assembly_data jad
+      LEFT JOIN users u ON jad.user_id = u.id
+      WHERE jad.lot_no = ? AND jad.user_id = ?
+    `, [lotNo, userId]);
+
+    let assemblySizes = [];
+    if (assemblyData) {
+      const [sizes] = await pool.query(`
+        SELECT size_label, pieces FROM jeans_assembly_sizes WHERE jeans_assembly_data_id = ?
+      `, [assemblyData.id]);
+      assemblySizes = sizes;
+    }
+
+    const [[paymentInfo]] = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) as total_paid, COUNT(*) as payment_count
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'jeans_assembly' AND status = 'approved'
+    `, [userId, lotNo]);
+
+    const [[pendingPayment]] = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) as pending_amount
+      FROM stage_payments
+      WHERE user_id = ? AND lot_no = ? AND stage = 'jeans_assembly' AND status = 'pending'
+    `, [userId, lotNo]);
+
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalAssembledPieces = assemblySizes.reduce((sum, s) => sum + s.pieces, 0);
+
+    res.json({
+      success: true,
+      lot: {
+        lot_no: cuttingLot.lot_no,
+        sku: cuttingLot.sku,
+        cutting_remark: cuttingLot.remark,
+        cutting_master: cuttingLot.cutting_master_name,
+        cutting_date: cuttingLot.created_at,
+        flow_type: cuttingLot.flow_type,
+        fabric_type: cuttingLot.fabric_type
+      },
+      cutting: { sizes: cuttingSizes, total_pieces: totalCutPieces },
+      assembly: {
+        data_id: assemblyData?.id,
+        sizes: assemblySizes,
+        total_pieces: totalAssembledPieces,
+        pending_pieces: totalCutPieces - totalAssembledPieces,
+        created_at: assemblyData?.created_at
+      },
+      payment: {
+        total_paid: paymentInfo?.total_paid || 0,
+        payment_count: paymentInfo?.payment_count || 0,
+        pending_amount: pendingPayment?.pending_amount || 0
+      }
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /lot-details =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jeansassemblydashboard/history-download
+router.get('/history-download', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let query = `
+      SELECT jad.lot_no, jad.sku, jad.total_pieces, jad.created_at,
+             cl.remark as cutting_remark, cl.fabric_type,
+             COALESCE(pay.total_paid, 0) as total_paid
+      FROM jeans_assembly_data jad
+      LEFT JOIN cutting_lots cl ON jad.lot_no = cl.lot_no
+      LEFT JOIN (
+        SELECT lot_no, SUM(amount) as total_paid
+        FROM stage_payments WHERE user_id = ? AND stage = 'jeans_assembly' AND status = 'approved'
+        GROUP BY lot_no
+      ) pay ON jad.lot_no = pay.lot_no
+      WHERE jad.user_id = ?
+    `;
+    const params = [userId, userId];
+
+    if (startDate) { query += ` AND DATE(jad.created_at) >= ?`; params.push(startDate); }
+    if (endDate) { query += ` AND DATE(jad.created_at) <= ?`; params.push(endDate); }
+    query += ` ORDER BY jad.created_at DESC`;
+
+    const [rows] = await pool.query(query, params);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Jeans Assembly History');
+
+    sheet.columns = [
+      { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'SKU', key: 'sku', width: 20 },
+      { header: 'Pieces', key: 'total_pieces', width: 10 },
+      { header: 'Cutting Remark', key: 'cutting_remark', width: 30 },
+      { header: 'Fabric Type', key: 'fabric_type', width: 15 },
+      { header: 'Payment (₹)', key: 'total_paid', width: 12 },
+      { header: 'Date', key: 'created_at', width: 18 }
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    rows.forEach(row => {
+      sheet.addRow({
+        lot_no: row.lot_no,
+        sku: row.sku,
+        total_pieces: row.total_pieces,
+        cutting_remark: row.cutting_remark || '-',
+        fabric_type: row.fabric_type || '-',
+        total_paid: row.total_paid,
+        created_at: row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : '-'
+      });
+    });
+
+    const filename = `jeans_assembly_history_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /history-download =>', err);
     return res.status(500).json({ error: err.message });
   }
 });

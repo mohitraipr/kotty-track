@@ -6,6 +6,7 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isWashingMaster } = require('../middlewares/auth');
+const { createStagePayment } = require('../utils/stagePaymentHelper');
 
 // MULTER SETUP
 const storage = multer.diskStorage({
@@ -709,95 +710,10 @@ router.get('/list-entries', isAuthenticated, isWashingMaster, async (req, res) =
 });
 
 /*-----------------------------------------
-  2) APPROVAL ROUTES: washing_assignments
+  2) OLD APPROVAL ROUTES REMOVED (2026-04-23)
+  Now using self-assign flow: /available-lots + /submit
+  See git history if rollback needed
 -----------------------------------------*/
-
-router.get('/approve', isAuthenticated, isWashingMaster, (req, res) => {
-  res.render('washingApprove', { user: req.session.user });
-});
-
-// GET /washingdashboard/approve/list
-// GET /washingdashboard/approve/list
-router.get('/approve/list', isAuthenticated, isWashingMaster, async (req, res) => {
-  try {
-    const userId     = req.session.user.id;
-    const searchTerm = req.query.search || '';
-    const searchLike = `%${searchTerm}%`;
-
-    const [rows] = await pool.query(`
-      SELECT
-        wa.id            AS assignment_id,
-        wa.sizes_json,
-        wa.assigned_on,
-        wa.is_approved,
-        wa.assignment_remark,
-
-        jd.lot_no,
-        jd.sku,
-        jd.total_pieces,
-
-        cl.remark       AS cutting_remark
-      FROM washing_assignments wa
-      JOIN jeans_assembly_data jd
-        ON wa.jeans_assembly_assignment_id = jd.id
-      LEFT JOIN cutting_lots cl
-        ON cl.lot_no = jd.lot_no
-      WHERE wa.user_id    = ?
-        AND wa.is_approved IS NULL
-        AND ( jd.lot_no LIKE ? OR jd.sku LIKE ? )
-      ORDER BY wa.assigned_on DESC
-    `, [userId, searchLike, searchLike]);
-
-    return res.json({ data: rows });
-  } catch (err) {
-    console.error('[ERROR] GET /washingdashboard/approve/list =>', err);
-    return res.status(500).json({ error: 'Could not load assignments: ' + err.message });
-  }
-});
-
-
-// POST /washingdashboard/approve-lot
-router.post('/approve-lot', isAuthenticated, isWashingMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const { assignment_id } = req.body;
-    if (!assignment_id) {
-      return res.status(400).json({ error: 'No assignment_id provided.' });
-    }
-    await pool.query(`
-      UPDATE washing_assignments
-      SET is_approved = 1,approved_on = NOW(), assignment_remark = NULL
-      WHERE id = ? AND user_id = ?
-    `, [assignment_id, userId]);
-    return res.json({ success: true, message: 'Assignment approved successfully!' });
-  } catch (error) {
-    console.error('[ERROR] POST /washingdashboard/approve-lot =>', error);
-    return res.status(500).json({ error: 'Error approving assignment: ' + error.message });
-  }
-});
-
-// POST /washingdashboard/deny-lot
-router.post('/deny-lot', isAuthenticated, isWashingMaster, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const { assignment_id, denial_remark } = req.body;
-    if (!assignment_id) {
-      return res.status(400).json({ error: 'No assignment_id provided.' });
-    }
-    if (!denial_remark || !denial_remark.trim()) {
-      return res.status(400).json({ error: 'You must provide a remark for denial.' });
-    }
-    await pool.query(`
-      UPDATE washing_assignments
-      SET is_approved = 0,approved_on = NOW(), assignment_remark = ?
-      WHERE id = ? AND user_id = ?
-    `, [denial_remark.trim(), assignment_id, userId]);
-    return res.json({ success: true, message: 'Assignment denied successfully.' });
-  } catch (error) {
-    console.error('[ERROR] POST /washingdashboard/deny-lot =>', error);
-    return res.status(500).json({ error: 'Error denying assignment: ' + error.message });
-  }
-});
 
 /*-----------------------------------------
   3) ASSIGN TO "WASHING_IN"
@@ -1017,6 +933,285 @@ router.get('/create/assignable-users', isAuthenticated, isWashingMaster, async (
     return res.json({ data: rows });
   } catch (err) {
     console.error('[ERROR] GET /washingdashboard/create/assignable-users =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/*-----------------------------------------
+  SELF-ASSIGN FLOW (Stitching-style)
+  Worker picks available lot + submits in one step
+-----------------------------------------*/
+
+// GET /washingdashboard/available-lots
+// Shows denim lots with jeans_assembly_data that haven't been fully washed
+router.get('/available-lots', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+
+    // Find jeans_assembly_data records where:
+    // 1. flow_type is denim (or cutter is_denim_cutter = 1)
+    // 2. Has remaining pieces not yet washed
+    const [rows] = await pool.query(`
+      SELECT
+        jad.id,
+        jad.lot_no,
+        jad.sku,
+        jad.total_pieces,
+        jad.created_at,
+        cl.remark AS cutting_remark,
+        jad.total_pieces - COALESCE((
+          SELECT SUM(wd.total_pieces)
+          FROM washing_data wd
+          WHERE wd.lot_no = jad.lot_no
+        ), 0) AS remaining_pieces,
+        u.username AS assembly_master
+      FROM jeans_assembly_data jad
+      LEFT JOIN users u ON jad.user_id = u.id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = jad.lot_no
+      WHERE (jad.lot_no LIKE ? OR jad.sku LIKE ? OR cl.remark LIKE ?)
+        AND (
+          cl.flow_type = 'denim'
+          OR EXISTS (
+            SELECT 1 FROM users cu
+            WHERE cu.id = cl.user_id AND cu.is_denim_cutter = 1
+          )
+          OR jad.lot_no REGEXP '^(AK|UM)'
+        )
+      HAVING remaining_pieces > 0
+      ORDER BY jad.created_at DESC
+      LIMIT 50
+    `, [search, search, search]);
+
+    return res.json({ data: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /washingdashboard/available-lots =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingdashboard/available-lot-sizes/:lotId
+// Get sizes for a specific assembly lot with remaining counts for washing
+router.get('/available-lot-sizes/:lotId', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const lotId = req.params.lotId;
+
+    const [[jad]] = await pool.query(`SELECT * FROM jeans_assembly_data WHERE id = ?`, [lotId]);
+    if (!jad) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        jads.id,
+        jads.size_label,
+        jads.pieces,
+        jads.pieces - COALESCE((
+          SELECT SUM(wds.pieces)
+          FROM washing_data_sizes wds
+          JOIN washing_data wd ON wds.washing_data_id = wd.id
+          WHERE wd.lot_no = ? AND wds.size_label = jads.size_label
+        ), 0) AS remain
+      FROM jeans_assembly_data_sizes jads
+      WHERE jads.jeans_assembly_data_id = ?
+    `, [jad.lot_no, lotId]);
+
+    return res.json(rows.map(r => ({
+      id: r.id,
+      size_label: r.size_label,
+      pieces: r.pieces,
+      remain: r.remain < 0 ? 0 : r.remain
+    })));
+  } catch (err) {
+    console.error('[ERROR] GET /washingdashboard/available-lot-sizes/:lotId =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingdashboard/submit
+// Self-assign + complete washing in one step (stitching-style flow)
+router.post('/submit', isAuthenticated, isWashingMaster, upload.single('image_file'), async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+    const { selectedLotId, remark } = req.body;
+    const sizesObj = req.body.sizes || {};
+
+    let image_url = null;
+    if (req.file) {
+      image_url = '/uploads/' + req.file.filename;
+    }
+
+    // Calculate total pieces
+    let grandTotal = 0;
+    for (const sizeId of Object.keys(sizesObj)) {
+      const countVal = parseInt(sizesObj[sizeId], 10);
+      if (!isNaN(countVal) && countVal > 0) {
+        grandTotal += countVal;
+      }
+    }
+    if (grandTotal <= 0) {
+      return res.status(400).json({ error: 'No pieces requested.' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1) Get jeans_assembly_data
+    const [[jad]] = await conn.query(`SELECT * FROM jeans_assembly_data WHERE id = ?`, [selectedLotId]);
+    if (!jad) {
+      await conn.rollback();
+      conn.release();
+      return res.status(400).json({ error: 'Invalid lot selection.' });
+    }
+
+    // 2) Validate sizes against available pieces
+    const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(Boolean);
+    const [sizeRows] = await conn.query(
+      `SELECT id, size_label, pieces FROM jeans_assembly_data_sizes WHERE id IN (?)`,
+      [sizeIds.length ? sizeIds : [0]]
+    );
+    const sizeMap = {};
+    for (const row of sizeRows) sizeMap[row.id] = row;
+
+    const sizeLabels = sizeRows.map(r => r.size_label);
+    const [usedRows] = await conn.query(
+      `SELECT wds.size_label, COALESCE(SUM(wds.pieces), 0) AS usedCount
+       FROM washing_data_sizes wds
+       JOIN washing_data wd ON wds.washing_data_id = wd.id
+       WHERE wd.lot_no = ? AND wds.size_label IN (?)
+       GROUP BY wds.size_label`,
+      [jad.lot_no, sizeLabels.length ? sizeLabels : ['']]
+    );
+    const usedMap = {};
+    for (const row of usedRows) usedMap[row.size_label] = row.usedCount;
+
+    for (const sizeId of sizeIds) {
+      const row = sizeMap[sizeId];
+      if (!row) continue;
+      const requested = parseInt(sizesObj[sizeId], 10) || 0;
+      if (requested === 0) continue;
+      const used = usedMap[row.size_label] || 0;
+      const remain = row.pieces - used;
+      if (requested > remain) {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({ error: `Requested ${requested} for ${row.size_label}, but only ${remain} remain.` });
+      }
+    }
+
+    // 3) Get assembly master info for payment (directly from jeans_assembly_data.user_id)
+    const [[jadAssignment]] = await conn.query(`
+      SELECT jad2.user_id AS assembly_master_id, u.username AS assembly_master_username
+      FROM jeans_assembly_data jad2
+      JOIN users u ON jad2.user_id = u.id
+      WHERE jad2.id = ?
+    `, [jad.id]);
+
+    // 4) Create washing_assignments record (auto-approved)
+    const sizesJson = JSON.stringify(sizeRows.filter(r => parseInt(sizesObj[r.id], 10) > 0).map(r => ({
+      size_label: r.size_label,
+      pieces: parseInt(sizesObj[r.id], 10)
+    })));
+
+    const [assignResult] = await conn.query(`
+      INSERT INTO washing_assignments
+        (jeans_assembly_master_id, user_id, jeans_assembly_assignment_id, assigned_on, sizes_json, is_approved, approved_on)
+      VALUES (?, ?, ?, NOW(), ?, 1, NOW())
+    `, [jadAssignment?.assembly_master_id || null, userId, jad.id, sizesJson]);
+
+    // 5) Insert washing_data
+    const [dataResult] = await conn.query(`
+      INSERT INTO washing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `, [userId, jad.lot_no, jad.sku, grandTotal, remark || null, image_url]);
+    const newId = dataResult.insertId;
+
+    // 6) Insert washing_data_sizes
+    for (const sizeId of sizeIds) {
+      const numVal = parseInt(sizesObj[sizeId], 10) || 0;
+      if (numVal <= 0) continue;
+      const sds = sizeMap[sizeId];
+      await conn.query(
+        `INSERT INTO washing_data_sizes (washing_data_id, size_label, pieces, created_at)
+         VALUES (?, ?, ?, NOW())`,
+        [newId, sds.size_label, numVal]
+      );
+    }
+
+    // 7) Auto-create assembly payment
+    if (jadAssignment) {
+      await createStagePayment('assembly', {
+        lot_no: jad.lot_no,
+        sku: jad.sku,
+        qty: grandTotal,
+        user_id: jadAssignment.assembly_master_id,
+        username: jadAssignment.assembly_master_username
+      });
+    }
+
+    await conn.commit();
+    conn.release();
+
+    return res.json({
+      success: true,
+      message: 'Washing entry created successfully!',
+      washingDataId: newId
+    });
+  } catch (err) {
+    console.error('[ERROR] POST /washingdashboard/submit =>', err);
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    return res.status(500).json({ error: 'Error creating washing data: ' + err.message });
+  }
+});
+
+// GET /washingdashboard/my-today - Today's entries for current user
+router.get('/my-today', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [rows] = await pool.query(`
+      SELECT id, lot_no, sku, total_pieces, created_at
+      FROM washing_data
+      WHERE user_id = ? AND DATE(created_at) = CURDATE()
+      ORDER BY created_at DESC
+    `, [userId]);
+
+    const totalToday = rows.reduce((sum, r) => sum + r.total_pieces, 0);
+
+    return res.json({
+      entries: rows,
+      total_pieces: totalToday,
+      count: rows.length
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /my-today =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /washingdashboard/my-entries - Paginated history
+router.get('/my-entries', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = 20;
+    const search = req.query.search ? `%${req.query.search}%` : '%';
+
+    const [rows] = await pool.query(`
+      SELECT id, lot_no, sku, total_pieces, created_at
+      FROM washing_data
+      WHERE user_id = ? AND (lot_no LIKE ? OR sku LIKE ?)
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, search, search, limit, offset]);
+
+    return res.json({ entries: rows });
+  } catch (err) {
+    console.error('[ERROR] GET /my-entries =>', err);
     return res.status(500).json({ error: err.message });
   }
 });

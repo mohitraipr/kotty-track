@@ -121,26 +121,67 @@ router.get('/rates/template', isAuthenticated, isOperator, async (req, res) => {
 
 // Add/update single rate
 router.post('/rates', isAuthenticated, isOperator, async (req, res) => {
-  const { sku, stage, rate } = req.body;
+  const { sku, stage, rate, redirect } = req.body;
+  const redirectUrl = redirect || '/operator/payments/rates';
 
   if (!sku || !stage || !STAGES.includes(stage)) {
     req.flash('error', 'Invalid SKU or stage');
-    return res.redirect('/operator/payments/rates');
+    return res.redirect(redirectUrl);
   }
 
   try {
+    const skuUpper = sku.trim().toUpperCase();
+    const rateValue = parseFloat(rate) || 0;
+
     await pool.query(
       `INSERT INTO stage_rates (sku, stage, rate, created_by)
        VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE rate = VALUES(rate), updated_at = NOW()`,
-      [sku.trim().toUpperCase(), stage, parseFloat(rate) || 0, req.session.user.id]
+      [skuUpper, stage, rateValue, req.session.user.id]
     );
-    req.flash('success', `Rate saved for ${sku} - ${stage}`);
+
+    // Update any pending payments with rate_configured = 0 for this SKU+stage
+    const [pendingPayments] = await pool.query(
+      `SELECT id, qty FROM stage_payments
+       WHERE sku = ? AND stage = ? AND status = 'pending' AND rate_configured = 0`,
+      [skuUpper, stage]
+    );
+
+    if (pendingPayments.length > 0) {
+      // Get extra rates for this SKU+stage
+      const [extraRates] = await pool.query(
+        `SELECT extra_name, rate FROM stage_extra_rates WHERE sku = ? AND stage = ?`,
+        [skuUpper, stage]
+      );
+
+      for (const p of pendingPayments) {
+        let extraAmount = 0;
+        let extraRatesJson = null;
+
+        if (extraRates.length > 0) {
+          const extras = extraRates.map(e => ({ name: e.extra_name, rate: parseFloat(e.rate) }));
+          extraRatesJson = JSON.stringify(extras);
+          extraAmount = extras.reduce((sum, e) => sum + (e.rate * p.qty), 0);
+        }
+
+        const totalAmount = (rateValue * p.qty) + extraAmount;
+
+        await pool.query(
+          `UPDATE stage_payments
+           SET base_rate = ?, extra_rates_json = ?, extra_amount = ?, total_amount = ?, rate_configured = 1, updated_at = NOW()
+           WHERE id = ?`,
+          [rateValue, extraRatesJson, extraAmount, totalAmount, p.id]
+        );
+      }
+      req.flash('success', `Rate saved. Updated ${pendingPayments.length} pending payments.`);
+    } else {
+      req.flash('success', `Rate saved for ${sku} - ${stage}`);
+    }
   } catch (err) {
     console.error('Error saving rate:', err);
     req.flash('error', 'Failed to save rate');
   }
-  res.redirect('/operator/payments/rates');
+  res.redirect(redirectUrl);
 });
 
 // Upload rates via Excel
@@ -555,6 +596,73 @@ router.post('/mark-paid', isAuthenticated, isOperator, async (req, res) => {
   res.redirect('/operator/payments/pending');
 });
 
+// Edit payment (operator)
+router.post('/edit/:id', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    const { qty, base_rate } = req.body;
+
+    // Get payment details
+    const [[payment]] = await pool.query(
+      'SELECT * FROM stage_payments WHERE id = ? AND status = ?',
+      [paymentId, 'pending']
+    );
+
+    if (!payment) {
+      req.flash('error', 'Payment not found or already processed');
+      return res.redirect('/operator/payments/pending');
+    }
+
+    // Calculate extra amount from existing extra_rates_json
+    let extraAmount = 0;
+    if (payment.extra_rates_json) {
+      try {
+        const extraRates = JSON.parse(payment.extra_rates_json);
+        extraAmount = extraRates.reduce((sum, e) => sum + (parseFloat(e.rate) * parseInt(qty)), 0);
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    }
+
+    const totalAmount = (parseFloat(base_rate) * parseInt(qty)) + extraAmount;
+
+    await pool.query(
+      `UPDATE stage_payments
+       SET qty = ?, base_rate = ?, extra_amount = ?, total_amount = ?, rate_configured = 1, updated_at = NOW()
+       WHERE id = ?`,
+      [qty, base_rate, extraAmount, totalAmount, paymentId]
+    );
+
+    req.flash('success', 'Payment updated successfully');
+  } catch (err) {
+    console.error('Error editing payment:', err);
+    req.flash('error', 'Failed to update payment');
+  }
+  res.redirect('/operator/payments/pending');
+});
+
+// Cancel payment (operator)
+router.post('/cancel/:id', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+
+    const [result] = await pool.query(
+      `UPDATE stage_payments SET status = 'cancelled', updated_at = NOW() WHERE id = ? AND status = 'pending'`,
+      [paymentId]
+    );
+
+    if (result.affectedRows > 0) {
+      req.flash('success', 'Payment cancelled');
+    } else {
+      req.flash('error', 'Payment not found or already processed');
+    }
+  } catch (err) {
+    console.error('Error cancelling payment:', err);
+    req.flash('error', 'Failed to cancel payment');
+  }
+  res.redirect('/operator/payments/pending');
+});
+
 // Payment history
 router.get('/history', isAuthenticated, isOperator, async (req, res) => {
   try {
@@ -776,7 +884,8 @@ router.post('/debits/reject/:id', isAuthenticated, isOperator, async (req, res) 
 // Check if user has worker role
 function isWorker(req, res, next) {
   const role = req.session.user?.roleName;
-  if (['stitching_master', 'washing_master', 'supervisor', 'finishing'].includes(role)) {
+  // Allow workers who get piece-rate payments
+  if (['cutting_manager', 'stitching_master', 'washing', 'washing_in', 'finishing', 'jeans_assembly', 'supervisor'].includes(role)) {
     return next();
   }
   req.flash('error', 'Access denied');
@@ -806,11 +915,12 @@ router.get('/my-payments', isAuthenticated, isWorker, async (req, res) => {
       [userId, 'approved']
     );
 
-    // Calculate summaries
+    // Calculate summaries (only include rate_configured payments in totals)
     const summary = {
-      pending: payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + parseFloat(p.total_amount), 0),
+      pending: payments.filter(p => p.status === 'pending' && p.rate_configured).reduce((sum, p) => sum + parseFloat(p.total_amount), 0),
       paid: payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + parseFloat(p.total_amount), 0),
-      debits: debits.reduce((sum, d) => sum + parseFloat(d.amount), 0)
+      debits: debits.reduce((sum, d) => sum + parseFloat(d.amount), 0),
+      unconfigured: payments.filter(p => !p.rate_configured).length
     };
 
     res.render('myPayments', {
