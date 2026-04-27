@@ -12,6 +12,8 @@ const { isAuthenticated, isMohitOperator, isVideoFinder } = require('../middlewa
 const {
   findVideosByAwb,
   findVideoByAwb,
+  findVideosByAwbFromCache,
+  preloadAllVideos,
   getVideosForDate,
   deleteObject,
   generatePresignedUrl,
@@ -48,6 +50,7 @@ function checkMohitOperator(req) {
 // Main video finder page
 router.get('/', isAuthenticated, allowVideoFinderAccess, (req, res) => {
   res.render('videoFinder', {
+    user: req.session.user,
     results: [],
     searchQuery: '',
     dateFilter: '',
@@ -160,10 +163,8 @@ router.get('/api/keyword', isAuthenticated, allowVideoFinderAccess, async (req, 
   }
 });
 
-// Bulk search via Excel upload
+// Bulk search via Excel upload (optimized with pre-loading)
 router.post('/bulk-search', isAuthenticated, allowVideoFinderAccess, upload.single('awbFile'), async (req, res) => {
-  const isMohit = checkMohitOperator(req);
-
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -174,12 +175,25 @@ router.post('/bulk-search', isAuthenticated, allowVideoFinderAccess, upload.sing
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
-    // Extract AWBs from first column
+    // Extract AWBs - check common column names
     const awbs = [];
-    for (const row of data) {
-      if (row[0]) {
-        const val = String(row[0]).trim().toUpperCase();
-        if (val && val !== 'AWB' && val !== 'FWD AWB' && val !== 'TRACKING') {
+    const headerRow = data[0] || [];
+    let awbColIndex = 0;
+
+    // Find AWB column by header name
+    for (let i = 0; i < headerRow.length; i++) {
+      const h = String(headerRow[i] || '').toUpperCase().trim();
+      if (h === 'AWB' || h === 'FWD AWB' || h === 'TRACKING' || h.includes('AWB')) {
+        awbColIndex = i;
+        break;
+      }
+    }
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row && row[awbColIndex]) {
+        const val = String(row[awbColIndex]).trim().toUpperCase();
+        if (val) {
           awbs.push(val);
         }
       }
@@ -189,8 +203,16 @@ router.post('/bulk-search', isAuthenticated, allowVideoFinderAccess, upload.sing
       return res.status(400).json({ error: 'No AWB numbers found in file' });
     }
 
-    // Search S3
-    const hits = await findVideosByAwb(awbs);
+    // For large lists, use pre-loading optimization
+    let hits;
+    if (awbs.length > 500) {
+      console.log(`Bulk search: Pre-loading videos for ${awbs.length} AWBs`);
+      const preloadedVideos = await preloadAllVideos(14);
+      console.log(`Pre-loaded ${preloadedVideos.length} videos`);
+      hits = await findVideosByAwbFromCache(awbs, preloadedVideos);
+    } else {
+      hits = await findVideosByAwb(awbs);
+    }
 
     const results = awbs.map((awb) => {
       const hit = hits.get(awb);
@@ -263,6 +285,7 @@ router.get('/url', isAuthenticated, allowVideoFinderAccess, async (req, res) => 
 
 // Chunked bulk search with Server-Sent Events (SSE) for progress
 // Use this for large searches (>500 AWBs)
+// OPTIMIZED: Pre-loads all S3 video listings once, then processes chunks against cache
 router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async (req, res) => {
   // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -274,10 +297,10 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  // Keep-alive ping every 15 seconds to prevent timeout
+  // Keep-alive ping every 10 seconds to prevent timeout
   const keepAlive = setInterval(() => {
     res.write(': keep-alive\n\n');
-  }, 15000);
+  }, 10000);
 
   // Track if client disconnects
   let clientDisconnected = false;
@@ -300,14 +323,34 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
     }
 
     const total = awbs.length;
-    sendEvent('start', { total, chunkSize: CHUNK_SIZE });
+    const totalChunks = Math.ceil(awbs.length / CHUNK_SIZE);
+    sendEvent('start', { total, chunkSize: CHUNK_SIZE, message: 'Loading video index...' });
+
+    // Pre-load ALL videos from S3 (last 14 days) - this is the key optimization
+    // Instead of re-listing folders for each chunk, we list once and reuse
+    const preloadedVideos = await preloadAllVideos(14);
+    console.log(`Pre-loaded ${preloadedVideos.length} videos for bulk search of ${total} AWBs`);
+
+    if (clientDisconnected) {
+      clearInterval(keepAlive);
+      return res.end();
+    }
+
+    sendEvent('progress', {
+      processed: 0,
+      total,
+      percent: 0,
+      chunk: 0,
+      totalChunks,
+      found: 0,
+      message: `Video index loaded (${preloadedVideos.length} files). Searching...`,
+    });
 
     const allResults = [];
     let foundCount = 0;
 
-    // Process in chunks
+    // Process in chunks against the cached video list
     for (let i = 0; i < awbs.length; i += CHUNK_SIZE) {
-      // Check if client disconnected
       if (clientDisconnected) {
         console.log('Client disconnected, stopping search');
         break;
@@ -315,19 +358,9 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
 
       const chunk = awbs.slice(i, i + CHUNK_SIZE);
       const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
-      const totalChunks = Math.ceil(awbs.length / CHUNK_SIZE);
 
-      sendEvent('progress', {
-        processed: Math.min(i + chunk.length, total),
-        total,
-        percent: Math.round(((i + chunk.length) / total) * 100),
-        chunk: chunkNum,
-        totalChunks,
-        found: foundCount,
-      });
-
-      // Search this chunk
-      const hits = await findVideosByAwb(chunk);
+      // Search this chunk against pre-loaded cache (much faster)
+      const hits = await findVideosByAwbFromCache(chunk, preloadedVideos);
 
       // Build results for this chunk
       const chunkResults = chunk.map((awb) => {
@@ -354,6 +387,15 @@ router.get('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async 
       }
 
       allResults.push(...chunkResults);
+
+      sendEvent('progress', {
+        processed: Math.min(i + chunk.length, total),
+        total,
+        percent: Math.round(((i + chunk.length) / total) * 100),
+        chunk: chunkNum,
+        totalChunks,
+        found: foundCount,
+      });
     }
 
     // Send completion (only if client still connected)

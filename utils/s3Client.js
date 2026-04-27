@@ -172,6 +172,57 @@ async function findVideosByAwb(awbList, packingDatesMap = {}) {
 }
 
 /**
+ * Pre-load all video objects from date folders (for bulk searches)
+ * Returns array of all objects across all folders
+ */
+async function preloadAllVideos(searchDays = 14) {
+  const folders = getCandidateFolders([], searchDays);
+  const allObjects = [];
+
+  for (const folder of folders) {
+    const objects = await listObjects(folder);
+    allObjects.push(...objects);
+  }
+
+  return allObjects;
+}
+
+/**
+ * Search for videos by AWB using pre-loaded objects (optimized for bulk)
+ * @param {string[]} awbList - List of AWBs to search
+ * @param {Object[]} preloadedObjects - Pre-loaded S3 objects from preloadAllVideos()
+ * Returns a Map of AWB -> { key, url, size, lastModified }
+ */
+async function findVideosByAwbFromCache(awbList, preloadedObjects) {
+  if (!awbList || !awbList.length) return new Map();
+
+  const awbSet = new Set(awbList.map((awb) => awb.toUpperCase().trim()).filter(Boolean));
+  const hits = new Map();
+
+  for (const obj of preloadedObjects) {
+    if (awbSet.size === 0) break; // All found
+
+    const keyUpper = obj.key.toUpperCase();
+
+    for (const awb of awbSet) {
+      if (keyUpper.includes(awb)) {
+        const url = await generatePresignedUrl(obj.key);
+        hits.set(awb, {
+          key: obj.key,
+          url,
+          size: obj.size,
+          lastModified: obj.lastModified,
+        });
+        awbSet.delete(awb);
+        break;
+      }
+    }
+  }
+
+  return hits;
+}
+
+/**
  * Search for a single AWB
  */
 async function findVideoByAwb(awb, packingDate = null) {
@@ -227,6 +278,8 @@ module.exports = {
   deleteObject,
   findVideosByAwb,
   findVideoByAwb,
+  findVideosByAwbFromCache,
+  preloadAllVideos,
   getVideosForDate,
   getCandidateFolders,
   formatFileSize,
