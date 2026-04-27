@@ -1,0 +1,257 @@
+<%- include('partials/header', { pageTitle: 'Rejected Lots Report' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/' }) %>
+
+<style>
+  .page-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 16px;
+    padding-top: calc(60px + 24px);
+  }
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  .filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+  }
+  .filter-select, .filter-input {
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    min-width: 140px;
+  }
+  .filter-select:focus, .filter-input:focus {
+    outline: none;
+    border-color: #2563eb;
+  }
+  .btn-filter {
+    padding: 10px 20px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-end;
+  }
+  .btn-filter:hover {
+    background: #1d4ed8;
+  }
+  .table-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .data-table th {
+    background: #f8fafc;
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  .data-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9375rem;
+    color: #1e293b;
+  }
+  .data-table tr:hover {
+    background: #f8fafc;
+  }
+  .stage-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .stage-stitching { background: #dbeafe; color: #1e40af; }
+  .stage-assembly { background: #fef3c7; color: #92400e; }
+  .stage-washing { background: #d1fae5; color: #065f46; }
+  .stage-washing-in { background: #e0e7ff; color: #3730a3; }
+  .stage-finishing { background: #fce7f3; color: #9d174d; }
+  .lot-no {
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .rejection-reason {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #dc2626;
+    font-style: italic;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+  }
+  .empty-state i {
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: 16px;
+  }
+  .summary-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .summary-card {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: 10px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 150px;
+    text-align: center;
+  }
+  .summary-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #dc2626;
+  }
+  .summary-label {
+    font-size: 0.8rem;
+    color: #991b1b;
+    margin-top: 4px;
+  }
+  @media (max-width: 768px) {
+    .data-table { font-size: 0.8125rem; }
+    .data-table th, .data-table td { padding: 10px 12px; }
+    .filters { flex-direction: column; }
+    .filter-group { width: 100%; }
+    .filter-select, .filter-input { width: 100%; }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title"><i class="bi bi-x-circle text-danger"></i> Rejected Lots Report</h1>
+  </div>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div style="background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-bottom: 20px; color: #991b1b;">
+      <strong>Error:</strong> <%= error %>
+    </div>
+  <% } %>
+
+  <form method="GET" action="/dashboard/rejected-lots">
+    <div class="filters">
+      <div class="filter-group">
+        <label class="filter-label">Stage</label>
+        <select name="stage" class="filter-select">
+          <option value="all" <%= stage === 'all' ? 'selected' : '' %>>All Stages</option>
+          <option value="stitching" <%= stage === 'stitching' ? 'selected' : '' %>>Stitching</option>
+          <option value="assembly" <%= stage === 'assembly' ? 'selected' : '' %>>Assembly</option>
+          <option value="washing" <%= stage === 'washing' ? 'selected' : '' %>>Washing</option>
+          <option value="washing_in" <%= stage === 'washing_in' ? 'selected' : '' %>>Washing-In</option>
+          <option value="finishing" <%= stage === 'finishing' ? 'selected' : '' %>>Finishing</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Search Lot/SKU</label>
+        <input type="text" name="search" class="filter-input" placeholder="e.g. AK1" value="<%= search %>">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Last N Days</label>
+        <select name="days" class="filter-select">
+          <option value="7" <%= days == 7 ? 'selected' : '' %>>Last 7 days</option>
+          <option value="30" <%= days == 30 ? 'selected' : '' %>>Last 30 days</option>
+          <option value="90" <%= days == 90 ? 'selected' : '' %>>Last 90 days</option>
+          <option value="365" <%= days == 365 ? 'selected' : '' %>>Last year</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-filter"><i class="bi bi-funnel"></i> Filter</button>
+    </div>
+  </form>
+
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="summary-number"><%= rejectedLots.length %></div>
+      <div class="summary-label">Total Rejections</div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <% if (rejectedLots.length === 0) { %>
+      <div class="empty-state">
+        <i class="bi bi-check-circle"></i>
+        <p>No rejected lots found</p>
+        <small>Try changing your filters</small>
+      </div>
+    <% } else { %>
+      <div style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Pieces</th>
+              <th>Rejected On</th>
+              <th>Assigned To</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% rejectedLots.forEach(lot => { %>
+              <tr>
+                <td>
+                  <span class="stage-badge stage-<%= lot.stage.toLowerCase().replace('-', '') %>">
+                    <%= lot.stage %>
+                  </span>
+                </td>
+                <td class="lot-no"><%= lot.lot_no ? lot.lot_no.toUpperCase() : '-' %></td>
+                <td><%= lot.sku || '-' %></td>
+                <td><%= lot.total_pieces || '-' %></td>
+                <td><%= lot.rejected_on ? new Date(lot.rejected_on).toLocaleDateString('en-IN') : '-' %></td>
+                <td><%= lot.assigned_to || '-' %></td>
+                <td class="rejection-reason" title="<%= lot.rejection_reason || '' %>">
+                  <%= lot.rejection_reason || '-' %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -431,12 +431,30 @@
             </div>
             <div class="col-md-6">
               <label for="vendor_id" class="form-label">Vendor <span class="text-danger">*</span></label>
-              <select class="form-select" id="vendor_id" name="vendor_id" required>
-                <option value="">Select Vendor</option>
-                <% vendors.forEach(vendor => { %>
-                  <option value="<%= vendor.id %>"><%= vendor.name %></option>
-                <% }) %>
-              </select>
+              <div class="input-group">
+                <select class="form-select" id="vendor_id" name="vendor_id" required>
+                  <option value="">Select Vendor</option>
+                  <% vendors.forEach(vendor => { %>
+                    <option value="<%= vendor.id %>"><%= vendor.name %></option>
+                  <% }) %>
+                </select>
+                <button type="button" class="btn btn-outline-success" id="addVendorBtn" title="Add New Vendor">
+                  <i class="bi bi-plus-lg"></i>
+                </button>
+              </div>
+              <!-- Hidden new vendor input (shown when adding) -->
+              <div id="newVendorGroup" style="display: none; margin-top: 8px;">
+                <div class="input-group">
+                  <input type="text" class="form-control" id="newVendorName" placeholder="Enter new vendor name">
+                  <button type="button" class="btn btn-success" id="saveVendorBtn" title="Save Vendor">
+                    <i class="bi bi-check-lg"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary" id="cancelVendorBtn" title="Cancel">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                <small class="text-muted">Type vendor name and click save</small>
+              </div>
             </div>
             <div class="col-md-6">
               <label for="date_invoice" class="form-label">Date Invoice <span class="text-danger">*</span></label>
@@ -582,5 +600,102 @@
     </div>
   </div>
 </div>
+
+<script>
+// Add New Vendor functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const vendorSelect = document.getElementById('vendor_id');
+  const addVendorBtn = document.getElementById('addVendorBtn');
+  const newVendorGroup = document.getElementById('newVendorGroup');
+  const newVendorName = document.getElementById('newVendorName');
+  const saveVendorBtn = document.getElementById('saveVendorBtn');
+  const cancelVendorBtn = document.getElementById('cancelVendorBtn');
+
+  // Show new vendor input
+  addVendorBtn.addEventListener('click', function() {
+    vendorSelect.parentElement.style.display = 'none';
+    newVendorGroup.style.display = 'block';
+    newVendorName.focus();
+  });
+
+  // Cancel - go back to select
+  cancelVendorBtn.addEventListener('click', function() {
+    newVendorGroup.style.display = 'none';
+    vendorSelect.parentElement.style.display = 'flex';
+    newVendorName.value = '';
+  });
+
+  // Save new vendor
+  saveVendorBtn.addEventListener('click', async function() {
+    const name = newVendorName.value.trim();
+    if (!name) {
+      alert('Please enter a vendor name');
+      newVendorName.focus();
+      return;
+    }
+
+    saveVendorBtn.disabled = true;
+    const originalIcon = saveVendorBtn.querySelector('i');
+    originalIcon.className = 'spinner-border spinner-border-sm';
+
+    try {
+      const res = await fetch('/fabric-manager/vendor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      // Add new option to select and select it
+      const option = document.createElement('option');
+      option.value = data.id;
+      option.textContent = data.name;
+      option.selected = true;
+      vendorSelect.appendChild(option);
+
+      // Sort options alphabetically (keep "Select Vendor" first)
+      const options = Array.from(vendorSelect.options);
+      const firstOption = options.shift();
+      options.sort((a, b) => a.text.localeCompare(b.text));
+      while (vendorSelect.firstChild) vendorSelect.removeChild(vendorSelect.firstChild);
+      vendorSelect.appendChild(firstOption);
+      options.forEach(opt => vendorSelect.appendChild(opt));
+
+      // Select the new vendor
+      vendorSelect.value = data.id;
+
+      // Show success message
+      if (data.existing) {
+        alert('Vendor "' + data.name + '" already exists - selected it');
+      }
+
+      // Hide input, show select
+      newVendorGroup.style.display = 'none';
+      vendorSelect.parentElement.style.display = 'flex';
+      newVendorName.value = '';
+
+    } catch (err) {
+      alert('Error creating vendor: ' + err.message);
+    } finally {
+      saveVendorBtn.disabled = false;
+      originalIcon.className = 'bi bi-check-lg';
+    }
+  });
+
+  // Enter key to save
+  newVendorName.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveVendorBtn.click();
+    }
+  });
+});
+</script>
 
 <%- include('partials/footer') %>

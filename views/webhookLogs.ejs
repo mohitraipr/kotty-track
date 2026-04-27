@@ -966,10 +966,6 @@
       }
     }
 
-    function closeDownloadModal() {
-      document.getElementById('downloadModal').classList.remove('active');
-    }
-
     function confirmDownload() {
       const icon = document.getElementById('modalIcon');
       const title = document.getElementById('modalTitle');
@@ -1031,6 +1027,8 @@
       }, estMs);
     }
 
+    let currentEventSource = null;
+
     async function startLiveFetch(warehouseName) {
       const icon = document.getElementById('modalIcon');
       const title = document.getElementById('modalTitle');
@@ -1042,75 +1040,229 @@
       const actions = document.getElementById('modalActions');
 
       icon.classList.add('loading');
+      title.textContent = 'Checking Status...';
+      subtitle.textContent = 'Looking for existing downloads';
+      stats.style.display = 'none';
+      progress.style.display = 'block';
+      progressFill.style.width = '0%';
+      progressText.textContent = '';
+      actions.style.display = 'none';
+
+      try {
+        // First check if there's an active or completed job
+        const statusRes = await fetch('/webhook/logs/download-status?warehouse=' + warehouseName, { credentials: 'include' });
+        const status = await statusRes.json();
+
+        if (status.lastCompleted) {
+          // Show completed job - ready to download
+          const job = status.lastCompleted;
+          icon.classList.remove('loading');
+          title.textContent = 'Download Ready!';
+          subtitle.textContent = job.rowCount.toLocaleString() + ' SKUs (fetched ' + Math.round(job.ageSeconds / 60) + ' min ago)';
+          progressFill.style.width = '100%';
+          progressText.textContent = 'Excel file ready';
+          showCompletedJobActions(job.downloadUrl, warehouseName);
+          return;
+        }
+
+        if (status.active) {
+          // Attach to running job
+          title.textContent = 'Download In Progress';
+          subtitle.textContent = 'Attaching to running job...';
+          progressText.textContent = status.rowCount.toLocaleString() + ' SKUs (' + status.elapsed + 's)';
+          progressFill.style.width = Math.min(95, status.rowCount / 850) + '%';
+        }
+
+        // Start or attach via SSE
+        startLiveFetchSSE(warehouseName);
+
+      } catch (err) {
+        console.error('Status check failed:', err);
+        // Fall back to starting fresh
+        startLiveFetchSSE(warehouseName);
+      }
+    }
+
+    function showCompletedJobActions(downloadUrl, warehouseName) {
+      const actions = document.getElementById('modalActions');
+      actions.textContent = '';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn btn-secondary';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = closeDownloadModal;
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.className = 'btn btn-primary';
+      downloadLink.style.textDecoration = 'none';
+      downloadLink.innerHTML = '<i class="bi bi-download"></i> Download Excel';
+
+      const refreshBtn = document.createElement('button');
+      refreshBtn.className = 'btn btn-outline-primary';
+      refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Fetch Fresh';
+      refreshBtn.onclick = () => startLiveFetchSSE(warehouseName);
+
+      actions.appendChild(closeBtn);
+      actions.appendChild(downloadLink);
+      actions.appendChild(refreshBtn);
+      actions.style.display = 'flex';
+    }
+
+    function startLiveFetchSSE(warehouseName) {
+      const icon = document.getElementById('modalIcon');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const progress = document.getElementById('modalProgress');
+      const progressFill = document.getElementById('modalProgressFill');
+      const progressText = document.getElementById('modalProgressText');
+      const actions = document.getElementById('modalActions');
+
+      // Close any existing connection
+      if (currentEventSource) {
+        currentEventSource.close();
+      }
+
+      icon.classList.add('loading');
       title.textContent = 'Fetching Inventory...';
       subtitle.textContent = 'Connecting to EasyEcom API';
-      stats.style.display = 'none';
       progress.style.display = 'block';
       progressFill.style.width = '0%';
       progressText.textContent = 'Starting...';
       actions.style.display = 'none';
 
-      try {
-        const response = await fetch('/webhook/logs/download-live?warehouse=' + warehouseName, { credentials: 'include' });
-        if (!response.ok) throw new Error('Server error: ' + response.status);
+      // Use SSE for real-time progress
+      currentEventSource = new EventSource('/webhook/logs/fetch-live?warehouse=' + warehouseName);
 
-        const reader = response.body.getReader();
-        const chunks = [];
-        let receivedBytes = 0;
-        let rowCount = 0;
-        const startTime = Date.now();
-        const estimatedBytes = warehouseName === 'faridabad' ? 5000000 : 3000000;
+      currentEventSource.addEventListener('start', (e) => {
+        const data = JSON.parse(e.data);
+        subtitle.textContent = data.message;
+        progressText.textContent = 'Fetching page 1...';
+      });
 
-        subtitle.textContent = 'Streaming data...';
+      currentEventSource.addEventListener('attached', (e) => {
+        const data = JSON.parse(e.data);
+        title.textContent = 'Watching Download';
+        subtitle.textContent = 'Attached to running job';
+        progressText.textContent = data.rowCount.toLocaleString() + ' SKUs (' + data.elapsed + 's)';
+        progressFill.style.width = Math.min(95, data.rowCount / 850) + '%';
+      });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      currentEventSource.addEventListener('progress', (e) => {
+        const data = JSON.parse(e.data);
+        const pct = Math.min(95, data.fetched / 850); // Estimate ~85k SKUs
+        progressFill.style.width = pct + '%';
+        progressText.textContent = data.fetched.toLocaleString() + ' SKUs (' + data.elapsed + 's)';
+        subtitle.textContent = data.message;
+      });
 
-          chunks.push(value);
-          receivedBytes += value.length;
+      currentEventSource.addEventListener('complete', (e) => {
+        const data = JSON.parse(e.data);
+        currentEventSource.close();
+        currentEventSource = null;
 
-          for (let i = 0; i < value.length; i++) {
-            if (value[i] === 10) rowCount++;
-          }
-
-          const pct = Math.min(95, Math.round((receivedBytes / estimatedBytes) * 100));
-          progressFill.style.width = pct + '%';
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          progressText.textContent = rowCount.toLocaleString() + ' SKUs (' + elapsed + 's)';
-        }
-
-        const blob = new Blob(chunks, { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-
-        progressFill.style.width = '100%';
         icon.classList.remove('loading');
         title.textContent = 'Ready!';
-        subtitle.innerHTML = '<strong style="color: var(--success);">' + rowCount.toLocaleString() + ' SKUs</strong> fetched in ' + elapsed + 's';
-        progressText.textContent = (blob.size / 1024).toFixed(0) + ' KB';
+        subtitle.textContent = data.totalSkus.toLocaleString() + ' SKUs fetched in ' + data.elapsed + 's';
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Excel file ready';
 
-        const filename = 'inventory_' + warehouseName + '_' + new Date().toISOString().slice(0, 10) + '.csv';
-        actions.innerHTML = `
-          <button class="btn btn-secondary" onclick="closeDownloadModal()">Close</button>
-          <a href="${url}" download="${filename}" class="btn btn-primary" style="text-decoration: none;">
-            <i class="bi bi-download"></i> Download CSV
-          </a>
-        `;
-        actions.style.display = 'flex';
+        showDownloadActions(data.downloadUrl);
+      });
 
-      } catch (err) {
-        console.error('Error:', err);
+      currentEventSource.addEventListener('error', (e) => {
+        let errorMsg = 'Connection error';
+        try {
+          const data = JSON.parse(e.data);
+          errorMsg = data.message || errorMsg;
+        } catch {}
+
+        currentEventSource.close();
+        currentEventSource = null;
+
         icon.classList.remove('loading');
         title.textContent = 'Failed';
-        subtitle.textContent = err.message || 'Connection error';
+        subtitle.textContent = errorMsg;
         progressText.textContent = '';
-        actions.innerHTML = `
-          <button class="btn btn-secondary" onclick="closeDownloadModal()">Close</button>
-          <button class="btn btn-primary" onclick="confirmDownload()">Retry</button>
-        `;
-        actions.style.display = 'flex';
+
+        showRetryActions(warehouseName);
+      });
+
+      currentEventSource.onerror = () => {
+        // Connection lost - try to reconnect after delay
+        if (currentEventSource && currentEventSource.readyState === EventSource.CLOSED) {
+          icon.classList.remove('loading');
+          title.textContent = 'Connection Lost';
+          subtitle.textContent = 'Click retry to reconnect';
+          showReconnectActions(warehouseName);
+        }
+      };
+    }
+
+    function showDownloadActions(downloadUrl) {
+      const actions = document.getElementById('modalActions');
+      actions.textContent = '';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn btn-secondary';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = closeDownloadModal;
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.className = 'btn btn-primary';
+      downloadLink.style.textDecoration = 'none';
+      downloadLink.innerHTML = '<i class="bi bi-download"></i> Download Excel';
+
+      actions.appendChild(closeBtn);
+      actions.appendChild(downloadLink);
+      actions.style.display = 'flex';
+    }
+
+    function showRetryActions(warehouseName) {
+      const actions = document.getElementById('modalActions');
+      actions.textContent = '';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn btn-secondary';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = closeDownloadModal;
+
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'btn btn-primary';
+      retryBtn.textContent = 'Retry';
+      retryBtn.onclick = () => startLiveFetchSSE(warehouseName);
+
+      actions.appendChild(closeBtn);
+      actions.appendChild(retryBtn);
+      actions.style.display = 'flex';
+    }
+
+    function showReconnectActions(warehouseName) {
+      const actions = document.getElementById('modalActions');
+      actions.textContent = '';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn btn-secondary';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = closeDownloadModal;
+
+      const reconnectBtn = document.createElement('button');
+      reconnectBtn.className = 'btn btn-primary';
+      reconnectBtn.textContent = 'Reconnect';
+      reconnectBtn.onclick = () => startLiveFetch(warehouseName);
+
+      actions.appendChild(closeBtn);
+      actions.appendChild(reconnectBtn);
+      actions.style.display = 'flex';
+    }
+
+    function closeDownloadModal() {
+      if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
       }
+      document.getElementById('downloadModal').classList.remove('active');
     }
 
     async function clearRawData() {

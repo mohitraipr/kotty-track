@@ -171,6 +171,18 @@
 
   .badge-pending { background: #fef3e2; color: var(--warning); }
   .badge-paid { background: #e8f5ef; color: var(--success); }
+  .badge-cancelled { background: #fdeaea; color: var(--danger); }
+
+  .rate-warning {
+    background: #fef3e2;
+    color: var(--warning);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 
   .badge-stitching { background: #e8f1fb; color: var(--info); }
   .badge-washing { background: #ede9fe; color: #7c3aed; }
@@ -304,8 +316,20 @@
               <td><%= p.sku %></td>
               <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
               <td><%= p.qty.toLocaleString() %></td>
-              <td><%= parseFloat(p.base_rate).toFixed(2) %></td>
-              <td><strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong></td>
+              <td>
+                <% if (p.rate_configured === 0 || p.rate_configured === false) { %>
+                <span class="rate-warning"><i class="bi bi-exclamation-triangle"></i> Not set</span>
+                <% } else { %>
+                <%= parseFloat(p.base_rate).toFixed(2) %>
+                <% } %>
+              </td>
+              <td>
+                <% if (p.rate_configured === 0 || p.rate_configured === false) { %>
+                <span class="rate-warning" title="Contact operator to set rate"><i class="bi bi-exclamation-triangle"></i> Contact operator</span>
+                <% } else { %>
+                <strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong>
+                <% } %>
+              </td>
               <td><span class="badge badge-<%= p.status %>"><%= p.status %></span></td>
             </tr>
             <% }); %>

@@ -1,0 +1,505 @@
+<%- include('partials/header', { pageTitle: 'Accounts - Payments' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/' }) %>
+
+<style>
+  :root {
+    --charcoal: #1a1a1a;
+    --cream: #faf8f5;
+    --cream-dark: #f0ebe3;
+    --terracotta: #c45c3a;
+    --success: #2d8a5f;
+    --warning: #c4873a;
+    --danger: #c23b22;
+    --info: #3a7bc4;
+    --border: #e5e0d8;
+    --text-secondary: #5a5a5a;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+
+  body { background: var(--cream); }
+
+  .page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    padding-top: calc(60px + 32px);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+    color: var(--charcoal);
+  }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn-kotty {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--terracotta); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-warning { background: var(--warning); color: white; }
+  .btn-sm { padding: 4px 8px; font-size: 0.75rem; }
+  .btn-lg { padding: 12px 24px; font-size: 1rem; }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-family: 'Outfit', sans-serif;
+  }
+  .alert-success { background: #e8f5ef; color: var(--success); }
+  .alert-error { background: #fdeaea; color: var(--danger); }
+  .alert-warning { background: #fef3e2; color: var(--warning); }
+
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.1rem;
+    color: var(--charcoal);
+    margin: 0;
+  }
+
+  .card-body { padding: 20px; }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .form-control, .form-select, textarea {
+    font-family: 'Outfit', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: white;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--charcoal);
+    font-size: 0.85rem;
+  }
+  .tab.active {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+  .tab .count {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    margin-left: 4px;
+  }
+  .tab.active .count {
+    background: rgba(255,255,255,0.3);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+  }
+
+  th {
+    background: var(--cream);
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:hover { background: var(--cream); }
+  tr.selected { background: #e8f5ef; }
+  tr.no-rate { background: #fef3e2; }
+
+  .badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-washing { background: #ede9fe; color: #7c3aed; }
+  .badge-finishing { background: #e8f5ef; color: var(--success); }
+  .badge-assembly { background: #fce7f3; color: #be185d; }
+  .badge-cutting { background: #fef3e2; color: var(--warning); }
+  .badge-no-rate { background: #fdeaea; color: var(--danger); }
+
+  .lot-details {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .cutting-remark {
+    color: var(--terracotta);
+    font-style: italic;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    flex: 1;
+    border-radius: var(--radius-md);
+    padding: 20px;
+    color: white;
+  }
+  .stat-card.green { background: linear-gradient(135deg, var(--success) 0%, #1e6b4a 100%); }
+  .stat-card.orange { background: linear-gradient(135deg, var(--warning) 0%, #a06830 100%); }
+  .stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    opacity: 0.9;
+  }
+  .stat-value {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.75rem;
+  }
+
+  .summary-bar {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 2px solid var(--success);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+  }
+
+  .rate-input {
+    width: 80px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal.show { display: flex; }
+  .modal-content {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+  }
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-header">
+    <h1 class="page-title">Payments</h1>
+    <div class="btn-group">
+      <a href="/accounts/payments/history" class="btn-kotty btn-outline">
+        <i class="bi bi-clock-history"></i> History
+      </a>
+    </div>
+  </div>
+
+  <% if (error && error.length) { %>
+  <div class="alert alert-error"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+  <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card green">
+      <div class="stat-label">Ready to Pay</div>
+      <div class="stat-value">Rs. <%= totalPending.toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></div>
+    </div>
+    <% if (noRateCount > 0) { %>
+    <div class="stat-card orange">
+      <div class="stat-label">Awaiting Rate Config</div>
+      <div class="stat-value"><%= noRateCount %> payments</div>
+    </div>
+    <% } %>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <a href="?show=all&stage=<%= currentStage %>&user_id=<%= currentUserId %>&search=<%= search %>" class="tab <%= show === 'all' || !show ? 'active' : '' %>">
+      All
+    </a>
+    <a href="?show=ready&stage=<%= currentStage %>&user_id=<%= currentUserId %>&search=<%= search %>" class="tab <%= show === 'ready' ? 'active' : '' %>">
+      Ready to Pay
+    </a>
+    <a href="?show=no-rate&stage=<%= currentStage %>&user_id=<%= currentUserId %>&search=<%= search %>" class="tab <%= show === 'no-rate' ? 'active' : '' %>">
+      No Rate <% if (noRateCount > 0) { %><span class="count"><%= noRateCount %></span><% } %>
+    </a>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-body">
+      <form method="GET" class="filter-row">
+        <input type="hidden" name="show" value="<%= show || 'all' %>">
+        <select name="stage" class="form-select">
+          <option value="all" <%= currentStage === 'all' ? 'selected' : '' %>>All Stages</option>
+          <% stages.forEach(s => { %>
+          <option value="<%= s %>" <%= currentStage === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }); %>
+        </select>
+        <select name="user_id" class="form-select">
+          <option value="">All Workers</option>
+          <% users.forEach(u => { %>
+          <option value="<%= u.user_id %>" <%= currentUserId == u.user_id ? 'selected' : '' %>><%= u.username %></option>
+          <% }); %>
+        </select>
+        <input type="text" name="search" class="form-control" placeholder="Search lot/sku/remark..." value="<%= search %>">
+        <button type="submit" class="btn-kotty btn-primary">Filter</button>
+        <% if (search || currentStage !== 'all' || currentUserId) { %>
+        <a href="/accounts/payments/pending?show=<%= show || 'all' %>" class="btn-kotty btn-outline">Clear</a>
+        <% } %>
+      </form>
+    </div>
+  </div>
+
+  <!-- Payments Table -->
+  <form id="markPaidForm" method="POST" action="/accounts/payments/mark-paid">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-hourglass-split"></i> Pending Payments</h2>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= payments.length %> payments</span>
+      </div>
+      <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selectAll"></th>
+              <th>Worker</th>
+              <th>Lot Details</th>
+              <th>SKU</th>
+              <th>Stage</th>
+              <th>Qty</th>
+              <th>Rate</th>
+              <th>Total</th>
+              <th>Created</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (payments.length === 0) { %>
+            <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
+            <% } else { %>
+            <% payments.forEach(p => { %>
+            <tr class="<%= p.rate_configured ? '' : 'no-rate' %>">
+              <td>
+                <% if (p.rate_configured) { %>
+                <input type="checkbox" name="paymentIds" value="<%= p.id %>" class="payment-cb">
+                <% } else { %>
+                <span class="badge badge-no-rate">No Rate</span>
+                <% } %>
+              </td>
+              <td><strong><%= p.username %></strong></td>
+              <td>
+                <div><strong><%= p.lot_no %></strong></div>
+                <% if (p.cutting_remark) { %>
+                <div class="lot-details cutting-remark"><%= p.cutting_remark %></div>
+                <% } %>
+                <% if (p.cutting_date) { %>
+                <div class="lot-details">Cut: <%= new Date(p.cutting_date).toLocaleDateString('en-IN') %></div>
+                <% } %>
+              </td>
+              <td><%= p.sku %></td>
+              <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
+              <td><%= p.qty.toLocaleString() %></td>
+              <td>
+                <% if (p.rate_configured) { %>
+                <%= parseFloat(p.base_rate).toFixed(2) %>
+                <% } else { %>
+                <input type="number" step="0.01" min="0" class="form-control rate-input"
+                       id="rate-<%= p.id %>" placeholder="0.00">
+                <% } %>
+              </td>
+              <td>
+                <strong id="total-<%= p.id %>">
+                  <%= p.rate_configured ? parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '—' %>
+                </strong>
+              </td>
+              <td><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
+              <td>
+                <% if (!p.rate_configured) { %>
+                <button type="button" class="btn-kotty btn-warning btn-sm" onclick="setRate(<%= p.id %>, <%= p.qty %>)">
+                  Set Rate
+                </button>
+                <% } %>
+              </td>
+            </tr>
+            <% }); %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <% if (payments.filter(p => p.rate_configured).length > 0) { %>
+    <div class="summary-bar">
+      <div>
+        <span style="font-family: 'Outfit', sans-serif;">Selected: <strong id="selectedCount">0</strong></span>
+        <span style="margin-left: 16px;">Total: <strong id="selectedTotal" style="color: var(--success);">0.00</strong></span>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <textarea name="payment_remark" class="form-control" placeholder="Payment remark (optional)" style="width: 250px; height: 40px;"></textarea>
+        <button type="submit" class="btn-kotty btn-success btn-lg" id="markPaidBtn" disabled>
+          <i class="bi bi-check2-all"></i> Mark as Paid
+        </button>
+      </div>
+    </div>
+    <% } %>
+  </form>
+</div>
+
+<script>
+var selectAll = document.getElementById('selectAll');
+var checkboxes = document.querySelectorAll('.payment-cb');
+var selectedCountEl = document.getElementById('selectedCount');
+var selectedTotalEl = document.getElementById('selectedTotal');
+var markPaidBtn = document.getElementById('markPaidBtn');
+
+var paymentAmounts = {};
+<% payments.filter(p => p.rate_configured).forEach(p => { %>
+paymentAmounts['<%= p.id %>'] = <%= parseFloat(p.total_amount) %>;
+<% }); %>
+
+if (selectAll) {
+  selectAll.addEventListener('change', function() {
+    checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+    updateSelection();
+  });
+}
+
+checkboxes.forEach(function(cb) {
+  cb.addEventListener('change', updateSelection);
+});
+
+function updateSelection() {
+  var count = 0;
+  var total = 0;
+
+  checkboxes.forEach(function(cb) {
+    if (cb.checked) {
+      count++;
+      total += paymentAmounts[cb.value] || 0;
+    }
+  });
+
+  if (selectedCountEl) selectedCountEl.textContent = count;
+  if (selectedTotalEl) selectedTotalEl.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  if (markPaidBtn) markPaidBtn.disabled = count === 0;
+}
+
+function setRate(paymentId, qty) {
+  var rateInput = document.getElementById('rate-' + paymentId);
+  var rate = parseFloat(rateInput.value);
+
+  if (!rate || rate <= 0) {
+    alert('Please enter a valid rate');
+    rateInput.focus();
+    return;
+  }
+
+  var total = (rate * qty).toFixed(2);
+  if (!confirm('Set rate Rs. ' + rate.toFixed(2) + ' x ' + qty + ' = Rs. ' + total + '?')) {
+    return;
+  }
+
+  fetch('/accounts/payments/set-rate/' + paymentId, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_rate: rate })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.success) {
+      alert(data.message);
+      window.location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(function(err) {
+    alert('Error: ' + err.message);
+  });
+}
+</script>
+
+<%- include('partials/footer') %>

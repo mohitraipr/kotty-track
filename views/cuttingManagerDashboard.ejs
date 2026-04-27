@@ -257,9 +257,14 @@
 
 <main class="page-container">
   <div class="container">
-    <div class="page-header">
-      <h1 class="page-title" data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</h1>
-      <p class="page-subtitle"><span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> (<%= user.roleName %>)</p>
+    <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h1 class="page-title" data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</h1>
+        <p class="page-subtitle"><span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> (<%= user.roleName %>)</p>
+      </div>
+      <a href="/payments/my-payments" class="kotty-btn kotty-btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
+        <i class="bi bi-wallet2"></i> My Payments
+      </a>
     </div>
 
     <% if (error && error.length > 0) { %>
@@ -285,9 +290,6 @@
       <button class="kotty-tab" id="create-lot-tab" data-bs-toggle="tab" data-bs-target="#create-lot" type="button" role="tab" aria-controls="create-lot" aria-selected="false">
         <i class="bi bi-plus-circle-fill"></i><span data-i18n="createNewCuttingLot">Create New Cutting Lot</span>
       </button>
-      <a class="kotty-tab" href="/cutting-manager/assign-stitching">
-        <i class="bi bi-people-fill"></i><span>Assign to Stitching</span>
-      </a>
     </div>
 
     <div class="tab-content" id="dashboardTabsContent">

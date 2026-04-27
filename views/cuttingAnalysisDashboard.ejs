@@ -1,0 +1,519 @@
+<%- include('partials/header', { pageTitle: 'Cutting Analysis Dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/' }) %>
+
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text-light: #6b7280;
+    --primary: #c45c3a;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+  }
+
+  body { background: var(--bg); }
+
+  .page-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 24px;
+    padding-top: calc(60px + 24px);
+  }
+
+  .page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-card.danger .stat-value { color: var(--danger); }
+  .stat-card.warning .stat-value { color: var(--warning); }
+  .stat-card.success .stat-value { color: var(--success); }
+  .stat-card.info .stat-value { color: var(--info); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fafafa;
+  }
+
+  .card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .card-body { padding: 0; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  .tab .badge {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    margin-left: 6px;
+  }
+
+  .tab.active .badge {
+    background: rgba(255,255,255,0.3);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  th {
+    background: #f9fafb;
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-light);
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:hover { background: #f9fafb; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .status-out { background: #fef2f2; color: #dc2626; }
+  .status-critical { background: #fef2f2; color: #dc2626; }
+  .status-low { background: #fff7ed; color: #ea580c; }
+  .status-watch { background: #fefce8; color: #ca8a04; }
+  .status-ok { background: #f0fdf4; color: #16a34a; }
+  .status-over { background: #eff6ff; color: #2563eb; }
+  .status-dead { background: #f3f4f6; color: #6b7280; }
+
+  .cut-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .cut-wrong { background: #fef2f2; color: #dc2626; }
+  .cut-needs { background: #fff7ed; color: #ea580c; }
+  .cut-under { background: #fefce8; color: #ca8a04; }
+  .cut-adequate { background: #f0fdf4; color: #16a34a; }
+  .cut-not { background: #f3f4f6; color: #6b7280; }
+
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .num.highlight { font-weight: 700; color: var(--primary); }
+  .num.danger { color: var(--danger); }
+  .num.warning { color: var(--warning); }
+  .num.success { color: var(--success); }
+
+  .sku-cell {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .sku-name {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .form-control, .form-select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.875rem;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-outline { background: white; border: 1px solid var(--border); color: var(--text); }
+
+  .section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  .scroll-container {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .alert-danger { background: #fef2f2; color: #dc2626; }
+  .alert-success { background: #f0fdf4; color: #16a34a; }
+
+  .rca-section {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .rca-title {
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 12px;
+  }
+
+  .rca-item {
+    margin-bottom: 8px;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .rca-item:before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #f59e0b;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-light);
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .page-container { padding: 16px; }
+  }
+</style>
+
+<div class="page-container">
+  <h1 class="page-title">Cutting Analysis Dashboard</h1>
+
+  <% if (error && error.length) { %>
+  <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+  <% if (success && success.length) { %>
+  <div class="alert alert-success"><%= success %></div>
+  <% } %>
+
+  <% if (summary) { %>
+  <!-- Summary Stats -->
+  <div class="stats-grid">
+    <div class="stat-card danger">
+      <div class="stat-value"><%= summary.outOfStock %></div>
+      <div class="stat-label">Out of Stock</div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-value"><%= summary.criticalLow %></div>
+      <div class="stat-label">Critical Low</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-value"><%= summary.lowStock %></div>
+      <div class="stat-label">Low Stock</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-value"><%= summary.needsCutting %></div>
+      <div class="stat-label">Needs Cutting</div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-value"><%= summary.wrongCut %></div>
+      <div class="stat-label">Wrong Cut</div>
+    </div>
+    <div class="stat-card info">
+      <div class="stat-value"><%= summary.overStocked %></div>
+      <div class="stat-label">Over Stocked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= summary.totalOrders.toLocaleString() %></div>
+      <div class="stat-label">Total Orders</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><%= summary.totalInventory.toLocaleString() %></div>
+      <div class="stat-label">Total Inventory</div>
+    </div>
+  </div>
+
+  <!-- RCA Section -->
+  <div class="rca-section">
+    <div class="rca-title">Root Cause Analysis & Recommendations</div>
+    <%
+      const criticalItems = analysisData.filter(a => a.status === 'CRITICAL LOW' || a.status === 'OUT OF STOCK').slice(0, 5);
+      const wrongCuts = analysisData.filter(a => a.cutStatus === 'WRONG CUT').slice(0, 3);
+    %>
+    <% if (criticalItems.length > 0) { %>
+    <div class="rca-item"><strong>Immediate Action Required:</strong> <%= criticalItems.map(i => i.sku.replace('KTTMENSJEANS', 'J')).join(', ') %> are critically low with high demand</div>
+    <% } %>
+    <% if (wrongCuts.length > 0) { %>
+    <div class="rca-item"><strong>Review Cutting Decisions:</strong> <%= wrongCuts.map(i => i.sku.replace('KTTMENSJEANS', 'J')).join(', ') %> were cut but have minimal/no sales</div>
+    <% } %>
+    <div class="rca-item"><strong>DOH Target:</strong> Maintain 14-30 days of inventory based on daily sales velocity</div>
+    <div class="rca-item"><strong>Priority:</strong> Focus cutting on SKUs with DOH < 7 days and daily sales > 10 units</div>
+  </div>
+  <% } %>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <a href="#" class="tab active" data-filter="all">All SKUs <span class="badge"><%= analysisData ? analysisData.length : 0 %></span></a>
+    <a href="#" class="tab" data-filter="critical">Critical <span class="badge"><%= analysisData ? analysisData.filter(a => a.priority <= 2).length : 0 %></span></a>
+    <a href="#" class="tab" data-filter="cut">To Cut <span class="badge"><%= analysisData ? analysisData.filter(a => a.cutStatus === 'NEEDS CUTTING').length : 0 %></span></a>
+    <a href="#" class="tab" data-filter="wrong">Wrong Cuts <span class="badge"><%= analysisData ? analysisData.filter(a => a.cutStatus === 'WRONG CUT').length : 0 %></span></a>
+    <a href="#" class="tab" data-filter="over">Over Stocked <span class="badge"><%= analysisData ? analysisData.filter(a => a.status === 'OVER STOCKED' || a.status === 'DEAD STOCK').length : 0 %></span></a>
+  </div>
+
+  <!-- Main Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">SKU Analysis</h2>
+      <div class="filter-row">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search SKU..." style="width: 200px;">
+      </div>
+    </div>
+    <div class="card-body">
+      <% if (analysisData && analysisData.length > 0) { %>
+      <div class="scroll-container">
+        <table id="analysisTable">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th class="num">Orders (27d)</th>
+              <th class="num">Daily Sales</th>
+              <th class="num">Inventory</th>
+              <th class="num">Faridabad</th>
+              <th class="num">Delhi</th>
+              <th class="num">DOH</th>
+              <th>Status</th>
+              <th class="num">Cut (30d)</th>
+              <th class="num">Need to Cut</th>
+              <th>Cut Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% analysisData.forEach(row => { %>
+            <tr data-status="<%= row.status %>" data-cut="<%= row.cutStatus %>" data-priority="<%= row.priority %>">
+              <td>
+                <div class="sku-cell"><%= row.sku.replace('KTTMENSJEANS', 'JEANS') %></div>
+                <% if (row.name) { %><div class="sku-name"><%= row.name %></div><% } %>
+              </td>
+              <td class="num <%= row.orders > 500 ? 'highlight' : '' %>"><%= row.orders.toLocaleString() %></td>
+              <td class="num"><%= row.dailySales %></td>
+              <td class="num <%= row.inventory === 0 ? 'danger' : '' %>"><%= row.inventory.toLocaleString() %></td>
+              <td class="num"><%= row.faridabad %></td>
+              <td class="num"><%= row.delhi.toLocaleString() %></td>
+              <td class="num <%= row.doh <= 3 ? 'danger' : row.doh <= 7 ? 'warning' : row.doh > 60 ? 'success' : '' %>"><%= row.doh === 999 ? '∞' : row.doh %></td>
+              <td>
+                <span class="status-badge status-<%= row.status.toLowerCase().replace(' ', '-').replace('_', '-') %>">
+                  <%= row.status %>
+                </span>
+              </td>
+              <td class="num"><%= row.cut.toLocaleString() %></td>
+              <td class="num <%= row.needToCut > 0 ? 'warning' : '' %>"><%= row.needToCut.toLocaleString() %></td>
+              <td>
+                <span class="cut-badge cut-<%= row.cutStatus.toLowerCase().replace(' ', '-') %>">
+                  <%= row.cutStatus %>
+                </span>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <% } else { %>
+      <div class="empty-state">
+        <p>No analysis data available.</p>
+        <p>Make sure inventory and orders report files are in the project root.</p>
+      </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Cutting Lots -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Last 30 Days Denim Cutting</h2>
+      <span style="font-size: 0.85rem; color: var(--text-light);"><%= cuttingData.length %> lots</span>
+    </div>
+    <div class="card-body">
+      <div class="scroll-container" style="max-height: 400px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th class="num">Pieces</th>
+              <th>Remark</th>
+              <th>Master</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% cuttingData.forEach(lot => { %>
+            <tr>
+              <td><strong><%= lot.lot_no %></strong></td>
+              <td><%= lot.sku %></td>
+              <td class="num"><%= lot.total_pieces.toLocaleString() %></td>
+              <td><%= lot.remark || '-' %></td>
+              <td><%= lot.cutting_master %></td>
+              <td><%= new Date(lot.created_at).toLocaleDateString('en-IN') %></td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var tabs = document.querySelectorAll('.tab');
+  var rows = document.querySelectorAll('#analysisTable tbody tr');
+  var searchInput = document.getElementById('searchInput');
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function(e) {
+      e.preventDefault();
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      this.classList.add('active');
+
+      var filter = this.dataset.filter;
+      filterRows(filter, searchInput.value);
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      var activeTab = document.querySelector('.tab.active');
+      var filter = activeTab ? activeTab.dataset.filter : 'all';
+      filterRows(filter, this.value);
+    });
+  }
+
+  function filterRows(filter, search) {
+    search = (search || '').toLowerCase();
+
+    rows.forEach(function(row) {
+      var status = row.dataset.status;
+      var cutStatus = row.dataset.cut;
+      var priority = parseInt(row.dataset.priority);
+      var sku = row.querySelector('.sku-cell').textContent.toLowerCase();
+
+      var showByFilter = true;
+      if (filter === 'critical') {
+        showByFilter = priority <= 2;
+      } else if (filter === 'cut') {
+        showByFilter = cutStatus === 'NEEDS CUTTING';
+      } else if (filter === 'wrong') {
+        showByFilter = cutStatus === 'WRONG CUT';
+      } else if (filter === 'over') {
+        showByFilter = status === 'OVER STOCKED' || status === 'DEAD STOCK';
+      }
+
+      var showBySearch = !search || sku.includes(search);
+
+      row.style.display = (showByFilter && showBySearch) ? '' : 'none';
+    });
+  }
+});
+</script>
+
+<%- include('partials/footer') %>

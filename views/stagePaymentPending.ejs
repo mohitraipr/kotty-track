@@ -60,7 +60,9 @@
   .btn-primary { background: var(--terracotta); color: white; }
   .btn-outline { background: white; border: 1px solid var(--border); color: var(--charcoal); }
   .btn-success { background: var(--success); color: white; }
-  .btn-lg { padding: 12px 24px; font-size: 1rem; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-warning { background: var(--warning); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
 
   .alert {
     padding: 12px 16px;
@@ -135,7 +137,6 @@
   }
 
   tr:hover { background: var(--cream); }
-  tr.selected { background: #e8f5ef; }
 
   .badge {
     padding: 4px 8px;
@@ -147,6 +148,19 @@
   .badge-stitching { background: #e8f1fb; color: var(--info); }
   .badge-washing { background: #ede9fe; color: #7c3aed; }
   .badge-finishing { background: #e8f5ef; color: var(--success); }
+  .badge-assembly { background: #fce7f3; color: #be185d; }
+  .badge-cutting { background: #fef3e2; color: var(--warning); }
+
+  .rate-warning {
+    background: #fef3e2;
+    color: var(--warning);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 
   .summary-cards {
     display: grid;
@@ -175,16 +189,39 @@
     color: var(--charcoal);
   }
 
-  .summary-bar {
-    position: sticky;
-    bottom: 0;
-    background: white;
-    border-top: 2px solid var(--success);
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
     align-items: center;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+    justify-content: center;
+  }
+  .modal.active { display: flex; }
+  .modal-content {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+  }
+  .modal-title {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
   }
 </style>
 
@@ -192,8 +229,11 @@
   <div class="page-header">
     <h1 class="page-title">Pending Payments</h1>
     <div class="btn-group">
-      <a href="/operator/payments/create" class="btn-kotty btn-primary">
-        <i class="bi bi-plus-circle"></i> Create Payment
+      <a href="/operator/payments/rates" class="btn-kotty btn-primary">
+        <i class="bi bi-gear"></i> Configure Rates
+      </a>
+      <a href="/operator/payments/debits" class="btn-kotty btn-outline">
+        <i class="bi bi-dash-circle"></i> Debits
       </a>
       <a href="/operator/payments/history" class="btn-kotty btn-outline">
         <i class="bi bi-clock-history"></i> History
@@ -237,114 +277,167 @@
           <option value="<%= s %>" <%= currentStage === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
           <% }); %>
         </select>
-        <input type="text" name="search" class="form-control" placeholder="Search..." value="<%= search %>">
+        <input type="text" name="search" class="form-control" placeholder="Search lot/sku/worker..." value="<%= search %>">
         <button type="submit" class="btn-kotty btn-primary">Filter</button>
+        <% if (search || currentStage !== 'all') { %>
+        <a href="/operator/payments/pending" class="btn-kotty btn-outline">Clear</a>
+        <% } %>
       </form>
     </div>
   </div>
 
   <!-- Payments Table -->
-  <form id="markPaidForm" method="POST" action="/operator/payments/mark-paid">
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title"><i class="bi bi-hourglass-split"></i> Pending Payments</h2>
-        <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= payments.length %> pending</span>
-      </div>
-      <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table>
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="selectAll"></th>
-              <th>Worker</th>
-              <th>Lot No</th>
-              <th>SKU</th>
-              <th>Stage</th>
-              <th>Qty</th>
-              <th>Base Rate</th>
-              <th>Extra</th>
-              <th>Total</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (payments.length === 0) { %>
-            <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
-            <% } else { %>
-            <% payments.forEach(p => { %>
-            <tr>
-              <td><input type="checkbox" name="paymentIds" value="<%= p.id %>" class="payment-cb"></td>
-              <td><strong><%= p.username %></strong></td>
-              <td><%= p.lot_no %></td>
-              <td><%= p.sku %></td>
-              <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
-              <td><%= p.qty.toLocaleString() %></td>
-              <td><%= parseFloat(p.base_rate).toFixed(2) %></td>
-              <td><%= parseFloat(p.extra_amount || 0).toFixed(2) %></td>
-              <td><strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong></td>
-              <td><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
-            </tr>
-            <% }); %>
-            <% } %>
-          </tbody>
-        </table>
-      </div>
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="bi bi-hourglass-split"></i> Pending Payments</h2>
+      <span style="font-size: 0.85rem; color: var(--text-secondary);"><%= payments.length %> pending</span>
     </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Worker</th>
+            <th>Lot No</th>
+            <th>SKU</th>
+            <th>Stage</th>
+            <th>Qty</th>
+            <th>Base Rate</th>
+            <th>Extra</th>
+            <th>Total</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (payments.length === 0) { %>
+          <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
+          <% } else { %>
+          <% payments.forEach(p => { %>
+          <tr>
+            <td><strong><%= p.username %></strong></td>
+            <td><%= p.lot_no %></td>
+            <td><%= p.sku %></td>
+            <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
+            <td><%= p.qty.toLocaleString() %></td>
+            <td>
+              <% if (!p.rate_configured) { %>
+              <span class="rate-warning"><i class="bi bi-exclamation-triangle"></i> Not set</span>
+              <% } else { %>
+              <%= parseFloat(p.base_rate).toFixed(2) %>
+              <% } %>
+            </td>
+            <td><%= parseFloat(p.extra_amount || 0).toFixed(2) %></td>
+            <td>
+              <% if (!p.rate_configured) { %>
+              <span class="rate-warning"><i class="bi bi-exclamation-triangle"></i> Set rate</span>
+              <% } else { %>
+              <strong><%= parseFloat(p.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) %></strong>
+              <% } %>
+            </td>
+            <td><%= new Date(p.created_at).toLocaleDateString('en-IN') %></td>
+            <td>
+              <% if (!p.rate_configured) { %>
+              <button type="button" class="btn-kotty btn-sm btn-warning" onclick="openSetRateModal(<%= p.id %>, '<%= p.sku %>', '<%= p.stage %>')">
+                <i class="bi bi-currency-rupee"></i> Set Rate
+              </button>
+              <% } else { %>
+              <button type="button" class="btn-kotty btn-sm btn-outline" onclick="openEditModal(<%= p.id %>, <%= p.qty %>, <%= parseFloat(p.base_rate) %>)">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <% } %>
+              <form method="POST" action="/operator/payments/cancel/<%= p.id %>" style="display: inline;" onsubmit="return confirm('Cancel this payment?')">
+                <button type="submit" class="btn-kotty btn-sm btn-danger">
+                  <i class="bi bi-x"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-    <% if (payments.length > 0) { %>
-    <div class="summary-bar">
-      <div>
-        <span style="font-family: 'Outfit', sans-serif;">Selected: <strong id="selectedCount">0</strong></span>
-        <span style="margin-left: 16px;">Total: <strong id="selectedTotal" style="color: var(--success);">0.00</strong></span>
+<!-- Edit Payment Modal -->
+<div id="editModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Edit Payment</h3>
+    <form id="editForm" method="POST">
+      <input type="hidden" name="payment_id" id="editPaymentId">
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input type="number" name="qty" id="editQty" class="form-control" required>
       </div>
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <input type="text" name="notes" class="form-control" placeholder="Payment notes (optional)" style="width: 200px;">
-        <button type="submit" class="btn-kotty btn-success btn-lg" id="markPaidBtn" disabled>
-          <i class="bi bi-check2-all"></i> Mark as Paid
-        </button>
+      <div class="form-group">
+        <label class="form-label">Base Rate</label>
+        <input type="number" name="base_rate" id="editBaseRate" step="0.01" class="form-control" required>
       </div>
-    </div>
-    <% } %>
-  </form>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+        <button type="button" class="btn-kotty btn-outline" onclick="closeEditModal()">Cancel</button>
+        <button type="submit" class="btn-kotty btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Set Rate Modal -->
+<div id="setRateModal" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-title">Set Rate for SKU</h3>
+    <form id="setRateForm" method="POST" action="/operator/payments/rates">
+      <input type="hidden" name="redirect" value="/operator/payments/pending">
+      <div class="form-group">
+        <label class="form-label">SKU</label>
+        <input type="text" name="sku" id="setRateSku" class="form-control" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stage</label>
+        <input type="text" name="stage" id="setRateStage" class="form-control" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rate *</label>
+        <input type="number" name="rate" step="0.01" class="form-control" required>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+        <button type="button" class="btn-kotty btn-outline" onclick="closeSetRateModal()">Cancel</button>
+        <button type="submit" class="btn-kotty btn-primary">Save Rate</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
-const selectAll = document.getElementById('selectAll');
-const checkboxes = document.querySelectorAll('.payment-cb');
-const selectedCountEl = document.getElementById('selectedCount');
-const selectedTotalEl = document.getElementById('selectedTotal');
-const markPaidBtn = document.getElementById('markPaidBtn');
-
-const paymentAmounts = {};
-<% payments.forEach(p => { %>
-paymentAmounts['<%= p.id %>'] = <%= parseFloat(p.total_amount) %>;
-<% }); %>
-
-if (selectAll) {
-  selectAll.addEventListener('change', function() {
-    checkboxes.forEach(cb => cb.checked = this.checked);
-    updateSelection();
-  });
+function openEditModal(id, qty, rate) {
+  document.getElementById('editPaymentId').value = id;
+  document.getElementById('editQty').value = qty;
+  document.getElementById('editBaseRate').value = rate;
+  document.getElementById('editForm').action = '/operator/payments/edit/' + id;
+  document.getElementById('editModal').classList.add('active');
 }
 
-checkboxes.forEach(cb => {
-  cb.addEventListener('change', updateSelection);
-});
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('active');
+}
 
-function updateSelection() {
-  let count = 0;
-  let total = 0;
+function openSetRateModal(paymentId, sku, stage) {
+  document.getElementById('setRateSku').value = sku;
+  document.getElementById('setRateStage').value = stage;
+  document.getElementById('setRateModal').classList.add('active');
+}
 
-  checkboxes.forEach(cb => {
-    if (cb.checked) {
-      count++;
-      total += paymentAmounts[cb.value] || 0;
+function closeSetRateModal() {
+  document.getElementById('setRateModal').classList.remove('active');
+}
+
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.classList.remove('active');
     }
   });
-
-  if (selectedCountEl) selectedCountEl.textContent = count;
-  if (selectedTotalEl) selectedTotalEl.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-  if (markPaidBtn) markPaidBtn.disabled = count === 0;
-}
+});
 </script>
 
 <%- include('partials/footer') %>
