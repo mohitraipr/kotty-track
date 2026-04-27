@@ -1450,7 +1450,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
 
     // Get cutting sizes
     const [cuttingSizes] = await pool.query(`
-      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+      SELECT size_label, total_pieces as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
     `, [cuttingLot.id]);
 
     // Get stitching data for this user
@@ -1465,7 +1465,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
     let stitchingSizes = [];
     if (stitchingData) {
       const [sizes] = await pool.query(`
-        SELECT size_label, pieces FROM stitching_sizes WHERE stitching_data_id = ?
+        SELECT size_label, pieces FROM stitching_data_sizes WHERE stitching_data_id = ?
       `, [stitchingData.id]);
       stitchingSizes = sizes;
     }
@@ -1487,8 +1487,8 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
     `, [userId, lotNo]);
 
     // Calculate totals
-    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
-    const totalStitchedPieces = stitchingSizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
+    const totalStitchedPieces = stitchingSizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
 
     res.json({
       success: true,

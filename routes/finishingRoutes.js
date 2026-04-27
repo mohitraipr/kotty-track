@@ -1315,7 +1315,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isFinishingMaster, async (req
     }
 
     const [cuttingSizes] = await pool.query(`
-      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+      SELECT size_label, total_pieces as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
     `, [cuttingLot.id]);
 
     const [[finishingData]] = await pool.query(`
@@ -1328,7 +1328,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isFinishingMaster, async (req
     let finishingSizes = [];
     if (finishingData) {
       const [sizes] = await pool.query(`
-        SELECT size_label, pieces FROM finishing_sizes WHERE finishing_data_id = ?
+        SELECT size_label, pieces FROM finishing_data_sizes WHERE finishing_data_id = ?
       `, [finishingData.id]);
       finishingSizes = sizes;
     }
@@ -1345,8 +1345,8 @@ router.get('/lot-details/:lotNo', isAuthenticated, isFinishingMaster, async (req
       WHERE user_id = ? AND lot_no = ? AND stage = 'finishing' AND status = 'pending'
     `, [userId, lotNo]);
 
-    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
-    const totalFinishedPieces = finishingSizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
+    const totalFinishedPieces = finishingSizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
 
     res.json({
       success: true,

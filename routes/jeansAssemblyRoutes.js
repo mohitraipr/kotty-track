@@ -1119,7 +1119,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isJeansAssemblyMaster, async 
     }
 
     const [cuttingSizes] = await pool.query(`
-      SELECT size_label, pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+      SELECT size_label, total_pieces as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
     `, [cuttingLot.id]);
 
     const [[assemblyData]] = await pool.query(`
@@ -1132,7 +1132,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isJeansAssemblyMaster, async 
     let assemblySizes = [];
     if (assemblyData) {
       const [sizes] = await pool.query(`
-        SELECT size_label, pieces FROM jeans_assembly_sizes WHERE jeans_assembly_data_id = ?
+        SELECT size_label, pieces FROM jeans_assembly_data_sizes WHERE jeans_assembly_data_id = ?
       `, [assemblyData.id]);
       assemblySizes = sizes;
     }
@@ -1149,8 +1149,8 @@ router.get('/lot-details/:lotNo', isAuthenticated, isJeansAssemblyMaster, async 
       WHERE user_id = ? AND lot_no = ? AND stage = 'jeans_assembly' AND status = 'pending'
     `, [userId, lotNo]);
 
-    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + s.pieces, 0);
-    const totalAssembledPieces = assemblySizes.reduce((sum, s) => sum + s.pieces, 0);
+    const totalCutPieces = cuttingSizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
+    const totalAssembledPieces = assemblySizes.reduce((sum, s) => sum + (s.pieces || 0), 0);
 
     res.json({
       success: true,
