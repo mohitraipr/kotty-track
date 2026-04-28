@@ -585,6 +585,12 @@
     border-top: 1px solid var(--border);
   }
 
+  /* Reject input */
+  .reject-row { margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+  .reject-input { flex: 1; padding: 6px 8px; border: 1px solid #dc2626; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-align: center; background: #fee2e2; }
+  .reject-input::placeholder { font-weight: 400; color: #9ca3af; font-size: 0.7rem; }
+  .reject-label { font-size: 0.65rem; color: #dc2626; font-weight: 600; }
+
   /* ═══════════════════════════════════════════════════════════════════════════
      SUBMIT SECTION
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1718,6 +1724,25 @@
       input.addEventListener('focus', function() { this.select(); });
       card.appendChild(input);
 
+      // Reject input row
+      const rejectRow = document.createElement('div');
+      rejectRow.className = 'reject-row';
+      const rejectInput = document.createElement('input');
+      rejectInput.type = 'number';
+      rejectInput.className = 'reject-input';
+      rejectInput.dataset.size = size.size_label;
+      rejectInput.placeholder = 'Reject';
+      rejectInput.min = '0';
+      rejectInput.disabled = size.available_qty === 0;
+      rejectInput.addEventListener('input', handleQtyInput);
+      rejectInput.addEventListener('focus', function() { this.select(); });
+      rejectRow.appendChild(rejectInput);
+      const rejectLabel = document.createElement('span');
+      rejectLabel.className = 'reject-label';
+      rejectLabel.textContent = 'RJ';
+      rejectRow.appendChild(rejectLabel);
+      card.appendChild(rejectRow);
+
       const errorMsg = document.createElement('div');
       errorMsg.className = 'size-error';
       errorMsg.textContent = 'Max: ' + size.available_qty;
@@ -1795,17 +1820,19 @@
 
   function handleQtyInput(e) {
     const inp = e.target;
-    const val = parseInt(inp.value) || 0;
-    const max = parseInt(inp.dataset.max) || 0;
     const card = inp.closest('.size-card');
+    const okInput = card.querySelector('.qty-input');
+    const rejectInput = card.querySelector('.reject-input');
+    const max = parseInt(okInput.dataset.max) || 0;
+    const okVal = parseInt(okInput.value) || 0;
+    const rjVal = parseInt(rejectInput ? rejectInput.value : 0) || 0;
+    const total = okVal + rjVal;
 
-    // Validate
-    if (val > max) {
+    if (total > max) {
       card.classList.add('input-error');
-      inp.classList.add('input-error');
+      card.querySelector('.size-error').textContent = 'Total exceeds ' + max;
     } else {
       card.classList.remove('input-error');
-      inp.classList.remove('input-error');
     }
 
     updateTotal();
@@ -1813,29 +1840,35 @@
 
   // Update total with animation
   function updateTotal() {
-    const inputs = document.querySelectorAll('.qty-input');
-    let total = 0;
+    const cards = document.querySelectorAll('.size-card');
+    let totalOk = 0, totalRj = 0;
     let hasError = false;
 
-    inputs.forEach(inp => {
-      const val = parseInt(inp.value) || 0;
-      const max = parseInt(inp.dataset.max) || 0;
-      total += Math.min(val, max);
-      if (val > max) hasError = true;
-      inp.closest('.size-card').classList.toggle('has-qty', val > 0 && val <= max);
+    cards.forEach(card => {
+      const okInput = card.querySelector('.qty-input');
+      const rejectInput = card.querySelector('.reject-input');
+      if (!okInput) return;
+      const max = parseInt(okInput.dataset.max) || 0;
+      const okVal = parseInt(okInput.value) || 0;
+      const rjVal = parseInt(rejectInput ? rejectInput.value : 0) || 0;
+      if (okVal + rjVal > max) hasError = true;
+      totalOk += okVal;
+      totalRj += rjVal;
+      card.classList.toggle('has-qty', (okVal + rjVal) > 0 && (okVal + rjVal) <= max);
     });
 
     const totalEl = document.getElementById('totalQty');
     const totalDisplay = document.getElementById('totalDisplay');
+    const displayText = totalOk + (totalRj > 0 ? ' + ' + totalRj + ' RJ' : '');
 
-    if (totalEl.textContent !== String(total)) {
-      totalEl.textContent = total;
+    if (totalEl.textContent !== displayText) {
+      totalEl.textContent = displayText;
       totalDisplay.classList.add('pulse');
       setTimeout(() => totalDisplay.classList.remove('pulse'), 300);
     }
 
     // Disable submit if errors or no qty
-    document.getElementById('btnSubmit').disabled = hasError || total === 0;
+    document.getElementById('btnSubmit').disabled = hasError || (totalOk + totalRj) === 0;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1848,17 +1881,22 @@
       return;
     }
 
-    const inputs = document.querySelectorAll('.qty-input');
+    const cards = document.querySelectorAll('.size-card');
     const sizes = [];
-    let hasError = false;
+    const rejects = [];
+    let totalOk = 0, totalRj = 0, hasError = false;
 
-    inputs.forEach(inp => {
-      const qty = parseInt(inp.value) || 0;
-      const max = parseInt(inp.dataset.max) || 0;
-      if (qty > max) hasError = true;
-      if (qty > 0 && qty <= max) {
-        sizes.push({ size: inp.dataset.size, qty: qty });
-      }
+    cards.forEach(card => {
+      const okInput = card.querySelector('.qty-input');
+      const rejectInput = card.querySelector('.reject-input');
+      if (!okInput) return;
+      const size = okInput.dataset.size;
+      const max = parseInt(okInput.dataset.max) || 0;
+      const okQty = parseInt(okInput.value) || 0;
+      const rjQty = parseInt(rejectInput ? rejectInput.value : 0) || 0;
+      if (okQty + rjQty > max) hasError = true;
+      if (okQty > 0) { sizes.push({ size: size, qty: okQty }); totalOk += okQty; }
+      if (rjQty > 0) { rejects.push({ size: size, qty: rjQty }); totalRj += rjQty; }
     });
 
     if (hasError) {
@@ -1866,13 +1904,15 @@
       return;
     }
 
-    if (sizes.length === 0) {
+    if (sizes.length === 0 && rejects.length === 0) {
       showToast('Enter at least one size quantity', 'warning');
       return;
     }
 
-    const total = sizes.reduce((s, x) => s + x.qty, 0);
-    if (!confirm('Submit ' + total + ' pieces for ' + currentLot.lot_no.toUpperCase() + '?')) {
+    let confirmMsg = 'Submit ' + totalOk + ' OK pieces';
+    if (totalRj > 0) confirmMsg += ' + ' + totalRj + ' REJECT';
+    confirmMsg += ' for ' + currentLot.lot_no.toUpperCase() + '?';
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -1883,13 +1923,15 @@
       const res = await fetch('/stitchingdashboard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cutting_lot_id: currentLot.cutting_lot_id, sizes: sizes })
+        body: JSON.stringify({ cutting_lot_id: currentLot.cutting_lot_id, sizes: sizes, rejects: rejects })
       });
 
       const data = await res.json();
 
       if (data.success) {
-        showToast('Submitted ' + total + ' pieces!', 'success', 4000);
+        let msg = 'Submitted ' + totalOk + ' OK';
+        if (totalRj > 0) msg += ', ' + totalRj + ' reject';
+        showToast(msg, 'success', 4000);
         document.getElementById('searchInput').value = '';
         document.getElementById('lotResult').style.display = 'none';
         currentLot = null;

@@ -1274,20 +1274,19 @@ router.get('/available-lots', isAuthenticated, isStitchingMaster, async (req, re
 router.post('/submit', isAuthenticated, isStitchingMaster, async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { cutting_lot_id, sizes } = req.body;
+    const { cutting_lot_id, sizes, rejects } = req.body;
     // sizes = [{ size: "S", qty: 250 }, { size: "M", qty: 100 }]
+    // rejects = [{ size: "S", qty: 5 }] (optional)
 
     const userId = req.session.user.id;
     const username = req.session.user.username;
 
-    if (!cutting_lot_id || !sizes || !Array.isArray(sizes) || sizes.length === 0) {
-      return res.status(400).json({ error: 'Missing cutting_lot_id or sizes' });
-    }
-
     // Filter out zero quantities
-    const validSizes = sizes.filter(s => s.qty > 0);
-    if (validSizes.length === 0) {
-      return res.status(400).json({ error: 'No sizes with quantity > 0' });
+    const validSizes = (sizes || []).filter(s => s.qty > 0);
+    const validRejects = (rejects || []).filter(s => s.qty > 0);
+
+    if (!cutting_lot_id || (validSizes.length === 0 && validRejects.length === 0)) {
+      return res.status(400).json({ error: 'Missing cutting_lot_id or no quantities entered' });
     }
 
     await conn.beginTransaction();
@@ -1321,43 +1320,76 @@ router.post('/submit', isAuthenticated, isStitchingMaster, async (req, res) => {
       FOR UPDATE
     `, [lot.lot_no, cutting_lot_id]);
 
-    // Validate each size
+    // Validate each size (ok + reject <= available)
     const availableMap = {};
     availableSizes.forEach(s => { availableMap[s.size_label] = Number(s.available_qty); });
 
+    // Combine validSizes and validRejects per size for validation
+    const requestedBySize = {};
     for (const s of validSizes) {
-      const available = availableMap[s.size] || 0;
-      if (s.qty > available) {
+      requestedBySize[s.size] = (requestedBySize[s.size] || 0) + s.qty;
+    }
+    for (const s of validRejects) {
+      requestedBySize[s.size] = (requestedBySize[s.size] || 0) + s.qty;
+    }
+
+    for (const [size, requested] of Object.entries(requestedBySize)) {
+      const available = availableMap[size] || 0;
+      if (requested > available) {
         await conn.rollback();
         return res.status(400).json({
-          error: `Not enough ${s.size} available. Max: ${available}, Requested: ${s.qty}`
+          error: `Not enough ${size} available. Max: ${available}, Requested: ${requested}`
         });
       }
     }
 
-    // 1. Create stitching_assignments record (tracking)
-    const sizesJson = JSON.stringify(validSizes.map(s => ({ size: s.size, qty: s.qty })));
+    // 1. Create stitching_assignments record (tracking) - include both ok and reject
+    const allSizesForAssign = [...validSizes, ...validRejects.map(r => ({ size: r.size, qty: r.qty, reject: true }))];
+    const sizesJson = JSON.stringify(allSizesForAssign.map(s => ({ size: s.size, qty: s.qty, reject: s.reject || false })));
     await conn.query(`
       INSERT INTO stitching_assignments
         (assigner_cutting_master, user_id, cutting_lot_id, sizes_json, isApproved, assigned_on, approved_on)
       VALUES (?, ?, ?, ?, 1, NOW(), NOW())
     `, [lot.cutting_master_id, userId, cutting_lot_id, sizesJson]);
 
-    // 2. Create stitching_data record (completion)
+    // 2. Create stitching_data record (completion) - only OK pieces
     const totalPieces = validSizes.reduce((sum, s) => sum + s.qty, 0);
-    const [dataResult] = await conn.query(`
-      INSERT INTO stitching_data (user_id, lot_no, sku, total_pieces, created_at)
-      VALUES (?, ?, ?, ?, NOW())
-    `, [userId, lot.lot_no, lot.sku, totalPieces]);
+    let stitchingDataId = null;
 
-    const stitchingDataId = dataResult.insertId;
+    if (totalPieces > 0) {
+      const [dataResult] = await conn.query(`
+        INSERT INTO stitching_data (user_id, lot_no, sku, total_pieces, created_at)
+        VALUES (?, ?, ?, ?, NOW())
+      `, [userId, lot.lot_no, lot.sku, totalPieces]);
 
-    // 3. Create stitching_data_sizes records
-    for (const s of validSizes) {
-      await conn.query(`
-        INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
-        VALUES (?, ?, ?)
-      `, [stitchingDataId, s.size, s.qty]);
+      stitchingDataId = dataResult.insertId;
+
+      // 3. Create stitching_data_sizes records
+      for (const s of validSizes) {
+        await conn.query(`
+          INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces)
+          VALUES (?, ?, ?)
+        `, [stitchingDataId, s.size, s.qty]);
+      }
+    }
+
+    // 4. Handle REJECT pieces
+    const totalReject = validRejects.reduce((sum, s) => sum + s.qty, 0);
+    if (totalReject > 0) {
+      const [rejectResult] = await conn.query(`
+        INSERT INTO reject_data
+          (lot_no, sku, stage, user_id, source_data_id, total_pieces, reason, created_at)
+        VALUES (?, ?, 'stitching', ?, ?, ?, 'Quality issue', NOW())
+      `, [lot.lot_no, lot.sku, userId, stitchingDataId, totalReject]);
+
+      const rejectDataId = rejectResult.insertId;
+
+      for (const s of validRejects) {
+        await conn.query(`
+          INSERT INTO reject_data_sizes (reject_data_id, size_label, pieces)
+          VALUES (?, ?, ?)
+        `, [rejectDataId, s.size, s.qty]);
+      }
     }
 
     await conn.commit();
@@ -1377,10 +1409,14 @@ router.post('/submit', isAuthenticated, isStitchingMaster, async (req, res) => {
       // Don't fail the submission if payment creation fails
     }
 
+    let message = `Stitching completed: ${totalPieces} OK pieces`;
+    if (totalReject > 0) message += `, ${totalReject} rejected`;
+
     return res.json({
       success: true,
-      message: `Stitching completed: ${totalPieces} pieces`,
-      stitching_data_id: stitchingDataId
+      message: message,
+      stitching_data_id: stitchingDataId,
+      reject_count: totalReject
     });
 
   } catch (err) {
