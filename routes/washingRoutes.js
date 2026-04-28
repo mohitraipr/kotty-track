@@ -1216,4 +1216,97 @@ router.get('/my-entries', isAuthenticated, isWashingMaster, async (req, res) => 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// REWASH COMPLETION ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const REWASH_DEBIT_RATE = 200;
+
+// GET /washingdashboard/my-rewash-requests - Get pending rewash requests for this washer
+router.get('/my-rewash-requests', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [requests] = await pool.query(`
+      SELECT rr.id, rr.lot_no, rr.sku, rr.total_requested, rr.status, rr.created_at, rr.debit_id
+      FROM rewash_requests rr
+      WHERE rr.washer_id = ? AND rr.status = 'pending'
+      ORDER BY rr.created_at DESC
+    `, [userId]);
+
+    // Get sizes for each request
+    for (const req of requests) {
+      const [sizes] = await pool.query(`
+        SELECT size_label, pieces_requested FROM rewash_request_sizes WHERE rewash_request_id = ?
+      `, [req.id]);
+      req.sizes = sizes;
+    }
+
+    return res.json({ success: true, requests });
+  } catch (err) {
+    console.error('[ERROR] GET /my-rewash-requests =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /washingdashboard/complete-rewash/:id - Mark rewash as complete
+router.post('/complete-rewash/:id', isAuthenticated, isWashingMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const rewashId = parseInt(req.params.id, 10);
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // 1) Verify the rewash request belongs to this washer and is pending
+    const [[rr]] = await conn.query(`
+      SELECT * FROM rewash_requests WHERE id = ? AND washer_id = ? AND status = 'pending'
+    `, [rewashId, userId]);
+
+    if (!rr) {
+      await conn.rollback();
+      conn.release();
+      return res.status(404).json({ error: 'Rewash request not found or already completed' });
+    }
+
+    // 2) Delete the associated debit (remove penalty)
+    if (rr.debit_id) {
+      await conn.query(`DELETE FROM stage_debits WHERE id = ?`, [rr.debit_id]);
+    }
+
+    // 3) Update rewash request status to completed
+    await conn.query(`
+      UPDATE rewash_requests
+      SET status = 'completed', completed_by = ?, completed_at = NOW()
+      WHERE id = ?
+    `, [userId, rewashId]);
+
+    // 4) Create normal washing payment for the rewashed pieces
+    const [[washerInfo]] = await conn.query(`SELECT username FROM users WHERE id = ?`, [userId]);
+
+    // Get rate for washing
+    const [[rateRow]] = await conn.query(`SELECT rate FROM stage_rates WHERE stage = 'washing' LIMIT 1`);
+    const rate = rateRow?.rate || 0;
+    const totalAmount = rr.total_requested * rate;
+
+    await conn.query(`
+      INSERT INTO stage_payments (user_id, username, stage, lot_no, sku, qty, rate, total_amount, status, created_at)
+      VALUES (?, ?, 'washing', ?, ?, ?, ?, ?, 'pending', NOW())
+    `, [userId, washerInfo?.username || 'Unknown', rr.lot_no, rr.sku, rr.total_requested, rate, totalAmount]);
+
+    await conn.commit();
+    conn.release();
+
+    return res.json({ success: true, message: 'Rewash completed, debit removed, payment created' });
+  } catch (err) {
+    if (conn) {
+      await conn.rollback();
+      conn.release();
+    }
+    console.error('[ERROR] POST /complete-rewash/:id =>', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -514,6 +514,26 @@
   .lot-option-meta { font-size: 12px; color: #6b7280; }
   .lot-option-remark { font-size: 12px; color: #3b82f6; font-weight: 500; word-break: break-word; }
   .lot-option-avail { font-size: 13px; font-weight: 600; color: #22c55e; }
+
+  /* Rewash Tab */
+  .rewash-card { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 16px; }
+  .rewash-header { padding: 16px 20px; background: var(--warning-light); border-bottom: 1px solid #fcd34d; display: flex; justify-content: space-between; align-items: center; }
+  .rewash-header-title { font-weight: 700; color: #92400e; display: flex; align-items: center; gap: 8px; }
+  .rewash-header-badge { background: var(--warning); color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+  .rewash-list { list-style: none; margin: 0; padding: 0; }
+  .rewash-item { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .rewash-item:last-child { border-bottom: none; }
+  .rewash-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .rewash-lot { font-weight: 700; font-size: 1rem; text-transform: uppercase; }
+  .rewash-sku { font-size: 0.8125rem; color: var(--text-light); }
+  .rewash-debit { font-size: 0.875rem; font-weight: 600; color: var(--danger); }
+  .rewash-sizes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .rewash-size-badge { background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+  .rewash-date { font-size: 0.75rem; color: var(--text-light); margin-bottom: 10px; }
+  .btn-complete-rewash { width: 100%; padding: 12px; background: var(--success); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-complete-rewash:disabled { opacity: 0.6; cursor: not-allowed; }
+  .rewash-empty { padding: 48px 20px; text-align: center; color: var(--text-light); }
+  .rewash-empty i { font-size: 2.5rem; opacity: 0.3; margin-bottom: 12px; display: block; }
 </style>
 
 <div class="toast-container" id="toastContainer"></div>
@@ -540,6 +560,9 @@
   <div class="tabs">
     <button class="tab-btn active" data-tab="submit">
       <i class="bi bi-plus-circle"></i> Submit
+    </button>
+    <button class="tab-btn" data-tab="rewash">
+      <i class="bi bi-arrow-repeat"></i> Rewash <span id="rewashBadge" style="display:none; background:#f59e0b; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; margin-left:4px;">0</span>
     </button>
     <button class="tab-btn" data-tab="history">
       <i class="bi bi-clock-history"></i> History
@@ -598,6 +621,22 @@
       <ul class="today-list" id="todayList">
         <li class="today-item" style="justify-content: center; color: var(--text-light);">Loading...</li>
       </ul>
+    </div>
+  </div>
+
+  <!-- REWASH TAB -->
+  <div class="tab-content" id="rewashTab">
+    <div class="rewash-card">
+      <div class="rewash-header">
+        <span class="rewash-header-title"><i class="bi bi-arrow-repeat"></i> Pending Rewash</span>
+        <span class="rewash-header-badge" id="rewashCount">0</span>
+      </div>
+      <ul class="rewash-list" id="rewashList">
+        <li class="rewash-empty"><i class="bi bi-check-circle"></i>No pending rewash requests</li>
+      </ul>
+    </div>
+    <div style="background: #fef3c7; border-radius: 12px; padding: 14px 16px; font-size: 0.8125rem; color: #92400e;">
+      <strong>How it works:</strong> When pieces are marked for rewash, a ₹200/pc debit is created. Complete the rewash and submit here to remove the debit and receive normal payment.
     </div>
   </div>
 
@@ -997,6 +1036,117 @@ document.getElementById('historySearch').addEventListener('input', function() {
 
 loadToday();
 loadHistory(true);
+loadRewashRequests();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REWASH TAB FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadRewashRequests() {
+  try {
+    const res = await fetch('/washingdashboard/my-rewash-requests');
+    const data = await res.json();
+    const list = document.getElementById('rewashList');
+    list.textContent = '';
+
+    const requests = data.requests || [];
+    const badge = document.getElementById('rewashBadge');
+    const countBadge = document.getElementById('rewashCount');
+
+    if (requests.length === 0) {
+      badge.style.display = 'none';
+      countBadge.textContent = '0';
+      const li = document.createElement('li');
+      li.className = 'rewash-empty';
+      li.innerHTML = '<i class="bi bi-check-circle"></i>No pending rewash requests';
+      list.appendChild(li);
+      return;
+    }
+
+    badge.style.display = 'inline';
+    badge.textContent = requests.length;
+    countBadge.textContent = requests.length;
+
+    requests.forEach(function(req) {
+      const li = document.createElement('li');
+      li.className = 'rewash-item';
+
+      const header = document.createElement('div');
+      header.className = 'rewash-item-header';
+      const leftDiv = document.createElement('div');
+      const lotDiv = document.createElement('div');
+      lotDiv.className = 'rewash-lot';
+      lotDiv.textContent = req.lot_no;
+      const skuDiv = document.createElement('div');
+      skuDiv.className = 'rewash-sku';
+      skuDiv.textContent = req.sku;
+      leftDiv.appendChild(lotDiv);
+      leftDiv.appendChild(skuDiv);
+      const debitDiv = document.createElement('div');
+      debitDiv.className = 'rewash-debit';
+      debitDiv.textContent = '-₹' + (req.total_requested * 200);
+      header.appendChild(leftDiv);
+      header.appendChild(debitDiv);
+      li.appendChild(header);
+
+      if (req.sizes && req.sizes.length > 0) {
+        const sizesDiv = document.createElement('div');
+        sizesDiv.className = 'rewash-sizes';
+        req.sizes.forEach(function(s) {
+          const badge = document.createElement('span');
+          badge.className = 'rewash-size-badge';
+          badge.textContent = s.size_label + ': ' + s.pieces_requested;
+          sizesDiv.appendChild(badge);
+        });
+        li.appendChild(sizesDiv);
+      }
+
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'rewash-date';
+      dateDiv.textContent = 'Requested: ' + new Date(req.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      li.appendChild(dateDiv);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-complete-rewash';
+      btn.innerHTML = '<i class="bi bi-check2-circle"></i> Mark Rewash Complete';
+      btn.onclick = function() { completeRewash(req.id, req.lot_no, req.total_requested); };
+      li.appendChild(btn);
+
+      list.appendChild(li);
+    });
+  } catch (err) {
+    console.error('Failed to load rewash requests:', err);
+  }
+}
+
+async function completeRewash(requestId, lotNo, totalPieces) {
+  if (!confirm('Mark rewash complete for ' + lotNo.toUpperCase() + ' (' + totalPieces + ' pcs)?\n\nThis will remove the ₹' + (totalPieces * 200) + ' debit and create normal payment.')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/washingdashboard/complete-rewash/' + requestId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showToast('Rewash completed! Debit removed.', 'success', 4000);
+      loadRewashRequests();
+      loadToday();
+    } else {
+      showToast(data.error || 'Failed to complete rewash', 'error');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+document.querySelector('[data-tab="rewash"]').addEventListener('click', function() {
+  loadRewashRequests();
+});
 </script>
 
 <%- include('partials/footer') %>
