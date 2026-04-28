@@ -11,7 +11,7 @@ const {
 const ALLOWED_STATUSES = ['open', 'proceeding', 'arrived'];
 
 // Roles allowed to create indents from stage dashboards
-const STAGE_INDENT_ROLES = ['stitching_master', 'jeans_assembly_master', 'finishing_master', 'cutting_master', 'operator', 'washing_in_master'];
+const STAGE_INDENT_ROLES = ['stitching_master', 'jeans_assembly_master', 'finishing_master', 'finishing', 'cutting_master', 'operator', 'washing_in_master'];
 
 // Map role to stage name
 const ROLE_TO_STAGE = {
