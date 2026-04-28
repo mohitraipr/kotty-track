@@ -394,9 +394,45 @@
                   <label for="lot_no" class="kotty-form-label"><i class="bi bi-hash"></i><span data-i18n="lotNumberGenerated">Lot Number (Generated)</span></label>
                   <input type="text" class="kotty-input" id="lot_no" name="lot_no" value="<%= generatedLotNumber %>" readonly />
                 </div>
-                <div class="col-md-4">
-                  <label for="sku" class="kotty-form-label"><i class="bi bi-barcode"></i><span data-i18n="skuLabel">SKU</span></label>
-                  <input type="text" class="kotty-input" id="sku" name="sku" placeholder="Enter SKU" pattern="^(?:[Kk][Tt][Tt]|[Cc][Cc]|[Kk][Tt][Yy]|[Kk][Oo][Tt][Tt][Yy]|[Ff]{2}[Kk][Tt][Tt])[A-Za-z]+\d+$" title="Type The SKU In This Format(e.g., kttwomenspant261)" required />
+                <!-- SKU Builder -->
+                <div class="col-md-8">
+                  <label class="kotty-form-label"><i class="bi bi-barcode"></i><span>SKU Builder</span></label>
+                  <div class="sku-builder" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 80px;">
+                      <label style="font-size: 0.7rem; color: #666;">Brand</label>
+                      <select id="skuBrand" class="kotty-input" style="padding: 8px;">
+                        <option value="KTT" selected>KTT</option>
+                        <option value="KOTTY">KOTTY</option>
+                        <option value="NW">NW</option>
+                      </select>
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                      <label style="font-size: 0.7rem; color: #666;">Gender (optional)</label>
+                      <select id="skuGender" class="kotty-input" style="padding: 8px;">
+                        <option value="">-- None --</option>
+                        <option value="WOMENS">WOMENS</option>
+                        <option value="MENS">MENS</option>
+                        <option value="LADIES">LADIES</option>
+                        <option value="BOYS">BOYS</option>
+                        <option value="GIRLS">GIRLS</option>
+                      </select>
+                    </div>
+                    <div style="flex: 1.5; min-width: 120px;">
+                      <label style="font-size: 0.7rem; color: #666;">Category</label>
+                      <div style="display: flex; gap: 4px;">
+                        <select id="skuCategory" class="kotty-input" style="padding: 8px; flex: 1;" required>
+                          <option value="">Select...</option>
+                        </select>
+                        <button type="button" id="btnAddCategory" class="kotty-btn" style="padding: 8px 12px; white-space: nowrap;" title="Add new category">+</button>
+                      </div>
+                    </div>
+                    <div style="flex: 1; min-width: 80px;">
+                      <label style="font-size: 0.7rem; color: #666;">Code</label>
+                      <input type="number" id="skuCode" class="kotty-input" style="padding: 8px;" placeholder="123" min="1" required />
+                    </div>
+                  </div>
+                  <input type="hidden" id="sku" name="sku" required />
+                  <div id="skuPreview" style="margin-top: 8px; font-size: 0.9rem; color: #16a34a; font-weight: 600;">Preview: <span id="skuPreviewText">--</span></div>
                 </div>
                 <div class="col-md-4">
                   <label for="fabric_type_search" class="kotty-form-label"><i class="bi bi-hexagon-fill"></i><span data-i18n="fabricTypeLabel">Fabric Type</span></label>
@@ -1056,6 +1092,86 @@ async function submitIndent() {
   } catch (e) { alert('Error: ' + e.message); }
   btn.disabled = false;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SKU BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadSkuCategories() {
+  try {
+    const res = await fetch('/cutting-manager/api/sku-categories');
+    const data = await res.json();
+    const select = document.getElementById('skuCategory');
+    select.textContent = '';
+    var defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Select...';
+    select.appendChild(defaultOpt);
+    if (data.categories) {
+      data.categories.forEach(function(cat) {
+        var opt = document.createElement('option');
+        opt.value = cat.name;
+        opt.textContent = cat.name;
+        select.appendChild(opt);
+      });
+    }
+  } catch (e) { console.error('Failed to load categories:', e); }
+}
+
+function updateSkuPreview() {
+  var brand = document.getElementById('skuBrand').value;
+  var gender = document.getElementById('skuGender').value;
+  var category = document.getElementById('skuCategory').value;
+  var code = document.getElementById('skuCode').value;
+
+  if (brand && category && code) {
+    var sku = (brand + gender + category + code).toUpperCase();
+    document.getElementById('skuPreviewText').textContent = sku;
+    document.getElementById('sku').value = sku;
+  } else {
+    document.getElementById('skuPreviewText').textContent = '--';
+    document.getElementById('sku').value = '';
+  }
+}
+
+document.getElementById('skuBrand').addEventListener('change', updateSkuPreview);
+document.getElementById('skuGender').addEventListener('change', updateSkuPreview);
+document.getElementById('skuCategory').addEventListener('change', updateSkuPreview);
+document.getElementById('skuCode').addEventListener('input', updateSkuPreview);
+
+document.getElementById('btnAddCategory').addEventListener('click', async function() {
+  var newCat = prompt('Enter new category name (e.g., KURTI):');
+  if (!newCat || !newCat.trim()) return;
+
+  var catName = newCat.trim().toUpperCase();
+  try {
+    var res = await fetch('/cutting-manager/api/sku-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: catName })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Category "' + catName + '" added!');
+      await loadSkuCategories();
+      document.getElementById('skuCategory').value = catName;
+      updateSkuPreview();
+    } else {
+      alert(data.error || 'Failed to add category');
+    }
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+document.getElementById('lotForm').addEventListener('submit', function(e) {
+  var sku = document.getElementById('sku').value;
+  if (!sku) {
+    e.preventDefault();
+    alert('Please complete the SKU builder (Brand + Category + Code required)');
+    return false;
+  }
+});
+
+loadSkuCategories();
 </script>
 
 <%- include('partials/footer') %>

@@ -1,0 +1,145 @@
+<%- include('partials/header', { pageTitle: 'SKU Categories' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  :root {
+    --primary: #c45c3a;
+    --primary-dark: #a84a2d;
+    --success: #2d8a5f;
+    --danger: #c23b22;
+    --bg: #faf8f5;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --text-light: #666;
+    --border: #e5e2dd;
+  }
+  body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  .container { max-width: 800px; margin: 0 auto; padding: 20px; padding-top: 80px; }
+  .page-header { margin-bottom: 24px; }
+  .page-title { font-size: 1.5rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .back-link { color: var(--text-light); text-decoration: none; font-size: 0.9rem; }
+  .back-link:hover { color: var(--primary); }
+  .card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; }
+  .form-row { display: flex; gap: 10px; }
+  .form-input { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
+  .form-input:focus { outline: none; border-color: var(--primary); }
+  .btn { padding: 12px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-danger { background: var(--danger); color: white; padding: 6px 12px; font-size: 0.8rem; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  .table th { font-size: 0.8rem; color: var(--text-light); text-transform: uppercase; font-weight: 600; }
+  .table td { font-size: 0.95rem; }
+  .category-name { font-weight: 600; }
+  .meta { font-size: 0.8rem; color: var(--text-light); }
+  .empty-state { text-align: center; padding: 40px; color: var(--text-light); }
+  .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; font-weight: 500; z-index: 9999; display: none; }
+  .toast-success { background: #166534; color: white; }
+  .toast-error { background: #991b1b; color: white; }
+</style>
+
+<div id="toast" class="toast"></div>
+
+<div class="container">
+  <div class="page-header">
+    <a href="/operator/dashboard" class="back-link"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    <h1 class="page-title"><i class="bi bi-tags"></i> SKU Categories</h1>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Add New Category</div>
+    <form id="addForm" class="form-row">
+      <input type="text" id="newCategory" class="form-input" placeholder="Category name (e.g., KURTI)" required />
+      <button type="submit" class="btn btn-primary">Add Category</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Existing Categories (<span id="categoryCount"><%= categories.length %></span>)</div>
+    <% if (categories.length === 0) { %>
+      <div class="empty-state">
+        <i class="bi bi-inbox" style="font-size: 2rem; opacity: 0.3;"></i>
+        <p>No categories yet. Add one above.</p>
+      </div>
+    <% } else { %>
+      <table class="table" id="categoriesTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Added By</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% categories.forEach(function(cat) { %>
+          <tr data-id="<%= cat.id %>">
+            <td class="category-name"><%= cat.name %></td>
+            <td class="meta"><%= cat.created_by_name || 'System' %></td>
+            <td class="meta"><%= cat.created_at ? new Date(cat.created_at).toLocaleDateString('en-IN') : '-' %></td>
+            <td><button class="btn btn-danger btn-delete" data-id="<%= cat.id %>" data-name="<%= cat.name %>">Delete</button></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+
+<script>
+function showToast(msg, type) {
+  var toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast toast-' + type;
+  toast.style.display = 'block';
+  setTimeout(function() { toast.style.display = 'none'; }, 3000);
+}
+
+document.getElementById('addForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var input = document.getElementById('newCategory');
+  var name = input.value.trim();
+  if (!name) return;
+
+  try {
+    var res = await fetch('/operator/api/sku-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showToast('Category "' + name.toUpperCase() + '" added!', 'success');
+      input.value = '';
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      showToast(data.error || 'Failed to add', 'error');
+    }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+});
+
+document.querySelectorAll('.btn-delete').forEach(function(btn) {
+  btn.addEventListener('click', async function() {
+    var id = this.dataset.id;
+    var name = this.dataset.name;
+    if (!confirm('Delete category "' + name + '"?')) return;
+
+    try {
+      var res = await fetch('/operator/api/sku-categories/' + id, { method: 'DELETE' });
+      var data = await res.json();
+      if (data.success) {
+        showToast('Category deleted', 'success');
+        document.querySelector('tr[data-id="' + id + '"]').remove();
+        var count = document.querySelectorAll('#categoriesTable tbody tr').length;
+        document.getElementById('categoryCount').textContent = count;
+      } else {
+        showToast(data.error || 'Failed to delete', 'error');
+      }
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  });
+});
+</script>
+
+<%- include('partials/footer') %>

@@ -3596,4 +3596,70 @@ router.get("/lot-completion/download", isAuthenticated, isOperator, async (req, 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SKU CATEGORIES MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /operator/sku-categories - Render management page
+router.get('/sku-categories', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [categories] = await pool.query(`
+      SELECT sc.*, u.username AS created_by_name
+      FROM sku_categories sc
+      LEFT JOIN users u ON sc.created_by = u.id
+      ORDER BY sc.name
+    `);
+    res.render('operator-sku-categories', {
+      user: req.session.user,
+      categories
+    });
+  } catch (error) {
+    console.error('Error loading SKU categories:', error);
+    req.flash('error', 'Failed to load categories');
+    res.redirect('/operator/dashboard');
+  }
+});
+
+// GET /operator/api/sku-categories - JSON list
+router.get('/api/sku-categories', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [categories] = await pool.query('SELECT id, name FROM sku_categories ORDER BY name');
+    return res.json({ success: true, categories });
+  } catch (error) {
+    console.error('Error loading SKU categories:', error);
+    return res.status(500).json({ error: 'Failed to load categories' });
+  }
+});
+
+// POST /operator/api/sku-categories - Add category
+router.post('/api/sku-categories', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+    const catName = name.trim().toUpperCase();
+    await pool.query('INSERT INTO sku_categories (name, created_by) VALUES (?, ?)', [catName, req.session.user.id]);
+    return res.json({ success: true, message: 'Category added' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Category already exists' });
+    }
+    console.error('Error adding SKU category:', error);
+    return res.status(500).json({ error: 'Failed to add category' });
+  }
+});
+
+// DELETE /operator/api/sku-categories/:id - Delete category
+router.delete('/api/sku-categories/:id', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await pool.query('DELETE FROM sku_categories WHERE id = ?', [id]);
+    return res.json({ success: true, message: 'Category deleted' });
+  } catch (error) {
+    console.error('Error deleting SKU category:', error);
+    return res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
 module.exports = router;

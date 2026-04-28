@@ -687,4 +687,38 @@ router.post('/assign-stitching', isAuthenticated, isCuttingManager, async (req, 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SKU CATEGORIES API
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /cutting-manager/api/sku-categories - List all categories
+router.get('/api/sku-categories', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const [categories] = await pool.query('SELECT id, name FROM sku_categories ORDER BY name');
+    return res.json({ success: true, categories });
+  } catch (error) {
+    console.error('Error loading SKU categories:', error);
+    return res.status(500).json({ error: 'Failed to load categories' });
+  }
+});
+
+// POST /cutting-manager/api/sku-categories - Add new category
+router.post('/api/sku-categories', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+    const catName = name.trim().toUpperCase();
+    await pool.query('INSERT INTO sku_categories (name, created_by) VALUES (?, ?)', [catName, req.session.user.id]);
+    return res.json({ success: true, message: 'Category added' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Category already exists' });
+    }
+    console.error('Error adding SKU category:', error);
+    return res.status(500).json({ error: 'Failed to add category' });
+  }
+});
+
 module.exports = router;
