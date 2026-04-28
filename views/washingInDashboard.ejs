@@ -54,27 +54,28 @@
   .lot-number { font-size: 1.25rem; font-weight: 700; }
   .lot-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: #dbeafe; color: #1e40af; }
   .lot-meta { font-size: 0.875rem; color: var(--text-light); }
-  .sizes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .size-card { background: #f8fafc; border: 2px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; }
+  .sizes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .size-card { background: #f8fafc; border: 2px solid var(--border); border-radius: 10px; padding: 8px 6px; text-align: center; }
   .size-card.has-qty { border-color: var(--success); background: var(--success-light); }
   .size-card.disabled { opacity: 0.5; }
   .size-card.input-error { border-color: var(--danger); background: var(--danger-light); }
-  .size-name { font-weight: 700; font-size: 0.875rem; margin-bottom: 4px; }
-  .size-avail { font-size: 0.75rem; color: var(--text-light); margin-bottom: 8px; }
+  .size-name { font-weight: 700; font-size: 0.8rem; margin-bottom: 2px; }
+  .size-avail { font-size: 0.65rem; color: var(--text-light); margin-bottom: 4px; }
   .size-avail .green { color: var(--success); font-weight: 600; }
-  .size-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; font-weight: 600; text-align: center; }
+  .size-input { width: 100%; padding: 8px 4px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; font-weight: 600; text-align: center; }
   .size-error { font-size: 0.6875rem; color: var(--danger); margin-top: 4px; display: none; }
   .size-card.input-error .size-error { display: block; }
-  /* Rewash/Reject inputs */
-  .size-inputs-row { display: flex; gap: 4px; margin-top: 6px; }
-  .size-mini-input { flex: 1; padding: 6px 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-align: center; }
-  .size-mini-input.rewash { border-color: #f59e0b; background: #fef9c3; }
-  .size-mini-input.reject { border-color: #dc2626; background: #fee2e2; }
-  .size-mini-input::placeholder { font-weight: 400; color: #9ca3af; font-size: 0.625rem; }
-  .size-mini-label { font-size: 0.625rem; color: var(--text-light); margin-top: 4px; display: flex; justify-content: space-between; }
-  .size-mini-label span { flex: 1; text-align: center; }
-  .size-mini-label .rw { color: #f59e0b; }
-  .size-mini-label .rj { color: #dc2626; }
+  /* Rewash/Reject compact row */
+  .rw-rj-row { display: flex; gap: 4px; margin-top: 6px; }
+  .rw-rj-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .rw-rj-label { font-size: 0.55rem; font-weight: 600; margin-bottom: 2px; text-transform: uppercase; }
+  .rw-rj-label.rw { color: #d97706; }
+  .rw-rj-label.rj { color: #dc2626; }
+  .rw-rj-input { width: 100%; padding: 4px 2px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-align: center; }
+  .rw-rj-input.rewash { border-color: #fbbf24; background: #fef9c3; }
+  .rw-rj-input.reject { border-color: #f87171; background: #fee2e2; }
+  .rw-rj-input::placeholder { font-weight: 400; color: #9ca3af; font-size: 0.65rem; }
+  .rw-rj-input:focus { outline: none; }
   .submit-section { padding-top: 16px; border-top: 1px solid var(--border); }
   .total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .total-label { font-weight: 600; }
@@ -392,42 +393,46 @@ async function displaySelectedLot() {
     input.addEventListener('input', handleQtyInput);
     input.addEventListener('focus', function() { this.select(); });
     card.appendChild(input);
-    // Rewash + Reject row
-    var miniRow = document.createElement('div');
-    miniRow.className = 'size-inputs-row';
+    // Rewash + Reject compact row
+    var rwRjRow = document.createElement('div');
+    rwRjRow.className = 'rw-rj-row';
+    // Rewash item
+    var rwItem = document.createElement('div');
+    rwItem.className = 'rw-rj-item';
+    var rwLabel = document.createElement('div');
+    rwLabel.className = 'rw-rj-label rw';
+    rwLabel.textContent = 'RW';
+    rwItem.appendChild(rwLabel);
     var rewashInput = document.createElement('input');
     rewashInput.type = 'number';
-    rewashInput.className = 'size-mini-input rewash rewash-input';
+    rewashInput.className = 'rw-rj-input rewash rewash-input';
     rewashInput.dataset.sizeId = size.id;
-    rewashInput.placeholder = 'RW';
+    rewashInput.placeholder = '0';
     rewashInput.min = '0';
     rewashInput.disabled = size.remain <= 0;
     rewashInput.addEventListener('input', handleQtyInput);
     rewashInput.addEventListener('focus', function() { this.select(); });
-    miniRow.appendChild(rewashInput);
+    rwItem.appendChild(rewashInput);
+    rwRjRow.appendChild(rwItem);
+    // Reject item
+    var rjItem = document.createElement('div');
+    rjItem.className = 'rw-rj-item';
+    var rjLabel = document.createElement('div');
+    rjLabel.className = 'rw-rj-label rj';
+    rjLabel.textContent = 'RJ';
+    rjItem.appendChild(rjLabel);
     var rejectInput = document.createElement('input');
     rejectInput.type = 'number';
-    rejectInput.className = 'size-mini-input reject reject-input';
+    rejectInput.className = 'rw-rj-input reject reject-input';
     rejectInput.dataset.sizeId = size.id;
-    rejectInput.placeholder = 'RJ';
+    rejectInput.placeholder = '0';
     rejectInput.min = '0';
     rejectInput.disabled = size.remain <= 0;
     rejectInput.addEventListener('input', handleQtyInput);
     rejectInput.addEventListener('focus', function() { this.select(); });
-    miniRow.appendChild(rejectInput);
-    card.appendChild(miniRow);
-    // Labels
-    var labelRow = document.createElement('div');
-    labelRow.className = 'size-mini-label';
-    var rwLabel = document.createElement('span');
-    rwLabel.className = 'rw';
-    rwLabel.textContent = 'Rewash';
-    labelRow.appendChild(rwLabel);
-    var rjLabel = document.createElement('span');
-    rjLabel.className = 'rj';
-    rjLabel.textContent = 'Reject';
-    labelRow.appendChild(rjLabel);
-    card.appendChild(labelRow);
+    rjItem.appendChild(rejectInput);
+    rwRjRow.appendChild(rjItem);
+    card.appendChild(rwRjRow);
     var errorDiv = document.createElement('div');
     errorDiv.className = 'size-error';
     errorDiv.textContent = 'Max: ' + size.remain;
