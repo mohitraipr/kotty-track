@@ -615,22 +615,35 @@ router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, a
 router.get("/debug/lot-journey", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
 
-    const [lots] = await pool.query(`
+    let query = `
       SELECT
         cl.lot_no,
         cl.sku,
         cl.total_pieces,
+        cl.remark,
         DATE_FORMAT(cl.created_at, '%Y-%m-%d') as created_date,
-        COALESCE((SELECT SUM(completed_pieces) FROM stitching_data WHERE lot_no = cl.lot_no), 0) as stitched,
-        COALESCE((SELECT SUM(completed_pieces) FROM jeans_assembly_data WHERE lot_no = cl.lot_no), 0) as assembled,
-        COALESCE((SELECT SUM(completed_pieces) FROM washing_data WHERE lot_no = cl.lot_no), 0) as washed,
-        COALESCE((SELECT SUM(completed_pieces) FROM washing_in_data WHERE lot_no = cl.lot_no), 0) as wash_in,
-        COALESCE((SELECT SUM(finished_pieces) FROM finishing_data WHERE lot_no = cl.lot_no), 0) as finished
+        u.username as cutting_master,
+        COALESCE((SELECT SUM(total_pieces) FROM stitching_data WHERE lot_no = cl.lot_no), 0) as stitched,
+        COALESCE((SELECT SUM(total_pieces) FROM jeans_assembly_data WHERE lot_no = cl.lot_no), 0) as assembled,
+        COALESCE((SELECT SUM(total_pieces) FROM washing_data WHERE lot_no = cl.lot_no), 0) as washed,
+        COALESCE((SELECT SUM(total_pieces) FROM washing_in_data WHERE lot_no = cl.lot_no), 0) as wash_in,
+        COALESCE((SELECT SUM(total_pieces) FROM finishing_data WHERE lot_no = cl.lot_no), 0) as finished
       FROM cutting_lots cl
-      ORDER BY cl.created_at DESC
-      LIMIT ?
-    `, [limit]);
+      LEFT JOIN users u ON cl.user_id = u.id
+    `;
+    const params = [];
+
+    if (search) {
+      query += ` WHERE cl.lot_no LIKE ? OR cl.remark LIKE ?`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    query += ` ORDER BY cl.created_at DESC LIMIT ?`;
+    params.push(limit);
+
+    const [lots] = await pool.query(query, params);
 
     // Analyze journey
     const analysis = lots.map(lot => {
@@ -663,6 +676,8 @@ router.get("/debug/lot-journey", async (req, res) => {
         lot_no: lot.lot_no,
         sku: lot.sku,
         total: total,
+        remark: lot.remark,
+        cutting_master: lot.cutting_master,
         created: lot.created_date,
         currentStage,
         stages,
