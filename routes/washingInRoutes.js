@@ -1282,31 +1282,43 @@ router.get('/available-lot-sizes/:lotId', isAuthenticated, isWashingInMaster, as
   }
 });
 
+// Rewash debit rate (configurable)
+const REWASH_DEBIT_RATE = 200;
+
 // POST /washingin/submit
-// Self-assign + complete washing_in in one step (stitching-style flow)
+// Self-assign + complete washing_in in one step with rewash/reject support
 router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_file'), async (req, res) => {
   let conn;
   try {
     const userId = req.session.user.id;
     const username = req.session.user.username;
-    const { selectedLotId, remark } = req.body;
+    const { selectedLotId, remark, rejectReason } = req.body;
     const sizesObj = req.body.sizes || {};
+    const rewashObj = req.body.rewash || {};
+    const rejectObj = req.body.reject || {};
 
     let image_url = null;
     if (req.file) {
       image_url = '/uploads/' + req.file.filename;
     }
 
-    // Calculate total pieces
-    let grandTotal = 0;
-    for (const sizeId of Object.keys(sizesObj)) {
-      const countVal = parseInt(sizesObj[sizeId], 10);
-      if (!isNaN(countVal) && countVal > 0) {
-        grandTotal += countVal;
-      }
+    // Calculate totals
+    let okTotal = 0, rewashTotal = 0, rejectTotal = 0;
+    const allSizeIds = new Set([
+      ...Object.keys(sizesObj),
+      ...Object.keys(rewashObj),
+      ...Object.keys(rejectObj)
+    ].map(id => parseInt(id, 10)).filter(Boolean));
+
+    for (const sizeId of allSizeIds) {
+      okTotal += parseInt(sizesObj[sizeId], 10) || 0;
+      rewashTotal += parseInt(rewashObj[sizeId], 10) || 0;
+      rejectTotal += parseInt(rejectObj[sizeId], 10) || 0;
     }
+
+    const grandTotal = okTotal + rewashTotal + rejectTotal;
     if (grandTotal <= 0) {
-      return res.status(400).json({ error: 'No pieces requested.' });
+      return res.status(400).json({ error: 'No pieces entered.' });
     }
 
     conn = await pool.getConnection();
@@ -1321,7 +1333,7 @@ router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_
     }
 
     // 2) Validate sizes against available pieces
-    const sizeIds = Object.keys(sizesObj).map(id => parseInt(id, 10)).filter(Boolean);
+    const sizeIds = Array.from(allSizeIds);
     const [sizeRows] = await conn.query(
       `SELECT id, size_label, pieces FROM washing_data_sizes WHERE id IN (?)`,
       [sizeIds.length ? sizeIds : [0]]
@@ -1341,22 +1353,29 @@ router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_
     const usedMap = {};
     for (const row of usedRows) usedMap[row.size_label] = row.usedCount;
 
+    // Validate total requested per size doesn't exceed available
     for (const sizeId of sizeIds) {
       const row = sizeMap[sizeId];
       if (!row) continue;
-      const requested = parseInt(sizesObj[sizeId], 10) || 0;
+      const ok = parseInt(sizesObj[sizeId], 10) || 0;
+      const rw = parseInt(rewashObj[sizeId], 10) || 0;
+      const rj = parseInt(rejectObj[sizeId], 10) || 0;
+      const requested = ok + rw + rj;
       if (requested === 0) continue;
       const used = usedMap[row.size_label] || 0;
       const remain = row.pieces - used;
       if (requested > remain) {
         await conn.rollback();
         conn.release();
-        return res.status(400).json({ error: `Requested ${requested} for ${row.size_label}, but only ${remain} remain.` });
+        return res.status(400).json({ error: `Total ${requested} for ${row.size_label} exceeds available ${remain}.` });
       }
     }
 
     // 3) Create washing_in_assignments record (auto-approved)
-    const sizesJson = JSON.stringify(sizeRows.filter(r => parseInt(sizesObj[r.id], 10) > 0).map(r => r.size_label));
+    const sizesJson = JSON.stringify(sizeRows.filter(r => {
+      const sid = r.id;
+      return (parseInt(sizesObj[sid], 10) || 0) + (parseInt(rewashObj[sid], 10) || 0) + (parseInt(rejectObj[sid], 10) || 0) > 0;
+    }).map(r => r.size_label));
 
     await conn.query(`
       INSERT INTO washing_in_assignments
@@ -1364,38 +1383,115 @@ router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_
       VALUES (?, ?, ?, NOW(), ?, 1, NOW())
     `, [wd.user_id, userId, wd.id, sizesJson]);
 
-    // 4) Insert washing_in_data
-    const [dataResult] = await conn.query(`
-      INSERT INTO washing_in_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, NOW())
-    `, [userId, wd.lot_no, wd.sku, grandTotal, remark || null, image_url]);
-    const newId = dataResult.insertId;
+    let newWashingInId = null;
+    let rewashRequestId = null;
+    let rejectDataId = null;
 
-    // 5) Insert washing_in_data_sizes
-    for (const sizeId of sizeIds) {
-      const numVal = parseInt(sizesObj[sizeId], 10) || 0;
-      if (numVal <= 0) continue;
-      const sds = sizeMap[sizeId];
-      await conn.query(
-        `INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
-         VALUES (?, ?, ?, NOW())`,
-        [newId, sds.size_label, numVal]
-      );
+    // 4) Insert washing_in_data for OK pieces (if any)
+    if (okTotal > 0) {
+      const [dataResult] = await conn.query(`
+        INSERT INTO washing_in_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `, [userId, wd.lot_no, wd.sku, okTotal, remark || null, image_url]);
+      newWashingInId = dataResult.insertId;
+
+      // Insert washing_in_data_sizes for OK pieces
+      for (const sizeId of sizeIds) {
+        const numVal = parseInt(sizesObj[sizeId], 10) || 0;
+        if (numVal <= 0) continue;
+        const sds = sizeMap[sizeId];
+        await conn.query(
+          `INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
+           VALUES (?, ?, ?, NOW())`,
+          [newWashingInId, sds.size_label, numVal]
+        );
+      }
     }
 
-    // 6) Auto-create washing payment
-    const [[washingMaster]] = await conn.query(
-      `SELECT username FROM users WHERE id = ?`,
-      [wd.user_id]
-    );
-    if (washingMaster) {
-      await createStagePayment('washing', {
-        lot_no: wd.lot_no,
-        sku: wd.sku,
-        qty: grandTotal,
-        user_id: wd.user_id,
-        username: washingMaster.username
-      });
+    // 5) Handle REWASH pieces
+    if (rewashTotal > 0) {
+      // Create rewash_request
+      const [rrResult] = await conn.query(`
+        INSERT INTO rewash_requests
+          (washing_data_id, washer_id, user_id, lot_no, sku, total_requested, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending')
+      `, [wd.id, wd.user_id, userId, wd.lot_no, wd.sku, rewashTotal]);
+      rewashRequestId = rrResult.insertId;
+
+      // Insert rewash_request_sizes
+      for (const sizeId of sizeIds) {
+        const numVal = parseInt(rewashObj[sizeId], 10) || 0;
+        if (numVal <= 0) continue;
+        const sds = sizeMap[sizeId];
+        await conn.query(
+          `INSERT INTO rewash_request_sizes (rewash_request_id, size_label, pieces_requested)
+           VALUES (?, ?, ?)`,
+          [rewashRequestId, sds.size_label, numVal]
+        );
+      }
+
+      // Create DEBIT against washer (rewashTotal × REWASH_DEBIT_RATE)
+      const [[washerInfo]] = await conn.query(`SELECT username FROM users WHERE id = ?`, [wd.user_id]);
+      const debitAmount = rewashTotal * REWASH_DEBIT_RATE;
+
+      const [debitResult] = await conn.query(`
+        INSERT INTO stage_debits
+          (user_id, username, lot_no, sku, stage, qty, rate, amount, reason, raised_by, rewash_request_id, auto_created, status)
+        VALUES (?, ?, ?, ?, 'washing', ?, ?, ?, ?, ?, ?, 1, 'approved')
+      `, [
+        wd.user_id,
+        washerInfo?.username || 'Unknown',
+        wd.lot_no,
+        wd.sku,
+        rewashTotal,
+        REWASH_DEBIT_RATE,
+        debitAmount,
+        `Rewash penalty: ${rewashTotal} pcs × ₹${REWASH_DEBIT_RATE}`,
+        userId,
+        rewashRequestId
+      ]);
+
+      // Update rewash_request with debit_id
+      await conn.query(`UPDATE rewash_requests SET debit_id = ? WHERE id = ?`, [debitResult.insertId, rewashRequestId]);
+    }
+
+    // 6) Handle REJECT pieces
+    if (rejectTotal > 0) {
+      const [rejectResult] = await conn.query(`
+        INSERT INTO reject_data
+          (lot_no, sku, stage, user_id, source_data_id, total_pieces, reason, created_at)
+        VALUES (?, ?, 'washing_in', ?, ?, ?, ?, NOW())
+      `, [wd.lot_no, wd.sku, userId, wd.id, rejectTotal, rejectReason || 'Quality issue']);
+      rejectDataId = rejectResult.insertId;
+
+      // Insert reject_data_sizes
+      for (const sizeId of sizeIds) {
+        const numVal = parseInt(rejectObj[sizeId], 10) || 0;
+        if (numVal <= 0) continue;
+        const sds = sizeMap[sizeId];
+        await conn.query(
+          `INSERT INTO reject_data_sizes (reject_data_id, size_label, pieces)
+           VALUES (?, ?, ?)`,
+          [rejectDataId, sds.size_label, numVal]
+        );
+      }
+    }
+
+    // 7) Auto-create washing payment ONLY for OK pieces (not rewash, not reject)
+    if (okTotal > 0) {
+      const [[washingMaster]] = await conn.query(
+        `SELECT username FROM users WHERE id = ?`,
+        [wd.user_id]
+      );
+      if (washingMaster) {
+        await createStagePayment('washing', {
+          lot_no: wd.lot_no,
+          sku: wd.sku,
+          qty: okTotal,
+          user_id: wd.user_id,
+          username: washingMaster.username
+        });
+      }
     }
 
     await conn.commit();
@@ -1403,8 +1499,10 @@ router.post('/submit', isAuthenticated, isWashingInMaster, upload.single('image_
 
     return res.json({
       success: true,
-      message: 'Washing In entry created successfully!',
-      washingInDataId: newId
+      message: `Washing In completed! OK: ${okTotal}, Rewash: ${rewashTotal}, Reject: ${rejectTotal}`,
+      washingInDataId: newWashingInId,
+      rewashRequestId,
+      rejectDataId
     });
   } catch (err) {
     console.error('[ERROR] POST /washingin/submit =>', err);

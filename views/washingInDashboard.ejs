@@ -65,6 +65,16 @@
   .size-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; font-weight: 600; text-align: center; }
   .size-error { font-size: 0.6875rem; color: var(--danger); margin-top: 4px; display: none; }
   .size-card.input-error .size-error { display: block; }
+  /* Rewash/Reject inputs */
+  .size-inputs-row { display: flex; gap: 4px; margin-top: 6px; }
+  .size-mini-input { flex: 1; padding: 6px 2px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-align: center; }
+  .size-mini-input.rewash { border-color: #f59e0b; background: #fef9c3; }
+  .size-mini-input.reject { border-color: #dc2626; background: #fee2e2; }
+  .size-mini-input::placeholder { font-weight: 400; color: #9ca3af; font-size: 0.625rem; }
+  .size-mini-label { font-size: 0.625rem; color: var(--text-light); margin-top: 4px; display: flex; justify-content: space-between; }
+  .size-mini-label span { flex: 1; text-align: center; }
+  .size-mini-label .rw { color: #f59e0b; }
+  .size-mini-label .rj { color: #dc2626; }
   .submit-section { padding-top: 16px; border-top: 1px solid var(--border); }
   .total-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .total-label { font-weight: 600; }
@@ -203,7 +213,10 @@
         </div>
         <div class="sizes-grid" id="sizesGrid"></div>
         <div class="submit-section">
-          <div class="total-row"><span class="total-label">Total Pieces</span><span class="total-value"><span id="totalQty">0</span> pcs</span></div>
+          <div class="total-row"><span class="total-label">Total</span><span class="total-value"><span id="totalQty">0</span> pcs</span></div>
+          <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 12px; text-align: center;">
+            OK = normal payment • <span style="color:#f59e0b">Rewash = ₹200/pc debit</span> • <span style="color:#dc2626">Reject = permanent</span>
+          </div>
           <button type="button" class="btn-submit" id="btnSubmit" onclick="submitWashingIn()" disabled>
             <span class="btn-text"><i class="bi bi-check-circle"></i> Submit Washing In</span>
           </button>
@@ -366,6 +379,7 @@ async function displaySelectedLot() {
     availDiv.appendChild(greenSpan);
     availDiv.appendChild(document.createTextNode(' / ' + size.pieces));
     card.appendChild(availDiv);
+    // OK qty input
     var input = document.createElement('input');
     input.type = 'number';
     input.className = 'size-input qty-input';
@@ -378,6 +392,42 @@ async function displaySelectedLot() {
     input.addEventListener('input', handleQtyInput);
     input.addEventListener('focus', function() { this.select(); });
     card.appendChild(input);
+    // Rewash + Reject row
+    var miniRow = document.createElement('div');
+    miniRow.className = 'size-inputs-row';
+    var rewashInput = document.createElement('input');
+    rewashInput.type = 'number';
+    rewashInput.className = 'size-mini-input rewash rewash-input';
+    rewashInput.dataset.sizeId = size.id;
+    rewashInput.placeholder = 'RW';
+    rewashInput.min = '0';
+    rewashInput.disabled = size.remain <= 0;
+    rewashInput.addEventListener('input', handleQtyInput);
+    rewashInput.addEventListener('focus', function() { this.select(); });
+    miniRow.appendChild(rewashInput);
+    var rejectInput = document.createElement('input');
+    rejectInput.type = 'number';
+    rejectInput.className = 'size-mini-input reject reject-input';
+    rejectInput.dataset.sizeId = size.id;
+    rejectInput.placeholder = 'RJ';
+    rejectInput.min = '0';
+    rejectInput.disabled = size.remain <= 0;
+    rejectInput.addEventListener('input', handleQtyInput);
+    rejectInput.addEventListener('focus', function() { this.select(); });
+    miniRow.appendChild(rejectInput);
+    card.appendChild(miniRow);
+    // Labels
+    var labelRow = document.createElement('div');
+    labelRow.className = 'size-mini-label';
+    var rwLabel = document.createElement('span');
+    rwLabel.className = 'rw';
+    rwLabel.textContent = 'Rewash';
+    labelRow.appendChild(rwLabel);
+    var rjLabel = document.createElement('span');
+    rjLabel.className = 'rj';
+    rjLabel.textContent = 'Reject';
+    labelRow.appendChild(rjLabel);
+    card.appendChild(labelRow);
     var errorDiv = document.createElement('div');
     errorDiv.className = 'size-error';
     errorDiv.textContent = 'Max: ' + size.remain;
@@ -434,39 +484,77 @@ async function searchLot() {
 
 function handleQtyInput(e) {
   var inp = e.target;
-  var val = parseInt(inp.value) || 0;
-  var max = parseInt(inp.dataset.max) || 0;
   var card = inp.closest('.size-card');
-  if (val > max) { card.classList.add('input-error'); } else { card.classList.remove('input-error'); card.classList.toggle('has-qty', val > 0); }
+  var sizeId = inp.dataset.sizeId;
+  // Get all inputs for this size
+  var okInput = card.querySelector('.qty-input');
+  var rwInput = card.querySelector('.rewash-input');
+  var rjInput = card.querySelector('.reject-input');
+  var max = parseInt(okInput.dataset.max) || 0;
+  var okVal = parseInt(okInput.value) || 0;
+  var rwVal = parseInt(rwInput.value) || 0;
+  var rjVal = parseInt(rjInput.value) || 0;
+  var total = okVal + rwVal + rjVal;
+  if (total > max) {
+    card.classList.add('input-error');
+    card.querySelector('.size-error').textContent = 'Total exceeds ' + max;
+  } else {
+    card.classList.remove('input-error');
+    card.classList.toggle('has-qty', total > 0);
+  }
   updateTotal();
 }
 
 function updateTotal() {
-  var inputs = document.querySelectorAll('.qty-input');
-  var total = 0, hasError = false;
-  inputs.forEach(function(inp) {
-    var val = parseInt(inp.value) || 0;
-    var max = parseInt(inp.dataset.max) || 0;
-    if (val > 0 && val <= max) total += val;
-    if (val > max) hasError = true;
+  var cards = document.querySelectorAll('.size-card');
+  var totalOk = 0, totalRw = 0, totalRj = 0, hasError = false;
+  cards.forEach(function(card) {
+    var okInput = card.querySelector('.qty-input');
+    var rwInput = card.querySelector('.rewash-input');
+    var rjInput = card.querySelector('.reject-input');
+    if (!okInput) return;
+    var max = parseInt(okInput.dataset.max) || 0;
+    var okVal = parseInt(okInput.value) || 0;
+    var rwVal = parseInt(rwInput ? rwInput.value : 0) || 0;
+    var rjVal = parseInt(rjInput ? rjInput.value : 0) || 0;
+    if (okVal + rwVal + rjVal > max) hasError = true;
+    totalOk += okVal;
+    totalRw += rwVal;
+    totalRj += rjVal;
   });
-  document.getElementById('totalQty').textContent = total;
-  document.getElementById('btnSubmit').disabled = hasError || total === 0;
+  var display = totalOk + (totalRw > 0 ? ' + ' + totalRw + ' RW' : '') + (totalRj > 0 ? ' + ' + totalRj + ' RJ' : '');
+  document.getElementById('totalQty').textContent = display;
+  document.getElementById('btnSubmit').disabled = hasError || (totalOk + totalRw + totalRj) === 0;
 }
 
 async function submitWashingIn() {
   if (!currentLot) return;
-  var inputs = document.querySelectorAll('.qty-input');
-  var sizes = {}, total = 0, hasError = false;
-  inputs.forEach(function(inp) {
-    var qty = parseInt(inp.value) || 0;
-    var max = parseInt(inp.dataset.max) || 0;
-    if (qty > max) hasError = true;
-    if (qty > 0 && qty <= max) { sizes[inp.dataset.sizeId] = qty; total += qty; }
+  var cards = document.querySelectorAll('.size-card');
+  var sizes = {}, rewash = {}, reject = {};
+  var totalOk = 0, totalRw = 0, totalRj = 0, hasError = false;
+  cards.forEach(function(card) {
+    var okInput = card.querySelector('.qty-input');
+    var rwInput = card.querySelector('.rewash-input');
+    var rjInput = card.querySelector('.reject-input');
+    if (!okInput) return;
+    var sizeId = okInput.dataset.sizeId;
+    var max = parseInt(okInput.dataset.max) || 0;
+    var okVal = parseInt(okInput.value) || 0;
+    var rwVal = parseInt(rwInput ? rwInput.value : 0) || 0;
+    var rjVal = parseInt(rjInput ? rjInput.value : 0) || 0;
+    if (okVal + rwVal + rjVal > max) hasError = true;
+    if (okVal > 0) { sizes[sizeId] = okVal; totalOk += okVal; }
+    if (rwVal > 0) { rewash[sizeId] = rwVal; totalRw += rwVal; }
+    if (rjVal > 0) { reject[sizeId] = rjVal; totalRj += rjVal; }
   });
   if (hasError) { showToast('Fix errors first', 'error'); return; }
-  if (total === 0) { showToast('Enter quantity', 'warning'); return; }
-  if (!confirm('Submit ' + total + ' pieces?')) return;
+  var grandTotal = totalOk + totalRw + totalRj;
+  if (grandTotal === 0) { showToast('Enter quantity', 'warning'); return; }
+  var confirmMsg = 'Submit ' + totalOk + ' OK pieces';
+  if (totalRw > 0) confirmMsg += ', ' + totalRw + ' REWASH (₹' + (totalRw * 200) + ' debit)';
+  if (totalRj > 0) confirmMsg += ', ' + totalRj + ' REJECT';
+  confirmMsg += '?';
+  if (!confirm(confirmMsg)) return;
 
   var btn = document.getElementById('btnSubmit');
   setButtonLoading(btn, true);
@@ -475,11 +563,14 @@ async function submitWashingIn() {
     var res = await fetch('/washingin/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedLotId: currentLot.id, sizes: sizes })
+      body: JSON.stringify({ selectedLotId: currentLot.id, sizes: sizes, rewash: rewash, reject: reject })
     });
     var data = await res.json();
     if (data.success) {
-      showToast('Submitted ' + total + ' pieces!', 'success', 4000);
+      var msg = 'Submitted ' + totalOk + ' OK';
+      if (totalRw > 0) msg += ', ' + totalRw + ' rewash';
+      if (totalRj > 0) msg += ', ' + totalRj + ' reject';
+      showToast(msg, 'success', 4000);
       document.getElementById('searchInput').value = '';
       document.getElementById('lotResult').style.display = 'none';
       currentLot = null;
