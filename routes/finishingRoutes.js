@@ -1079,7 +1079,7 @@ router.post('/submit', isAuthenticated, isFinishingMaster, upload.single('image_
   try {
     const userId = req.session.user.id;
     const username = req.session.user.username;
-    const { selectedLotId, sourceType, remark } = req.body;
+    const { selectedLotId, sourceType, remark, destination, destination_remark } = req.body;
     const sizesObj = req.body.sizes || {};
 
     let image_url = null;
@@ -1189,9 +1189,9 @@ router.post('/submit', isAuthenticated, isFinishingMaster, upload.single('image_
 
     // Insert finishing_data
     const [ins] = await conn.query(
-      `INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [userId, lotNo, sku, grandTotal, remark || null, image_url]
+      `INSERT INTO finishing_data (user_id, lot_no, sku, total_pieces, remark, image_url, destination, destination_remark, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, lotNo, sku, grandTotal, remark || null, image_url, destination || null, destination_remark || null]
     );
     const newId = ins.insertId;
 

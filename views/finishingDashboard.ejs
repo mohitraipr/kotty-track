@@ -602,6 +602,24 @@ document.addEventListener('DOMContentLoaded', function() {
       remarkInput.placeholder = 'Remark (optional)';
       card.appendChild(remarkInput);
 
+      // Destination dropdown
+      const destRow = document.createElement('div');
+      destRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px;';
+      const destSelect = document.createElement('select');
+      destSelect.id = 'destinationSelect';
+      destSelect.className = 'remark-input';
+      destSelect.style.flex = '1';
+      destSelect.innerHTML = '<option value="">-- Destination (optional) --</option><option value="warehouse">Warehouse</option><option value="po">PO (Purchase Order)</option><option value="return">Return</option><option value="other">Other</option>';
+      destRow.appendChild(destSelect);
+      const destRemarkInput = document.createElement('input');
+      destRemarkInput.type = 'text';
+      destRemarkInput.id = 'destinationRemark';
+      destRemarkInput.className = 'remark-input';
+      destRemarkInput.style.flex = '1';
+      destRemarkInput.placeholder = 'Destination remark';
+      destRow.appendChild(destRemarkInput);
+      card.appendChild(destRow);
+
       const sizeGrid = document.createElement('div');
       sizeGrid.className = 'size-grid';
 
@@ -659,6 +677,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const lotId = submitBtn.getAttribute('data-lot-id');
     const sourceType = submitBtn.getAttribute('data-source-type');
     const remark = document.getElementById('remarkInput').value.trim();
+    const destination = document.getElementById('destinationSelect').value;
+    const destinationRemark = document.getElementById('destinationRemark').value.trim();
 
     const sizesData = {};
     let totalQty = 0;
@@ -694,6 +714,8 @@ document.addEventListener('DOMContentLoaded', function() {
       formData.append('selectedLotId', lotId);
       formData.append('sourceType', sourceType);
       formData.append('remark', remark);
+      if (destination) formData.append('destination', destination);
+      if (destinationRemark) formData.append('destination_remark', destinationRemark);
 
       for (const size in sizesData) {
         formData.append('sizes[' + size + ']', sizesData[size]);
