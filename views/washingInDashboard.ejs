@@ -490,15 +490,20 @@ async function searchLot() {
 function handleQtyInput(e) {
   var inp = e.target;
   var card = inp.closest('.size-card');
-  var sizeId = inp.dataset.sizeId;
-  // Get all inputs for this size
   var okInput = card.querySelector('.qty-input');
   var rwInput = card.querySelector('.rewash-input');
   var rjInput = card.querySelector('.reject-input');
   var max = parseInt(okInput.dataset.max) || 0;
-  var okVal = parseInt(okInput.value) || 0;
   var rwVal = parseInt(rwInput.value) || 0;
   var rjVal = parseInt(rjInput.value) || 0;
+
+  // Auto-adjust OK when RW/RJ changes (OK = max - RW - RJ)
+  if (inp === rwInput || inp === rjInput) {
+    var newOk = Math.max(0, max - rwVal - rjVal);
+    okInput.value = newOk;
+  }
+
+  var okVal = parseInt(okInput.value) || 0;
   var total = okVal + rwVal + rjVal;
   if (total > max) {
     card.classList.add('input-error');
@@ -527,7 +532,11 @@ function updateTotal() {
     totalRw += rwVal;
     totalRj += rjVal;
   });
-  var display = totalOk + (totalRw > 0 ? ' + ' + totalRw + ' RW' : '') + (totalRj > 0 ? ' + ' + totalRj + ' RJ' : '');
+  var parts = [];
+  if (totalOk > 0) parts.push(totalOk + ' OK');
+  if (totalRw > 0) parts.push(totalRw + ' RW');
+  if (totalRj > 0) parts.push(totalRj + ' RJ');
+  var display = parts.length > 0 ? parts.join(', ') : '0';
   document.getElementById('totalQty').textContent = display;
   document.getElementById('btnSubmit').disabled = hasError || (totalOk + totalRw + totalRj) === 0;
 }
