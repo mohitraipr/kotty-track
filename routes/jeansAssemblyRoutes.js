@@ -1197,7 +1197,7 @@ router.get('/history-download', isAuthenticated, isJeansAssemblyMaster, async (r
       FROM jeans_assembly_data jad
       LEFT JOIN cutting_lots cl ON jad.lot_no = cl.lot_no
       LEFT JOIN (
-        SELECT lot_no, SUM(amount) as total_paid
+        SELECT lot_no, SUM(total_amount) as total_paid
         FROM stage_payments WHERE user_id = ? AND stage = 'jeans_assembly' AND status = 'approved'
         GROUP BY lot_no
       ) pay ON jad.lot_no = pay.lot_no

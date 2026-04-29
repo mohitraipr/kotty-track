@@ -1582,7 +1582,7 @@ router.get('/history-download', isAuthenticated, isStitchingMaster, async (req, 
       FROM stitching_data sd
       LEFT JOIN cutting_lots cl ON sd.lot_no = cl.lot_no
       LEFT JOIN (
-        SELECT lot_no, SUM(amount) as total_paid
+        SELECT lot_no, SUM(total_amount) as total_paid
         FROM stage_payments
         WHERE user_id = ? AND stage = 'stitching' AND status = 'approved'
         GROUP BY lot_no

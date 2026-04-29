@@ -1589,7 +1589,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isWashingInMaster, async (req
     const [[finished]] = await pool.query(`SELECT COALESCE(SUM(total_pieces),0) as qty FROM finishing_data WHERE lot_no = ?`, [lotNo]);
 
     const [[payment]] = await pool.query(`
-      SELECT sp.status as payment_status, sp.amount as payment_amount
+      SELECT sp.status as payment_status, sp.total_amount as payment_amount
       FROM stage_payments sp
       WHERE sp.lot_no = ? AND sp.stage = 'washing_in' AND sp.user_id = ?
       ORDER BY sp.created_at DESC LIMIT 1

@@ -1393,7 +1393,7 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
       FROM finishing_data fd
       LEFT JOIN cutting_lots cl ON fd.lot_no = cl.lot_no
       LEFT JOIN (
-        SELECT lot_no, SUM(amount) as total_paid
+        SELECT lot_no, SUM(total_amount) as total_paid
         FROM stage_payments WHERE user_id = ? AND stage = 'finishing' AND status = 'approved'
         GROUP BY lot_no
       ) pay ON fd.lot_no = pay.lot_no
