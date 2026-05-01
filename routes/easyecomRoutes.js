@@ -530,20 +530,23 @@ router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (
       console.log('Got', returns.length, 'returns from all warehouses');
     }
 
-    // Map data to consistent format for frontend
-    const mappedReturns = returns.map(r => ({
-      awb: r.awb_number || r.awb || '-',
-      orderId: r.order_id || r.reference_code || '-',
-      sku: r.sku || r.product_sku || (r.items && r.items[0]?.sku) || '-',
-      customer: r.customer_name || r.billing_name || '-',
-      phone: r.customer_phone || r.billing_phone || '-',
-      reason: r.return_reason || r.reason || '-',
-      amount: r.refund_amount || r.total_amount || 0,
-      status: r.status || r.return_status || '-',
-      date: r.created_at || r.return_date || '-',
-      marketplace: r.marketplace || r.channel || '-',
-      warehouse: r._warehouse === 'delhi' ? 'Delhi' : 'Faridabad'
-    }));
+    // Map data to consistent format for frontend (based on EasyEcom getPendingReturns response)
+    const mappedReturns = returns.map(r => {
+      const item = r.items?.[0] || {};
+      return {
+        awb: item.return_awb_number || r.Forward_Awb_Number || '-',
+        orderId: r.reference_code || r.order_id || '-',
+        sku: item.sku || '-',
+        customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+        phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+        reason: item.return_reason || '-',
+        amount: r.total_invoice_amount || item.total_item_selling_price || 0,
+        status: item.return_type || 'Pending',
+        date: item.pending_return_creation_date || r.order_date || '-',
+        marketplace: r.marketplace || '-',
+        warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
+      };
+    });
 
     res.json({ success: true, data: mappedReturns });
   } catch (err) {
@@ -600,18 +603,19 @@ router.get('/pending-returns/download', isAuthenticated, allowReturnsAccess, asy
     };
 
     returns.forEach(r => {
+      const item = r.items?.[0] || {};
       sheet.addRow({
-        awb: r.awb_number || r.awb || '-',
-        orderId: r.order_id || r.reference_code || '-',
-        sku: r.sku || r.product_sku || (r.items && r.items[0]?.sku) || '-',
-        customer: r.customer_name || r.billing_name || '-',
-        phone: r.customer_phone || r.billing_phone || '-',
-        reason: r.return_reason || r.reason || '-',
-        amount: r.refund_amount || r.total_amount || 0,
-        status: r.status || r.return_status || '-',
-        date: r.created_at || r.return_date || '-',
-        marketplace: r.marketplace || r.channel || '-',
-        warehouse: r._warehouse === 'delhi' ? 'Delhi' : 'Faridabad'
+        awb: item.return_awb_number || r.Forward_Awb_Number || '-',
+        orderId: r.reference_code || r.order_id || '-',
+        sku: item.sku || '-',
+        customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+        phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+        reason: item.return_reason || '-',
+        amount: r.total_invoice_amount || item.total_item_selling_price || 0,
+        status: item.return_type || 'Pending',
+        date: item.pending_return_creation_date || r.order_date || '-',
+        marketplace: r.marketplace || '-',
+        warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
       });
     });
 

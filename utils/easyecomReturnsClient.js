@@ -605,11 +605,12 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
     });
 
     const data = response.data;
-    console.log(`Returns API response for ${warehouse}: code=${data.code}, count=${(data.data || []).length}`);
+    const returns = data.data?.pending_returns || data.data || [];
+    console.log(`Returns API response for ${warehouse}: code=${data.code}, count=${returns.length}`);
 
     return {
       success: data.code === 200 || data.success !== false,
-      returns: data.data || [],
+      returns: returns,
       pagination: {
         page: data.page || page,
         limit: data.limit || limit,
