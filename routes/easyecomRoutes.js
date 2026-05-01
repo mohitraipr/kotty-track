@@ -14,7 +14,7 @@ const {
   getSlowMovers,
   saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
-const { getAllReturns, getReturnsList } = require('../utils/easyecomReturnsClient');
+const { getAllReturns, getReturnsList, getAllCompletedReturns, getCompletedReturns } = require('../utils/easyecomReturnsClient');
 
 const WAREHOUSE_LABELS = {
   173983: 'Faridabad',
@@ -504,9 +504,10 @@ router.get('/pending-returns', isAuthenticated, allowReturnsAccess, async (req, 
 
 // Pending Returns Data API
 router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (req, res) => {
-  const { fromDate, toDate, warehouse, status } = req.query;
-  console.log('=== PENDING RETURNS REQUEST ===');
-  console.log('Query params:', { fromDate, toDate, warehouse, status });
+  const { fromDate, toDate, warehouse, status, reportType } = req.query;
+  const isCompleted = reportType === 'completed';
+  console.log(`=== ${isCompleted ? 'COMPLETED' : 'PENDING'} RETURNS REQUEST ===`);
+  console.log('Query params:', { fromDate, toDate, warehouse, status, reportType });
 
   try {
     const options = {};
@@ -518,34 +519,56 @@ router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (
 
     if (warehouse && warehouse !== 'all') {
       const warehouseKey = warehouse === '176318' ? 'delhi' : 'faridabad';
-      console.log('Fetching for single warehouse:', warehouseKey);
-      const result = await getReturnsList(options, warehouseKey);
+      console.log(`Fetching ${isCompleted ? 'completed' : 'pending'} for single warehouse:`, warehouseKey);
+      const result = isCompleted
+        ? await getCompletedReturns(options, warehouseKey)
+        : await getReturnsList(options, warehouseKey);
       console.log('Result:', JSON.stringify(result).substring(0, 500));
       if (result.success) {
         returns = result.returns.map(r => ({ ...r, _warehouse: warehouseKey }));
       }
     } else {
-      console.log('Fetching for all warehouses');
-      returns = await getAllReturns(options);
+      console.log(`Fetching ${isCompleted ? 'completed' : 'pending'} for all warehouses`);
+      returns = isCompleted
+        ? await getAllCompletedReturns(options)
+        : await getAllReturns(options);
       console.log('Got', returns.length, 'returns from all warehouses');
     }
 
-    // Map data to consistent format for frontend (based on EasyEcom getPendingReturns response)
+    // Map data to consistent format for frontend
     const mappedReturns = returns.map(r => {
       const item = r.items?.[0] || {};
-      return {
-        awb: item.return_awb_number || r.Forward_Awb_Number || '-',
-        orderId: r.reference_code || r.order_id || '-',
-        sku: item.sku || '-',
-        customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
-        phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
-        reason: item.return_reason || '-',
-        amount: r.total_invoice_amount || item.total_item_selling_price || 0,
-        status: item.return_type || 'Pending',
-        date: item.pending_return_creation_date || r.order_date || '-',
-        marketplace: r.marketplace || '-',
-        warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
-      };
+      if (isCompleted) {
+        // Completed returns (credit_notes) have different structure
+        return {
+          awb: r.return_awb_number || '-',
+          orderId: r.reference_code || r.order_id || '-',
+          sku: item.sku || '-',
+          customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+          phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+          reason: item.return_reason || '-',
+          amount: r.credit_note_amount || r.total_invoice_amount || 0,
+          status: item.inventory_status || r.return_type || 'Completed',
+          date: r.return_date || r.credit_note_date || '-',
+          marketplace: r.marketplace || '-',
+          warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
+        };
+      } else {
+        // Pending returns
+        return {
+          awb: item.return_awb_number || r.Forward_Awb_Number || '-',
+          orderId: r.reference_code || r.order_id || '-',
+          sku: item.sku || '-',
+          customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+          phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+          reason: item.return_reason || '-',
+          amount: r.total_invoice_amount || item.total_item_selling_price || 0,
+          status: item.return_type || 'Pending',
+          date: item.pending_return_creation_date || r.order_date || '-',
+          marketplace: r.marketplace || '-',
+          warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
+        };
+      }
     });
 
     res.json({ success: true, data: mappedReturns });
@@ -557,7 +580,8 @@ router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (
 
 // Pending Returns Excel Download
 router.get('/pending-returns/download', isAuthenticated, allowReturnsAccess, async (req, res) => {
-  const { fromDate, toDate, warehouse, status } = req.query;
+  const { fromDate, toDate, warehouse, status, reportType } = req.query;
+  const isCompleted = reportType === 'completed';
 
   try {
     const options = {};
@@ -569,16 +593,20 @@ router.get('/pending-returns/download', isAuthenticated, allowReturnsAccess, asy
 
     if (warehouse && warehouse !== 'all') {
       const warehouseKey = warehouse === '176318' ? 'delhi' : 'faridabad';
-      const result = await getReturnsList(options, warehouseKey);
+      const result = isCompleted
+        ? await getCompletedReturns(options, warehouseKey)
+        : await getReturnsList(options, warehouseKey);
       if (result.success) {
         returns = result.returns.map(r => ({ ...r, _warehouse: warehouseKey }));
       }
     } else {
-      returns = await getAllReturns(options);
+      returns = isCompleted
+        ? await getAllCompletedReturns(options)
+        : await getAllReturns(options);
     }
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Pending Returns');
+    const sheet = workbook.addWorksheet(isCompleted ? 'Completed Returns' : 'Pending Returns');
 
     sheet.columns = [
       { header: 'AWB', key: 'awb', width: 18 },
@@ -604,23 +632,39 @@ router.get('/pending-returns/download', isAuthenticated, allowReturnsAccess, asy
 
     returns.forEach(r => {
       const item = r.items?.[0] || {};
-      sheet.addRow({
-        awb: item.return_awb_number || r.Forward_Awb_Number || '-',
-        orderId: r.reference_code || r.order_id || '-',
-        sku: item.sku || '-',
-        customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
-        phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
-        reason: item.return_reason || '-',
-        amount: r.total_invoice_amount || item.total_item_selling_price || 0,
-        status: item.return_type || 'Pending',
-        date: item.pending_return_creation_date || r.order_date || '-',
-        marketplace: r.marketplace || '-',
-        warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
-      });
+      if (isCompleted) {
+        sheet.addRow({
+          awb: r.return_awb_number || '-',
+          orderId: r.reference_code || r.order_id || '-',
+          sku: item.sku || '-',
+          customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+          phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+          reason: item.return_reason || '-',
+          amount: r.credit_note_amount || r.total_invoice_amount || 0,
+          status: item.inventory_status || r.return_type || 'Completed',
+          date: r.return_date || r.credit_note_date || '-',
+          marketplace: r.marketplace || '-',
+          warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
+        });
+      } else {
+        sheet.addRow({
+          awb: item.return_awb_number || r.Forward_Awb_Number || '-',
+          orderId: r.reference_code || r.order_id || '-',
+          sku: item.sku || '-',
+          customer: r.forward_shipment_customer_name || r.forward_shipment_billing_name || '-',
+          phone: r.forward_shipment_customer_contact_num || r.forward_shipment_billing_mobile || '-',
+          reason: item.return_reason || '-',
+          amount: r.total_invoice_amount || item.total_item_selling_price || 0,
+          status: item.return_type || 'Pending',
+          date: item.pending_return_creation_date || r.order_date || '-',
+          marketplace: r.marketplace || '-',
+          warehouse: r.warehouseId === 176318 ? 'Delhi' : 'Faridabad'
+        });
+      }
     });
 
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `returns-${dateStr}.xlsx`;
+    const filename = `${isCompleted ? 'completed' : 'pending'}-returns-${dateStr}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);

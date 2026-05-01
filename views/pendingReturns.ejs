@@ -188,13 +188,19 @@
 <div class="page-wrapper">
   <div class="container-fluid">
     <div class="page-header">
-      <h1 class="page-title">Pending Returns</h1>
+      <h1 class="page-title">Returns Dashboard</h1>
       <p class="text-muted mb-0">View and manage return orders from EasyEcom</p>
     </div>
 
     <div class="kotty-card">
       <div class="kotty-card-header">
         <div class="filter-group">
+          <label>Report:</label>
+          <select id="reportType">
+            <option value="pending">Pending Returns</option>
+            <option value="completed">Completed Returns</option>
+          </select>
+
           <label>From:</label>
           <input type="date" id="fromDate" value="">
 
@@ -327,7 +333,8 @@
         fromDate: $('#fromDate').val(),
         toDate: $('#toDate').val(),
         warehouse: $('#warehouse').val(),
-        status: $('#status').val()
+        status: $('#status').val(),
+        reportType: $('#reportType').val()
       });
 
       $('#loadingOverlay').removeClass('hidden');
@@ -355,7 +362,8 @@
         fromDate: $('#fromDate').val(),
         toDate: $('#toDate').val(),
         warehouse: $('#warehouse').val(),
-        status: $('#status').val()
+        status: $('#status').val(),
+        reportType: $('#reportType').val()
       });
 
       window.location.href = '/easyecom/pending-returns/download?' + params;

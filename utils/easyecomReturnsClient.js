@@ -626,7 +626,7 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
 }
 
 /**
- * Get all returns from all warehouses
+ * Get all returns from all warehouses (pending returns)
  * @param {Object} options - Filter options
  * @returns {Promise<Array>} Combined returns from all warehouses
  */
@@ -648,6 +648,74 @@ async function getAllReturns(options = {}) {
   return results;
 }
 
+/**
+ * Get completed returns (credit notes) from EasyEcom
+ * @param {Object} options - Filter options
+ * @param {string} warehouse - Warehouse key ('faridabad' or 'delhi')
+ * @returns {Promise<Object>} Completed returns list
+ */
+async function getCompletedReturns({ fromDate, toDate } = {}, warehouse = 'faridabad') {
+  const token = await authenticateWithCredentials(warehouse);
+  if (!token) {
+    throw new Error(`Failed to authenticate with EasyEcom for warehouse: ${warehouse}`);
+  }
+
+  const params = {};
+  if (fromDate && toDate) {
+    params.created_after = fromDate;
+    params.created_before = toDate;
+  }
+
+  console.log(`Fetching completed returns for ${warehouse} with params:`, JSON.stringify(params));
+
+  try {
+    const response = await axios.get(`${EASYECOM_API_BASE}/orders/getAllReturns`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      params,
+      timeout: 60000
+    });
+
+    const data = response.data;
+    const returns = data.data?.credit_notes || data.data || [];
+    console.log(`Completed returns API response for ${warehouse}: code=${data.code}, count=${returns.length}`);
+
+    return {
+      success: data.code === 200 || data.success !== false,
+      returns: returns,
+      warehouse
+    };
+  } catch (error) {
+    console.error(`Failed to fetch completed returns for ${warehouse}:`, error.response?.status, error.response?.data || error.message);
+    return { success: false, returns: [], warehouse, error: error.message };
+  }
+}
+
+/**
+ * Get all completed returns from all warehouses
+ * @param {Object} options - Filter options
+ * @returns {Promise<Array>} Combined completed returns from all warehouses
+ */
+async function getAllCompletedReturns(options = {}) {
+  const warehouses = ['faridabad', 'delhi'];
+  const results = [];
+
+  for (const warehouse of warehouses) {
+    try {
+      const result = await getCompletedReturns(options, warehouse);
+      if (result.success && result.returns) {
+        results.push(...result.returns.map(r => ({ ...r, _warehouse: warehouse })));
+      }
+    } catch (error) {
+      console.error(`Error fetching completed returns from ${warehouse}:`, error.message);
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   // Order operations
   getOrder,
@@ -662,6 +730,8 @@ module.exports = {
   getReverseCouriers,
   getReturnsList,
   getAllReturns,
+  getCompletedReturns,
+  getAllCompletedReturns,
 
   // Inventory operations (live API, includes virtual inventory)
   authenticateWithCredentials,
