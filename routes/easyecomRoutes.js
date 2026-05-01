@@ -505,6 +505,8 @@ router.get('/pending-returns', isAuthenticated, allowReturnsAccess, async (req, 
 // Pending Returns Data API
 router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (req, res) => {
   const { fromDate, toDate, warehouse, status } = req.query;
+  console.log('=== PENDING RETURNS REQUEST ===');
+  console.log('Query params:', { fromDate, toDate, warehouse, status });
 
   try {
     const options = {};
@@ -516,12 +518,16 @@ router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (
 
     if (warehouse && warehouse !== 'all') {
       const warehouseKey = warehouse === '176318' ? 'delhi' : 'faridabad';
+      console.log('Fetching for single warehouse:', warehouseKey);
       const result = await getReturnsList(options, warehouseKey);
+      console.log('Result:', JSON.stringify(result).substring(0, 500));
       if (result.success) {
         returns = result.returns.map(r => ({ ...r, _warehouse: warehouseKey }));
       }
     } else {
+      console.log('Fetching for all warehouses');
       returns = await getAllReturns(options);
+      console.log('Got', returns.length, 'returns from all warehouses');
     }
 
     // Map data to consistent format for frontend
