@@ -14,6 +14,7 @@ const {
   getSlowMovers,
   saveReplenishmentRule,
 } = require('../utils/easyecomAnalytics');
+const { getAllReturns, getReturnsList } = require('../utils/easyecomReturnsClient');
 
 const WAREHOUSE_LABELS = {
   173983: 'Faridabad',
@@ -455,6 +456,170 @@ router.post('/health-cleanup', isAuthenticated, isOnlyMohitOperator, async (req,
   } catch (err) {
     console.error('Failed to cleanup health records:', err);
     res.status(500).json({ error: 'Failed to cleanup health records' });
+  }
+});
+
+// ============ PENDING RETURNS DASHBOARD ============
+
+const RETURN_STATUSES = [
+  'All',
+  'Created',
+  'AWB Generated',
+  'Pickup Scheduled',
+  'Picked Up',
+  'In Transit',
+  'Delivered',
+  'Received',
+  'QC Pending',
+  'QC Done',
+  'Cancelled',
+  'Failed'
+];
+
+function allowReturnsAccess(req, res, next) {
+  const username = req.session?.user?.username?.toLowerCase();
+  const role = req.session?.user?.roleName;
+
+  if (
+    username === 'mohitoperator' ||
+    role === 'operator' ||
+    role === 'returns_operator' ||
+    role === 'admin'
+  ) {
+    return next();
+  }
+
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
+}
+
+// Pending Returns Dashboard Page
+router.get('/pending-returns', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  res.render('pendingReturns', {
+    user: req.session.user,
+    statuses: RETURN_STATUSES,
+    warehouses: ALLOWED_WAREHOUSES
+  });
+});
+
+// Pending Returns Data API
+router.get('/pending-returns/data', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  const { fromDate, toDate, warehouse, status } = req.query;
+
+  try {
+    const options = {};
+    if (fromDate) options.fromDate = fromDate;
+    if (toDate) options.toDate = toDate;
+    if (status && status !== 'All') options.status = status;
+
+    let returns = [];
+
+    if (warehouse && warehouse !== 'all') {
+      const warehouseKey = warehouse === '176318' ? 'delhi' : 'faridabad';
+      const result = await getReturnsList(options, warehouseKey);
+      if (result.success) {
+        returns = result.returns.map(r => ({ ...r, _warehouse: warehouseKey }));
+      }
+    } else {
+      returns = await getAllReturns(options);
+    }
+
+    // Map data to consistent format for frontend
+    const mappedReturns = returns.map(r => ({
+      awb: r.awb_number || r.awb || '-',
+      orderId: r.order_id || r.reference_code || '-',
+      sku: r.sku || r.product_sku || (r.items && r.items[0]?.sku) || '-',
+      customer: r.customer_name || r.billing_name || '-',
+      phone: r.customer_phone || r.billing_phone || '-',
+      reason: r.return_reason || r.reason || '-',
+      amount: r.refund_amount || r.total_amount || 0,
+      status: r.status || r.return_status || '-',
+      date: r.created_at || r.return_date || '-',
+      marketplace: r.marketplace || r.channel || '-',
+      warehouse: r._warehouse === 'delhi' ? 'Delhi' : 'Faridabad'
+    }));
+
+    res.json({ success: true, data: mappedReturns });
+  } catch (err) {
+    console.error('Failed to fetch pending returns:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Pending Returns Excel Download
+router.get('/pending-returns/download', isAuthenticated, allowReturnsAccess, async (req, res) => {
+  const { fromDate, toDate, warehouse, status } = req.query;
+
+  try {
+    const options = {};
+    if (fromDate) options.fromDate = fromDate;
+    if (toDate) options.toDate = toDate;
+    if (status && status !== 'All') options.status = status;
+
+    let returns = [];
+
+    if (warehouse && warehouse !== 'all') {
+      const warehouseKey = warehouse === '176318' ? 'delhi' : 'faridabad';
+      const result = await getReturnsList(options, warehouseKey);
+      if (result.success) {
+        returns = result.returns.map(r => ({ ...r, _warehouse: warehouseKey }));
+      }
+    } else {
+      returns = await getAllReturns(options);
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Pending Returns');
+
+    sheet.columns = [
+      { header: 'AWB', key: 'awb', width: 18 },
+      { header: 'Order ID', key: 'orderId', width: 18 },
+      { header: 'SKU', key: 'sku', width: 25 },
+      { header: 'Customer', key: 'customer', width: 25 },
+      { header: 'Phone', key: 'phone', width: 15 },
+      { header: 'Reason', key: 'reason', width: 30 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Status', key: 'status', width: 18 },
+      { header: 'Date', key: 'date', width: 12 },
+      { header: 'Marketplace', key: 'marketplace', width: 15 },
+      { header: 'Warehouse', key: 'warehouse', width: 12 }
+    ];
+
+    // Style header row
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    returns.forEach(r => {
+      sheet.addRow({
+        awb: r.awb_number || r.awb || '-',
+        orderId: r.order_id || r.reference_code || '-',
+        sku: r.sku || r.product_sku || (r.items && r.items[0]?.sku) || '-',
+        customer: r.customer_name || r.billing_name || '-',
+        phone: r.customer_phone || r.billing_phone || '-',
+        reason: r.return_reason || r.reason || '-',
+        amount: r.refund_amount || r.total_amount || 0,
+        status: r.status || r.return_status || '-',
+        date: r.created_at || r.return_date || '-',
+        marketplace: r.marketplace || r.channel || '-',
+        warehouse: r._warehouse === 'delhi' ? 'Delhi' : 'Faridabad'
+      });
+    });
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `returns-${dateStr}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Failed to download returns:', err);
+    res.status(500).json({ error: 'Failed to generate Excel file' });
   }
 });
 

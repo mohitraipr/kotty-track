@@ -565,6 +565,79 @@ function verifyWebhookToken(providedToken) {
   return providedToken === EASYECOM_ACCESS_TOKEN;
 }
 
+/**
+ * Get list of return orders from EasyEcom
+ * @param {Object} options - Filter options
+ * @param {string} options.fromDate - Start date (YYYY-MM-DD)
+ * @param {string} options.toDate - End date (YYYY-MM-DD)
+ * @param {string} options.status - Return status filter
+ * @param {number} options.page - Page number (default 1)
+ * @param {number} options.limit - Items per page (default 100)
+ * @param {string} warehouse - Warehouse key ('faridabad' or 'delhi')
+ * @returns {Promise<Object>} Returns list with pagination info
+ */
+async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 } = {}, warehouse = 'faridabad') {
+  const token = await authenticateWithCredentials(warehouse);
+  if (!token) {
+    throw new Error(`Failed to authenticate with EasyEcom for warehouse: ${warehouse}`);
+  }
+
+  const params = { page, limit };
+  if (fromDate) params.from_date = fromDate;
+  if (toDate) params.to_date = toDate;
+  if (status) params.status = status;
+
+  try {
+    const response = await axios.get(`${EASYECOM_API_BASE}/getReturnOrdersV3`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      params,
+      timeout: 30000
+    });
+
+    const data = response.data;
+    return {
+      success: data.code === 200 || data.success,
+      returns: data.data || [],
+      pagination: {
+        page: data.page || page,
+        limit: data.limit || limit,
+        total: data.total || 0,
+        hasMore: data.hasMore || false
+      },
+      warehouse
+    };
+  } catch (error) {
+    console.error(`Failed to fetch returns for ${warehouse}:`, error.response?.data || error.message);
+    throw error;
+  }
+}
+
+/**
+ * Get all returns from all warehouses
+ * @param {Object} options - Filter options
+ * @returns {Promise<Array>} Combined returns from all warehouses
+ */
+async function getAllReturns(options = {}) {
+  const warehouses = ['faridabad', 'delhi'];
+  const results = [];
+
+  for (const warehouse of warehouses) {
+    try {
+      const result = await getReturnsList(options, warehouse);
+      if (result.success && result.returns) {
+        results.push(...result.returns.map(r => ({ ...r, _warehouse: warehouse })));
+      }
+    } catch (error) {
+      console.error(`Error fetching returns from ${warehouse}:`, error.message);
+    }
+  }
+
+  return results;
+}
+
 module.exports = {
   // Order operations
   getOrder,
@@ -577,6 +650,8 @@ module.exports = {
   getReturnStatus,
   cancelReturn,
   getReverseCouriers,
+  getReturnsList,
+  getAllReturns,
 
   // Inventory operations (live API, includes virtual inventory)
   authenticateWithCredentials,

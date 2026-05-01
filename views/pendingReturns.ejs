@@ -1,0 +1,371 @@
+<%- include('partials/header', { pageTitle: 'Pending Returns' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/easyecom/pending-returns' }) %>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+  .page-wrapper {
+    padding-top: calc(var(--navbar-height) + 1.5rem);
+    padding-bottom: 2rem;
+    min-height: 100vh;
+    background-color: var(--cream);
+  }
+
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    color: var(--charcoal);
+    margin-bottom: 0.25rem;
+  }
+
+  .kotty-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .kotty-card-header {
+    background: var(--cream-dark);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .kotty-card-body {
+    padding: 1.25rem;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-group label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0;
+  }
+
+  .filter-group select,
+  .filter-group input {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    background: white;
+  }
+
+  .filter-group input[type="date"] {
+    width: 140px;
+  }
+
+  .btn-terracotta {
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: var(--transition-base);
+  }
+
+  .btn-terracotta:hover {
+    background: var(--terracotta-dark, #c25a3a);
+    color: white;
+  }
+
+  .btn-outline-secondary {
+    border: 1px solid var(--border-light);
+    background: white;
+    color: var(--text-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+  }
+
+  .btn-outline-secondary:hover {
+    background: var(--gray-50);
+  }
+
+  #returnsTable {
+    font-size: var(--text-sm);
+  }
+
+  #returnsTable thead th {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--gray-50);
+    border-bottom: 2px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  #returnsTable tbody td {
+    vertical-align: middle;
+    border-color: var(--border-light);
+  }
+
+  #returnsTable tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+
+  .status-created { background: #e3f2fd; color: #1565c0; }
+  .status-pickup { background: #fff3e0; color: #ef6c00; }
+  .status-transit { background: #e8f5e9; color: #2e7d32; }
+  .status-delivered, .status-received { background: #c8e6c9; color: #1b5e20; }
+  .status-cancelled, .status-failed { background: #ffebee; color: #c62828; }
+
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .loading-overlay.hidden {
+    display: none;
+  }
+
+  .table-container {
+    position: relative;
+    min-height: 300px;
+  }
+
+  @media (max-width: 768px) {
+    .filter-group {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .kotty-card-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .dataTables_wrapper .dataTables_filter input {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0.4rem 0.75rem;
+  }
+
+  .dataTables_wrapper .dataTables_length select {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 0.25rem 0.5rem;
+  }
+</style>
+
+<div class="page-wrapper">
+  <div class="container-fluid">
+    <div class="page-header">
+      <h1 class="page-title">Pending Returns</h1>
+      <p class="text-muted mb-0">View and manage return orders from EasyEcom</p>
+    </div>
+
+    <div class="kotty-card">
+      <div class="kotty-card-header">
+        <div class="filter-group">
+          <label>From:</label>
+          <input type="date" id="fromDate" value="">
+
+          <label>To:</label>
+          <input type="date" id="toDate" value="">
+
+          <label>Warehouse:</label>
+          <select id="warehouse">
+            <option value="all">All</option>
+            <% warehouses.forEach(w => { %>
+              <option value="<%= w.id %>"><%= w.label %></option>
+            <% }); %>
+          </select>
+
+          <label>Status:</label>
+          <select id="status">
+            <% statuses.forEach(s => { %>
+              <option value="<%= s %>"><%= s %></option>
+            <% }); %>
+          </select>
+
+          <button type="button" class="btn btn-terracotta" id="applyFilters">
+            <i class="fas fa-search me-1"></i> Apply
+          </button>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" id="refreshBtn">
+            <i class="fas fa-sync-alt me-1"></i> Refresh
+          </button>
+          <button type="button" class="btn btn-terracotta" id="downloadBtn">
+            <i class="fas fa-download me-1"></i> Excel
+          </button>
+        </div>
+      </div>
+
+      <div class="kotty-card-body">
+        <div class="table-container">
+          <div class="loading-overlay hidden" id="loadingOverlay">
+            <div class="spinner-border text-secondary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table id="returnsTable" class="table table-hover" style="width:100%">
+              <thead>
+                <tr>
+                  <th>AWB</th>
+                  <th>Order ID</th>
+                  <th>SKU</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Reason</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Marketplace</th>
+                  <th>Warehouse</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+  $(document).ready(function() {
+    // Set default dates (last 7 days)
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    document.getElementById('toDate').value = today.toISOString().split('T')[0];
+    document.getElementById('fromDate').value = weekAgo.toISOString().split('T')[0];
+
+    // Initialize DataTable
+    const table = $('#returnsTable').DataTable({
+      processing: true,
+      pageLength: 25,
+      order: [[8, 'desc']], // Sort by date descending
+      columns: [
+        { data: 'awb' },
+        { data: 'orderId' },
+        { data: 'sku' },
+        { data: 'customer' },
+        { data: 'phone' },
+        { data: 'reason' },
+        { data: 'amount', render: (d) => d ? '₹' + parseFloat(d).toFixed(2) : '-' },
+        {
+          data: 'status',
+          render: function(data) {
+            const statusClass = getStatusClass(data);
+            return `<span class="status-badge ${statusClass}">${data}</span>`;
+          }
+        },
+        { data: 'date', render: (d) => d && d !== '-' ? new Date(d).toLocaleDateString('en-IN') : '-' },
+        { data: 'marketplace' },
+        { data: 'warehouse' }
+      ],
+      language: {
+        emptyTable: 'No return orders found',
+        zeroRecords: 'No matching records'
+      }
+    });
+
+    function getStatusClass(status) {
+      if (!status) return '';
+      const s = status.toLowerCase();
+      if (s.includes('created') || s.includes('awb')) return 'status-created';
+      if (s.includes('pickup') || s.includes('scheduled')) return 'status-pickup';
+      if (s.includes('transit') || s.includes('picked')) return 'status-transit';
+      if (s.includes('delivered') || s.includes('received') || s.includes('qc done')) return 'status-delivered';
+      if (s.includes('cancel') || s.includes('fail')) return 'status-cancelled';
+      return '';
+    }
+
+    function loadData() {
+      const params = new URLSearchParams({
+        fromDate: $('#fromDate').val(),
+        toDate: $('#toDate').val(),
+        warehouse: $('#warehouse').val(),
+        status: $('#status').val()
+      });
+
+      $('#loadingOverlay').removeClass('hidden');
+      table.clear().draw();
+
+      fetch('/easyecom/pending-returns/data?' + params)
+        .then(res => res.json())
+        .then(result => {
+          if (result.success && result.data) {
+            table.rows.add(result.data).draw();
+          } else {
+            console.error('Failed to load data:', result.error);
+          }
+        })
+        .catch(err => {
+          console.error('Error loading returns:', err);
+        })
+        .finally(() => {
+          $('#loadingOverlay').addClass('hidden');
+        });
+    }
+
+    function downloadExcel() {
+      const params = new URLSearchParams({
+        fromDate: $('#fromDate').val(),
+        toDate: $('#toDate').val(),
+        warehouse: $('#warehouse').val(),
+        status: $('#status').val()
+      });
+
+      window.location.href = '/easyecom/pending-returns/download?' + params;
+    }
+
+    // Event handlers
+    $('#applyFilters').on('click', loadData);
+    $('#refreshBtn').on('click', loadData);
+    $('#downloadBtn').on('click', downloadExcel);
+
+    // Load data on page load
+    loadData();
+  });
+</script>
