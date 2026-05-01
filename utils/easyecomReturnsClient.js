@@ -582,11 +582,7 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
     throw new Error(`Failed to authenticate with EasyEcom for warehouse: ${warehouse}`);
   }
 
-  const warehouseKey = warehouse.toLowerCase();
-  const creds = WAREHOUSE_CREDENTIALS[warehouseKey] || WAREHOUSE_CREDENTIALS.faridabad;
-
   const params = {};
-  // EasyEcom requires created_after/created_before together, max 7 day range
   if (fromDate && toDate) {
     params.created_after = fromDate;
     params.created_before = toDate;
@@ -594,34 +590,55 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
 
   console.log(`Fetching pending returns for ${warehouse} with params:`, JSON.stringify(params));
 
-  try {
-    const response = await axios.get(`${EASYECOM_API_BASE}/getPendingReturns`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      params,
-      timeout: 60000
-    });
+  const allReturns = [];
+  let nextUrl = null;
+  let pageNum = 1;
 
-    const data = response.data;
-    const returns = data.data?.pending_returns || data.data || [];
-    console.log(`Returns API response for ${warehouse}: code=${data.code}, count=${returns.length}`);
+  try {
+    do {
+      const url = nextUrl || `${EASYECOM_API_BASE}/getPendingReturns`;
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 60000
+      };
+
+      // Only add params on first request, subsequent use nextUrl directly
+      if (!nextUrl) {
+        config.params = params;
+      }
+
+      console.log(`Fetching pending returns page ${pageNum} for ${warehouse}...`);
+      const response = nextUrl
+        ? await axios.get(`${EASYECOM_API_BASE}${nextUrl}`, config)
+        : await axios.get(url, config);
+
+      const data = response.data;
+      const returns = data.data?.pending_returns || [];
+      allReturns.push(...returns);
+
+      nextUrl = data.data?.nextUrl || null;
+      pageNum++;
+
+      console.log(`Page ${pageNum - 1}: Got ${returns.length} returns, total so far: ${allReturns.length}`);
+
+      // Small delay to avoid rate limiting
+      if (nextUrl) await new Promise(r => setTimeout(r, 200));
+
+    } while (nextUrl);
+
+    console.log(`Completed fetching pending returns for ${warehouse}: total ${allReturns.length}`);
 
     return {
-      success: data.code === 200 || data.success !== false,
-      returns: returns,
-      pagination: {
-        page: data.page || page,
-        limit: data.limit || limit,
-        total: data.total || (data.data || []).length,
-        hasMore: data.hasMore || false
-      },
+      success: true,
+      returns: allReturns,
       warehouse
     };
   } catch (error) {
     console.error(`Failed to fetch returns for ${warehouse}:`, error.response?.status, error.response?.data || error.message);
-    return { success: false, returns: [], warehouse, error: error.message };
+    return { success: false, returns: allReturns, warehouse, error: error.message };
   }
 }
 
@@ -668,28 +685,53 @@ async function getCompletedReturns({ fromDate, toDate } = {}, warehouse = 'farid
 
   console.log(`Fetching completed returns for ${warehouse} with params:`, JSON.stringify(params));
 
-  try {
-    const response = await axios.get(`${EASYECOM_API_BASE}/orders/getAllReturns`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      params,
-      timeout: 60000
-    });
+  const allReturns = [];
+  let nextUrl = null;
+  let pageNum = 1;
 
-    const data = response.data;
-    const returns = data.data?.credit_notes || data.data || [];
-    console.log(`Completed returns API response for ${warehouse}: code=${data.code}, count=${returns.length}`);
+  try {
+    do {
+      const url = nextUrl || `${EASYECOM_API_BASE}/orders/getAllReturns`;
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 60000
+      };
+
+      if (!nextUrl) {
+        config.params = params;
+      }
+
+      console.log(`Fetching completed returns page ${pageNum} for ${warehouse}...`);
+      const response = nextUrl
+        ? await axios.get(`${EASYECOM_API_BASE}${nextUrl}`, config)
+        : await axios.get(url, config);
+
+      const data = response.data;
+      const returns = data.data?.credit_notes || data.data || [];
+      allReturns.push(...(Array.isArray(returns) ? returns : []));
+
+      nextUrl = data.data?.nextUrl || null;
+      pageNum++;
+
+      console.log(`Page ${pageNum - 1}: Got ${returns.length} completed returns, total so far: ${allReturns.length}`);
+
+      if (nextUrl) await new Promise(r => setTimeout(r, 200));
+
+    } while (nextUrl);
+
+    console.log(`Completed fetching completed returns for ${warehouse}: total ${allReturns.length}`);
 
     return {
-      success: data.code === 200 || data.success !== false,
-      returns: returns,
+      success: true,
+      returns: allReturns,
       warehouse
     };
   } catch (error) {
     console.error(`Failed to fetch completed returns for ${warehouse}:`, error.response?.status, error.response?.data || error.message);
-    return { success: false, returns: [], warehouse, error: error.message };
+    return { success: false, returns: allReturns, warehouse, error: error.message };
   }
 }
 
