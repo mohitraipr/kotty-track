@@ -598,8 +598,7 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
     const response = await axios.get(`${EASYECOM_API_BASE}/getPendingReturns`, {
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'x-api-key': EASYECOM_API_KEY
+        'Authorization': `Bearer ${token}`
       },
       params,
       timeout: 60000
