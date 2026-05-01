@@ -583,35 +583,39 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
   }
 
   const params = { page, limit };
-  if (fromDate) params.from_date = fromDate;
-  if (toDate) params.to_date = toDate;
-  if (status) params.status = status;
+  if (fromDate) params.start_date = fromDate;
+  if (toDate) params.end_date = toDate;
+  if (status && status !== 'All') params.status = status;
+
+  console.log(`Fetching returns for ${warehouse} with params:`, JSON.stringify(params));
 
   try {
-    const response = await axios.get(`${EASYECOM_API_BASE}/getReturnOrdersV3`, {
+    const response = await axios.get(`${EASYECOM_API_BASE}/returns/getReturnsDataV2`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       params,
-      timeout: 30000
+      timeout: 60000
     });
 
     const data = response.data;
+    console.log(`Returns API response for ${warehouse}: code=${data.code}, count=${(data.data || []).length}`);
+
     return {
-      success: data.code === 200 || data.success,
+      success: data.code === 200 || data.success !== false,
       returns: data.data || [],
       pagination: {
         page: data.page || page,
         limit: data.limit || limit,
-        total: data.total || 0,
+        total: data.total || (data.data || []).length,
         hasMore: data.hasMore || false
       },
       warehouse
     };
   } catch (error) {
-    console.error(`Failed to fetch returns for ${warehouse}:`, error.response?.data || error.message);
-    throw error;
+    console.error(`Failed to fetch returns for ${warehouse}:`, error.response?.status, error.response?.data || error.message);
+    return { success: false, returns: [], warehouse, error: error.message };
   }
 }
 
