@@ -192,6 +192,8 @@ const poAdminApiRoutes = require('./routes/poAdminApiRoutes');
 const returnRoutes = require('./routes/returnRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const accountsPaymentRoutes = require('./routes/accountsPaymentRoutes');
+const aiRoutes = require('./routes/aiRoutes');
+const returnGrnRoutes = require('./routes/returnGrnRoutes');
 
 // Use Routes
 // Health check for Cloud Run (must be before auth middleware)
@@ -246,6 +248,8 @@ app.use('/mail-manager', mailManagerRoutes);
 app.use('/po-admin', poAdminRoutes);
 app.use('/api/po-admin', poAdminApiRoutes);
 app.use('/returns', returnRoutes);
+app.use('/return-grn', returnGrnRoutes);
+app.use('/ai', aiRoutes);
 
 // Initialize the background health refresh queue with the database pool
 const { pool } = require('./config/db');

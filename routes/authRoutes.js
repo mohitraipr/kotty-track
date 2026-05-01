@@ -49,6 +49,8 @@ function getDashboardForRole(roleName) {
     'productviewer': '/product-links',
     'wishlinkops': '/webhook/logs',
     'videofinder': '/video-finder',
+    'return_grn': '/return-grn/scan',
+    'returns_operator': '/return-grn/dashboard',
   };
 
   // If role not found, log it for debugging and return a safe default

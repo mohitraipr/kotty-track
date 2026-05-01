@@ -1,0 +1,821 @@
+<%- include('partials/header') %>
+<%- include('partials/navbar', { user }) %>
+
+<style>
+:root {
+    --grn-slate: #1e293b;
+    --grn-slate-light: #334155;
+    --grn-amber: #f59e0b;
+    --grn-amber-glow: rgba(245, 158, 11, 0.15);
+    --grn-success: #10b981;
+    --grn-success-glow: rgba(16, 185, 129, 0.2);
+    --grn-danger: #ef4444;
+    --grn-danger-glow: rgba(239, 68, 68, 0.2);
+    --grn-surface: #f8fafc;
+    --grn-border: #e2e8f0;
+}
+
+.grn-page {
+    min-height: calc(100vh - 60px);
+    background: linear-gradient(135deg, var(--grn-surface) 0%, #e2e8f0 100%);
+    padding: 1.5rem 1rem;
+}
+
+/* Header bar */
+.grn-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.grn-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.75rem;
+    color: var(--grn-slate);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.grn-title-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--grn-slate);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--grn-amber);
+    font-size: 1.25rem;
+}
+
+.grn-date-badge {
+    background: var(--grn-slate);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+}
+
+/* Stats strip */
+.grn-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.grn-stat {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    border: 2px solid var(--grn-border);
+    transition: all 0.3s ease;
+}
+
+.grn-stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.grn-stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.grn-stat--total .grn-stat-value { color: var(--grn-slate); }
+.grn-stat--good .grn-stat-value { color: var(--grn-success); }
+.grn-stat--good { border-color: var(--grn-success); background: var(--grn-success-glow); }
+.grn-stat--bad .grn-stat-value { color: var(--grn-danger); }
+.grn-stat--bad { border-color: var(--grn-danger); background: var(--grn-danger-glow); }
+
+/* Main scan card */
+.grn-scan-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.grn-scan-card.success-flash {
+    border-color: var(--grn-success);
+    box-shadow: 0 0 0 4px var(--grn-success-glow), 0 4px 24px rgba(0,0,0,0.08);
+    animation: successPulse 0.5s ease;
+}
+
+.grn-scan-card.error-flash {
+    border-color: var(--grn-danger);
+    box-shadow: 0 0 0 4px var(--grn-danger-glow), 0 4px 24px rgba(0,0,0,0.08);
+    animation: errorShake 0.5s ease;
+}
+
+@keyframes successPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.01); }
+}
+
+@keyframes errorShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}
+
+/* AWB Input - THE STAR */
+.grn-awb-wrapper {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.grn-awb-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    color: var(--grn-slate);
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.grn-awb-label i {
+    color: var(--grn-amber);
+}
+
+.grn-awb-input {
+    width: 100%;
+    padding: 1.25rem 1.5rem;
+    font-size: 1.5rem;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-weight: 500;
+    letter-spacing: 2px;
+    border: 3px solid var(--grn-slate);
+    border-radius: 12px;
+    background: var(--grn-surface);
+    color: var(--grn-slate);
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.grn-awb-input:focus {
+    outline: none;
+    border-color: var(--grn-amber);
+    box-shadow: 0 0 0 4px var(--grn-amber-glow);
+    background: white;
+}
+
+.grn-awb-input::placeholder {
+    color: #94a3b8;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Status & Submit row */
+.grn-action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.grn-action-row.has-image {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.grn-status-btn {
+    position: relative;
+    padding: 1rem;
+    border: 3px solid var(--grn-border);
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.grn-status-btn input {
+    position: absolute;
+    opacity: 0;
+}
+
+.grn-status-btn .status-icon {
+    font-size: 1.5rem;
+}
+
+.grn-status-btn .status-text {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.grn-status-btn--good:has(input:checked) {
+    border-color: var(--grn-success);
+    background: var(--grn-success-glow);
+    color: var(--grn-success);
+}
+
+.grn-status-btn--bad:has(input:checked) {
+    border-color: var(--grn-danger);
+    background: var(--grn-danger-glow);
+    color: var(--grn-danger);
+}
+
+.grn-submit-btn {
+    padding: 1rem 2rem;
+    background: var(--grn-slate);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.grn-submit-btn:hover {
+    background: var(--grn-slate-light);
+    transform: translateY(-1px);
+}
+
+.grn-submit-btn:active {
+    transform: translateY(0);
+}
+
+/* Image upload */
+.grn-image-upload {
+    display: none;
+    margin-top: 1rem;
+}
+
+.grn-image-upload.visible {
+    display: block;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.grn-image-btn {
+    width: 100%;
+    padding: 1rem;
+    border: 2px dashed var(--grn-danger);
+    border-radius: 12px;
+    background: var(--grn-danger-glow);
+    color: var(--grn-danger);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* Feedback toast */
+.grn-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 90%;
+    text-align: center;
+}
+
+.grn-toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.grn-toast--success {
+    background: var(--grn-success);
+    color: white;
+}
+
+.grn-toast--error {
+    background: var(--grn-danger);
+    color: white;
+}
+
+/* Recent scans */
+.grn-recent {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.grn-recent-header {
+    background: var(--grn-slate);
+    color: white;
+    padding: 1rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.grn-recent-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grn-recent-badge {
+    background: rgba(255,255,255,0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+}
+
+.grn-scan-list {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.grn-scan-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--grn-border);
+    transition: background 0.2s ease;
+}
+
+.grn-scan-item:hover {
+    background: var(--grn-surface);
+}
+
+.grn-scan-item:last-child {
+    border-bottom: none;
+}
+
+.grn-scan-awb {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--grn-slate);
+    letter-spacing: 0.5px;
+}
+
+.grn-scan-time {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.grn-scan-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.grn-scan-status--good {
+    background: var(--grn-success-glow);
+    color: var(--grn-success);
+}
+
+.grn-scan-status--bad {
+    background: var(--grn-danger-glow);
+    color: var(--grn-danger);
+}
+
+.grn-scan-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.grn-scan-actions button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: var(--grn-surface);
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.grn-scan-actions button:hover {
+    background: var(--grn-slate);
+    color: white;
+}
+
+.grn-scan-actions .delete-btn:hover {
+    background: var(--grn-danger);
+}
+
+.grn-empty {
+    padding: 3rem 2rem;
+    text-align: center;
+    color: #94a3b8;
+}
+
+.grn-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* Mobile optimizations */
+@media (max-width: 576px) {
+    .grn-page { padding: 1rem 0.75rem; }
+    .grn-scan-card { padding: 1.5rem 1.25rem; }
+    .grn-awb-input { font-size: 1.25rem; padding: 1rem 1.25rem; }
+    .grn-action-row { grid-template-columns: 1fr 1fr; }
+    .grn-action-row.has-image { grid-template-columns: 1fr 1fr; }
+}
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+<div class="grn-page">
+    <div class="container" style="max-width: 600px;">
+        <!-- Header -->
+        <div class="grn-header">
+            <h1 class="grn-title">
+                <span class="grn-title-icon"><i class="bi bi-upc-scan"></i></span>
+                Return GRN
+            </h1>
+            <span class="grn-date-badge"><%= today %></span>
+        </div>
+
+        <!-- Stats -->
+        <div class="grn-stats">
+            <div class="grn-stat grn-stat--total">
+                <div class="grn-stat-value" id="totalCount"><%= counts.total || 0 %></div>
+                <div class="grn-stat-label">Total</div>
+            </div>
+            <div class="grn-stat grn-stat--good">
+                <div class="grn-stat-value" id="goodCount"><%= counts.good_count || 0 %></div>
+                <div class="grn-stat-label">Good</div>
+            </div>
+            <div class="grn-stat grn-stat--bad">
+                <div class="grn-stat-value" id="badCount"><%= counts.bad_count || 0 %></div>
+                <div class="grn-stat-label">Bad</div>
+            </div>
+        </div>
+
+        <!-- Scan Card -->
+        <div class="grn-scan-card" id="scanCard">
+            <form id="scanForm">
+                <div class="grn-awb-wrapper">
+                    <label class="grn-awb-label">
+                        <i class="bi bi-qr-code-scan"></i>
+                        Scan AWB
+                    </label>
+                    <input type="text" class="grn-awb-input" id="awbInput"
+                           placeholder="Scan barcode or type AWB..." autofocus autocomplete="off">
+                </div>
+
+                <div class="grn-action-row" id="actionRow">
+                    <label class="grn-status-btn grn-status-btn--good">
+                        <input type="radio" name="status" value="good" checked>
+                        <span class="status-icon"><i class="bi bi-check-circle-fill"></i></span>
+                        <span class="status-text">Good</span>
+                    </label>
+                    <label class="grn-status-btn grn-status-btn--bad">
+                        <input type="radio" name="status" value="bad">
+                        <span class="status-icon"><i class="bi bi-x-circle-fill"></i></span>
+                        <span class="status-text">Bad</span>
+                    </label>
+                </div>
+
+                <div class="grn-image-upload" id="imageUploadWrapper">
+                    <label class="grn-image-btn">
+                        <i class="bi bi-camera-fill"></i>
+                        <span>Capture photo of damaged item</span>
+                        <input type="file" id="imageInput" accept="image/*,video/*" capture="environment" style="display:none;">
+                    </label>
+                </div>
+
+                <button type="submit" class="grn-submit-btn w-100 mt-3">
+                    <i class="bi bi-check2-square"></i>
+                    Submit Scan
+                </button>
+            </form>
+        </div>
+
+        <!-- Recent Scans -->
+        <div class="grn-recent">
+            <div class="grn-recent-header">
+                <span class="grn-recent-title">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Scans
+                </span>
+                <span class="grn-recent-badge">Editable 30 min</span>
+            </div>
+            <div class="grn-scan-list" id="scanList">
+                <% if (recentScans.length === 0) { %>
+                <div class="grn-empty" id="noScansRow">
+                    <i class="bi bi-inbox"></i>
+                    <p>No scans yet today.<br>Start scanning AWBs above.</p>
+                </div>
+                <% } else { %>
+                <% recentScans.forEach(scan => { %>
+                <div class="grn-scan-item" data-id="<%= scan.id %>">
+                    <div>
+                        <div class="grn-scan-awb"><%= scan.awb %></div>
+                        <div class="grn-scan-time"><%= new Date(scan.scanned_at).toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'}) %></div>
+                    </div>
+                    <span class="grn-scan-status grn-scan-status--<%= scan.status %>">
+                        <i class="bi bi-<%= scan.status === 'good' ? 'check' : 'x' %>-lg"></i>
+                        <%= scan.status %>
+                    </span>
+                    <div class="grn-scan-actions">
+                        <button class="edit-btn" data-id="<%= scan.id %>" data-awb="<%= scan.awb %>" data-status="<%= scan.status %>">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="delete-btn" data-id="<%= scan.id %>">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <% }) %>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="grn-toast" id="toast"></div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none;">
+            <div class="modal-header" style="background: var(--grn-slate); color: white; border-radius: 16px 16px 0 0;">
+                <h5 class="modal-title" style="font-family: 'Outfit', sans-serif; font-weight: 600;">Edit Scan</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem;">
+                <form id="editForm">
+                    <input type="hidden" id="editId">
+                    <div class="mb-3">
+                        <label class="form-label" style="font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--grn-slate);">AWB</label>
+                        <input type="text" class="form-control" id="editAwb" readonly style="font-family: 'JetBrains Mono', monospace; background: var(--grn-surface);">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" style="font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--grn-slate);">Status</label>
+                        <select class="form-select" id="editStatus" style="font-family: 'Outfit', sans-serif;">
+                            <option value="good">Good</option>
+                            <option value="bad">Bad</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="editImageWrapper" style="display: none;">
+                        <label class="form-label" style="font-family: 'Outfit', sans-serif; font-weight: 600; color: var(--grn-danger);">Upload damage photo</label>
+                        <input type="file" class="form-control" id="editImage" accept="image/*,video/*" capture="environment">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="border: none; padding: 1rem 1.5rem 1.5rem;">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal" style="font-family: 'Outfit', sans-serif; font-weight: 500;">Cancel</button>
+                <button type="button" class="btn" id="saveEditBtn" style="background: var(--grn-slate); color: white; font-family: 'Outfit', sans-serif; font-weight: 600;">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scanForm = document.getElementById('scanForm');
+    const awbInput = document.getElementById('awbInput');
+    const scanCard = document.getElementById('scanCard');
+    const imageWrapper = document.getElementById('imageUploadWrapper');
+    const imageInput = document.getElementById('imageInput');
+    const toast = document.getElementById('toast');
+    const scanList = document.getElementById('scanList');
+
+    // Status radio change
+    document.querySelectorAll('input[name="status"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            imageWrapper.classList.toggle('visible', this.value === 'bad');
+        });
+    });
+
+    // Form submit
+    scanForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const awb = awbInput.value.trim();
+        if (!awb) {
+            showToast('Please scan or enter an AWB', 'error');
+            return;
+        }
+
+        const status = document.querySelector('input[name="status"]:checked').value;
+        const formData = new FormData();
+        formData.append('awb', awb);
+        formData.append('status', status);
+
+        if (status === 'bad' && imageInput.files[0]) {
+            formData.append('image', imageInput.files[0]);
+        }
+
+        try {
+            const response = await fetch('/return-grn/scan', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('AWB ' + awb + ' scanned', 'success');
+                scanCard.classList.add('success-flash');
+                setTimeout(function() { scanCard.classList.remove('success-flash'); }, 500);
+
+                document.getElementById('totalCount').textContent = data.counts.total;
+                document.getElementById('goodCount').textContent = data.counts.good_count;
+                document.getElementById('badCount').textContent = data.counts.bad_count;
+
+                addScanToList(data.scan);
+
+                awbInput.value = '';
+                document.querySelector('input[name="status"][value="good"]').checked = true;
+                imageInput.value = '';
+                imageWrapper.classList.remove('visible');
+            } else {
+                showToast(data.error || 'Scan failed', 'error');
+                scanCard.classList.add('error-flash');
+                setTimeout(function() { scanCard.classList.remove('error-flash'); }, 500);
+            }
+        } catch (err) {
+            showToast('Network error', 'error');
+        }
+
+        awbInput.focus();
+    });
+
+    function showToast(message, type) {
+        toast.textContent = message;
+        toast.className = 'grn-toast grn-toast--' + type + ' show';
+        setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+
+    function addScanToList(scan) {
+        const empty = document.getElementById('noScansRow');
+        if (empty) empty.remove();
+
+        const item = document.createElement('div');
+        item.className = 'grn-scan-item';
+        item.dataset.id = scan.id;
+
+        const infoDiv = document.createElement('div');
+        const awbDiv = document.createElement('div');
+        awbDiv.className = 'grn-scan-awb';
+        awbDiv.textContent = scan.awb;
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'grn-scan-time';
+        timeDiv.textContent = new Date(scan.scanned_at).toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'});
+        infoDiv.appendChild(awbDiv);
+        infoDiv.appendChild(timeDiv);
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'grn-scan-status grn-scan-status--' + scan.status;
+        const statusIcon = document.createElement('i');
+        statusIcon.className = 'bi bi-' + (scan.status === 'good' ? 'check' : 'x') + '-lg';
+        statusSpan.appendChild(statusIcon);
+        statusSpan.appendChild(document.createTextNode(' ' + scan.status));
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'grn-scan-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.dataset.id = scan.id;
+        editBtn.dataset.awb = scan.awb;
+        editBtn.dataset.status = scan.status;
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.dataset.id = scan.id;
+        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        item.appendChild(infoDiv);
+        item.appendChild(statusSpan);
+        item.appendChild(actionsDiv);
+
+        scanList.insertBefore(item, scanList.firstChild);
+    }
+
+    // Edit modal
+    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.edit-btn')) {
+            const btn = e.target.closest('.edit-btn');
+            document.getElementById('editId').value = btn.dataset.id;
+            document.getElementById('editAwb').value = btn.dataset.awb;
+            document.getElementById('editStatus').value = btn.dataset.status;
+            document.getElementById('editImageWrapper').style.display = btn.dataset.status === 'bad' ? 'block' : 'none';
+            editModal.show();
+        }
+    });
+
+    document.getElementById('editStatus').addEventListener('change', function() {
+        document.getElementById('editImageWrapper').style.display = this.value === 'bad' ? 'block' : 'none';
+    });
+
+    document.getElementById('saveEditBtn').addEventListener('click', async function() {
+        const id = document.getElementById('editId').value;
+        const formData = new FormData();
+        formData.append('status', document.getElementById('editStatus').value);
+
+        const imageFile = document.getElementById('editImage').files[0];
+        if (imageFile) formData.append('image', imageFile);
+
+        try {
+            const response = await fetch('/return-grn/scan/' + id, { method: 'PUT', body: formData });
+            const data = await response.json();
+            if (data.success) {
+                editModal.hide();
+                location.reload();
+            } else {
+                alert(data.error || 'Update failed');
+            }
+        } catch (err) {
+            alert('Network error');
+        }
+    });
+
+    // Delete
+    document.addEventListener('click', async function(e) {
+        if (e.target.closest('.delete-btn')) {
+            if (!confirm('Delete this scan?')) return;
+            const btn = e.target.closest('.delete-btn');
+            try {
+                const response = await fetch('/return-grn/scan/' + btn.dataset.id, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    btn.closest('.grn-scan-item').remove();
+                    location.reload();
+                } else {
+                    alert(data.error || 'Delete failed');
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+    });
+});
+</script>
+
+<%- include('partials/footer') %>

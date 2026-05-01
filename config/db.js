@@ -20,7 +20,7 @@ const connectionConfig = {
   user: env.DB_USER,
   password: env.DB_PASSWORD,
   database: env.DB_NAME,
-  timezone: 'local',
+  timezone: '+05:30', // IST - ensures NOW() returns IST time
   waitForConnections: true,
   connectionLimit: 50,
   queueLimit: 250,

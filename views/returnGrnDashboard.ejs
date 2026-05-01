@@ -1,0 +1,856 @@
+<%- include('partials/header') %>
+<%- include('partials/navbar', { user }) %>
+
+<style>
+:root {
+    --grn-slate: #1e293b;
+    --grn-slate-light: #334155;
+    --grn-amber: #f59e0b;
+    --grn-amber-glow: rgba(245, 158, 11, 0.15);
+    --grn-success: #10b981;
+    --grn-success-glow: rgba(16, 185, 129, 0.15);
+    --grn-danger: #ef4444;
+    --grn-danger-glow: rgba(239, 68, 68, 0.15);
+    --grn-warning: #eab308;
+    --grn-warning-glow: rgba(234, 179, 8, 0.15);
+    --grn-surface: #f8fafc;
+    --grn-border: #e2e8f0;
+}
+
+.grn-dashboard {
+    min-height: calc(100vh - 60px);
+    background: linear-gradient(180deg, var(--grn-slate) 0%, var(--grn-slate) 180px, var(--grn-surface) 180px);
+    padding-bottom: 2rem;
+}
+
+.grn-dashboard-header {
+    padding: 1.5rem 0 2rem;
+    color: white;
+}
+
+.grn-dashboard-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    margin: 0 0 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.grn-dashboard-title i {
+    color: var(--grn-amber);
+}
+
+.grn-dashboard-subtitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    opacity: 0.7;
+}
+
+.grn-header-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.grn-btn {
+    padding: 0.75rem 1.25rem;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grn-btn--outline {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.grn-btn--outline:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.grn-btn--primary {
+    background: var(--grn-amber);
+    color: var(--grn-slate);
+}
+
+.grn-btn--primary:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+}
+
+.grn-btn--success {
+    background: var(--grn-success);
+    color: white;
+}
+
+/* Stats Grid */
+.grn-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+    margin-top: -3rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .grn-stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 576px) {
+    .grn-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.grn-stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border-left: 4px solid var(--grn-border);
+    transition: all 0.2s ease;
+}
+
+.grn-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+}
+
+.grn-stat-card--total { border-left-color: var(--grn-slate); }
+.grn-stat-card--matched { border-left-color: var(--grn-success); }
+.grn-stat-card--unmatched { border-left-color: var(--grn-warning); }
+.grn-stat-card--good { border-left-color: var(--grn-success); }
+.grn-stat-card--bad { border-left-color: var(--grn-danger); }
+
+.grn-stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.25rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.grn-stat-card--total .grn-stat-value { color: var(--grn-slate); }
+.grn-stat-card--matched .grn-stat-value { color: var(--grn-success); }
+.grn-stat-card--unmatched .grn-stat-value { color: var(--grn-warning); }
+.grn-stat-card--good .grn-stat-value { color: var(--grn-success); }
+.grn-stat-card--bad .grn-stat-value { color: var(--grn-danger); }
+
+.grn-stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Filter Card */
+.grn-filter-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.grn-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.grn-filter-group {
+    flex: 1;
+    min-width: 140px;
+}
+
+.grn-filter-label {
+    display: block;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--grn-slate);
+    margin-bottom: 0.5rem;
+}
+
+.grn-filter-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 2px solid var(--grn-border);
+    border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.grn-filter-input:focus {
+    outline: none;
+    border-color: var(--grn-slate);
+}
+
+.grn-filter-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Employee Stats */
+.grn-section {
+    background: white;
+    border-radius: 16px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+.grn-section-header {
+    background: var(--grn-surface);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--grn-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.grn-section-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--grn-slate);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grn-section-title i {
+    color: var(--grn-amber);
+}
+
+.grn-section-badge {
+    background: var(--grn-slate);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Employee Stats Table */
+.grn-emp-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.grn-emp-table th {
+    background: var(--grn-surface);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #64748b;
+    border-bottom: 1px solid var(--grn-border);
+}
+
+.grn-emp-table th:not(:first-child) {
+    text-align: center;
+}
+
+.grn-emp-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--grn-border);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.875rem;
+}
+
+.grn-emp-table td:not(:first-child) {
+    text-align: center;
+}
+
+.grn-emp-table tr:last-child td {
+    border-bottom: none;
+}
+
+.grn-emp-table tr:hover {
+    background: var(--grn-surface);
+}
+
+.grn-emp-name {
+    font-weight: 600;
+    color: var(--grn-slate);
+}
+
+.grn-emp-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.grn-emp-count--total { background: var(--grn-surface); color: var(--grn-slate); }
+.grn-emp-count--good { background: var(--grn-success-glow); color: var(--grn-success); }
+.grn-emp-count--bad { background: var(--grn-danger-glow); color: var(--grn-danger); }
+.grn-emp-count--matched { background: var(--grn-success-glow); color: var(--grn-success); }
+
+/* Data Table */
+.grn-data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.grn-data-table th {
+    background: var(--grn-slate);
+    color: white;
+    padding: 0.875rem 1rem;
+    text-align: left;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+}
+
+.grn-data-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--grn-border);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8125rem;
+    vertical-align: middle;
+}
+
+.grn-data-table tr:hover {
+    background: var(--grn-surface);
+}
+
+.grn-awb-cell {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--grn-slate);
+    letter-spacing: 0.3px;
+}
+
+.grn-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 6px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.grn-badge--good { background: var(--grn-success-glow); color: var(--grn-success); }
+.grn-badge--bad { background: var(--grn-danger-glow); color: var(--grn-danger); }
+.grn-badge--matched { background: var(--grn-success-glow); color: var(--grn-success); }
+.grn-badge--unmatched { background: var(--grn-warning-glow); color: #a16207; }
+
+.grn-data-scroll {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.grn-empty-state {
+    padding: 3rem 2rem;
+    text-align: center;
+    color: #94a3b8;
+}
+
+.grn-empty-state i {
+    font-size: 3rem;
+    opacity: 0.4;
+    margin-bottom: 1rem;
+}
+
+/* Reconcile Modal */
+.grn-modal-result {
+    padding: 1.5rem;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.grn-modal-result--success {
+    background: var(--grn-success-glow);
+}
+
+.grn-modal-result--error {
+    background: var(--grn-danger-glow);
+}
+
+.grn-modal-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.grn-modal-result--success .grn-modal-icon { color: var(--grn-success); }
+.grn-modal-result--error .grn-modal-icon { color: var(--grn-danger); }
+
+.grn-modal-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--grn-slate);
+}
+
+.grn-modal-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.grn-modal-stat {
+    text-align: center;
+}
+
+.grn-modal-stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    color: var(--grn-slate);
+}
+
+.grn-modal-stat-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+<div class="grn-dashboard">
+    <div class="container-fluid px-4">
+        <!-- Header -->
+        <div class="grn-dashboard-header">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                <div>
+                    <h1 class="grn-dashboard-title">
+                        <i class="bi bi-clipboard-data"></i>
+                        Return GRN Dashboard
+                    </h1>
+                    <p class="grn-dashboard-subtitle">Track and reconcile warehouse returns</p>
+                </div>
+                <div class="grn-header-actions">
+                    <button class="grn-btn grn-btn--outline" id="refreshBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    <button class="grn-btn grn-btn--primary" id="reconcileBtn">
+                        <i class="bi bi-arrow-repeat"></i> Reconcile with EasyEcom
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grn-stats-grid">
+            <div class="grn-stat-card grn-stat-card--total">
+                <div class="grn-stat-value" id="statTotal"><%= stats.total_scanned || 0 %></div>
+                <div class="grn-stat-label">Total Scanned</div>
+            </div>
+            <div class="grn-stat-card grn-stat-card--matched">
+                <div class="grn-stat-value" id="statMatched"><%= stats.matched || 0 %></div>
+                <div class="grn-stat-label">Matched</div>
+            </div>
+            <div class="grn-stat-card grn-stat-card--unmatched">
+                <div class="grn-stat-value" id="statUnmatched"><%= stats.unmatched || 0 %></div>
+                <div class="grn-stat-label">Unmatched</div>
+            </div>
+            <div class="grn-stat-card grn-stat-card--good">
+                <div class="grn-stat-value" id="statGood"><%= stats.good_count || 0 %></div>
+                <div class="grn-stat-label">Good Items</div>
+            </div>
+            <div class="grn-stat-card grn-stat-card--bad">
+                <div class="grn-stat-value" id="statBad"><%= stats.bad_count || 0 %></div>
+                <div class="grn-stat-label">Bad Items</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="grn-filter-card">
+            <form id="filterForm" class="grn-filter-row">
+                <div class="grn-filter-group">
+                    <label class="grn-filter-label">From Date</label>
+                    <input type="date" class="grn-filter-input" id="fromDate" value="<%= today %>">
+                </div>
+                <div class="grn-filter-group">
+                    <label class="grn-filter-label">To Date</label>
+                    <input type="date" class="grn-filter-input" id="toDate" value="<%= today %>">
+                </div>
+                <div class="grn-filter-group">
+                    <label class="grn-filter-label">Employee</label>
+                    <select class="grn-filter-input" id="employeeFilter">
+                        <option value="">All Employees</option>
+                        <% employees.forEach(emp => { %>
+                        <option value="<%= emp.employee_id %>"><%= emp.employee_name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="grn-filter-group">
+                    <label class="grn-filter-label">Status</label>
+                    <select class="grn-filter-input" id="statusFilter">
+                        <option value="all">All Status</option>
+                        <option value="good">Good</option>
+                        <option value="bad">Bad</option>
+                    </select>
+                </div>
+                <div class="grn-filter-group">
+                    <label class="grn-filter-label">Matched</label>
+                    <select class="grn-filter-input" id="matchedFilter">
+                        <option value="all">All</option>
+                        <option value="yes">Matched Only</option>
+                        <option value="no">Unmatched Only</option>
+                    </select>
+                </div>
+                <div class="grn-filter-actions">
+                    <button type="submit" class="grn-btn grn-btn--primary">
+                        <i class="bi bi-search"></i> Filter
+                    </button>
+                    <button type="button" class="grn-btn grn-btn--success" id="downloadBtn">
+                        <i class="bi bi-download"></i> Excel
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Employee Stats -->
+        <div class="grn-section">
+            <div class="grn-section-header">
+                <span class="grn-section-title">
+                    <i class="bi bi-people-fill"></i>
+                    Employee Performance
+                </span>
+                <span class="grn-section-badge">Today</span>
+            </div>
+            <table class="grn-emp-table" id="employeeStatsTable">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Total</th>
+                        <th>Good</th>
+                        <th>Bad</th>
+                        <th>Matched</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Data Table -->
+        <div class="grn-section">
+            <div class="grn-section-header">
+                <span class="grn-section-title">
+                    <i class="bi bi-table"></i>
+                    Scan Records
+                </span>
+                <span class="grn-section-badge" id="recordCount">0 records</span>
+            </div>
+            <div class="grn-data-scroll">
+                <table class="grn-data-table" id="scansTable">
+                    <thead>
+                        <tr>
+                            <th>AWB</th>
+                            <th>Status</th>
+                            <th>Employee</th>
+                            <th>Scanned</th>
+                            <th>Matched</th>
+                            <th>SKU</th>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Marketplace</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reconcile Modal -->
+<div class="modal fade" id="reconcileModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+            <div class="modal-body p-0" id="reconcileResult">
+                <!-- Result will be shown here -->
+            </div>
+            <div class="modal-footer border-0 justify-content-center pb-4">
+                <button type="button" class="grn-btn grn-btn--primary px-4" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scansTable = document.getElementById('scansTable').querySelector('tbody');
+    const employeeStatsTable = document.getElementById('employeeStatsTable').querySelector('tbody');
+    const reconcileModal = new bootstrap.Modal(document.getElementById('reconcileModal'));
+
+    loadData();
+    loadEmployeeStats();
+
+    document.getElementById('filterForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadData();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        loadData();
+        loadEmployeeStats();
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', function() {
+        const params = new URLSearchParams({
+            fromDate: document.getElementById('fromDate').value,
+            toDate: document.getElementById('toDate').value,
+            employeeId: document.getElementById('employeeFilter').value,
+            status: document.getElementById('statusFilter').value,
+            matched: document.getElementById('matchedFilter').value
+        });
+        window.location.href = '/return-grn/download?' + params.toString();
+    });
+
+    document.getElementById('reconcileBtn').addEventListener('click', async function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Reconciling...';
+
+        try {
+            const response = await fetch('/return-grn/reconcile', { method: 'POST' });
+            const data = await response.json();
+
+            const resultDiv = document.getElementById('reconcileResult');
+            resultDiv.textContent = '';
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'grn-modal-result grn-modal-result--' + (data.success ? 'success' : 'error');
+
+            const icon = document.createElement('div');
+            icon.className = 'grn-modal-icon';
+            icon.innerHTML = '<i class="bi bi-' + (data.success ? 'check-circle-fill' : 'x-circle-fill') + '"></i>';
+            wrapper.appendChild(icon);
+
+            const title = document.createElement('div');
+            title.className = 'grn-modal-title';
+            title.textContent = data.success ? 'Reconciliation Complete' : 'Reconciliation Failed';
+            wrapper.appendChild(title);
+
+            if (data.success) {
+                const stats = document.createElement('div');
+                stats.className = 'grn-modal-stats';
+
+                const stat1 = document.createElement('div');
+                stat1.className = 'grn-modal-stat';
+                stat1.innerHTML = '<div class="grn-modal-stat-value">' + data.total + '</div><div class="grn-modal-stat-label">Total</div>';
+
+                const stat2 = document.createElement('div');
+                stat2.className = 'grn-modal-stat';
+                stat2.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-success);">' + data.matched + '</div><div class="grn-modal-stat-label">Matched</div>';
+
+                const stat3 = document.createElement('div');
+                stat3.className = 'grn-modal-stat';
+                stat3.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-warning);">' + data.unmatched + '</div><div class="grn-modal-stat-label">Unmatched</div>';
+
+                stats.appendChild(stat1);
+                stats.appendChild(stat2);
+                stats.appendChild(stat3);
+                wrapper.appendChild(stats);
+
+                loadData();
+                loadEmployeeStats();
+            } else {
+                const errMsg = document.createElement('p');
+                errMsg.style.color = 'var(--grn-danger)';
+                errMsg.textContent = data.error || 'Unknown error occurred';
+                wrapper.appendChild(errMsg);
+            }
+
+            resultDiv.appendChild(wrapper);
+            reconcileModal.show();
+        } catch (err) {
+            alert('Network error during reconciliation');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Reconcile with EasyEcom';
+        }
+    });
+
+    async function loadData() {
+        const params = new URLSearchParams({
+            fromDate: document.getElementById('fromDate').value,
+            toDate: document.getElementById('toDate').value,
+            employeeId: document.getElementById('employeeFilter').value,
+            status: document.getElementById('statusFilter').value,
+            matched: document.getElementById('matchedFilter').value
+        });
+
+        try {
+            const response = await fetch('/return-grn/data?' + params.toString());
+            const result = await response.json();
+
+            if (result.success) {
+                scansTable.textContent = '';
+                document.getElementById('recordCount').textContent = result.data.length + ' records';
+
+                result.data.forEach(function(scan) {
+                    const tr = document.createElement('tr');
+
+                    const awbTd = document.createElement('td');
+                    awbTd.className = 'grn-awb-cell';
+                    awbTd.textContent = scan.awb;
+                    tr.appendChild(awbTd);
+
+                    const statusTd = document.createElement('td');
+                    const statusBadge = document.createElement('span');
+                    statusBadge.className = 'grn-badge grn-badge--' + scan.status;
+                    statusBadge.textContent = scan.status;
+                    statusTd.appendChild(statusBadge);
+                    tr.appendChild(statusTd);
+
+                    const empTd = document.createElement('td');
+                    empTd.textContent = scan.employee_name || '-';
+                    tr.appendChild(empTd);
+
+                    const timeTd = document.createElement('td');
+                    timeTd.textContent = new Date(scan.scanned_at).toLocaleString('en-IN', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'});
+                    tr.appendChild(timeTd);
+
+                    const matchedTd = document.createElement('td');
+                    const matchBadge = document.createElement('span');
+                    matchBadge.className = 'grn-badge grn-badge--' + (scan.is_matched ? 'matched' : 'unmatched');
+                    matchBadge.textContent = scan.is_matched ? 'Yes' : 'No';
+                    matchedTd.appendChild(matchBadge);
+                    tr.appendChild(matchedTd);
+
+                    const skuTd = document.createElement('td');
+                    skuTd.textContent = scan.ee_sku || '-';
+                    tr.appendChild(skuTd);
+
+                    const orderTd = document.createElement('td');
+                    orderTd.textContent = scan.ee_reference_code || scan.ee_order_id || '-';
+                    tr.appendChild(orderTd);
+
+                    const custTd = document.createElement('td');
+                    custTd.textContent = scan.ee_customer_name || '-';
+                    tr.appendChild(custTd);
+
+                    const mktTd = document.createElement('td');
+                    mktTd.textContent = scan.ee_marketplace || '-';
+                    tr.appendChild(mktTd);
+
+                    const amtTd = document.createElement('td');
+                    amtTd.textContent = scan.ee_amount ? '₹' + Number(scan.ee_amount).toLocaleString() : '-';
+                    tr.appendChild(amtTd);
+
+                    scansTable.appendChild(tr);
+                });
+
+                if (result.data.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 10;
+                    td.className = 'grn-empty-state';
+                    td.innerHTML = '<i class="bi bi-inbox"></i><p>No records found for selected filters</p>';
+                    tr.appendChild(td);
+                    scansTable.appendChild(tr);
+                }
+            }
+        } catch (err) {
+            console.error('Error loading data:', err);
+        }
+    }
+
+    async function loadEmployeeStats() {
+        const date = document.getElementById('fromDate').value;
+
+        try {
+            const response = await fetch('/return-grn/employee-stats?date=' + date);
+            const result = await response.json();
+
+            if (result.success) {
+                employeeStatsTable.textContent = '';
+
+                result.data.forEach(function(stat) {
+                    const tr = document.createElement('tr');
+
+                    const nameTd = document.createElement('td');
+                    nameTd.className = 'grn-emp-name';
+                    nameTd.textContent = stat.employee_name;
+                    tr.appendChild(nameTd);
+
+                    const totalTd = document.createElement('td');
+                    const totalSpan = document.createElement('span');
+                    totalSpan.className = 'grn-emp-count grn-emp-count--total';
+                    totalSpan.textContent = stat.total;
+                    totalTd.appendChild(totalSpan);
+                    tr.appendChild(totalTd);
+
+                    const goodTd = document.createElement('td');
+                    const goodSpan = document.createElement('span');
+                    goodSpan.className = 'grn-emp-count grn-emp-count--good';
+                    goodSpan.textContent = stat.good_count;
+                    goodTd.appendChild(goodSpan);
+                    tr.appendChild(goodTd);
+
+                    const badTd = document.createElement('td');
+                    const badSpan = document.createElement('span');
+                    badSpan.className = 'grn-emp-count grn-emp-count--bad';
+                    badSpan.textContent = stat.bad_count;
+                    badTd.appendChild(badSpan);
+                    tr.appendChild(badTd);
+
+                    const matchedTd = document.createElement('td');
+                    const matchedSpan = document.createElement('span');
+                    matchedSpan.className = 'grn-emp-count grn-emp-count--matched';
+                    matchedSpan.textContent = stat.matched;
+                    matchedTd.appendChild(matchedSpan);
+                    tr.appendChild(matchedTd);
+
+                    employeeStatsTable.appendChild(tr);
+                });
+
+                if (result.data.length === 0) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 5;
+                    td.style.textAlign = 'center';
+                    td.style.padding = '2rem';
+                    td.style.color = '#94a3b8';
+                    td.textContent = 'No employee data for today';
+                    tr.appendChild(td);
+                    employeeStatsTable.appendChild(tr);
+                }
+            }
+        } catch (err) {
+            console.error('Error loading employee stats:', err);
+        }
+    }
+});
+</script>
+
+<%- include('partials/footer') %>
