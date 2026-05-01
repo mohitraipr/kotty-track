@@ -582,18 +582,24 @@ async function getReturnsList({ fromDate, toDate, status, page = 1, limit = 100 
     throw new Error(`Failed to authenticate with EasyEcom for warehouse: ${warehouse}`);
   }
 
-  const params = { page, limit };
-  if (fromDate) params.start_date = fromDate;
-  if (toDate) params.end_date = toDate;
-  if (status && status !== 'All') params.status = status;
+  const warehouseKey = warehouse.toLowerCase();
+  const creds = WAREHOUSE_CREDENTIALS[warehouseKey] || WAREHOUSE_CREDENTIALS.faridabad;
 
-  console.log(`Fetching returns for ${warehouse} with params:`, JSON.stringify(params));
+  const params = {};
+  // EasyEcom requires created_after/created_before together, max 7 day range
+  if (fromDate && toDate) {
+    params.created_after = fromDate;
+    params.created_before = toDate;
+  }
+
+  console.log(`Fetching pending returns for ${warehouse} with params:`, JSON.stringify(params));
 
   try {
-    const response = await axios.get(`${EASYECOM_API_BASE}/returns/getReturnsDataV2`, {
+    const response = await axios.get(`${EASYECOM_API_BASE}/getPendingReturns`, {
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'x-api-key': EASYECOM_API_KEY
       },
       params,
       timeout: 60000
