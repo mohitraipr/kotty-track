@@ -1,301 +1,748 @@
-<!-- views/stitchingApprove.ejs -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Approve Stitching Assignments</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<%- include('partials/header', { pageTitle: 'Stitching Approve' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
 
-  <!-- Bootstrap -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
+<style>
+  /* Page-specific styles for Stitching Approve */
+  .dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
 
-  <style>
-    body {
-      background-color: #f8f9fa;
-      color: #212529;
-      min-height: 100vh;
-      display: flex;
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--charcoal);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .page-title i {
+    color: var(--terracotta);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Buttons */
+  .btn-kotty {
+    font-family: var(--font-body);
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .btn-kotty-primary {
+    background: var(--terracotta);
+    color: white;
+    border-color: var(--terracotta);
+  }
+
+  .btn-kotty-primary:hover {
+    background: var(--terracotta-dark);
+    border-color: var(--terracotta-dark);
+    color: white;
+  }
+
+  .btn-kotty-outline {
+    background: transparent;
+    color: var(--charcoal);
+    border-color: var(--border-medium);
+  }
+
+  .btn-kotty-outline:hover {
+    background: var(--cream-dark);
+    border-color: var(--charcoal);
+    color: var(--charcoal);
+  }
+
+  .btn-kotty-success {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+  }
+
+  .btn-kotty-success:hover {
+    background: #256f4d;
+    border-color: #256f4d;
+    color: white;
+  }
+
+  .btn-kotty-danger {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+  }
+
+  .btn-kotty-danger:hover {
+    background: #a53220;
+    border-color: #a53220;
+    color: white;
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8125rem;
+  }
+
+  /* Flash Messages */
+  .alert-kotty {
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid transparent;
+  }
+
+  .alert-kotty-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-color: rgba(194, 59, 34, 0.2);
+  }
+
+  .alert-kotty-success {
+    background: var(--success-light);
+    color: var(--success);
+    border-color: rgba(45, 138, 95, 0.2);
+  }
+
+  .alert-kotty-info {
+    background: var(--info-light);
+    color: var(--info);
+    border-color: rgba(58, 123, 196, 0.2);
+  }
+
+  .alert-kotty .btn-close {
+    margin-left: auto;
+    opacity: 0.6;
+    filter: none;
+  }
+
+  .alert-kotty .btn-close:hover {
+    opacity: 1;
+  }
+
+  /* Search Bar */
+  .search-bar {
+    position: sticky;
+    top: 60px;
+    z-index: 100;
+    background: var(--cream);
+    padding: 16px 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    max-width: 400px;
+  }
+
+  .search-input-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1rem;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 12px 16px 12px 42px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    background: white;
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Card */
+  .kotty-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .kotty-card-header {
+    background: var(--cream-dark);
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: var(--text-base);
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .kotty-card-header i {
+    color: var(--terracotta);
+  }
+
+  .kotty-card-body {
+    padding: 0;
+  }
+
+  /* Table */
+  .kotty-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-body);
+  }
+
+  .kotty-table thead th {
+    background: var(--cream);
+    padding: 14px 16px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    text-align: left;
+    border-bottom: 1px solid var(--border-medium);
+  }
+
+  .kotty-table tbody td {
+    padding: 14px 16px;
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .kotty-table tbody tr:hover {
+    background: var(--cream);
+  }
+
+  .kotty-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Badge */
+  .kotty-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .kotty-badge-info {
+    background: var(--info-light);
+    color: var(--info);
+  }
+
+  /* Actions Group */
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+  }
+
+  .empty-state-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--info-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+  }
+
+  .empty-state-icon i {
+    font-size: 2rem;
+    color: var(--info);
+  }
+
+  .empty-state-title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--charcoal);
+    margin-bottom: 8px;
+  }
+
+  .empty-state-text {
+    color: var(--text-muted);
+    font-size: var(--text-base);
+  }
+
+  /* Modal Styling */
+  .modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .modal-header {
+    background: var(--cream-dark);
+    border-bottom: 1px solid var(--border-light);
+    padding: 18px 24px;
+  }
+
+  .modal-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--charcoal);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-title i {
+    color: var(--danger);
+  }
+
+  .modal-body {
+    padding: 24px;
+    font-family: var(--font-body);
+  }
+
+  .modal-footer {
+    background: var(--cream);
+    border-top: 1px solid var(--border-light);
+    padding: 16px 24px;
+    gap: 10px;
+  }
+
+  /* Form Elements */
+  .form-label {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  .form-control {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    padding: 10px 14px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  textarea.form-control {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .dashboard-container {
+      padding: 20px 16px;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+    }
+
+    .kotty-table {
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .action-buttons {
       flex-direction: column;
+      align-items: stretch;
     }
-    .main-content {
-      flex: 1 0 auto;
+
+    .action-buttons .btn-kotty {
+      justify-content: center;
     }
-    .sticky-subheader {
-      position: sticky;
-      top: 0;
-      z-index: 1020;
-      background-color: #f8f9fa;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #dee2e6;
-    }
-  </style>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/professional.css">
-</head>
-<body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="fas fa-tshirt me-2"></i> KOTTY
+  }
+</style>
+
+<main class="dashboard-container">
+  <!-- Flash Messages -->
+  <% if (error && error.length > 0) { %>
+    <% error.forEach(function(msg) { %>
+      <div class="alert-kotty alert-kotty-danger alert alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-circle"></i>
+        <span><%= msg %></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% }) %>
+  <% } %>
+
+  <% if (success && success.length > 0) { %>
+    <% success.forEach(function(msg) { %>
+      <div class="alert-kotty alert-kotty-success alert alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle"></i>
+        <span><%= msg %></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% }) %>
+  <% } %>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">
+      <i class="bi bi-check-circle"></i>
+      Pending Stitching Assignments
+    </h1>
+    <div class="header-actions">
+      <a href="/stitchingdashboard" class="btn-kotty btn-kotty-outline">
+        <i class="bi bi-arrow-left"></i>
+        Back to Dashboard
       </a>
-      <div class="ms-auto d-flex gap-2">
-        <!-- Link back to the main Stitching Dashboard -->
-        <a href="/stitchingdashboard" class="btn btn-outline-light btn-sm">
-          <i class="fas fa-arrow-left"></i> Back to Dashboard
-        </a>
-        <!-- Optional logout link -->
-        <a href="/logout" class="btn btn-sm btn-danger">
-          <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+    </div>
+  </div>
+
+  <!-- Search Bar -->
+  <div class="search-bar">
+    <div class="search-input-wrapper">
+      <i class="bi bi-search"></i>
+      <input
+        type="text"
+        id="searchAssignments"
+        class="search-input"
+        placeholder="Search by lot or SKU..."
+      />
+    </div>
+  </div>
+
+  <!-- Pending Approvals Card -->
+  <div class="kotty-card">
+    <div class="kotty-card-header">
+      <i class="bi bi-clock-history"></i>
+      Pending Approvals
+    </div>
+    <div class="kotty-card-body">
+      <div class="table-responsive">
+        <table class="kotty-table" id="assignmentsTable">
+          <thead>
+            <tr>
+              <th>Assignment ID</th>
+              <th>Lot No</th>
+              <th>SKU</th>
+              <th>Assigned On</th>
+              <th>Remark</th>
+              <th style="width: 200px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State (hidden by default) -->
+      <div id="noAssignmentsAlert" class="empty-state d-none">
+        <div class="empty-state-icon">
+          <i class="bi bi-inbox"></i>
+        </div>
+        <h3 class="empty-state-title">No Pending Assignments</h3>
+        <p class="empty-state-text">All stitching assignments have been processed.</p>
       </div>
     </div>
-  </nav>
+  </div>
+</main>
 
-  <!-- Main Container -->
-  <div class="container my-4 main-content">
-    <!-- FLASH MESSAGES -->
-    <% if (error && error.length > 0) { %>
-      <% error.forEach(function(msg) { %>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <i class="fas fa-exclamation-circle me-2"></i> <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+<!-- Deny Modal -->
+<div
+  class="modal fade"
+  id="denyModal"
+  tabindex="-1"
+  aria-labelledby="denyModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="denyForm" action="/stitchingdashboard/deny-lot" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="denyModalLabel">
+            <i class="bi bi-x-circle"></i> Deny Assignment
+          </h5>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Close"
+          ></button>
         </div>
-      <% }) %>
-    <% } %>
-
-    <% if (success && success.length > 0) { %>
-      <% success.forEach(function(msg) { %>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <i class="fas fa-check-circle me-2"></i> <%= msg %>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-      <% }) %>
-    <% } %>
-
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h1 class="mb-0">
-        <i class="fas fa-check-circle"></i> Pending Stitching Assignments
-      </h1>
-    </div>
-
-    <!-- Sticky sub-header with search -->
-    <div class="sticky-subheader">
-      <div class="row">
-        <div class="col-sm-6">
-          <div class="input-group">
-            <span class="input-group-text">
-              <i class="fas fa-search"></i>
-            </span>
-            <input
-              type="text"
-              id="searchAssignments"
+        <div class="modal-body">
+          <input type="hidden" name="assignment_id" id="denyAssignmentId" value="" />
+          <div class="mb-3">
+            <label for="denial_remark" class="form-label">
+              Reason for Denial
+            </label>
+            <textarea
               class="form-control"
-              placeholder="Search by lot or SKU..."
-            />
+              name="denial_remark"
+              id="denial_remark"
+              rows="3"
+              placeholder="Please provide a reason for denying this assignment..."
+              required
+            ></textarea>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Card for pending approvals -->
-    <div class="card mt-2">
-      <div class="card-header">
-        <strong>Pending Approvals</strong>
-      </div>
-      <div class="card-body p-0">
-        <!-- We'll render a table of assignments here -->
-        <div class="table-responsive">
-          <table class="table table-striped mb-0" id="assignmentsTable">
-            <thead class="table-dark">
-              <tr>
-                <th scope="col">Assignment ID</th>
-                <th scope="col">Lot No</th>
-                <th scope="col">SKU</th>
-                <th scope="col">Assigned On</th>
-                <th scope="col">Remark</th>
-                <th scope="col" style="width: 180px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Populated by JS -->
-            </tbody>
-          </table>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-kotty btn-kotty-outline"
+            data-bs-dismiss="modal"
+          >
+            Cancel
+          </button>
+          <button type="submit" class="btn-kotty btn-kotty-danger">
+            <i class="bi bi-x-circle"></i> Deny
+          </button>
         </div>
-      </div>
-    </div>
-
-    <!-- If no assignments, we'll show an alert (in JS) -->
-    <div id="noAssignmentsAlert" class="alert alert-info mt-3 d-none">
-      <i class="fas fa-info-circle me-2"></i>
-      No pending assignments found.
+      </form>
     </div>
   </div>
+</div>
 
-  <!-- DENY MODAL -->
-  <div
-    class="modal fade"
-    id="denyModal"
-    tabindex="-1"
-    aria-labelledby="denyModalLabel"
-    aria-hidden="true"
-  >
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <form id="denyForm" action="/stitchingdashboard/deny-lot" method="POST">
-          <div class="modal-header">
-            <h5 class="modal-title" id="denyModalLabel">
-              <i class="fas fa-ban"></i> Deny Assignment
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
-          </div>
-          <div class="modal-body">
-            <input type="hidden" name="assignment_id" id="denyAssignmentId" value="" />
-            <div class="mb-3">
-              <label for="denial_remark" class="form-label">
-                <strong>Reason for Denial</strong>
-              </label>
-              <textarea
-                class="form-control"
-                name="denial_remark"
-                id="denial_remark"
-                rows="3"
-                required
-              ></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-danger">
-              <i class="fas fa-ban"></i> Deny
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+<script>
+  const searchAssignments = document.getElementById('searchAssignments');
+  const assignmentsTableBody = document.querySelector('#assignmentsTable tbody');
+  const noAssignmentsAlert = document.getElementById('noAssignmentsAlert');
 
-  <!-- Bootstrap JS -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
-  <script>
-    const searchAssignments = document.getElementById('searchAssignments');
-    const assignmentsTableBody = document.querySelector('#assignmentsTable tbody');
-    const noAssignmentsAlert = document.getElementById('noAssignmentsAlert');
+  let assignmentData = [];
 
-    let assignmentData = [];
+  // Fetch pending assignments from the server
+  async function fetchAssignments(search = '') {
+    try {
+      const resp = await fetch(`/stitchingdashboard/approve/list?search=${encodeURIComponent(search)}`);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      assignmentData = data.data || [];
+      renderAssignmentsTable();
+    } catch (err) {
+      console.error('Error fetching assignments:', err);
+      showErrorState();
+    }
+  }
 
-    // Fetch pending assignments from the server
-    async function fetchAssignments(search = '') {
-      try {
-        const resp = await fetch(`/stitchingdashboard/approve/list?search=${encodeURIComponent(search)}`);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        assignmentData = data.data || [];
-        renderAssignmentsTable();
-      } catch (err) {
-        console.error('Error fetching assignments:', err);
-        assignmentsTableBody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-danger">
-              Error loading assignments. Please try again later.
-            </td>
-          </tr>
-        `;
-      }
+  function showErrorState() {
+    // Clear table and show error using DOM methods
+    while (assignmentsTableBody.firstChild) {
+      assignmentsTableBody.removeChild(assignmentsTableBody.firstChild);
+    }
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.setAttribute('colspan', '6');
+    td.className = 'text-center';
+    td.style.padding = '40px';
+
+    const iconDiv = document.createElement('div');
+    iconDiv.className = 'empty-state-icon';
+    iconDiv.style.width = '60px';
+    iconDiv.style.height = '60px';
+    iconDiv.style.marginBottom = '12px';
+    iconDiv.style.margin = '0 auto 12px';
+
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-exclamation-triangle';
+    icon.style.fontSize = '1.5rem';
+    icon.style.color = 'var(--danger)';
+    iconDiv.appendChild(icon);
+
+    const errorText = document.createElement('p');
+    errorText.style.color = 'var(--danger)';
+    errorText.style.margin = '0';
+    errorText.textContent = 'Error loading assignments. Please try again later.';
+
+    td.appendChild(iconDiv);
+    td.appendChild(errorText);
+    tr.appendChild(td);
+    assignmentsTableBody.appendChild(tr);
+  }
+
+  function renderAssignmentsTable() {
+    // Clear old
+    while (assignmentsTableBody.firstChild) {
+      assignmentsTableBody.removeChild(assignmentsTableBody.firstChild);
     }
 
-    function renderAssignmentsTable() {
-      // Clear old
-      assignmentsTableBody.innerHTML = '';
+    if (!assignmentData.length) {
+      // Show the "No pending" alert
+      noAssignmentsAlert.classList.remove('d-none');
+      document.querySelector('#assignmentsTable thead').style.display = 'none';
+      return;
+    } else {
+      noAssignmentsAlert.classList.add('d-none');
+      document.querySelector('#assignmentsTable thead').style.display = '';
+    }
 
-      if (!assignmentData.length) {
-        // Show the "No pending" alert
-        noAssignmentsAlert.classList.remove('d-none');
-        return;
-      } else {
-        noAssignmentsAlert.classList.add('d-none');
-      }
+    assignmentData.forEach(item => {
+      const tr = document.createElement('tr');
 
-      assignmentData.forEach(item => {
-        const tr = document.createElement('tr');
-
-        // Format date
-        const assignedOnDate = new Date(item.assigned_on).toLocaleString();
-
-        tr.innerHTML = `
-          <td>${item.assignment_id}</td>
-          <td>${item.lot_no}</td>
-          <td>${item.sku}</td>
-          <td>${assignedOnDate}</td>
-          <td>${item.assignment_remark || 'N/A'}</td>
-          <td>
-            <div class="d-flex flex-wrap gap-2">
-              <!-- Approve form -->
-              <form method="POST" action="/stitchingdashboard/approve-lot">
-                <input type="hidden" name="assignment_id" value="${item.assignment_id}">
-                <button type="submit" class="btn btn-success btn-sm">
-                  <i class="fas fa-check-circle"></i> Approve
-                </button>
-              </form>
-              <!-- Deny button triggers modal -->
-              <button
-                class="btn btn-danger btn-sm"
-                data-bs-toggle="modal"
-                data-bs-target="#denyModal"
-                data-assignment-id="${item.assignment_id}"
-              >
-                <i class="fas fa-ban"></i> Deny
-              </button>
-            </div>
-          </td>
-        `;
-
-        assignmentsTableBody.appendChild(tr);
+      // Format date
+      const assignedOnDate = new Date(item.assigned_on).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
-    }
 
-    // On show Deny Modal
-    const denyModal = document.getElementById('denyModal');
-    denyModal.addEventListener('show.bs.modal', (event) => {
-      const button = event.relatedTarget;
-      const assignmentId = button.getAttribute('data-assignment-id');
-      document.getElementById('denyAssignmentId').value = assignmentId;
-      document.getElementById('denial_remark').value = '';
+      // Assignment ID cell
+      const tdId = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = 'kotty-badge kotty-badge-info';
+      badge.textContent = '#' + item.assignment_id;
+      tdId.appendChild(badge);
+
+      // Lot No cell
+      const tdLot = document.createElement('td');
+      const strong = document.createElement('strong');
+      strong.textContent = item.lot_no;
+      tdLot.appendChild(strong);
+
+      // SKU cell
+      const tdSku = document.createElement('td');
+      tdSku.textContent = item.sku;
+
+      // Assigned On cell
+      const tdDate = document.createElement('td');
+      tdDate.textContent = assignedOnDate;
+
+      // Remark cell
+      const tdRemark = document.createElement('td');
+      if (item.assignment_remark) {
+        tdRemark.textContent = item.assignment_remark;
+      } else {
+        const naSpan = document.createElement('span');
+        naSpan.style.color = 'var(--text-muted)';
+        naSpan.textContent = 'N/A';
+        tdRemark.appendChild(naSpan);
+      }
+
+      // Actions cell
+      const tdActions = document.createElement('td');
+      const actionDiv = document.createElement('div');
+      actionDiv.className = 'action-buttons';
+
+      // Approve form
+      const approveForm = document.createElement('form');
+      approveForm.method = 'POST';
+      approveForm.action = '/stitchingdashboard/approve-lot';
+      approveForm.style.margin = '0';
+
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'assignment_id';
+      hiddenInput.value = item.assignment_id;
+      approveForm.appendChild(hiddenInput);
+
+      const approveBtn = document.createElement('button');
+      approveBtn.type = 'submit';
+      approveBtn.className = 'btn-kotty btn-kotty-success btn-sm';
+      const approveIcon = document.createElement('i');
+      approveIcon.className = 'bi bi-check-circle';
+      approveBtn.appendChild(approveIcon);
+      approveBtn.appendChild(document.createTextNode(' Approve'));
+      approveForm.appendChild(approveBtn);
+
+      // Deny button
+      const denyBtn = document.createElement('button');
+      denyBtn.className = 'btn-kotty btn-kotty-danger btn-sm';
+      denyBtn.setAttribute('data-bs-toggle', 'modal');
+      denyBtn.setAttribute('data-bs-target', '#denyModal');
+      denyBtn.setAttribute('data-assignment-id', item.assignment_id);
+      const denyIcon = document.createElement('i');
+      denyIcon.className = 'bi bi-x-circle';
+      denyBtn.appendChild(denyIcon);
+      denyBtn.appendChild(document.createTextNode(' Deny'));
+
+      actionDiv.appendChild(approveForm);
+      actionDiv.appendChild(denyBtn);
+      tdActions.appendChild(actionDiv);
+
+      tr.appendChild(tdId);
+      tr.appendChild(tdLot);
+      tr.appendChild(tdSku);
+      tr.appendChild(tdDate);
+      tr.appendChild(tdRemark);
+      tr.appendChild(tdActions);
+
+      assignmentsTableBody.appendChild(tr);
     });
+  }
 
-    // Real-time search
-    searchAssignments.addEventListener('input', () => {
-      const val = searchAssignments.value.trim();
-      fetchAssignments(val);
-    });
+  // On show Deny Modal
+  const denyModal = document.getElementById('denyModal');
+  denyModal.addEventListener('show.bs.modal', (event) => {
+    const button = event.relatedTarget;
+    const assignmentId = button.getAttribute('data-assignment-id');
+    document.getElementById('denyAssignmentId').value = assignmentId;
+    document.getElementById('denial_remark').value = '';
+  });
 
-    // Initial load
-    fetchAssignments();
-  </script>
-</body>
-</html>
+  // Real-time search
+  searchAssignments.addEventListener('input', () => {
+    const val = searchAssignments.value.trim();
+    fetchAssignments(val);
+  });
+
+  // Initial load
+  fetchAssignments();
+</script>
+
+<%- include('partials/footer') %>
