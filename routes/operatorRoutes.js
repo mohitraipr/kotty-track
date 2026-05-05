@@ -1265,14 +1265,29 @@ function getDepartmentStatuses({
         finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
       };
     } else {
-      // approved => partial or complete
+      // approved => check dispatch to next stage
       if (stitchedQty===0) {
         stitchingStatus= "In-Line";
-      } else if (stitchedQty>= totalCut && totalCut>0) {
-        stitchingStatus= "Completed";
+      } else if (isDenim) {
+        // Denim: compare against what assembly received
+        if (!asmAssign) {
+          stitchingStatus= "Completed-Inline";
+        } else if (assembledQty < stitchedQty) {
+          const pend= stitchedQty - assembledQty;
+          stitchingStatus= `${pend} Pending`;
+        } else {
+          stitchingStatus= !washAssign ? "Completed-Inline" : "Completed";
+        }
       } else {
-        const pend= totalCut- stitchedQty;
-        stitchingStatus= `${pend} Pending`;
+        // Hosiery: compare against what finishing received
+        if (!finAssign) {
+          stitchingStatus= "Completed-Inline";
+        } else if (finishedQty < stitchedQty) {
+          const pend= stitchedQty - finishedQty;
+          stitchingStatus= `${pend} Pending`;
+        } else {
+          stitchingStatus= "Completed";
+        }
       }
     }
   }
@@ -1338,14 +1353,16 @@ function getDepartmentStatuses({
           finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
         };
       } else {
-        // partial or complete
+        // approved => check dispatch to washing
         if (assembledQty===0) {
           assemblyStatus= "In-Line";
-        } else if (assembledQty>= stitchedQty && stitchedQty>0) {
-          assemblyStatus= "Completed";
-        } else {
-          const pend= stitchedQty- assembledQty;
+        } else if (!washAssign) {
+          assemblyStatus= "Completed-Inline";
+        } else if (washedQty < assembledQty) {
+          const pend= assembledQty - washedQty;
           assemblyStatus= `${pend} Pending`;
+        } else {
+          assemblyStatus= !washInAssign ? "Completed-Inline" : "Completed";
         }
       }
 
@@ -1398,14 +1415,16 @@ function getDepartmentStatuses({
             finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
           };
         } else {
-          // partial or complete
+          // approved => check dispatch to washingIn
           if (washedQty===0) {
             washingStatus= "In-Line";
-          } else if (washedQty>= assembledQty && assembledQty>0) {
-            washingStatus= "Completed";
-          } else {
-            const pend= assembledQty- washedQty;
+          } else if (!washInAssign) {
+            washingStatus= "Completed-Inline";
+          } else if (washingInQty < washedQty) {
+            const pend= washedQty - washingInQty;
             washingStatus= `${pend} Pending`;
+          } else {
+            washingStatus= !finAssign ? "Completed-Inline" : "Completed";
           }
         }
 
@@ -1455,14 +1474,16 @@ function getDepartmentStatuses({
               finishingStatus, finishingOp, finishingAssignedOn, finishingApprovedOn
             };
           } else {
-            // partial or complete
+            // approved => check dispatch to finishing
             if (washingInQty===0) {
               washingInStatus= "In-Line";
-            } else if (washingInQty>= washedQty && washedQty>0) {
-              washingInStatus= "Completed";
-            } else {
-              const pend= washedQty- washingInQty;
+            } else if (!finAssign) {
+              washingInStatus= "Completed-Inline";
+            } else if (finishedQty < washingInQty) {
+              const pend= washingInQty - finishedQty;
               washingInStatus= `${pend} Pending`;
+            } else {
+              washingInStatus= "Completed";
             }
           }
         }
@@ -2193,6 +2214,22 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
        GROUP BY fd.lot_no, fds.size_label
     `, [lotNos, lotNos, lotNos, lotNos, lotNos]);
 
+    // Query for dispatched quantities and destinations
+    const [dispatchRows] = await pool.query(`
+      SELECT fdp.lot_no, fdp.size_label,
+             COALESCE(SUM(fdp.quantity),0) AS dispatchedQty,
+             GROUP_CONCAT(DISTINCT fdp.destination ORDER BY fdp.sent_at DESC SEPARATOR ', ') AS destinations
+        FROM finishing_dispatches fdp
+       WHERE fdp.lot_no IN (?)
+       GROUP BY fdp.lot_no, fdp.size_label
+    `, [lotNos]);
+
+    const dispatchMap = {};
+    for (const d of dispatchRows) {
+      const key = `${d.lot_no}|${d.size_label}`;
+      dispatchMap[key] = { dispatchedQty: parseFloat(d.dispatchedQty) || 0, destinations: d.destinations || '' };
+    }
+
     const sizeSumsMap = {};
     for (const r of rows) {
       const key = `${r.lot_no}|${r.size_label}`;
@@ -2315,7 +2352,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         finishingApprovedOn: statuses.finishingApprovedOn,
         finishingOp:         statuses.finishingOp,
         finishingStatus:     statuses.finishingStatus,
-        finishedQty
+        finishedQty,
+        dispatchedQty:       (dispatchMap[`${lotNo}|${sizeLabel}`] || {}).dispatchedQty || 0,
+        destinations:        (dispatchMap[`${lotNo}|${sizeLabel}`] || {}).destinations || ''
       });
     }
 
@@ -2362,7 +2401,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         { header: "Finishing Approved On", key: "finishingApprovedOn", width: 20 },
         { header: "Finishing Operator", key: "finishingOp", width: 15 },
         { header: "Finishing Status", key: "finishingStatus", width: 25 },
-        { header: "Finished Qty", key: "finishedQty", width: 15 }
+        { header: "Finished Qty", key: "finishedQty", width: 15 },
+        { header: "Dispatched Qty", key: "dispatchedQty", width: 15 },
+        { header: "Dispatch Destination", key: "destinations", width: 25 }
       ];
 
       finalData.forEach(r => {
@@ -2404,7 +2445,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
           finishingApprovedOn: r.finishingApprovedOn,
           finishingOp: r.finishingOp,
           finishingStatus: r.finishingStatus,
-          finishedQty: r.finishedQty
+          finishedQty: r.finishedQty,
+          dispatchedQty: r.dispatchedQty,
+          destinations: r.destinations
         });
       });
 

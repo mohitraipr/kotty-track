@@ -370,7 +370,13 @@ router.get('/data', isAuthenticated, allowOperatorAccess, async (req, res) => {
  */
 router.post('/reconcile', isAuthenticated, allowOperatorAccess, async (req, res) => {
   try {
-    console.log('Starting GRN reconciliation...');
+    const { fromDate, toDate } = req.body;
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ success: false, error: 'Please provide fromDate and toDate' });
+    }
+
+    console.log(`Starting GRN reconciliation for ${fromDate} to ${toDate}...`);
 
     // Get all unmatched scans
     const [unmatchedScans] = await pool.query(
@@ -378,14 +384,14 @@ router.post('/reconcile', isAuthenticated, allowOperatorAccess, async (req, res)
     );
 
     if (unmatchedScans.length === 0) {
-      return res.json({ success: true, message: 'No unmatched scans to reconcile', matched: 0 });
+      return res.json({ success: true, message: 'No unmatched scans to reconcile', matched: 0, total: 0, unmatched: 0 });
     }
 
     console.log(`Found ${unmatchedScans.length} unmatched scans`);
 
-    // Fetch pending returns from EasyEcom
-    const pendingReturns = await getAllReturns({});
-    console.log(`Fetched ${pendingReturns.length} pending returns from EasyEcom`);
+    // Fetch pending returns from EasyEcom with user-selected date filter
+    const pendingReturns = await getAllReturns({ fromDate, toDate });
+    console.log(`Fetched ${pendingReturns.length} pending returns from EasyEcom for ${fromDate} to ${toDate}`);
 
     // Build AWB lookup map from EasyEcom data
     const awbToReturn = new Map();

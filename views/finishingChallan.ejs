@@ -270,22 +270,35 @@
       <thead>
         <tr>
           <th>Sl No.</th>
-          <th>Size Label</th>
-          <th>Pieces</th>
+          <th>Size</th>
+          <th>Finished</th>
+          <th>Dispatched</th>
+          <th>Pending</th>
+          <th>Destination</th>
         </tr>
       </thead>
       <tbody>
-        <% let grandTot = 0; %>
-        <% sizes.forEach((sz, i) => { grandTot += sz.pieces; %>
+        <% let grandTot = 0, grandDispatched = 0; %>
+        <% sizes.forEach((sz, i) => {
+          grandTot += sz.pieces;
+          grandDispatched += (sz.dispatched || 0);
+          const pending = sz.pieces - (sz.dispatched || 0);
+        %>
           <tr>
             <td><%= i + 1 %></td>
             <td><%= sz.size_label %></td>
             <td><%= sz.pieces %></td>
+            <td><%= sz.dispatched || 0 %></td>
+            <td style="<%= pending > 0 ? 'color: var(--terracotta); font-weight: 600;' : '' %>"><%= pending %></td>
+            <td><%= sz.destinations || '—' %></td>
           </tr>
         <% }); %>
         <tr class="total-row">
           <td colspan="2">Total</td>
           <td><%= grandTot %></td>
+          <td><%= grandDispatched %></td>
+          <td><%= grandTot - grandDispatched %></td>
+          <td></td>
         </tr>
       </tbody>
     </table>

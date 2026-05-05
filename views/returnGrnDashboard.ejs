@@ -32,10 +32,12 @@
 .grn-dashboard-title {
     font-family: 'DM Serif Display', serif;
     font-size: 2rem;
+    font-weight: 400;
     margin: 0 0 0.25rem;
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    color: #ffffff;
 }
 
 .grn-dashboard-title i {
@@ -437,7 +439,7 @@
 }
 </style>
 
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 
 <div class="grn-dashboard">
     <div class="container-fluid px-4">
@@ -596,10 +598,38 @@
 <div class="modal fade" id="reconcileModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
-            <div class="modal-body p-0" id="reconcileResult">
-                <!-- Result will be shown here -->
+            <div class="modal-header border-0 bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Reconcile with EasyEcom</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-footer border-0 justify-content-center pb-4">
+            <div class="modal-body p-4">
+                <!-- Date Selection Form -->
+                <div id="reconcileForm">
+                    <p class="text-muted mb-3">Select date range to fetch returns from EasyEcom:</p>
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <label class="grn-filter-label">From Date</label>
+                            <input type="date" class="grn-filter-input w-100" id="reconcileFromDate" value="<%= today %>">
+                        </div>
+                        <div class="col-6">
+                            <label class="grn-filter-label">To Date</label>
+                            <input type="date" class="grn-filter-input w-100" id="reconcileToDate" value="<%= today %>">
+                        </div>
+                    </div>
+                    <button type="button" class="grn-btn grn-btn--primary w-100" id="startReconcileBtn">
+                        <i class="bi bi-play-fill"></i> Start Reconciliation
+                    </button>
+                </div>
+                <!-- Loading State -->
+                <div id="reconcileLoading" style="display: none;" class="text-center py-4">
+                    <div class="spinner-border text-warning mb-3" role="status"></div>
+                    <p class="mb-0">Fetching returns from EasyEcom...</p>
+                </div>
+                <!-- Result -->
+                <div id="reconcileResult" style="display: none;"></div>
+            </div>
+            <div class="modal-footer border-0 justify-content-center pb-4" id="reconcileFooter" style="display: none;">
+                <button type="button" class="grn-btn grn-btn--outline px-4 me-2" id="reconcileAgainBtn">Reconcile Again</button>
                 <button type="button" class="grn-btn grn-btn--primary px-4" data-bs-dismiss="modal">Done</button>
             </div>
         </div>
@@ -636,17 +666,51 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/return-grn/download?' + params.toString();
     });
 
-    document.getElementById('reconcileBtn').addEventListener('click', async function() {
-        const btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Reconciling...';
+    // Reconcile modal elements
+    const reconcileForm = document.getElementById('reconcileForm');
+    const reconcileLoading = document.getElementById('reconcileLoading');
+    const reconcileResult = document.getElementById('reconcileResult');
+    const reconcileFooter = document.getElementById('reconcileFooter');
+
+    function resetReconcileModal() {
+        reconcileForm.style.display = 'block';
+        reconcileLoading.style.display = 'none';
+        reconcileResult.style.display = 'none';
+        reconcileFooter.style.display = 'none';
+    }
+
+    document.getElementById('reconcileBtn').addEventListener('click', function() {
+        resetReconcileModal();
+        reconcileModal.show();
+    });
+
+    document.getElementById('reconcileAgainBtn').addEventListener('click', resetReconcileModal);
+
+    document.getElementById('startReconcileBtn').addEventListener('click', async function() {
+        const fromDate = document.getElementById('reconcileFromDate').value;
+        const toDate = document.getElementById('reconcileToDate').value;
+
+        if (!fromDate || !toDate) {
+            alert('Please select both dates');
+            return;
+        }
+
+        // Show loading
+        reconcileForm.style.display = 'none';
+        reconcileLoading.style.display = 'block';
 
         try {
-            const response = await fetch('/return-grn/reconcile', { method: 'POST' });
+            const response = await fetch('/return-grn/reconcile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fromDate, toDate })
+            });
             const data = await response.json();
 
-            const resultDiv = document.getElementById('reconcileResult');
-            resultDiv.textContent = '';
+            reconcileLoading.style.display = 'none';
+            reconcileResult.style.display = 'block';
+            reconcileFooter.style.display = 'flex';
+            reconcileResult.textContent = '';
 
             const wrapper = document.createElement('div');
             wrapper.className = 'grn-modal-result grn-modal-result--' + (data.success ? 'success' : 'error');
@@ -667,20 +731,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const stat1 = document.createElement('div');
                 stat1.className = 'grn-modal-stat';
-                stat1.innerHTML = '<div class="grn-modal-stat-value">' + data.total + '</div><div class="grn-modal-stat-label">Total</div>';
+                stat1.innerHTML = '<div class="grn-modal-stat-value">' + (data.total || 0) + '</div><div class="grn-modal-stat-label">Unmatched Scans</div>';
 
                 const stat2 = document.createElement('div');
                 stat2.className = 'grn-modal-stat';
-                stat2.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-success);">' + data.matched + '</div><div class="grn-modal-stat-label">Matched</div>';
+                stat2.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-success);">' + (data.matched || 0) + '</div><div class="grn-modal-stat-label">Now Matched</div>';
 
                 const stat3 = document.createElement('div');
                 stat3.className = 'grn-modal-stat';
-                stat3.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-warning);">' + data.unmatched + '</div><div class="grn-modal-stat-label">Unmatched</div>';
+                stat3.innerHTML = '<div class="grn-modal-stat-value" style="color: var(--grn-warning);">' + (data.unmatched || 0) + '</div><div class="grn-modal-stat-label">Still Unmatched</div>';
 
                 stats.appendChild(stat1);
                 stats.appendChild(stat2);
                 stats.appendChild(stat3);
                 wrapper.appendChild(stats);
+
+                if (data.message) {
+                    const msg = document.createElement('p');
+                    msg.className = 'text-muted mt-3 mb-0 small';
+                    msg.textContent = data.message;
+                    wrapper.appendChild(msg);
+                }
 
                 loadData();
                 loadEmployeeStats();
@@ -691,13 +762,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 wrapper.appendChild(errMsg);
             }
 
-            resultDiv.appendChild(wrapper);
-            reconcileModal.show();
+            reconcileResult.appendChild(wrapper);
         } catch (err) {
-            alert('Network error during reconciliation');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Reconcile with EasyEcom';
+            reconcileLoading.style.display = 'none';
+            reconcileResult.style.display = 'block';
+            reconcileFooter.style.display = 'flex';
+            reconcileResult.innerHTML = '<div class="grn-modal-result grn-modal-result--error"><div class="grn-modal-icon"><i class="bi bi-x-circle-fill"></i></div><div class="grn-modal-title">Network Error</div><p style="color: var(--grn-danger);">Could not connect to server</p></div>';
         }
     });
 

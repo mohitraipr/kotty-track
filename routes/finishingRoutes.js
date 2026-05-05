@@ -493,8 +493,20 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
       return res.redirect('/finishingdashboard');
     }
     const [sizes] = await pool.query(`
-      SELECT * FROM finishing_data_sizes WHERE finishing_data_id = ? ORDER BY id ASC
-    `, [entryId]);
+      SELECT fds.*,
+             COALESCE(d.dispatched, 0) AS dispatched,
+             COALESCE(d.destinations, '') AS destinations
+      FROM finishing_data_sizes fds
+      LEFT JOIN (
+        SELECT size_label, SUM(quantity) AS dispatched,
+               GROUP_CONCAT(DISTINCT destination ORDER BY sent_at DESC SEPARATOR ', ') AS destinations
+        FROM finishing_dispatches
+        WHERE finishing_data_id = ?
+        GROUP BY size_label
+      ) d ON fds.size_label = d.size_label
+      WHERE fds.finishing_data_id = ?
+      ORDER BY fds.id ASC
+    `, [entryId, entryId]);
     const [updates] = await pool.query(`
       SELECT * FROM finishing_data_updates WHERE finishing_data_id = ? ORDER BY updated_at ASC
     `, [entryId]);
@@ -516,12 +528,24 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
   try {
     const userId = req.session.user.id;
     const [mainRows] = await pool.query(`
-      SELECT * FROM finishing_data WHERE user_id = ? ORDER BY created_at ASC
+      SELECT fd.*, cl.lot_no as cutting_lot_no
+      FROM finishing_data fd
+      LEFT JOIN cutting_lots cl ON fd.lot_no = cl.lot_no
+      WHERE fd.user_id = ?
+      ORDER BY fd.created_at ASC
     `, [userId]);
     const [allSizes] = await pool.query(`
-      SELECT fds.*
+      SELECT fds.*, fd.lot_no,
+             COALESCE(d.dispatched, 0) AS dispatched,
+             COALESCE(d.destinations, '') AS destinations
       FROM finishing_data_sizes fds
       JOIN finishing_data fd ON fd.id = fds.finishing_data_id
+      LEFT JOIN (
+        SELECT finishing_data_id, size_label, SUM(quantity) AS dispatched,
+               GROUP_CONCAT(DISTINCT destination ORDER BY sent_at DESC SEPARATOR ', ') AS destinations
+        FROM finishing_dispatches
+        GROUP BY finishing_data_id, size_label
+      ) d ON fds.finishing_data_id = d.finishing_data_id AND fds.size_label = d.size_label
       WHERE fd.user_id = ?
       ORDER BY fds.finishing_data_id, fds.id
     `, [userId]);
@@ -552,12 +576,26 @@ router.get('/download-all', isAuthenticated, isFinishingMaster, async (req, res)
     sizesSheet.columns = [
       { header: 'ID', key: 'id', width: 6 },
       { header: 'Finishing ID', key: 'finishing_data_id', width: 12 },
+      { header: 'Lot No', key: 'lot_no', width: 15 },
       { header: 'Size Label', key: 'size_label', width: 12 },
-      { header: 'Pieces', key: 'pieces', width: 8 },
+      { header: 'Finished', key: 'pieces', width: 10 },
+      { header: 'Dispatched', key: 'dispatched', width: 12 },
+      { header: 'Pending', key: 'pending', width: 10 },
+      { header: 'Destination', key: 'destinations', width: 25 },
       { header: 'Created At', key: 'created_at', width: 20 }
     ];
     allSizes.forEach(s => {
-      sizesSheet.addRow({ id: s.id, finishing_data_id: s.finishing_data_id, size_label: s.size_label, pieces: s.pieces, created_at: s.created_at });
+      sizesSheet.addRow({
+        id: s.id,
+        finishing_data_id: s.finishing_data_id,
+        lot_no: s.lot_no,
+        size_label: s.size_label,
+        pieces: s.pieces,
+        dispatched: s.dispatched || 0,
+        pending: s.pieces - (s.dispatched || 0),
+        destinations: s.destinations || '',
+        created_at: s.created_at
+      });
     });
     const dispatchSheet = workbook.addWorksheet('FinishingDispatches');
     dispatchSheet.columns = [
@@ -1387,9 +1425,11 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
     const endDate = req.query.endDate;
 
     let query = `
-      SELECT fd.lot_no, fd.sku, fd.total_pieces, fd.created_at,
+      SELECT fd.id, fd.lot_no, fd.sku, fd.total_pieces, fd.created_at,
              cl.remark as cutting_remark, cl.fabric_type,
-             COALESCE(pay.total_paid, 0) as total_paid
+             COALESCE(pay.total_paid, 0) as total_paid,
+             COALESCE(disp.dispatched, 0) as dispatched,
+             COALESCE(disp.destinations, '') as destinations
       FROM finishing_data fd
       LEFT JOIN cutting_lots cl ON fd.lot_no = cl.lot_no
       LEFT JOIN (
@@ -1397,6 +1437,12 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
         FROM stage_payments WHERE user_id = ? AND stage = 'finishing' AND status = 'approved'
         GROUP BY lot_no
       ) pay ON fd.lot_no = pay.lot_no
+      LEFT JOIN (
+        SELECT finishing_data_id, SUM(quantity) as dispatched,
+               GROUP_CONCAT(DISTINCT destination ORDER BY sent_at DESC SEPARATOR ', ') as destinations
+        FROM finishing_dispatches
+        GROUP BY finishing_data_id
+      ) disp ON fd.id = disp.finishing_data_id
       WHERE fd.user_id = ?
     `;
     const params = [userId, userId];
@@ -1414,7 +1460,10 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
     sheet.columns = [
       { header: 'Lot No', key: 'lot_no', width: 15 },
       { header: 'SKU', key: 'sku', width: 20 },
-      { header: 'Pieces', key: 'total_pieces', width: 10 },
+      { header: 'Finished', key: 'total_pieces', width: 10 },
+      { header: 'Dispatched', key: 'dispatched', width: 12 },
+      { header: 'Pending', key: 'pending', width: 10 },
+      { header: 'Destination', key: 'destinations', width: 25 },
       { header: 'Cutting Remark', key: 'cutting_remark', width: 30 },
       { header: 'Fabric Type', key: 'fabric_type', width: 15 },
       { header: 'Payment (₹)', key: 'total_paid', width: 12 },
@@ -1427,6 +1476,9 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
         lot_no: row.lot_no,
         sku: row.sku,
         total_pieces: row.total_pieces,
+        dispatched: row.dispatched || 0,
+        pending: row.total_pieces - (row.dispatched || 0),
+        destinations: row.destinations || '-',
         cutting_remark: row.cutting_remark || '-',
         fabric_type: row.fabric_type || '-',
         total_paid: row.total_paid,
