@@ -408,6 +408,43 @@
                 <i class="bi bi-arrow-repeat me-1"></i>Sync Sent
               </button>
             </div>
+            <hr class="my-2" style="border-color: var(--border-light);">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+              <button class="quick-action-btn" onclick="startRecentScan()" id="scanRecentBtn"
+                      title="Walk inbox last N days, look up Order ID -> AWB -> S3 video, save to mail_video_checks">
+                <i class="bi bi-search me-1"></i>Scan Last
+              </button>
+              <select id="scanDays" class="form-select form-select-sm" style="width: auto;">
+                <option value="3">3 days</option>
+                <option value="7" selected>7 days</option>
+                <option value="14">14 days</option>
+                <option value="30">30 days</option>
+              </select>
+              <div class="dropdown">
+                <button class="quick-action-btn dropdown-toggle" data-bs-toggle="dropdown"
+                        title="Download CSV from saved scan results">
+                  <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Scans
+                </button>
+                <ul class="dropdown-menu">
+                  <li><a class="dropdown-item" href="#" onclick="exportChecks('all'); return false;">All scanned</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="exportChecks('true'); return false;">Video FOUND only</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="exportChecks('false'); return false;">Video NOT found only</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><h6 class="dropdown-header">Scope</h6></li>
+                  <li>
+                    <div class="px-3 py-1">
+                      <select id="exportDays" class="form-select form-select-sm">
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="14">Last 14 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="0">All time</option>
+                      </select>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              <span id="checkStats" class="small text-muted ms-1"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -596,6 +633,39 @@
       <div class="modal-footer" style="border-top: 1px solid var(--border-light); background: var(--cream);">
         <button type="button" class="btn btn-outline-secondary" onclick="cancelBulkReply()" id="bulkCancelBtn">Cancel</button>
         <button type="button" class="btn btn-kotty-primary d-none" onclick="closeBulkModal()" id="bulkDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Scan Progress Modal -->
+<div class="modal fade" id="scanRecentModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="border-radius: var(--radius-lg); border: none;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-light); background: var(--cream);">
+        <h5 class="modal-title" style="font-family: var(--font-display);">
+          <i class="bi bi-search me-2" style="color: var(--terracotta);"></i>
+          Scanning Inbox<span id="scanRecentDaysLabel"></span>
+        </h5>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem;">
+        <div class="mb-3 small text-muted" id="scanRecentStatus">Starting...</div>
+        <div class="progress-kotty mb-3">
+          <div id="scanRecentBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+        </div>
+        <div class="row g-2 text-center mb-3">
+          <div class="col-4 col-md-2"><div class="stat-box info"><div id="scanStatProcessed" class="stat-value">0</div><div class="stat-label">Processed</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box success"><div id="scanStatVideoFound" class="stat-value">0</div><div class="stat-label">Video</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box warning"><div id="scanStatNoVideo" class="stat-value">0</div><div class="stat-label">No Video</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box muted"><div id="scanStatNoOrder" class="stat-value">0</div><div class="stat-label">No Order</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box primary"><div id="scanStatNoMap" class="stat-value">0</div><div class="stat-label">No AWB</div></div></div>
+          <div class="col-4 col-md-2"><div class="stat-box muted"><div id="scanStatReplied" class="stat-value">0</div><div class="stat-label">Replied</div></div></div>
+        </div>
+        <div id="scanRecentLog" class="reply-log"><div class="text-muted text-center">Waiting to start...</div></div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--border-light); background: var(--cream);">
+        <button type="button" class="btn btn-outline-secondary" onclick="cancelRecentScan()" id="scanRecentCancelBtn">Stop</button>
+        <button type="button" class="btn btn-kotty-primary d-none" onclick="closeScanRecentModal()" id="scanRecentDoneBtn">Done</button>
       </div>
     </div>
   </div>
@@ -962,7 +1032,13 @@ async function findVideosForEmail() {
     const res = await fetch('/mail-manager/find-videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, awb: outboundAwb })
+      body: JSON.stringify({
+        orderId,
+        awb: outboundAwb,
+        messageId: currentEmail?.messageId,
+        subject: currentEmail?.subject,
+        fromAddress: currentEmail?.fromAddress
+      })
     });
 
     const data = await res.json();
@@ -1195,6 +1271,146 @@ async function exportSelected() {
     btn.innerHTML = '<i class="bi bi-download me-1"></i>Export';
   }
 }
+
+// ==================== RECENT SCAN (7-DAY BACKFILL) ====================
+
+let scanRecentEventSource = null;
+
+async function refreshCheckStats() {
+  try {
+    const days = parseInt(document.getElementById('exportDays')?.value || '7', 10);
+    const url = '/mail-manager/check-stats' + (days > 0 ? '?days=' + days : '?days=0');
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const span = document.getElementById('checkStats');
+    if (!span) return;
+    const scope = data.days ? `${data.days}d` : 'all';
+    span.textContent = `${data.total} scanned (${scope}) — ${data.videoFound} with video, ${data.noVideo} without`;
+  } catch (e) {
+    // silent
+  }
+}
+
+function startRecentScan() {
+  if (scanRecentEventSource) {
+    showToast('A scan is already running', 'warning');
+    return;
+  }
+
+  const days = parseInt(document.getElementById('scanDays').value, 10) || 7;
+
+  document.getElementById('scanRecentDaysLabel').textContent = ` — Last ${days} days`;
+  document.getElementById('scanRecentStatus').textContent = 'Starting...';
+  document.getElementById('scanRecentLog').innerHTML = '<div class="text-muted">Connecting...</div>';
+  ['scanStatProcessed','scanStatVideoFound','scanStatNoVideo','scanStatNoOrder','scanStatNoMap','scanStatReplied']
+    .forEach(id => { document.getElementById(id).textContent = '0'; });
+  document.getElementById('scanRecentCancelBtn').classList.remove('d-none');
+  document.getElementById('scanRecentDoneBtn').classList.add('d-none');
+
+  const modal = new bootstrap.Modal(document.getElementById('scanRecentModal'));
+  modal.show();
+
+  const log = document.getElementById('scanRecentLog');
+  scanRecentEventSource = new EventSource('/mail-manager/scan-recent-stream?days=' + days);
+
+  scanRecentEventSource.addEventListener('start', (e) => {
+    const data = JSON.parse(e.data);
+    const mapMsg = data.hasMappingLoaded
+      ? `Mapping loaded: ${data.mappingCount} entries`
+      : '<span style="color: var(--warning);">No Excel mapping loaded — emails without AWB-from-DB lookup will be marked No AWB</span>';
+    document.getElementById('scanRecentStatus').innerHTML =
+      `Walking inbox back to ${new Date(data.cutoff).toLocaleString()} — ${mapMsg}`;
+    log.innerHTML = '';
+  });
+
+  scanRecentEventSource.addEventListener('progress', (e) => {
+    const d = JSON.parse(e.data);
+    document.getElementById('scanStatProcessed').textContent = d.processed;
+    document.getElementById('scanStatVideoFound').textContent = d.videoFound;
+    document.getElementById('scanStatNoVideo').textContent = d.noVideo;
+    document.getElementById('scanStatNoOrder').textContent = d.noOrderId;
+    document.getElementById('scanStatNoMap').textContent = d.noMapping;
+    document.getElementById('scanStatReplied').textContent = d.alreadyReplied;
+    document.getElementById('scanRecentStatus').textContent =
+      `Seen ${d.seen}, processed ${d.processed} (${d.videoFound} with video)`;
+  });
+
+  scanRecentEventSource.addEventListener('warn', (e) => {
+    const d = JSON.parse(e.data);
+    log.innerHTML += `<div style="color: var(--warning);"><i class="bi bi-exclamation-triangle me-1"></i>${escapeHtml(d.error || 'warn')}</div>`;
+    log.scrollTop = log.scrollHeight;
+  });
+
+  scanRecentEventSource.addEventListener('complete', (e) => {
+    const d = JSON.parse(e.data);
+    scanRecentEventSource.close();
+    scanRecentEventSource = null;
+
+    document.getElementById('scanStatProcessed').textContent = d.processed;
+    document.getElementById('scanStatVideoFound').textContent = d.videoFound;
+    document.getElementById('scanStatNoVideo').textContent = d.noVideo;
+    document.getElementById('scanStatNoOrder').textContent = d.noOrderId;
+    document.getElementById('scanStatNoMap').textContent = d.noMapping;
+    document.getElementById('scanStatReplied').textContent = d.alreadyReplied;
+
+    const summary = d.cancelled
+      ? `Stopped after ${d.processed} processed (${d.videoFound} with video, ${d.noVideo} without)`
+      : `Done: ${d.processed} processed (${d.videoFound} with video, ${d.noVideo} without, ${d.alreadyReplied} already replied, ${d.errors} errors)`;
+    document.getElementById('scanRecentStatus').textContent = summary;
+    document.getElementById('scanRecentBar').classList.remove('progress-bar-animated');
+
+    document.getElementById('scanRecentCancelBtn').classList.add('d-none');
+    document.getElementById('scanRecentDoneBtn').classList.remove('d-none');
+
+    showToast(summary, d.cancelled ? 'warning' : 'success');
+    refreshCheckStats();
+  });
+
+  scanRecentEventSource.addEventListener('error', (e) => {
+    let msg = 'Scan failed';
+    try { msg = JSON.parse(e.data).message || msg; } catch (_) {}
+    log.innerHTML += `<div style="color: var(--danger);"><i class="bi bi-x-circle me-1"></i>${escapeHtml(msg)}</div>`;
+    log.scrollTop = log.scrollHeight;
+    if (scanRecentEventSource) {
+      scanRecentEventSource.close();
+      scanRecentEventSource = null;
+    }
+    document.getElementById('scanRecentCancelBtn').classList.add('d-none');
+    document.getElementById('scanRecentDoneBtn').classList.remove('d-none');
+  });
+}
+
+function cancelRecentScan() {
+  if (scanRecentEventSource) {
+    scanRecentEventSource.close();
+    scanRecentEventSource = null;
+    showToast('Scan stopped (in-flight email may still finish on server)', 'info');
+  }
+  closeScanRecentModal();
+}
+
+function closeScanRecentModal() {
+  const modal = bootstrap.Modal.getInstance(document.getElementById('scanRecentModal'));
+  if (modal) modal.hide();
+  refreshCheckStats();
+}
+
+// Trigger CSV download from saved scan results.
+function exportChecks(filter) {
+  const days = parseInt(document.getElementById('exportDays').value, 10);
+  const params = new URLSearchParams({ videoFound: filter });
+  if (!isNaN(days)) params.set('days', String(days));
+  // Plain navigation — browser handles the download.
+  window.location = '/mail-manager/export-checks?' + params.toString();
+}
+
+// Refresh stats whenever the user changes the scope dropdown.
+document.addEventListener('DOMContentLoaded', () => {
+  refreshCheckStats();
+  const scope = document.getElementById('exportDays');
+  if (scope) scope.addEventListener('change', refreshCheckStats);
+});
 
 async function startBulkReply() {
   if (selectedEmails.size === 0) {

@@ -142,6 +142,76 @@ async function loadOrderAwbMapping() {
   }
 }
 
+// Upsert per-email video lookup result. Called from every flow that already
+// runs Order ID -> AWB -> S3 (single view, bulk-check, bulk-reply, find-videos,
+// 7-day scan) so the table stays self-healing.
+//
+// Pass videoFound as boolean only when an actual S3 check ran; pass undefined
+// for metadata-only writes (e.g. single-email view) so we don't clobber a
+// previously-found video.
+async function recordVideoCheck(data) {
+  try {
+    const receivedAt = data.receivedAt
+      ? new Date(typeof data.receivedAt === 'string' ? parseInt(data.receivedAt) || data.receivedAt : data.receivedAt)
+      : null;
+
+    const ranS3Check = typeof data.videoFound === 'boolean';
+    const videoFoundVal = ranS3Check ? (data.videoFound ? 1 : 0) : 0;
+
+    // When ranS3Check is false, keep existing video_* columns untouched on update.
+    const videoUpdateClause = ranS3Check
+      ? `video_found = VALUES(video_found),
+         video_url = VALUES(video_url),
+         video_s3_key = VALUES(video_s3_key),
+         video_size = VALUES(video_size),`
+      : '';
+
+    await pool.query(`
+      INSERT INTO mail_video_checks
+        (message_id, thread_id, subject, from_address, to_address, received_at,
+         order_id, outbound_awb, return_awb, ticket,
+         video_found, video_url, video_s3_key, video_size,
+         scan_source, checked_by, checked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        thread_id     = COALESCE(VALUES(thread_id), thread_id),
+        subject       = COALESCE(VALUES(subject), subject),
+        from_address  = COALESCE(VALUES(from_address), from_address),
+        to_address    = COALESCE(VALUES(to_address), to_address),
+        received_at   = COALESCE(VALUES(received_at), received_at),
+        order_id      = COALESCE(VALUES(order_id), order_id),
+        outbound_awb  = COALESCE(VALUES(outbound_awb), outbound_awb),
+        return_awb    = COALESCE(VALUES(return_awb), return_awb),
+        ticket        = COALESCE(VALUES(ticket), ticket),
+        ${videoUpdateClause}
+        scan_source   = VALUES(scan_source),
+        checked_by    = COALESCE(VALUES(checked_by), checked_by),
+        checked_at    = NOW()
+    `, [
+      data.messageId,
+      data.threadId || null,
+      (data.subject || '').slice(0, 500) || null,
+      data.fromAddress || null,
+      data.toAddress || null,
+      receivedAt,
+      data.orderId || null,
+      data.outboundAwb || null,
+      data.returnAwb || null,
+      data.ticket || null,
+      videoFoundVal,
+      data.videoUrl || null,
+      data.videoS3Key || null,
+      data.videoSize || null,
+      data.scanSource || 'manual',
+      data.userId || null
+    ]);
+    return true;
+  } catch (err) {
+    console.error('Failed to record video check:', err);
+    return false;
+  }
+}
+
 // Lookup AWB from database
 async function lookupAwbFromDb(orderId) {
   try {
@@ -519,6 +589,21 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
       fromAddress: fromAddressParam || ''
     };
 
+    // Metadata-only upsert (no S3 check ran here, so videoFound stays undefined).
+    if (extractedDetails.orderId || outboundAwb) {
+      recordVideoCheck({
+        messageId,
+        subject,
+        fromAddress: fromAddressParam || '',
+        orderId: extractedDetails.orderId,
+        outboundAwb,
+        returnAwb: extractedDetails.returnAwb,
+        ticket: extractedDetails.ticket,
+        scanSource: 'single_view',
+        userId: req.session?.user?.id
+      }).catch(() => {});
+    }
+
     res.json({
       details,
       content,
@@ -540,7 +625,7 @@ router.get('/emails/:messageId', isAuthenticated, isOnlyMohitOperator, async (re
 // If AWB provided directly, use that (for manual override)
 router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   try {
-    const { orderId, awb, packingDate } = req.body;
+    const { orderId, awb, packingDate, messageId, subject, fromAddress } = req.body;
 
     // Get AWB from mapping if not provided directly
     let awbToSearch = awb; // Allow direct AWB override
@@ -580,6 +665,24 @@ router.post('/find-videos', isAuthenticated, isOnlyMohitOperator, async (req, re
 
     const results = await findVideosByAwb([awbToSearch], packingDatesMap);
     const video = results.get(awbToSearch.toUpperCase());
+
+    // Record scan result if caller supplied a messageId (i.e. lookup happened
+    // from an open email; manual AWB-only lookups skip this).
+    if (messageId) {
+      recordVideoCheck({
+        messageId,
+        subject,
+        fromAddress,
+        orderId,
+        outboundAwb: awbToSearch,
+        videoFound: !!video,
+        videoUrl: video?.url || null,
+        videoS3Key: video?.key || null,
+        videoSize: video?.size || null,
+        scanSource: 'find_videos',
+        userId: req.session?.user?.id
+      }).catch(() => {});
+    }
 
     if (video) {
       res.json({
@@ -799,6 +902,16 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
 
         // STEP 1: Check if we have an Order ID
         if (!extracted.orderId) {
+          recordVideoCheck({
+            messageId,
+            subject,
+            fromAddress,
+            toAddress,
+            returnAwb: extracted.returnAwb,
+            ticket: extracted.ticket,
+            scanSource: 'bulk_reply',
+            userId: req.session?.user?.id
+          }).catch(() => {});
           results.noOrderId++;
           results.details.push({
             messageId,
@@ -824,6 +937,17 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         }
 
         if (!outboundAwb) {
+          recordVideoCheck({
+            messageId,
+            subject,
+            fromAddress,
+            toAddress,
+            orderId: extracted.orderId,
+            returnAwb: extracted.returnAwb,
+            ticket: extracted.ticket,
+            scanSource: 'bulk_reply',
+            userId: req.session?.user?.id
+          }).catch(() => {});
           results.noMapping++;
           results.details.push({
             messageId,
@@ -841,6 +965,19 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
         const videoHit = videoResults.get(outboundAwb.toUpperCase());
 
         if (!videoHit) {
+          recordVideoCheck({
+            messageId,
+            subject,
+            fromAddress,
+            toAddress,
+            orderId: extracted.orderId,
+            outboundAwb,
+            returnAwb: extracted.returnAwb,
+            ticket: extracted.ticket,
+            videoFound: false,
+            scanSource: 'bulk_reply',
+            userId: req.session?.user?.id
+          }).catch(() => {});
           results.noVideo++;
           results.details.push({
             messageId,
@@ -911,6 +1048,24 @@ router.get('/bulk-reply-stream', isAuthenticated, isOnlyMohitOperator, async (re
           classification: 'initial',
           userId: req.session?.user?.id
         });
+
+        recordVideoCheck({
+          messageId,
+          threadId,
+          subject,
+          fromAddress,
+          toAddress,
+          orderId: extracted.orderId,
+          outboundAwb,
+          returnAwb: extracted.returnAwb,
+          ticket: extracted.ticket,
+          videoFound: true,
+          videoUrl: videoHit.url,
+          videoS3Key: videoHit.key,
+          videoSize: videoHit.size,
+          scanSource: 'bulk_reply',
+          userId: req.session?.user?.id
+        }).catch(() => {});
 
         results.success++;
         results.details.push({
@@ -1055,7 +1210,23 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
 
         // Check if video exists for the OUTBOUND AWB
         const videoResults = await findVideosByAwb([outboundAwb]);
-        const hasVideo = videoResults.has(outboundAwb.toUpperCase());
+        const videoHit = videoResults.get(outboundAwb.toUpperCase());
+        const hasVideo = !!videoHit;
+
+        recordVideoCheck({
+          messageId,
+          subject,
+          orderId: extracted.orderId,
+          outboundAwb,
+          returnAwb: extracted.returnAwb,
+          ticket: extracted.ticket,
+          videoFound: hasVideo,
+          videoUrl: videoHit?.url || null,
+          videoS3Key: videoHit?.key || null,
+          videoSize: videoHit?.size || null,
+          scanSource: 'bulk_check',
+          userId: req.session?.user?.id
+        }).catch(() => {});
 
         results.push({
           messageId,
@@ -1084,6 +1255,230 @@ router.post('/bulk-check-videos', isAuthenticated, isOnlyMohitOperator, async (r
   } catch (err) {
     console.error('Bulk check error:', err);
     res.status(500).json({ error: 'Failed to check videos: ' + err.message });
+  }
+});
+
+// ==================== 7-DAY SCAN ====================
+//
+// Walk the Zoho inbox backwards in time, page by page, until we cross the
+// cutoff (default 7 days). For each non-replied email: extract Order ID,
+// look up outbound AWB, check S3, upsert mail_video_checks. No emails sent.
+//
+// Streamed via SSE so the user sees live progress (this can take 5-15 min).
+router.get('/scan-recent-stream', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const keepAlive = setInterval(() => {
+    res.write(': keep-alive\n\n');
+  }, 15000);
+
+  let cancelled = false;
+  req.on('close', () => { cancelled = true; });
+
+  const sessionKey = getSessionKey(req);
+  const mapping = sessionMappings.get(sessionKey);
+  const userId = req.session?.user?.id;
+
+  try {
+    const days = Math.max(1, Math.min(30, parseInt(req.query.days || '7', 10)));
+    const cutoffTs = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    sendEvent('start', {
+      days,
+      cutoff: new Date(cutoffTs).toISOString(),
+      hasMappingLoaded: !!(mapping && Object.keys(mapping).length > 0),
+      mappingCount: mapping ? Object.keys(mapping).length : 0
+    });
+
+    const PAGE_SIZE = 200;
+    const PAGE_DELAY_MS = 400;     // between Zoho page fetches
+    const PER_EMAIL_DELAY_MS = 250; // between Zoho content fetches (rate-safe)
+
+    let start = 0;
+    const stats = {
+      pagesFetched: 0,
+      seen: 0,
+      processed: 0,
+      ownEmails: 0,
+      alreadyReplied: 0,
+      noOrderId: 0,
+      noMapping: 0,
+      videoFound: 0,
+      noVideo: 0,
+      errors: 0
+    };
+
+    let reachedCutoff = false;
+    while (!cancelled && !reachedCutoff) {
+      let page;
+      try {
+        page = await zohoMail.getEmails('inbox', PAGE_SIZE, start);
+      } catch (pageErr) {
+        sendEvent('warn', { message: 'Zoho page fetch failed: ' + (pageErr.message || pageErr) });
+        break;
+      }
+
+      if (!page || page.length === 0) break;
+      stats.pagesFetched++;
+
+      // Pull back already-handled message IDs for this page in one query
+      const pageIds = page.map(e => e.messageId).filter(Boolean);
+      let handledSet = new Set();
+      if (pageIds.length > 0) {
+        try {
+          const [handledRows] = await pool.query(
+            `SELECT message_id FROM mail_replies WHERE message_id IN (?) AND status IN ('replied', 'closed')`,
+            [pageIds]
+          );
+          handledSet = new Set(handledRows.map(r => r.message_id));
+        } catch (e) {
+          // non-fatal
+        }
+      }
+
+      for (const email of page) {
+        if (cancelled) break;
+        stats.seen++;
+
+        const receivedTs = parseInt(email.receivedTime || '0', 10);
+        if (receivedTs && receivedTs < cutoffTs) {
+          reachedCutoff = true;
+          break;
+        }
+
+        if (isOurOwnEmail(email)) {
+          stats.ownEmails++;
+          continue;
+        }
+
+        if (handledSet.has(email.messageId)) {
+          stats.alreadyReplied++;
+          // Still upsert metadata so the export shows them as resolved
+          recordVideoCheck({
+            messageId: email.messageId,
+            subject: email.subject,
+            fromAddress: email.fromAddress || email.sender,
+            toAddress: email.toAddress,
+            receivedAt: receivedTs || null,
+            scanSource: '7day_scan',
+            userId
+          }).catch(() => {});
+          continue;
+        }
+
+        // Fetch content to extract Order ID + RT number
+        let content;
+        try {
+          content = await zohoMail.getEmailContent(email.messageId);
+        } catch (cErr) {
+          stats.errors++;
+          sendEvent('warn', { messageId: email.messageId, error: 'fetch_content: ' + (cErr.message || cErr) });
+          await new Promise(r => setTimeout(r, PER_EMAIL_DELAY_MS));
+          continue;
+        }
+
+        const subject = email.subject || content?.subject || '';
+        const bodyText = content?.content || '';
+        const extracted = zohoMail.extractOrderDetails(bodyText, subject);
+
+        const baseRow = {
+          messageId: email.messageId,
+          subject,
+          fromAddress: email.fromAddress || email.sender,
+          toAddress: email.toAddress,
+          receivedAt: receivedTs || null,
+          orderId: extracted.orderId,
+          returnAwb: extracted.returnAwb,
+          ticket: extracted.ticket,
+          scanSource: '7day_scan',
+          userId
+        };
+
+        if (!extracted.orderId) {
+          stats.noOrderId++;
+          recordVideoCheck(baseRow).catch(() => {});
+          stats.processed++;
+          await new Promise(r => setTimeout(r, PER_EMAIL_DELAY_MS));
+          continue;
+        }
+
+        let outboundAwb = null;
+        if (mapping && mapping[extracted.orderId.toUpperCase()]) {
+          outboundAwb = mapping[extracted.orderId.toUpperCase()];
+        }
+        if (!outboundAwb) {
+          outboundAwb = await lookupAwbFromDb(extracted.orderId);
+        }
+
+        if (!outboundAwb) {
+          stats.noMapping++;
+          recordVideoCheck(baseRow).catch(() => {});
+          stats.processed++;
+          await new Promise(r => setTimeout(r, PER_EMAIL_DELAY_MS));
+          continue;
+        }
+
+        // S3 video lookup
+        let videoHit = null;
+        try {
+          const videoResults = await findVideosByAwb([outboundAwb]);
+          videoHit = videoResults.get(outboundAwb.toUpperCase()) || null;
+        } catch (sErr) {
+          stats.errors++;
+          sendEvent('warn', { messageId: email.messageId, error: 's3: ' + (sErr.message || sErr) });
+        }
+
+        if (videoHit) stats.videoFound++; else stats.noVideo++;
+
+        recordVideoCheck({
+          ...baseRow,
+          outboundAwb,
+          videoFound: !!videoHit,
+          videoUrl: videoHit?.url || null,
+          videoS3Key: videoHit?.key || null,
+          videoSize: videoHit?.size || null
+        }).catch(() => {});
+
+        stats.processed++;
+
+        if (stats.processed % 5 === 0) {
+          sendEvent('progress', {
+            seen: stats.seen,
+            processed: stats.processed,
+            videoFound: stats.videoFound,
+            noVideo: stats.noVideo,
+            noOrderId: stats.noOrderId,
+            noMapping: stats.noMapping,
+            alreadyReplied: stats.alreadyReplied
+          });
+        }
+
+        await new Promise(r => setTimeout(r, PER_EMAIL_DELAY_MS));
+      }
+
+      if (page.length < PAGE_SIZE) break; // last page
+      start += PAGE_SIZE;
+      await new Promise(r => setTimeout(r, PAGE_DELAY_MS));
+    }
+
+    sendEvent('complete', {
+      ...stats,
+      cancelled,
+      cutoff: new Date(cutoffTs).toISOString()
+    });
+  } catch (err) {
+    console.error('Scan recent error:', err);
+    sendEvent('error', { message: err.message || String(err) });
+  } finally {
+    clearInterval(keepAlive);
+    res.end();
   }
 });
 
@@ -1347,6 +1742,117 @@ router.post('/export-selected', isAuthenticated, isOnlyMohitOperator, async (req
   } catch (err) {
     console.error('Export error:', err);
     res.status(500).json({ error: 'Failed to export: ' + err.message });
+  }
+});
+
+// ==================== VIDEO CHECK EXPORT ====================
+
+// Quick stats for the UI banner. Lets the user see how many rows the export
+// will contain before downloading.
+router.get('/check-stats', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days || '7', 10);
+    const useDateFilter = !isNaN(days) && days > 0;
+
+    const where = useDateFilter ? 'WHERE checked_at >= (NOW() - INTERVAL ? DAY)' : '';
+    const params = useDateFilter ? [days] : [];
+
+    const [rows] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(video_found = 1) AS video_found,
+        SUM(video_found = 0) AS no_video
+      FROM mail_video_checks
+      ${where}
+    `, params);
+
+    const r = rows[0] || {};
+    res.json({
+      days: useDateFilter ? days : null,
+      total: Number(r.total || 0),
+      videoFound: Number(r.video_found || 0),
+      noVideo: Number(r.no_video || 0)
+    });
+  } catch (err) {
+    console.error('check-stats error:', err);
+    res.status(500).json({ error: 'Failed to load stats: ' + err.message });
+  }
+});
+
+// Export mail_video_checks rows as CSV.
+// Query params:
+//   videoFound: 'true' | 'false' | 'all' (default 'all')
+//   days:       integer; rows checked within last N days (default 7, 0 = no limit)
+router.get('/export-checks', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const filter = (req.query.videoFound || 'all').toString().toLowerCase();
+    const days = parseInt(req.query.days || '7', 10);
+
+    const conditions = [];
+    const params = [];
+
+    if (filter === 'true') {
+      conditions.push('video_found = 1');
+    } else if (filter === 'false') {
+      conditions.push('video_found = 0');
+    }
+
+    if (!isNaN(days) && days > 0) {
+      conditions.push('checked_at >= (NOW() - INTERVAL ? DAY)');
+      params.push(days);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [rows] = await pool.query(`
+      SELECT message_id, subject, from_address, to_address, received_at,
+             order_id, outbound_awb, return_awb, ticket,
+             video_found, video_url, video_s3_key, scan_source, checked_at
+      FROM mail_video_checks
+      ${where}
+      ORDER BY checked_at DESC
+    `, params);
+
+    const headers = [
+      'Message ID', 'Subject', 'From', 'To', 'Received At',
+      'Order ID', 'Outbound AWB', 'Return AWB', 'Ticket',
+      'Video Found', 'Video URL', 'Video S3 Key', 'Scan Source', 'Checked At'
+    ];
+
+    const escape = v => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/\r?\n/g, ' ');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const lines = [headers.join(',')];
+    rows.forEach(r => {
+      lines.push([
+        r.message_id,
+        r.subject,
+        r.from_address,
+        r.to_address,
+        r.received_at ? new Date(r.received_at).toISOString() : '',
+        r.order_id,
+        r.outbound_awb,
+        r.return_awb,
+        r.ticket,
+        r.video_found ? 'YES' : 'NO',
+        r.video_url,
+        r.video_s3_key,
+        r.scan_source,
+        r.checked_at ? new Date(r.checked_at).toISOString() : ''
+      ].map(escape).join(','));
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const suffix = filter === 'true' ? 'video_found' : filter === 'false' ? 'no_video' : 'all';
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=mail_video_checks_${suffix}_${today}.csv`);
+    res.send(lines.join('\n'));
+  } catch (err) {
+    console.error('export-checks error:', err);
+    res.status(500).json({ error: 'Failed to export checks: ' + err.message });
   }
 });
 
