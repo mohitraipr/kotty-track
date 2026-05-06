@@ -469,6 +469,137 @@ router.get('/events', isAuthenticated, isStitchingMaster, (req, res) => {
   res.render('stitchingEvents', { user: req.session.user });
 });
 
+// GET /stitchingdashboard/event/history
+// Returns this operator's recent events at this stage with size detail.
+// Query params: days (1-365, default 7), type ('all'|'approve'|'complete'|'reject', default 'all').
+router.get('/event/history', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 7));
+    const type = String(req.query.type || 'all');
+    const allowed = new Set(['all', 'approve', 'complete', 'reject']);
+    if (!allowed.has(type)) return res.status(400).json({ error: 'Invalid type' });
+
+    const params = [userId, days];
+    let typeFilter = '';
+    if (type !== 'all') { typeFilter = 'AND e.event_type = ?'; params.push(type); }
+
+    const [events] = await pool.query(
+      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              cl.lot_no, cl.sku
+       FROM stitching_events e
+       JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE e.operator_id = ?
+         AND e.created_at >= (NOW() - INTERVAL ? DAY)
+         ${typeFilter}
+       ORDER BY e.created_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    if (!events.length) return res.json({ events: [] });
+
+    const eventIds = events.map(e => e.id);
+    const [sizes] = await pool.query(
+      `SELECT event_id, size_label, pieces FROM stitching_event_sizes
+       WHERE event_id IN (?)`,
+      [eventIds]
+    );
+    const sizeMap = {};
+    for (const s of sizes) {
+      if (!sizeMap[s.event_id]) sizeMap[s.event_id] = {};
+      sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
+    }
+    events.forEach(e => { e.sizes = sizeMap[e.id] || {}; });
+
+    res.json({ events });
+  } catch (err) {
+    console.error('[ERROR] GET /event/history =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /stitchingdashboard/event/export
+// Streams an .xlsx of this operator's events with size breakdown.
+router.get('/event/export', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username || 'operator';
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const type = String(req.query.type || 'all');
+    const allowed = new Set(['all', 'approve', 'complete', 'reject']);
+    if (!allowed.has(type)) return res.status(400).json({ error: 'Invalid type' });
+
+    const params = [userId, days];
+    let typeFilter = '';
+    if (type !== 'all') { typeFilter = 'AND e.event_type = ?'; params.push(type); }
+
+    const [events] = await pool.query(
+      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              cl.lot_no, cl.sku
+       FROM stitching_events e
+       JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE e.operator_id = ?
+         AND e.created_at >= (NOW() - INTERVAL ? DAY)
+         ${typeFilter}
+       ORDER BY e.created_at DESC`,
+      params
+    );
+
+    let sizeMap = {};
+    if (events.length) {
+      const eventIds = events.map(e => e.id);
+      const [sizes] = await pool.query(
+        `SELECT event_id, size_label, pieces FROM stitching_event_sizes
+         WHERE event_id IN (?) ORDER BY size_label`,
+        [eventIds]
+      );
+      for (const s of sizes) {
+        if (!sizeMap[s.event_id]) sizeMap[s.event_id] = [];
+        sizeMap[s.event_id].push(`${s.size_label}:${Number(s.pieces) || 0}`);
+      }
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Kotty Track';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Stitching Events');
+    ws.columns = [
+      { header: 'Date',      key: 'date',   width: 20 },
+      { header: 'Event',     key: 'event',  width: 12 },
+      { header: 'Lot No',    key: 'lot',    width: 14 },
+      { header: 'SKU',       key: 'sku',    width: 22 },
+      { header: 'Pieces',    key: 'pieces', width: 10 },
+      { header: 'Sizes',     key: 'sizes',  width: 36 },
+      { header: 'Remark',    key: 'remark', width: 32 },
+      { header: 'Parent ID', key: 'parent', width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    events.forEach(e => {
+      ws.addRow({
+        date:   e.created_at ? new Date(e.created_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        event:  e.event_type,
+        lot:    e.lot_no,
+        sku:    e.sku,
+        pieces: Number(e.pieces) || 0,
+        sizes:  (sizeMap[e.id] || []).join('  ·  '),
+        remark: e.remark || '',
+        parent: e.parent_event_id || '',
+      });
+    });
+
+    const fname = `stitching_${username}_${days}d_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /event/export =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /stitchingdashboard/event/search?q=...
 // Search for a lot by lot_no, sku, or cutting remark. Unlike the old
 // /available-lots endpoint, this does NOT filter by "fully consumed"
@@ -502,11 +633,18 @@ router.get('/event/search', isAuthenticated, isStitchingMaster, async (req, res)
 // ==================================================================
 
 // GET /stitchingdashboard
-router.get('/', isAuthenticated, isStitchingMaster, async (req, res) => {
+// Renders the new event-model dashboard. Legacy assignment-based view is
+// kept on disk (views/stitchingDashboard.ejs) and reachable via the legacy
+// approve/list/challan APIs, but the operator's primary surface is now
+// the event-model UI.
+router.get('/', isAuthenticated, isStitchingMaster, (req, res) => {
+  res.render('stitchingEvents', { user: req.session.user });
+});
+
+// Legacy alias kept for any old links / bookmarks.
+router.get('/legacy', isAuthenticated, isStitchingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
-
-    // Show only approved, not-yet-used cutting lots for creation:
     const [lots] = await pool.query(`
       SELECT c.id, c.lot_no, c.sku, c.total_pieces, c.remark AS cutting_remark
       FROM cutting_lots c
@@ -516,20 +654,13 @@ router.get('/', isAuthenticated, isStitchingMaster, async (req, res) => {
         AND c.lot_no NOT IN (SELECT lot_no FROM stitching_data)
       ORDER BY c.created_at DESC
     `, [userId]);
-
     const error = req.flash('error');
     const success = req.flash('success');
-
-    return res.render('stitchingDashboard', {
-      user: req.session.user,
-      lots,
-      error,
-      success
-    });
+    return res.render('stitchingDashboard', { user: req.session.user, lots, error, success });
   } catch (err) {
-    console.error('[ERROR] GET /stitchingdashboard =>', err);
-    req.flash('error', 'Cannot load dashboard data.');
-    return res.redirect('/');
+    console.error('[ERROR] GET /stitchingdashboard/legacy =>', err);
+    req.flash('error', 'Cannot load legacy dashboard.');
+    return res.redirect('/stitchingdashboard');
   }
 });
 
