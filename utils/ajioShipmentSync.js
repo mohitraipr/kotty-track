@@ -30,6 +30,10 @@ const WAREHOUSES = [
 // in the date window, so we send one pass per chunk and rely on
 // `awb_number != null` (handled in extractAwb) to keep only relevant rows.
 const STATUS_FILTERS = ['Printed'];
+
+// AJIO Dropship marketplace_id (seen in tenant data). Filtering server-side
+// drops 80-95% of responses since most orders aren't Ajio.
+const AJIO_MARKETPLACE_ID = parseInt(process.env.AJIO_MARKETPLACE_ID || '578', 10);
 const LOOKBACK_DAYS = parseInt(process.env.AJIO_RECON_LOOKBACK_DAYS || '7', 10);
 
 // Token cache per warehouse (mirrors easyecomReturnsClient pattern)
@@ -84,6 +88,9 @@ async function fetchOrdersPage(token, { status, fromDate, toDate, nextUrl }) {
       order_status: status,
       start_date: fmtDate(fromDate),
       end_date: fmtDate(toDate),
+      // Server-side filter — see AJIO_MARKETPLACE_ID. If EasyEcom ignores
+      // this param too, we still filter client-side via isAjio().
+      marketplace_id: AJIO_MARKETPLACE_ID,
     };
     resp = await axios.get(url, { params, headers, timeout: 60000 });
   }
@@ -206,8 +213,9 @@ async function upsertShipments(rows) {
   return values.length;
 }
 
-async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = {}) {
+async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress, shouldCancel } = {}) {
   const emit = typeof onProgress === 'function' ? onProgress : () => {};
+  const cancelled = () => typeof shouldCancel === 'function' && shouldCancel();
   const token = await getToken(wh);
   if (!token) {
     emit({ kind: 'warehouse_skipped', warehouse: wh.key, reason: 'no_token' });
@@ -225,6 +233,10 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
 
   for (const status of STATUS_FILTERS) {
     for (const { from, to } of chunks) {
+      if (cancelled()) {
+        emit({ kind: 'cancelled', warehouse: wh.key, after: 'chunk_boundary' });
+        break;
+      }
       stepIdx++;
       emit({
         kind: 'chunk_start', warehouse: wh.key, status,
@@ -266,7 +278,12 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
           emit({ kind: 'chunk_progress', warehouse: wh.key, status, pages, chunkOrders, chunkAwb });
         }
         if (pages > 500) break; // safety cap (~25k orders)
+        if (cancelled()) {
+          emit({ kind: 'cancelled', warehouse: wh.key, after: 'page', pages });
+          break;
+        }
       } while (nextUrl);
+      if (cancelled()) break;
       emit({
         kind: 'chunk_done', warehouse: wh.key, status,
         orders: chunkOrders, ajio: chunkAjio, withAwb: chunkAwb,
@@ -275,18 +292,24 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
     }
   }
 
-  // Dedup within a single run on awb
+  // Dedup within a single run on awb. Always upsert what we have so partial
+  // runs (cancelled, errored) still persist their progress.
   const dedup = Array.from(new Map(rowsToUpsert.map((r) => [r.awb, r])).values());
   const upserted = await upsertShipments(dedup);
-  return { warehouse: wh.key, fetched, ajio: ajioCount, withAwb, upserted, chunks: chunks.length };
+  return { warehouse: wh.key, fetched, ajio: ajioCount, withAwb, upserted, chunks: chunks.length, cancelled: cancelled() };
 }
 
 async function syncAjioShipments(opts = {}) {
   const startedAt = Date.now();
   const results = [];
   const emit = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
+  const cancelled = () => typeof opts.shouldCancel === 'function' && opts.shouldCancel();
   emit({ kind: 'run_start', warehouses: WAREHOUSES.map((w) => w.key), lookbackDays: opts.lookbackDays || LOOKBACK_DAYS });
   for (const wh of WAREHOUSES) {
+    if (cancelled()) {
+      emit({ kind: 'run_cancelled', after: wh.key });
+      break;
+    }
     try {
       const r = await syncWarehouse(wh, opts);
       results.push(r);
@@ -299,8 +322,8 @@ async function syncAjioShipments(opts = {}) {
   }
   const tookMs = Date.now() - startedAt;
   console.log(`[ajioRecon] done in ${tookMs}ms`, results);
-  emit({ kind: 'run_done', tookMs, results });
-  return { tookMs, results };
+  emit({ kind: 'run_done', tookMs, results, cancelled: cancelled() });
+  return { tookMs, results, cancelled: cancelled() };
 }
 
 // Debug helper: hit EasyEcom once for one warehouse + status, return the

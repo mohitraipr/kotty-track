@@ -11,7 +11,7 @@ const { syncAjioShipments, debugFetchOnce } = require('../utils/ajioShipmentSync
 // scales to multiple instances, so a manual run only blocks the instance
 // it was started on — that's intentional. We keep it simple.
 let job = {
-  state: 'idle', // idle | running | done | error
+  state: 'idle', // idle | running | done | error | cancelled
   startedAt: null,
   finishedAt: null,
   startedBy: null,
@@ -19,6 +19,7 @@ let job = {
   events: [],     // last N progress events
   result: null,   // { tookMs, results }
   error: null,
+  cancelRequested: false,
 };
 
 const MAX_EVENTS = 500;
@@ -38,12 +39,17 @@ async function runJob({ lookbackDays, startedBy }) {
     events: [],
     result: null,
     error: null,
+    cancelRequested: false,
   };
   pushEvent({ kind: 'job_start', lookbackDays, startedBy });
   // fire-and-forget
-  syncAjioShipments({ lookbackDays, onProgress: pushEvent })
+  syncAjioShipments({
+    lookbackDays,
+    onProgress: pushEvent,
+    shouldCancel: () => job.cancelRequested,
+  })
     .then((result) => {
-      job.state = 'done';
+      job.state = result.cancelled ? 'cancelled' : 'done';
       job.finishedAt = Date.now();
       job.result = result;
     })
@@ -97,6 +103,15 @@ router.post('/run', isAuthenticated, isOperator, async (req, res) => {
     console.error('Manual Ajio recon failed:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+router.post('/cancel', isAuthenticated, isOperator, (req, res) => {
+  if (job.state !== 'running') {
+    return res.json({ ok: false, error: `not_running (state=${job.state})` });
+  }
+  job.cancelRequested = true;
+  pushEvent({ kind: 'cancel_requested', by: req.session.user?.username || null });
+  res.json({ ok: true });
 });
 
 router.get('/status', isAuthenticated, isOperator, (req, res) => {
