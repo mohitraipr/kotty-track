@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
+const stageEvents = require('../utils/stageEvents');
 
 // ----------------------------
 // MULTER SETUP (for image uploads)
@@ -122,6 +123,355 @@ router.post('/deny-lot', isAuthenticated, isStitchingMaster, async (req, res) =>
     console.error('[ERROR] POST /deny-lot =>', error);
     req.flash('error', 'Error denying assignment: ' + error.message);
     return res.redirect('/stitchingdashboard/approve');
+  }
+});
+
+// ==================================================================
+//   1.5) NEW EVENT MODEL — multi-batch approve/complete/reject
+//
+// Replaces the old "submit auto-approves once" pattern. The same
+// stitching operator can:
+//   - search a lot, approve N pieces  (creates an APPROVE event)
+//   - search again, complete M pieces against an earlier approve
+//     (creates a COMPLETE event linked to the parent approve, and
+//     optionally a REJECT event for any defective pieces)
+//   - repeat until the cutting pool is exhausted.
+//
+// Aggregate per lot at this stage:
+//   inline = approved - completed - rejected
+//
+// Each COMPLETE event also dual-writes a stitching_data row + sizes
+// so downstream stages (assembly) keep working under their existing
+// queries until they migrate to the event model too.
+// ==================================================================
+
+const STAGE = 'stitching';
+
+// GET /stitchingdashboard/event/lot-state/:cuttingLotId
+// Return everything the new dashboard needs to render the state of
+// a single lot at the stitching stage:
+//   - lot info + cutting remark
+//   - per-stage aggregates and per-size-aggregates
+//   - per-size availability still in the cutting pool
+//   - list of open approves (for the "complete from approved" form)
+router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+
+    const [[lot]] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE cl.id = ?`,
+      [lotId]
+    );
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    const [cutSizes] = await pool.query(
+      `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? ORDER BY id`,
+      [lotId]
+    );
+
+    const aggregates = await stageEvents.getStageAggregates(pool, STAGE, lotId);
+    const sizeAggregates = await stageEvents.getStageSizeAggregates(pool, STAGE, lotId);
+    const openApprovals = await stageEvents.getOpenApprovals(pool, STAGE, lotId);
+
+    // Per-size: cutting pool minus what's already been approved at stitching.
+    const upstreamSizes = cutSizes.map(s => {
+      const approvedAtStitching = (sizeAggregates[s.size_label] || {}).approved || 0;
+      return {
+        size_label: s.size_label,
+        cut_qty: Number(s.total_pieces) || 0,
+        approved_at_stage: approvedAtStitching,
+        available: Math.max(0, (Number(s.total_pieces) || 0) - approvedAtStitching),
+      };
+    });
+    const upstreamTotalAvailable = upstreamSizes.reduce((acc, s) => acc + s.available, 0);
+
+    res.json({
+      lot,
+      stage_aggregates: aggregates,
+      stage_size_aggregates: sizeAggregates,
+      upstream_sizes: upstreamSizes,
+      upstream_total_available: upstreamTotalAvailable,
+      open_approvals: openApprovals,
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /event/lot-state =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /stitchingdashboard/event/approve
+// Body: { cutting_lot_id, sizes: [{size_label, pieces}], remark? }
+// Creates an APPROVE event with size breakdown. Validates against the
+// remaining cutting pool per size.
+router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { cutting_lot_id, sizes, remark } = req.body;
+
+    const lotId = parseInt(cutting_lot_id, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+    if (!Array.isArray(sizes) || sizes.length === 0) {
+      return res.status(400).json({ error: 'sizes is required' });
+    }
+    const cleanSizes = sizes
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length) {
+      return res.status(400).json({ error: 'No positive size quantities provided' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // Re-check availability under transaction to avoid double-approval races
+    const [cutSizesRows] = await conn.query(
+      `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+    const cutMap = {};
+    for (const r of cutSizesRows) cutMap[r.size_label] = Number(r.total_pieces) || 0;
+
+    const sizeAgg = await stageEvents.getStageSizeAggregates(conn, STAGE, lotId);
+
+    for (const s of cleanSizes) {
+      const cut = cutMap[s.size_label] || 0;
+      const alreadyApproved = (sizeAgg[s.size_label] || {}).approved || 0;
+      const available = cut - alreadyApproved;
+      if (s.pieces > available) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Size ${s.size_label}: only ${available} pieces available in cutting pool (requested ${s.pieces})`,
+        });
+      }
+    }
+
+    const eventId = await stageEvents.recordEvent(conn, {
+      stage: STAGE,
+      cuttingLotId: lotId,
+      eventType: 'approve',
+      operatorId: userId,
+      sizes: cleanSizes,
+      parentEventId: null,
+      remark: remark ? String(remark).trim() : null,
+    });
+
+    await conn.commit();
+    res.json({
+      success: true,
+      event_id: eventId,
+      total_pieces: cleanSizes.reduce((a, s) => a + s.pieces, 0),
+      sizes: cleanSizes,
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /event/approve =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// POST /stitchingdashboard/event/complete
+// Body: {
+//   parent_event_id,                       -- the approve event being closed against
+//   completed_sizes: [{size_label, pieces}],
+//   rejected_sizes?: [{size_label, pieces}],
+//   reject_reason?, complete_remark?
+// }
+// Creates a COMPLETE event and (if rejected_sizes provided) a REJECT
+// event under the same parent approve. Validates that completed +
+// rejected per size never exceeds the parent approve's remaining inline.
+//
+// Side effect: dual-writes a stitching_data + stitching_data_sizes row
+// for the COMPLETED pieces so downstream stages (assembly) can pick
+// them up under their existing queries.
+router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+
+    const parentId = parseInt(parent_event_id, 10);
+    if (!Number.isFinite(parentId) || parentId <= 0) {
+      return res.status(400).json({ error: 'Invalid parent_event_id' });
+    }
+
+    const cleanCompleted = (Array.isArray(completed_sizes) ? completed_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+
+    if (!cleanCompleted.length && !cleanRejected.length) {
+      return res.status(400).json({ error: 'Provide completed and/or rejected sizes' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // Lock and validate the parent approve event
+    const [[parent]] = await conn.query(
+      `SELECT id, cutting_lot_id, event_type, pieces, operator_id
+       FROM ${stageEvents.tablesFor(STAGE).events}
+       WHERE id = ? FOR UPDATE`,
+      [parentId]
+    );
+    if (!parent || parent.event_type !== 'approve') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'parent_event_id must reference an approve event' });
+    }
+
+    // Per-size: completed + rejected so far + new completed + new rejected <= approved (per size)
+    const { events, eventSizes } = stageEvents.tablesFor(STAGE);
+    const [parentSizesRows] = await conn.query(
+      `SELECT size_label, pieces FROM ${eventSizes} WHERE event_id = ?`,
+      [parentId]
+    );
+    const parentSizeMap = {};
+    for (const r of parentSizesRows) parentSizeMap[r.size_label] = Number(r.pieces) || 0;
+
+    const [childSizesRows] = await conn.query(
+      `SELECT s.size_label, e.event_type, SUM(s.pieces) AS pieces
+       FROM ${events} e
+       JOIN ${eventSizes} s ON s.event_id = e.id
+       WHERE e.parent_event_id = ?
+       GROUP BY s.size_label, e.event_type`,
+      [parentId]
+    );
+    const childSizeMap = {};
+    for (const r of childSizesRows) {
+      if (!childSizeMap[r.size_label]) childSizeMap[r.size_label] = { complete: 0, reject: 0 };
+      childSizeMap[r.size_label][r.event_type] = Number(r.pieces) || 0;
+    }
+
+    const allLabels = new Set([
+      ...cleanCompleted.map(s => s.size_label),
+      ...cleanRejected.map(s => s.size_label),
+    ]);
+
+    for (const label of allLabels) {
+      const approved = parentSizeMap[label] || 0;
+      const prev = childSizeMap[label] || { complete: 0, reject: 0 };
+      const newComplete = (cleanCompleted.find(s => s.size_label === label) || {}).pieces || 0;
+      const newReject = (cleanRejected.find(s => s.size_label === label) || {}).pieces || 0;
+      const totalAfter = prev.complete + prev.reject + newComplete + newReject;
+      if (totalAfter > approved) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Size ${label}: total complete+reject (${totalAfter}) exceeds approved ${approved}`,
+        });
+      }
+    }
+
+    // Insert events
+    let completeEventId = null;
+    let rejectEventId = null;
+
+    if (cleanCompleted.length) {
+      completeEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE,
+        cuttingLotId: parent.cutting_lot_id,
+        eventType: 'complete',
+        operatorId: userId,
+        sizes: cleanCompleted,
+        parentEventId: parentId,
+        remark: complete_remark ? String(complete_remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE,
+        cuttingLotId: parent.cutting_lot_id,
+        eventType: 'reject',
+        operatorId: userId,
+        sizes: cleanRejected,
+        parentEventId: parentId,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
+
+    // Dual-write: also append a stitching_data row for the COMPLETED pieces
+    // so downstream stages still reading stitching_data keep working until
+    // they migrate to the event model.
+    if (cleanCompleted.length) {
+      const [[lot]] = await conn.query(
+        `SELECT lot_no, sku FROM cutting_lots WHERE id = ?`,
+        [parent.cutting_lot_id]
+      );
+      const totalCompleted = cleanCompleted.reduce((a, s) => a + s.pieces, 0);
+      const [sdResult] = await conn.query(
+        `INSERT INTO stitching_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+         VALUES (?, ?, ?, ?, ?, NULL, NOW())`,
+        [userId, lot.lot_no, lot.sku, totalCompleted, complete_remark || null]
+      );
+      const sdId = sdResult.insertId;
+      const sdSizeRows = cleanCompleted.map(s => [sdId, s.size_label, s.pieces]);
+      await conn.query(
+        `INSERT INTO stitching_data_sizes (stitching_data_id, size_label, pieces) VALUES ?`,
+        [sdSizeRows]
+      );
+    }
+
+    await conn.commit();
+    res.json({
+      success: true,
+      complete_event_id: completeEventId,
+      reject_event_id: rejectEventId,
+      completed_total: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /event/complete =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// GET /stitchingdashboard/events
+// Renders the new event-model dashboard. The page itself is a thin
+// shell — all state comes from the /event/* endpoints above.
+router.get('/events', isAuthenticated, isStitchingMaster, (req, res) => {
+  res.render('stitchingEvents', { user: req.session.user });
+});
+
+// GET /stitchingdashboard/event/search?q=...
+// Search for a lot by lot_no, sku, or cutting remark. Unlike the old
+// /available-lots endpoint, this does NOT filter by "fully consumed"
+// — the new dashboard always shows current state for any matching
+// lot, even if everything is already approved at stitching.
+router.get('/event/search', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ lots: [] });
+    const like = `%${q}%`;
+    const [lots] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
+              cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?
+       ORDER BY cl.created_at DESC
+       LIMIT 25`,
+      [like, like, like]
+    );
+    res.json({ lots });
+  } catch (err) {
+    console.error('[ERROR] GET /event/search =>', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
