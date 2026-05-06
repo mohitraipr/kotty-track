@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isAdmin } = require('../middlewares/auth');
-const { syncAjioShipments } = require('../utils/ajioShipmentSync');
+const { syncAjioShipments, debugFetchOnce } = require('../utils/ajioShipmentSync');
 
 router.post('/run', isAuthenticated, isAdmin, async (req, res) => {
   try {
@@ -33,6 +33,17 @@ router.get('/stats', isAuthenticated, isAdmin, async (req, res) => {
       WHERE marketplace LIKE '%ajio%'
     `);
     res.json({ ok: true, stats: counts });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Debug: hit EasyEcom once with several candidate URLs and dump the raw
+// response shape. Use this to figure out the right endpoint for the tenant.
+router.post('/debug', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const out = await debugFetchOnce(req.body || {});
+    res.json({ ok: true, ...out });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
