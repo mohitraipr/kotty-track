@@ -59,8 +59,8 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-// EasyEcom V2 list endpoint. Both GET /orders and POST /orders/V2/getAllOrders
-// exist; V2 supports cursor pagination and is the documented one for bulk pulls.
+// EasyEcom V2 list endpoint. EasyEcom enforces a max 7-day window per call
+// and returns errors in the body shape { code, message, data }.
 async function fetchOrdersPage(token, { status, fromDate, toDate, cursor }) {
   const url = `${EASYECOM_API_BASE}/orders/V2/getAllOrders`;
   const params = {
@@ -75,11 +75,33 @@ async function fetchOrdersPage(token, { status, fromDate, toDate, cursor }) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     timeout: 60000,
   });
-  // Normalise: EasyEcom responses wrap data under .data with optional next_url/cursor.
-  const payload = data?.data || data || {};
-  const orders = payload.orders || payload.data || payload.results || [];
-  const nextCursor = payload.next_cursor || payload.cursor || payload.nextCursor || null;
+
+  // EasyEcom signals errors via body.code rather than HTTP status.
+  if (data && typeof data.code === 'number' && data.code >= 400) {
+    throw new Error(`EasyEcom ${data.code}: ${data.message}`);
+  }
+
+  const payload = data?.data ?? data ?? {};
+  const orders = Array.isArray(payload)
+    ? payload
+    : (payload.orders || payload.data || payload.results || []);
+  const nextCursor = (payload && !Array.isArray(payload))
+    ? (payload.next_cursor || payload.cursor || payload.nextCursor || null)
+    : null;
   return { orders: Array.isArray(orders) ? orders : [], nextCursor };
+}
+
+// Build ≤7-day chunks counting backwards from `to`. Last chunk may be shorter.
+function buildDateChunks(lookbackDays, chunkDays = 6) {
+  const chunks = [];
+  let to = new Date();
+  const earliest = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  while (to > earliest) {
+    const from = new Date(Math.max(earliest.getTime(), to.getTime() - chunkDays * 24 * 60 * 60 * 1000));
+    chunks.push({ from, to });
+    to = from;
+  }
+  return chunks;
 }
 
 function isAjio(order) {
@@ -176,8 +198,7 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
   const token = await getToken(wh);
   if (!token) return { warehouse: wh.key, fetched: 0, ajio: 0, withAwb: 0, upserted: 0, skipped: 'no_token' };
 
-  const toDate = new Date();
-  const fromDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const chunks = buildDateChunks(lookbackDays, 6);
 
   let fetched = 0;
   let ajioCount = 0;
@@ -185,36 +206,38 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
   const rowsToUpsert = [];
 
   for (const status of STATUS_FILTERS) {
-    let cursor = null;
-    let pages = 0;
-    do {
-      let page;
-      try {
-        page = await fetchOrdersPage(token, { status, fromDate, toDate, cursor });
-      } catch (err) {
-        console.error(`[ajioRecon] ${wh.key} ${status} page error:`, err.response?.data || err.message);
-        break;
-      }
-      fetched += page.orders.length;
-      for (const o of page.orders) {
-        if (!isAjio(o)) continue;
-        ajioCount++;
-        const row = buildShipmentRow(o, wh.warehouse_id);
-        if (row) {
-          withAwb++;
-          rowsToUpsert.push(row);
+    for (const { from, to } of chunks) {
+      let cursor = null;
+      let pages = 0;
+      do {
+        let page;
+        try {
+          page = await fetchOrdersPage(token, { status, fromDate: from, toDate: to, cursor });
+        } catch (err) {
+          console.error(`[ajioRecon] ${wh.key} ${status} ${fmtDate(from)}..${fmtDate(to)} error:`, err.response?.data || err.message);
+          break;
         }
-      }
-      cursor = page.nextCursor;
-      pages++;
-      if (pages > 200) break; // safety cap
-    } while (cursor);
+        fetched += page.orders.length;
+        for (const o of page.orders) {
+          if (!isAjio(o)) continue;
+          ajioCount++;
+          const row = buildShipmentRow(o, wh.warehouse_id);
+          if (row) {
+            withAwb++;
+            rowsToUpsert.push(row);
+          }
+        }
+        cursor = page.nextCursor;
+        pages++;
+        if (pages > 200) break; // safety cap
+      } while (cursor);
+    }
   }
 
   // Dedup within a single run on awb
   const dedup = Array.from(new Map(rowsToUpsert.map((r) => [r.awb, r])).values());
   const upserted = await upsertShipments(dedup);
-  return { warehouse: wh.key, fetched, ajio: ajioCount, withAwb, upserted };
+  return { warehouse: wh.key, fetched, ajio: ajioCount, withAwb, upserted, chunks: chunks.length };
 }
 
 async function syncAjioShipments(opts = {}) {
