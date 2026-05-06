@@ -485,7 +485,7 @@ router.get('/event/history', isAuthenticated, isStitchingMaster, async (req, res
     if (type !== 'all') { typeFilter = 'AND e.event_type = ?'; params.push(type); }
 
     const [events] = await pool.query(
-      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+      `SELECT e.id, e.cutting_lot_id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
               cl.lot_no, cl.sku
        FROM stitching_events e
        JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
@@ -515,6 +515,47 @@ router.get('/event/history', isAuthenticated, isStitchingMaster, async (req, res
     res.json({ events });
   } catch (err) {
     console.error('[ERROR] GET /event/history =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /stitchingdashboard/event/lot-journey/:cuttingLotId
+// All events on this lot at the stitching stage, regardless of operator,
+// with size breakdowns and operator usernames. Used by the My Work modal
+// to show the full chronology of a lot.
+router.get('/event/lot-journey/:cuttingLotId', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+    const [events] = await pool.query(
+      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              u.username AS operator
+       FROM stitching_events e
+       JOIN users u ON u.id = e.operator_id
+       WHERE e.cutting_lot_id = ?
+       ORDER BY e.created_at ASC, e.id ASC`,
+      [lotId]
+    );
+    if (!events.length) return res.json({ events: [] });
+
+    const ids = events.map(e => e.id);
+    const [sizes] = await pool.query(
+      `SELECT event_id, size_label, pieces FROM stitching_event_sizes
+       WHERE event_id IN (?)`,
+      [ids]
+    );
+    const sizeMap = {};
+    for (const s of sizes) {
+      if (!sizeMap[s.event_id]) sizeMap[s.event_id] = {};
+      sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
+    }
+    events.forEach(e => { e.sizes = sizeMap[e.id] || {}; });
+
+    res.json({ events });
+  } catch (err) {
+    console.error('[ERROR] GET /event/lot-journey =>', err);
     res.status(500).json({ error: err.message });
   }
 });
