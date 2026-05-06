@@ -194,11 +194,17 @@ async function upsertShipments(rows) {
   return values.length;
 }
 
-async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
+async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = {}) {
+  const emit = typeof onProgress === 'function' ? onProgress : () => {};
   const token = await getToken(wh);
-  if (!token) return { warehouse: wh.key, fetched: 0, ajio: 0, withAwb: 0, upserted: 0, skipped: 'no_token' };
+  if (!token) {
+    emit({ kind: 'warehouse_skipped', warehouse: wh.key, reason: 'no_token' });
+    return { warehouse: wh.key, fetched: 0, ajio: 0, withAwb: 0, upserted: 0, skipped: 'no_token' };
+  }
 
   const chunks = buildDateChunks(lookbackDays, 6);
+  const totalSteps = chunks.length * STATUS_FILTERS.length;
+  let stepIdx = 0;
 
   let fetched = 0;
   let ajioCount = 0;
@@ -207,23 +213,37 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
 
   for (const status of STATUS_FILTERS) {
     for (const { from, to } of chunks) {
+      stepIdx++;
+      emit({
+        kind: 'chunk_start', warehouse: wh.key, status,
+        fromDate: fmtDate(from), toDate: fmtDate(to),
+        step: stepIdx, totalSteps,
+      });
       let cursor = null;
       let pages = 0;
+      let chunkOrders = 0;
+      let chunkAjio = 0;
+      let chunkAwb = 0;
       do {
         let page;
         try {
           page = await fetchOrdersPage(token, { status, fromDate: from, toDate: to, cursor });
         } catch (err) {
-          console.error(`[ajioRecon] ${wh.key} ${status} ${fmtDate(from)}..${fmtDate(to)} error:`, err.response?.data || err.message);
+          const msg = err.response?.data || err.message;
+          console.error(`[ajioRecon] ${wh.key} ${status} ${fmtDate(from)}..${fmtDate(to)} error:`, msg);
+          emit({ kind: 'chunk_error', warehouse: wh.key, status, error: String(msg).slice(0, 200) });
           break;
         }
         fetched += page.orders.length;
+        chunkOrders += page.orders.length;
         for (const o of page.orders) {
           if (!isAjio(o)) continue;
           ajioCount++;
+          chunkAjio++;
           const row = buildShipmentRow(o, wh.warehouse_id);
           if (row) {
             withAwb++;
+            chunkAwb++;
             rowsToUpsert.push(row);
           }
         }
@@ -231,6 +251,11 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
         pages++;
         if (pages > 200) break; // safety cap
       } while (cursor);
+      emit({
+        kind: 'chunk_done', warehouse: wh.key, status,
+        orders: chunkOrders, ajio: chunkAjio, withAwb: chunkAwb,
+        step: stepIdx, totalSteps,
+      });
     }
   }
 
@@ -243,17 +268,22 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS } = {}) {
 async function syncAjioShipments(opts = {}) {
   const startedAt = Date.now();
   const results = [];
+  const emit = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
+  emit({ kind: 'run_start', warehouses: WAREHOUSES.map((w) => w.key), lookbackDays: opts.lookbackDays || LOOKBACK_DAYS });
   for (const wh of WAREHOUSES) {
     try {
       const r = await syncWarehouse(wh, opts);
       results.push(r);
+      emit({ kind: 'warehouse_done', ...r });
     } catch (err) {
       console.error(`[ajioRecon] ${wh.key} sync failed:`, err.message);
       results.push({ warehouse: wh.key, error: err.message });
+      emit({ kind: 'warehouse_error', warehouse: wh.key, error: err.message });
     }
   }
   const tookMs = Date.now() - startedAt;
   console.log(`[ajioRecon] done in ${tookMs}ms`, results);
+  emit({ kind: 'run_done', tookMs, results });
   return { tookMs, results };
 }
 
