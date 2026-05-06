@@ -1,0 +1,131 @@
+<%- include('partials/header', { pageTitle: 'VMS Report' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  .vmsr-content { margin-top: var(--navbar-height); padding: 22px; }
+  .vmsr-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  .vmsr-card { background: #fff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer; }
+  .vmsr-card.active { outline: 2px solid #2563eb; }
+  .vmsr-card .label { font-size: 0.85rem; color: #64748b; }
+  .vmsr-card .value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; }
+  .vmsr-card.green .value { color: #16a34a; }
+  .vmsr-card.red .value { color: #dc2626; }
+  .vmsr-card.yellow .value { color: #ca8a04; }
+  .vmsr-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .vmsr-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; font-size: 0.88rem; }
+  .vmsr-table th, .vmsr-table td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+  .vmsr-table th { background: #f8fafc; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; }
+  .pill.green { background: #dcfce7; color: #166534; }
+  .pill.red   { background: #fee2e2; color: #991b1b; }
+  .pill.yellow{ background: #fef9c3; color: #854d0e; }
+  .pill.gray  { background: #f1f5f9; color: #475569; }
+</style>
+
+<div class="vmsr-content">
+  <div class="vmsr-toolbar">
+    <h2 style="margin:0;">📊 VMS Report (Ajio)</h2>
+    <span style="color:#64748b;">last <%= days %> days</span>
+    <span style="flex:1;"></span>
+    <select id="vmsrDays" class="form-select form-select-sm" style="width:140px;">
+      <% [7,14,30,60,90].forEach(d => { %>
+        <option value="<%= d %>" <%= d === days ? 'selected' : '' %>>last <%= d %> days</option>
+      <% }) %>
+    </select>
+    <a id="vmsrExport" class="btn btn-secondary btn-sm" href="/vms-report/export.xlsx?days=<%= days %>">⬇ Export Excel</a>
+  </div>
+
+  <div class="vmsr-cards">
+    <div class="vmsr-card" data-status="">
+      <div class="label">Total shipments</div>
+      <div class="value"><%= summary.total || 0 %></div>
+    </div>
+    <div class="vmsr-card green" data-status="video_created">
+      <div class="label">Video created</div>
+      <div class="value"><%= summary.video_created || 0 %></div>
+    </div>
+    <div class="vmsr-card yellow" data-status="video_pending">
+      <div class="label">Pending video (label printed)</div>
+      <div class="value"><%= summary.video_pending || 0 %></div>
+    </div>
+    <div class="vmsr-card red" data-status="video_missing">
+      <div class="label">Missing video (shipped)</div>
+      <div class="value"><%= summary.video_missing || 0 %></div>
+    </div>
+  </div>
+
+  <div id="vmsrTableWrap">
+    <table class="vmsr-table">
+      <thead>
+        <tr>
+          <th>AWB</th><th>Ajio Order #</th><th>Status</th><th>Computed</th>
+          <th>Label printed</th><th>Dispatched</th><th>Video</th><th>Packer</th>
+        </tr>
+      </thead>
+      <tbody id="vmsrRows"><tr><td colspan="8" style="text-align:center;color:#64748b;">Pick a card to load rows.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cards = document.querySelectorAll('.vmsr-card');
+  const rows = document.getElementById('vmsrRows');
+  const daysSel = document.getElementById('vmsrDays');
+  const exportLink = document.getElementById('vmsrExport');
+  let currentStatus = '';
+
+  function pillFor(s) {
+    if (s === 'video_created') return '<span class="pill green">video_created</span>';
+    if (s === 'video_missing') return '<span class="pill red">video_missing</span>';
+    if (s === 'video_pending') return '<span class="pill yellow">video_pending</span>';
+    return '<span class="pill gray">' + s + '</span>';
+  }
+
+  async function load(status) {
+    rows.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;">Loading…</td></tr>';
+    cards.forEach(c => c.classList.toggle('active', c.dataset.status === status));
+    const days = daysSel.value;
+    const url = '/vms-report/api/rows?days=' + days + (status ? '&status=' + encodeURIComponent(status) : '');
+    try {
+      const r = await fetch(url, { credentials: 'same-origin' });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      if (!j.rows.length) {
+        rows.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;">No rows</td></tr>';
+        return;
+      }
+      rows.innerHTML = j.rows.map(r => `
+        <tr>
+          <td>${r.awb}</td>
+          <td>${r.reference_code || '-'}</td>
+          <td>${r.current_status || '-'}</td>
+          <td>${pillFor(r.computed_status)}</td>
+          <td>${r.label_printed_at ? new Date(r.label_printed_at).toLocaleString() : '-'}</td>
+          <td>${r.dispatched_at ? new Date(r.dispatched_at).toLocaleString() : '-'}</td>
+          <td>${r.s3_key ? '<a href="#" data-key="' + r.s3_key + '" class="vmsr-play">▶ play</a>' : '-'}</td>
+          <td>${r.packer_name || '-'}</td>
+        </tr>`).join('');
+      rows.querySelectorAll('.vmsr-play').forEach(a => {
+        a.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const r = await fetch('/vms/api/playback-url?key=' + encodeURIComponent(a.dataset.key), { credentials: 'same-origin' });
+          const j = await r.json();
+          if (j.ok && j.url) window.open(j.url, '_blank');
+        });
+      });
+    } catch (err) {
+      rows.innerHTML = '<tr><td colspan="8" style="color:#dc2626;">' + err.message + '</td></tr>';
+    }
+  }
+
+  cards.forEach(c => c.addEventListener('click', () => {
+    currentStatus = c.dataset.status || '';
+    load(currentStatus);
+  }));
+  daysSel.addEventListener('change', () => {
+    exportLink.href = '/vms-report/export.xlsx?days=' + daysSel.value;
+    location.search = '?days=' + daysSel.value;
+  });
+})();
+</script>

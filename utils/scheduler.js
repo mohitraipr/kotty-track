@@ -5,6 +5,7 @@
 
 const cron = require('node-cron');
 const { syncAjioShipments } = require('./ajioShipmentSync');
+const { runMailAutoReply } = require('./mailAutoReplyJob');
 
 const TZ = process.env.CRON_TIMEZONE || 'Asia/Kolkata';
 const disabled = process.env.DISABLE_CRON === '1' || process.env.DISABLE_CRON === 'true';
@@ -34,6 +35,23 @@ function startCronJobs() {
   );
 
   console.log(`[cron] scheduled ajio shipment recon (every 30 min, TZ=${TZ})`);
+
+  // Mail auto-reply: 9 AM and 9 PM IST.
+  // Scans inbox, resolves AWB via order_awb_mapping → ee_orders.reference_code,
+  // sends Zoho reply with video link if found.
+  cron.schedule(
+    process.env.MAIL_REPLY_CRON || '0 9,21 * * *',
+    async () => {
+      try {
+        await runMailAutoReply();
+      } catch (err) {
+        console.error('[cron] mail auto-reply failed:', err);
+      }
+    },
+    { timezone: TZ }
+  );
+
+  console.log(`[cron] scheduled mail auto-reply (9 AM, 9 PM ${TZ})`);
 }
 
 module.exports = { startCronJobs };
