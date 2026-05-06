@@ -57,6 +57,7 @@
       <% }) %>
     </select>
     <button id="arRun" class="btn btn-primary btn-sm">▶ Run</button>
+    <button id="arStop" class="btn btn-danger btn-sm" disabled>⏹ Stop</button>
     <span id="arState" class="pill gray">idle</span>
     <span style="flex:1;"></span>
     <button id="arRefreshRecent" class="btn btn-secondary btn-sm">⟳ Refresh recent</button>
@@ -146,10 +147,14 @@
   let lastEventCount = 0;
 
   function setState(state) {
-    const cls = state === 'running' ? 'blue' : state === 'done' ? 'green' : state === 'error' ? 'red' : 'gray';
+    const cls = state === 'running' ? 'blue'
+              : state === 'done' ? 'green'
+              : state === 'error' ? 'red'
+              : state === 'cancelled' ? 'amber' : 'gray';
     els.state.className = 'pill ' + cls;
     els.state.textContent = state;
     els.run.disabled = state === 'running';
+    document.getElementById('arStop').disabled = state !== 'running';
   }
 
   function fmtEvent(e) {
@@ -161,7 +166,10 @@
     if (e.kind === 'warehouse_done') return `[${ts}] ✔ ${e.warehouse}: fetched=${e.fetched} ajio=${e.ajio} withAwb=${e.withAwb} upserted=${e.upserted}`;
     if (e.kind === 'warehouse_error') return `[${ts}] ✖ ${e.warehouse}: ${e.error}`;
     if (e.kind === 'warehouse_skipped') return `[${ts}] - ${e.warehouse} skipped (${e.reason})`;
-    if (e.kind === 'run_done') return `[${ts}] ✅ run_done in ${e.tookMs}ms`;
+    if (e.kind === 'run_done') return `[${ts}] ${e.cancelled ? '⏹' : '✅'} run_done in ${e.tookMs}ms${e.cancelled ? ' (cancelled)' : ''}`;
+    if (e.kind === 'cancel_requested') return `[${ts}] ⏹ cancel requested by ${e.by || '-'}`;
+    if (e.kind === 'cancelled') return `[${ts}]   ↳ stopped after ${e.after}${e.pages ? ' page=' + e.pages : ''}`;
+    if (e.kind === 'run_cancelled') return `[${ts}] ⏹ run cancelled after ${e.after}`;
     if (e.kind === 'job_start') return `[${ts}] job_start by ${e.startedBy} lookback=${e.lookbackDays}d`;
     if (e.kind === 'job_error') return `[${ts}] ✖ job_error: ${e.error}`;
     return `[${ts}] ${e.kind} ${JSON.stringify(e)}`;
@@ -258,6 +266,13 @@
   });
 
   els.refreshRecent.addEventListener('click', refreshRecent);
+
+  document.getElementById('arStop').addEventListener('click', async () => {
+    if (!confirm('Stop the running reconciliation?')) return;
+    try {
+      await fetch('/admin/ajio-recon/cancel', { method: 'POST', credentials: 'same-origin' });
+    } catch (err) { /* swallow */ }
+  });
 
   // Debug panel
   const dbg = {
