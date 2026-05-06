@@ -289,7 +289,7 @@ async function syncAjioShipments(opts = {}) {
 
 // Debug helper: hit EasyEcom once for one warehouse + status, return the
 // raw response so we can see the actual response shape.
-async function debugFetchOnce({ warehouse = 'faridabad', status = 'Printed', lookbackDays = 30, urlOverride, method = 'GET' } = {}) {
+async function debugFetchOnce({ warehouse = 'faridabad', status = 'Printed', lookbackDays = 7, urlOverride, method = 'GET', ajioOnly = false } = {}) {
   const wh = WAREHOUSES.find((w) => w.key === warehouse);
   if (!wh) throw new Error(`unknown warehouse: ${warehouse}`);
   const token = await getToken(wh);
@@ -325,13 +325,24 @@ async function debugFetchOnce({ warehouse = 'faridabad', status = 'Printed', loo
       const resp = method === 'POST'
         ? await axios.post(url, params, config)
         : await axios.get(url, { ...config, params });
+      const data = resp.data;
+      const payload = data?.data ?? data ?? {};
+      const orders = Array.isArray(payload) ? payload : (payload.orders || payload.data || payload.results || []);
+      const filtered = ajioOnly ? orders.filter((o) => isAjio(o)) : orders;
+      const firstOrder = filtered[0] || orders[0] || null;
       attempts.push({
         url,
         method,
         status: resp.status,
-        sentParams: method === 'POST' ? params : params,
-        responseKeys: Object.keys(resp.data || {}),
-        sample: JSON.stringify(resp.data).slice(0, 4000),
+        sentParams: params,
+        bodyCode: data?.code,
+        bodyMessage: data?.message,
+        responseKeys: data && typeof data === 'object' ? Object.keys(data) : null,
+        payloadKeys: payload && typeof payload === 'object' && !Array.isArray(payload) ? Object.keys(payload) : 'array',
+        ordersCount: orders.length,
+        ajioCount: orders.filter((o) => isAjio(o)).length,
+        firstOrderKeys: firstOrder ? Object.keys(firstOrder) : null,
+        firstOrderSample: firstOrder ? JSON.stringify(firstOrder).slice(0, 6000) : null,
       });
     } catch (err) {
       attempts.push({
