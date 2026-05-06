@@ -715,12 +715,16 @@ async function wUpstreamSizes(conn, cuttingLotId, lotNo) {
 
   const out = [];
   for (const [size_label, assembled] of Object.entries(upstream)) {
-    const approved = (wSizes[size_label] || {}).approved || 0;
+    const sa = wSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
     out.push({
       size_label,
       assembled_qty: assembled,
-      approved_at_stage: approved,
-      available: Math.max(0, assembled - approved),
+      approved: sa.approved,
+      completed: sa.completed,
+      rejected: sa.rejected,
+      inline: sa.inline,
+      approved_at_stage: sa.approved,
+      available: Math.max(0, assembled - sa.approved),
     });
   }
   return out;

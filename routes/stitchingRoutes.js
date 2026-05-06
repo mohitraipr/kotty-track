@@ -181,16 +181,22 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
     const openApprovals = await stageEvents.getOpenApprovals(pool, STAGE, lotId);
 
     // Per-size: cutting pool minus what's already been approved at stitching.
-    // Normalize the size_label key on lookup to handle whitespace/case drift
-    // between cutting_lot_sizes and stitching_event_sizes.
+    // Embed the full per-size aggregates (approved/completed/rejected/inline)
+    // directly so the frontend doesn't need a separate lookup against
+    // stage_size_aggregates — eliminates any chance of key-mismatch drift.
     const upstreamSizes = cutSizes.map(s => {
       const key = stageEvents.normalizeSizeLabel(s.size_label);
-      const approvedAtStitching = (sizeAggregates[key] || {}).approved || 0;
+      const sa = sizeAggregates[key] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+      const cutQty = Number(s.total_pieces) || 0;
       return {
         size_label: s.size_label,
-        cut_qty: Number(s.total_pieces) || 0,
-        approved_at_stage: approvedAtStitching,
-        available: Math.max(0, (Number(s.total_pieces) || 0) - approvedAtStitching),
+        cut_qty: cutQty,
+        approved: sa.approved,
+        completed: sa.completed,
+        rejected: sa.rejected,
+        inline: sa.inline,
+        approved_at_stage: sa.approved,
+        available: Math.max(0, cutQty - sa.approved),
       };
     });
     const upstreamTotalAvailable = upstreamSizes.reduce((acc, s) => acc + s.available, 0);

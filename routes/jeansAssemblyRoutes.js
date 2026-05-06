@@ -839,14 +839,19 @@ async function jaUpstreamSizes(conn, cuttingLotId, lotNo) {
   // Assembly's already-approved totals per size (already normalized by helper)
   const jaSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_JA, cuttingLotId);
 
+  // Embed full per-size aggregates so frontend has no lookup work.
   const out = [];
   for (const [size_label, stitched] of Object.entries(stitchSizes)) {
-    const approved = (jaSizes[size_label] || {}).approved || 0;
+    const sa = jaSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
     out.push({
       size_label,
       stitched_qty: stitched,
-      approved_at_stage: approved,
-      available: Math.max(0, stitched - approved),
+      approved: sa.approved,
+      completed: sa.completed,
+      rejected: sa.rejected,
+      inline: sa.inline,
+      approved_at_stage: sa.approved,
+      available: Math.max(0, stitched - sa.approved),
     });
   }
   return out;

@@ -140,12 +140,16 @@ async function fUpstreamSizes(conn, lot) {
   const fSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_F, cuttingLotId);
   const out = [];
   for (const [size_label, qty] of Object.entries(upstream)) {
-    const approved = (fSizes[size_label] || {}).approved || 0;
+    const sa = fSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
     out.push({
       size_label,
       upstream_qty: qty,
-      approved_at_stage: approved,
-      available: Math.max(0, qty - approved),
+      approved: sa.approved,
+      completed: sa.completed,
+      rejected: sa.rejected,
+      inline: sa.inline,
+      approved_at_stage: sa.approved,
+      available: Math.max(0, qty - sa.approved),
     });
   }
   return out;

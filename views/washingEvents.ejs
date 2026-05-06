@@ -301,15 +301,14 @@ function renderState() {
 
   const tbody = el('sizeMatrixBody'); tbody.textContent = '';
   upstream_sizes.forEach(s => {
-    const sa = sizeAgg[s.size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
     const row = document.createElement('tr');
     function cell(val, dim) { const td = document.createElement('td'); td.textContent = fmt(val); if (dim) td.classList.add('dim'); return td; }
     const labelTd = document.createElement('td'); labelTd.textContent = s.size_label; row.appendChild(labelTd);
     row.appendChild(cell(s.assembled_qty));
-    row.appendChild(cell(sa.approved, sa.approved === 0));
-    row.appendChild(cell(sa.completed, sa.completed === 0));
-    row.appendChild(cell(sa.rejected, sa.rejected === 0));
-    row.appendChild(cell(sa.inline, sa.inline === 0));
+    row.appendChild(cell(s.approved || 0, !s.approved));
+    row.appendChild(cell(s.completed || 0, !s.completed));
+    row.appendChild(cell(s.rejected || 0, !s.rejected));
+    row.appendChild(cell(s.inline || 0, !s.inline));
     row.appendChild(cell(s.available, s.available === 0));
     tbody.appendChild(row);
   });

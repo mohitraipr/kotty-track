@@ -140,12 +140,16 @@ async function wiUpstreamSizes(conn, cuttingLotId, lotNo) {
   const wiSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_WI, cuttingLotId);
   const out = [];
   for (const [size_label, washed] of Object.entries(upstream)) {
-    const approved = (wiSizes[size_label] || {}).approved || 0;
+    const sa = wiSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
     out.push({
       size_label,
       washed_qty: washed,
-      approved_at_stage: approved,
-      available: Math.max(0, washed - approved),
+      approved: sa.approved,
+      completed: sa.completed,
+      rejected: sa.rejected,
+      inline: sa.inline,
+      approved_at_stage: sa.approved,
+      available: Math.max(0, washed - sa.approved),
     });
   }
   return out;
