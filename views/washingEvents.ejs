@@ -1,0 +1,475 @@
+<%- include('partials/header', { pageTitle: 'Washing — Events' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/washingdashboard' }) %>
+
+<style>
+  /* Reuses .cutting-remark-note from kotty-theme.css */
+  .events-page { padding: calc(var(--navbar-height) + 1.5rem) 1.25rem 4rem; max-width: 960px; margin: 0 auto; min-height: 100vh; }
+  .events-title { font-family: var(--font-display); font-size: var(--text-3xl); color: var(--text-primary); letter-spacing: -0.02em; margin: 0 0 0.25rem; }
+  .events-subtitle { font-family: var(--font-body); color: var(--text-secondary); margin: 0 0 1.75rem; font-size: var(--text-sm); }
+  .events-subtitle em { font-family: var(--font-display); font-style: italic; color: var(--terracotta-dark); font-weight: 500; }
+
+  .search-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.125rem 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; }
+  .search-row { display: flex; gap: 0.625rem; }
+  .search-input { flex: 1; padding: 0.75rem 1rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: var(--text-base); color: var(--text-primary); background: var(--bg-card); transition: border-color 0.15s, box-shadow 0.15s; }
+  .search-input:focus { outline: none; border-color: var(--terracotta); box-shadow: 0 0 0 3px var(--terracotta-bg); }
+  .search-btn { padding: 0.75rem 1.25rem; background: var(--terracotta); color: white; border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .search-btn:hover { background: var(--terracotta-dark); }
+  .search-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+
+  .search-results { margin-top: 0.875rem; border-top: 1px dashed var(--border-light); padding-top: 0.875rem; display: none; }
+  .search-results.show { display: block; }
+  .search-result-row { display: flex; align-items: center; gap: 1rem; padding: 0.625rem 0.75rem; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.1s; }
+  .search-result-row:hover { background: var(--cream-dark); }
+  .search-result-no { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); min-width: 9ch; }
+  .search-result-meta { flex: 1; color: var(--text-secondary); font-size: var(--text-sm); }
+  .search-result-flow { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.125rem 0.5rem; border-radius: var(--radius-full); font-weight: 600; }
+  .search-result-flow.denim { background: var(--terracotta-bg); color: var(--terracotta-dark); }
+  .search-result-flow.hosiery { background: var(--info-light); color: var(--info); }
+
+  .lot-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.5rem 1.5rem 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; display: none; }
+  .lot-card.show { display: block; }
+  .lot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .lot-no { font-family: var(--font-display); font-size: var(--text-2xl); color: var(--text-primary); letter-spacing: -0.01em; }
+  .lot-meta { color: var(--text-secondary); font-size: var(--text-sm); }
+  .lot-meta strong { color: var(--text-primary); font-weight: 500; }
+
+  .agg-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.625rem; margin: 1rem 0 1.25rem; }
+  .agg-pill { background: var(--cream); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.625rem 0.75rem; }
+  .agg-pill .label { font-family: var(--font-display); font-style: italic; font-size: var(--text-xs); color: var(--text-muted); letter-spacing: 0.04em; }
+  .agg-pill .value { font-family: var(--font-body); font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-top: 0.125rem; }
+  .agg-pill.inline { background: var(--terracotta-bg); border-color: rgba(196,92,58,0.18); }
+  .agg-pill.inline .value { color: var(--terracotta-dark); }
+  .agg-pill.completed .value { color: #2d6a3e; }
+  .agg-pill.rejected .value { color: #b34d28; }
+
+  .size-matrix { width: 100%; border-collapse: collapse; font-size: var(--text-sm); margin-bottom: 0.5rem; }
+  .size-matrix th, .size-matrix td { text-align: right; padding: 0.45rem 0.625rem; border-bottom: 1px solid var(--border-light); }
+  .size-matrix th:first-child, .size-matrix td:first-child { text-align: left; font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; }
+  .size-matrix th { font-family: var(--font-display); font-style: italic; font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border-medium); font-weight: 500; }
+  .size-matrix td.dim { color: var(--text-muted); }
+
+  .action-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; display: none; }
+  .action-card.show { display: block; }
+  .action-tabs { display: flex; border-bottom: 1px solid var(--border-light); background: var(--cream); }
+  .action-tab { flex: 1; padding: 0.875rem 1rem; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-weight: 500; color: var(--text-secondary); transition: all 0.15s; }
+  .action-tab:hover { color: var(--text-primary); background: var(--cream-dark); }
+  .action-tab.active { color: var(--terracotta-dark); border-bottom-color: var(--terracotta); background: var(--bg-card); }
+  .action-tab[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  .action-body { padding: 1.25rem 1.5rem 1.5rem; }
+  .action-section-hint { color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: 1rem; }
+
+  .size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.625rem; margin-bottom: 1rem; }
+  .size-cell { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.5rem 0.625rem; background: var(--cream); }
+  .size-cell.disabled { opacity: 0.45; }
+  .size-cell .size-cell-label { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
+  .size-cell .size-cell-avail { font-size: var(--text-xs); color: var(--text-muted); margin: 0.125rem 0 0.375rem; }
+  .size-cell input { width: 100%; padding: 0.375rem 0.5rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-base); text-align: right; background: var(--bg-card); }
+  .size-cell input:focus { outline: none; border-color: var(--terracotta); }
+  .size-cell input:disabled { background: var(--cream-dark); color: var(--text-muted); }
+
+  .approve-picker { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .approve-pick { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.625rem 0.875rem; cursor: pointer; background: var(--cream); transition: all 0.12s; }
+  .approve-pick:hover { border-color: var(--terracotta-light); }
+  .approve-pick.selected { border-color: var(--terracotta); background: var(--terracotta-bg); }
+  .approve-pick-head { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--text-sm); }
+  .approve-pick-head .approved { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); }
+  .approve-pick-head .when { color: var(--text-muted); font-size: var(--text-xs); }
+  .approve-pick-detail { margin-top: 0.25rem; font-size: var(--text-xs); color: var(--text-secondary); font-family: var(--font-mono); }
+
+  .complete-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.625rem; margin-bottom: 1rem; }
+  .complete-cell { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.5rem 0.625rem; background: var(--cream); }
+  .complete-cell-row { display: flex; gap: 0.375rem; align-items: center; }
+  .complete-cell-row label { font-size: var(--text-xs); color: var(--text-muted); width: 4.5rem; }
+  .complete-cell-row input { flex: 1; min-width: 0; padding: 0.3rem 0.45rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-sm); text-align: right; background: var(--bg-card); }
+  .complete-cell-row input:focus { outline: none; border-color: var(--terracotta); }
+
+  .form-row { display: flex; gap: 0.625rem; margin-bottom: 0.875rem; }
+  .form-row textarea, .form-row input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: var(--text-sm); resize: vertical; }
+
+  .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0.625rem 0; border-top: 1px dashed var(--border-medium); margin-top: 0.5rem; }
+  .total-label { font-family: var(--font-display); font-style: italic; color: var(--text-secondary); }
+  .total-value { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); }
+
+  .submit-btn { width: 100%; margin-top: 0.75rem; padding: 0.85rem; background: var(--terracotta); color: white; border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: var(--text-base); cursor: pointer; transition: background 0.15s; }
+  .submit-btn:hover { background: var(--terracotta-dark); }
+  .submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+
+  .toast-area { position: fixed; top: calc(var(--navbar-height) + 1rem); right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+  .toast { padding: 0.75rem 1rem; background: var(--bg-card); border-radius: var(--radius-md); box-shadow: var(--shadow-md); border-left: 3px solid var(--terracotta); font-size: var(--text-sm); color: var(--text-primary); max-width: 360px; animation: slideIn 0.2s ease-out; }
+  .toast.success { border-left-color: #2d6a3e; }
+  .toast.error { border-left-color: #b34d28; }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .empty-state { text-align: center; padding: 1rem 0.5rem; color: var(--text-muted); font-style: italic; font-size: var(--text-sm); }
+</style>
+
+<main class="events-page">
+  <h1 class="events-title">Washing</h1>
+  <p class="events-subtitle">
+    Search a denim lot, then <em>approve</em> pieces from assembly's completed pool to start washing,
+    or <em>complete</em> pieces against an earlier approval. Approving fires payment to the assembly master.
+  </p>
+
+  <div class="search-card">
+    <div class="search-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="Lot number, SKU, or cutting remark…" autofocus />
+      <button id="searchBtn" class="search-btn">Search</button>
+    </div>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+
+  <div id="lotCard" class="lot-card">
+    <div class="lot-head">
+      <div>
+        <div class="lot-no" id="lotNo">—</div>
+        <div class="lot-meta">
+          <span id="lotSku">—</span> &bull; Cut by <strong id="lotCutter">—</strong>
+        </div>
+      </div>
+      <span class="search-result-flow" id="lotFlow">DENIM</span>
+    </div>
+
+    <div class="cutting-remark-note" id="cuttingRemarkNote" style="display: none;">
+      <span class="cutting-remark-note__label">From Cutting</span>
+      <span class="cutting-remark-note__text" id="cuttingRemarkText"></span>
+    </div>
+
+    <div class="agg-pills">
+      <div class="agg-pill"><div class="label">Approved</div><div class="value" id="aggApproved">0</div></div>
+      <div class="agg-pill completed"><div class="label">Completed</div><div class="value" id="aggCompleted">0</div></div>
+      <div class="agg-pill rejected"><div class="label">Rejected</div><div class="value" id="aggRejected">0</div></div>
+      <div class="agg-pill inline"><div class="label">Inline</div><div class="value" id="aggInline">0</div></div>
+    </div>
+
+    <table class="size-matrix">
+      <thead>
+        <tr>
+          <th>Size</th>
+          <th>Assembled</th>
+          <th>Approved</th>
+          <th>Completed</th>
+          <th>Rejected</th>
+          <th>Inline</th>
+          <th>Available from assembly</th>
+        </tr>
+      </thead>
+      <tbody id="sizeMatrixBody"></tbody>
+    </table>
+  </div>
+
+  <div id="actionCard" class="action-card">
+    <div class="action-tabs">
+      <button class="action-tab active" id="tabApprove" onclick="switchTab('approve')">
+        Approve from assembly
+      </button>
+      <button class="action-tab" id="tabComplete" onclick="switchTab('complete')">
+        Complete &amp; reject
+      </button>
+    </div>
+
+    <div class="action-body" id="approvePanel">
+      <div class="action-section-hint">
+        Pick how many pieces to take into washing from assembly's completed pool. <strong>Approving fires payment to the assembly master.</strong>
+      </div>
+      <div class="size-grid" id="approveSizeGrid"></div>
+      <div class="form-row">
+        <input type="text" id="approveRemark" placeholder="Remark (optional)" />
+      </div>
+      <div class="total-row">
+        <span class="total-label">Total to approve</span>
+        <span class="total-value" id="approveTotal">0</span>
+      </div>
+      <button class="submit-btn" id="approveBtn" onclick="submitApprove()" disabled>Record approval</button>
+    </div>
+
+    <div class="action-body" id="completePanel" style="display: none;">
+      <div class="action-section-hint">Select an open approval, then enter how many pieces are completed and (optionally) rejected per size.</div>
+      <div id="approvePicker" class="approve-picker"></div>
+      <div id="completeForm" style="display: none;">
+        <div class="complete-grid" id="completeSizeGrid"></div>
+        <div class="form-row"><input type="text" id="completeRemark" placeholder="Completion remark (optional)" /></div>
+        <div class="form-row"><input type="text" id="rejectReason" placeholder="Reject reason (only if rejecting)" /></div>
+        <div class="total-row">
+          <span class="total-label">Completed / Rejected</span>
+          <span class="total-value">
+            <span id="completeTotal">0</span>
+            <span style="color: var(--text-muted); font-weight: 400;"> / </span>
+            <span id="rejectTotal" style="color: #b34d28;">0</span>
+          </span>
+        </div>
+        <button class="submit-btn" id="completeBtn" onclick="submitComplete()" disabled>Record completion</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast-area" id="toastArea"></div>
+
+<script>
+'use strict';
+
+const BASE = '/washingdashboard';
+
+let currentLot = null;
+let currentState = null;
+let selectedApprovalId = null;
+
+function el(id) { return document.getElementById(id); }
+function fmt(n) { return Number(n || 0).toLocaleString(); }
+
+function toast(msg, kind) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (kind || '');
+  t.textContent = msg;
+  el('toastArea').appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(() => t.remove(), 3300);
+}
+function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(async r => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    return data;
+  });
+}
+function escapeText(s) {
+  return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+async function runSearch() {
+  const q = el('searchInput').value.trim();
+  if (!q) return;
+  el('searchBtn').disabled = true;
+  try {
+    const data = await api('GET', BASE + '/event/search?q=' + encodeURIComponent(q));
+    const wrap = el('searchResults');
+    wrap.textContent = '';
+    if (!data.lots.length) {
+      wrap.innerHTML = '<div class="empty-state">No denim lots match "' + escapeText(q) + '"</div>';
+      wrap.classList.add('show'); return;
+    }
+    if (data.lots.length === 1) { wrap.classList.remove('show'); await selectLot(data.lots[0]); return; }
+    data.lots.forEach(lot => {
+      const row = document.createElement('div'); row.className = 'search-result-row';
+      row.onclick = () => selectLot(lot);
+      const num = document.createElement('span'); num.className = 'search-result-no'; num.textContent = lot.lot_no; row.appendChild(num);
+      const meta = document.createElement('span'); meta.className = 'search-result-meta';
+      meta.textContent = (lot.sku || '—') + ' • ' + lot.total_pieces + ' pcs cut'; row.appendChild(meta);
+      const flow = document.createElement('span'); flow.className = 'search-result-flow denim'; flow.textContent = 'Denim'; row.appendChild(flow);
+      wrap.appendChild(row);
+    });
+    wrap.classList.add('show');
+  } catch (err) { toast('Search failed: ' + err.message, 'error'); }
+  finally { el('searchBtn').disabled = false; }
+}
+el('searchBtn').addEventListener('click', runSearch);
+el('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+async function selectLot(lot) {
+  el('searchResults').classList.remove('show');
+  currentLot = lot;
+  await refreshState();
+}
+async function refreshState() {
+  if (!currentLot) return;
+  try {
+    currentState = await api('GET', BASE + '/event/lot-state/' + currentLot.id);
+    renderState();
+  } catch (err) { toast('Could not load lot state: ' + err.message, 'error'); }
+}
+
+function renderState() {
+  if (!currentState) return;
+  const { lot, stage_aggregates: agg, stage_size_aggregates: sizeAgg, upstream_sizes, open_approvals: open } = currentState;
+
+  el('lotNo').textContent = (lot.lot_no || '').toUpperCase();
+  el('lotSku').textContent = lot.sku || '—';
+  el('lotCutter').textContent = lot.cutting_master || '—';
+
+  const remarkNote = el('cuttingRemarkNote');
+  if (lot.cutting_remark) {
+    el('cuttingRemarkText').textContent = lot.cutting_remark;
+    remarkNote.style.display = 'flex';
+  } else { remarkNote.style.display = 'none'; }
+
+  el('aggApproved').textContent = fmt(agg.approved);
+  el('aggCompleted').textContent = fmt(agg.completed);
+  el('aggRejected').textContent = fmt(agg.rejected);
+  el('aggInline').textContent = fmt(agg.inline);
+
+  const tbody = el('sizeMatrixBody'); tbody.textContent = '';
+  upstream_sizes.forEach(s => {
+    const sa = sizeAgg[s.size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const row = document.createElement('tr');
+    function cell(val, dim) { const td = document.createElement('td'); td.textContent = fmt(val); if (dim) td.classList.add('dim'); return td; }
+    const labelTd = document.createElement('td'); labelTd.textContent = s.size_label; row.appendChild(labelTd);
+    row.appendChild(cell(s.assembled_qty));
+    row.appendChild(cell(sa.approved, sa.approved === 0));
+    row.appendChild(cell(sa.completed, sa.completed === 0));
+    row.appendChild(cell(sa.rejected, sa.rejected === 0));
+    row.appendChild(cell(sa.inline, sa.inline === 0));
+    row.appendChild(cell(s.available, s.available === 0));
+    tbody.appendChild(row);
+  });
+
+  el('lotCard').classList.add('show');
+  el('actionCard').classList.add('show');
+
+  const canApprove = currentState.upstream_total_available > 0;
+  const canComplete = open.length > 0;
+  el('tabApprove').disabled = !canApprove;
+  el('tabComplete').disabled = !canComplete;
+
+  if (canApprove) switchTab('approve');
+  else if (canComplete) switchTab('complete');
+  else switchTab('approve');
+
+  renderApproveForm();
+  renderCompletePanel();
+}
+function switchTab(tab) {
+  el('tabApprove').classList.toggle('active', tab === 'approve');
+  el('tabComplete').classList.toggle('active', tab === 'complete');
+  el('approvePanel').style.display = tab === 'approve' ? 'block' : 'none';
+  el('completePanel').style.display = tab === 'complete' ? 'block' : 'none';
+}
+
+function renderApproveForm() {
+  const grid = el('approveSizeGrid'); grid.textContent = '';
+  const upstream = currentState.upstream_sizes;
+  if (!upstream.length || currentState.upstream_total_available <= 0) {
+    grid.innerHTML = '<div class="empty-state">No pieces available — assembly has nothing completed that washing hasn\'t already taken.</div>';
+    el('approveBtn').disabled = true; el('approveTotal').textContent = '0'; return;
+  }
+  upstream.forEach(s => {
+    const cell = document.createElement('div'); cell.className = 'size-cell' + (s.available === 0 ? ' disabled' : '');
+    const lab = document.createElement('div'); lab.className = 'size-cell-label'; lab.textContent = s.size_label; cell.appendChild(lab);
+    const av = document.createElement('div'); av.className = 'size-cell-avail'; av.textContent = 'Available ' + fmt(s.available); cell.appendChild(av);
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '0'; inp.max = String(s.available); inp.value = '0';
+    inp.dataset.size = s.size_label; inp.disabled = s.available === 0;
+    inp.addEventListener('input', recalcApproveTotal);
+    cell.appendChild(inp); grid.appendChild(cell);
+  });
+  recalcApproveTotal();
+}
+function recalcApproveTotal() {
+  const inputs = el('approveSizeGrid').querySelectorAll('input[data-size]');
+  let total = 0;
+  inputs.forEach(i => {
+    let v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > Number(i.max)) { v = Number(i.max); i.value = v; }
+    total += v;
+  });
+  el('approveTotal').textContent = fmt(total);
+  el('approveBtn').disabled = total <= 0;
+}
+async function submitApprove() {
+  if (!currentLot) return;
+  const inputs = el('approveSizeGrid').querySelectorAll('input[data-size]');
+  const sizes = [];
+  inputs.forEach(i => { const p = parseInt(i.value, 10) || 0; if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p }); });
+  if (!sizes.length) return;
+  const total = sizes.reduce((a, s) => a + s.pieces, 0);
+  if (!confirm('Approve ' + fmt(total) + ' pieces and pay the assembly master for this batch?')) return;
+  el('approveBtn').disabled = true;
+  try {
+    await api('POST', BASE + '/event/approve', {
+      cutting_lot_id: currentLot.id, sizes, remark: el('approveRemark').value.trim() || null,
+    });
+    toast('Approved ' + fmt(total) + ' pieces, payment recorded.', 'success');
+    el('approveRemark').value = ''; await refreshState();
+  } catch (err) { toast('Approve failed: ' + err.message, 'error'); el('approveBtn').disabled = false; }
+}
+
+function renderCompletePanel() {
+  const picker = el('approvePicker'); picker.textContent = '';
+  selectedApprovalId = null; el('completeForm').style.display = 'none';
+  const open = currentState.open_approvals;
+  if (!open.length) { picker.innerHTML = '<div class="empty-state">No open approvals — approve pieces first.</div>'; return; }
+  open.forEach(a => {
+    const card = document.createElement('div'); card.className = 'approve-pick'; card.dataset.id = String(a.event_id);
+    card.onclick = () => selectApprove(a);
+    const head = document.createElement('div'); head.className = 'approve-pick-head';
+    const left = document.createElement('span');
+    left.innerHTML = '<span class="approved">' + fmt(a.approved) + '</span> approved · ' +
+      '<span style="color: var(--terracotta-dark); font-weight: 600;">' + fmt(a.inline) + ' inline</span>';
+    head.appendChild(left);
+    const when = document.createElement('span'); when.className = 'when';
+    when.textContent = a.operator + ' · ' + new Date(a.approved_at).toLocaleString();
+    head.appendChild(when); card.appendChild(head);
+    const detail = document.createElement('div'); detail.className = 'approve-pick-detail';
+    detail.textContent = Object.entries(a.sizes).map(([k, v]) => k + ': ' + v).join(' · ');
+    card.appendChild(detail); picker.appendChild(card);
+  });
+}
+function selectApprove(approve) {
+  selectedApprovalId = approve.event_id;
+  document.querySelectorAll('.approve-pick').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.approve-pick').forEach(c => { if (Number(c.dataset.id) === approve.event_id) c.classList.add('selected'); });
+  const grid = el('completeSizeGrid'); grid.textContent = '';
+  Object.entries(approve.sizes).forEach(([label, approvedPieces]) => {
+    const cell = document.createElement('div'); cell.className = 'complete-cell';
+    const lab = document.createElement('div'); lab.className = 'size-cell-label'; lab.textContent = label + ' (≤ ' + approvedPieces + ')';
+    cell.appendChild(lab);
+    function row(name, color) {
+      const r = document.createElement('div'); r.className = 'complete-cell-row';
+      const l = document.createElement('label'); l.textContent = name; if (color) l.style.color = color;
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.min = '0'; inp.max = String(approvedPieces); inp.value = '0';
+      inp.dataset.size = label; inp.dataset.kind = name.toLowerCase();
+      inp.addEventListener('input', recalcCompleteTotals);
+      r.appendChild(l); r.appendChild(inp); return r;
+    }
+    cell.appendChild(row('Done')); cell.appendChild(row('Reject', '#b34d28'));
+    grid.appendChild(cell);
+  });
+  el('completeForm').style.display = 'block'; recalcCompleteTotals();
+}
+function recalcCompleteTotals() {
+  let done = 0, rej = 0;
+  el('completeSizeGrid').querySelectorAll('input').forEach(i => {
+    let v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > Number(i.max)) { v = Number(i.max); i.value = v; }
+    if (i.dataset.kind === 'done') done += v; else if (i.dataset.kind === 'reject') rej += v;
+  });
+  el('completeTotal').textContent = fmt(done); el('rejectTotal').textContent = fmt(rej);
+  el('completeBtn').disabled = (done + rej) <= 0;
+}
+async function submitComplete() {
+  if (!selectedApprovalId) return;
+  const completed = {}, rejected = {};
+  el('completeSizeGrid').querySelectorAll('input').forEach(i => {
+    const v = parseInt(i.value, 10) || 0;
+    if (v > 0) {
+      const target = i.dataset.kind === 'done' ? completed : rejected;
+      target[i.dataset.size] = (target[i.dataset.size] || 0) + v;
+    }
+  });
+  const cs = Object.entries(completed).map(([size_label, pieces]) => ({ size_label, pieces }));
+  const rs = Object.entries(rejected).map(([size_label, pieces]) => ({ size_label, pieces }));
+  if (!cs.length && !rs.length) return;
+  const cTotal = cs.reduce((a, s) => a + s.pieces, 0);
+  const rTotal = rs.reduce((a, s) => a + s.pieces, 0);
+  let msg = '';
+  if (cTotal) msg += 'Complete ' + fmt(cTotal);
+  if (rTotal) msg += (msg ? ', ' : '') + 'reject ' + fmt(rTotal);
+  if (!confirm(msg + ' for ' + currentLot.lot_no + '?')) return;
+  el('completeBtn').disabled = true;
+  try {
+    await api('POST', BASE + '/event/complete', {
+      parent_event_id: selectedApprovalId,
+      completed_sizes: cs, rejected_sizes: rs,
+      complete_remark: el('completeRemark').value.trim() || null,
+      reject_reason: el('rejectReason').value.trim() || null,
+    });
+    toast('Recorded.', 'success');
+    el('completeRemark').value = ''; el('rejectReason').value = '';
+    await refreshState();
+  } catch (err) { toast('Could not record: ' + err.message, 'error'); el('completeBtn').disabled = false; }
+}
+</script>
+
+<%- include('partials/footer') %>
