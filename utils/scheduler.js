@@ -20,21 +20,24 @@ function startCronJobs() {
     return;
   }
 
-  // Ajio shipment reconciliation: every 30 min.
-  // Pulls Printed/Shipped Ajio orders and upserts AWBs into ee_shipments.
-  cron.schedule(
-    process.env.AJIO_RECON_CRON || '*/30 * * * *',
-    async () => {
-      try {
-        await syncAjioShipments();
-      } catch (err) {
-        console.error('[cron] ajio recon failed:', err);
-      }
-    },
-    { timezone: TZ }
-  );
-
-  console.log(`[cron] scheduled ajio shipment recon (every 30 min, TZ=${TZ})`);
+  // Ajio shipment reconciliation cron — opt-in only. Default OFF because
+  // AWBs now come from the vmsOperator manual upload sheet.
+  if (process.env.AJIO_RECON_ENABLED === '1' || process.env.AJIO_RECON_ENABLED === 'true') {
+    cron.schedule(
+      process.env.AJIO_RECON_CRON || '*/30 * * * *',
+      async () => {
+        try {
+          await syncAjioShipments();
+        } catch (err) {
+          console.error('[cron] ajio recon failed:', err);
+        }
+      },
+      { timezone: TZ }
+    );
+    console.log(`[cron] scheduled ajio shipment recon (every 30 min, TZ=${TZ})`);
+  } else {
+    console.log('[cron] ajio shipment recon DISABLED (set AJIO_RECON_ENABLED=1 to re-enable)');
+  }
 
   // Mail auto-reply: 9 AM and 9 PM IST.
   // Scans inbox, resolves AWB via order_awb_mapping → ee_orders.reference_code,
