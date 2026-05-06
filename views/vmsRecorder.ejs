@@ -1,0 +1,84 @@
+<%- include('partials/header', { pageTitle: 'AWB Video Recorder' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  .vms-content { margin-top: var(--navbar-height); padding: 20px; }
+  .vms-card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 18px; }
+  .vms-video { width: 100%; max-height: 60vh; background: #000; border-radius: 8px; }
+  .vms-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .vms-status { font-size: 0.9rem; }
+  .vms-status.connected { color: #16a34a; }
+  .vms-status.recording { color: #dc2626; font-weight: 600; }
+  .vms-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; }
+  .vms-tag.ok { background: #dcfce7; color: #166534; }
+  .vms-tag.warn { background: #fef9c3; color: #854d0e; }
+  .vms-tag.err { background: #fee2e2; color: #991b1b; }
+  .vms-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .vms-table th, .vms-table td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+  .vms-table th { background: #f8fafc; font-weight: 600; }
+  .vms-progress { height: 6px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .vms-progress-bar { height: 100%; background: #2563eb; width: 0%; transition: width .2s; }
+</style>
+
+<div class="vms-content">
+  <h2 style="margin-top: 0;">📦 AWB Video Recorder</h2>
+
+  <div class="row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+    <!-- LEFT: camera + controls -->
+    <div class="vms-card">
+      <div class="vms-toolbar">
+        <input type="text" id="vmsPacker" class="form-control form-control-sm"
+               value="<%= user.username %>" placeholder="Packer">
+        <input type="text" id="vmsAwb" class="form-control form-control-sm" placeholder="AWB" autofocus>
+        <select id="vmsMarketplace" class="form-select form-select-sm">
+          <option value="Ajio" selected>Ajio</option>
+        </select>
+      </div>
+
+      <video id="vmsVideo" class="vms-video" autoplay playsinline muted></video>
+      <canvas id="vmsCanvas" style="display:none;"></canvas>
+
+      <div class="vms-toolbar" style="margin-top: 10px;">
+        <button id="vmsStart" class="btn btn-success btn-sm">▶ Start</button>
+        <button id="vmsStop" class="btn btn-danger btn-sm" disabled>⏹ Stop</button>
+        <button id="vmsSwitch" class="btn btn-secondary btn-sm">🔄 Switch camera</button>
+        <span id="vmsStatus" class="vms-status">Camera: not connected</span>
+      </div>
+
+      <div id="vmsAwbInfo" style="margin-top:6px; font-size:0.88rem; color:#475569;"></div>
+      <div class="vms-progress" style="margin-top:10px;"><div id="vmsProgress" class="vms-progress-bar"></div></div>
+      <div id="vmsUploadMsg" style="margin-top:6px; font-size:0.85rem;"></div>
+    </div>
+
+    <!-- RIGHT: AWB queue + recent -->
+    <div class="vms-card">
+      <div class="vms-toolbar" style="justify-content: space-between;">
+        <div>
+          <strong>Pending AWBs</strong>
+          <span id="vmsPendingCount" class="vms-tag warn">0</span>
+        </div>
+        <div>
+          <button id="vmsRefresh" class="btn btn-secondary btn-sm">⟳ Refresh</button>
+        </div>
+      </div>
+      <div style="max-height: 32vh; overflow-y: auto;">
+        <table class="vms-table">
+          <thead><tr><th>AWB</th><th>Reference</th><th>Printed</th><th>Status</th></tr></thead>
+          <tbody id="vmsAwbTable"><tr><td colspan="4" style="text-align:center;color:#64748b;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <strong>Recent uploads</strong>
+        <div style="max-height: 24vh; overflow-y: auto; margin-top: 6px;">
+          <table class="vms-table">
+            <thead><tr><th>Time</th><th>AWB</th><th>Packer</th><th>Size</th></tr></thead>
+            <tbody id="vmsRecentTable"><tr><td colspan="4" style="text-align:center;color:#64748b;">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/public/js/vmsRecorder.js"></script>
