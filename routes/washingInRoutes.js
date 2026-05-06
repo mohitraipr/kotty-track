@@ -11,6 +11,7 @@ const { pool } = require('../config/db');
 // If you have authentication middlewares for "washingInMaster" role:
 const { isAuthenticated, isWashingInMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
+const stageEvents = require('../utils/stageEvents');
 
 // ----------------------------------------------
 // MULTER SETUP (for optional image uploads)
@@ -93,6 +94,308 @@ router.get('/', isAuthenticated, isWashingInMaster, async (req, res) => {
     console.error('[ERROR] GET /washingin =>', err);
     req.flash('error', 'Cannot load washingIn dashboard data.');
     return res.redirect('/');
+  }
+});
+
+// ==================================================================
+//   NEW EVENT MODEL — multi-batch approve/complete/reject
+//
+//   Upstream pool = washing's COMPLETE events (legacy fallback to
+//   washing_data). Each approve fires createStagePayment('washing', ...)
+//   for the washing master.
+// ==================================================================
+
+const STAGE_WI = 'washing_in';
+
+async function wiUpstreamSizes(conn, cuttingLotId, lotNo) {
+  const [evRows] = await conn.query(
+    `SELECT s.size_label, COALESCE(SUM(s.pieces),0) AS pieces
+     FROM washing_event_sizes s
+     JOIN washing_events e ON e.id = s.event_id
+     WHERE e.cutting_lot_id = ? AND e.event_type = 'complete'
+     GROUP BY s.size_label`,
+    [cuttingLotId]
+  );
+  const upstream = {};
+  for (const r of evRows) upstream[r.size_label] = Number(r.pieces) || 0;
+
+  if (Object.keys(upstream).length === 0) {
+    const [legRows] = await conn.query(
+      `SELECT wds.size_label, COALESCE(SUM(wds.pieces),0) AS pieces
+       FROM washing_data_sizes wds
+       JOIN washing_data wd ON wd.id = wds.washing_data_id
+       WHERE wd.lot_no = ?
+       GROUP BY wds.size_label`,
+      [lotNo]
+    );
+    for (const r of legRows) upstream[r.size_label] = Number(r.pieces) || 0;
+  }
+
+  const wiSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_WI, cuttingLotId);
+  const out = [];
+  for (const [size_label, washed] of Object.entries(upstream)) {
+    const approved = (wiSizes[size_label] || {}).approved || 0;
+    out.push({
+      size_label,
+      washed_qty: washed,
+      approved_at_stage: approved,
+      available: Math.max(0, washed - approved),
+    });
+  }
+  return out;
+}
+
+async function wiPickWasherForPayment(conn, lotNo) {
+  const [rows] = await conn.query(
+    `SELECT wd.user_id, u.username, wd.sku
+     FROM washing_data wd
+     JOIN users u ON u.id = wd.user_id
+     WHERE wd.lot_no = ?
+     ORDER BY wd.total_pieces DESC, wd.created_at DESC
+     LIMIT 1`,
+    [lotNo]
+  );
+  return rows[0] || null;
+}
+
+router.get('/events', isAuthenticated, isWashingInMaster, (req, res) => {
+  res.render('washingInEvents', { user: req.session.user });
+});
+
+router.get('/event/search', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ lots: [] });
+    const like = `%${q}%`;
+    const [lots] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)
+         AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
+              OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL
+                  AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
+       ORDER BY cl.created_at DESC
+       LIMIT 25`,
+      [like, like, like]
+    );
+    res.json({ lots });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/event/search =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+
+    const [[lot]] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl JOIN users u ON u.id = cl.user_id
+       WHERE cl.id = ?`,
+      [lotId]
+    );
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    const aggregates     = await stageEvents.getStageAggregates(pool, STAGE_WI, lotId);
+    const sizeAggregates = await stageEvents.getStageSizeAggregates(pool, STAGE_WI, lotId);
+    const openApprovals  = await stageEvents.getOpenApprovals(pool, STAGE_WI, lotId);
+    const upstreamSizes  = await wiUpstreamSizes(pool, lotId, lot.lot_no);
+    const upstreamTotal  = upstreamSizes.reduce((a, s) => a + s.available, 0);
+
+    res.json({
+      lot,
+      stage_aggregates: aggregates,
+      stage_size_aggregates: sizeAggregates,
+      upstream_sizes: upstreamSizes,
+      upstream_total_available: upstreamTotal,
+      open_approvals: openApprovals,
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /washingin/event/lot-state =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { cutting_lot_id, sizes, remark } = req.body;
+    const lotId = parseInt(cutting_lot_id, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    if (!Array.isArray(sizes) || !sizes.length) return res.status(400).json({ error: 'sizes is required' });
+
+    const cleanSizes = sizes
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length) return res.status(400).json({ error: 'No positive size quantities provided' });
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [[lot]] = await conn.query(`SELECT lot_no, sku FROM cutting_lots WHERE id = ?`, [lotId]);
+    if (!lot) { await conn.rollback(); return res.status(404).json({ error: 'Lot not found' }); }
+
+    const upstream = await wiUpstreamSizes(conn, lotId, lot.lot_no);
+    const upstreamMap = {};
+    for (const r of upstream) upstreamMap[r.size_label] = r.available;
+    for (const s of cleanSizes) {
+      const avail = upstreamMap[s.size_label] || 0;
+      if (s.pieces > avail) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Size ${s.size_label}: only ${avail} pieces completed by washing not yet taken (requested ${s.pieces})` });
+      }
+    }
+
+    const eventId = await stageEvents.recordEvent(conn, {
+      stage: STAGE_WI, cuttingLotId: lotId, eventType: 'approve',
+      operatorId: userId, sizes: cleanSizes, parentEventId: null,
+      remark: remark ? String(remark).trim() : null,
+    });
+
+    await conn.commit();
+
+    const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
+    try {
+      const washer = await wiPickWasherForPayment(pool, lot.lot_no);
+      if (washer) {
+        await createStagePayment('washing', {
+          lot_no: lot.lot_no, sku: washer.sku || lot.sku, qty: totalPieces,
+          user_id: washer.user_id, username: washer.username,
+        });
+      }
+    } catch (payErr) {
+      console.error('[WARN] /washingin/event/approve washing payment failed:', payErr.message);
+    }
+
+    res.json({ success: true, event_id: eventId, total_pieces: totalPieces, sizes: cleanSizes });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /washingin/event/approve =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+    const parentId = parseInt(parent_event_id, 10);
+    if (!Number.isFinite(parentId) || parentId <= 0) return res.status(400).json({ error: 'Invalid parent_event_id' });
+
+    const cleanCompleted = (Array.isArray(completed_sizes) ? completed_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+
+    if (!cleanCompleted.length && !cleanRejected.length) {
+      return res.status(400).json({ error: 'Provide completed and/or rejected sizes' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const { events, eventSizes } = stageEvents.tablesFor(STAGE_WI);
+
+    const [[parent]] = await conn.query(
+      `SELECT id, cutting_lot_id, event_type, pieces FROM ${events} WHERE id = ? FOR UPDATE`,
+      [parentId]
+    );
+    if (!parent || parent.event_type !== 'approve') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'parent_event_id must reference an approve event' });
+    }
+
+    const [parentSizesRows] = await conn.query(
+      `SELECT size_label, pieces FROM ${eventSizes} WHERE event_id = ?`, [parentId]
+    );
+    const parentSizeMap = {};
+    for (const r of parentSizesRows) parentSizeMap[r.size_label] = Number(r.pieces) || 0;
+
+    const [childSizesRows] = await conn.query(
+      `SELECT s.size_label, e.event_type, SUM(s.pieces) AS pieces
+       FROM ${events} e JOIN ${eventSizes} s ON s.event_id = e.id
+       WHERE e.parent_event_id = ?
+       GROUP BY s.size_label, e.event_type`,
+      [parentId]
+    );
+    const childSizeMap = {};
+    for (const r of childSizesRows) {
+      if (!childSizeMap[r.size_label]) childSizeMap[r.size_label] = { complete: 0, reject: 0 };
+      childSizeMap[r.size_label][r.event_type] = Number(r.pieces) || 0;
+    }
+
+    const allLabels = new Set([
+      ...cleanCompleted.map(s => s.size_label),
+      ...cleanRejected.map(s => s.size_label),
+    ]);
+    for (const label of allLabels) {
+      const approved = parentSizeMap[label] || 0;
+      const prev = childSizeMap[label] || { complete: 0, reject: 0 };
+      const newC = (cleanCompleted.find(s => s.size_label === label) || {}).pieces || 0;
+      const newR = (cleanRejected.find(s => s.size_label === label) || {}).pieces || 0;
+      if (prev.complete + prev.reject + newC + newR > approved) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Size ${label}: total complete+reject exceeds approved ${approved}` });
+      }
+    }
+
+    let completeEventId = null, rejectEventId = null;
+    if (cleanCompleted.length) {
+      completeEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_WI, cuttingLotId: parent.cutting_lot_id, eventType: 'complete',
+        operatorId: userId, sizes: cleanCompleted, parentEventId: parentId,
+        remark: complete_remark ? String(complete_remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_WI, cuttingLotId: parent.cutting_lot_id, eventType: 'reject',
+        operatorId: userId, sizes: cleanRejected, parentEventId: parentId,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
+
+    if (cleanCompleted.length) {
+      const [[lot]] = await conn.query(`SELECT lot_no, sku FROM cutting_lots WHERE id = ?`, [parent.cutting_lot_id]);
+      const totalCompleted = cleanCompleted.reduce((a, s) => a + s.pieces, 0);
+      const [adResult] = await conn.query(
+        `INSERT INTO washing_in_data (user_id, lot_no, sku, total_pieces, remark, image_url, created_at)
+         VALUES (?, ?, ?, ?, ?, NULL, NOW())`,
+        [userId, lot.lot_no, lot.sku, totalCompleted, complete_remark || null]
+      );
+      const widId = adResult.insertId;
+      for (const s of cleanCompleted) {
+        await conn.query(
+          `INSERT INTO washing_in_data_sizes (washing_in_data_id, size_label, pieces, created_at)
+           VALUES (?, ?, ?, NOW())`,
+          [widId, s.size_label, s.pieces]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.json({
+      success: true,
+      complete_event_id: completeEventId, reject_event_id: rejectEventId,
+      completed_total: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /washingin/event/complete =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
