@@ -13,6 +13,15 @@
 
 const STAGES = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
 
+// SQL enum values are present-tense ('approve','complete','reject') but the
+// aggregate object uses past-tense keys ('approved','completed','rejected').
+// Map between them when reading rows back.
+const EVENT_TYPE_TO_KEY = {
+  approve:  'approved',
+  complete: 'completed',
+  reject:   'rejected',
+};
+
 function tablesFor(stage) {
   if (!STAGES.includes(stage)) {
     throw new Error(`Unknown stage: ${stage}`);
@@ -79,7 +88,8 @@ async function getStageSizeAggregates(conn, stage, cuttingLotId) {
     const key = String(row.size_label || '').trim().toUpperCase();
     if (!key) continue;
     if (!map[key]) map[key] = { approved: 0, completed: 0, rejected: 0, inline: 0 };
-    map[key][row.event_type] = (map[key][row.event_type] || 0) + (Number(row.pieces) || 0);
+    const k = EVENT_TYPE_TO_KEY[row.event_type];
+    if (k) map[key][k] = (map[key][k] || 0) + (Number(row.pieces) || 0);
   }
   for (const key of Object.keys(map)) {
     map[key].inline = map[key].approved - map[key].completed - map[key].rejected;
@@ -129,7 +139,10 @@ async function getOpenApprovals(conn, stage, cuttingLotId) {
   for (const c of children) {
     const id = c.parent_event_id;
     if (!childMap[id]) childMap[id] = { completed: 0, rejected: 0 };
-    childMap[id][c.event_type] = Number(c.pieces) || 0;
+    const k = EVENT_TYPE_TO_KEY[c.event_type];
+    if (k && (k === 'completed' || k === 'rejected')) {
+      childMap[id][k] = Number(c.pieces) || 0;
+    }
   }
 
   // Pull size breakdowns per approve in one round trip
