@@ -265,6 +265,14 @@ app.use('/admin/ajio-recon', ajioReconRoutes);
 const vmsRoutes = require('./routes/vmsRoutes');
 app.use('/vms', vmsRoutes);
 
+// VMS status report
+const vmsReportRoutes = require('./routes/vmsReportRoutes');
+app.use('/vms-report', vmsReportRoutes);
+
+// Mail auto-reply (admin manual trigger + stats)
+const mailAutoReplyRoutes = require('./routes/mailAutoReplyRoutes');
+app.use('/admin/mail-auto-reply', mailAutoReplyRoutes);
+
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
