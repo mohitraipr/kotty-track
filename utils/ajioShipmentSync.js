@@ -30,6 +30,10 @@ const WAREHOUSES = [
 // in the date window, so we send one pass per chunk and rely on
 // `awb_number != null` (handled in extractAwb) to keep only relevant rows.
 const STATUS_FILTERS = ['Printed'];
+
+// AJIO Dropship marketplace_id (seen in tenant data). Filtering server-side
+// drops 80-95% of responses since most orders aren't Ajio.
+const AJIO_MARKETPLACE_ID = parseInt(process.env.AJIO_MARKETPLACE_ID || '578', 10);
 const LOOKBACK_DAYS = parseInt(process.env.AJIO_RECON_LOOKBACK_DAYS || '7', 10);
 
 // Token cache per warehouse (mirrors easyecomReturnsClient pattern)
@@ -84,6 +88,9 @@ async function fetchOrdersPage(token, { status, fromDate, toDate, nextUrl }) {
       order_status: status,
       start_date: fmtDate(fromDate),
       end_date: fmtDate(toDate),
+      // Server-side filter — see AJIO_MARKETPLACE_ID. If EasyEcom ignores
+      // this param too, we still filter client-side via isAjio().
+      marketplace_id: AJIO_MARKETPLACE_ID,
     };
     resp = await axios.get(url, { params, headers, timeout: 60000 });
   }
