@@ -26,7 +26,10 @@ const WAREHOUSES = [
   },
 ];
 
-const STATUS_FILTERS = ['Printed', 'Shipped']; // statuses that can carry an AWB
+// EasyEcom currently ignores the order_status filter and returns all orders
+// in the date window, so we send one pass per chunk and rely on
+// `awb_number != null` (handled in extractAwb) to keep only relevant rows.
+const STATUS_FILTERS = ['Printed'];
 const LOOKBACK_DAYS = parseInt(process.env.AJIO_RECON_LOOKBACK_DAYS || '7', 10);
 
 // Token cache per warehouse (mirrors easyecomReturnsClient pattern)
@@ -59,24 +62,26 @@ function fmtDate(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-// EasyEcom V2 list endpoint. EasyEcom enforces a max 7-day window per call
-// and returns errors in the body shape { code, message, data }.
-async function fetchOrdersPage(token, { status, fromDate, toDate, cursor }) {
-  const url = `${EASYECOM_API_BASE}/orders/V2/getAllOrders`;
-  const params = {
-    order_status: status,
-    start_date: fmtDate(fromDate),
-    end_date: fmtDate(toDate),
-  };
-  if (cursor) params.cursor = cursor;
+// EasyEcom V2 list endpoint. EasyEcom enforces a max 7-day window per call,
+// returns errors in the body shape { code, message, data }, and paginates
+// via a `nextUrl` field (a fully-formed URL) — not a cursor.
+async function fetchOrdersPage(token, { status, fromDate, toDate, nextUrl }) {
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  const { data } = await axios.get(url, {
-    params,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    timeout: 60000,
-  });
+  let resp;
+  if (nextUrl) {
+    resp = await axios.get(nextUrl, { headers, timeout: 60000 });
+  } else {
+    const url = `${EASYECOM_API_BASE}/orders/V2/getAllOrders`;
+    const params = {
+      order_status: status,
+      start_date: fmtDate(fromDate),
+      end_date: fmtDate(toDate),
+    };
+    resp = await axios.get(url, { params, headers, timeout: 60000 });
+  }
+  const data = resp.data;
 
-  // EasyEcom signals errors via body.code rather than HTTP status.
   if (data && typeof data.code === 'number' && data.code >= 400) {
     throw new Error(`EasyEcom ${data.code}: ${data.message}`);
   }
@@ -85,10 +90,10 @@ async function fetchOrdersPage(token, { status, fromDate, toDate, cursor }) {
   const orders = Array.isArray(payload)
     ? payload
     : (payload.orders || payload.data || payload.results || []);
-  const nextCursor = (payload && !Array.isArray(payload))
-    ? (payload.next_cursor || payload.cursor || payload.nextCursor || null)
+  const nextUrlOut = (payload && !Array.isArray(payload))
+    ? (payload.nextUrl || payload.next_url || null)
     : null;
-  return { orders: Array.isArray(orders) ? orders : [], nextCursor };
+  return { orders: Array.isArray(orders) ? orders : [], nextUrl: nextUrlOut };
 }
 
 // Build ≤7-day chunks counting backwards from `to`. Last chunk may be shorter.
@@ -219,7 +224,7 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
         fromDate: fmtDate(from), toDate: fmtDate(to),
         step: stepIdx, totalSteps,
       });
-      let cursor = null;
+      let nextUrl = null;
       let pages = 0;
       let chunkOrders = 0;
       let chunkAjio = 0;
@@ -227,7 +232,7 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
       do {
         let page;
         try {
-          page = await fetchOrdersPage(token, { status, fromDate: from, toDate: to, cursor });
+          page = await fetchOrdersPage(token, { status, fromDate: from, toDate: to, nextUrl });
         } catch (err) {
           const msg = err.response?.data || err.message;
           console.error(`[ajioRecon] ${wh.key} ${status} ${fmtDate(from)}..${fmtDate(to)} error:`, msg);
@@ -247,10 +252,14 @@ async function syncWarehouse(wh, { lookbackDays = LOOKBACK_DAYS, onProgress } = 
             rowsToUpsert.push(row);
           }
         }
-        cursor = page.nextCursor;
+        nextUrl = page.nextUrl;
         pages++;
-        if (pages > 200) break; // safety cap
-      } while (cursor);
+        // Emit per-page progress so long chunks stay visible
+        if (pages > 1 && pages % 5 === 0) {
+          emit({ kind: 'chunk_progress', warehouse: wh.key, status, pages, chunkOrders, chunkAwb });
+        }
+        if (pages > 500) break; // safety cap (~25k orders)
+      } while (nextUrl);
       emit({
         kind: 'chunk_done', warehouse: wh.key, status,
         orders: chunkOrders, ajio: chunkAjio, withAwb: chunkAwb,

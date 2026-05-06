@@ -71,6 +71,32 @@
   </div>
 
   <div class="ar-section">
+    <h3>Debug — peek at raw EasyEcom order</h3>
+    <div class="ar-toolbar" style="padding:12px;">
+      <select id="arDbgWh" class="form-select form-select-sm" style="width:140px;">
+        <option value="faridabad">faridabad</option>
+        <option value="delhi" selected>delhi</option>
+      </select>
+      <select id="arDbgStatus" class="form-select form-select-sm" style="width:140px;">
+        <option value="Printed" selected>Printed</option>
+        <option value="Shipped">Shipped</option>
+        <option value="Open">Open</option>
+        <option value="Confirmed">Confirmed</option>
+        <option value="Ready to dispatch">Ready to dispatch</option>
+      </select>
+      <select id="arDbgDays" class="form-select form-select-sm" style="width:140px;">
+        <option value="3">last 3 days</option>
+        <option value="7" selected>last 7 days</option>
+      </select>
+      <label style="font-size:0.85rem;"><input type="checkbox" id="arDbgAjio" checked> Ajio only</label>
+      <button id="arDbgRun" class="btn btn-secondary btn-sm">🔍 Inspect one order</button>
+      <span id="arDbgInfo" style="font-size:0.85rem; color:#475569;"></span>
+    </div>
+    <div id="arDbgKeys" style="margin:6px 0; font-size:0.85rem; color:#0f172a;"></div>
+    <pre id="arDbgSample" class="ar-log" style="max-height:40vh;"></pre>
+  </div>
+
+  <div class="ar-section">
     <h3>Most recent shipments</h3>
     <div style="overflow-x:auto;">
       <table class="ar-table">
@@ -232,6 +258,42 @@
   });
 
   els.refreshRecent.addEventListener('click', refreshRecent);
+
+  // Debug panel
+  const dbg = {
+    wh: $('arDbgWh'), status: $('arDbgStatus'), days: $('arDbgDays'), ajio: $('arDbgAjio'),
+    run: $('arDbgRun'), info: $('arDbgInfo'), keys: $('arDbgKeys'), sample: $('arDbgSample'),
+  };
+  dbg.run.addEventListener('click', async () => {
+    dbg.info.textContent = 'fetching…';
+    dbg.sample.textContent = '';
+    dbg.keys.textContent = '';
+    try {
+      const r = await fetch('/admin/ajio-recon/debug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          warehouse: dbg.wh.value,
+          status: dbg.status.value,
+          lookbackDays: parseInt(dbg.days.value, 10),
+          ajioOnly: dbg.ajio.checked,
+        }),
+      });
+      const j = await r.json();
+      const a = (j.attempts || []).find((x) => x.status === 200) || (j.attempts || [])[0];
+      if (!a) { dbg.info.textContent = 'no response'; return; }
+      dbg.info.textContent = `URL=${a.url} | orders=${a.ordersCount} | ajio=${a.ajioCount} | bodyCode=${a.bodyCode || 'ok'}`;
+      dbg.keys.textContent = a.firstOrderKeys
+        ? 'Top-level keys: ' + a.firstOrderKeys.join(', ')
+        : (a.bodyMessage || 'no first order');
+      dbg.sample.textContent = a.firstOrderSample
+        ? JSON.stringify(JSON.parse(a.firstOrderSample), null, 2)
+        : JSON.stringify(j, null, 2);
+    } catch (err) {
+      dbg.info.textContent = 'error: ' + err.message;
+    }
+  });
 
   // Resume any in-flight job on page load
   poll();
