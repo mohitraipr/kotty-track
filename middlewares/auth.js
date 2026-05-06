@@ -190,14 +190,21 @@ function isVideoCreator(req, res, next) {
     return res.redirect('/login');
   }
   const username = (user.username || '').toLowerCase();
-  const role = user.roleName;
-  if (role === 'videocreator' || role === 'videofinder' || role === 'vmsoperator' || username === 'mohitoperator') {
+  const role = (user.roleName || '').toLowerCase();
+  if (role === 'videocreator' || role === 'videofinder' || role === 'vmsoperator' ||
+      role === 'admin' || username === 'mohitoperator') {
     return next();
   }
   const wantsJson = req.headers.accept?.includes('application/json') || req.xhr;
   if (wantsJson) return res.status(403).json({ error: 'Permission denied' });
-  req.flash('error', 'You do not have permission to access the VMS recorder.');
-  return res.redirect('/');
+  return res.status(403).send(
+    `<div style="font-family:system-ui;padding:40px;max-width:600px;margin:60px auto;text-align:center;">
+       <h2>403 — Permission denied</h2>
+       <p>The <code>videocreator</code>, <code>videofinder</code>, or <code>vmsoperator</code> role is required for this page.</p>
+       <p style="color:#64748b;font-size:0.9rem;">You're logged in as <strong>${user.username}</strong>${role ? ` (${role})` : ''}.</p>
+       <p><a href="/">Back to dashboard</a></p>
+     </div>`
+  );
 }
 
 // vmsOperator: uploads AWBs, sees mail/video dashboards.
@@ -208,14 +215,21 @@ function isVmsOperator(req, res, next) {
     return res.redirect('/login');
   }
   const username = (user.username || '').toLowerCase();
-  const role = user.roleName;
-  if (role === 'vmsoperator' || username === 'mohitoperator') {
+  const role = (user.roleName || '').toLowerCase();
+  if (role === 'vmsoperator' || username === 'mohitoperator' || role === 'admin') {
     return next();
   }
   const wantsJson = req.headers.accept?.includes('application/json') || req.xhr;
   if (wantsJson) return res.status(403).json({ error: 'Permission denied' });
-  req.flash('error', 'You do not have permission to access the VMS Operator page.');
-  return res.redirect('/');
+  // Render a 403 directly instead of redirecting — prevents loops with /login
+  return res.status(403).send(
+    `<div style="font-family:system-ui;padding:40px;max-width:600px;margin:60px auto;text-align:center;">
+       <h2>403 — Permission denied</h2>
+       <p>The <code>vmsoperator</code> role is required for this page.</p>
+       <p style="color:#64748b;font-size:0.9rem;">You're logged in as <strong>${user.username}</strong>${role ? ` (${role})` : ''}.</p>
+       <p><a href="/">Back to dashboard</a></p>
+     </div>`
+  );
 }
 
 function isProductViewer(req, res, next) {
