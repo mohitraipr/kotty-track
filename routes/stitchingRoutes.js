@@ -600,6 +600,136 @@ router.get('/event/export', isAuthenticated, isStitchingMaster, async (req, res)
   }
 });
 
+// GET /stitchingdashboard/event/payments
+// Returns current operator's stage_payments rows for stage='stitching'
+// in the chosen window, plus summary totals.
+router.get('/event/payments', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const status = String(req.query.status || 'all');
+    const allowedStatus = new Set(['all', 'pending', 'paid', 'cancelled']);
+    if (!allowedStatus.has(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    const params = [userId, days];
+    let statusFilter = '';
+    if (status !== 'all') { statusFilter = 'AND status = ?'; params.push(status); }
+
+    const [rows] = await pool.query(
+      `SELECT id, lot_no, sku, qty, base_rate, extra_amount, total_amount,
+              rate_configured, status, paid_on, created_at, payment_remark
+       FROM stage_payments
+       WHERE user_id = ?
+         AND stage = 'stitching'
+         AND created_at >= (NOW() - INTERVAL ? DAY)
+         ${statusFilter}
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    // Summary totals
+    const [[summary]] = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status='pending' THEN total_amount ELSE 0 END), 0)   AS pending_amount,
+         COALESCE(SUM(CASE WHEN status='paid'    THEN total_amount ELSE 0 END), 0)   AS paid_amount,
+         COALESCE(SUM(CASE WHEN status='pending' THEN qty ELSE 0 END), 0)            AS pending_qty,
+         COALESCE(SUM(CASE WHEN status='paid'    THEN qty ELSE 0 END), 0)            AS paid_qty,
+         COUNT(*)                                                                     AS total_rows
+       FROM stage_payments
+       WHERE user_id = ? AND stage = 'stitching'
+         AND created_at >= (NOW() - INTERVAL ? DAY)`,
+      [userId, days]
+    );
+
+    res.json({
+      payments: rows,
+      summary: {
+        pending_amount: Number(summary.pending_amount) || 0,
+        paid_amount:    Number(summary.paid_amount)    || 0,
+        pending_qty:    Number(summary.pending_qty)    || 0,
+        paid_qty:       Number(summary.paid_qty)       || 0,
+        total_rows:     Number(summary.total_rows)     || 0,
+      },
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /event/payments =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /stitchingdashboard/event/payments/export
+router.get('/event/payments/export', isAuthenticated, isStitchingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username || 'operator';
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const status = String(req.query.status || 'all');
+    const allowedStatus = new Set(['all', 'pending', 'paid', 'cancelled']);
+    if (!allowedStatus.has(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    const params = [userId, days];
+    let statusFilter = '';
+    if (status !== 'all') { statusFilter = 'AND status = ?'; params.push(status); }
+
+    const [rows] = await pool.query(
+      `SELECT lot_no, sku, qty, base_rate, extra_amount, total_amount,
+              rate_configured, status, paid_on, created_at, payment_remark
+       FROM stage_payments
+       WHERE user_id = ?
+         AND stage = 'stitching'
+         AND created_at >= (NOW() - INTERVAL ? DAY)
+         ${statusFilter}
+       ORDER BY created_at DESC`,
+      params
+    );
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Kotty Track';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Stitching Payments');
+    ws.columns = [
+      { header: 'Created',     key: 'created',  width: 20 },
+      { header: 'Lot No',      key: 'lot',      width: 14 },
+      { header: 'SKU',         key: 'sku',      width: 22 },
+      { header: 'Pieces',      key: 'qty',      width: 10 },
+      { header: 'Base Rate',   key: 'base',     width: 12 },
+      { header: 'Extras',      key: 'extras',   width: 12 },
+      { header: 'Total ₹',     key: 'total',    width: 14 },
+      { header: 'Rate Set?',   key: 'rateset',  width: 10 },
+      { header: 'Status',      key: 'status',   width: 12 },
+      { header: 'Paid On',     key: 'paid',     width: 20 },
+      { header: 'Remark',      key: 'remark',   width: 30 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    rows.forEach(r => {
+      ws.addRow({
+        created: r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        lot:     r.lot_no,
+        sku:     r.sku,
+        qty:     Number(r.qty) || 0,
+        base:    Number(r.base_rate) || 0,
+        extras:  Number(r.extra_amount) || 0,
+        total:   Number(r.total_amount) || 0,
+        rateset: r.rate_configured ? 'YES' : 'NO',
+        status:  r.status,
+        paid:    r.paid_on ? new Date(r.paid_on).toISOString().replace('T', ' ').slice(0, 19) : '',
+        remark:  r.payment_remark || '',
+      });
+    });
+
+    const fname = `stitching_payments_${username}_${days}d_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /event/payments/export =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /stitchingdashboard/event/search?q=...
 // Search for a lot by lot_no, sku, or cutting remark. Unlike the old
 // /available-lots endpoint, this does NOT filter by "fully consumed"
