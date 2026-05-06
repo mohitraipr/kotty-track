@@ -234,4 +234,63 @@ async function syncAjioShipments(opts = {}) {
   return { tookMs, results };
 }
 
-module.exports = { syncAjioShipments, syncWarehouse };
+// Debug helper: hit EasyEcom once for one warehouse + status, return the
+// raw response so we can see the actual response shape.
+async function debugFetchOnce({ warehouse = 'faridabad', status = 'Printed', lookbackDays = 30, urlOverride, method = 'GET' } = {}) {
+  const wh = WAREHOUSES.find((w) => w.key === warehouse);
+  if (!wh) throw new Error(`unknown warehouse: ${warehouse}`);
+  const token = await getToken(wh);
+  if (!token) return { error: 'no_token', warehouse };
+
+  const toDate = new Date();
+  const fromDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
+  const candidates = urlOverride
+    ? [urlOverride]
+    : [
+        `${EASYECOM_API_BASE}/orders/V2/getAllOrders`,
+        `${EASYECOM_API_BASE}/Orders/V2/getAllOrders`,
+        `${EASYECOM_API_BASE}/orders/getAllOrders`,
+        `${EASYECOM_API_BASE}/orders`,
+      ];
+
+  const params = {
+    order_status: status,
+    status,
+    start_date: fmtDate(fromDate),
+    end_date: fmtDate(toDate),
+    from_date: fmtDate(fromDate),
+    to_date: fmtDate(toDate),
+  };
+
+  const attempts = [];
+  for (const url of candidates) {
+    try {
+      const config = {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        timeout: 30000,
+      };
+      const resp = method === 'POST'
+        ? await axios.post(url, params, config)
+        : await axios.get(url, { ...config, params });
+      attempts.push({
+        url,
+        method,
+        status: resp.status,
+        sentParams: method === 'POST' ? params : params,
+        responseKeys: Object.keys(resp.data || {}),
+        sample: JSON.stringify(resp.data).slice(0, 4000),
+      });
+    } catch (err) {
+      attempts.push({
+        url,
+        method,
+        error: err.message,
+        responseStatus: err.response?.status,
+        responseData: err.response?.data ? JSON.stringify(err.response.data).slice(0, 1500) : null,
+      });
+    }
+  }
+  return { warehouse, status, fromDate: fmtDate(fromDate), toDate: fmtDate(toDate), attempts };
+}
+
+module.exports = { syncAjioShipments, syncWarehouse, debugFetchOnce };
