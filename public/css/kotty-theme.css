@@ -1055,3 +1055,65 @@ h1, h2, h3, h4, h5, h6 {
     font-size: var(--text-2xl);
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   Cutting remark — a "paper memo" pinned to the lot card
+   Shown on every stage's selected-lot view so operators see the
+   note from the cutting team before they pick quantities.
+   ────────────────────────────────────────────────────────────────── */
+.cutting-remark-note {
+  display: flex;
+  gap: 0.625rem;
+  align-items: baseline;
+  margin: 0.875rem 0 1.125rem;
+  padding: 0.625rem 0.875rem 0.625rem 1rem;
+  background: linear-gradient(135deg, var(--cream) 0%, var(--terracotta-bg) 100%);
+  border-left: 3px solid var(--terracotta);
+  border-radius: 2px 6px 6px 2px;
+  font-size: var(--text-sm);
+  position: relative;
+  box-shadow:
+    var(--shadow-xs),
+    inset 0 0 0 1px rgba(196, 92, 58, 0.05);
+}
+
+/* Staple mark — the only physical-world flourish.
+   Tiny terracotta bar nicked into the top-left edge,
+   slightly rotated so it reads as "pinned by hand". */
+.cutting-remark-note::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 14px;
+  width: 14px;
+  height: 4px;
+  background: var(--terracotta-dark);
+  border-radius: 1px;
+  opacity: 0.7;
+  transform: rotate(-8deg);
+}
+
+.cutting-remark-note__label {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--text-xs);
+  color: var(--terracotta-dark);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.cutting-remark-note__label::after {
+  content: ' —';
+  color: var(--terracotta);
+  margin-left: 0.125rem;
+}
+
+.cutting-remark-note__text {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-weight: 450;
+  flex: 1 1 auto;
+  word-break: break-word;
+}

@@ -212,6 +212,10 @@
           <div class="lot-title"><span class="lot-number" id="lotNo">-</span><span class="lot-badge">DENIM</span></div>
           <div class="lot-meta"><span id="lotSku">-</span> &bull; Washed by <span id="lotMaster">-</span></div>
         </div>
+        <div class="cutting-remark-note" id="cuttingRemarkNote" style="display: none;">
+          <span class="cutting-remark-note__label">From Cutting</span>
+          <span class="cutting-remark-note__text" id="cuttingRemarkText"></span>
+        </div>
         <div class="sizes-grid" id="sizesGrid"></div>
         <div class="submit-section">
           <div class="total-row"><span class="total-label">Total</span><span class="total-value"><span id="totalQty">0</span> pcs</span></div>
@@ -360,6 +364,15 @@ async function displaySelectedLot() {
   document.getElementById('lotNo').textContent = currentLot.lot_no.toUpperCase();
   document.getElementById('lotSku').textContent = currentLot.sku;
   document.getElementById('lotMaster').textContent = currentLot.washing_master || '-';
+
+  var remarkNote = document.getElementById('cuttingRemarkNote');
+  if (currentLot.cutting_remark) {
+    document.getElementById('cuttingRemarkText').textContent = currentLot.cutting_remark;
+    remarkNote.style.display = 'flex';
+  } else {
+    remarkNote.style.display = 'none';
+  }
+
   var sizeRes = await fetch('/washingin/available-lot-sizes/' + currentLot.id);
   var sizes = await sizeRes.json();
   currentLot.sizes = sizes;

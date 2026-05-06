@@ -595,6 +595,21 @@ document.addEventListener('DOMContentLoaded', function() {
       header.appendChild(sourceSpan);
       card.appendChild(header);
 
+      if (lot.cutting_remark) {
+        const remarkNote = document.createElement('div');
+        remarkNote.className = 'cutting-remark-note';
+        remarkNote.style.display = 'flex';
+        const remarkLabel = document.createElement('span');
+        remarkLabel.className = 'cutting-remark-note__label';
+        remarkLabel.textContent = 'From Cutting';
+        const remarkBody = document.createElement('span');
+        remarkBody.className = 'cutting-remark-note__text';
+        remarkBody.textContent = lot.cutting_remark;
+        remarkNote.appendChild(remarkLabel);
+        remarkNote.appendChild(remarkBody);
+        card.appendChild(remarkNote);
+      }
+
       const remarkInput = document.createElement('input');
       remarkInput.type = 'text';
       remarkInput.id = 'remarkInput';

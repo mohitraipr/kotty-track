@@ -594,6 +594,10 @@
             <span id="lotSku">-</span> &bull; Assembly by <span id="lotMaster">-</span>
           </div>
         </div>
+        <div class="cutting-remark-note" id="cuttingRemarkNote" style="display: none;">
+          <span class="cutting-remark-note__label">From Cutting</span>
+          <span class="cutting-remark-note__text" id="cuttingRemarkText"></span>
+        </div>
         <div class="sizes-grid" id="sizesGrid"></div>
         <div class="submit-section">
           <div class="total-row">
@@ -739,6 +743,15 @@ async function displaySelectedLot() {
   document.getElementById('lotNo').textContent = currentLot.lot_no.toUpperCase();
   document.getElementById('lotSku').textContent = currentLot.sku;
   document.getElementById('lotMaster').textContent = currentLot.assembly_master || '-';
+
+  const remarkNote = document.getElementById('cuttingRemarkNote');
+  if (currentLot.cutting_remark) {
+    document.getElementById('cuttingRemarkText').textContent = currentLot.cutting_remark;
+    remarkNote.style.display = 'flex';
+  } else {
+    remarkNote.style.display = 'none';
+  }
+
   const sizeRes = await fetch('/washingdashboard/available-lot-sizes/' + currentLot.id);
   const sizes = await sizeRes.json();
   currentLot.sizes = sizes;
