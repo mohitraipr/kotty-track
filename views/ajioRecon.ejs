@@ -1,0 +1,239 @@
+<%- include('partials/header', { pageTitle: 'Ajio Shipment Recon' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  .ar-content { margin-top: var(--navbar-height); padding: 22px; }
+  .ar-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  .ar-card { background: #fff; padding: 16px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .ar-card .label { font-size: 0.85rem; color: #64748b; }
+  .ar-card .value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; }
+  .ar-card.green .value { color: #16a34a; }
+  .ar-card.blue  .value { color: #2563eb; }
+  .ar-card.amber .value { color: #ca8a04; }
+  .ar-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; background:#fff; padding:14px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .ar-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; font-size: 0.88rem; }
+  .ar-table th, .ar-table td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+  .ar-table th { background: #f8fafc; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; }
+  .pill.gray   { background: #f1f5f9; color: #475569; }
+  .pill.green  { background: #dcfce7; color: #166534; }
+  .pill.blue   { background: #dbeafe; color: #1d4ed8; }
+  .pill.amber  { background: #fef9c3; color: #854d0e; }
+  .pill.red    { background: #fee2e2; color: #991b1b; }
+  .ar-log { background: #0f172a; color: #cbd5e1; padding: 12px; border-radius: 8px; font-family: ui-monospace, monospace; font-size: 0.8rem; max-height: 32vh; overflow-y: auto; white-space: pre-wrap; }
+  .ar-progress { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .ar-progress-bar { height: 100%; background: #2563eb; width: 0%; transition: width .3s; }
+  .ar-section { margin-top: 18px; }
+  .ar-section h3 { margin: 0 0 8px; font-size: 1rem; color: #0f172a; }
+</style>
+
+<div class="ar-content">
+  <h2 style="margin-top:0;">📡 Ajio Shipment Reconciliation</h2>
+
+  <div class="ar-cards">
+    <div class="ar-card blue">
+      <div class="label">Total Ajio shipments</div>
+      <div class="value"><%= summary.total || 0 %></div>
+    </div>
+    <div class="ar-card green">
+      <div class="label">From reconcile (cron pull)</div>
+      <div class="value"><%= summary.from_reconcile || 0 %></div>
+    </div>
+    <div class="ar-card amber">
+      <div class="label">From webhook</div>
+      <div class="value"><%= summary.from_webhook || 0 %></div>
+    </div>
+    <div class="ar-card">
+      <div class="label">Last update</div>
+      <div class="value" style="font-size:1rem;"><%= summary.last_update ? new Date(summary.last_update).toLocaleString() : 'Never' %></div>
+    </div>
+  </div>
+
+  <div class="ar-toolbar">
+    <strong>Run reconciliation:</strong>
+    <select id="arDays" class="form-select form-select-sm" style="width:160px;">
+      <% [3,7,14,21,30].forEach(d => { %>
+        <option value="<%= d %>" <%= d === 7 ? 'selected' : '' %>>last <%= d %> days</option>
+      <% }) %>
+    </select>
+    <button id="arRun" class="btn btn-primary btn-sm">▶ Run</button>
+    <span id="arState" class="pill gray">idle</span>
+    <span style="flex:1;"></span>
+    <button id="arRefreshRecent" class="btn btn-secondary btn-sm">⟳ Refresh recent</button>
+  </div>
+
+  <div class="ar-progress"><div id="arBar" class="ar-progress-bar"></div></div>
+  <div id="arSummary" style="margin-top:6px; font-size:0.88rem; color:#475569;"></div>
+
+  <div class="ar-section">
+    <h3>Run log</h3>
+    <div id="arLog" class="ar-log">Run a reconciliation to see live progress here.</div>
+  </div>
+
+  <div class="ar-section">
+    <h3>Most recent shipments</h3>
+    <div style="overflow-x:auto;">
+      <table class="ar-table">
+        <thead>
+          <tr>
+            <th>AWB</th><th>Order ID</th><th>Ajio Order #</th><th>Status</th>
+            <th>Courier</th><th>WH</th><th>Label printed</th><th>Source</th><th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="arRecent">
+          <% recent.forEach(r => { %>
+            <tr>
+              <td><%= r.awb %></td>
+              <td><%= r.order_id %></td>
+              <td><%= r.reference_code || '-' %></td>
+              <td><%= r.current_status || '-' %></td>
+              <td><%= r.courier_name || '-' %></td>
+              <td><%= r.warehouse_id || '-' %></td>
+              <td><%= r.label_printed_at ? new Date(r.label_printed_at).toLocaleString() : '-' %></td>
+              <td><span class="pill <%= r.source === 'reconcile' ? 'green' : (r.source === 'webhook' ? 'amber' : 'gray') %>"><%= r.source %></span></td>
+              <td><%= r.updated_at ? new Date(r.updated_at).toLocaleString() : '-' %></td>
+            </tr>
+          <% }) %>
+          <% if (!recent.length) { %>
+            <tr><td colspan="9" style="text-align:center;color:#64748b;">No shipments yet — run a reconciliation.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    days: $('arDays'),
+    run: $('arRun'),
+    state: $('arState'),
+    bar: $('arBar'),
+    log: $('arLog'),
+    summary: $('arSummary'),
+    refreshRecent: $('arRefreshRecent'),
+    recent: $('arRecent'),
+  };
+  let pollTimer = null;
+  let lastEventCount = 0;
+
+  function setState(state) {
+    const cls = state === 'running' ? 'blue' : state === 'done' ? 'green' : state === 'error' ? 'red' : 'gray';
+    els.state.className = 'pill ' + cls;
+    els.state.textContent = state;
+    els.run.disabled = state === 'running';
+  }
+
+  function fmtEvent(e) {
+    const ts = new Date(e.t).toLocaleTimeString();
+    if (e.kind === 'run_start') return `[${ts}] run_start lookback=${e.lookbackDays}d`;
+    if (e.kind === 'chunk_start') return `[${ts}] ${e.warehouse}/${e.status} ${e.fromDate} → ${e.toDate} (step ${e.step}/${e.totalSteps})`;
+    if (e.kind === 'chunk_done')  return `[${ts}]   → fetched=${e.orders} ajio=${e.ajio} withAwb=${e.withAwb}`;
+    if (e.kind === 'chunk_error') return `[${ts}] ✖ ${e.warehouse}/${e.status} error: ${e.error}`;
+    if (e.kind === 'warehouse_done') return `[${ts}] ✔ ${e.warehouse}: fetched=${e.fetched} ajio=${e.ajio} withAwb=${e.withAwb} upserted=${e.upserted}`;
+    if (e.kind === 'warehouse_error') return `[${ts}] ✖ ${e.warehouse}: ${e.error}`;
+    if (e.kind === 'warehouse_skipped') return `[${ts}] - ${e.warehouse} skipped (${e.reason})`;
+    if (e.kind === 'run_done') return `[${ts}] ✅ run_done in ${e.tookMs}ms`;
+    if (e.kind === 'job_start') return `[${ts}] job_start by ${e.startedBy} lookback=${e.lookbackDays}d`;
+    if (e.kind === 'job_error') return `[${ts}] ✖ job_error: ${e.error}`;
+    return `[${ts}] ${e.kind} ${JSON.stringify(e)}`;
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/admin/ajio-recon/status', { credentials: 'same-origin' });
+      const j = await r.json();
+      setState(j.state);
+
+      // Append only new events
+      if (j.events.length !== lastEventCount) {
+        if (lastEventCount === 0) els.log.textContent = '';
+        const slice = j.events.slice(lastEventCount);
+        for (const e of slice) {
+          els.log.textContent += (els.log.textContent ? '\n' : '') + fmtEvent(e);
+        }
+        els.log.scrollTop = els.log.scrollHeight;
+        lastEventCount = j.events.length;
+      }
+
+      // progress bar (count chunk_done events vs totalSteps from any chunk_start)
+      const totalSteps = j.events.findLast?.((e) => e.kind === 'chunk_start')?.totalSteps
+        || j.events.reduce((m, e) => Math.max(m, e.totalSteps || 0), 0);
+      const done = j.events.filter((e) => e.kind === 'chunk_done').length;
+      if (totalSteps) els.bar.style.width = Math.min(100, Math.round((done / (totalSteps * 2)) * 100)) + '%'; // *2 because two warehouses
+
+      if (j.state === 'done' && j.result) {
+        const totals = j.result.results.reduce((acc, r) => {
+          acc.fetched += r.fetched || 0; acc.ajio += r.ajio || 0; acc.withAwb += r.withAwb || 0; acc.upserted += r.upserted || 0;
+          return acc;
+        }, { fetched: 0, ajio: 0, withAwb: 0, upserted: 0 });
+        els.summary.textContent = `Last run: fetched=${totals.fetched}, ajio=${totals.ajio}, withAwb=${totals.withAwb}, upserted=${totals.upserted} (${j.result.tookMs}ms)`;
+        els.bar.style.width = '100%';
+        clearInterval(pollTimer); pollTimer = null;
+        refreshRecent();
+      } else if (j.state === 'error') {
+        els.summary.textContent = 'Error: ' + j.error;
+        clearInterval(pollTimer); pollTimer = null;
+      }
+    } catch (err) { /* swallow */ }
+  }
+
+  async function refreshRecent() {
+    try {
+      const r = await fetch('/admin/ajio-recon/recent?limit=20', { credentials: 'same-origin' });
+      const j = await r.json();
+      if (!j.ok) return;
+      els.recent.innerHTML = j.rows.length ? j.rows.map(r => {
+        const sourcePill = r.source === 'reconcile' ? 'green' : r.source === 'webhook' ? 'amber' : 'gray';
+        return `<tr>
+          <td>${r.awb}</td>
+          <td>${r.order_id}</td>
+          <td>${r.reference_code || '-'}</td>
+          <td>${r.current_status || '-'}</td>
+          <td>${r.courier_name || '-'}</td>
+          <td>${r.warehouse_id || '-'}</td>
+          <td>${r.label_printed_at ? new Date(r.label_printed_at).toLocaleString() : '-'}</td>
+          <td><span class="pill ${sourcePill}">${r.source}</span></td>
+          <td>${r.updated_at ? new Date(r.updated_at).toLocaleString() : '-'}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="9" style="text-align:center;color:#64748b;">No shipments yet.</td></tr>`;
+    } catch (err) { /* ignore */ }
+  }
+
+  els.run.addEventListener('click', async () => {
+    els.log.textContent = '';
+    els.summary.textContent = '';
+    els.bar.style.width = '0%';
+    lastEventCount = 0;
+    setState('running');
+    try {
+      const r = await fetch('/admin/ajio-recon/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ lookbackDays: parseInt(els.days.value, 10) }),
+      });
+      const j = await r.json();
+      if (!j.ok && j.error !== 'already_running') {
+        setState('error');
+        els.log.textContent = 'Failed to start: ' + (j.error || r.status);
+        return;
+      }
+    } catch (err) {
+      setState('error');
+      els.log.textContent = 'Network error: ' + err.message;
+      return;
+    }
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(poll, 1000);
+    poll();
+  });
+
+  els.refreshRecent.addEventListener('click', refreshRecent);
+
+  // Resume any in-flight job on page load
+  poll();
+})();
+</script>
