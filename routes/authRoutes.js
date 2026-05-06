@@ -49,6 +49,8 @@ function getDashboardForRole(roleName) {
     'productviewer': '/product-links',
     'wishlinkops': '/webhook/logs',
     'videofinder': '/video-finder',
+    'videocreator': '/vms',
+    'vmsoperator': '/vms-operator',
     'return_grn': '/return-grn/scan',
     'returns_operator': '/return-grn/dashboard',
   };
