@@ -211,9 +211,11 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster,
     );
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
+    const userId = req.session?.user?.id;
     const aggregates     = await stageEvents.getStageAggregates(pool, STAGE_WI, lotId);
     const sizeAggregates = await stageEvents.getStageSizeAggregates(pool, STAGE_WI, lotId);
-    const openApprovals  = await stageEvents.getOpenApprovals(pool, STAGE_WI, lotId);
+    // Owner-locked: only show this operator's own open approves.
+    const openApprovals  = await stageEvents.getOpenApprovals(pool, STAGE_WI, lotId, userId);
     const upstreamSizes  = await wiUpstreamSizes(pool, lotId, lot.lot_no);
     const upstreamTotal  = upstreamSizes.reduce((a, s) => a + s.available, 0);
 
@@ -317,12 +319,18 @@ router.post('/event/complete', isAuthenticated, isWashingInMaster, async (req, r
     const { events, eventSizes } = stageEvents.tablesFor(STAGE_WI);
 
     const [[parent]] = await conn.query(
-      `SELECT id, cutting_lot_id, event_type, pieces FROM ${events} WHERE id = ? FOR UPDATE`,
+      `SELECT id, cutting_lot_id, event_type, pieces, operator_id FROM ${events} WHERE id = ? FOR UPDATE`,
       [parentId]
     );
     if (!parent || parent.event_type !== 'approve') {
       await conn.rollback();
       return res.status(400).json({ error: 'parent_event_id must reference an approve event' });
+    }
+    if (parent.operator_id !== userId) {
+      await conn.rollback();
+      return res.status(403).json({
+        error: 'You can only complete pieces against your own approve. Ask the original approver to record the completion.',
+      });
     }
 
     const [parentSizesRows] = await conn.query(

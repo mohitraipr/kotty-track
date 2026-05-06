@@ -176,9 +176,11 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
       [lotId]
     );
 
+    const userId = req.session?.user?.id;
     const aggregates = await stageEvents.getStageAggregates(pool, STAGE, lotId);
     const sizeAggregates = await stageEvents.getStageSizeAggregates(pool, STAGE, lotId);
-    const openApprovals = await stageEvents.getOpenApprovals(pool, STAGE, lotId);
+    // Owner-locked: only show this operator's own open approves.
+    const openApprovals = await stageEvents.getOpenApprovals(pool, STAGE, lotId, userId);
 
     // Per-size: cutting pool minus what's already been approved at stitching.
     // Embed the full per-size aggregates (approved/completed/rejected/inline)
@@ -343,6 +345,13 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
     if (!parent || parent.event_type !== 'approve') {
       await conn.rollback();
       return res.status(400).json({ error: 'parent_event_id must reference an approve event' });
+    }
+    // Owner-lock: only the approver can complete or reject their own approve.
+    if (parent.operator_id !== userId) {
+      await conn.rollback();
+      return res.status(403).json({
+        error: 'You can only complete pieces against your own approve. Ask the original approver to record the completion.',
+      });
     }
 
     // Per-size: completed + rejected so far + new completed + new rejected <= approved (per size)

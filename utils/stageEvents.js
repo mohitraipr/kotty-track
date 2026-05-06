@@ -108,18 +108,30 @@ function normalizeSizeLabel(label) {
  * with positive remaining inline (not yet fully completed/rejected).
  * Used by the "complete" form to let an operator pick which approval
  * batch they're completing pieces against.
+ *
+ * If `operatorId` is supplied, restricts to that operator's own approves —
+ * enforces the owner-locked model where only the operator who approved
+ * can complete/reject their own batch.
  */
-async function getOpenApprovals(conn, stage, cuttingLotId) {
+async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
   const { events, eventSizes } = tablesFor(stage);
+  const params = [cuttingLotId];
+  let operatorFilter = '';
+  if (operatorId) {
+    operatorFilter = 'AND e.operator_id = ?';
+    params.push(operatorId);
+  }
   const [approves] = await conn.query(
     `
-      SELECT e.id, e.pieces AS approved, e.created_at, e.remark, u.username AS operator
+      SELECT e.id, e.pieces AS approved, e.created_at, e.remark, u.username AS operator,
+             e.operator_id
       FROM ${events} e
       JOIN users u ON u.id = e.operator_id
       WHERE e.cutting_lot_id = ? AND e.event_type = 'approve'
+        ${operatorFilter}
       ORDER BY e.created_at ASC
     `,
-    [cuttingLotId]
+    params
   );
 
   if (!approves.length) return [];
