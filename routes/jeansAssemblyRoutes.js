@@ -815,7 +815,10 @@ async function jaUpstreamSizes(conn, cuttingLotId, lotNo) {
   );
 
   const stitchSizes = {};
-  for (const r of evRows) stitchSizes[r.size_label] = Number(r.pieces) || 0;
+  for (const r of evRows) {
+    const k = stageEvents.normalizeSizeLabel(r.size_label);
+    if (k) stitchSizes[k] = (stitchSizes[k] || 0) + (Number(r.pieces) || 0);
+  }
 
   if (Object.keys(stitchSizes).length === 0) {
     // Legacy fallback — stitching submit auto-completed everything
@@ -827,10 +830,13 @@ async function jaUpstreamSizes(conn, cuttingLotId, lotNo) {
        GROUP BY sds.size_label`,
       [lotNo]
     );
-    for (const r of legRows) stitchSizes[r.size_label] = Number(r.pieces) || 0;
+    for (const r of legRows) {
+      const k = stageEvents.normalizeSizeLabel(r.size_label);
+      if (k) stitchSizes[k] = (stitchSizes[k] || 0) + (Number(r.pieces) || 0);
+    }
   }
 
-  // Assembly's already-approved totals per size
+  // Assembly's already-approved totals per size (already normalized by helper)
   const jaSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_JA, cuttingLotId);
 
   const out = [];
@@ -975,9 +981,9 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
     // Re-check upstream availability under the txn
     const upstream = await jaUpstreamSizes(conn, lotId, lot.lot_no);
     const upstreamMap = {};
-    for (const r of upstream) upstreamMap[r.size_label] = r.available;
+    for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
     for (const s of cleanSizes) {
-      const avail = upstreamMap[s.size_label] || 0;
+      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
       if (s.pieces > avail) {
         await conn.rollback();
         return res.status(400).json({

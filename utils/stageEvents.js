@@ -73,14 +73,24 @@ async function getStageSizeAggregates(conn, stage, cuttingLotId) {
   );
   const map = {};
   for (const row of rows) {
-    const key = row.size_label;
+    // Normalize: trim + uppercase so that any whitespace/case drift between
+    // tables (e.g. CHAR padding, "26" vs "26 ", "xl" vs "XL") doesn't break
+    // downstream object-key lookups.
+    const key = String(row.size_label || '').trim().toUpperCase();
+    if (!key) continue;
     if (!map[key]) map[key] = { approved: 0, completed: 0, rejected: 0, inline: 0 };
-    map[key][row.event_type] = Number(row.pieces) || 0;
+    map[key][row.event_type] = (map[key][row.event_type] || 0) + (Number(row.pieces) || 0);
   }
   for (const key of Object.keys(map)) {
     map[key].inline = map[key].approved - map[key].completed - map[key].rejected;
   }
   return map;
+}
+
+// Normalization helper used by routes when looking up size aggregates
+// by labels read from upstream tables (cutting_lot_sizes, etc.).
+function normalizeSizeLabel(label) {
+  return String(label || '').trim().toUpperCase();
 }
 
 /**
@@ -219,4 +229,5 @@ module.exports = {
   getStageSizeAggregates,
   getOpenApprovals,
   recordEvent,
+  normalizeSizeLabel,
 };

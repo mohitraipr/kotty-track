@@ -117,7 +117,10 @@ async function fUpstreamSizes(conn, lot) {
     [cuttingLotId]
   );
   const upstream = {};
-  for (const r of evRows) upstream[r.size_label] = Number(r.pieces) || 0;
+  for (const r of evRows) {
+    const k = stageEvents.normalizeSizeLabel(r.size_label);
+    if (k) upstream[k] = (upstream[k] || 0) + (Number(r.pieces) || 0);
+  }
 
   if (Object.keys(upstream).length === 0) {
     const [legRows] = await conn.query(
@@ -128,7 +131,10 @@ async function fUpstreamSizes(conn, lot) {
        GROUP BY ds.size_label`,
       [lotNo]
     );
-    for (const r of legRows) upstream[r.size_label] = Number(r.pieces) || 0;
+    for (const r of legRows) {
+      const k = stageEvents.normalizeSizeLabel(r.size_label);
+      if (k) upstream[k] = (upstream[k] || 0) + (Number(r.pieces) || 0);
+    }
   }
 
   const fSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_F, cuttingLotId);
@@ -243,9 +249,9 @@ router.post('/event/approve', isAuthenticated, isFinishingMaster, async (req, re
 
     const upstream = await fUpstreamSizes(conn, lot);
     const upstreamMap = {};
-    for (const r of upstream) upstreamMap[r.size_label] = r.available;
+    for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
     for (const s of cleanSizes) {
-      const avail = upstreamMap[s.size_label] || 0;
+      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
       if (s.pieces > avail) {
         await conn.rollback();
         return res.status(400).json({ error: `Size ${s.size_label}: only ${avail} pieces available (requested ${s.pieces})` });

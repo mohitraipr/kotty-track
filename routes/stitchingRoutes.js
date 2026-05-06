@@ -181,8 +181,11 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
     const openApprovals = await stageEvents.getOpenApprovals(pool, STAGE, lotId);
 
     // Per-size: cutting pool minus what's already been approved at stitching.
+    // Normalize the size_label key on lookup to handle whitespace/case drift
+    // between cutting_lot_sizes and stitching_event_sizes.
     const upstreamSizes = cutSizes.map(s => {
-      const approvedAtStitching = (sizeAggregates[s.size_label] || {}).approved || 0;
+      const key = stageEvents.normalizeSizeLabel(s.size_label);
+      const approvedAtStitching = (sizeAggregates[key] || {}).approved || 0;
       return {
         size_label: s.size_label,
         cut_qty: Number(s.total_pieces) || 0,
@@ -239,13 +242,17 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
       [lotId]
     );
     const cutMap = {};
-    for (const r of cutSizesRows) cutMap[r.size_label] = Number(r.total_pieces) || 0;
+    for (const r of cutSizesRows) {
+      const k = stageEvents.normalizeSizeLabel(r.size_label);
+      if (k) cutMap[k] = (cutMap[k] || 0) + (Number(r.total_pieces) || 0);
+    }
 
     const sizeAgg = await stageEvents.getStageSizeAggregates(conn, STAGE, lotId);
 
     for (const s of cleanSizes) {
-      const cut = cutMap[s.size_label] || 0;
-      const alreadyApproved = (sizeAgg[s.size_label] || {}).approved || 0;
+      const k = stageEvents.normalizeSizeLabel(s.size_label);
+      const cut = cutMap[k] || 0;
+      const alreadyApproved = (sizeAgg[k] || {}).approved || 0;
       const available = cut - alreadyApproved;
       if (s.pieces > available) {
         await conn.rollback();
