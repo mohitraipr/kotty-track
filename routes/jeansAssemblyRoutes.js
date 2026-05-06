@@ -7,6 +7,7 @@ const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isJeansAssemblyMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
+const stageEvents = require('../utils/stageEvents');
 
 // -------------------------------------
 // MULTER for Image Upload
@@ -782,6 +783,400 @@ router.post('/deny-lot', isAuthenticated, isJeansAssemblyMaster, async (req, res
   } catch (err) {
     console.error('[ERROR] POST /jeansassemblydashboard/deny-lot =>', err);
     return res.status(500).json({ error: 'Error denying assignment: ' + err.message });
+  }
+});
+
+// ==================================================================
+//   NEW EVENT MODEL — multi-batch approve/complete/reject
+//
+//   Mirrors stitching's /event/* endpoints. The upstream pool here is
+//   stitching's COMPLETE event totals for the lot; assembly approves
+//   pieces from that pool.
+//
+//   On every approve event we fire createStagePayment('stitching', …)
+//   for the qty being taken — this replaces the old "submit pays the
+//   stitcher" trigger and supports per-batch payments.
+// ==================================================================
+
+const STAGE_JA = 'jeans_assembly';
+
+// Helper: stitching's "downstream available" pool for a cutting lot.
+// = total completed by stitching (events + legacy) - already approved
+//   by assembly (events). Returned per size + total.
+async function jaUpstreamSizes(conn, cuttingLotId, lotNo) {
+  // Stitching completed totals — prefer events, fall back to legacy data
+  const [evRows] = await conn.query(
+    `SELECT s.size_label, COALESCE(SUM(s.pieces),0) AS pieces
+     FROM stitching_event_sizes s
+     JOIN stitching_events e ON e.id = s.event_id
+     WHERE e.cutting_lot_id = ? AND e.event_type = 'complete'
+     GROUP BY s.size_label`,
+    [cuttingLotId]
+  );
+
+  const stitchSizes = {};
+  for (const r of evRows) stitchSizes[r.size_label] = Number(r.pieces) || 0;
+
+  if (Object.keys(stitchSizes).length === 0) {
+    // Legacy fallback — stitching submit auto-completed everything
+    const [legRows] = await conn.query(
+      `SELECT sds.size_label, COALESCE(SUM(sds.pieces),0) AS pieces
+       FROM stitching_data_sizes sds
+       JOIN stitching_data sd ON sd.id = sds.stitching_data_id
+       WHERE sd.lot_no = ?
+       GROUP BY sds.size_label`,
+      [lotNo]
+    );
+    for (const r of legRows) stitchSizes[r.size_label] = Number(r.pieces) || 0;
+  }
+
+  // Assembly's already-approved totals per size
+  const jaSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_JA, cuttingLotId);
+
+  const out = [];
+  for (const [size_label, stitched] of Object.entries(stitchSizes)) {
+    const approved = (jaSizes[size_label] || {}).approved || 0;
+    out.push({
+      size_label,
+      stitched_qty: stitched,
+      approved_at_stage: approved,
+      available: Math.max(0, stitched - approved),
+    });
+  }
+  return out;
+}
+
+// Helper: identify the stitcher who should receive the payment for an
+// assembly approve. Picks the stitcher with the largest stitching_data
+// row for this lot (close enough for v1 — accountants can adjust if a
+// lot was split across multiple stitchers).
+async function jaPickStitcherForPayment(conn, lotNo) {
+  const [rows] = await conn.query(
+    `SELECT sd.user_id, u.username, sd.sku
+     FROM stitching_data sd
+     JOIN users u ON u.id = sd.user_id
+     WHERE sd.lot_no = ?
+     ORDER BY sd.total_pieces DESC, sd.created_at DESC
+     LIMIT 1`,
+    [lotNo]
+  );
+  return rows[0] || null;
+}
+
+// GET /jeansassemblydashboard/events  — render the new dashboard
+router.get('/events', isAuthenticated, isJeansAssemblyMaster, (req, res) => {
+  res.render('jeansAssemblyEvents', { user: req.session.user });
+});
+
+// GET /jeansassemblydashboard/event/search?q=...
+router.get('/event/search', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q) return res.json({ lots: [] });
+    const like = `%${q}%`;
+    // Restrict to denim — assembly is denim-only
+    const [lots] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
+              cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)
+         AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
+              OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL
+                  AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
+       ORDER BY cl.created_at DESC
+       LIMIT 25`,
+      [like, like, like]
+    );
+    res.json({ lots });
+  } catch (err) {
+    console.error('[ERROR] GET /event/search =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /jeansassemblydashboard/event/lot-state/:cuttingLotId
+router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+
+    const [[lot]] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+              u.username AS cutting_master, u.is_denim_cutter
+       FROM cutting_lots cl
+       JOIN users u ON u.id = cl.user_id
+       WHERE cl.id = ?`,
+      [lotId]
+    );
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    const aggregates      = await stageEvents.getStageAggregates(pool, STAGE_JA, lotId);
+    const sizeAggregates  = await stageEvents.getStageSizeAggregates(pool, STAGE_JA, lotId);
+    const openApprovals   = await stageEvents.getOpenApprovals(pool, STAGE_JA, lotId);
+    const upstreamSizes   = await jaUpstreamSizes(pool, lotId, lot.lot_no);
+    const upstreamTotal   = upstreamSizes.reduce((a, s) => a + s.available, 0);
+
+    res.json({
+      lot,
+      stage_aggregates: aggregates,
+      stage_size_aggregates: sizeAggregates,
+      upstream_sizes: upstreamSizes,
+      upstream_total_available: upstreamTotal,
+      open_approvals: openApprovals,
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /event/lot-state =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /jeansassemblydashboard/event/approve
+// Body: { cutting_lot_id, sizes: [{size_label, pieces}], remark? }
+//
+// Side effects (after the events insert):
+//   - createStagePayment('stitching', ...) for the qty being taken,
+//     paid to the lot's primary stitcher.
+router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { cutting_lot_id, sizes, remark } = req.body;
+
+    const lotId = parseInt(cutting_lot_id, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+    if (!Array.isArray(sizes) || sizes.length === 0) {
+      return res.status(400).json({ error: 'sizes is required' });
+    }
+    const cleanSizes = sizes
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length) {
+      return res.status(400).json({ error: 'No positive size quantities provided' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [[lot]] = await conn.query(
+      `SELECT lot_no, sku FROM cutting_lots WHERE id = ?`,
+      [lotId]
+    );
+    if (!lot) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    // Re-check upstream availability under the txn
+    const upstream = await jaUpstreamSizes(conn, lotId, lot.lot_no);
+    const upstreamMap = {};
+    for (const r of upstream) upstreamMap[r.size_label] = r.available;
+    for (const s of cleanSizes) {
+      const avail = upstreamMap[s.size_label] || 0;
+      if (s.pieces > avail) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Size ${s.size_label}: only ${avail} pieces completed by stitching not yet taken (requested ${s.pieces})`,
+        });
+      }
+    }
+
+    const eventId = await stageEvents.recordEvent(conn, {
+      stage: STAGE_JA,
+      cuttingLotId: lotId,
+      eventType: 'approve',
+      operatorId: userId,
+      sizes: cleanSizes,
+      parentEventId: null,
+      remark: remark ? String(remark).trim() : null,
+    });
+
+    await conn.commit();
+
+    // Fire stitching payment outside the txn — payment failure doesn't
+    // roll the approve back. Best-effort.
+    const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
+    try {
+      const stitcher = await jaPickStitcherForPayment(pool, lot.lot_no);
+      if (stitcher) {
+        await createStagePayment('stitching', {
+          lot_no: lot.lot_no,
+          sku: stitcher.sku || lot.sku,
+          qty: totalPieces,
+          user_id: stitcher.user_id,
+          username: stitcher.username,
+        });
+      }
+    } catch (payErr) {
+      console.error('[WARN] /event/approve stitching payment failed:', payErr.message);
+    }
+
+    res.json({
+      success: true,
+      event_id: eventId,
+      total_pieces: totalPieces,
+      sizes: cleanSizes,
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /event/approve =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// POST /jeansassemblydashboard/event/complete
+// Body: { parent_event_id, completed_sizes, rejected_sizes?, remark?, reject_reason? }
+//
+// Side effects: dual-writes to jeans_assembly_data + jeans_assembly_data_sizes
+// for the COMPLETED pieces so downstream washing's existing queries see the
+// completed pieces under their old shape until washing migrates.
+router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { parent_event_id, completed_sizes, rejected_sizes, reject_reason, complete_remark } = req.body;
+
+    const parentId = parseInt(parent_event_id, 10);
+    if (!Number.isFinite(parentId) || parentId <= 0) {
+      return res.status(400).json({ error: 'Invalid parent_event_id' });
+    }
+
+    const cleanCompleted = (Array.isArray(completed_sizes) ? completed_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+
+    if (!cleanCompleted.length && !cleanRejected.length) {
+      return res.status(400).json({ error: 'Provide completed and/or rejected sizes' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const { events, eventSizes } = stageEvents.tablesFor(STAGE_JA);
+
+    const [[parent]] = await conn.query(
+      `SELECT id, cutting_lot_id, event_type, pieces, operator_id
+       FROM ${events}
+       WHERE id = ? FOR UPDATE`,
+      [parentId]
+    );
+    if (!parent || parent.event_type !== 'approve') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'parent_event_id must reference an approve event' });
+    }
+
+    const [parentSizesRows] = await conn.query(
+      `SELECT size_label, pieces FROM ${eventSizes} WHERE event_id = ?`,
+      [parentId]
+    );
+    const parentSizeMap = {};
+    for (const r of parentSizesRows) parentSizeMap[r.size_label] = Number(r.pieces) || 0;
+
+    const [childSizesRows] = await conn.query(
+      `SELECT s.size_label, e.event_type, SUM(s.pieces) AS pieces
+       FROM ${events} e
+       JOIN ${eventSizes} s ON s.event_id = e.id
+       WHERE e.parent_event_id = ?
+       GROUP BY s.size_label, e.event_type`,
+      [parentId]
+    );
+    const childSizeMap = {};
+    for (const r of childSizesRows) {
+      if (!childSizeMap[r.size_label]) childSizeMap[r.size_label] = { complete: 0, reject: 0 };
+      childSizeMap[r.size_label][r.event_type] = Number(r.pieces) || 0;
+    }
+
+    const allLabels = new Set([
+      ...cleanCompleted.map(s => s.size_label),
+      ...cleanRejected.map(s => s.size_label),
+    ]);
+
+    for (const label of allLabels) {
+      const approved = parentSizeMap[label] || 0;
+      const prev = childSizeMap[label] || { complete: 0, reject: 0 };
+      const newComplete = (cleanCompleted.find(s => s.size_label === label) || {}).pieces || 0;
+      const newReject = (cleanRejected.find(s => s.size_label === label) || {}).pieces || 0;
+      const totalAfter = prev.complete + prev.reject + newComplete + newReject;
+      if (totalAfter > approved) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Size ${label}: total complete+reject (${totalAfter}) exceeds approved ${approved}`,
+        });
+      }
+    }
+
+    let completeEventId = null;
+    let rejectEventId = null;
+
+    if (cleanCompleted.length) {
+      completeEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_JA,
+        cuttingLotId: parent.cutting_lot_id,
+        eventType: 'complete',
+        operatorId: userId,
+        sizes: cleanCompleted,
+        parentEventId: parentId,
+        remark: complete_remark ? String(complete_remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_JA,
+        cuttingLotId: parent.cutting_lot_id,
+        eventType: 'reject',
+        operatorId: userId,
+        sizes: cleanRejected,
+        parentEventId: parentId,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
+
+    // Dual-write to jeans_assembly_data for downstream compatibility
+    // (washing reads jeans_assembly_data via lot_no in its existing query).
+    if (cleanCompleted.length) {
+      const [[lot]] = await conn.query(
+        `SELECT lot_no, sku FROM cutting_lots WHERE id = ?`,
+        [parent.cutting_lot_id]
+      );
+      const totalCompleted = cleanCompleted.reduce((a, s) => a + s.pieces, 0);
+      const [adResult] = await conn.query(
+        `INSERT INTO jeans_assembly_data
+           (user_id, lot_no, sku, total_pieces, remark, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())`,
+        [userId, lot.lot_no, lot.sku, totalCompleted, complete_remark || null]
+      );
+      const adId = adResult.insertId;
+      const adSizes = cleanCompleted.map(s => [adId, s.size_label, s.pieces]);
+      await conn.query(
+        `INSERT INTO jeans_assembly_data_sizes (jeans_assembly_data_id, size_label, pieces) VALUES ?`,
+        [adSizes]
+      );
+    }
+
+    await conn.commit();
+    res.json({
+      success: true,
+      complete_event_id: completeEventId,
+      reject_event_id: rejectEventId,
+      completed_total: cleanCompleted.reduce((a, s) => a + s.pieces, 0),
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+    });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /event/complete =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
