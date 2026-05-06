@@ -70,7 +70,14 @@ async function fetchOrdersPage(token, { status, fromDate, toDate, nextUrl }) {
 
   let resp;
   if (nextUrl) {
-    resp = await axios.get(nextUrl, { headers, timeout: 60000 });
+    // EasyEcom may return nextUrl as a relative path; resolve against the API base.
+    let fullUrl;
+    try {
+      fullUrl = new URL(nextUrl, EASYECOM_API_BASE).toString();
+    } catch (e) {
+      throw new Error(`Bad nextUrl from EasyEcom: ${String(nextUrl).slice(0, 200)}`);
+    }
+    resp = await axios.get(fullUrl, { headers, timeout: 60000 });
   } else {
     const url = `${EASYECOM_API_BASE}/orders/V2/getAllOrders`;
     const params = {

@@ -52,8 +52,8 @@
   <div class="ar-toolbar">
     <strong>Run reconciliation:</strong>
     <select id="arDays" class="form-select form-select-sm" style="width:160px;">
-      <% [3,7,14,21,30].forEach(d => { %>
-        <option value="<%= d %>" <%= d === 7 ? 'selected' : '' %>>last <%= d %> days</option>
+      <% [3,7,14,21,30,60,90].forEach(d => { %>
+        <option value="<%= d %>" <%= d === 30 ? 'selected' : '' %>>last <%= d %> days</option>
       <% }) %>
     </select>
     <button id="arRun" class="btn btn-primary btn-sm">▶ Run</button>
