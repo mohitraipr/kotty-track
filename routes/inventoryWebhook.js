@@ -155,11 +155,105 @@ async function persistInventorySnapshots(inventoryData = [], allowedSkus = new S
   return preparedRows;
 }
 
+// Marketplaces we want to track per-AWB shipments for. Ajio only for now.
+const SHIPMENT_TRACKED_MARKETPLACES = /ajio/i;
+
+function pickFirst(...vals) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return null;
+}
+
+function extractShipmentRow(order) {
+  // EasyEcom places awb_number at order level once a label is printed.
+  // Some payloads also surface it on suborder[0]. Accept both.
+  const awb =
+    pickFirst(order.awb_number, order.awbNumber, order.awb) ||
+    (Array.isArray(order.suborders) ? pickFirst(...order.suborders.map((s) => s?.awb_number)) : null);
+  if (!awb) return null;
+
+  const marketplace = order.marketplace || '';
+  if (!SHIPMENT_TRACKED_MARKETPLACES.test(marketplace)) return null;
+
+  const status = order.order_status || null;
+  const labelPrintedAt =
+    pickFirst(order.label_printed_at, order.print_date, order.label_print_date) ||
+    (status && /print/i.test(status) ? order.last_update_date || order.import_date : null);
+  const dispatchedAt =
+    pickFirst(order.dispatched_date, order.dispatch_date, order.shipped_date) ||
+    (status && /dispatch|shipp|manifest/i.test(status) ? order.last_update_date : null);
+  const deliveredAt = status && /delivered/i.test(status) ? order.last_update_date : null;
+  const rtoAt = status && /rto|return/i.test(status) ? order.last_update_date : null;
+
+  return {
+    awb: String(awb).trim(),
+    order_id: order.order_id,
+    invoice_id: order.invoice_id || null,
+    reference_code: order.reference_code || null,
+    marketplace,
+    marketplace_id: order.marketplace_id || null,
+    warehouse_id: order.warehouseId || order.import_warehouse_id || null,
+    courier_name: pickFirst(order.courier_aggregator_name, order.courier_name, order.courier),
+    manifest_id: pickFirst(order.manifest_id, order.manifestId),
+    tracking_url: pickFirst(order.tracking_url, order.track_url),
+    label_status: status && /print/i.test(status) ? status : null,
+    current_status: status,
+    order_status_id: order.order_status_id || null,
+    label_printed_at: labelPrintedAt,
+    dispatched_at: dispatchedAt,
+    delivered_at: deliveredAt,
+    rto_at: rtoAt,
+    last_seen_at: order.last_update_date || null,
+    raw: JSON.stringify(order),
+  };
+}
+
+async function persistShipments(shipmentRows) {
+  if (!shipmentRows.length) return 0;
+  const values = shipmentRows.map((s) => [
+    s.awb, s.order_id, s.invoice_id, s.reference_code, s.marketplace, s.marketplace_id,
+    s.warehouse_id, s.courier_name, s.manifest_id, s.tracking_url, s.label_status,
+    s.current_status, s.order_status_id, s.label_printed_at, s.dispatched_at,
+    s.delivered_at, s.rto_at, s.last_seen_at, 'webhook', s.raw,
+  ]);
+  await pool.query(
+    `INSERT INTO ee_shipments
+       (awb, order_id, invoice_id, reference_code, marketplace, marketplace_id,
+        warehouse_id, courier_name, manifest_id, tracking_url, label_status,
+        current_status, order_status_id, label_printed_at, dispatched_at,
+        delivered_at, rto_at, last_seen_at, source, raw)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE
+       order_id = VALUES(order_id),
+       invoice_id = COALESCE(VALUES(invoice_id), invoice_id),
+       reference_code = COALESCE(VALUES(reference_code), reference_code),
+       marketplace = COALESCE(VALUES(marketplace), marketplace),
+       marketplace_id = COALESCE(VALUES(marketplace_id), marketplace_id),
+       warehouse_id = COALESCE(VALUES(warehouse_id), warehouse_id),
+       courier_name = COALESCE(VALUES(courier_name), courier_name),
+       manifest_id = COALESCE(VALUES(manifest_id), manifest_id),
+       tracking_url = COALESCE(VALUES(tracking_url), tracking_url),
+       label_status = COALESCE(VALUES(label_status), label_status),
+       current_status = VALUES(current_status),
+       order_status_id = COALESCE(VALUES(order_status_id), order_status_id),
+       label_printed_at = COALESCE(ee_shipments.label_printed_at, VALUES(label_printed_at)),
+       dispatched_at = COALESCE(ee_shipments.dispatched_at, VALUES(dispatched_at)),
+       delivered_at = COALESCE(ee_shipments.delivered_at, VALUES(delivered_at)),
+       rto_at = COALESCE(ee_shipments.rto_at, VALUES(rto_at)),
+       last_seen_at = VALUES(last_seen_at),
+       raw = VALUES(raw)`,
+    [values]
+  );
+  return values.length;
+}
+
 async function persistOrders(orders = [], allowedSkus = new Set()) {
   if (!Array.isArray(orders) || !orders.length) return [];
 
   const orderRows = [];
   const subOrderRows = [];
+  const shipmentRows = [];
 
   for (const order of orders) {
     if (!order || !order.order_id) continue;
@@ -219,6 +313,9 @@ async function persistOrders(orders = [], allowedSkus = new Set()) {
       // Save order even without suborders
       orderRows.push(orderPayload);
     }
+
+    const shipmentRow = extractShipmentRow(order);
+    if (shipmentRow) shipmentRows.push(shipmentRow);
   }
 
   if (!orderRows.length) return [];
@@ -337,6 +434,17 @@ async function persistOrders(orders = [], allowedSkus = new Set()) {
   } finally {
     connection.release();
   }
+
+  // Outside the orders/suborders transaction so a shipment-table issue
+  // can never roll back the primary ee_orders write.
+  if (shipmentRows.length) {
+    try {
+      await persistShipments(shipmentRows);
+    } catch (err) {
+      console.error('persistShipments failed (orders saved OK):', err);
+    }
+  }
+
   return orderRows;
 }
 

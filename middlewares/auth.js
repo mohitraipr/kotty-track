@@ -181,6 +181,25 @@ function isVideoFinder(req, res, next) {
   return hasRole('videofinder')(req, res, next);
 }
 
+// Allow VMS recorder access: explicit videocreator role, mohitOperator
+// (for ops/debug), or any user the project's broader operator group can use.
+function isVideoCreator(req, res, next) {
+  const user = req.session?.user;
+  if (!user) {
+    req.flash('error', 'Please login first.');
+    return res.redirect('/login');
+  }
+  const username = (user.username || '').toLowerCase();
+  const role = user.roleName;
+  if (role === 'videocreator' || role === 'videofinder' || username === 'mohitoperator') {
+    return next();
+  }
+  const wantsJson = req.headers.accept?.includes('application/json') || req.xhr;
+  if (wantsJson) return res.status(403).json({ error: 'Permission denied' });
+  req.flash('error', 'You do not have permission to access the VMS recorder.');
+  return res.redirect('/');
+}
+
 function isProductViewer(req, res, next) {
   return hasRole('productviewer')(req, res, next);
 }
@@ -260,6 +279,7 @@ module.exports = {
     isNowiPOOrganization,
     isVendorFiles,
     isVideoFinder,
+    isVideoCreator,
     isProductViewer,
     allowUserIds,
     allowRoles,

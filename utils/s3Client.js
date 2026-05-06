@@ -3,7 +3,7 @@
  * Used by Video Finder and Mail Manager features
  */
 
-const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, ListObjectsV2Command, GetObjectCommand, DeleteObjectCommand, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 // Configuration from environment
@@ -81,6 +81,34 @@ async function generatePresignedUrl(key, expiresIn = PRESIGN_TTL_SECONDS) {
   } catch (err) {
     console.error('S3 presign error:', err);
     return null;
+  }
+}
+
+/**
+ * Generate a presigned PUT URL for browser uploads.
+ * The browser must send the same Content-Type used here.
+ */
+async function generatePresignedPutUrl(key, contentType, expiresIn = 900) {
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(s3Client, command, { expiresIn });
+}
+
+/**
+ * HEAD an object to confirm it exists and read its size after upload.
+ */
+async function headObject(key) {
+  try {
+    const out = await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    return { exists: true, size: out.ContentLength, contentType: out.ContentType };
+  } catch (err) {
+    if (err?.$metadata?.httpStatusCode === 404 || err.name === 'NotFound') {
+      return { exists: false };
+    }
+    throw err;
   }
 }
 
@@ -275,6 +303,8 @@ function clearCache() {
 module.exports = {
   listObjects,
   generatePresignedUrl,
+  generatePresignedPutUrl,
+  headObject,
   deleteObject,
   findVideosByAwb,
   findVideoByAwb,

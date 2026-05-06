@@ -253,6 +253,18 @@ app.use('/return-grn', returnGrnRoutes);
 const { pool } = require('./config/db');
 initHealthQueue(pool);
 
+// Start scheduled jobs (Ajio recon, mail auto-reply, etc.)
+const { startCronJobs } = require('./utils/scheduler');
+startCronJobs();
+
+// Manual trigger + stats for the Ajio recon cron (admin only)
+const ajioReconRoutes = require('./routes/ajioReconRoutes');
+app.use('/admin/ajio-recon', ajioReconRoutes);
+
+// VMS (AWB Video Recorder)
+const vmsRoutes = require('./routes/vmsRoutes');
+app.use('/vms', vmsRoutes);
+
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
