@@ -1,0 +1,261 @@
+<%- include('partials/header', { pageTitle: 'VMS Operator' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  .vo-content { margin-top: var(--navbar-height); padding: 22px; }
+  .vo-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  .vo-card  { background:#fff; padding:14px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .vo-card .label { font-size:0.8rem; color:#64748b; }
+  .vo-card .value { font-size:1.5rem; font-weight:700; margin-top:4px; }
+  .vo-card.green  .value { color:#16a34a; }
+  .vo-card.amber  .value { color:#ca8a04; }
+  .vo-card.red    .value { color:#dc2626; }
+  .vo-card.blue   .value { color:#2563eb; }
+  .vo-section { background:#fff; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:16px; padding:14px; }
+  .vo-section h3 { margin:0 0 10px; font-size:1rem; }
+  .vo-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .vo-tabs { display:flex; gap:4px; border-bottom:1px solid #e2e8f0; margin-bottom:10px; }
+  .vo-tab { padding:8px 14px; cursor:pointer; border-bottom:2px solid transparent; font-size:0.9rem; color:#64748b; }
+  .vo-tab.active { border-bottom-color:#2563eb; color:#0f172a; font-weight:600; }
+  .vo-table { width:100%; border-collapse:collapse; font-size:0.86rem; }
+  .vo-table th, .vo-table td { padding:6px 9px; border-bottom:1px solid #eee; text-align:left; vertical-align:top; }
+  .vo-table th { background:#f8fafc; font-weight:600; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.74rem; }
+  .pill.green { background:#dcfce7; color:#166534; }
+  .pill.amber { background:#fef9c3; color:#854d0e; }
+  .pill.red   { background:#fee2e2; color:#991b1b; }
+  .pill.blue  { background:#dbeafe; color:#1d4ed8; }
+  .pill.gray  { background:#f1f5f9; color:#475569; }
+  .vo-uploadbox { border:2px dashed #cbd5e1; padding:14px; border-radius:8px; }
+</style>
+
+<div class="vo-content">
+  <h2 style="margin-top:0;">🎛️ VMS Operator</h2>
+
+  <div class="vo-cards">
+    <div class="vo-card blue"><div class="label">Uploaded AWBs</div><div class="value" id="cUploaded"><%= counts.uploaded_awbs || 0 %></div></div>
+    <div class="vo-card green"><div class="label">Videos recorded</div><div class="value" id="cVideos"><%= counts.total_videos || 0 %></div></div>
+    <div class="vo-card green"><div class="label">Mails replied</div><div class="value" id="cReplied"><%= counts.mails_replied || 0 %></div></div>
+    <div class="vo-card amber"><div class="label">Mails unreplied</div><div class="value" id="cUnreplied"><%= counts.mails_unreplied || 0 %></div></div>
+    <div class="vo-card gray"><div class="label">Mails closed</div><div class="value" id="cClosed"><%= counts.mails_closed || 0 %></div></div>
+  </div>
+
+  <!-- Upload -->
+  <div class="vo-section">
+    <h3>📤 Upload AWB list</h3>
+    <div class="vo-uploadbox">
+      <div style="margin-bottom:6px; color:#475569; font-size:0.88rem;">
+        Excel/CSV with columns: <strong>AWB</strong> (required), <em>Customer Order ID</em>, <em>Marketplace</em>, <em>Notes</em>.
+        Re-uploading the same AWB updates its row.
+      </div>
+      <form id="voUploadForm" style="display:flex; gap:8px; align-items:center;">
+        <input type="file" id="voFile" accept=".csv,.xls,.xlsx" required>
+        <button id="voUploadBtn" class="btn btn-primary btn-sm" type="submit">Upload</button>
+        <span id="voUploadMsg" style="font-size:0.86rem; color:#475569;"></span>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="vo-section">
+    <div class="vo-tabs">
+      <div class="vo-tab active" data-tab="awbs">📦 AWB Uploads</div>
+      <div class="vo-tab" data-tab="replied">✉️ Replied</div>
+      <div class="vo-tab" data-tab="unreplied">⏳ Unreplied</div>
+      <div class="vo-tab" data-tab="closed">🔒 Closed</div>
+      <div class="vo-tab" data-tab="videos">🎥 Videos</div>
+      <div class="vo-tab" data-tab="packers">👥 Packer counts</div>
+    </div>
+
+    <div class="vo-toolbar">
+      <input type="date" id="voFrom" class="form-control form-control-sm" style="width:160px;">
+      <input type="date" id="voTo" class="form-control form-control-sm" style="width:160px;">
+      <button id="voApply" class="btn btn-secondary btn-sm">Apply dates</button>
+      <span style="flex:1;"></span>
+      <label style="font-size:0.85rem;"><input type="checkbox" id="voIncludeUrls"> Include video URLs in export (slow)</label>
+      <a id="voExport" class="btn btn-outline-success btn-sm" href="#">⬇ Export Excel</a>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="vo-table">
+        <thead id="voThead"></thead>
+        <tbody id="voTbody"><tr><td style="text-align:center;color:#64748b;">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const tbody = $('voTbody'), thead = $('voThead');
+  const exportLink = $('voExport');
+  const includeUrls = $('voIncludeUrls');
+  const tabs = document.querySelectorAll('.vo-tab');
+  let activeTab = 'awbs';
+
+  const HEADERS = {
+    awbs:      ['AWB','Customer Order ID','Marketplace','Has Video','Video At','Packer','Uploaded By','Uploaded At','Notes'],
+    replied:   ['Created','From','Subject','Order ID','AWB','Status','Replied At','Video'],
+    unreplied: ['Created','From','Subject','Order ID','AWB','Status','Classification'],
+    closed:    ['Created','From','Subject','Order ID','AWB','Status'],
+    videos:    ['Created','AWB','Packer','Marketplace','Size','S3 Key','Action'],
+    packers:   ['Packer','Videos','First','Last'],
+  };
+
+  function pillForStatus(s) {
+    if (s === 'replied') return '<span class="pill green">replied</span>';
+    if (s === 'closed')  return '<span class="pill gray">closed</span>';
+    if (s === 'initial') return '<span class="pill amber">initial</span>';
+    if (s === 'proceeding') return '<span class="pill blue">proceeding</span>';
+    if (s === 'error') return '<span class="pill red">error</span>';
+    return '<span class="pill gray">' + (s || '-') + '</span>';
+  }
+  function fmtDate(d) { return d ? new Date(d).toLocaleString() : '-'; }
+  function fmtBytes(n) {
+    if (!n) return '-'; const u = ['B','KB','MB','GB']; let i = 0;
+    while (n > 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return n.toFixed(1) + ' ' + u[i];
+  }
+
+  function setHeader(tab) {
+    thead.innerHTML = '<tr>' + HEADERS[tab].map(h => `<th>${h}</th>`).join('') + '</tr>';
+  }
+
+  function dateParams() {
+    const p = new URLSearchParams();
+    if ($('voFrom').value) p.set('from', $('voFrom').value);
+    if ($('voTo').value)   p.set('to', $('voTo').value);
+    return p.toString();
+  }
+
+  async function loadAwbs() {
+    const r = await fetch('/vms-operator/api/awbs?limit=500', { credentials: 'same-origin' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    tbody.innerHTML = r.rows.length ? r.rows.map(x => `<tr>
+      <td>${x.awb}</td>
+      <td>${x.customer_order_id || '-'}</td>
+      <td>${x.marketplace || '-'}</td>
+      <td>${x.has_video ? '<span class="pill green">yes</span>' : '<span class="pill amber">no</span>'}</td>
+      <td>${fmtDate(x.video_at)}</td>
+      <td>${x.packer_name || '-'}</td>
+      <td>${x.uploaded_by_name || '-'}</td>
+      <td>${fmtDate(x.created_at)}</td>
+      <td>${x.notes || '-'}</td>
+    </tr>`).join('') : `<tr><td colspan="9" style="text-align:center;color:#64748b;">No uploads yet.</td></tr>`;
+  }
+
+  async function loadMails(bucket) {
+    const r = await fetch('/vms-operator/api/mails/' + bucket + '?limit=500', { credentials: 'same-origin' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    if (!r.rows.length) {
+      tbody.innerHTML = `<tr><td colspan="${HEADERS[bucket].length}" style="text-align:center;color:#64748b;">No mails.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = r.rows.map(x => {
+      if (bucket === 'replied') return `<tr>
+        <td>${fmtDate(x.created_at)}</td><td>${x.from_address || '-'}</td><td>${x.subject || '-'}</td>
+        <td>${x.order_id || '-'}</td><td>${x.awb || '-'}</td><td>${pillForStatus(x.status)}</td>
+        <td>${fmtDate(x.replied_at)}</td>
+        <td>${x.video_url ? `<a href="${x.video_url}" target="_blank">link</a>` : '-'}</td>
+      </tr>`;
+      if (bucket === 'unreplied') return `<tr>
+        <td>${fmtDate(x.created_at)}</td><td>${x.from_address || '-'}</td><td>${x.subject || '-'}</td>
+        <td>${x.order_id || '-'}</td><td>${x.awb || '-'}</td><td>${pillForStatus(x.status)}</td>
+        <td>${x.classification || '-'}</td>
+      </tr>`;
+      // closed
+      return `<tr>
+        <td>${fmtDate(x.created_at)}</td><td>${x.from_address || '-'}</td><td>${x.subject || '-'}</td>
+        <td>${x.order_id || '-'}</td><td>${x.awb || '-'}</td><td>${pillForStatus(x.status)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function loadVideos() {
+    const qs = dateParams();
+    const r = await fetch('/vms-operator/api/videos?limit=500' + (qs ? '&' + qs : ''), { credentials: 'same-origin' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    tbody.innerHTML = r.rows.length ? r.rows.map(x => `<tr>
+      <td>${fmtDate(x.created_at)}</td>
+      <td>${x.awb}</td>
+      <td>${x.packer_username || x.packer_name || '-'}</td>
+      <td>${x.marketplace || '-'}</td>
+      <td>${fmtBytes(x.size_bytes)}</td>
+      <td style="font-family:ui-monospace,monospace; font-size:0.78rem;">${x.s3_key}</td>
+      <td><a href="#" data-key="${x.s3_key}" class="vo-play">▶ play</a></td>
+    </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:#64748b;">No videos.</td></tr>`;
+    tbody.querySelectorAll('.vo-play').forEach(a => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const r = await fetch('/vms-operator/api/playback-url?key=' + encodeURIComponent(a.dataset.key), { credentials: 'same-origin' }).then(r => r.json());
+      if (r.ok && r.url) window.open(r.url, '_blank');
+    }));
+  }
+
+  async function loadPackers() {
+    const qs = dateParams();
+    const r = await fetch('/vms-operator/api/packer-counts' + (qs ? '?' + qs : ''), { credentials: 'same-origin' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    tbody.innerHTML = r.rows.length ? r.rows.map(x => `<tr>
+      <td>${x.packer}</td><td>${x.video_count}</td>
+      <td>${fmtDate(x.first_at)}</td><td>${fmtDate(x.last_at)}</td>
+    </tr>`).join('') : `<tr><td colspan="4" style="text-align:center;color:#64748b;">No data.</td></tr>`;
+  }
+
+  function exportHref() {
+    const qs = dateParams();
+    const urlsFlag = (activeTab === 'videos' && includeUrls.checked) ? (qs ? '&' : '?') + 'includeUrls=1' : '';
+    if (activeTab === 'awbs')    return '/vms-operator/awbs/export.xlsx';
+    if (['replied','unreplied','closed'].includes(activeTab)) return `/vms-operator/mails/${activeTab}/export.xlsx`;
+    if (activeTab === 'videos')  return '/vms-operator/videos/export.xlsx' + (qs ? '?' + qs : '') + urlsFlag;
+    if (activeTab === 'packers') return '/vms-operator/packer-counts/export.xlsx' + (qs ? '?' + qs : '');
+    return '#';
+  }
+
+  async function loadActive() {
+    setHeader(activeTab);
+    tbody.innerHTML = `<tr><td colspan="${HEADERS[activeTab].length}" style="text-align:center;color:#64748b;">Loading…</td></tr>`;
+    exportLink.href = exportHref();
+    try {
+      if (activeTab === 'awbs') await loadAwbs();
+      else if (['replied','unreplied','closed'].includes(activeTab)) await loadMails(activeTab);
+      else if (activeTab === 'videos') await loadVideos();
+      else if (activeTab === 'packers') await loadPackers();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="${HEADERS[activeTab].length}" style="color:#dc2626;">${err.message}</td></tr>`;
+    }
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.toggle('active', x === t));
+    activeTab = t.dataset.tab;
+    loadActive();
+  }));
+
+  $('voApply').addEventListener('click', loadActive);
+  includeUrls.addEventListener('change', () => { exportLink.href = exportHref(); });
+
+  $('voUploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = $('voFile').files[0];
+    if (!file) return;
+    $('voUploadMsg').textContent = 'Uploading…';
+    const fd = new FormData();
+    fd.append('awbFile', file);
+    try {
+      const r = await fetch('/vms-operator/api/upload', { method: 'POST', credentials: 'same-origin', body: fd });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'failed');
+      $('voUploadMsg').textContent = `✅ Loaded ${j.received} AWBs`;
+      $('voFile').value = '';
+      activeTab = 'awbs';
+      tabs.forEach(x => x.classList.toggle('active', x.dataset.tab === 'awbs'));
+      loadActive();
+    } catch (err) {
+      $('voUploadMsg').textContent = '❌ ' + err.message;
+    }
+  });
+
+  loadActive();
+})();
+</script>

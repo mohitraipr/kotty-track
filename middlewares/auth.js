@@ -191,12 +191,30 @@ function isVideoCreator(req, res, next) {
   }
   const username = (user.username || '').toLowerCase();
   const role = user.roleName;
-  if (role === 'videocreator' || role === 'videofinder' || username === 'mohitoperator') {
+  if (role === 'videocreator' || role === 'videofinder' || role === 'vmsoperator' || username === 'mohitoperator') {
     return next();
   }
   const wantsJson = req.headers.accept?.includes('application/json') || req.xhr;
   if (wantsJson) return res.status(403).json({ error: 'Permission denied' });
   req.flash('error', 'You do not have permission to access the VMS recorder.');
+  return res.redirect('/');
+}
+
+// vmsOperator: uploads AWBs, sees mail/video dashboards.
+function isVmsOperator(req, res, next) {
+  const user = req.session?.user;
+  if (!user) {
+    req.flash('error', 'Please login first.');
+    return res.redirect('/login');
+  }
+  const username = (user.username || '').toLowerCase();
+  const role = user.roleName;
+  if (role === 'vmsoperator' || username === 'mohitoperator') {
+    return next();
+  }
+  const wantsJson = req.headers.accept?.includes('application/json') || req.xhr;
+  if (wantsJson) return res.status(403).json({ error: 'Permission denied' });
+  req.flash('error', 'You do not have permission to access the VMS Operator page.');
   return res.redirect('/');
 }
 
@@ -280,6 +298,7 @@ module.exports = {
     isVendorFiles,
     isVideoFinder,
     isVideoCreator,
+    isVmsOperator,
     isProductViewer,
     allowUserIds,
     allowRoles,

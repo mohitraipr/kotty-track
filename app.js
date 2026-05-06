@@ -273,6 +273,10 @@ app.use('/vms-report', vmsReportRoutes);
 const mailAutoReplyRoutes = require('./routes/mailAutoReplyRoutes');
 app.use('/admin/mail-auto-reply', mailAutoReplyRoutes);
 
+// VMS Operator (AWB upload + mail/video dashboards)
+const vmsOperatorRoutes = require('./routes/vmsOperatorRoutes');
+app.use('/vms-operator', vmsOperatorRoutes);
+
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');

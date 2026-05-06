@@ -26,25 +26,21 @@ async function isAlreadyReplied(messageId) {
 async function lookupAwbForOrder(orderId) {
   if (!orderId) return null;
 
-  // (1) order_awb_mapping (manual Excel upload)
+  // (1) vmsOperator AWB upload sheet (primary source)
+  const [[upload]] = await pool.query(
+    `SELECT awb FROM vms_awb_uploads
+      WHERE UPPER(customer_order_id) = UPPER(?)
+      ORDER BY created_at DESC LIMIT 1`,
+    [orderId]
+  );
+  if (upload?.awb) return { awb: upload.awb, source: 'vms_uploads' };
+
+  // (2) order_awb_mapping (legacy manual Excel via Mail Manager)
   const [[mapped]] = await pool.query(
     `SELECT awb FROM order_awb_mapping WHERE order_id = ? LIMIT 1`,
     [orderId.toUpperCase()]
   );
   if (mapped?.awb) return { awb: mapped.awb, source: 'mapping' };
-
-  // (2) ee_orders.reference_code (the Ajio customer order number) → ee_shipments
-  const [[ref]] = await pool.query(
-    `SELECT s.awb
-       FROM ee_orders o
-       JOIN ee_shipments s ON s.order_id = o.order_id
-      WHERE UPPER(o.reference_code) = UPPER(?)
-        AND o.marketplace LIKE '%ajio%'
-      ORDER BY s.updated_at DESC
-      LIMIT 1`,
-    [orderId]
-  );
-  if (ref?.awb) return { awb: ref.awb, source: 'ee_shipments' };
 
   return null;
 }

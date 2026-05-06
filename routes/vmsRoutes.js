@@ -60,20 +60,21 @@ router.get('/api/server-time', isAuthenticated, isVideoCreator, (req, res) => {
 });
 
 // ---------- AWB list ----------
-// Pending = printed-label Ajio AWBs without a video, last N days.
+// Pending = AWBs uploaded by vmsOperator that don't yet have a video.
 router.get('/api/awbs', isAuthenticated, isVideoCreator, async (req, res) => {
   try {
-    const days = Math.min(parseInt(req.query.days || '7', 10), 30);
+    const days = Math.min(parseInt(req.query.days || '30', 10), 365);
     const [rows] = await pool.query(
-      `SELECT s.awb, s.marketplace, s.reference_code, s.warehouse_id,
-              s.label_printed_at, s.current_status,
+      `SELECT u.awb,
+              u.marketplace,
+              u.customer_order_id  AS reference_code,
+              u.created_at         AS label_printed_at,
+              CASE WHEN v.id IS NULL THEN 'Pending' ELSE 'Recorded' END AS current_status,
               v.id IS NOT NULL AS has_video
-         FROM ee_shipments s
-         LEFT JOIN vms_videos v ON v.awb = s.awb
-        WHERE s.marketplace LIKE '%ajio%'
-          AND s.label_printed_at IS NOT NULL
-          AND s.label_printed_at >= NOW() - INTERVAL ? DAY
-        ORDER BY s.label_printed_at DESC
+         FROM vms_awb_uploads u
+         LEFT JOIN vms_videos v ON v.awb = u.awb
+        WHERE u.created_at >= NOW() - INTERVAL ? DAY
+        ORDER BY u.created_at DESC
         LIMIT 5000`,
       [days]
     );
@@ -89,23 +90,24 @@ router.get('/api/awbs', isAuthenticated, isVideoCreator, async (req, res) => {
   }
 });
 
-// Lookup a single AWB so we can warn the operator if the AWB isn't
-// in the printed-Ajio set (still allow recording — we don't want to
-// block them — but flag it on the UI).
+// Lookup a single AWB. Used by the recorder to warn if the AWB hasn't
+// been uploaded by vmsOperator yet (still allow recording — won't block
+// the packer — but flag it on the UI).
 router.get('/api/awb/:awb', isAuthenticated, isVideoCreator, async (req, res) => {
   try {
     const awb = String(req.params.awb || '').trim();
     if (!awb) return res.status(400).json({ ok: false, error: 'awb required' });
-    const [[shipment]] = await pool.query(
-      `SELECT awb, marketplace, current_status, reference_code, label_printed_at
-         FROM ee_shipments WHERE awb = ? LIMIT 1`,
+    const [[uploaded]] = await pool.query(
+      `SELECT awb, customer_order_id AS reference_code, marketplace, created_at AS label_printed_at,
+              'Pending' AS current_status
+         FROM vms_awb_uploads WHERE awb = ? LIMIT 1`,
       [awb]
     );
     const [[video]] = await pool.query(
       `SELECT id, s3_key, created_at FROM vms_videos WHERE awb = ? LIMIT 1`,
       [awb]
     );
-    res.json({ ok: true, awb, shipment: shipment || null, video: video || null });
+    res.json({ ok: true, awb, shipment: uploaded || null, video: video || null });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
