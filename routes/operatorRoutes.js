@@ -348,68 +348,60 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
 });
 
 
+// Department -> event tables map for the new event-based pendency math.
+// Each row aggregates by (cutting_lot_id, operator) and reports:
+//   approved  — pieces this operator has APPROVED into this stage
+//   completed — pieces this operator has COMPLETED in this stage
+//   rejected  — pieces this operator has REJECTED at this stage
+//   inline    — approved - completed - rejected  (work in progress here)
+//   assigned  — historical compatibility column (= approved)
+//   pending   — historical compatibility column (= inline)
+const PENDENCY_STAGE_TABLES = {
+  stitching:  'stitching_events',
+  assembly:   'jeans_assembly_events',
+  washing:    'washing_events',
+  washing_in: 'washing_in_events',
+  finishing:  'finishing_events',
+};
+
 async function fetchPendencyRows(dept, searchLike, offset, limit) {
-  const cacheKey = `pend-${dept}-${searchLike}-${offset}-${limit}`;
+  const cacheKey = `pend-v2-${dept}-${searchLike}-${offset}-${limit}`;
   return cache.fetchCached(cacheKey, async () => {
-    let query = "";
-    const params = [searchLike, offset, limit];
-    if (dept === "assembly") {
-      query = `
-        SELECT ja.id AS assignment_id, sd.lot_no, u.username,
-               ja.assigned_pieces AS assigned,
-               COALESCE(jds.completed,0) AS completed,
-               ja.assigned_pieces - COALESCE(jds.completed,0) AS pending
-          FROM jeans_assembly_assignments ja
-          JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-          JOIN users u ON ja.user_id = u.id
-          LEFT JOIN (
-            SELECT assignment_id, SUM(total_pieces) AS completed
-              FROM jeans_assembly_data
-             GROUP BY assignment_id
-          ) jds ON jds.assignment_id = ja.id
-         WHERE sd.lot_no LIKE ?
-
-         ORDER BY ja.assigned_on DESC
-         LIMIT ?, ?`;
-      } else if (dept === "washing") {
-    query = `
-      SELECT wa.id AS assignment_id, jd.lot_no, u.username,
-             wa.assigned_pieces AS assigned,
-             COALESCE(wds.completed,0) AS completed,
-             wa.assigned_pieces - COALESCE(wds.completed,0) AS pending
-        FROM washing_assignments wa
-        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-        JOIN users u ON wa.user_id = u.id
-        LEFT JOIN (
-          SELECT washing_assignment_id, SUM(total_pieces) AS completed
-            FROM washing_data
-           GROUP BY washing_assignment_id
-        ) wds ON wds.washing_assignment_id = wa.id
-       WHERE jd.lot_no LIKE ?
-
-       ORDER BY wa.assigned_on DESC
-       LIMIT ?, ?`;
-  } else {
-    query = `
-      SELECT sa.id AS assignment_id, c.lot_no, u.username,
-             c.total_pieces AS assigned,
-             COALESCE(sds.completed,0) AS completed,
-             c.total_pieces - COALESCE(sds.completed,0) AS pending
-        FROM stitching_assignments sa
-        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-        JOIN users u ON sa.user_id = u.id
-        LEFT JOIN (
-          SELECT user_id, lot_no, SUM(total_pieces) AS completed
-            FROM stitching_data
-           GROUP BY user_id, lot_no
-        ) sds ON sds.user_id = sa.user_id AND sds.lot_no = c.lot_no
-       WHERE c.lot_no LIKE ?
-
-       ORDER BY sa.assigned_on DESC
-       LIMIT ?, ?`;
+    const eventsTable = PENDENCY_STAGE_TABLES[dept];
+    if (!eventsTable) {
+      // Unknown dept -> empty, but don't error so the page still loads.
+      return [];
     }
 
-    const [rows] = await pool.query(query, params);
+    // Event-based aggregation, joined back to cutting_lots for lot_no.
+    // Each (lot, operator) is a row. Operators who only approved (no
+    // complete yet) appear with completed = 0 and a positive inline,
+    // which is what the operator dashboard needs to see.
+    const query = `
+      SELECT
+        MIN(e.id) AS assignment_id,
+        cl.lot_no,
+        u.username,
+        SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END) AS approved,
+        SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END) AS completed,
+        SUM(CASE WHEN e.event_type='reject'   THEN e.pieces ELSE 0 END) AS rejected,
+        SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END)
+          - SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END)
+          - SUM(CASE WHEN e.event_type='reject'   THEN e.pieces ELSE 0 END) AS inline,
+        SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END) AS assigned,
+        SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END)
+          - SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END)
+          - SUM(CASE WHEN e.event_type='reject'   THEN e.pieces ELSE 0 END) AS pending
+      FROM ${eventsTable} e
+      JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+      JOIN users u ON u.id = e.operator_id
+      WHERE cl.lot_no LIKE ?
+      GROUP BY e.cutting_lot_id, e.operator_id, cl.lot_no, u.username
+      ORDER BY MAX(e.created_at) DESC
+      LIMIT ?, ?
+    `;
+
+    const [rows] = await pool.query(query, [searchLike, offset, limit]);
     return rows;
   });
 }
