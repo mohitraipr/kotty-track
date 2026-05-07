@@ -845,16 +845,19 @@ async function jaUpstreamSizes(conn, cuttingLotId, lotNo) {
   // Embed full per-size aggregates so frontend has no lookup work.
   const out = [];
   for (const [size_label, stitched] of Object.entries(stitchSizes)) {
-    const sa = jaSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const sa = jaSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0, upstream_rejected: 0, inline_rejected: 0 };
+    const consumed = (sa.approved || 0) + (sa.upstream_rejected || 0);
     out.push({
       size_label,
       stitched_qty: stitched,
       approved: sa.approved,
       completed: sa.completed,
       rejected: sa.rejected,
+      upstream_rejected: sa.upstream_rejected || 0,
+      inline_rejected: sa.inline_rejected || 0,
       inline: sa.inline,
       approved_at_stage: sa.approved,
-      available: Math.max(0, stitched - sa.approved),
+      available: Math.max(0, stitched - consumed),
     });
   }
   return out;
@@ -1249,19 +1252,19 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, remark } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason } = req.body;
 
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) {
       return res.status(400).json({ error: 'Invalid cutting_lot_id' });
     }
-    if (!Array.isArray(sizes) || sizes.length === 0) {
-      return res.status(400).json({ error: 'sizes is required' });
-    }
-    const cleanSizes = sizes
+    const cleanSizes = (Array.isArray(sizes) ? sizes : [])
       .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
       .filter(s => s.size_label && s.pieces > 0);
-    if (!cleanSizes.length) {
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length && !cleanRejected.length) {
       return res.status(400).json({ error: 'No positive size quantities provided' });
     }
 
@@ -1277,54 +1280,79 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
       return res.status(404).json({ error: 'Lot not found' });
     }
 
-    // Re-check upstream availability under the txn
     const upstream = await jaUpstreamSizes(conn, lotId, lot.lot_no);
     const upstreamMap = {};
     for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
-    for (const s of cleanSizes) {
-      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
-      if (s.pieces > avail) {
+
+    const labels = new Set([
+      ...cleanSizes.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+      ...cleanRejected.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+    ]);
+    for (const k of labels) {
+      const avail = upstreamMap[k] || 0;
+      const taken = (cleanSizes.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      const rej   = (cleanRejected.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      if (taken + rej > avail) {
         await conn.rollback();
         return res.status(400).json({
-          error: `Size ${s.size_label}: only ${avail} pieces completed by stitching not yet taken (requested ${s.pieces})`,
+          error: `Size ${k}: only ${avail} pieces available from stitching (requested ${taken + rej} = take ${taken} + reject ${rej})`,
         });
       }
     }
 
-    const eventId = await stageEvents.recordEvent(conn, {
-      stage: STAGE_JA,
-      cuttingLotId: lotId,
-      eventType: 'approve',
-      operatorId: userId,
-      sizes: cleanSizes,
-      parentEventId: null,
-      remark: remark ? String(remark).trim() : null,
-    });
+    let approveEventId = null;
+    let rejectEventId  = null;
+
+    if (cleanSizes.length) {
+      approveEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_JA,
+        cuttingLotId: lotId,
+        eventType: 'approve',
+        operatorId: userId,
+        sizes: cleanSizes,
+        parentEventId: null,
+        remark: remark ? String(remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_JA,
+        cuttingLotId: lotId,
+        eventType: 'reject',
+        operatorId: userId,
+        sizes: cleanRejected,
+        parentEventId: null,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
 
     await conn.commit();
 
-    // Fire stitching payment outside the txn — payment failure doesn't
-    // roll the approve back. Best-effort.
+    // Stitching payment fires for taken pieces only — best-effort
     const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
-    try {
-      const stitcher = await jaPickStitcherForPayment(pool, lot.lot_no);
-      if (stitcher) {
-        await createStagePayment('stitching', {
-          lot_no: lot.lot_no,
-          sku: stitcher.sku || lot.sku,
-          qty: totalPieces,
-          user_id: stitcher.user_id,
-          username: stitcher.username,
-        });
+    if (totalPieces > 0) {
+      try {
+        const stitcher = await jaPickStitcherForPayment(pool, lot.lot_no);
+        if (stitcher) {
+          await createStagePayment('stitching', {
+            lot_no: lot.lot_no,
+            sku: stitcher.sku || lot.sku,
+            qty: totalPieces,
+            user_id: stitcher.user_id,
+            username: stitcher.username,
+          });
+        }
+      } catch (payErr) {
+        console.error('[WARN] /event/approve stitching payment failed:', payErr.message);
       }
-    } catch (payErr) {
-      console.error('[WARN] /event/approve stitching payment failed:', payErr.message);
     }
 
     res.json({
       success: true,
-      event_id: eventId,
+      event_id: approveEventId,
+      reject_event_id: rejectEventId,
       total_pieces: totalPieces,
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
       sizes: cleanSizes,
     });
   } catch (err) {

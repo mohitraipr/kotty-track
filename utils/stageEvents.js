@@ -34,8 +34,14 @@ function tablesFor(stage) {
 
 /**
  * Aggregate event totals for a single (lot, stage). Returns:
- *   { approved, completed, rejected, inline }
- * where inline = approved - completed - rejected.
+ *   { approved, completed, rejected, inline_rejected, upstream_rejected, inline }
+ *
+ *   - upstream_rejected: reject events with parent_event_id IS NULL (rejected
+ *     at upstream handover; never entered this stage's pool — consumes upstream pool)
+ *   - inline_rejected:   reject events with parent_event_id NOT NULL (rejected
+ *     during this stage's processing — consumes a previous approve)
+ *   - rejected = upstream_rejected + inline_rejected (back-compat)
+ *   - inline   = approved - completed - inline_rejected (the WIP currently held)
  */
 async function getStageAggregates(conn, stage, cuttingLotId) {
   const { events } = tablesFor(stage);
@@ -44,21 +50,26 @@ async function getStageAggregates(conn, stage, cuttingLotId) {
       SELECT
         COALESCE(SUM(CASE WHEN event_type='approve'  THEN pieces END), 0) AS approved,
         COALESCE(SUM(CASE WHEN event_type='complete' THEN pieces END), 0) AS completed,
-        COALESCE(SUM(CASE WHEN event_type='reject'   THEN pieces END), 0) AS rejected
+        COALESCE(SUM(CASE WHEN event_type='reject' AND parent_event_id IS NOT NULL THEN pieces END), 0) AS inline_rejected,
+        COALESCE(SUM(CASE WHEN event_type='reject' AND parent_event_id IS NULL     THEN pieces END), 0) AS upstream_rejected
       FROM ${events}
       WHERE cutting_lot_id = ?
     `,
     [cuttingLotId]
   );
   const r = rows[0] || {};
-  const approved = Number(r.approved) || 0;
-  const completed = Number(r.completed) || 0;
-  const rejected = Number(r.rejected) || 0;
+  const approved          = Number(r.approved)          || 0;
+  const completed         = Number(r.completed)         || 0;
+  const inline_rejected   = Number(r.inline_rejected)   || 0;
+  const upstream_rejected = Number(r.upstream_rejected) || 0;
+  const rejected          = inline_rejected + upstream_rejected;
   return {
     approved,
     completed,
     rejected,
-    inline: approved - completed - rejected,
+    inline_rejected,
+    upstream_rejected,
+    inline: approved - completed - inline_rejected,
   };
 }
 
@@ -72,11 +83,12 @@ async function getStageSizeAggregates(conn, stage, cuttingLotId) {
     `
       SELECT s.size_label,
              e.event_type,
+             CASE WHEN e.parent_event_id IS NULL THEN 'u' ELSE 'i' END AS bucket,
              SUM(s.pieces) AS pieces
       FROM ${eventSizes} s
       JOIN ${events} e ON e.id = s.event_id
       WHERE e.cutting_lot_id = ?
-      GROUP BY s.size_label, e.event_type
+      GROUP BY s.size_label, e.event_type, bucket
     `,
     [cuttingLotId]
   );
@@ -87,12 +99,23 @@ async function getStageSizeAggregates(conn, stage, cuttingLotId) {
     // downstream object-key lookups.
     const key = String(row.size_label || '').trim().toUpperCase();
     if (!key) continue;
-    if (!map[key]) map[key] = { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    if (!map[key]) {
+      map[key] = {
+        approved: 0, completed: 0, rejected: 0,
+        inline_rejected: 0, upstream_rejected: 0, inline: 0,
+      };
+    }
+    const pieces = Number(row.pieces) || 0;
     const k = EVENT_TYPE_TO_KEY[row.event_type];
-    if (k) map[key][k] = (map[key][k] || 0) + (Number(row.pieces) || 0);
+    if (!k) continue;
+    map[key][k] = (map[key][k] || 0) + pieces;
+    if (row.event_type === 'reject') {
+      if (row.bucket === 'u') map[key].upstream_rejected += pieces;
+      else                    map[key].inline_rejected   += pieces;
+    }
   }
   for (const key of Object.keys(map)) {
-    map[key].inline = map[key].approved - map[key].completed - map[key].rejected;
+    map[key].inline = map[key].approved - map[key].completed - map[key].inline_rejected;
   }
   return map;
 }
@@ -220,9 +243,11 @@ async function recordEvent(conn, {
   if (eventType === 'approve' && parentEventId !== null) {
     throw new Error('approve events must not have a parent_event_id');
   }
-  if ((eventType === 'complete' || eventType === 'reject') && parentEventId === null) {
-    throw new Error(`${eventType} events require parent_event_id`);
+  if (eventType === 'complete' && parentEventId === null) {
+    throw new Error('complete events require parent_event_id');
   }
+  // reject events MAY be parentless: that's an "upstream reject" — pieces
+  // refused at handover before they entered this stage's pool.
 
   const [result] = await conn.query(
     `

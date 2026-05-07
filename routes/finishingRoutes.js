@@ -144,16 +144,19 @@ async function fUpstreamSizes(conn, lot) {
   const fSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_F, cuttingLotId);
   const out = [];
   for (const [size_label, qty] of Object.entries(upstream)) {
-    const sa = fSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const sa = fSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0, upstream_rejected: 0, inline_rejected: 0 };
+    const consumed = (sa.approved || 0) + (sa.upstream_rejected || 0);
     out.push({
       size_label,
       upstream_qty: qty,
       approved: sa.approved,
       completed: sa.completed,
       rejected: sa.rejected,
+      upstream_rejected: sa.upstream_rejected || 0,
+      inline_rejected: sa.inline_rejected || 0,
       inline: sa.inline,
       approved_at_stage: sa.approved,
-      available: Math.max(0, qty - sa.approved),
+      available: Math.max(0, qty - consumed),
     });
   }
   return out;
@@ -466,6 +469,198 @@ router.get('/event/payments/export', isAuthenticated, isFinishingMaster, async (
   }
 });
 
+// ==================================================================
+//   DISPATCH (post-complete) — cutting-lot-keyed dispatch surface for
+//   the new event-model UI. Wraps the existing finishing_dispatches +
+//   finishing_data tables. Owner-locked: only the operator who owns
+//   the finishing_data row can dispatch from it.
+// ==================================================================
+
+// GET /finishingdashboard/event/dispatch-state/:cuttingLotId
+// Returns this operator's dispatchable finishing_data rows for the lot,
+// each with per-size produced/dispatched/available, plus a flat lot-level
+// availability summary.
+router.get('/event/dispatch-state/:cuttingLotId', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    const userId = req.session.user.id;
+
+    const [[lot]] = await pool.query(`SELECT id, lot_no, sku FROM cutting_lots WHERE id = ?`, [lotId]);
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    const [batches] = await pool.query(
+      `SELECT id, lot_no, sku, total_pieces, remark, created_at
+       FROM finishing_data
+       WHERE user_id = ? AND lot_no = ?
+       ORDER BY created_at ASC`,
+      [userId, lot.lot_no]
+    );
+    if (!batches.length) {
+      return res.json({ lot, batches: [], lot_summary: { available: 0, dispatched: 0, produced: 0 } });
+    }
+
+    const ids = batches.map(b => b.id);
+    const [sizeRows] = await pool.query(
+      `SELECT fds.finishing_data_id, fds.size_label, fds.pieces,
+              COALESCE(d.qty, 0) AS dispatched
+       FROM finishing_data_sizes fds
+       LEFT JOIN (
+         SELECT finishing_data_id, size_label, SUM(quantity) AS qty
+         FROM finishing_dispatches
+         WHERE finishing_data_id IN (?)
+         GROUP BY finishing_data_id, size_label
+       ) d ON d.finishing_data_id = fds.finishing_data_id AND d.size_label = fds.size_label
+       WHERE fds.finishing_data_id IN (?)
+       ORDER BY fds.finishing_data_id, fds.id`,
+      [ids, ids]
+    );
+
+    const sizesByBatch = {};
+    let lotProduced = 0, lotDispatched = 0, lotAvailable = 0;
+    for (const r of sizeRows) {
+      const produced  = Number(r.pieces) || 0;
+      const dispatched = Number(r.dispatched) || 0;
+      const available = Math.max(0, produced - dispatched);
+      lotProduced   += produced;
+      lotDispatched += dispatched;
+      lotAvailable  += available;
+      if (!sizesByBatch[r.finishing_data_id]) sizesByBatch[r.finishing_data_id] = [];
+      sizesByBatch[r.finishing_data_id].push({
+        size_label: r.size_label,
+        produced, dispatched, available,
+      });
+    }
+
+    const out = batches.map(b => {
+      const sizes = sizesByBatch[b.id] || [];
+      const batchAvailable = sizes.reduce((a, s) => a + s.available, 0);
+      const batchProduced  = sizes.reduce((a, s) => a + s.produced, 0);
+      const batchDispatched = sizes.reduce((a, s) => a + s.dispatched, 0);
+      return {
+        finishing_data_id: b.id,
+        lot_no: b.lot_no,
+        sku: b.sku,
+        total_pieces: b.total_pieces,
+        remark: b.remark,
+        created_at: b.created_at,
+        sizes,
+        produced: batchProduced,
+        dispatched: batchDispatched,
+        available: batchAvailable,
+        fully_dispatched: batchAvailable === 0,
+      };
+    });
+
+    res.json({
+      lot,
+      batches: out,
+      lot_summary: { available: lotAvailable, dispatched: lotDispatched, produced: lotProduced },
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/dispatch-state =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /finishingdashboard/event/dispatch
+// Body: { finishing_data_id, destination, custom_destination?, sizes: [{size_label, pieces}] }
+// Inserts finishing_dispatches rows. Owner-locked: only the user who owns
+// this finishing_data row may dispatch from it.
+router.post('/event/dispatch', isAuthenticated, isFinishingMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const { finishing_data_id, destination, custom_destination, sizes } = req.body;
+
+    const fdId = parseInt(finishing_data_id, 10);
+    if (!Number.isFinite(fdId) || fdId <= 0) return res.status(400).json({ error: 'Invalid finishing_data_id' });
+
+    let dest = String(destination || '').trim();
+    if (dest === 'other' || !dest) {
+      dest = String(custom_destination || '').trim();
+    }
+    if (!dest) return res.status(400).json({ error: 'Destination is required' });
+
+    const cleanSizes = (Array.isArray(sizes) ? sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length) return res.status(400).json({ error: 'No positive size quantities provided' });
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [[fd]] = await conn.query(
+      `SELECT id, user_id, lot_no FROM finishing_data WHERE id = ? FOR UPDATE`,
+      [fdId]
+    );
+    if (!fd) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Finishing batch not found' });
+    }
+    if (fd.user_id !== userId) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'You can only dispatch from your own finishing batches' });
+    }
+
+    // Per-size availability check under the txn
+    const [sizeRows] = await conn.query(
+      `SELECT fds.id, fds.size_label, fds.pieces,
+              COALESCE(d.qty, 0) AS dispatched,
+              COALESCE(dDest.qty, 0) AS dest_dispatched
+       FROM finishing_data_sizes fds
+       LEFT JOIN (
+         SELECT size_label, SUM(quantity) AS qty FROM finishing_dispatches
+         WHERE finishing_data_id = ? GROUP BY size_label
+       ) d ON d.size_label = fds.size_label
+       LEFT JOIN (
+         SELECT size_label, SUM(quantity) AS qty FROM finishing_dispatches
+         WHERE finishing_data_id = ? AND destination = ? GROUP BY size_label
+       ) dDest ON dDest.size_label = fds.size_label
+       WHERE fds.finishing_data_id = ?`,
+      [fdId, fdId, dest, fdId]
+    );
+    const fdSizeMap = {};
+    for (const r of sizeRows) fdSizeMap[stageEvents.normalizeSizeLabel(r.size_label)] = r;
+
+    const inserts = [];
+    let totalDispatch = 0;
+    for (const s of cleanSizes) {
+      const k = stageEvents.normalizeSizeLabel(s.size_label);
+      const row = fdSizeMap[k];
+      if (!row) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Size ${s.size_label} not produced in this batch` });
+      }
+      const available = (Number(row.pieces) || 0) - (Number(row.dispatched) || 0);
+      if (s.pieces > available) {
+        await conn.rollback();
+        return res.status(400).json({ error: `Size ${row.size_label}: only ${available} pieces available to dispatch (requested ${s.pieces})` });
+      }
+      const newTotalSent = (Number(row.dest_dispatched) || 0) + s.pieces;
+      inserts.push([fdId, fd.lot_no, dest, row.size_label, s.pieces, newTotalSent, new Date(), new Date()]);
+      totalDispatch += s.pieces;
+    }
+
+    if (inserts.length) {
+      await conn.query(
+        `INSERT INTO finishing_dispatches
+          (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
+         VALUES ?`,
+        [inserts]
+      );
+    }
+    await conn.commit();
+    res.json({ success: true, dispatched_total: totalDispatch, destination: dest });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /finishingdashboard/event/dispatch =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 router.get('/event/search', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
@@ -527,15 +722,19 @@ router.post('/event/approve', isAuthenticated, isFinishingMaster, async (req, re
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, remark } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason } = req.body;
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
-    if (!Array.isArray(sizes) || !sizes.length) return res.status(400).json({ error: 'sizes is required' });
 
-    const cleanSizes = sizes
+    const cleanSizes = (Array.isArray(sizes) ? sizes : [])
       .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
       .filter(s => s.size_label && s.pieces > 0);
-    if (!cleanSizes.length) return res.status(400).json({ error: 'No positive size quantities provided' });
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length && !cleanRejected.length) {
+      return res.status(400).json({ error: 'No positive size quantities provided' });
+    }
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
@@ -549,36 +748,64 @@ router.post('/event/approve', isAuthenticated, isFinishingMaster, async (req, re
     const upstream = await fUpstreamSizes(conn, lot);
     const upstreamMap = {};
     for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
-    for (const s of cleanSizes) {
-      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
-      if (s.pieces > avail) {
+
+    const labels = new Set([
+      ...cleanSizes.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+      ...cleanRejected.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+    ]);
+    for (const k of labels) {
+      const avail = upstreamMap[k] || 0;
+      const taken = (cleanSizes.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      const rej   = (cleanRejected.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      if (taken + rej > avail) {
         await conn.rollback();
-        return res.status(400).json({ error: `Size ${s.size_label}: only ${avail} pieces available (requested ${s.pieces})` });
+        return res.status(400).json({ error: `Size ${k}: only ${avail} pieces available (requested ${taken + rej} = take ${taken} + reject ${rej})` });
       }
     }
 
-    const eventId = await stageEvents.recordEvent(conn, {
-      stage: STAGE_F, cuttingLotId: lotId, eventType: 'approve',
-      operatorId: userId, sizes: cleanSizes, parentEventId: null,
-      remark: remark ? String(remark).trim() : null,
-    });
+    let approveEventId = null;
+    let rejectEventId  = null;
+
+    if (cleanSizes.length) {
+      approveEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_F, cuttingLotId: lotId, eventType: 'approve',
+        operatorId: userId, sizes: cleanSizes, parentEventId: null,
+        remark: remark ? String(remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_F, cuttingLotId: lotId, eventType: 'reject',
+        operatorId: userId, sizes: cleanRejected, parentEventId: null,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
 
     await conn.commit();
 
     const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
-    try {
-      const payee = await fPickPayeeForLot(pool, lot);
-      if (payee) {
-        await createStagePayment(payee.stage, {
-          lot_no: lot.lot_no, sku: payee.sku || lot.sku, qty: totalPieces,
-          user_id: payee.user_id, username: payee.username,
-        });
+    if (totalPieces > 0) {
+      try {
+        const payee = await fPickPayeeForLot(pool, lot);
+        if (payee) {
+          await createStagePayment(payee.stage, {
+            lot_no: lot.lot_no, sku: payee.sku || lot.sku, qty: totalPieces,
+            user_id: payee.user_id, username: payee.username,
+          });
+        }
+      } catch (payErr) {
+        console.error('[WARN] /finishing/event/approve payment failed:', payErr.message);
       }
-    } catch (payErr) {
-      console.error('[WARN] /finishing/event/approve payment failed:', payErr.message);
     }
 
-    res.json({ success: true, event_id: eventId, total_pieces: totalPieces, sizes: cleanSizes });
+    res.json({
+      success: true,
+      event_id: approveEventId,
+      reject_event_id: rejectEventId,
+      total_pieces: totalPieces,
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+      sizes: cleanSizes,
+    });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch (_) {}
     console.error('[ERROR] POST /finishing/event/approve =>', err);

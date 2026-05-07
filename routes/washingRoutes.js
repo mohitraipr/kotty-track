@@ -719,16 +719,19 @@ async function wUpstreamSizes(conn, cuttingLotId, lotNo) {
 
   const out = [];
   for (const [size_label, assembled] of Object.entries(upstream)) {
-    const sa = wSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const sa = wSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0, upstream_rejected: 0, inline_rejected: 0 };
+    const consumed = (sa.approved || 0) + (sa.upstream_rejected || 0);
     out.push({
       size_label,
       assembled_qty: assembled,
       approved: sa.approved,
       completed: sa.completed,
       rejected: sa.rejected,
+      upstream_rejected: sa.upstream_rejected || 0,
+      inline_rejected: sa.inline_rejected || 0,
       inline: sa.inline,
       approved_at_stage: sa.approved,
-      available: Math.max(0, assembled - sa.approved),
+      available: Math.max(0, assembled - consumed),
     });
   }
   return out;
@@ -1108,16 +1111,20 @@ router.post('/event/approve', isAuthenticated, isWashingMaster, async (req, res)
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, remark } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, remark, reject_reason } = req.body;
 
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
-    if (!Array.isArray(sizes) || !sizes.length) return res.status(400).json({ error: 'sizes is required' });
 
-    const cleanSizes = sizes
+    const cleanSizes = (Array.isArray(sizes) ? sizes : [])
       .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
       .filter(s => s.size_label && s.pieces > 0);
-    if (!cleanSizes.length) return res.status(400).json({ error: 'No positive size quantities provided' });
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length && !cleanRejected.length) {
+      return res.status(400).json({ error: 'No positive size quantities provided' });
+    }
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
@@ -1128,43 +1135,75 @@ router.post('/event/approve', isAuthenticated, isWashingMaster, async (req, res)
     const upstream = await wUpstreamSizes(conn, lotId, lot.lot_no);
     const upstreamMap = {};
     for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
-    for (const s of cleanSizes) {
-      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
-      if (s.pieces > avail) {
+
+    const labels = new Set([
+      ...cleanSizes.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+      ...cleanRejected.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+    ]);
+    for (const k of labels) {
+      const avail = upstreamMap[k] || 0;
+      const taken = (cleanSizes.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      const rej   = (cleanRejected.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      if (taken + rej > avail) {
         await conn.rollback();
-        return res.status(400).json({ error: `Size ${s.size_label}: only ${avail} pieces completed by assembly not yet taken (requested ${s.pieces})` });
+        return res.status(400).json({ error: `Size ${k}: only ${avail} pieces available from assembly (requested ${taken + rej} = take ${taken} + reject ${rej})` });
       }
     }
 
-    const eventId = await stageEvents.recordEvent(conn, {
-      stage: STAGE_W,
-      cuttingLotId: lotId,
-      eventType: 'approve',
-      operatorId: userId,
-      sizes: cleanSizes,
-      parentEventId: null,
-      remark: remark ? String(remark).trim() : null,
-    });
+    let approveEventId = null;
+    let rejectEventId  = null;
+
+    if (cleanSizes.length) {
+      approveEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_W,
+        cuttingLotId: lotId,
+        eventType: 'approve',
+        operatorId: userId,
+        sizes: cleanSizes,
+        parentEventId: null,
+        remark: remark ? String(remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_W,
+        cuttingLotId: lotId,
+        eventType: 'reject',
+        operatorId: userId,
+        sizes: cleanRejected,
+        parentEventId: null,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
 
     await conn.commit();
 
     const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
-    try {
-      const assembler = await wPickAssemblerForPayment(pool, lot.lot_no);
-      if (assembler) {
-        await createStagePayment('assembly', {
-          lot_no: lot.lot_no,
-          sku: assembler.sku || lot.sku,
-          qty: totalPieces,
-          user_id: assembler.user_id,
-          username: assembler.username,
-        });
+    if (totalPieces > 0) {
+      try {
+        const assembler = await wPickAssemblerForPayment(pool, lot.lot_no);
+        if (assembler) {
+          await createStagePayment('assembly', {
+            lot_no: lot.lot_no,
+            sku: assembler.sku || lot.sku,
+            qty: totalPieces,
+            user_id: assembler.user_id,
+            username: assembler.username,
+          });
+        }
+      } catch (payErr) {
+        console.error('[WARN] /event/approve assembly payment failed:', payErr.message);
       }
-    } catch (payErr) {
-      console.error('[WARN] /event/approve assembly payment failed:', payErr.message);
     }
 
-    res.json({ success: true, event_id: eventId, total_pieces: totalPieces, sizes: cleanSizes });
+    res.json({
+      success: true,
+      event_id: approveEventId,
+      reject_event_id: rejectEventId,
+      total_pieces: totalPieces,
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+      sizes: cleanSizes,
+    });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch (_) {}
     console.error('[ERROR] POST /washing/event/approve =>', err);

@@ -384,7 +384,7 @@
     margin: 0 0 0.75rem;
   }
 
-  .sx-input-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .sx-input-list { display: flex; flex-direction: column; gap: 0.625rem; }
   .sx-input-row {
     display: grid; grid-template-columns: 3rem 1fr auto; gap: 0.625rem;
     align-items: center;
@@ -392,6 +392,47 @@
     background: var(--c-card); border: 1px solid var(--c-border);
     border-radius: var(--r);
   }
+  /* Per-size card with stacked buckets — used by Take card to split a
+     size into 2 (take/reject) or 3 (take/rewash/reject) buckets. */
+  .sx-input-card {
+    display: grid; grid-template-columns: 1fr; gap: 0.5rem;
+    padding: 0.75rem 0.75rem 0.625rem;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r);
+  }
+  .sx-input-card-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 0.625rem;
+  }
+  .sx-input-card-head .label {
+    font-size: 1.125rem; font-weight: 800;
+    color: var(--c-text); letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sx-input-card-head .avail {
+    font-size: 0.75rem; color: var(--c-text-2);
+  }
+  .sx-input-card-head .avail .n {
+    color: var(--c-text); font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .sx-bucket-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    flex-wrap: wrap; justify-content: flex-end;
+  }
+  .sx-bucket {
+    display: flex; align-items: center; gap: 0.375rem;
+  }
+  .sx-bucket-tag {
+    font-size: 0.6875rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+  }
+  .sx-bucket-tag.take   { background: var(--c-primary-soft); color: var(--c-primary); }
+  .sx-bucket-tag.rewash { background: var(--c-warning-soft); color: var(--c-warning); }
+  .sx-bucket-tag.reject { background: var(--c-danger-soft);  color: var(--c-danger); }
+
   .sx-input-label {
     font-weight: 700; font-size: 1rem; color: var(--c-text); text-align: center;
     font-variant-numeric: tabular-nums;
@@ -417,6 +458,71 @@
     font-variant-numeric: tabular-nums;
   }
   .sx-stepper input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px var(--c-primary-soft); }
+  .sx-stepper.is-mini button { width: 1.875rem; height: 1.875rem; font-size: 0.75rem; }
+  .sx-stepper.is-mini input { width: 3rem; height: 1.875rem; font-size: 0.8125rem; }
+  .sx-stepper.is-rewash input { background: #fffbeb; border-color: #fde68a; color: var(--c-warning); }
+  .sx-stepper.is-rewash input:focus { border-color: var(--c-warning); box-shadow: 0 0 0 3px var(--c-warning-soft); }
+  .sx-stepper.is-rewash button:hover { background: var(--c-warning-soft); border-color: var(--c-warning); color: var(--c-warning); }
+  .sx-stepper.is-reject input { background: #fef2f2; border-color: #fecaca; color: var(--c-danger); }
+  .sx-stepper.is-reject input:focus { border-color: var(--c-danger); box-shadow: 0 0 0 3px var(--c-danger-soft); }
+  .sx-stepper.is-reject button:hover { background: var(--c-danger-soft); border-color: var(--c-danger); color: var(--c-danger); }
+
+  .sx-totals-grid {
+    display: grid; grid-template-columns: 1fr; gap: 0.5rem;
+    margin-top: 0.875rem;
+  }
+  .sx-totals-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .sx-totals-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .sx-mini-total {
+    padding: 0.625rem 0.75rem;
+    background: var(--c-bg); border-radius: var(--r);
+    text-align: center;
+  }
+  .sx-mini-total.is-take   { background: var(--c-primary-soft); }
+  .sx-mini-total.is-take   .l, .sx-mini-total.is-take   .v { color: var(--c-primary); }
+  .sx-mini-total.is-rewash { background: var(--c-warning-soft); }
+  .sx-mini-total.is-rewash .l, .sx-mini-total.is-rewash .v { color: var(--c-warning); }
+  .sx-mini-total.is-reject { background: var(--c-danger-soft); }
+  .sx-mini-total.is-reject .l, .sx-mini-total.is-reject .v { color: var(--c-danger); }
+  .sx-mini-total .l {
+    font-size: 0.6875rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 0.125rem; opacity: 0.9;
+  }
+  .sx-mini-total .v {
+    font-size: 1.375rem; font-weight: 800;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+
+  /* Dispatch card (finishing) */
+  .sx-action-card.is-dispatch::before { background: #0ea5e9; }
+  .sx-action-card.is-dispatch .sx-action-icon { background: #e0f2fe; color: #0284c7; }
+  .sx-action-card.is-dispatch .sx-action-title .qty { color: #0284c7; }
+  .sx-action-card.is-dispatch .sx-action-cta { background: #0284c7; box-shadow: 0 1px 2px rgba(2,132,199,0.25); }
+  .sx-action-card.is-dispatch .sx-action-cta:hover { background: #0369a1; box-shadow: 0 4px 12px rgba(2,132,199,0.35); }
+  .sx-action-card.is-dispatch .sx-form-submit { background: #0284c7; }
+  .sx-action-card.is-dispatch .sx-form-submit:hover { background: #0369a1; }
+  .sx-action-card.is-dispatch .sx-totals { background: #e0f2fe; }
+  .sx-action-card.is-dispatch .sx-totals .l, .sx-action-card.is-dispatch .sx-totals .v { color: #0284c7; }
+  .sx-dispatch-batch + .sx-dispatch-batch { margin-top: 0.875rem; padding-top: 0.875rem; border-top: 1px dashed var(--c-border); }
+  .sx-dispatch-batch-head {
+    font-size: 0.8125rem; font-weight: 600; color: var(--c-text-2);
+    margin-bottom: 0.5rem;
+  }
+  .sx-dispatch-batch-head .b { color: var(--c-text); font-weight: 700; }
+  .sx-dest-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
+    margin-top: 0.625rem;
+  }
+  .sx-dest-row select, .sx-dest-row input {
+    width: 100%; padding: 0.5rem 0.625rem; box-sizing: border-box;
+    border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    background: var(--c-card); font-family: inherit; font-size: 0.875rem;
+    color: var(--c-text);
+  }
+  @media (max-width: 480px) {
+    .sx-dest-row { grid-template-columns: 1fr; }
+  }
 
   .sx-form-row { margin-top: 0.625rem; }
   .sx-form-row input[type="text"] {
@@ -966,6 +1072,8 @@
 
 const BASE = '/jeansassemblydashboard';
 const STAGE_LABEL = 'Jeans Assembly';
+// Stage feature flags. Per-stage views override these at generation time.
+const STAGE_FEATURES = { rewash: false, dispatch: false };
 
 let currentLot = null;
 let currentState = null;
@@ -1114,7 +1222,7 @@ function renderState() {
 // ═════════════════════════════════════════════════════
 // Auto-action panel
 // ═════════════════════════════════════════════════════
-function renderActions() {
+async function renderActions() {
   const wrap = el('actionsContainer');
   wrap.innerHTML = '';
   const totalAvailable = currentState.upstream_total_available || 0;
@@ -1129,6 +1237,19 @@ function renderActions() {
     cards++;
     wrap.appendChild(buildDoneCard(a));
   });
+  // Dispatch (finishing only) — show card if there's anything ready to ship
+  if (STAGE_FEATURES.dispatch) {
+    try {
+      const ds = await api('GET', BASE + '/event/dispatch-state/' + currentLot.id);
+      const summary = ds.lot_summary || { available: 0 };
+      if ((summary.available || 0) > 0) {
+        cards++;
+        wrap.appendChild(buildDispatchCard(ds));
+      }
+    } catch (err) {
+      console.warn('dispatch-state failed', err.message);
+    }
+  }
   if (cards === 0) {
     const card = document.createElement('div');
     card.className = 'sx-action-card is-empty';
@@ -1143,9 +1264,141 @@ function renderActions() {
   }
 }
 
+// ─── Dispatch card (finishing only) ───────────────────────────
+function buildDispatchCard(state) {
+  const card = document.createElement('div');
+  card.className = 'sx-action-card is-dispatch';
+  const summary = state.lot_summary || { available: 0 };
+
+  card.innerHTML = `
+    <div class="sx-action-card-body">
+      <div class="sx-action-row">
+        <div class="sx-action-icon">→</div>
+        <div class="sx-action-text">
+          <p class="sx-action-title">Dispatch <span class="qty">${fmt(summary.available)}</span> finished pieces</p>
+          <p class="sx-action-sub">Pieces you've completed and not yet shipped. Pick a destination and the pieces to send.</p>
+        </div>
+      </div>
+      <button class="sx-action-cta" data-action="dispatch-toggle-form">
+        <span class="sx-action-cta-check">→</span>
+        Open dispatch form
+      </button>
+    </div>
+    <button class="sx-action-toggle" data-action="dispatch-toggle">
+      <span class="arrow">⌄</span> ${state.batches.length} batch${state.batches.length === 1 ? '' : 'es'} ready
+    </button>
+    <div class="sx-action-form" id="dispatchForm"></div>
+  `;
+
+  const form = card.querySelector('#dispatchForm');
+  state.batches.forEach((b, idx) => {
+    if ((b.available || 0) === 0) return;
+    const block = document.createElement('div');
+    block.className = 'sx-dispatch-batch';
+    block.dataset.fdId = String(b.finishing_data_id);
+    const created = b.created_at ? new Date(b.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    block.innerHTML = `
+      <div class="sx-dispatch-batch-head">
+        Batch <span class="b">#${b.finishing_data_id}</span> · ${fmt(b.available)} available${created ? ' · completed ' + escapeText(created) : ''}
+      </div>
+      <div class="sx-input-list" data-list="dispatch-sizes-${idx}"></div>
+      <div class="sx-dest-row">
+        <select data-input="destination-${idx}">
+          <option value="">— Select destination —</option>
+          <option value="Warehouse">Warehouse</option>
+          <option value="Ajio">Ajio</option>
+          <option value="Myntra">Myntra</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Flipkart">Flipkart</option>
+          <option value="Shopify">Shopify (own store)</option>
+          <option value="other">Other…</option>
+        </select>
+        <input type="text" placeholder="Custom destination" data-input="custom-dest-${idx}" />
+      </div>
+      <div class="sx-totals" style="margin-top: 0.625rem;">
+        <span class="l">Dispatching from this batch</span>
+        <span class="v" data-display="dispatch-total-${idx}">0</span>
+      </div>
+      <button class="sx-form-submit" data-action="dispatch-submit" data-idx="${idx}">Dispatch from batch #${b.finishing_data_id}</button>
+    `;
+
+    const sizeList = block.querySelector(`[data-list="dispatch-sizes-${idx}"]`);
+    b.sizes.forEach(s => {
+      if ((s.available || 0) === 0) return;
+      const sRow = document.createElement('div');
+      sRow.className = 'sx-input-row';
+      sRow.innerHTML = `
+        <span class="sx-input-label">${escapeText(s.size_label)}</span>
+        <span class="sx-input-avail"><span class="n">${fmt(s.available)}</span> ready</span>
+        <div class="sx-stepper">
+          <button type="button" data-step="-10">−10</button>
+          <button type="button" data-step="-1">−</button>
+          <input type="number" min="0" max="${s.available}" value="${s.available}"
+                 data-size="${escapeText(s.size_label)}" data-avail="${s.available}" data-batch="${idx}" />
+          <button type="button" data-step="1">+</button>
+          <button type="button" data-step="10">+10</button>
+        </div>
+      `;
+      bindStepper(sRow, () => recalcDispatchTotal(card, idx));
+      sizeList.appendChild(sRow);
+    });
+    form.appendChild(block);
+
+    block.querySelector(`[data-action="dispatch-submit"]`).addEventListener('click',
+      () => doDispatch(card, idx, b.finishing_data_id));
+    recalcDispatchTotal(card, idx);
+  });
+
+  card.querySelector('[data-action="dispatch-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
+  card.querySelector('[data-action="dispatch-toggle-form"]').addEventListener('click', () => card.classList.add('expanded'));
+
+  return card;
+}
+
+function recalcDispatchTotal(card, idx) {
+  const inputs = card.querySelectorAll(`[data-list="dispatch-sizes-${idx}"] input[data-size]`);
+  let total = 0;
+  inputs.forEach(i => {
+    let v = parseInt(i.value, 10);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    const max = Number(i.dataset.avail) || 0;
+    if (v > max) { v = max; i.value = v; }
+    total += v;
+  });
+  const t = card.querySelector(`[data-display="dispatch-total-${idx}"]`);
+  if (t) t.textContent = fmt(total);
+}
+
+async function doDispatch(card, idx, finishing_data_id) {
+  const inputs = card.querySelectorAll(`[data-list="dispatch-sizes-${idx}"] input[data-size]`);
+  const sizes = [];
+  inputs.forEach(i => {
+    const p = parseInt(i.value, 10) || 0;
+    if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p });
+  });
+  if (!sizes.length) { toast('No pieces selected', 'error'); return; }
+  const destSel = card.querySelector(`[data-input="destination-${idx}"]`);
+  const customInput = card.querySelector(`[data-input="custom-dest-${idx}"]`);
+  let dest = (destSel && destSel.value) || '';
+  if (dest === 'other') dest = (customInput && customInput.value || '').trim();
+  if (!dest) { toast('Pick a destination', 'error'); return; }
+  const total = sizes.reduce((a, s) => a + s.pieces, 0);
+  if (!confirm('Dispatch ' + fmt(total) + ' pieces from batch #' + finishing_data_id + ' to ' + dest + '?')) return;
+  try {
+    await api('POST', BASE + '/event/dispatch', {
+      finishing_data_id, destination: dest === 'other' ? 'other' : dest,
+      custom_destination: dest, sizes,
+    });
+    toast('Dispatched ' + fmt(total) + ' pieces ✓', 'success');
+    await refreshState();
+  } catch (err) { toast('Could not dispatch: ' + err.message, 'error'); }
+}
+
 function buildTakeCard() {
   const totalAvailable = currentState.upstream_total_available || 0;
   const upstream = currentState.upstream_sizes;
+  const hasRewash = !!STAGE_FEATURES.rewash;
+  const totalCols = 1 + (hasRewash ? 1 : 0) + 1; // take, [rewash,] reject
 
   const card = document.createElement('div');
   card.className = 'sx-action-card';
@@ -1155,7 +1408,9 @@ function buildTakeCard() {
         <div class="sx-action-icon">↘</div>
         <div class="sx-action-text">
           <p class="sx-action-title">Take <span class="qty">${fmt(totalAvailable)}</span> pieces into ${STAGE_LABEL.toLowerCase()}</p>
-          <p class="sx-action-sub">Everything still in the cutting pool.</p>
+          <p class="sx-action-sub">${hasRewash
+            ? 'Inspect what came in: take the good ones, send wet/improper back for rewash, reject anything torn or unusable.'
+            : 'Inspect what came in: take the good ones, reject anything torn or damaged.'}</p>
         </div>
       </div>
       <button class="sx-action-cta" data-action="take-confirm">
@@ -1164,38 +1419,89 @@ function buildTakeCard() {
       </button>
     </div>
     <button class="sx-action-toggle" data-action="take-toggle">
-      <span class="arrow">⌄</span> Or adjust by size
+      <span class="arrow">⌄</span> Or split each size: take${hasRewash ? ' / rewash' : ''} / reject
     </button>
     <div class="sx-action-form">
-      <p class="sx-form-helper">Pre-filled with everything available. Reduce a size below if you don't want to take it all.</p>
-      <div class="sx-input-list" id="takeSizeList"></div>
-      <div class="sx-form-row"><input type="text" id="takeRemark" placeholder="Note (optional)" /></div>
-      <div class="sx-totals">
-        <span class="l">Total to take</span>
-        <span class="v" id="takeTotal">0</span>
+      <p class="sx-form-helper">Pre-filled with the full available qty under <strong>Take</strong>. Move pieces into <strong style="color:${hasRewash ? 'var(--c-warning)' : 'var(--c-danger)'};">${hasRewash ? 'Rewash' : 'Reject'}</strong>${hasRewash ? ' or <strong style="color:var(--c-danger);">Reject</strong>' : ''} for sizes that need attention.</p>
+      <div class="sx-input-list" data-list="take-sizes"></div>
+
+      <div class="sx-form-row"><input type="text" data-input="take-remark" placeholder="Note for taken pieces (optional)" /></div>
+      ${hasRewash ? '<div class="sx-form-row"><input type="text" data-input="rewash-reason" placeholder="Reason for rewash (e.g. still wet, improper wash)" /></div>' : ''}
+      <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reason for reject (e.g. fabric defect)" /></div>
+
+      <div class="sx-totals-grid cols-${totalCols}">
+        <div class="sx-mini-total is-take"><div class="l">Take</div><div class="v" data-display="take-total">0</div></div>
+        ${hasRewash ? '<div class="sx-mini-total is-rewash"><div class="l">Rewash</div><div class="v" data-display="rewash-total">0</div></div>' : ''}
+        <div class="sx-mini-total is-reject"><div class="l">Reject</div><div class="v" data-display="reject-total">0</div></div>
       </div>
-      <button class="sx-form-submit" data-action="take-submit">Take pieces</button>
+      <button class="sx-form-submit" data-action="take-submit">Save</button>
     </div>
   `;
 
-  const list = card.querySelector('#takeSizeList');
+  const list = card.querySelector('[data-list="take-sizes"]');
   upstream.forEach(s => {
     const avail = s.available || 0;
     if (avail === 0) return;
     const row = document.createElement('div');
-    row.className = 'sx-input-row';
+    row.className = 'sx-input-card';
     row.innerHTML = `
-      <span class="sx-input-label">${escapeText(s.size_label)}</span>
-      <span class="sx-input-avail"><span class="n">${fmt(avail)}</span> available</span>
-      <div class="sx-stepper">
-        <button type="button" data-step="-10">−10</button>
-        <button type="button" data-step="-1">−</button>
-        <input type="number" min="0" max="${avail}" value="${avail}" data-size="${escapeText(s.size_label)}" data-avail="${avail}" />
-        <button type="button" data-step="1">+</button>
-        <button type="button" data-step="10">+10</button>
+      <div class="sx-input-card-head">
+        <span class="label">${escapeText(s.size_label)}</span>
+        <span class="avail"><span class="n">${fmt(avail)}</span> available</span>
+      </div>
+      <div class="sx-bucket-row">
+        <div class="sx-bucket">
+          <span class="sx-bucket-tag take">Take</span>
+          <div class="sx-stepper">
+            <button type="button" data-step="-10">−10</button>
+            <button type="button" data-step="-1">−</button>
+            <input type="number" min="0" max="${avail}" value="${avail}"
+                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="take" />
+            <button type="button" data-step="1">+</button>
+            <button type="button" data-step="10">+10</button>
+          </div>
+        </div>
+      </div>
+      <div class="sx-bucket-row">
+        ${hasRewash ? `
+        <div class="sx-bucket">
+          <span class="sx-bucket-tag rewash">Rewash</span>
+          <div class="sx-stepper is-mini is-rewash">
+            <button type="button" data-step="-1">−</button>
+            <input type="number" min="0" max="${avail}" value="0"
+                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="rewash" />
+            <button type="button" data-step="1">+</button>
+          </div>
+        </div>
+        ` : ''}
+        <div class="sx-bucket">
+          <span class="sx-bucket-tag reject">Reject</span>
+          <div class="sx-stepper is-mini is-reject">
+            <button type="button" data-step="-1">−</button>
+            <input type="number" min="0" max="${avail}" value="0"
+                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="reject" />
+            <button type="button" data-step="1">+</button>
+          </div>
+        </div>
       </div>
     `;
-    bindStepper(row, () => recalcTakeTotal(card));
+    // Re-bind every stepper in this row independently so each input
+    // updates correctly. The shared bindStepper utility handles ±N.
+    row.querySelectorAll('.sx-stepper').forEach(stepper => {
+      const input = stepper.querySelector('input');
+      const max = Number(input.dataset.avail) || 0;
+      stepper.querySelectorAll('button[data-step]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          let cur = parseInt(input.value, 10) || 0;
+          let next = cur + parseInt(btn.dataset.step, 10);
+          if (next < 0) next = 0;
+          if (next > max) next = max;
+          input.value = next;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      });
+      input.addEventListener('input', () => recalcTakeTotal(card));
+    });
     list.appendChild(row);
   });
 
@@ -1208,16 +1514,50 @@ function buildTakeCard() {
 }
 
 function recalcTakeTotal(card) {
-  const inputs = card.querySelectorAll('#takeSizeList input[data-size]');
-  let total = 0;
-  inputs.forEach(i => {
-    let v = parseInt(i.value, 10);
-    if (!Number.isFinite(v) || v < 0) v = 0;
-    const max = Number(i.dataset.avail) || 0;
-    if (v > max) { v = max; i.value = v; }
-    total += v;
+  // Per size: take + rewash + reject must not exceed available.
+  // Cascade reduction: when the sum exceeds avail, trim the input that
+  // just changed (we don't know which, so trim deterministically — last
+  // bucket in the order reject→rewash→take).
+  const groups = {};
+  card.querySelectorAll('[data-list="take-sizes"] input[data-size]').forEach(i => {
+    const k = i.dataset.size;
+    if (!groups[k]) groups[k] = { avail: Number(i.dataset.avail) || 0, take: null, rewash: null, reject: null };
+    groups[k][i.dataset.kind] = i;
   });
-  card.querySelector('#takeTotal').textContent = fmt(total);
+  let totalTake = 0, totalRewash = 0, totalReject = 0;
+  for (const k of Object.keys(groups)) {
+    const g = groups[k];
+    let take   = parseInt((g.take||{}).value,   10) || 0;
+    let rewash = parseInt((g.rewash||{}).value, 10) || 0;
+    let reject = parseInt((g.reject||{}).value, 10) || 0;
+    if (take < 0) take = 0;
+    if (rewash < 0) rewash = 0;
+    if (reject < 0) reject = 0;
+    let sum = take + rewash + reject;
+    if (sum > g.avail) {
+      // Trim from reject first, then rewash, then take.
+      let over = sum - g.avail;
+      const cuts = [['reject', () => reject], ['rewash', () => rewash], ['take', () => take]];
+      for (const [name, _] of cuts) {
+        if (over <= 0) break;
+        const cur = name === 'reject' ? reject : name === 'rewash' ? rewash : take;
+        const trim = Math.min(cur, over);
+        if (name === 'reject') reject -= trim;
+        else if (name === 'rewash') rewash -= trim;
+        else take -= trim;
+        over -= trim;
+      }
+      if (g.take)   g.take.value   = take;
+      if (g.rewash) g.rewash.value = rewash;
+      if (g.reject) g.reject.value = reject;
+    }
+    totalTake   += take;
+    totalRewash += rewash;
+    totalReject += reject;
+  }
+  const t1 = card.querySelector('[data-display="take-total"]');   if (t1) t1.textContent = fmt(totalTake);
+  const t2 = card.querySelector('[data-display="rewash-total"]'); if (t2) t2.textContent = fmt(totalRewash);
+  const t3 = card.querySelector('[data-display="reject-total"]'); if (t3) t3.textContent = fmt(totalReject);
 }
 
 async function doTakeAll() {
@@ -1228,30 +1568,55 @@ async function doTakeAll() {
   if (!sizes.length) return;
   const total = sizes.reduce((a, s) => a + s.pieces, 0);
   if (!confirm('Take ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' into ' + STAGE_LABEL.toLowerCase() + '?')) return;
-  await doTakeRequest(sizes, null);
+  await doTakeRequest({ sizes, rejected_sizes: [], rewash_sizes: [] });
 }
 
 async function doTakeFromForm(card) {
-  const inputs = card.querySelectorAll('#takeSizeList input[data-size]');
   const sizes = [];
-  inputs.forEach(i => {
+  const rejected_sizes = [];
+  const rewash_sizes = [];
+  card.querySelectorAll('input[data-kind="take"]').forEach(i => {
     const p = parseInt(i.value, 10) || 0;
     if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p });
   });
-  if (!sizes.length) { toast('No pieces selected', 'error'); return; }
-  const remark = card.querySelector('#takeRemark').value.trim() || null;
-  const total = sizes.reduce((a, s) => a + s.pieces, 0);
-  if (!confirm('Take ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' into ' + STAGE_LABEL.toLowerCase() + '?')) return;
-  await doTakeRequest(sizes, remark);
+  card.querySelectorAll('input[data-kind="reject"]').forEach(i => {
+    const p = parseInt(i.value, 10) || 0;
+    if (p > 0) rejected_sizes.push({ size_label: i.dataset.size, pieces: p });
+  });
+  card.querySelectorAll('input[data-kind="rewash"]').forEach(i => {
+    const p = parseInt(i.value, 10) || 0;
+    if (p > 0) rewash_sizes.push({ size_label: i.dataset.size, pieces: p });
+  });
+  if (!sizes.length && !rejected_sizes.length && !rewash_sizes.length) {
+    toast('Nothing entered', 'error'); return;
+  }
+  const remark        = (card.querySelector('[data-input="take-remark"]')   || {}).value || '';
+  const reject_reason = (card.querySelector('[data-input="reject-reason"]') || {}).value || '';
+  const rewash_reason = (card.querySelector('[data-input="rewash-reason"]') || {}).value || '';
+  const tt = sizes.reduce((a,s)=>a+s.pieces,0);
+  const rt = rewash_sizes.reduce((a,s)=>a+s.pieces,0);
+  const rj = rejected_sizes.reduce((a,s)=>a+s.pieces,0);
+  let msg = '';
+  if (tt) msg += 'Take ' + fmt(tt);
+  if (rt) msg += (msg ? ', ' : '') + 'send ' + fmt(rt) + ' back for rewash';
+  if (rj) msg += (msg ? ', ' : '') + 'reject ' + fmt(rj);
+  if (!confirm(msg + ' for ' + (currentLot.lot_no || '').toUpperCase() + '?')) return;
+  await doTakeRequest({
+    sizes, rejected_sizes, rewash_sizes,
+    remark: remark.trim() || null,
+    reject_reason: reject_reason.trim() || null,
+    rewash_reason: rewash_reason.trim() || null,
+  });
 }
 
-async function doTakeRequest(sizes, remark) {
+async function doTakeRequest(payload) {
   try {
-    await api('POST', BASE + '/event/approve', { cutting_lot_id: currentLot.id, sizes, remark });
-    toast('Taken into ' + STAGE_LABEL.toLowerCase() + ' ✓', 'success');
+    await api('POST', BASE + '/event/approve', { cutting_lot_id: currentLot.id, ...payload });
+    const tt = (payload.sizes || []).reduce((a,s)=>a+s.pieces,0);
+    toast(tt > 0 ? ('Taken into ' + STAGE_LABEL.toLowerCase() + ' ✓') : 'Saved ✓', 'success');
     await refreshState();
     if (infoTab === 'work') loadHistory();
-  } catch (err) { toast('Could not take: ' + err.message, 'error'); }
+  } catch (err) { toast('Could not save: ' + err.message, 'error'); }
 }
 
 function buildDoneCard(approve) {

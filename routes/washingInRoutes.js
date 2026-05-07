@@ -142,18 +142,39 @@ async function wiUpstreamSizes(conn, cuttingLotId, lotNo) {
   }
 
   const wiSizes = await stageEvents.getStageSizeAggregates(conn, STAGE_WI, cuttingLotId);
+  // Also subtract pending rewash requests against this lot — those pieces
+  // have been physically pulled back to washing and are no longer in the
+  // washing-in pool.
+  const [rewashRows] = await conn.query(
+    `SELECT rrs.size_label, COALESCE(SUM(rrs.pieces_requested),0) AS pieces
+     FROM rewash_requests rr
+     JOIN rewash_request_sizes rrs ON rrs.rewash_request_id = rr.id
+     WHERE rr.lot_no = ? AND rr.status = 'pending'
+     GROUP BY rrs.size_label`,
+    [lotNo]
+  );
+  const rewashMap = {};
+  for (const r of rewashRows) {
+    const k = stageEvents.normalizeSizeLabel(r.size_label);
+    if (k) rewashMap[k] = (rewashMap[k] || 0) + (Number(r.pieces) || 0);
+  }
   const out = [];
   for (const [size_label, washed] of Object.entries(upstream)) {
-    const sa = wiSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const sa = wiSizes[size_label] || { approved: 0, completed: 0, rejected: 0, inline: 0, upstream_rejected: 0, inline_rejected: 0 };
+    const pendingRewash = rewashMap[size_label] || 0;
+    const consumed = (sa.approved || 0) + (sa.upstream_rejected || 0) + pendingRewash;
     out.push({
       size_label,
       washed_qty: washed,
       approved: sa.approved,
       completed: sa.completed,
       rejected: sa.rejected,
+      upstream_rejected: sa.upstream_rejected || 0,
+      inline_rejected: sa.inline_rejected || 0,
+      pending_rewash: pendingRewash,
       inline: sa.inline,
       approved_at_stage: sa.approved,
-      available: Math.max(0, washed - sa.approved),
+      available: Math.max(0, washed - consumed),
     });
   }
   return out;
@@ -526,19 +547,32 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster,
   }
 });
 
+// POST /washingin/event/approve
+// Body: { cutting_lot_id, sizes, rejected_sizes?, rewash_sizes?, remark?, reject_reason?, rewash_reason? }
+// Three buckets at handover: TAKE (approve event), REJECT (reject event,
+// parent NULL), REWASH (rewash_requests row keyed to the upstream washer's
+// washing_data row, with ₹200/pc debit). All three split per size.
+const REWASH_DEBIT_RATE_PER_PC = 200;
 router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, res) => {
   let conn;
   try {
     const userId = req.session.user.id;
-    const { cutting_lot_id, sizes, remark } = req.body;
+    const { cutting_lot_id, sizes, rejected_sizes, rewash_sizes, remark, reject_reason, rewash_reason } = req.body;
     const lotId = parseInt(cutting_lot_id, 10);
     if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
-    if (!Array.isArray(sizes) || !sizes.length) return res.status(400).json({ error: 'sizes is required' });
 
-    const cleanSizes = sizes
+    const cleanSizes = (Array.isArray(sizes) ? sizes : [])
       .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
       .filter(s => s.size_label && s.pieces > 0);
-    if (!cleanSizes.length) return res.status(400).json({ error: 'No positive size quantities provided' });
+    const cleanRejected = (Array.isArray(rejected_sizes) ? rejected_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    const cleanRewash = (Array.isArray(rewash_sizes) ? rewash_sizes : [])
+      .map(s => ({ size_label: String(s.size_label || '').trim(), pieces: Number(s.pieces) || 0 }))
+      .filter(s => s.size_label && s.pieces > 0);
+    if (!cleanSizes.length && !cleanRejected.length && !cleanRewash.length) {
+      return res.status(400).json({ error: 'No positive size quantities provided' });
+    }
 
     conn = await pool.getConnection();
     await conn.beginTransaction();
@@ -549,36 +583,162 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
     const upstream = await wiUpstreamSizes(conn, lotId, lot.lot_no);
     const upstreamMap = {};
     for (const r of upstream) upstreamMap[stageEvents.normalizeSizeLabel(r.size_label)] = r.available;
-    for (const s of cleanSizes) {
-      const avail = upstreamMap[stageEvents.normalizeSizeLabel(s.size_label)] || 0;
-      if (s.pieces > avail) {
+
+    const labels = new Set([
+      ...cleanSizes.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+      ...cleanRejected.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+      ...cleanRewash.map(s => stageEvents.normalizeSizeLabel(s.size_label)),
+    ]);
+    for (const k of labels) {
+      const avail = upstreamMap[k] || 0;
+      const taken = (cleanSizes.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      const rej   = (cleanRejected.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      const rw    = (cleanRewash.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      if (taken + rej + rw > avail) {
         await conn.rollback();
-        return res.status(400).json({ error: `Size ${s.size_label}: only ${avail} pieces completed by washing not yet taken (requested ${s.pieces})` });
+        return res.status(400).json({
+          error: `Size ${k}: only ${avail} pieces available from washing (requested ${taken + rej + rw} = take ${taken} + reject ${rej} + rewash ${rw})`,
+        });
       }
     }
 
-    const eventId = await stageEvents.recordEvent(conn, {
-      stage: STAGE_WI, cuttingLotId: lotId, eventType: 'approve',
-      operatorId: userId, sizes: cleanSizes, parentEventId: null,
-      remark: remark ? String(remark).trim() : null,
-    });
+    let approveEventId = null;
+    let rejectEventId  = null;
+    let rewashRequestId = null;
+
+    if (cleanSizes.length) {
+      approveEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_WI, cuttingLotId: lotId, eventType: 'approve',
+        operatorId: userId, sizes: cleanSizes, parentEventId: null,
+        remark: remark ? String(remark).trim() : null,
+      });
+    }
+    if (cleanRejected.length) {
+      rejectEventId = await stageEvents.recordEvent(conn, {
+        stage: STAGE_WI, cuttingLotId: lotId, eventType: 'reject',
+        operatorId: userId, sizes: cleanRejected, parentEventId: null,
+        remark: reject_reason ? String(reject_reason).trim() : null,
+      });
+    }
+
+    if (cleanRewash.length) {
+      // Rewash: pick the upstream washer's washing_data row (largest/most-recent
+      // for this lot). Create rewash_requests + per-size rows. Deduct from
+      // washing_data_sizes so the next take sees fewer pieces. Debit washer
+      // ₹200/pc via stage_payments (negative-amount entry).
+      const [[wd]] = await conn.query(
+        `SELECT id, user_id, lot_no, sku, total_pieces
+         FROM washing_data
+         WHERE lot_no = ?
+         ORDER BY total_pieces DESC, created_at DESC
+         LIMIT 1`,
+        [lot.lot_no]
+      );
+      if (!wd) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Cannot find a washer batch to send pieces back to' });
+      }
+
+      const totalRewash = cleanRewash.reduce((a, s) => a + s.pieces, 0);
+      const [rrIns] = await conn.query(
+        `INSERT INTO rewash_requests (washing_data_id, user_id, lot_no, sku, total_requested, status)
+         VALUES (?, ?, ?, ?, ?, 'pending')`,
+        [wd.id, userId, wd.lot_no, wd.sku, totalRewash]
+      );
+      rewashRequestId = rrIns.insertId;
+
+      // Per-size rows + bookkeeping on washing_data_sizes
+      for (const s of cleanRewash) {
+        await conn.query(
+          `INSERT INTO rewash_request_sizes (rewash_request_id, size_label, pieces_requested)
+           VALUES (?, ?, ?)`,
+          [rewashRequestId, s.size_label, s.pieces]
+        );
+        await conn.query(
+          `UPDATE washing_data_sizes wds
+           SET wds.pieces = GREATEST(0, wds.pieces - ?)
+           WHERE wds.washing_data_id = ? AND wds.size_label = ?`,
+          [s.pieces, wd.id, s.size_label]
+        );
+        await conn.query(
+          `INSERT INTO washing_data_updates (washing_data_id, size_label, pieces)
+           VALUES (?, ?, ?)`,
+          [wd.id, s.size_label, -s.pieces]
+        );
+      }
+      await conn.query(
+        `UPDATE washing_data SET total_pieces = GREATEST(0, total_pieces - ?) WHERE id = ?`,
+        [totalRewash, wd.id]
+      );
+
+      // Debit the washer ₹200/pc — recorded as a negative payment row so
+      // the accounts dashboard shows the deduction. Best-effort outside txn
+      // committed below.
+      // (We commit the rewash bookkeeping first so the debit is not lost
+      //  if stage_payments insert fails for any unrelated reason.)
+    }
 
     await conn.commit();
 
+    // Side-effects after txn: washing payment for taken pieces + rewash debit
     const totalPieces = cleanSizes.reduce((a, s) => a + s.pieces, 0);
-    try {
-      const washer = await wiPickWasherForPayment(pool, lot.lot_no);
-      if (washer) {
-        await createStagePayment('washing', {
-          lot_no: lot.lot_no, sku: washer.sku || lot.sku, qty: totalPieces,
-          user_id: washer.user_id, username: washer.username,
-        });
+    if (totalPieces > 0) {
+      try {
+        const washer = await wiPickWasherForPayment(pool, lot.lot_no);
+        if (washer) {
+          await createStagePayment('washing', {
+            lot_no: lot.lot_no, sku: washer.sku || lot.sku, qty: totalPieces,
+            user_id: washer.user_id, username: washer.username,
+          });
+        }
+      } catch (payErr) {
+        console.error('[WARN] /washingin/event/approve washing payment failed:', payErr.message);
       }
-    } catch (payErr) {
-      console.error('[WARN] /washingin/event/approve washing payment failed:', payErr.message);
+    }
+    const totalRewashOut = cleanRewash.reduce((a, s) => a + s.pieces, 0);
+    if (totalRewashOut > 0) {
+      try {
+        const [[wd]] = await pool.query(
+          `SELECT wd.id, wd.user_id, u.username, wd.sku
+           FROM washing_data wd JOIN users u ON u.id = wd.user_id
+           WHERE wd.lot_no = ? ORDER BY wd.total_pieces DESC, wd.created_at DESC LIMIT 1`,
+          [lot.lot_no]
+        );
+        if (wd) {
+          // Stage_payments treats this as a 'washing' rebate: status 'pending',
+          // qty negative so the accounts UI displays it as a debit. The
+          // washer clears it by completing the rewash request; on completion
+          // /complete-rewash flow already issues a positive payment.
+          await pool.query(
+            `INSERT INTO stage_payments
+              (user_id, username, lot_no, sku, stage, qty,
+               base_rate, extra_rates_json, extra_amount, total_amount,
+               rate_configured, status, payment_remark, created_at)
+             VALUES (?, ?, ?, ?, 'washing', ?, ?, NULL, 0, ?, 1, 'pending', ?, NOW())`,
+            [
+              wd.user_id, wd.username, lot.lot_no, wd.sku || lot.sku,
+              -totalRewashOut,
+              REWASH_DEBIT_RATE_PER_PC,
+              -totalRewashOut * REWASH_DEBIT_RATE_PER_PC,
+              `Rewash debit (request #${rewashRequestId})${rewash_reason ? ' — ' + String(rewash_reason).trim() : ''}`,
+            ]
+          );
+        }
+      } catch (debitErr) {
+        console.error('[WARN] /washingin/event/approve rewash debit failed:', debitErr.message);
+      }
     }
 
-    res.json({ success: true, event_id: eventId, total_pieces: totalPieces, sizes: cleanSizes });
+    res.json({
+      success: true,
+      event_id: approveEventId,
+      reject_event_id: rejectEventId,
+      rewash_request_id: rewashRequestId,
+      total_pieces: totalPieces,
+      rejected_total: cleanRejected.reduce((a, s) => a + s.pieces, 0),
+      rewash_total: totalRewashOut,
+      sizes: cleanSizes,
+    });
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch (_) {}
     console.error('[ERROR] POST /washingin/event/approve =>', err);

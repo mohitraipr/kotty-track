@@ -980,6 +980,271 @@ function isDenimLot(lotOrLotNo, isDenimCutter = null, flowType = null) {
   return up.startsWith("AK") || up.startsWith("UM");
 }
 
+// ---------- PIC-Report v2 helpers (user-friendly schema) ----------
+function parseLotRemark(remark) {
+  if (!remark) return { externalLotNo: '', sortNo: '' };
+  const s = String(remark);
+  const lotMatch  = s.match(/LOT\s*N(?:O|UMBER)?\s*[:#-]?\s*([A-Za-z0-9_\-\/]+)/i);
+  const sortMatch = s.match(/SORT\s*N(?:O|UMBER)?\s*[:#-]?\s*([A-Za-z0-9_\-\/]+)/i);
+  return {
+    externalLotNo: lotMatch  ? lotMatch[1]  : '',
+    sortNo:        sortMatch ? sortMatch[1] : ''
+  };
+}
+
+function fmtIST(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  return dt.toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+}
+
+function daysSince(d, ref = new Date()) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const ms = ref.getTime() - dt.getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+// Per-stage classifier. Returns a status that describes ONLY this stage.
+//   isApplicable=false      => N/A (e.g. assembly/washing for hosiery)
+//   no assignment           => Not Started
+//   is_approved is null     => Pending Approval
+//   is_approved == 0        => Denied
+//   approved & out=0        => In Progress
+//   approved & out >= in    => Completed
+//   approved & 0<out<in     => Partial
+function classifyStage({ assign, inQty, outQty, nextAssign, isApplicable }) {
+  if (!isApplicable) {
+    return { status: 'N/A', pending: 0, inline: '' };
+  }
+  if (!assign) {
+    return { status: 'Not Started', pending: Math.max(0, inQty || 0), inline: '' };
+  }
+  const approved = (assign.is_approved !== undefined) ? assign.is_approved : assign.isApproved;
+  if (approved === null || approved === undefined) {
+    return { status: 'Pending Approval', pending: Math.max(0, (inQty || 0) - (outQty || 0)), inline: '' };
+  }
+  if (Number(approved) === 0) {
+    return { status: 'Denied', pending: Math.max(0, (inQty || 0) - (outQty || 0)), inline: '' };
+  }
+  // approved
+  if (!outQty || outQty <= 0) {
+    return { status: 'In Progress', pending: Math.max(0, inQty || 0), inline: nextAssign ? 'Yes' : '' };
+  }
+  if (inQty > 0 && outQty >= inQty) {
+    return { status: 'Completed', pending: 0, inline: nextAssign ? '' : 'Yes' };
+  }
+  return { status: 'Partial', pending: Math.max(0, inQty - outQty), inline: nextAssign ? 'Yes' : '' };
+}
+
+// Build a flat, user-friendly row: per-stage In/Out/Pending/Status/Inline + a top-level rollup.
+function buildEnhancedRow({
+  lot, isDenim, totalCut, sums, assigns, rewashQty
+}) {
+  const { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty } = sums;
+  const { stAssign, asmAssign, washAssign, washInAssign, finAssign } = assigns;
+
+  // Stage flows:
+  //   DENIM:    Cut → Stitch → Assembly → Washing → WashIn → Finishing
+  //   HOSIERY:  Cut → Stitch → Finishing
+  const stitch = classifyStage({
+    assign: stAssign,
+    inQty:  totalCut,
+    outQty: stitchedQty,
+    nextAssign: isDenim ? asmAssign : finAssign,
+    isApplicable: true
+  });
+  const assembly = classifyStage({
+    assign: asmAssign,
+    inQty:  stitchedQty,
+    outQty: assembledQty,
+    nextAssign: washAssign,
+    isApplicable: isDenim
+  });
+  const washing = classifyStage({
+    assign: washAssign,
+    inQty:  assembledQty,
+    outQty: washedQty,
+    nextAssign: washInAssign,
+    isApplicable: isDenim
+  });
+  const washIn = classifyStage({
+    assign: washInAssign,
+    inQty:  washedQty,
+    outQty: washingInQty,
+    nextAssign: finAssign,
+    isApplicable: isDenim
+  });
+  const finishing = classifyStage({
+    assign: finAssign,
+    inQty:  isDenim ? washingInQty : stitchedQty,
+    outQty: finishedQty,
+    nextAssign: null,
+    isApplicable: true
+  });
+
+  // Determine current stage: first non-Completed, non-NA in the chain.
+  const chain = isDenim
+    ? [['Stitching', stitch, stAssign],
+       ['Assembly',  assembly, asmAssign],
+       ['Washing',   washing,  washAssign],
+       ['Wash-In',   washIn,   washInAssign],
+       ['Finishing', finishing, finAssign]]
+    : [['Stitching', stitch, stAssign],
+       ['Finishing', finishing, finAssign]];
+
+  let currentStage = 'Done';
+  let currentPending = 0;
+  let stageStartTs = lot.created_at || null;
+  for (const [name, info, assign] of chain) {
+    if (info.status === 'N/A') continue;
+    if (info.status === 'Completed') {
+      // advance start ts to this stage's approval
+      if (assign && assign.approved_on) stageStartTs = assign.approved_on;
+      continue;
+    }
+    currentStage = name;
+    currentPending = info.pending;
+    if (assign && assign.assigned_on) stageStartTs = assign.assigned_on;
+    break;
+  }
+
+  const { externalLotNo, sortNo } = parseLotRemark(lot.remark);
+  const opName = a => (a && a.opName) ? a.opName : '';
+
+  return {
+    // identification
+    lotNo: lot.lot_no,
+    externalLotNo,
+    sortNo,
+    sku: lot.sku,
+    lotType: isDenim ? 'Denim' : 'Hosiery',
+    createdAt: lot.created_at
+      ? new Date(lot.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')
+      : '',
+    daysSinceCreated: daysSince(lot.created_at),
+    totalCut,
+    remark: lot.remark || '',
+
+    // rollup
+    currentStage,
+    currentPendingQty: currentPending,
+    daysInStage: daysSince(stageStartTs),
+
+    // stitching
+    stitchOp:        opName(stAssign),
+    stitchAssignedOn: fmtIST(stAssign && stAssign.assigned_on),
+    stitchApprovedOn: fmtIST(stAssign && stAssign.approved_on),
+    stitchInQty:     totalCut,
+    stitchOutQty:    stitchedQty,
+    stitchPendingQty: stitch.pending,
+    stitchStatus:    stitch.status,
+    stitchInline:    stitch.inline,
+
+    // assembly
+    assemblyOp:        isDenim ? opName(asmAssign) : '—',
+    assemblyAssignedOn: isDenim ? fmtIST(asmAssign && asmAssign.assigned_on) : '—',
+    assemblyApprovedOn: isDenim ? fmtIST(asmAssign && asmAssign.approved_on) : '—',
+    assemblyInQty:     isDenim ? stitchedQty  : '—',
+    assemblyOutQty:    isDenim ? assembledQty : '—',
+    assemblyPendingQty: isDenim ? assembly.pending : '—',
+    assemblyStatus:    assembly.status,
+    assemblyInline:    isDenim ? assembly.inline : '—',
+
+    // washing
+    washingOp:        isDenim ? opName(washAssign) : '—',
+    washingAssignedOn: isDenim ? fmtIST(washAssign && washAssign.assigned_on) : '—',
+    washingApprovedOn: isDenim ? fmtIST(washAssign && washAssign.approved_on) : '—',
+    washingInQty_in:  isDenim ? assembledQty : '—',
+    washingOutQty:    isDenim ? washedQty    : '—',
+    washingPendingQty: isDenim ? washing.pending : '—',
+    washingStatus:    washing.status,
+    washingInline:    isDenim ? washing.inline : '—',
+
+    // wash-in
+    washInOp:        isDenim ? opName(washInAssign) : '—',
+    washInAssignedOn: isDenim ? fmtIST(washInAssign && washInAssign.assigned_on) : '—',
+    washInApprovedOn: isDenim ? fmtIST(washInAssign && washInAssign.approved_on) : '—',
+    washInInQty:     isDenim ? washedQty    : '—',
+    washInOutQty:    isDenim ? washingInQty : '—',
+    washInPendingQty: isDenim ? washIn.pending : '—',
+    washInStatus:    washIn.status,
+    washInInline:    isDenim ? washIn.inline : '—',
+    rewashPendingQty: rewashQty || 0,
+
+    // finishing
+    finishingOp:        opName(finAssign),
+    finishingAssignedOn: fmtIST(finAssign && finAssign.assigned_on),
+    finishingApprovedOn: fmtIST(finAssign && finAssign.approved_on),
+    finishingInQty:     isDenim ? washingInQty : stitchedQty,
+    finishingOutQty:    finishedQty,
+    finishingPendingQty: finishing.pending,
+    finishingStatus:    finishing.status
+  };
+}
+
+const PIC_REPORT_V2_COLUMNS = [
+  { header: 'Lot No',              key: 'lotNo',             width: 14 },
+  { header: 'External Lot No',     key: 'externalLotNo',     width: 14 },
+  { header: 'Sort No',             key: 'sortNo',            width: 14 },
+  { header: 'SKU',                 key: 'sku',               width: 22 },
+  { header: 'Lot Type',            key: 'lotType',           width: 9  },
+  { header: 'Created At',          key: 'createdAt',         width: 12 },
+  { header: 'Days Since Created',  key: 'daysSinceCreated',  width: 10 },
+  { header: 'Total Cut',           key: 'totalCut',          width: 10 },
+  { header: 'Current Stage',       key: 'currentStage',      width: 14 },
+  { header: 'Current Pending Qty', key: 'currentPendingQty', width: 12 },
+  { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
+  { header: 'Remark',              key: 'remark',            width: 26 },
+
+  { header: 'Stitch Operator',     key: 'stitchOp',          width: 14 },
+  { header: 'Stitch Assigned On',  key: 'stitchAssignedOn',  width: 19 },
+  { header: 'Stitch Approved On',  key: 'stitchApprovedOn',  width: 19 },
+  { header: 'Stitch In Qty',       key: 'stitchInQty',       width: 11 },
+  { header: 'Stitch Out Qty',      key: 'stitchOutQty',      width: 11 },
+  { header: 'Stitch Pending Qty',  key: 'stitchPendingQty',  width: 12 },
+  { header: 'Stitch Status',       key: 'stitchStatus',      width: 16 },
+  { header: 'Stitch Inline?',      key: 'stitchInline',      width: 9  },
+
+  { header: 'Assembly Operator',     key: 'assemblyOp',          width: 14 },
+  { header: 'Assembly Assigned On',  key: 'assemblyAssignedOn',  width: 19 },
+  { header: 'Assembly Approved On',  key: 'assemblyApprovedOn',  width: 19 },
+  { header: 'Assembly In Qty',       key: 'assemblyInQty',       width: 11 },
+  { header: 'Assembly Out Qty',      key: 'assemblyOutQty',      width: 11 },
+  { header: 'Assembly Pending Qty',  key: 'assemblyPendingQty',  width: 12 },
+  { header: 'Assembly Status',       key: 'assemblyStatus',      width: 16 },
+  { header: 'Assembly Inline?',      key: 'assemblyInline',      width: 9  },
+
+  { header: 'Washing Operator',     key: 'washingOp',          width: 14 },
+  { header: 'Washing Assigned On',  key: 'washingAssignedOn',  width: 19 },
+  { header: 'Washing Approved On',  key: 'washingApprovedOn',  width: 19 },
+  { header: 'Washing In Qty',       key: 'washingInQty_in',    width: 11 },
+  { header: 'Washing Out Qty',      key: 'washingOutQty',      width: 11 },
+  { header: 'Washing Pending Qty',  key: 'washingPendingQty',  width: 12 },
+  { header: 'Washing Status',       key: 'washingStatus',      width: 16 },
+  { header: 'Washing Inline?',      key: 'washingInline',      width: 9  },
+
+  { header: 'Wash-In Operator',     key: 'washInOp',           width: 14 },
+  { header: 'Wash-In Assigned On',  key: 'washInAssignedOn',   width: 19 },
+  { header: 'Wash-In Approved On',  key: 'washInApprovedOn',   width: 19 },
+  { header: 'Wash-In In Qty',       key: 'washInInQty',        width: 11 },
+  { header: 'Wash-In Out Qty',      key: 'washInOutQty',       width: 11 },
+  { header: 'Wash-In Pending Qty',  key: 'washInPendingQty',   width: 12 },
+  { header: 'Wash-In Status',       key: 'washInStatus',       width: 16 },
+  { header: 'Wash-In Inline?',      key: 'washInInline',       width: 9  },
+  { header: 'Rewash Pending Qty',   key: 'rewashPendingQty',   width: 12 },
+
+  { header: 'Finishing Operator',     key: 'finishingOp',          width: 14 },
+  { header: 'Finishing Assigned On',  key: 'finishingAssignedOn',  width: 19 },
+  { header: 'Finishing Approved On',  key: 'finishingApprovedOn',  width: 19 },
+  { header: 'Finishing In Qty',       key: 'finishingInQty',       width: 11 },
+  { header: 'Finishing Out Qty',      key: 'finishingOutQty',      width: 11 },
+  { header: 'Finishing Pending Qty',  key: 'finishingPendingQty',  width: 12 },
+  { header: 'Finishing Status',       key: 'finishingStatus',      width: 16 }
+];
+
 // Aggregates and last-assignment data for multiple lots in one go
 async function fetchLotAggregates(lotNos = []) {
   if (!lotNos.length) {
@@ -1903,103 +2168,76 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       });
     }
 
-    // 6) If download => Excel
+    // 6) If download => Excel (v2 user-friendly schema)
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = "PIC Report – Denim Chain with WashingIn";
+      workbook.creator = "PIC Report v2";
 
       const sheet = workbook.addWorksheet("PIC-Report");
-      sheet.columns = [
-        { header: "Lot No",               key: "lotNo",                width: 15 },
-        { header: "SKU",                  key: "sku",                  width: 12 },
-        { header: "Lot Type",             key: "lotType",              width: 10 },
-        { header: "Total Cut",            key: "totalCut",             width: 10 },
-        { header: "Created At",           key: "createdAt",            width: 15 },
-        { header: "Remark",               key: "remark",               width: 20 },
+      sheet.columns = PIC_REPORT_V2_COLUMNS;
 
-        // Stitching
-        { header: "Stitch Assigned On",   key: "stitchAssignedOn",     width: 20 },
-        { header: "Stitch Approved On",   key: "stitchApprovedOn",     width: 20 },
-        { header: "Stitch Operator",      key: "stitchOp",             width: 15 },
-        { header: "Stitch Status",        key: "stitchStatus",         width: 25 },
-        { header: "Stitched Qty",         key: "stitchedQty",          width: 15 },
+      for (const lot of lots) {
+        const lotNo = lot.lot_no;
+        const denim = isDenimLot(lot);
+        const totalCut = parseFloat(lot.total_pieces) || 0;
+        const sums = lotSumsMap[lotNo] || {
+          stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0
+        };
+        const assigns = {
+          stAssign:     stitchMap[lotNo] || null,
+          asmAssign:    asmMap[lotNo]    || null,
+          washAssign:   washMap[lotNo]   || null,
+          washInAssign: winMap[lotNo]    || null,
+          finAssign:    finMap[lotNo]    || null
+        };
 
-        // Assembly
-        { header: "Assembly Assigned On", key: "assemblyAssignedOn",   width: 20 },
-        { header: "Assembly Approved On", key: "assemblyApprovedOn",   width: 20 },
-        { header: "Assembly Operator",    key: "assemblyOp",           width: 15 },
-        { header: "Assembly Status",      key: "assemblyStatus",       width: 25 },
-        { header: "Assembled Qty",        key: "assembledQty",         width: 15 },
-
-        // Washing
-        { header: "Washing Assigned On",  key: "washingAssignedOn",    width: 20 },
-        { header: "Washing Approved On",  key: "washingApprovedOn",    width: 20 },
-        { header: "Washing Operator",     key: "washingOp",            width: 15 },
-        { header: "Washing Status",       key: "washingStatus",        width: 25 },
-        { header: "Washed Qty",           key: "washedQty",            width: 15 },
-
-        // Washing‑In
-        { header: "WashIn Assigned On",   key: "washingInAssignedOn",  width: 20 },
-        { header: "WashIn Approved On",   key: "washingInApprovedOn",  width: 20 },
-        { header: "WashIn Operator",      key: "washingInOp",          width: 15 },
-        { header: "WashIn Status",        key: "washingInStatus",      width: 25 },
-        { header: "WashIn Qty",           key: "washingInQty",         width: 15 },
-        { header: "Rewash Pending",       key: "rewashPendingQty",     width: 15 },
-
-        // Finishing
-        { header: "Finishing Assigned On",key: "finishingAssignedOn",  width: 20 },
-        { header: "Finishing Approved On",key: "finishingApprovedOn",  width: 20 },
-        { header: "Finishing Operator",   key: "finishingOp",          width: 15 },
-        { header: "Finishing Status",     key: "finishingStatus",      width: 25 },
-        { header: "Finished Qty",         key: "finishedQty",          width: 15 }
-      ];
-
-      finalData.forEach(r => {
-        sheet.addRow({
-          lotNo:               r.lotNo,
-          sku:                 r.sku,
-          lotType:             r.lotType,
-          totalCut:            r.totalCut,
-          createdAt:           r.createdAt,
-          remark:              r.remark,
-
-          // Stitching
-          stitchAssignedOn:    r.stitchAssignedOn,
-          stitchApprovedOn:    r.stitchApprovedOn,
-          stitchOp:            r.stitchOp,
-          stitchStatus:        r.stitchStatus,
-          stitchedQty:         r.stitchedQty,
-
-          // Assembly
-          assemblyAssignedOn:  r.assemblyAssignedOn,
-          assemblyApprovedOn:  r.assemblyApprovedOn,
-          assemblyOp:          r.assemblyOp,
-          assemblyStatus:      r.assemblyStatus,
-          assembledQty:        r.assembledQty,
-
-          // Washing
-          washingAssignedOn:   r.washingAssignedOn,
-          washingApprovedOn:   r.washingApprovedOn,
-          washingOp:           r.washingOp,
-          washingStatus:       r.washingStatus,
-          washedQty:           r.washedQty,
-
-          // WashingIn
-          washingInAssignedOn: r.washingInAssignedOn,
-          washingInApprovedOn: r.washingInApprovedOn,
-          washingInOp:         r.washingInOp,
-          washingInStatus:     r.washingInStatus,
-          washingInQty:        r.washingInQty,
-          rewashPendingQty:    r.rewashPendingQty,
-
-          // Finishing
-          finishingAssignedOn: r.finishingAssignedOn,
-          finishingApprovedOn: r.finishingApprovedOn,
-          finishingOp:         r.finishingOp,
-          finishingStatus:     r.finishingStatus,
-          finishedQty:         r.finishedQty
+        // honour department + status filters by re-running the existing classifier
+        const statuses = getDepartmentStatuses({
+          isDenim: denim,
+          totalCut,
+          stitchedQty:  sums.stitchedQty,
+          assembledQty: sums.assembledQty,
+          washedQty:    sums.washedQty,
+          washingInQty: sums.washingInQty,
+          finishedQty:  sums.finishedQty,
+          stAssign:     assigns.stAssign,
+          asmAssign:    assigns.asmAssign,
+          washAssign:   assigns.washAssign,
+          washInAssign: assigns.washInAssign,
+          finAssign:    assigns.finAssign
         });
-      });
+        const deptResult = filterByDept({
+          department, isDenim: denim,
+          stitchingStatus: statuses.stitchingStatus,
+          assemblyStatus:  statuses.assemblyStatus,
+          washingStatus:   statuses.washingStatus,
+          washingInStatus: statuses.washingInStatus,
+          finishingStatus: statuses.finishingStatus
+        });
+        if (!deptResult.showRow) continue;
+        if (status !== "all") {
+          const actualStatus = deptResult.actualStatus.toLowerCase();
+          if (status === "not_assigned") {
+            if (!actualStatus.startsWith("in ")) continue;
+          } else {
+            const want = status.toLowerCase();
+            if (want === "inline" && actualStatus.includes("in-line")) {
+              // pass
+            } else if (!actualStatus.includes(want)) {
+              continue;
+            }
+          }
+        }
+
+        sheet.addRow(buildEnhancedRow({
+          lot, isDenim: denim, totalCut, sums, assigns,
+          rewashQty: rewashMap[lotNo] || 0
+        }));
+      }
+
+      // Header styling
+      sheet.getRow(1).font = { bold: true };
+      sheet.views = [{ state: 'frozen', xSplit: 4, ySplit: 1 }];
 
       res.setHeader(
         "Content-Type",
@@ -2007,7 +2245,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       );
       res.setHeader(
         "Content-Disposition",
-        'attachment; filename="PICReport-FixedChain.xlsx"'
+        'attachment; filename="PICReport.xlsx"'
       );
       await workbook.xlsx.write(res);
       res.end();
@@ -2248,7 +2486,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       const lotNo = row.lot_no;
       const sizeLabel = row.size_label;
       const totalCut = parseFloat(row.total_pieces) || 0;
-      const denim = isDenimLot(lot);
+      const denim = isDenimLot(row);
 
       const sums = sizeSumsMap[`${lotNo}|${sizeLabel}`] || {};
       const stitchedQty  = sums.stitchedQty  || 0;
@@ -2352,96 +2590,128 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 
     if (download === "1") {
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = "PIC Report by Size";
+      workbook.creator = "PIC Size Report v2";
 
       const sheet = workbook.addWorksheet("PIC-Size-Report");
-      sheet.columns = [
-        { header: "Lot No", key: "lotNo", width: 15 },
-        { header: "SKU_Size", key: "sku_size", width: 20 },
-        { header: "SKU", key: "sku", width: 12 },
-        { header: "Size", key: "size", width: 10 },
-        { header: "Lot Type", key: "lotType", width: 10 },
-        { header: "Total Cut", key: "totalCut", width: 10 },
-        { header: "Created At", key: "createdAt", width: 15 },
-        { header: "Remark", key: "remark", width: 20 },
 
-        { header: "Stitch Assigned On", key: "stitchAssignedOn", width: 20 },
-        { header: "Stitch Approved On", key: "stitchApprovedOn", width: 20 },
-        { header: "Stitch Operator", key: "stitchOp", width: 15 },
-        { header: "Stitch Status", key: "stitchStatus", width: 25 },
-        { header: "Stitched Qty", key: "stitchedQty", width: 15 },
-
-        { header: "Assembly Assigned On", key: "assemblyAssignedOn", width: 20 },
-        { header: "Assembly Approved On", key: "assemblyApprovedOn", width: 20 },
-        { header: "Assembly Operator", key: "assemblyOp", width: 15 },
-        { header: "Assembly Status", key: "assemblyStatus", width: 25 },
-        { header: "Assembled Qty", key: "assembledQty", width: 15 },
-
-        { header: "Washing Assigned On", key: "washingAssignedOn", width: 20 },
-        { header: "Washing Approved On", key: "washingApprovedOn", width: 20 },
-        { header: "Washing Operator", key: "washingOp", width: 15 },
-        { header: "Washing Status", key: "washingStatus", width: 25 },
-        { header: "Washed Qty", key: "washedQty", width: 15 },
-
-        { header: "WashIn Assigned On", key: "washingInAssignedOn", width: 20 },
-        { header: "WashIn Approved On", key: "washingInApprovedOn", width: 20 },
-        { header: "WashIn Operator", key: "washingInOp", width: 15 },
-        { header: "WashIn Status", key: "washingInStatus", width: 25 },
-        { header: "WashIn Qty", key: "washingInQty", width: 15 },
-
-        { header: "Finishing Assigned On", key: "finishingAssignedOn", width: 20 },
-        { header: "Finishing Approved On", key: "finishingApprovedOn", width: 20 },
-        { header: "Finishing Operator", key: "finishingOp", width: 15 },
-        { header: "Finishing Status", key: "finishingStatus", width: 25 },
-        { header: "Finished Qty", key: "finishedQty", width: 15 },
-        { header: "Dispatched Qty", key: "dispatchedQty", width: 15 },
-        { header: "Dispatch Destination", key: "destinations", width: 25 }
+      // Build size-aware columns: same shape as PIC v2 + Size + dispatch columns
+      const sizeCols = [
+        { header: 'Lot No',              key: 'lotNo',             width: 14 },
+        { header: 'External Lot No',     key: 'externalLotNo',     width: 14 },
+        { header: 'Sort No',             key: 'sortNo',            width: 14 },
+        { header: 'SKU',                 key: 'sku',               width: 22 },
+        { header: 'Size',                key: 'size',              width: 8  },
+        { header: 'SKU_Size',            key: 'sku_size',          width: 24 },
+        { header: 'Lot Type',            key: 'lotType',           width: 9  },
+        { header: 'Created At',          key: 'createdAt',         width: 12 },
+        { header: 'Days Since Created',  key: 'daysSinceCreated',  width: 10 },
+        { header: 'Lot Total Cut',       key: 'totalCut',          width: 10 },
+        { header: 'Current Stage',       key: 'currentStage',      width: 14 },
+        { header: 'Current Pending Qty', key: 'currentPendingQty', width: 12 },
+        { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
+        { header: 'Remark',              key: 'remark',            width: 26 }
       ];
+      // Append the per-stage columns from the v2 schema (skip the identification block we already have)
+      const stageColKeys = new Set([
+        'stitchOp','stitchAssignedOn','stitchApprovedOn','stitchInQty','stitchOutQty','stitchPendingQty','stitchStatus','stitchInline',
+        'assemblyOp','assemblyAssignedOn','assemblyApprovedOn','assemblyInQty','assemblyOutQty','assemblyPendingQty','assemblyStatus','assemblyInline',
+        'washingOp','washingAssignedOn','washingApprovedOn','washingInQty_in','washingOutQty','washingPendingQty','washingStatus','washingInline',
+        'washInOp','washInAssignedOn','washInApprovedOn','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline','rewashPendingQty',
+        'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus'
+      ]);
+      for (const c of PIC_REPORT_V2_COLUMNS) {
+        if (stageColKeys.has(c.key)) sizeCols.push(c);
+      }
+      sizeCols.push({ header: 'Dispatched Qty',       key: 'dispatchedQty', width: 12 });
+      sizeCols.push({ header: 'Dispatch Destination', key: 'destinations',  width: 26 });
+      sheet.columns = sizeCols;
 
-      finalData.forEach(r => {
-        sheet.addRow({
-          lotNo: r.lotNo,
-          sku_size: r.sku_size,
-          sku: r.sku,
-          size: r.size,
-          lotType: r.lotType,
-          totalCut: r.totalCut,
-          createdAt: r.createdAt,
-          remark: r.remark,
+      for (const row of rows) {
+        const lotNo = row.lot_no;
+        const sizeLabel = row.size_label;
+        const denim = isDenimLot(row);
+        const totalCut = parseFloat(row.total_pieces) || 0;
+        const sums = sizeSumsMap[`${lotNo}|${sizeLabel}`] || {
+          stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0
+        };
+        const assigns = {
+          stAssign:     stitchMap[lotNo] || null,
+          asmAssign:    asmMap[lotNo]    || null,
+          washAssign:   washMap[lotNo]   || null,
+          washInAssign: winMap[lotNo]    || null,
+          finAssign:    finMap[lotNo]    || null
+        };
 
-          stitchAssignedOn: r.stitchAssignedOn,
-          stitchApprovedOn: r.stitchApprovedOn,
-          stitchOp: r.stitchOp,
-          stitchStatus: r.stitchStatus,
-          stitchedQty: r.stitchedQty,
-
-          assemblyAssignedOn: r.assemblyAssignedOn,
-          assemblyApprovedOn: r.assemblyApprovedOn,
-          assemblyOp: r.assemblyOp,
-          assemblyStatus: r.assemblyStatus,
-          assembledQty: r.assembledQty,
-
-          washingAssignedOn: r.washingAssignedOn,
-          washingApprovedOn: r.washingApprovedOn,
-          washingOp: r.washingOp,
-          washingStatus: r.washingStatus,
-          washedQty: r.washedQty,
-
-          washingInAssignedOn: r.washingInAssignedOn,
-          washingInApprovedOn: r.washingInApprovedOn,
-          washingInOp: r.washingInOp,
-          washingInStatus: r.washingInStatus,
-          washingInQty: r.washingInQty,
-
-          finishingAssignedOn: r.finishingAssignedOn,
-          finishingApprovedOn: r.finishingApprovedOn,
-          finishingOp: r.finishingOp,
-          finishingStatus: r.finishingStatus,
-          finishedQty: r.finishedQty,
-          dispatchedQty: r.dispatchedQty,
-          destinations: r.destinations
+        // department/status filters via existing classifier (lot-level)
+        const statuses = getDepartmentStatuses({
+          isDenim: denim,
+          totalCut,
+          stitchedQty:  sums.stitchedQty,
+          assembledQty: sums.assembledQty,
+          washedQty:    sums.washedQty,
+          washingInQty: sums.washingInQty,
+          finishedQty:  sums.finishedQty,
+          stAssign:     assigns.stAssign,
+          asmAssign:    assigns.asmAssign,
+          washAssign:   assigns.washAssign,
+          washInAssign: assigns.washInAssign,
+          finAssign:    assigns.finAssign
         });
-      });
+        const deptResult = filterByDept({
+          department, isDenim: denim,
+          stitchingStatus: statuses.stitchingStatus,
+          assemblyStatus:  statuses.assemblyStatus,
+          washingStatus:   statuses.washingStatus,
+          washingInStatus: statuses.washingInStatus,
+          finishingStatus: statuses.finishingStatus
+        });
+        if (!deptResult.showRow) continue;
+        if (status !== "all") {
+          const actualStatus = deptResult.actualStatus.toLowerCase();
+          if (status === "not_assigned") {
+            if (!actualStatus.startsWith("in ")) continue;
+          } else {
+            const want = status.toLowerCase();
+            if (want === "inline" && actualStatus.includes("in-line")) {
+              // pass
+            } else if (!actualStatus.includes(want)) {
+              continue;
+            }
+          }
+        }
+
+        // Build a size-level enhanced row. We don't have a per-size cut quantity, so
+        // we use stitchedQty (size) as the "input" baseline for the stitch stage —
+        // pending-at-stitch is therefore unknowable per size and shown as blank.
+        const lotForBuilder = {
+          lot_no: lotNo,
+          sku: row.sku,
+          remark: row.remark,
+          created_at: row.created_at
+        };
+        const enriched = buildEnhancedRow({
+          lot: lotForBuilder,
+          isDenim: denim,
+          totalCut: sums.stitchedQty, // baseline at size granularity
+          sums,
+          assigns,
+          rewashQty: 0
+        });
+        // size-specific overrides
+        enriched.size = sizeLabel;
+        enriched.sku_size = `${row.sku}_${sizeLabel}`;
+        enriched.totalCut = totalCut;       // show the lot total for context
+        enriched.stitchInQty = '';          // unknown per size
+        enriched.stitchPendingQty = '';     // unknown per size
+        const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
+        enriched.dispatchedQty = dispatch.dispatchedQty || 0;
+        enriched.destinations  = dispatch.destinations  || '';
+
+        sheet.addRow(enriched);
+      }
+
+      sheet.getRow(1).font = { bold: true };
+      sheet.views = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
 
       res.setHeader(
         "Content-Type",
