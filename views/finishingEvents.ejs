@@ -1,230 +1,1000 @@
-<%- include('partials/header', { pageTitle: 'Finishing — Events' }) %>
+<%- include('partials/header', { pageTitle: 'Finishing' }) %>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/finishingdashboard' }) %>
 
 <style>
-  /* Reuses .cutting-remark-note from kotty-theme.css */
-  .events-page { padding: calc(var(--navbar-height) + 1.5rem) 1.25rem 4rem; max-width: 960px; margin: 0 auto; min-height: 100vh; }
-  .events-title { font-family: var(--font-display); font-size: var(--text-3xl); color: var(--text-primary); letter-spacing: -0.02em; margin: 0 0 0.25rem; }
-  .events-subtitle { font-family: var(--font-body); color: var(--text-secondary); margin: 0 0 1.75rem; font-size: var(--text-sm); }
-  .events-subtitle em { font-family: var(--font-display); font-style: italic; color: var(--terracotta-dark); font-weight: 500; }
+  /* ───────────────────────────────────────────────────────────────
+     STITCHING DASHBOARD v3
+     Enterprise-clean, mobile-first, factory-friendly.
+     Inter throughout, indigo accent, strict color coding.
+     ─────────────────────────────────────────────────────────────── */
 
-  .search-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.125rem 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; }
-  .search-row { display: flex; gap: 0.625rem; }
-  .search-input { flex: 1; padding: 0.75rem 1rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: var(--text-base); color: var(--text-primary); background: var(--bg-card); transition: border-color 0.15s, box-shadow 0.15s; }
-  .search-input:focus { outline: none; border-color: var(--terracotta); box-shadow: 0 0 0 3px var(--terracotta-bg); }
-  .search-btn { padding: 0.75rem 1.25rem; background: var(--terracotta); color: white; border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 500; cursor: pointer; transition: background 0.15s; }
-  .search-btn:hover { background: var(--terracotta-dark); }
-  .search-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-  .search-results { margin-top: 0.875rem; border-top: 1px dashed var(--border-light); padding-top: 0.875rem; display: none; }
-  .search-results.show { display: block; }
-  .search-result-row { display: flex; align-items: center; gap: 1rem; padding: 0.625rem 0.75rem; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.1s; }
-  .search-result-row:hover { background: var(--cream-dark); }
-  .search-result-no { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); min-width: 9ch; }
-  .search-result-meta { flex: 1; color: var(--text-secondary); font-size: var(--text-sm); }
-  .search-result-flow { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.125rem 0.5rem; border-radius: var(--radius-full); font-weight: 600; }
-  .search-result-flow.denim { background: var(--terracotta-bg); color: var(--terracotta-dark); }
-  .search-result-flow.hosiery { background: var(--info-light); color: var(--info); }
+  /* Scope all rules under .sx so we don't fight global kotty-theme styles */
+  .sx {
+    --c-bg:        #f5f7fb;
+    --c-card:      #ffffff;
+    --c-border:    #e5e8ee;
+    --c-border-2:  #eef0f4;
 
-  .lot-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1.5rem 1.5rem 1.25rem; box-shadow: var(--shadow-sm); margin-bottom: 1.25rem; display: none; }
-  .lot-card.show { display: block; }
-  .lot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
-  .lot-no { font-family: var(--font-display); font-size: var(--text-2xl); color: var(--text-primary); letter-spacing: -0.01em; }
-  .lot-meta { color: var(--text-secondary); font-size: var(--text-sm); }
-  .lot-meta strong { color: var(--text-primary); font-weight: 500; }
+    --c-text:      #0f172a;   /* slate-900 */
+    --c-text-2:    #475569;   /* slate-600 */
+    --c-text-3:    #94a3b8;   /* slate-400 */
 
-  .agg-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.625rem; margin: 1rem 0 1.25rem; }
-  .agg-pill { background: var(--cream); border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.625rem 0.75rem; }
-  .agg-pill .label { font-family: var(--font-display); font-style: italic; font-size: var(--text-xs); color: var(--text-muted); letter-spacing: 0.04em; }
-  .agg-pill .value { font-family: var(--font-body); font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); margin-top: 0.125rem; }
-  .agg-pill.inline { background: var(--terracotta-bg); border-color: rgba(196,92,58,0.18); }
-  .agg-pill.inline .value { color: var(--terracotta-dark); }
-  .agg-pill.completed .value { color: #2d6a3e; }
-  .agg-pill.rejected .value { color: #b34d28; }
+    --c-primary:        #4f46e5;   /* indigo-600 */
+    --c-primary-hover:  #4338ca;   /* indigo-700 */
+    --c-primary-soft:   #eef2ff;   /* indigo-50 */
+    --c-primary-strip:  #6366f1;   /* indigo-500 */
 
-  .size-matrix { width: 100%; border-collapse: collapse; font-size: var(--text-sm); margin-bottom: 0.5rem; }
-  .size-matrix th, .size-matrix td { text-align: right; padding: 0.45rem 0.625rem; border-bottom: 1px solid var(--border-light); }
-  .size-matrix th:first-child, .size-matrix td:first-child { text-align: left; font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; }
-  .size-matrix th { font-family: var(--font-display); font-style: italic; font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border-medium); font-weight: 500; }
-  .size-matrix td.dim { color: var(--text-muted); }
+    --c-success:        #16a34a;   /* emerald-600 */
+    --c-success-hover:  #15803d;
+    --c-success-soft:   #dcfce7;
 
-  .action-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; display: none; }
-  .action-card.show { display: block; }
-  .action-tabs { display: flex; border-bottom: 1px solid var(--border-light); background: var(--cream); }
-  .action-tab { flex: 1; padding: 0.875rem 1rem; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-family: var(--font-body); font-weight: 500; color: var(--text-secondary); transition: all 0.15s; }
-  .action-tab:hover { color: var(--text-primary); background: var(--cream-dark); }
-  .action-tab.active { color: var(--terracotta-dark); border-bottom-color: var(--terracotta); background: var(--bg-card); }
-  .action-tab[disabled] { opacity: 0.4; cursor: not-allowed; }
+    --c-warning:        #d97706;   /* amber-600 */
+    --c-warning-soft:   #fef3c7;
 
-  .action-body { padding: 1.25rem 1.5rem 1.5rem; }
-  .action-section-hint { color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: 1rem; }
+    --c-danger:         #dc2626;   /* red-600 */
+    --c-danger-hover:   #b91c1c;
+    --c-danger-soft:    #fee2e2;
 
-  .size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.625rem; margin-bottom: 1rem; }
-  .size-cell { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.5rem 0.625rem; background: var(--cream); }
-  .size-cell.disabled { opacity: 0.45; }
-  .size-cell .size-cell-label { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
-  .size-cell .size-cell-avail { font-size: var(--text-xs); color: var(--text-muted); margin: 0.125rem 0 0.375rem; }
-  .size-cell input { width: 100%; padding: 0.375rem 0.5rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-base); text-align: right; background: var(--bg-card); }
-  .size-cell input:focus { outline: none; border-color: var(--terracotta); }
-  .size-cell input:disabled { background: var(--cream-dark); color: var(--text-muted); }
+    --shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow:     0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-lg:  0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+    --shadow-xl:  0 24px 48px rgba(15, 23, 42, 0.18), 0 8px 16px rgba(15, 23, 42, 0.08);
 
-  .approve-picker { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
-  .approve-pick { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.625rem 0.875rem; cursor: pointer; background: var(--cream); transition: all 0.12s; }
-  .approve-pick:hover { border-color: var(--terracotta-light); }
-  .approve-pick.selected { border-color: var(--terracotta); background: var(--terracotta-bg); }
-  .approve-pick-head { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--text-sm); }
-  .approve-pick-head .approved { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); }
-  .approve-pick-head .when { color: var(--text-muted); font-size: var(--text-xs); }
-  .approve-pick-detail { margin-top: 0.25rem; font-size: var(--text-xs); color: var(--text-secondary); font-family: var(--font-mono); }
+    --r-sm: 8px;
+    --r:    12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --r-pill: 999px;
 
-  .complete-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.625rem; margin-bottom: 1rem; }
-  .complete-cell { border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 0.5rem 0.625rem; background: var(--cream); }
-  .complete-cell-row { display: flex; gap: 0.375rem; align-items: center; }
-  .complete-cell-row label { font-size: var(--text-xs); color: var(--text-muted); width: 4.5rem; }
-  .complete-cell-row input { flex: 1; min-width: 0; padding: 0.3rem 0.45rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-sm); text-align: right; background: var(--bg-card); }
-  .complete-cell-row input:focus { outline: none; border-color: var(--terracotta); }
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--c-text);
+    -webkit-font-smoothing: antialiased;
+  }
 
-  .form-row { display: flex; gap: 0.625rem; margin-bottom: 0.875rem; }
-  .form-row textarea, .form-row input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border-medium); border-radius: var(--radius-md); font-family: var(--font-body); font-size: var(--text-sm); resize: vertical; }
+  body { background: #f5f7fb; }
 
-  .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 0.625rem 0; border-top: 1px dashed var(--border-medium); margin-top: 0.5rem; }
-  .total-label { font-family: var(--font-display); font-style: italic; color: var(--text-secondary); }
-  .total-value { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; color: var(--text-primary); }
+  .sx-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 5rem;
+    min-height: 100vh;
+  }
 
-  .submit-btn { width: 100%; margin-top: 0.75rem; padding: 0.85rem; background: var(--terracotta); color: white; border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: var(--text-base); cursor: pointer; transition: background 0.15s; }
-  .submit-btn:hover { background: var(--terracotta-dark); }
-  .submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+  /* ─── Page header ──────────────────────────────────────── */
+  .sx-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.25rem;
+    gap: 1rem; flex-wrap: wrap;
+  }
+  .sx-head h1 {
+    font-size: clamp(1.5rem, 3.5vw, 1.875rem);
+    font-weight: 700;
+    color: var(--c-text);
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+  .sx-head .pill {
+    font-size: 0.75rem; font-weight: 500;
+    padding: 0.25rem 0.625rem;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    color: var(--c-text-2);
+    border-radius: var(--r-pill);
+  }
 
-  .toast-area { position: fixed; top: calc(var(--navbar-height) + 1rem); right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
-  .toast { padding: 0.75rem 1rem; background: var(--bg-card); border-radius: var(--radius-md); box-shadow: var(--shadow-md); border-left: 3px solid var(--terracotta); font-size: var(--text-sm); color: var(--text-primary); max-width: 360px; animation: slideIn 0.2s ease-out; }
-  .toast.success { border-left-color: #2d6a3e; }
-  .toast.error { border-left-color: #b34d28; }
-  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .empty-state { text-align: center; padding: 1rem 0.5rem; color: var(--text-muted); font-style: italic; font-size: var(--text-sm); }
+  /* ─── Search ──────────────────────────────────────────── */
+  .sx-search {
+    background: var(--c-card);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    padding: 0.875rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .sx-search-row { display: flex; gap: 0.5rem; align-items: center; }
+  .sx-search-icon {
+    flex: 0 0 auto; width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--c-text-3); margin-left: 0.25rem;
+  }
+  .sx-search input {
+    flex: 1; min-width: 0;
+    border: none; outline: none; background: transparent;
+    font-family: inherit;
+    font-size: 1rem; padding: 0.625rem 0.5rem;
+    color: var(--c-text);
+  }
+  .sx-search input::placeholder { color: var(--c-text-3); }
+  .sx-btn {
+    border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; font-size: 0.9375rem;
+    padding: 0.625rem 1.125rem;
+    border-radius: var(--r);
+    transition: all 0.15s;
+  }
+  .sx-btn-primary {
+    background: var(--c-primary); color: white;
+    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+  }
+  .sx-btn-primary:hover { background: var(--c-primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
+  .sx-btn-primary:disabled { background: var(--c-text-3); cursor: not-allowed; transform: none; box-shadow: none; }
+  .sx-btn-ghost {
+    background: transparent; color: var(--c-text-2); border: 1px solid var(--c-border);
+  }
+  .sx-btn-ghost:hover { background: var(--c-bg); color: var(--c-text); }
+
+  .sx-search-results {
+    margin-top: 0.875rem;
+    border-top: 1px solid var(--c-border-2);
+    padding-top: 0.625rem;
+    display: none;
+  }
+  .sx-search-results.show { display: block; animation: fadeIn 0.2s; }
+  .sx-search-row-result {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 0.625rem;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .sx-search-row-result:hover { background: var(--c-bg); }
+  .sx-search-row-result + .sx-search-row-result { border-top: 1px solid var(--c-border-2); }
+  .sx-result-no {
+    font-weight: 700; color: var(--c-text); font-size: 0.9375rem;
+    min-width: 7rem; letter-spacing: 0.02em;
+  }
+  .sx-result-meta { flex: 1; color: var(--c-text-2); font-size: 0.875rem; }
+  .sx-flow {
+    font-size: 0.75rem; font-weight: 500;
+    padding: 0.2rem 0.625rem; border-radius: var(--r-pill);
+    text-transform: capitalize;
+  }
+  .sx-flow.denim { background: var(--c-primary-soft); color: var(--c-primary); }
+  .sx-flow.hosiery { background: #f0f9ff; color: #0369a1; }
+
+  /* ─── Lot context card ────────────────────────────────── */
+  .sx-lot {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.25rem 1.25rem 1rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 1rem;
+    display: none;
+  }
+  .sx-lot.show { display: block; animation: slideUpFade 0.3s ease-out; }
+
+  .sx-lot-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+  .sx-lot-no {
+    font-size: clamp(1.5rem, 4.5vw, 2rem);
+    font-weight: 800;
+    color: var(--c-text);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0;
+  }
+  .sx-lot-meta {
+    color: var(--c-text-2); font-size: 0.875rem;
+    margin: 0.25rem 0 0.875rem;
+  }
+  .sx-lot-meta strong { color: var(--c-text); font-weight: 600; }
+
+  .sx-cutting-remark {
+    display: flex; gap: 0.625rem; align-items: flex-start;
+    padding: 0.75rem 0.875rem;
+    background: var(--c-warning-soft);
+    border-radius: var(--r);
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--c-warning);
+  }
+  .sx-cutting-remark .label {
+    font-size: 0.75rem; font-weight: 700;
+    color: var(--c-warning); white-space: nowrap;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding-top: 1px;
+  }
+  .sx-cutting-remark .text {
+    color: var(--c-text); font-size: 0.875rem; line-height: 1.5;
+    flex: 1;
+  }
+
+  /* aggregate strip — 4 stats */
+  .sx-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin: 0.875rem 0 1.125rem;
+  }
+  .sx-stat {
+    background: var(--c-bg); border-radius: var(--r);
+    padding: 0.75rem 0.625rem;
+    text-align: center;
+  }
+  .sx-stat .l {
+    font-size: 0.6875rem; font-weight: 600;
+    color: var(--c-text-3);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+  .sx-stat .v {
+    font-size: clamp(1.25rem, 3.5vw, 1.625rem);
+    font-weight: 700; line-height: 1;
+    color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .sx-stat.is-completed { background: var(--c-success-soft); }
+  .sx-stat.is-completed .l { color: var(--c-success); }
+  .sx-stat.is-completed .v { color: var(--c-success); }
+  .sx-stat.is-rejected { background: var(--c-danger-soft); }
+  .sx-stat.is-rejected .l { color: var(--c-danger); }
+  .sx-stat.is-rejected .v { color: var(--c-danger); }
+  .sx-stat.is-inline { background: var(--c-warning-soft); }
+  .sx-stat.is-inline .l { color: var(--c-warning); }
+  .sx-stat.is-inline .v { color: var(--c-warning); }
+
+  /* size chips — compact, color coded */
+  .sx-sizes-label {
+    font-size: 0.75rem; font-weight: 600;
+    color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .sx-sizes-label .total { color: var(--c-text-2); margin-left: 0.5rem; font-weight: 500; text-transform: none; letter-spacing: normal; }
+  .sx-chip-row {
+    display: flex; flex-wrap: wrap; gap: 0.375rem;
+  }
+  .sx-chip {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: var(--c-bg); border: 1px solid var(--c-border);
+    border-radius: var(--r-pill);
+    font-size: 0.8125rem;
+    cursor: default;
+    transition: all 0.15s;
+  }
+  .sx-chip-label { font-weight: 700; color: var(--c-text); font-variant-numeric: tabular-nums; }
+  .sx-chip-num   { color: var(--c-text-2); font-variant-numeric: tabular-nums; }
+  .sx-chip-status {
+    font-size: 0.75rem;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .sx-chip.s-done { background: var(--c-success-soft); border-color: transparent; }
+  .sx-chip.s-done .sx-chip-label { color: var(--c-success); }
+  .sx-chip.s-done .sx-chip-num { color: var(--c-success); }
+  .sx-chip.s-done .sx-chip-status { background: var(--c-success); }
+  .sx-chip.s-progress { background: var(--c-warning-soft); border-color: transparent; }
+  .sx-chip.s-progress .sx-chip-label { color: var(--c-warning); }
+  .sx-chip.s-progress .sx-chip-num { color: var(--c-warning); }
+  .sx-chip.s-progress .sx-chip-status { background: var(--c-warning); }
+  .sx-chip.s-empty { /* default neutral state */ }
+
+  /* ─── Action panel ──────────────────────────────────── */
+  .sx-actions { display: none; }
+  .sx-actions.show { display: block; }
+
+  .sx-actions-h {
+    font-size: 0.75rem; font-weight: 700;
+    color: var(--c-text-3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 0 0 0.625rem;
+    padding: 0 0.25rem;
+  }
+
+  .sx-action-card {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow);
+    margin-bottom: 0.875rem;
+    overflow: hidden;
+    position: relative;
+  }
+  .sx-action-card::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+    width: 4px;
+    background: var(--c-primary);
+  }
+  .sx-action-card.is-done::before { background: var(--c-success); }
+  .sx-action-card.is-empty::before { display: none; }
+
+  .sx-action-card-body {
+    padding: 1.125rem 1.25rem 1.125rem 1.5rem;
+  }
+  .sx-action-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 1rem; margin-bottom: 1rem;
+  }
+  .sx-action-icon {
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    border-radius: var(--r);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--c-primary-soft); color: var(--c-primary);
+    font-size: 1.125rem; font-weight: 700;
+  }
+  .sx-action-card.is-done .sx-action-icon { background: var(--c-success-soft); color: var(--c-success); }
+  .sx-action-card.is-empty .sx-action-icon { background: var(--c-bg); color: var(--c-text-3); }
+
+  .sx-action-text { flex: 1; min-width: 0; }
+  .sx-action-title {
+    font-size: 1.0625rem; font-weight: 700; color: var(--c-text);
+    margin: 0; line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  .sx-action-title .qty {
+    font-size: 1.375rem; font-weight: 800;
+    color: var(--c-primary); font-variant-numeric: tabular-nums;
+    margin: 0 0.125rem;
+  }
+  .sx-action-card.is-done .sx-action-title .qty { color: var(--c-success); }
+  .sx-action-sub {
+    color: var(--c-text-2); font-size: 0.875rem;
+    margin: 0.25rem 0 0;
+  }
+
+  .sx-action-cta {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: none; border-radius: var(--r);
+    cursor: pointer;
+    background: var(--c-primary); color: white;
+    font-family: inherit; font-weight: 600; font-size: 0.9375rem;
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+    transition: all 0.15s;
+  }
+  .sx-action-cta:hover { background: var(--c-primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
+  .sx-action-card.is-done .sx-action-cta { background: var(--c-success); box-shadow: 0 1px 2px rgba(22, 163, 74, 0.25); }
+  .sx-action-card.is-done .sx-action-cta:hover { background: var(--c-success-hover); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35); }
+  .sx-action-cta-check {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700;
+  }
+  .sx-action-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .sx-action-toggle {
+    display: block;
+    width: 100%; margin-top: 0.5rem;
+    padding: 0.625rem;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--c-text-2); font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+    text-align: center;
+    border-top: 1px solid var(--c-border-2);
+    margin-left: -1.5rem; margin-right: -1.25rem; margin-bottom: -1.125rem; margin-top: 1rem;
+    border-bottom-left-radius: var(--r-xl); border-bottom-right-radius: var(--r-xl);
+    transition: all 0.15s;
+  }
+  .sx-action-toggle:hover { background: var(--c-bg); color: var(--c-text); }
+  .sx-action-toggle .arrow { display: inline-block; margin-right: 0.25rem; transition: transform 0.2s; }
+  .sx-action-card.expanded .sx-action-toggle .arrow { transform: rotate(180deg); }
+  .sx-action-card.expanded .sx-action-toggle { background: var(--c-bg); color: var(--c-text); }
+
+  .sx-action-form { display: none; padding: 1rem 1.25rem 1.25rem 1.5rem; border-top: 1px solid var(--c-border); background: #fafbfd; }
+  .sx-action-card.expanded .sx-action-form { display: block; }
+  .sx-form-helper {
+    font-size: 0.8125rem; color: var(--c-text-2);
+    margin: 0 0 0.75rem;
+  }
+
+  .sx-input-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .sx-input-row {
+    display: grid; grid-template-columns: 3rem 1fr auto; gap: 0.625rem;
+    align-items: center;
+    padding: 0.625rem;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r);
+  }
+  .sx-input-label {
+    font-weight: 700; font-size: 1rem; color: var(--c-text); text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .sx-input-avail { font-size: 0.75rem; color: var(--c-text-2); }
+  .sx-input-avail .n { color: var(--c-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sx-stepper { display: flex; align-items: center; gap: 0.25rem; }
+  .sx-stepper button {
+    width: 2.25rem; height: 2.25rem;
+    border: 1px solid var(--c-border); background: var(--c-card);
+    border-radius: var(--r-sm); cursor: pointer;
+    font-family: inherit; font-size: 0.875rem; font-weight: 600;
+    color: var(--c-text);
+    transition: all 0.1s;
+  }
+  .sx-stepper button:hover { background: var(--c-primary-soft); border-color: var(--c-primary); color: var(--c-primary); }
+  .sx-stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sx-stepper input {
+    width: 4rem; height: 2.25rem; text-align: center;
+    border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    background: var(--c-card); font-family: inherit;
+    font-size: 0.9375rem; font-weight: 600; color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .sx-stepper input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px var(--c-primary-soft); }
+
+  .sx-form-row { margin-top: 0.625rem; }
+  .sx-form-row input[type="text"] {
+    width: 100%; padding: 0.625rem 0.75rem; box-sizing: border-box;
+    border: 1px solid var(--c-border); border-radius: var(--r);
+    background: var(--c-card); font-family: inherit; font-size: 0.875rem;
+    color: var(--c-text);
+  }
+  .sx-form-row input[type="text"]:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px var(--c-primary-soft); }
+
+  .sx-totals {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.875rem 1rem;
+    background: var(--c-primary-soft);
+    border-radius: var(--r);
+    margin-top: 0.875rem;
+  }
+  .sx-totals .l { font-size: 0.8125rem; font-weight: 600; color: var(--c-primary); text-transform: uppercase; letter-spacing: 0.04em; }
+  .sx-totals .v { font-size: 1.5rem; font-weight: 800; color: var(--c-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+
+  .sx-form-submit {
+    width: 100%; margin-top: 0.875rem;
+    padding: 0.875rem;
+    border: none; cursor: pointer;
+    background: var(--c-primary); color: white;
+    border-radius: var(--r);
+    font-family: inherit; font-weight: 600; font-size: 0.9375rem;
+    transition: all 0.15s;
+  }
+  .sx-form-submit:hover { background: var(--c-primary-hover); }
+  .sx-action-card.is-done .sx-form-submit { background: var(--c-success); }
+  .sx-action-card.is-done .sx-form-submit:hover { background: var(--c-success-hover); }
+  .sx-action-card.is-done .sx-totals { background: var(--c-success-soft); }
+  .sx-action-card.is-done .sx-totals .l { color: var(--c-success); }
+  .sx-action-card.is-done .sx-totals .v { color: var(--c-success); }
+
+  /* reject sub-section */
+  .sx-reject-toggle {
+    margin-top: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    background: var(--c-danger-soft);
+    border: 1px solid #fecaca;
+    border-radius: var(--r);
+    color: var(--c-danger);
+    font-family: inherit; font-size: 0.8125rem; font-weight: 600;
+    cursor: pointer; text-align: center;
+    transition: all 0.15s;
+  }
+  .sx-reject-toggle:hover { background: #fee2e2; border-color: #fca5a5; }
+  .sx-reject-section { display: none; padding-top: 0.875rem; }
+  .sx-reject-section.show { display: block; animation: slideUpFade 0.2s; }
+  .sx-reject-row {
+    display: grid; grid-template-columns: 3rem 1fr auto; gap: 0.625rem;
+    align-items: center;
+    padding: 0.5rem 0.625rem;
+    background: var(--c-card); border: 1px solid #fecaca;
+    border-radius: var(--r);
+  }
+  .sx-reject-row .sx-stepper input:focus { border-color: var(--c-danger); box-shadow: 0 0 0 3px var(--c-danger-soft); }
+
+  /* nothing-to-do state */
+  .sx-action-card.is-empty {
+    text-align: center;
+    padding: 2.25rem 1.25rem;
+    border: 1px dashed var(--c-border);
+    background: transparent; box-shadow: none;
+  }
+  .sx-action-card.is-empty .sx-empty-mark {
+    width: 56px; height: 56px;
+    margin: 0 auto 0.625rem;
+    background: var(--c-success-soft); color: var(--c-success);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; font-weight: 700;
+  }
+  .sx-action-card.is-empty p { color: var(--c-text-2); font-size: 0.9375rem; margin: 0; }
+  .sx-action-card.is-empty p small { display: block; font-size: 0.8125rem; color: var(--c-text-3); margin-top: 0.25rem; }
+
+  /* ─── Bottom info section: My Work / My Payments ───── */
+  .sx-info {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-top: 1rem;
+  }
+  .sx-info-tabs {
+    display: flex; padding: 0.5rem;
+    background: var(--c-bg);
+    border-bottom: 1px solid var(--c-border);
+  }
+  .sx-info-tab {
+    flex: 1;
+    padding: 0.625rem 0.5rem;
+    background: transparent; border: none; cursor: pointer;
+    font-family: inherit; font-size: 0.875rem; font-weight: 500;
+    color: var(--c-text-2);
+    border-radius: var(--r-sm);
+    transition: all 0.15s;
+  }
+  .sx-info-tab:hover { color: var(--c-text); background: var(--c-card); }
+  .sx-info-tab.active { background: var(--c-card); color: var(--c-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
+
+  .sx-info-body { padding: 1rem 1.125rem 1.25rem; }
+
+  .sx-controls {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    margin-bottom: 0.875rem; align-items: center;
+  }
+  .sx-controls select {
+    padding: 0.5rem 0.875rem 0.5rem 0.75rem;
+    border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    background: var(--c-card);
+    font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+    color: var(--c-text);
+    cursor: pointer;
+  }
+  .sx-controls select:focus { outline: none; border-color: var(--c-primary); }
+  .sx-controls .spacer { flex: 1; }
+  .sx-btn-export {
+    padding: 0.5rem 0.875rem;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-sm);
+    color: var(--c-text-2);
+    font-family: inherit; font-size: 0.8125rem; font-weight: 500;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 0.375rem;
+    transition: all 0.15s;
+  }
+  .sx-btn-export:hover { background: var(--c-success-soft); color: var(--c-success); border-color: var(--c-success); }
+
+  /* timeline (My Work) */
+  .sx-timeline {}
+  .sx-event {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.875rem;
+    padding: 0.75rem 0.625rem;
+    border-radius: var(--r);
+    cursor: pointer;
+    align-items: center;
+    transition: background 0.15s;
+    border: 1px solid transparent;
+  }
+  .sx-event + .sx-event { margin-top: 0.25rem; }
+  .sx-event:hover { background: var(--c-bg); border-color: var(--c-border-2); }
+  .sx-event-dot {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.875rem; font-weight: 700;
+    color: white;
+  }
+  .sx-event-dot.t-approve { background: var(--c-primary); }
+  .sx-event-dot.t-complete { background: var(--c-success); }
+  .sx-event-dot.t-reject { background: var(--c-danger); }
+  .sx-event-main { min-width: 0; }
+  .sx-event-line1 { font-size: 0.9375rem; font-weight: 600; color: var(--c-text); }
+  .sx-event-line2 { font-size: 0.75rem; color: var(--c-text-3); margin-top: 0.125rem; }
+  .sx-event-pieces {
+    font-size: 1.125rem; font-weight: 700;
+    color: var(--c-text); font-variant-numeric: tabular-nums;
+  }
+
+  /* My Payments */
+  .sx-pay-summary {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .sx-pay-summary-card {
+    padding: 0.875rem 1rem;
+    background: var(--c-bg); border: 1px solid var(--c-border-2);
+    border-radius: var(--r);
+  }
+  .sx-pay-summary-card.is-pending { background: var(--c-warning-soft); border-color: transparent; }
+  .sx-pay-summary-card.is-paid { background: var(--c-success-soft); border-color: transparent; }
+  .sx-pay-summary-card .l { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text-3); margin-bottom: 0.25rem; }
+  .sx-pay-summary-card.is-pending .l { color: var(--c-warning); }
+  .sx-pay-summary-card.is-paid .l { color: var(--c-success); }
+  .sx-pay-summary-card .v { font-size: 1.5rem; font-weight: 800; color: var(--c-text); font-variant-numeric: tabular-nums; line-height: 1.05; }
+  .sx-pay-summary-card.is-pending .v { color: var(--c-warning); }
+  .sx-pay-summary-card.is-paid .v { color: var(--c-success); }
+  .sx-pay-summary-card .s { font-size: 0.75rem; color: var(--c-text-2); margin-top: 0.25rem; font-variant-numeric: tabular-nums; }
+
+  .sx-pay-row {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 0.625rem;
+    align-items: center;
+    padding: 0.75rem 0.625rem;
+    border-radius: var(--r-sm);
+    transition: background 0.12s;
+  }
+  .sx-pay-row + .sx-pay-row { border-top: 1px solid var(--c-border-2); }
+  .sx-pay-row:hover { background: var(--c-bg); }
+  .sx-pay-main { min-width: 0; }
+  .sx-pay-lot { font-size: 0.875rem; font-weight: 600; color: var(--c-text); letter-spacing: 0.02em; }
+  .sx-pay-meta { font-size: 0.75rem; color: var(--c-text-3); margin-top: 0.125rem; }
+  .sx-pay-amt { font-size: 1.0625rem; font-weight: 700; color: var(--c-text); font-variant-numeric: tabular-nums; }
+  .sx-pay-status {
+    font-size: 0.6875rem; font-weight: 700; padding: 0.2rem 0.5rem;
+    border-radius: var(--r-pill); text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sx-pay-status.pending { background: var(--c-warning-soft); color: var(--c-warning); }
+  .sx-pay-status.paid { background: var(--c-success-soft); color: var(--c-success); }
+  .sx-pay-status.cancelled { background: var(--c-bg); color: var(--c-text-3); }
+
+  /* placeholders / empty states */
+  .sx-placeholder {
+    text-align: center; padding: 2.5rem 1rem;
+    color: var(--c-text-3);
+  }
+  .sx-placeholder-mark {
+    width: 48px; height: 48px;
+    margin: 0 auto 0.625rem;
+    background: var(--c-bg);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.125rem; color: var(--c-text-3);
+  }
+  .sx-placeholder p { font-size: 0.9375rem; color: var(--c-text-2); margin: 0; }
+  .sx-placeholder p small { display: block; margin-top: 0.25rem; font-size: 0.8125rem; color: var(--c-text-3); }
+
+  /* ─── Modal: lot journey detail ───────────────────────── */
+  .sx-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 0.5rem;
+    animation: fadeIn 0.15s;
+  }
+  .sx-modal-overlay.show { display: flex; }
+  .sx-modal {
+    background: var(--c-card);
+    border-radius: var(--r-xl);
+    width: 100%; max-width: 640px;
+    max-height: 92vh;
+    overflow: hidden;
+    box-shadow: var(--shadow-xl);
+    animation: modalIn 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex; flex-direction: column;
+  }
+  .sx-modal-head {
+    padding: 1.125rem 1.25rem;
+    border-bottom: 1px solid var(--c-border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  }
+  .sx-modal-title-block { min-width: 0; flex: 1; }
+  .sx-modal-eyebrow {
+    font-size: 0.6875rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--c-primary);
+    margin: 0 0 0.25rem;
+  }
+  .sx-modal-title {
+    font-size: 1.125rem; font-weight: 700;
+    color: var(--c-text); margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .sx-modal-close {
+    width: 36px; height: 36px;
+    background: var(--c-bg); border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--c-text-2);
+    font-size: 1.25rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .sx-modal-close:hover { background: var(--c-border); color: var(--c-text); }
+
+  .sx-modal-body {
+    overflow-y: auto;
+    padding: 1.25rem;
+  }
+
+  .sx-modal-section {
+    margin-bottom: 1.25rem;
+  }
+  .sx-modal-section:last-child { margin-bottom: 0; }
+  .sx-modal-section-h {
+    font-size: 0.6875rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--c-text-3);
+    margin: 0 0 0.625rem;
+  }
+
+  .sx-modal-detail-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.625rem;
+    background: var(--c-bg);
+    padding: 0.875rem;
+    border-radius: var(--r);
+  }
+  .sx-modal-detail-cell .l {
+    font-size: 0.6875rem; font-weight: 600; color: var(--c-text-3);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 0.25rem;
+  }
+  .sx-modal-detail-cell .v {
+    font-size: 0.9375rem; font-weight: 600; color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+  }
+  .sx-modal-detail-cell.full { grid-column: 1 / -1; }
+
+  .sx-modal-chips {
+    display: flex; flex-wrap: wrap; gap: 0.375rem;
+    margin-top: 0.25rem;
+  }
+
+  .sx-journey {
+    border-left: 2px solid var(--c-border);
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+  }
+  .sx-journey-step {
+    position: relative;
+    padding: 0.625rem 0.625rem;
+    border-radius: var(--r-sm);
+    background: var(--c-bg);
+  }
+  .sx-journey-step + .sx-journey-step { margin-top: 0.5rem; }
+  .sx-journey-step::before {
+    content: ''; position: absolute;
+    left: -1.4375rem; top: 1rem;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: var(--c-card);
+    border: 2px solid var(--c-primary);
+  }
+  .sx-journey-step.t-complete::before { border-color: var(--c-success); background: var(--c-success); }
+  .sx-journey-step.t-reject::before { border-color: var(--c-danger); background: var(--c-danger); }
+  .sx-journey-step.is-current { background: var(--c-primary-soft); }
+  .sx-journey-step.is-current::before { background: var(--c-primary); }
+  .sx-journey-step-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 0.5rem; margin-bottom: 0.125rem;
+  }
+  .sx-journey-pill {
+    font-size: 0.6875rem; font-weight: 700;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--r-pill);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sx-journey-pill.t-approve { background: var(--c-primary-soft); color: var(--c-primary); }
+  .sx-journey-pill.t-complete { background: var(--c-success-soft); color: var(--c-success); }
+  .sx-journey-pill.t-reject { background: var(--c-danger-soft); color: var(--c-danger); }
+  .sx-journey-when { font-size: 0.75rem; color: var(--c-text-3); }
+  .sx-journey-pieces {
+    font-size: 1rem; font-weight: 700; color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .sx-journey-by { font-size: 0.75rem; color: var(--c-text-2); margin-top: 0.125rem; }
+  .sx-journey-detail {
+    display: flex; flex-wrap: wrap; gap: 0.25rem;
+    margin-top: 0.375rem;
+  }
+  .sx-journey-detail .sx-chip {
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    background: var(--c-card);
+  }
+
+  /* ─── Toasts ──────────────────────────────────────── */
+  .sx-toasts {
+    position: fixed; bottom: 1rem; right: 1rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    z-index: 2000; max-width: 360px;
+  }
+  .sx-toast {
+    padding: 0.75rem 1rem;
+    background: var(--c-text);
+    color: white;
+    border-radius: var(--r);
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-lg);
+    animation: slideUpFade 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .sx-toast.success { background: var(--c-success); }
+  .sx-toast.error { background: var(--c-danger); }
+  .sx-toast::before {
+    content: ''; width: 16px; height: 16px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
+
+  /* ─── Animations ─────────────────────────────────── */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.97) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* ─── Mobile / tablet ─────────────────────────────── */
+  @media (max-width: 640px) {
+    .sx-page { padding-left: 0.625rem; padding-right: 0.625rem; }
+    .sx-stats { grid-template-columns: repeat(2, 1fr); }
+    .sx-pay-summary { grid-template-columns: 1fr; }
+    .sx-pay-row { grid-template-columns: 1fr auto; }
+    .sx-pay-status { grid-column: 1 / -1; justify-self: start; }
+    .sx-modal-overlay { align-items: flex-end; padding: 0; }
+    .sx-modal {
+      max-height: 90vh;
+      border-radius: var(--r-xl) var(--r-xl) 0 0;
+      animation: sheetUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+  }
 </style>
 
-<main class="events-page">
-  <h1 class="events-title">Finishing</h1>
-  <p class="events-subtitle">
-    Search any lot. <em>Hosiery</em> takes from stitching, <em>denim</em> from washing-in.
-    Approve pieces, then complete against the approval. Approving fires payment to the upstream master.
-  </p>
+<main class="sx sx-page">
 
-  <div class="search-card">
-    <div class="search-row">
-      <input type="text" id="searchInput" class="search-input" placeholder="Lot number, SKU, or cutting remark…" autofocus />
-      <button id="searchBtn" class="search-btn">Search</button>
+  <!-- ─── Header ──────────────────────────── -->
+  <header class="sx-head">
+    <h1>Finishing</h1>
+    <span class="pill" id="pageUserPill">—</span>
+  </header>
+
+  <!-- ─── Search ──────────────────────────── -->
+  <section class="sx-search">
+    <div class="sx-search-row">
+      <span class="sx-search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Type lot number or SKU and press Enter" autofocus />
+      <button id="searchBtn" class="sx-btn sx-btn-primary">Search</button>
     </div>
-    <div id="searchResults" class="search-results"></div>
-  </div>
+    <div id="searchResults" class="sx-search-results"></div>
+  </section>
 
-  <div id="lotCard" class="lot-card">
-    <div class="lot-head">
-      <div>
-        <div class="lot-no" id="lotNo">—</div>
-        <div class="lot-meta">
-          <span id="lotSku">—</span> &bull; Cut by <strong id="lotCutter">—</strong>
-        </div>
+  <!-- ─── Lot context ──────────────────────── -->
+  <section id="lotCard" class="sx-lot">
+    <div class="sx-lot-head">
+      <h2 class="sx-lot-no" id="lotNo">—</h2>
+      <span class="sx-flow denim" id="lotFlow">denim</span>
+    </div>
+    <p class="sx-lot-meta">
+      <strong id="lotSku">—</strong> · cut by <strong id="lotCutter">—</strong>
+    </p>
+    <div class="sx-cutting-remark" id="cuttingRemarkNote" style="display: none;">
+      <span class="label">From cutting</span>
+      <span class="text" id="cuttingRemarkText"></span>
+    </div>
+
+    <div class="sx-stats">
+      <div class="sx-stat"><div class="l">Approved</div><div class="v" id="aggApproved">0</div></div>
+      <div class="sx-stat is-completed"><div class="l">Completed</div><div class="v" id="aggCompleted">0</div></div>
+      <div class="sx-stat is-rejected"><div class="l">Rejected</div><div class="v" id="aggRejected">0</div></div>
+      <div class="sx-stat is-inline"><div class="l">Inline</div><div class="v" id="aggInline">0</div></div>
+    </div>
+
+    <div class="sx-sizes-label">
+      Pieces by size <span class="total">total cut <span id="totalCut">0</span></span>
+    </div>
+    <div class="sx-chip-row" id="sizeChips"></div>
+  </section>
+
+  <!-- ─── Auto-action panel ─────────────────── -->
+  <section id="actionsSection" class="sx-actions">
+    <p class="sx-actions-h" id="actionsHeading">What you can do</p>
+    <div id="actionsContainer"></div>
+  </section>
+
+  <!-- ─── My Work / My Payments ─────────────── -->
+  <section class="sx-info">
+    <div class="sx-info-tabs">
+      <button class="sx-info-tab active" id="tabWork" onclick="switchInfoTab('work')">My Work</button>
+      <button class="sx-info-tab" id="tabPayments" onclick="switchInfoTab('payments')">My Payments</button>
+    </div>
+
+    <!-- My Work -->
+    <div class="sx-info-body" id="workTab">
+      <div class="sx-controls">
+        <select id="historyDays">
+          <option value="1">Today</option>
+          <option value="7" selected>7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+        </select>
+        <select id="historyType">
+          <option value="all">All actions</option>
+          <option value="approve">Take into stitching</option>
+          <option value="complete">Mark as done</option>
+          <option value="reject">Rejected pieces</option>
+        </select>
+        <span class="spacer"></span>
+        <button class="sx-btn-export" onclick="downloadHistoryExcel()">⬇ Excel</button>
       </div>
-      <span class="search-result-flow" id="lotFlow">DENIM</span>
-    </div>
-
-    <div class="cutting-remark-note" id="cuttingRemarkNote" style="display: none;">
-      <span class="cutting-remark-note__label">From Cutting</span>
-      <span class="cutting-remark-note__text" id="cuttingRemarkText"></span>
-    </div>
-
-    <div class="agg-pills">
-      <div class="agg-pill"><div class="label">Approved</div><div class="value" id="aggApproved">0</div></div>
-      <div class="agg-pill completed"><div class="label">Completed</div><div class="value" id="aggCompleted">0</div></div>
-      <div class="agg-pill rejected"><div class="label">Rejected</div><div class="value" id="aggRejected">0</div></div>
-      <div class="agg-pill inline"><div class="label">Inline</div><div class="value" id="aggInline">0</div></div>
-    </div>
-
-    <table class="size-matrix">
-      <thead>
-        <tr>
-          <th>Size</th>
-          <th>Upstream</th>
-          <th>Approved</th>
-          <th>Completed</th>
-          <th>Rejected</th>
-          <th>Inline</th>
-          <th>Available</th>
-        </tr>
-      </thead>
-      <tbody id="sizeMatrixBody"></tbody>
-    </table>
-  </div>
-
-  <div id="actionCard" class="action-card">
-    <div class="action-tabs">
-      <button class="action-tab active" id="tabApprove" onclick="switchTab('approve')">
-        Approve from upstream
-      </button>
-      <button class="action-tab" id="tabComplete" onclick="switchTab('complete')">
-        Complete &amp; reject
-      </button>
-    </div>
-
-    <div class="action-body" id="approvePanel">
-      <div class="action-section-hint">
-        Pick how many pieces to take into finishing. The upstream is stitching for hosiery and washing-in for denim. <strong>Approving fires payment to the upstream master.</strong>
-      </div>
-      <div class="size-grid" id="approveSizeGrid"></div>
-      <div class="form-row">
-        <input type="text" id="approveRemark" placeholder="Remark (optional)" />
-      </div>
-      <div class="total-row">
-        <span class="total-label">Total to approve</span>
-        <span class="total-value" id="approveTotal">0</span>
-      </div>
-      <button class="submit-btn" id="approveBtn" onclick="submitApprove()" disabled>Record approval</button>
-    </div>
-
-    <div class="action-body" id="completePanel" style="display: none;">
-      <div class="action-section-hint">Select an open approval, then enter how many pieces are completed and (optionally) rejected per size.</div>
-      <div id="approvePicker" class="approve-picker"></div>
-      <div id="completeForm" style="display: none;">
-        <div class="complete-grid" id="completeSizeGrid"></div>
-        <div class="form-row"><input type="text" id="completeRemark" placeholder="Completion remark (optional)" /></div>
-        <div class="form-row"><input type="text" id="rejectReason" placeholder="Reject reason (only if rejecting)" /></div>
-        <div class="total-row">
-          <span class="total-label">Completed / Rejected</span>
-          <span class="total-value">
-            <span id="completeTotal">0</span>
-            <span style="color: var(--text-muted); font-weight: 400;"> / </span>
-            <span id="rejectTotal" style="color: #b34d28;">0</span>
-          </span>
-        </div>
-        <button class="submit-btn" id="completeBtn" onclick="submitComplete()" disabled>Record completion</button>
+      <div id="historyList" class="sx-timeline">
+        <div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading…</p></div>
       </div>
     </div>
-  </div>
+
+    <!-- My Payments -->
+    <div class="sx-info-body" id="paymentsTab" style="display: none;">
+      <div class="sx-controls">
+        <select id="payDays">
+          <option value="7">7 days</option>
+          <option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+          <option value="365">1 year</option>
+        </select>
+        <select id="payStatus">
+          <option value="all">All</option>
+          <option value="pending" selected>Pending only</option>
+          <option value="paid">Paid only</option>
+        </select>
+        <span class="spacer"></span>
+        <button class="sx-btn-export" onclick="downloadPaymentsExcel()">⬇ Excel</button>
+      </div>
+      <div id="paySummary" class="sx-pay-summary"></div>
+      <div id="payList">
+        <div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading…</p></div>
+      </div>
+    </div>
+  </section>
 </main>
 
-<div class="toast-area" id="toastArea"></div>
+<!-- ─── Modal: event detail + lot journey ─── -->
+<div id="modalOverlay" class="sx sx-modal-overlay" role="dialog" aria-modal="true">
+  <div class="sx-modal" id="modalCard">
+    <div class="sx-modal-head">
+      <div class="sx-modal-title-block">
+        <p class="sx-modal-eyebrow" id="modalEyebrow">Event detail</p>
+        <h3 class="sx-modal-title" id="modalTitle">—</h3>
+      </div>
+      <button class="sx-modal-close" onclick="closeModal()" aria-label="Close">×</button>
+    </div>
+    <div class="sx-modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="sx sx-toasts" id="toastArea"></div>
 
 <script>
 'use strict';
 
 const BASE = '/finishingdashboard';
+const STAGE_LABEL = 'Finishing';
 
 let currentLot = null;
 let currentState = null;
-let selectedApprovalId = null;
+let infoTab = 'work';
 
-function el(id) { return document.getElementById(id); }
-function fmt(n) { return Number(n || 0).toLocaleString(); }
+// ─── helpers ─────────────────────────────────
+const el = id => document.getElementById(id);
+const fmt = n => Number(n || 0).toLocaleString();
+const fmtMoney = n => '₹ ' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const escapeText = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const fmtDate = ts => {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+const fmtDateLong = ts => {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString();
+};
 
 function toast(msg, kind) {
   const t = document.createElement('div');
-  t.className = 'toast ' + (kind || '');
+  t.className = 'sx-toast ' + (kind || '');
   t.textContent = msg;
   el('toastArea').appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 3000);
-  setTimeout(() => t.remove(), 3300);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 3500);
+  setTimeout(() => t.remove(), 3800);
 }
+
 function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
@@ -234,59 +1004,73 @@ function api(method, url, body) {
     return data;
   });
 }
-function escapeText(s) {
-  return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-}
 
+// pill in header — show user
+try {
+  const u = <%- JSON.stringify(user || {}) %>;
+  if (u && u.username) el('pageUserPill').textContent = u.username;
+} catch (_) {}
+
+// ─── search ────────────────────────────────
 async function runSearch() {
   const q = el('searchInput').value.trim();
   if (!q) return;
-  el('searchBtn').disabled = true;
+  const btn = el('searchBtn');
+  btn.disabled = true; btn.textContent = '…';
   try {
     const data = await api('GET', BASE + '/event/search?q=' + encodeURIComponent(q));
     const wrap = el('searchResults');
     wrap.textContent = '';
     if (!data.lots.length) {
-      wrap.innerHTML = '<div class="empty-state">No denim lots match "' + escapeText(q) + '"</div>';
+      wrap.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>No lots found for &ldquo;' + escapeText(q) + '&rdquo;</p></div>';
       wrap.classList.add('show'); return;
     }
     if (data.lots.length === 1) { wrap.classList.remove('show'); await selectLot(data.lots[0]); return; }
     data.lots.forEach(lot => {
-      const row = document.createElement('div'); row.className = 'search-result-row';
+      const row = document.createElement('div');
+      row.className = 'sx-search-row-result';
       row.onclick = () => selectLot(lot);
-      const num = document.createElement('span'); num.className = 'search-result-no'; num.textContent = lot.lot_no; row.appendChild(num);
-      const meta = document.createElement('span'); meta.className = 'search-result-meta';
-      meta.textContent = (lot.sku || '—') + ' • ' + lot.total_pieces + ' pcs cut'; row.appendChild(meta);
-      const flow = document.createElement('span'); flow.className = 'search-result-flow denim'; flow.textContent = 'Denim'; row.appendChild(flow);
+      const isDenim = (lot.flow_type || '').toLowerCase() === 'denim' || (lot.flow_type === null && lot.is_denim_cutter);
+      row.innerHTML = `
+        <span class="sx-result-no">${escapeText((lot.lot_no || '').toUpperCase())}</span>
+        <span class="sx-result-meta">${escapeText(lot.sku || '—')} · ${fmt(Number(lot.total_pieces || 0))} pcs cut</span>
+        <span class="sx-flow ${isDenim ? 'denim' : 'hosiery'}">${isDenim ? 'denim' : 'hosiery'}</span>
+      `;
       wrap.appendChild(row);
     });
     wrap.classList.add('show');
   } catch (err) { toast('Search failed: ' + err.message, 'error'); }
-  finally { el('searchBtn').disabled = false; }
+  finally { btn.disabled = false; btn.textContent = 'Search'; }
 }
 el('searchBtn').addEventListener('click', runSearch);
 el('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
+// ─── select lot ────────────────────────────
 async function selectLot(lot) {
   el('searchResults').classList.remove('show');
   currentLot = lot;
   await refreshState();
 }
+
 async function refreshState() {
   if (!currentLot) return;
   try {
     currentState = await api('GET', BASE + '/event/lot-state/' + currentLot.id);
     renderState();
-  } catch (err) { toast('Could not load lot state: ' + err.message, 'error'); }
+  } catch (err) { toast('Could not load lot: ' + err.message, 'error'); }
 }
 
 function renderState() {
   if (!currentState) return;
-  const { lot, stage_aggregates: agg, stage_size_aggregates: sizeAgg, upstream_sizes, open_approvals: open } = currentState;
+  const { lot, stage_aggregates: agg, upstream_sizes, open_approvals: open } = currentState;
 
   el('lotNo').textContent = (lot.lot_no || '').toUpperCase();
   el('lotSku').textContent = lot.sku || '—';
   el('lotCutter').textContent = lot.cutting_master || '—';
+  const isDenim = (lot.flow_type || '').toLowerCase() === 'denim' || (lot.flow_type === null && lot.is_denim_cutter);
+  const flowEl = el('lotFlow');
+  flowEl.className = 'sx-flow ' + (isDenim ? 'denim' : 'hosiery');
+  flowEl.textContent = isDenim ? 'denim' : 'hosiery';
 
   const remarkNote = el('cuttingRemarkNote');
   if (lot.cutting_remark) {
@@ -299,176 +1083,557 @@ function renderState() {
   el('aggRejected').textContent = fmt(agg.rejected);
   el('aggInline').textContent = fmt(agg.inline);
 
-  const tbody = el('sizeMatrixBody'); tbody.textContent = '';
+  const totalCut = upstream_sizes.reduce((a, s) => a + (Number(s.cut_qty || s.stitched_qty || s.assembled_qty || s.washed_qty || s.upstream_qty) || 0), 0);
+  el('totalCut').textContent = fmt(totalCut);
+
+  // size chips (compact)
+  const chips = el('sizeChips'); chips.textContent = '';
   upstream_sizes.forEach(s => {
-    const row = document.createElement('tr');
-    function cell(val, dim) { const td = document.createElement('td'); td.textContent = fmt(val); if (dim) td.classList.add('dim'); return td; }
-    const labelTd = document.createElement('td'); labelTd.textContent = s.size_label; row.appendChild(labelTd);
-    row.appendChild(cell(s.upstream_qty));
-    row.appendChild(cell(s.approved || 0, !s.approved));
-    row.appendChild(cell(s.completed || 0, !s.completed));
-    row.appendChild(cell(s.rejected || 0, !s.rejected));
-    row.appendChild(cell(s.inline || 0, !s.inline));
-    row.appendChild(cell(s.available, s.available === 0));
-    tbody.appendChild(row);
+    const cut = s.cut_qty || s.stitched_qty || s.assembled_qty || s.washed_qty || s.upstream_qty || 0;
+    const completed = s.completed || 0;
+    const approved = s.approved || 0;
+    let cls = 's-empty';
+    let glyph = '';
+    if (cut > 0 && completed >= cut) { cls = 's-done'; glyph = '✓'; }
+    else if (approved > 0) { cls = 's-progress'; glyph = '·'; }
+    const chip = document.createElement('div');
+    chip.className = 'sx-chip ' + cls;
+    chip.innerHTML = `
+      <span class="sx-chip-label">${escapeText(s.size_label)}</span>
+      <span class="sx-chip-num">${fmt(completed)} / ${fmt(cut)}</span>
+      ${glyph ? '<span class="sx-chip-status">' + glyph + '</span>' : ''}
+    `;
+    chips.appendChild(chip);
   });
 
   el('lotCard').classList.add('show');
-  el('actionCard').classList.add('show');
-
-  const canApprove = currentState.upstream_total_available > 0;
-  const canComplete = open.length > 0;
-  el('tabApprove').disabled = !canApprove;
-  el('tabComplete').disabled = !canComplete;
-
-  if (canApprove) switchTab('approve');
-  else if (canComplete) switchTab('complete');
-  else switchTab('approve');
-
-  renderApproveForm();
-  renderCompletePanel();
-}
-function switchTab(tab) {
-  el('tabApprove').classList.toggle('active', tab === 'approve');
-  el('tabComplete').classList.toggle('active', tab === 'complete');
-  el('approvePanel').style.display = tab === 'approve' ? 'block' : 'none';
-  el('completePanel').style.display = tab === 'complete' ? 'block' : 'none';
+  el('actionsSection').classList.add('show');
+  renderActions();
 }
 
-function renderApproveForm() {
-  const grid = el('approveSizeGrid'); grid.textContent = '';
-  const upstream = currentState.upstream_sizes;
-  if (!upstream.length || currentState.upstream_total_available <= 0) {
-    grid.innerHTML = '<div class="empty-state">No pieces available — upstream has nothing completed that finishing hasn\'t already taken.</div>';
-    el('approveBtn').disabled = true; el('approveTotal').textContent = '0'; return;
+// ═════════════════════════════════════════════════════
+// Auto-action panel
+// ═════════════════════════════════════════════════════
+function renderActions() {
+  const wrap = el('actionsContainer');
+  wrap.innerHTML = '';
+  const totalAvailable = currentState.upstream_total_available || 0;
+  const open = currentState.open_approvals;
+
+  let cards = 0;
+  if (totalAvailable > 0) {
+    cards++;
+    wrap.appendChild(buildTakeCard());
   }
-  upstream.forEach(s => {
-    const cell = document.createElement('div'); cell.className = 'size-cell' + (s.available === 0 ? ' disabled' : '');
-    const lab = document.createElement('div'); lab.className = 'size-cell-label'; lab.textContent = s.size_label; cell.appendChild(lab);
-    const av = document.createElement('div'); av.className = 'size-cell-avail'; av.textContent = 'Available ' + fmt(s.available); cell.appendChild(av);
-    const inp = document.createElement('input');
-    inp.type = 'number'; inp.min = '0'; inp.max = String(s.available); inp.value = '0';
-    inp.dataset.size = s.size_label; inp.disabled = s.available === 0;
-    inp.addEventListener('input', recalcApproveTotal);
-    cell.appendChild(inp); grid.appendChild(cell);
+  open.forEach(a => {
+    cards++;
+    wrap.appendChild(buildDoneCard(a));
   });
-  recalcApproveTotal();
+  if (cards === 0) {
+    const card = document.createElement('div');
+    card.className = 'sx-action-card is-empty';
+    card.innerHTML = `
+      <div class="sx-empty-mark">✓</div>
+      <p>This lot is fully processed at ${STAGE_LABEL.toLowerCase()}.<small>Nothing for you to do here.</small></p>
+    `;
+    wrap.appendChild(card);
+    el('actionsHeading').textContent = '— this lot —';
+  } else {
+    el('actionsHeading').textContent = cards === 1 ? 'What you can do' : 'What you can do · ' + cards + ' actions';
+  }
 }
-function recalcApproveTotal() {
-  const inputs = el('approveSizeGrid').querySelectorAll('input[data-size]');
+
+function buildTakeCard() {
+  const totalAvailable = currentState.upstream_total_available || 0;
+  const upstream = currentState.upstream_sizes;
+
+  const card = document.createElement('div');
+  card.className = 'sx-action-card';
+  card.innerHTML = `
+    <div class="sx-action-card-body">
+      <div class="sx-action-row">
+        <div class="sx-action-icon">↘</div>
+        <div class="sx-action-text">
+          <p class="sx-action-title">Take <span class="qty">${fmt(totalAvailable)}</span> pieces into ${STAGE_LABEL.toLowerCase()}</p>
+          <p class="sx-action-sub">Everything still in the cutting pool.</p>
+        </div>
+      </div>
+      <button class="sx-action-cta" data-action="take-confirm">
+        <span class="sx-action-cta-check">✓</span>
+        Yes, take all ${fmt(totalAvailable)} pieces
+      </button>
+    </div>
+    <button class="sx-action-toggle" data-action="take-toggle">
+      <span class="arrow">⌄</span> Or adjust by size
+    </button>
+    <div class="sx-action-form">
+      <p class="sx-form-helper">Pre-filled with everything available. Reduce a size below if you don't want to take it all.</p>
+      <div class="sx-input-list" id="takeSizeList"></div>
+      <div class="sx-form-row"><input type="text" id="takeRemark" placeholder="Note (optional)" /></div>
+      <div class="sx-totals">
+        <span class="l">Total to take</span>
+        <span class="v" id="takeTotal">0</span>
+      </div>
+      <button class="sx-form-submit" data-action="take-submit">Take pieces</button>
+    </div>
+  `;
+
+  const list = card.querySelector('#takeSizeList');
+  upstream.forEach(s => {
+    const avail = s.available || 0;
+    if (avail === 0) return;
+    const row = document.createElement('div');
+    row.className = 'sx-input-row';
+    row.innerHTML = `
+      <span class="sx-input-label">${escapeText(s.size_label)}</span>
+      <span class="sx-input-avail"><span class="n">${fmt(avail)}</span> available</span>
+      <div class="sx-stepper">
+        <button type="button" data-step="-10">−10</button>
+        <button type="button" data-step="-1">−</button>
+        <input type="number" min="0" max="${avail}" value="${avail}" data-size="${escapeText(s.size_label)}" data-avail="${avail}" />
+        <button type="button" data-step="1">+</button>
+        <button type="button" data-step="10">+10</button>
+      </div>
+    `;
+    bindStepper(row, () => recalcTakeTotal(card));
+    list.appendChild(row);
+  });
+
+  card.querySelector('[data-action="take-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
+  card.querySelector('[data-action="take-confirm"]').addEventListener('click', () => doTakeAll());
+  card.querySelector('[data-action="take-submit"]').addEventListener('click', () => doTakeFromForm(card));
+
+  recalcTakeTotal(card);
+  return card;
+}
+
+function recalcTakeTotal(card) {
+  const inputs = card.querySelectorAll('#takeSizeList input[data-size]');
   let total = 0;
   inputs.forEach(i => {
-    let v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) v = 0;
-    if (v > Number(i.max)) { v = Number(i.max); i.value = v; }
+    let v = parseInt(i.value, 10);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    const max = Number(i.dataset.avail) || 0;
+    if (v > max) { v = max; i.value = v; }
     total += v;
   });
-  el('approveTotal').textContent = fmt(total);
-  el('approveBtn').disabled = total <= 0;
-}
-async function submitApprove() {
-  if (!currentLot) return;
-  const inputs = el('approveSizeGrid').querySelectorAll('input[data-size]');
-  const sizes = [];
-  inputs.forEach(i => { const p = parseInt(i.value, 10) || 0; if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p }); });
-  if (!sizes.length) return;
-  const total = sizes.reduce((a, s) => a + s.pieces, 0);
-  if (!confirm('Approve ' + fmt(total) + ' pieces and pay the upstream master for this batch?')) return;
-  el('approveBtn').disabled = true;
-  try {
-    await api('POST', BASE + '/event/approve', {
-      cutting_lot_id: currentLot.id, sizes, remark: el('approveRemark').value.trim() || null,
-    });
-    toast('Approved ' + fmt(total) + ' pieces, payment recorded.', 'success');
-    el('approveRemark').value = ''; await refreshState();
-  } catch (err) { toast('Approve failed: ' + err.message, 'error'); el('approveBtn').disabled = false; }
+  card.querySelector('#takeTotal').textContent = fmt(total);
 }
 
-function renderCompletePanel() {
-  const picker = el('approvePicker'); picker.textContent = '';
-  selectedApprovalId = null; el('completeForm').style.display = 'none';
-  const open = currentState.open_approvals;
-  if (!open.length) { picker.innerHTML = '<div class="empty-state">No open approvals — approve pieces first.</div>'; return; }
-  open.forEach(a => {
-    const card = document.createElement('div'); card.className = 'approve-pick'; card.dataset.id = String(a.event_id);
-    card.onclick = () => selectApprove(a);
-    const head = document.createElement('div'); head.className = 'approve-pick-head';
-    const left = document.createElement('span');
-    left.innerHTML = '<span class="approved">' + fmt(a.approved) + '</span> approved · ' +
-      '<span style="color: var(--terracotta-dark); font-weight: 600;">' + fmt(a.inline) + ' inline</span>';
-    head.appendChild(left);
-    const when = document.createElement('span'); when.className = 'when';
-    when.textContent = a.operator + ' · ' + new Date(a.approved_at).toLocaleString();
-    head.appendChild(when); card.appendChild(head);
-    const detail = document.createElement('div'); detail.className = 'approve-pick-detail';
-    detail.textContent = Object.entries(a.sizes).map(([k, v]) => k + ': ' + v).join(' · ');
-    card.appendChild(detail); picker.appendChild(card);
-  });
+async function doTakeAll() {
+  const upstream = currentState.upstream_sizes;
+  const sizes = upstream
+    .filter(s => (s.available || 0) > 0)
+    .map(s => ({ size_label: s.size_label, pieces: s.available }));
+  if (!sizes.length) return;
+  const total = sizes.reduce((a, s) => a + s.pieces, 0);
+  if (!confirm('Take ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' into ' + STAGE_LABEL.toLowerCase() + '?')) return;
+  await doTakeRequest(sizes, null);
 }
-function selectApprove(approve) {
-  selectedApprovalId = approve.event_id;
-  document.querySelectorAll('.approve-pick').forEach(c => c.classList.remove('selected'));
-  document.querySelectorAll('.approve-pick').forEach(c => { if (Number(c.dataset.id) === approve.event_id) c.classList.add('selected'); });
-  const grid = el('completeSizeGrid'); grid.textContent = '';
-  Object.entries(approve.sizes).forEach(([label, approvedPieces]) => {
-    const cell = document.createElement('div'); cell.className = 'complete-cell';
-    const lab = document.createElement('div'); lab.className = 'size-cell-label'; lab.textContent = label + ' (≤ ' + approvedPieces + ')';
-    cell.appendChild(lab);
-    function row(name, color) {
-      const r = document.createElement('div'); r.className = 'complete-cell-row';
-      const l = document.createElement('label'); l.textContent = name; if (color) l.style.color = color;
-      const inp = document.createElement('input');
-      inp.type = 'number'; inp.min = '0'; inp.max = String(approvedPieces); inp.value = '0';
-      inp.dataset.size = label; inp.dataset.kind = name.toLowerCase();
-      inp.addEventListener('input', recalcCompleteTotals);
-      r.appendChild(l); r.appendChild(inp); return r;
-    }
-    cell.appendChild(row('Done')); cell.appendChild(row('Reject', '#b34d28'));
-    grid.appendChild(cell);
+
+async function doTakeFromForm(card) {
+  const inputs = card.querySelectorAll('#takeSizeList input[data-size]');
+  const sizes = [];
+  inputs.forEach(i => {
+    const p = parseInt(i.value, 10) || 0;
+    if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p });
   });
-  el('completeForm').style.display = 'block'; recalcCompleteTotals();
+  if (!sizes.length) { toast('No pieces selected', 'error'); return; }
+  const remark = card.querySelector('#takeRemark').value.trim() || null;
+  const total = sizes.reduce((a, s) => a + s.pieces, 0);
+  if (!confirm('Take ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' into ' + STAGE_LABEL.toLowerCase() + '?')) return;
+  await doTakeRequest(sizes, remark);
 }
-function recalcCompleteTotals() {
+
+async function doTakeRequest(sizes, remark) {
+  try {
+    await api('POST', BASE + '/event/approve', { cutting_lot_id: currentLot.id, sizes, remark });
+    toast('Taken into ' + STAGE_LABEL.toLowerCase() + ' ✓', 'success');
+    await refreshState();
+    if (infoTab === 'work') loadHistory();
+  } catch (err) { toast('Could not take: ' + err.message, 'error'); }
+}
+
+function buildDoneCard(approve) {
+  const card = document.createElement('div');
+  card.className = 'sx-action-card is-done';
+  card.dataset.approveId = String(approve.event_id);
+  const sizesText = Object.entries(approve.sizes).map(([k,v]) => '<strong>' + escapeText(k) + '</strong> ' + fmt(v)).join(' · ');
+  const when = new Date(approve.approved_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+  card.innerHTML = `
+    <div class="sx-action-card-body">
+      <div class="sx-action-row">
+        <div class="sx-action-icon">✓</div>
+        <div class="sx-action-text">
+          <p class="sx-action-title">Mark <span class="qty">${fmt(approve.inline)}</span> pieces as done</p>
+          <p class="sx-action-sub">From your batch of ${fmt(approve.approved)} taken on ${when}.</p>
+        </div>
+      </div>
+      <button class="sx-action-cta" data-action="done-confirm">
+        <span class="sx-action-cta-check">✓</span>
+        Yes, all ${fmt(approve.inline)} pieces are done
+      </button>
+    </div>
+    <button class="sx-action-toggle" data-action="done-toggle">
+      <span class="arrow">⌄</span> Or some pieces are still being worked / spoiled
+    </button>
+    <div class="sx-action-form">
+      <p class="sx-form-helper">Pre-filled with the full inline amount per size. Reduce if some pieces aren't done yet.</p>
+      <div class="sx-input-list" data-list="done-sizes"></div>
+      <div class="sx-form-row"><input type="text" data-input="done-remark" placeholder="Completion note (optional)" /></div>
+      <div class="sx-totals">
+        <span class="l">Marking as done</span>
+        <span class="v" data-display="done-total">0</span>
+      </div>
+
+      <button type="button" class="sx-reject-toggle" data-action="reject-toggle">+ Some pieces are spoiled / damaged</button>
+      <div class="sx-reject-section" data-section="reject">
+        <p class="sx-form-helper" style="margin-top: 0.5rem; color: var(--c-danger);">Pieces that cannot be sent forward — these will be permanently rejected.</p>
+        <div class="sx-input-list" data-list="reject-sizes"></div>
+        <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reject reason (e.g. fabric defect)" /></div>
+        <div class="sx-totals" style="background: var(--c-danger-soft);">
+          <span class="l" style="color: var(--c-danger);">Rejecting</span>
+          <span class="v" data-display="reject-total" style="color: var(--c-danger);">0</span>
+        </div>
+      </div>
+
+      <button class="sx-form-submit" data-action="done-submit">Save</button>
+    </div>
+  `;
+
+  // Done size inputs (pre-filled with size's full approved qty as cap)
+  const dList = card.querySelector('[data-list="done-sizes"]');
+  Object.entries(approve.sizes).forEach(([label, full]) => {
+    const row = document.createElement('div');
+    row.className = 'sx-input-row';
+    row.innerHTML = `
+      <span class="sx-input-label">${escapeText(label)}</span>
+      <span class="sx-input-avail">up to <span class="n">${fmt(full)}</span></span>
+      <div class="sx-stepper">
+        <button type="button" data-step="-10">−10</button>
+        <button type="button" data-step="-1">−</button>
+        <input type="number" min="0" max="${full}" value="${full}" data-size="${escapeText(label)}" data-max="${full}" data-kind="done" />
+        <button type="button" data-step="1">+</button>
+        <button type="button" data-step="10">+10</button>
+      </div>
+    `;
+    bindStepper(row, () => recalcDoneTotals(card, approve));
+    dList.appendChild(row);
+  });
+
+  // Reject inputs (default 0)
+  const rList = card.querySelector('[data-list="reject-sizes"]');
+  Object.entries(approve.sizes).forEach(([label, full]) => {
+    const row = document.createElement('div');
+    row.className = 'sx-reject-row';
+    row.innerHTML = `
+      <span class="sx-input-label">${escapeText(label)}</span>
+      <span class="sx-input-avail">up to <span class="n">${fmt(full)}</span></span>
+      <div class="sx-stepper">
+        <button type="button" data-step="-1">−</button>
+        <input type="number" min="0" max="${full}" value="0" data-size="${escapeText(label)}" data-max="${full}" data-kind="reject" />
+        <button type="button" data-step="1">+</button>
+      </div>
+    `;
+    bindStepper(row, () => recalcDoneTotals(card, approve));
+    rList.appendChild(row);
+  });
+
+  card.querySelector('[data-action="done-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
+  card.querySelector('[data-action="reject-toggle"]').addEventListener('click', () => {
+    card.querySelector('[data-section="reject"]').classList.toggle('show');
+  });
+  card.querySelector('[data-action="done-confirm"]').addEventListener('click', () => doMarkDoneAll(approve));
+  card.querySelector('[data-action="done-submit"]').addEventListener('click', () => doMarkDoneFromForm(card, approve));
+
+  recalcDoneTotals(card, approve);
+  return card;
+}
+
+function bindStepper(row, onChange) {
+  const input = row.querySelector('input');
+  const max = Number(input.dataset.max || input.dataset.avail) || 0;
+  row.querySelectorAll('button[data-step]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cur = parseInt(input.value, 10) || 0;
+      let next = cur + parseInt(btn.dataset.step, 10);
+      if (next < 0) next = 0;
+      if (next > max) next = max;
+      input.value = next;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+  input.addEventListener('input', onChange);
+}
+
+function recalcDoneTotals(card, approve) {
+  const caps = approve.sizes;
+  const doneInputs = card.querySelectorAll('input[data-kind="done"]');
+  const rejInputs = card.querySelectorAll('input[data-kind="reject"]');
+  const rejBySize = {}; rejInputs.forEach(i => rejBySize[i.dataset.size] = i);
+  const doneBySize = {}; doneInputs.forEach(i => doneBySize[i.dataset.size] = i);
+
   let done = 0, rej = 0;
-  el('completeSizeGrid').querySelectorAll('input').forEach(i => {
+
+  doneInputs.forEach(i => {
     let v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) v = 0;
-    if (v > Number(i.max)) { v = Number(i.max); i.value = v; }
-    if (i.dataset.kind === 'done') done += v; else if (i.dataset.kind === 'reject') rej += v;
+    const cap = caps[i.dataset.size] || 0;
+    const r = parseInt((rejBySize[i.dataset.size] || {}).value, 10) || 0;
+    if (v + r > cap) { v = Math.max(0, cap - r); i.value = v; }
+    done += v;
   });
-  el('completeTotal').textContent = fmt(done); el('rejectTotal').textContent = fmt(rej);
-  el('completeBtn').disabled = (done + rej) <= 0;
+  rejInputs.forEach(i => {
+    let v = parseInt(i.value, 10); if (!Number.isFinite(v) || v < 0) v = 0;
+    const cap = caps[i.dataset.size] || 0;
+    const d = parseInt((doneBySize[i.dataset.size] || {}).value, 10) || 0;
+    if (v + d > cap) { v = Math.max(0, cap - d); i.value = v; }
+    rej += v;
+  });
+  card.querySelector('[data-display="done-total"]').textContent = fmt(done);
+  card.querySelector('[data-display="reject-total"]').textContent = fmt(rej);
 }
-async function submitComplete() {
-  if (!selectedApprovalId) return;
+
+async function doMarkDoneAll(approve) {
+  const completed = Object.entries(approve.sizes).map(([size_label, pieces]) => ({ size_label, pieces }));
+  const total = completed.reduce((a, s) => a + s.pieces, 0);
+  if (!confirm('Mark ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' as done?')) return;
+  await doMarkDoneRequest(approve.event_id, completed, [], null, null);
+}
+
+async function doMarkDoneFromForm(card, approve) {
   const completed = {}, rejected = {};
-  el('completeSizeGrid').querySelectorAll('input').forEach(i => {
+  card.querySelectorAll('input[data-kind="done"]').forEach(i => {
     const v = parseInt(i.value, 10) || 0;
-    if (v > 0) {
-      const target = i.dataset.kind === 'done' ? completed : rejected;
-      target[i.dataset.size] = (target[i.dataset.size] || 0) + v;
-    }
+    if (v > 0) completed[i.dataset.size] = (completed[i.dataset.size] || 0) + v;
+  });
+  card.querySelectorAll('input[data-kind="reject"]').forEach(i => {
+    const v = parseInt(i.value, 10) || 0;
+    if (v > 0) rejected[i.dataset.size] = (rejected[i.dataset.size] || 0) + v;
   });
   const cs = Object.entries(completed).map(([size_label, pieces]) => ({ size_label, pieces }));
   const rs = Object.entries(rejected).map(([size_label, pieces]) => ({ size_label, pieces }));
-  if (!cs.length && !rs.length) return;
+  if (!cs.length && !rs.length) { toast('Nothing entered', 'error'); return; }
+
   const cTotal = cs.reduce((a, s) => a + s.pieces, 0);
   const rTotal = rs.reduce((a, s) => a + s.pieces, 0);
   let msg = '';
-  if (cTotal) msg += 'Complete ' + fmt(cTotal);
+  if (cTotal) msg += 'Mark ' + fmt(cTotal) + ' done';
   if (rTotal) msg += (msg ? ', ' : '') + 'reject ' + fmt(rTotal);
-  if (!confirm(msg + ' for ' + currentLot.lot_no + '?')) return;
-  el('completeBtn').disabled = true;
+  if (!confirm(msg + ' for ' + (currentLot.lot_no || '').toUpperCase() + '?')) return;
+
+  const remark = card.querySelector('[data-input="done-remark"]').value.trim() || null;
+  const reason = card.querySelector('[data-input="reject-reason"]').value.trim() || null;
+  await doMarkDoneRequest(approve.event_id, cs, rs, remark, reason);
+}
+
+async function doMarkDoneRequest(parentId, completed_sizes, rejected_sizes, complete_remark, reject_reason) {
   try {
     await api('POST', BASE + '/event/complete', {
-      parent_event_id: selectedApprovalId,
-      completed_sizes: cs, rejected_sizes: rs,
-      complete_remark: el('completeRemark').value.trim() || null,
-      reject_reason: el('rejectReason').value.trim() || null,
+      parent_event_id: parentId, completed_sizes, rejected_sizes,
+      complete_remark, reject_reason,
     });
-    toast('Recorded.', 'success');
-    el('completeRemark').value = ''; el('rejectReason').value = '';
+    toast('Saved ✓', 'success');
     await refreshState();
-  } catch (err) { toast('Could not record: ' + err.message, 'error'); el('completeBtn').disabled = false; }
+    if (infoTab === 'work') loadHistory();
+  } catch (err) { toast('Could not save: ' + err.message, 'error'); }
 }
+
+// ─── My Work / My Payments ───────────────────
+function switchInfoTab(tab) {
+  infoTab = tab;
+  el('tabWork').classList.toggle('active', tab === 'work');
+  el('tabPayments').classList.toggle('active', tab === 'payments');
+  el('workTab').style.display = tab === 'work' ? 'block' : 'none';
+  el('paymentsTab').style.display = tab === 'payments' ? 'block' : 'none';
+  if (tab === 'work') loadHistory();
+  else loadPayments();
+}
+
+async function loadHistory() {
+  const days = el('historyDays').value;
+  const type = el('historyType').value;
+  const list = el('historyList');
+  list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading…</p></div>';
+  try {
+    const data = await api('GET', BASE + '/event/history?days=' + encodeURIComponent(days) + '&type=' + encodeURIComponent(type));
+    if (!data.events || !data.events.length) {
+      list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>No work in this range.</p></div>';
+      return;
+    }
+    list.textContent = '';
+    const labelFor = { approve: 'Took into ' + STAGE_LABEL.toLowerCase(), complete: 'Marked as done', reject: 'Rejected pieces' };
+    const dotGlyph = { approve: '↘', complete: '✓', reject: '×' };
+    data.events.forEach(e => {
+      const row = document.createElement('div');
+      row.className = 'sx-event';
+      row.dataset.eventId = e.id;
+      row.dataset.lotNo = e.lot_no || '';
+      row.dataset.cuttingLotId = e.cutting_lot_id || '';
+      row.onclick = () => openEventModal(e);
+      row.innerHTML = `
+        <div class="sx-event-dot t-${e.event_type}">${dotGlyph[e.event_type] || ''}</div>
+        <div class="sx-event-main">
+          <div class="sx-event-line1">${escapeText(labelFor[e.event_type] || e.event_type)} · <span style="color: var(--c-text-2); font-weight: 500;">${escapeText(e.lot_no || '—')}</span></div>
+          <div class="sx-event-line2">${fmtDate(e.created_at)}${e.remark ? ' · ' + escapeText(String(e.remark).slice(0, 50)) : ''}</div>
+        </div>
+        <div class="sx-event-pieces">${fmt(e.pieces)}</div>
+      `;
+      list.appendChild(row);
+    });
+  } catch (err) {
+    list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">!</div><p>Could not load: ' + escapeText(err.message) + '</p></div>';
+  }
+}
+
+el('historyDays').addEventListener('change', loadHistory);
+el('historyType').addEventListener('change', loadHistory);
+
+function downloadHistoryExcel() {
+  const days = el('historyDays').value;
+  const type = el('historyType').value;
+  window.location = BASE + '/event/export?days=' + encodeURIComponent(days) + '&type=' + encodeURIComponent(type);
+}
+
+async function loadPayments() {
+  const days = el('payDays').value;
+  const status = el('payStatus').value;
+  const sumWrap = el('paySummary');
+  const list = el('payList');
+  sumWrap.innerHTML = '';
+  list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading…</p></div>';
+  try {
+    const data = await api('GET', BASE + '/event/payments?days=' + encodeURIComponent(days) + '&status=' + encodeURIComponent(status));
+    const s = data.summary;
+    sumWrap.innerHTML = `
+      <div class="sx-pay-summary-card is-pending">
+        <div class="l">Pending</div>
+        <div class="v">${fmtMoney(s.pending_amount)}</div>
+        <div class="s">${fmt(s.pending_qty)} pieces</div>
+      </div>
+      <div class="sx-pay-summary-card is-paid">
+        <div class="l">Paid</div>
+        <div class="v">${fmtMoney(s.paid_amount)}</div>
+        <div class="s">${fmt(s.paid_qty)} pieces</div>
+      </div>
+    `;
+    if (!data.payments || !data.payments.length) {
+      list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>No payments in this range.</p></div>';
+      return;
+    }
+    list.textContent = '';
+    data.payments.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'sx-pay-row';
+      row.innerHTML = `
+        <div class="sx-pay-main">
+          <div class="sx-pay-lot">${escapeText(p.lot_no || '—')}</div>
+          <div class="sx-pay-meta">${escapeText(p.sku || '')} · ${fmt(p.qty)} pcs · ${fmtDate(p.created_at)}${p.rate_configured ? '' : ' · <span style="color: var(--c-danger);">rate not set</span>'}</div>
+        </div>
+        <div class="sx-pay-amt">${fmtMoney(p.total_amount)}</div>
+        <span class="sx-pay-status ${p.status}">${p.status}</span>
+      `;
+      list.appendChild(row);
+    });
+  } catch (err) {
+    list.innerHTML = '<div class="sx-placeholder"><div class="sx-placeholder-mark">!</div><p>Could not load: ' + escapeText(err.message) + '</p></div>';
+  }
+}
+
+el('payDays').addEventListener('change', loadPayments);
+el('payStatus').addEventListener('change', loadPayments);
+
+function downloadPaymentsExcel() {
+  const days = el('payDays').value;
+  const status = el('payStatus').value;
+  window.location = BASE + '/event/payments/export?days=' + encodeURIComponent(days) + '&status=' + encodeURIComponent(status);
+}
+
+// ─── Modal: event detail + lot journey ────────
+async function openEventModal(event) {
+  el('modalEyebrow').textContent = STAGE_LABEL + ' · event';
+  const labelMap = { approve: 'Took into ' + STAGE_LABEL.toLowerCase(), complete: 'Marked as done', reject: 'Rejected pieces' };
+  el('modalTitle').textContent = (labelMap[event.event_type] || event.event_type) + ' — ' + (event.lot_no || '');
+  const body = el('modalBody');
+
+  // 1) Event detail
+  const sizesChips = Object.entries(event.sizes || {}).length
+    ? '<div class="sx-modal-chips">' + Object.entries(event.sizes).map(([k, v]) => `<span class="sx-chip s-empty"><span class="sx-chip-label">${escapeText(k)}</span><span class="sx-chip-num">${fmt(v)}</span></span>`).join('') + '</div>'
+    : '<span style="color: var(--c-text-3);">no size detail</span>';
+
+  body.innerHTML = `
+    <div class="sx-modal-section">
+      <p class="sx-modal-section-h">This event</p>
+      <div class="sx-modal-detail-grid">
+        <div class="sx-modal-detail-cell"><div class="l">Lot</div><div class="v">${escapeText(event.lot_no || '—')}</div></div>
+        <div class="sx-modal-detail-cell"><div class="l">SKU</div><div class="v">${escapeText(event.sku || '—')}</div></div>
+        <div class="sx-modal-detail-cell"><div class="l">Pieces</div><div class="v">${fmt(event.pieces)}</div></div>
+        <div class="sx-modal-detail-cell"><div class="l">Action</div><div class="v" style="text-transform: capitalize;">${escapeText(event.event_type)}</div></div>
+        <div class="sx-modal-detail-cell full"><div class="l">When</div><div class="v">${fmtDateLong(event.created_at)}</div></div>
+        ${event.remark ? `<div class="sx-modal-detail-cell full"><div class="l">Remark</div><div class="v" style="font-weight: 500;">${escapeText(event.remark)}</div></div>` : ''}
+        <div class="sx-modal-detail-cell full"><div class="l">Sizes</div>${sizesChips}</div>
+      </div>
+    </div>
+    <div class="sx-modal-section">
+      <p class="sx-modal-section-h">Lot journey at ${STAGE_LABEL.toLowerCase()}</p>
+      <div id="modalJourney"><div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading lot history…</p></div></div>
+    </div>
+  `;
+  el('modalOverlay').classList.add('show');
+
+  // load lot journey if we have cutting_lot_id; many history rows include it
+  // (the backend will be wired to return cutting_lot_id alongside events)
+  const lotId = event.cutting_lot_id;
+  if (lotId) {
+    try {
+      const data = await api('GET', BASE + '/event/lot-journey/' + lotId);
+      renderJourney(data.events || [], event.id);
+    } catch (err) {
+      el('modalJourney').innerHTML = '<div class="sx-placeholder"><p style="color: var(--c-text-3);">Could not load journey: ' + escapeText(err.message) + '</p></div>';
+    }
+  } else {
+    el('modalJourney').innerHTML = '<div class="sx-placeholder"><p style="color: var(--c-text-3);">Lot journey unavailable for this row.</p></div>';
+  }
+}
+
+function renderJourney(events, currentEventId) {
+  const wrap = el('modalJourney');
+  if (!events.length) {
+    wrap.innerHTML = '<div class="sx-placeholder"><p style="color: var(--c-text-3);">No events recorded.</p></div>';
+    return;
+  }
+  const labelMap = { approve: 'Took in', complete: 'Marked done', reject: 'Rejected' };
+  let html = '<div class="sx-journey">';
+  events.forEach(e => {
+    const sizes = e.sizes && Object.keys(e.sizes).length
+      ? '<div class="sx-journey-detail">' + Object.entries(e.sizes).map(([k, v]) => `<span class="sx-chip s-empty"><span class="sx-chip-label">${escapeText(k)}</span><span class="sx-chip-num">${fmt(v)}</span></span>`).join('') + '</div>'
+      : '';
+    html += `
+      <div class="sx-journey-step t-${e.event_type}${e.id === currentEventId ? ' is-current' : ''}">
+        <div class="sx-journey-step-head">
+          <span class="sx-journey-pill t-${e.event_type}">${escapeText(labelMap[e.event_type] || e.event_type)}</span>
+          <span class="sx-journey-when">${fmtDate(e.created_at)}</span>
+        </div>
+        <div class="sx-journey-pieces">${fmt(e.pieces)} pcs</div>
+        ${e.operator ? `<div class="sx-journey-by">by ${escapeText(e.operator)}${e.remark ? ' — ' + escapeText(String(e.remark).slice(0, 80)) : ''}</div>` : ''}
+        ${sizes}
+      </div>
+    `;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function closeModal() {
+  el('modalOverlay').classList.remove('show');
+}
+
+// click outside to close, escape to close
+el('modalOverlay').addEventListener('click', e => { if (e.target === el('modalOverlay')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && el('modalOverlay').classList.contains('show')) closeModal(); });
+
+// initial load
+loadHistory();
 </script>
 
 <%- include('partials/footer') %>
