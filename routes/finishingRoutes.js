@@ -28,7 +28,11 @@ const upload = multer({
 /* =============================================================
    1) FINISHING DASHBOARD (GET /finishingdashboard)
    ============================================================= */
-router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
+router.get('/', isAuthenticated, isFinishingMaster, (req, res) => {
+  res.render('finishingEvents', { user: req.session.user });
+});
+
+router.get('/legacy', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
     const userId = req.session.user.id;
 
@@ -171,6 +175,295 @@ async function fPickPayeeForLot(conn, lot) {
 
 router.get('/events', isAuthenticated, isFinishingMaster, (req, res) => {
   res.render('finishingEvents', { user: req.session.user });
+});
+
+// ==================================================================
+//   EVENT-MODEL HISTORY / JOURNEY / EXPORT / PAYMENTS
+//   Cascade from stitching pattern.
+// ==================================================================
+
+router.get('/event/history', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 7));
+    const type = String(req.query.type || 'all');
+    const allowed = new Set(['all', 'approve', 'complete', 'reject']);
+    if (!allowed.has(type)) return res.status(400).json({ error: 'Invalid type' });
+
+    const params = [userId, days];
+    let typeFilter = '';
+    if (type !== 'all') { typeFilter = 'AND e.event_type = ?'; params.push(type); }
+
+    const [events] = await pool.query(
+      `SELECT e.id, e.cutting_lot_id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              cl.lot_no, cl.sku
+       FROM finishing_events e
+       JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE e.operator_id = ?
+         AND e.created_at >= (NOW() - INTERVAL ? DAY)
+         ${typeFilter}
+       ORDER BY e.created_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    if (!events.length) return res.json({ events: [] });
+
+    const eventIds = events.map(e => e.id);
+    const [sizes] = await pool.query(
+      `SELECT event_id, size_label, pieces FROM finishing_event_sizes WHERE event_id IN (?)`,
+      [eventIds]
+    );
+    const sizeMap = {};
+    for (const s of sizes) {
+      if (!sizeMap[s.event_id]) sizeMap[s.event_id] = {};
+      sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
+    }
+    events.forEach(e => { e.sizes = sizeMap[e.id] || {}; });
+
+    res.json({ events });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/history =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/event/lot-journey/:cuttingLotId', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) {
+      return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    }
+    const [events] = await pool.query(
+      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              u.username AS operator
+       FROM finishing_events e
+       JOIN users u ON u.id = e.operator_id
+       WHERE e.cutting_lot_id = ?
+       ORDER BY e.created_at ASC, e.id ASC`,
+      [lotId]
+    );
+    if (!events.length) return res.json({ events: [] });
+    const ids = events.map(e => e.id);
+    const [sizes] = await pool.query(
+      `SELECT event_id, size_label, pieces FROM finishing_event_sizes WHERE event_id IN (?)`,
+      [ids]
+    );
+    const sizeMap = {};
+    for (const s of sizes) {
+      if (!sizeMap[s.event_id]) sizeMap[s.event_id] = {};
+      sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
+    }
+    events.forEach(e => { e.sizes = sizeMap[e.id] || {}; });
+    res.json({ events });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/lot-journey =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/event/export', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username || 'operator';
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const type = String(req.query.type || 'all');
+    const allowed = new Set(['all', 'approve', 'complete', 'reject']);
+    if (!allowed.has(type)) return res.status(400).json({ error: 'Invalid type' });
+
+    const params = [userId, days];
+    let typeFilter = '';
+    if (type !== 'all') { typeFilter = 'AND e.event_type = ?'; params.push(type); }
+
+    const [events] = await pool.query(
+      `SELECT e.id, e.event_type, e.pieces, e.remark, e.created_at, e.parent_event_id,
+              cl.lot_no, cl.sku
+       FROM finishing_events e
+       JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE e.operator_id = ?
+         AND e.created_at >= (NOW() - INTERVAL ? DAY)
+         ${typeFilter}
+       ORDER BY e.created_at DESC`,
+      params
+    );
+
+    let sizeMap = {};
+    if (events.length) {
+      const eventIds = events.map(e => e.id);
+      const [sizes] = await pool.query(
+        `SELECT event_id, size_label, pieces FROM finishing_event_sizes
+         WHERE event_id IN (?) ORDER BY size_label`,
+        [eventIds]
+      );
+      for (const s of sizes) {
+        if (!sizeMap[s.event_id]) sizeMap[s.event_id] = [];
+        sizeMap[s.event_id].push(`${s.size_label}:${Number(s.pieces) || 0}`);
+      }
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Kotty Track';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Finishing Events');
+    ws.columns = [
+      { header: 'Date',      key: 'date',   width: 20 },
+      { header: 'Event',     key: 'event',  width: 12 },
+      { header: 'Lot No',    key: 'lot',    width: 14 },
+      { header: 'SKU',       key: 'sku',    width: 22 },
+      { header: 'Pieces',    key: 'pieces', width: 10 },
+      { header: 'Sizes',     key: 'sizes',  width: 36 },
+      { header: 'Remark',    key: 'remark', width: 32 },
+      { header: 'Parent ID', key: 'parent', width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    events.forEach(e => {
+      ws.addRow({
+        date:   e.created_at ? new Date(e.created_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        event:  e.event_type,
+        lot:    e.lot_no,
+        sku:    e.sku,
+        pieces: Number(e.pieces) || 0,
+        sizes:  (sizeMap[e.id] || []).join('  ·  '),
+        remark: e.remark || '',
+        parent: e.parent_event_id || '',
+      });
+    });
+
+    const fname = `finishing_${username}_${days}d_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/export =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/event/payments', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const status = String(req.query.status || 'all');
+    const allowedStatus = new Set(['all', 'pending', 'paid', 'cancelled']);
+    if (!allowedStatus.has(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    const params = [userId, days];
+    let statusFilter = '';
+    if (status !== 'all') { statusFilter = 'AND status = ?'; params.push(status); }
+
+    const [rows] = await pool.query(
+      `SELECT id, lot_no, sku, qty, base_rate, extra_amount, total_amount,
+              rate_configured, status, paid_on, created_at, payment_remark
+       FROM stage_payments
+       WHERE user_id = ?
+         AND stage = 'finishing'
+         AND created_at >= (NOW() - INTERVAL ? DAY)
+         ${statusFilter}
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    const [[summary]] = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status='pending' THEN total_amount ELSE 0 END), 0)   AS pending_amount,
+         COALESCE(SUM(CASE WHEN status='paid'    THEN total_amount ELSE 0 END), 0)   AS paid_amount,
+         COALESCE(SUM(CASE WHEN status='pending' THEN qty ELSE 0 END), 0)            AS pending_qty,
+         COALESCE(SUM(CASE WHEN status='paid'    THEN qty ELSE 0 END), 0)            AS paid_qty,
+         COUNT(*)                                                                     AS total_rows
+       FROM stage_payments
+       WHERE user_id = ? AND stage = 'finishing'
+         AND created_at >= (NOW() - INTERVAL ? DAY)`,
+      [userId, days]
+    );
+
+    res.json({
+      payments: rows,
+      summary: {
+        pending_amount: Number(summary.pending_amount) || 0,
+        paid_amount:    Number(summary.paid_amount)    || 0,
+        pending_qty:    Number(summary.pending_qty)    || 0,
+        paid_qty:       Number(summary.paid_qty)       || 0,
+        total_rows:     Number(summary.total_rows)     || 0,
+      },
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/payments =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/event/payments/export', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username || 'operator';
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const status = String(req.query.status || 'all');
+    const allowedStatus = new Set(['all', 'pending', 'paid', 'cancelled']);
+    if (!allowedStatus.has(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    const params = [userId, days];
+    let statusFilter = '';
+    if (status !== 'all') { statusFilter = 'AND status = ?'; params.push(status); }
+
+    const [rows] = await pool.query(
+      `SELECT lot_no, sku, qty, base_rate, extra_amount, total_amount,
+              rate_configured, status, paid_on, created_at, payment_remark
+       FROM stage_payments
+       WHERE user_id = ?
+         AND stage = 'finishing'
+         AND created_at >= (NOW() - INTERVAL ? DAY)
+         ${statusFilter}
+       ORDER BY created_at DESC`,
+      params
+    );
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Kotty Track';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Finishing Payments');
+    ws.columns = [
+      { header: 'Created',     key: 'created',  width: 20 },
+      { header: 'Lot No',      key: 'lot',      width: 14 },
+      { header: 'SKU',         key: 'sku',      width: 22 },
+      { header: 'Pieces',      key: 'qty',      width: 10 },
+      { header: 'Base Rate',   key: 'base',     width: 12 },
+      { header: 'Extras',      key: 'extras',   width: 12 },
+      { header: 'Total ₹',     key: 'total',    width: 14 },
+      { header: 'Rate Set?',   key: 'rateset',  width: 10 },
+      { header: 'Status',      key: 'status',   width: 12 },
+      { header: 'Paid On',     key: 'paid',     width: 20 },
+      { header: 'Remark',      key: 'remark',   width: 30 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    rows.forEach(r => {
+      ws.addRow({
+        created: r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        lot:     r.lot_no,
+        sku:     r.sku,
+        qty:     Number(r.qty) || 0,
+        base:    Number(r.base_rate) || 0,
+        extras:  Number(r.extra_amount) || 0,
+        total:   Number(r.total_amount) || 0,
+        rateset: r.rate_configured ? 'YES' : 'NO',
+        status:  r.status,
+        paid:    r.paid_on ? new Date(r.paid_on).toISOString().replace('T', ' ').slice(0, 19) : '',
+        remark:  r.payment_remark || '',
+      });
+    });
+
+    const fname = `finishing_payments_${username}_${days}d_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/payments/export =>', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/event/search', isAuthenticated, isFinishingMaster, async (req, res) => {
