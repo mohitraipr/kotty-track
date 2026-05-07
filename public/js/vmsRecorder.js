@@ -38,6 +38,7 @@
     autoStopTimer: null,
     startedAt: null,
     mimeType: null,
+    queuedAwb: null, // next AWB scanned while a recording is still active
   };
 
   const MAX_DURATION_MS = 2 * 60 * 1000;
@@ -162,34 +163,65 @@
     const awb = (els.awb.value || '').trim();
     const marketplace = (els.marketplace.value || '').trim();
     const packer = (els.packer.value || '').trim();
-    if (!awb) return alert('Enter AWB');
-    if (!marketplace) return alert('Select marketplace');
-    if (!packer) return alert('Enter packer name');
-    if (!state.stream) return alert('Camera not ready');
-    if (state.recording) return;
+    if (!awb) { setStatus('Scan or enter AWB'); return; }
+    if (!marketplace) { setStatus('Select marketplace first'); return; }
+    if (!packer) { setStatus('Enter packer name first'); return; }
+    if (!state.stream) { setStatus('Camera not ready'); return; }
 
-    // Pre-flight: check existing video for this AWB and surface info.
-    try {
-      const r = await fetch(`/vms/api/awb/${encodeURIComponent(awb)}`, { credentials: 'same-origin' });
-      const j = await r.json();
-      if (j?.video) {
-        if (!confirm(`Video already exists for ${awb}. Re-record will be rejected. Continue anyway?`)) return;
-      }
-      if (j?.shipment) {
-        els.awbInfo.innerHTML = `<span class="vms-tag ok">In ee_shipments</span> Ref: ${j.shipment.reference_code || '-'} • Status: ${j.shipment.current_status || '-'}`;
-      } else {
-        els.awbInfo.innerHTML = `<span class="vms-tag warn">Not yet in ee_shipments</span> — recording allowed; will reconcile later.`;
-      }
-    } catch (e) { /* non-fatal */ }
+    // Barcode-scanner chain: if a recording is already running, queue this AWB
+    // and stop the current one. The onstop handler will start the queued AWB
+    // immediately, while the previous recording's upload runs in the background.
+    if (state.recording) {
+      state.queuedAwb = awb;
+      els.awb.value = '';
+      stopRecording();
+      return;
+    }
+
+    // Pre-flight info — non-blocking, never interrupts the scan flow.
+    fetch(`/vms/api/awb/${encodeURIComponent(awb)}`, { credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((j) => {
+        const parts = [];
+        if (j?.shipment) {
+          parts.push(`<span class="vms-tag ok">In ee_shipments</span> Ref: ${j.shipment.reference_code || '-'} • Status: ${j.shipment.current_status || '-'}`);
+        } else {
+          parts.push(`<span class="vms-tag warn">Not yet in ee_shipments</span> — recording allowed; will reconcile later.`);
+        }
+        if (j?.video) {
+          parts.push(`<span style="color:#dc2626">⚠ Already has video — upload will be rejected.</span>`);
+        }
+        els.awbInfo.innerHTML = parts.join(' ');
+      })
+      .catch(() => {});
 
     state.currentAwb = awb;
     state.chunks = [];
     state.mimeType = pickMimeType();
+    els.awb.value = '';
 
     const canvasStream = els.canvas.captureStream(30);
     state.recorder = new MediaRecorder(canvasStream, { mimeType: state.mimeType });
     state.recorder.ondataavailable = (ev) => { if (ev.data?.size) state.chunks.push(ev.data); };
-    state.recorder.onstop = () => onRecordingStopped(awb, marketplace, packer);
+    state.recorder.onstop = () => {
+      // Snapshot this recording's data so a new recording can start
+      // immediately on the same canvas without clobbering the upload.
+      const chunks = state.chunks;
+      const mimeType = state.mimeType;
+      const startedAt = state.startedAt;
+      // Fire upload in background — do not await.
+      onRecordingStopped(awb, marketplace, packer, chunks, mimeType, startedAt);
+      // Chain into the queued AWB so the operator never has to click.
+      if (state.queuedAwb) {
+        const next = state.queuedAwb;
+        state.queuedAwb = null;
+        els.awb.value = next;
+        // brief tick lets MediaRecorder fully tear down before re-arming
+        setTimeout(() => startRecording(), 100);
+      } else {
+        els.awb.focus();
+      }
+    };
 
     state.recording = true;
     state.startedAt = Date.now();
@@ -219,16 +251,16 @@
     setStatus('Camera connected', 'connected');
   }
 
-  async function onRecordingStopped(awb, marketplace, packer) {
-    if (!state.chunks.length) {
-      setProgress(0, 'No data captured');
+  async function onRecordingStopped(awb, marketplace, packer, chunks, mimeType, startedAt) {
+    if (!chunks || !chunks.length) {
+      setProgress(0, `No data captured for ${awb}`);
       return;
     }
-    const blob = new Blob(state.chunks, { type: state.mimeType });
-    const durationMs = Date.now() - state.startedAt;
-    const clientStartedAt = new Date(state.startedAt).toISOString();
+    const blob = new Blob(chunks, { type: mimeType });
+    const durationMs = Date.now() - startedAt;
+    const clientStartedAt = new Date(startedAt).toISOString();
 
-    setProgress(5, 'Requesting upload URL…');
+    setProgress(5, `Uploading ${awb}…`);
 
     let presign;
     try {
@@ -236,26 +268,25 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ awb, packerName: packer, marketplace, mimeType: state.mimeType }),
+        body: JSON.stringify({ awb, packerName: packer, marketplace, mimeType }),
       });
       presign = await r.json();
       if (!r.ok || !presign.ok) throw new Error(presign?.error || 'upload-url failed');
     } catch (err) {
-      setProgress(0, `❌ ${err.message}`);
+      setProgress(0, `❌ ${awb}: ${err.message}`);
       return;
     }
 
-    setProgress(15, 'Uploading to S3…');
     try {
       await uploadWithProgress(presign.url, blob, presign.contentType, (p) => {
-        setProgress(15 + p * 75, `Uploading ${Math.round(p * 100)}%`);
+        setProgress(15 + p * 75, `Uploading ${awb} ${Math.round(p * 100)}%`);
       });
     } catch (err) {
-      setProgress(0, `❌ Upload failed: ${err.message}`);
+      setProgress(0, `❌ ${awb} upload failed: ${err.message}`);
       return;
     }
 
-    setProgress(95, 'Confirming…');
+    setProgress(95, `Confirming ${awb}…`);
     try {
       const r = await fetch('/vms/api/confirm', {
         method: 'POST',
@@ -263,19 +294,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           awb, key: presign.key, marketplace, packerName: packer,
-          mimeType: state.mimeType, durationMs, clientStartedAt,
+          mimeType, durationMs, clientStartedAt,
         }),
       });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j?.error || 'confirm failed');
     } catch (err) {
-      setProgress(0, `❌ Confirm failed: ${err.message}`);
+      setProgress(0, `❌ ${awb} confirm failed: ${err.message}`);
       return;
     }
 
     setProgress(100, `✅ Saved ${awb}`);
-    els.awb.value = '';
-    els.awb.focus();
     refreshAwbList();
     refreshRecent();
   }
