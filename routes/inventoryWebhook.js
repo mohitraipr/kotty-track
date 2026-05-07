@@ -994,32 +994,35 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
   try {
     sendEvent('start', { jobId, warehouse: warehouseName, message: 'Starting inventory fetch...' });
 
-    // Create temp file for Excel
+    // Stream rows directly to a CSV file on /tmp. Avoids accumulating ~96k
+    // rows in an in-memory ExcelJS Workbook (which OOM-killed the 1 GiB
+    // container at the end of pagination on 2026-05-07). CSV opens in
+    // Excel exactly the same way.
     const tempDir = os.tmpdir();
-    const filePath = path.join(tempDir, `inventory_${jobId}.xlsx`);
+    const filePath = path.join(tempDir, `inventory_${jobId}.csv`);
+    const csvStream = fs.createWriteStream(filePath, { encoding: 'utf8' });
 
-    // Create workbook
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Inventory');
+    // Helper to escape CSV cells (quote if it contains comma / quote / newline).
+    const csvCell = (val) => {
+      if (val === null || val === undefined) return '';
+      const s = String(val);
+      if (s.indexOf(',') === -1 && s.indexOf('"') === -1 && s.indexOf('\n') === -1) return s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    const writeRow = (cols) => {
+      const line = cols.map(csvCell).join(',') + '\n';
+      if (!csvStream.write(line)) {
+        return new Promise((resolve) => csvStream.once('drain', resolve));
+      }
+      return null;
+    };
 
-    // Uniware format columns
-    sheet.columns = [
-      { header: 'Product Code*', key: 'product_code', width: 20 },
-      { header: 'Quantity*', key: 'quantity', width: 12 },
-      { header: 'Shelf Code*', key: 'shelf_code', width: 15 },
-      { header: 'Adjustment Type*', key: 'adjustment_type', width: 18 },
-      { header: 'Inventory Type', key: 'inventory_type', width: 15 },
-      { header: 'Transfer to Shelf Code', key: 'transfer_shelf', width: 22 },
-      { header: 'Sla', key: 'sla', width: 10 },
-      { header: 'Source Batch Code', key: 'source_batch', width: 18 },
-      { header: 'Remarks', key: 'remarks', width: 15 },
-      { header: 'Force Allocate', key: 'force_allocate', width: 15 },
-    ];
-
-    // Style header
-    const headerRow = sheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } };
+    // Uniware-format header (matches the legacy Excel export)
+    writeRow([
+      'Product Code*', 'Quantity*', 'Shelf Code*', 'Adjustment Type*',
+      'Inventory Type', 'Transfer to Shelf Code', 'Sla',
+      'Source Batch Code', 'Remarks', 'Force Allocate',
+    ]);
 
     let rowCount = 0;
 
@@ -1029,23 +1032,18 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
       const currentJob = activeDownloads.get(warehouseKey);
       if (currentJob?.cancelled) {
         activeDownloads.delete(warehouseKey);
+        csvStream.end();
+        try { fs.unlinkSync(filePath); } catch (_) {}
         sendEvent('error', { message: 'Download cancelled' });
         res.end();
         return;
       }
 
-      sheet.addRow({
-        product_code: item.sku,
-        quantity: item.total_qty,
-        shelf_code: 'default',
-        adjustment_type: 'replace',
-        inventory_type: '',
-        transfer_shelf: '',
-        sla: '',
-        source_batch: '',
-        remarks: '',
-        force_allocate: '',
-      });
+      const drainPromise = writeRow([
+        item.sku, item.total_qty, 'default', 'replace',
+        '', '', '', '', '', '',
+      ]);
+      if (drainPromise) await drainPromise;
       rowCount++;
 
       // Update progress in activeDownloads
@@ -1063,11 +1061,13 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
       }
     }
 
+    // Close the file before declaring complete
+    await new Promise((resolve, reject) => {
+      csvStream.end((err) => (err ? reject(err) : resolve()));
+    });
+
     // Remove from active downloads
     activeDownloads.delete(warehouseKey);
-
-    // Save workbook
-    await workbook.xlsx.writeFile(filePath);
 
     // Store job info
     liveInventoryJobs.set(jobId, {
@@ -1112,8 +1112,16 @@ router.get('/logs/download-cached/:jobId', isAuthenticated, allowRoles(['wishlin
     return res.status(404).json({ error: 'File expired. Please fetch again.' });
   }
 
-  const filename = `inventory_live_${job.warehouse}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  // We now stream CSV (Excel-compatible) instead of XLSX — fetch-live writes
+  // a streaming .csv to /tmp to avoid OOM on 96k+ rows. Older callers may
+  // still have .xlsx jobs in flight; serve based on file extension.
+  const isCsv = job.filePath.toLowerCase().endsWith('.csv');
+  const ext = isCsv ? 'csv' : 'xlsx';
+  const filename = `inventory_live_${job.warehouse}_${new Date().toISOString().slice(0, 10)}.${ext}`;
+  res.setHeader(
+    'Content-Type',
+    isCsv ? 'text/csv; charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   const stream = fs.createReadStream(job.filePath);
