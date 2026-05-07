@@ -1,0 +1,244 @@
+<%- include('partials/header', { pageTitle: 'URL Scraper' }) %>
+<%- include('partials/navbar', { user: user }) %>
+
+<style>
+  .scraper-content {
+    margin-top: var(--navbar-height);
+    padding: 28px;
+    min-height: calc(100vh - var(--navbar-height));
+  }
+
+  .scraper-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .scraper-input-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .scraper-input-row input[type="url"] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .scraper-btn {
+    padding: 10px 18px;
+    background: var(--terracotta);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .scraper-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .scraper-status {
+    margin-top: 10px;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .scraper-status.error { color: var(--danger, #b91c1c); }
+
+  .scraper-meta dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 14px;
+    margin: 0;
+  }
+
+  .scraper-meta dt { font-weight: 600; color: var(--text-secondary); }
+  .scraper-meta dd { margin: 0; word-break: break-word; }
+
+  .scraper-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .scraper-image {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scraper-image img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    background: #eee;
+  }
+
+  .scraper-image-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .scraper-download-link {
+    color: var(--terracotta);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .scraper-download-link:hover { text-decoration: underline; }
+
+  .scraper-details-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+
+  .scraper-details-table th, .scraper-details-table td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<div class="scraper-content">
+  <div class="scraper-card">
+    <h2 style="margin-top:0;">URL Scraper</h2>
+    <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: 14px;">
+      Paste a product page URL to extract title, description, details, and downloadable images.
+    </p>
+
+    <form id="scraperForm" class="scraper-input-row" onsubmit="return false;">
+      <input type="url" id="scraperUrl" placeholder="https://example.com/products/..." required>
+      <button type="submit" id="scraperSubmit" class="scraper-btn">Scrape</button>
+    </form>
+    <div id="scraperStatus" class="scraper-status"></div>
+  </div>
+
+  <div id="scraperResult" class="scraper-card" style="display:none;">
+    <div class="scraper-meta">
+      <h3 id="resultTitle" style="margin-top:0;"></h3>
+      <dl>
+        <dt>URL</dt><dd><a id="resultUrl" target="_blank" rel="noopener"></a></dd>
+        <dt>Site</dt><dd id="resultSite"></dd>
+        <dt>Description</dt><dd id="resultDesc"></dd>
+      </dl>
+    </div>
+
+    <div id="resultDetailsWrap" style="display:none;">
+      <h4>Details</h4>
+      <table class="scraper-details-table">
+        <tbody id="resultDetails"></tbody>
+      </table>
+    </div>
+
+    <h4 style="margin-top:18px;">Images (<span id="resultImageCount">0</span>)</h4>
+    <div id="resultImages" class="scraper-images"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('scraperForm');
+  const urlInput = document.getElementById('scraperUrl');
+  const submitBtn = document.getElementById('scraperSubmit');
+  const statusEl = document.getElementById('scraperStatus');
+  const resultEl = document.getElementById('scraperResult');
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg || '';
+    statusEl.classList.toggle('error', !!isError);
+  }
+
+  function escape(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  async function scrape() {
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    submitBtn.disabled = true;
+    setStatus('Fetching...', false);
+    resultEl.style.display = 'none';
+
+    try {
+      const r = await fetch('/url-scraper/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setStatus(data.error || 'Scrape failed', true);
+        return;
+      }
+      render(data);
+      setStatus('');
+    } catch (e) {
+      setStatus('Network error: ' + e.message, true);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  function render(data) {
+    document.getElementById('resultTitle').textContent = data.title || '(no title)';
+    const urlA = document.getElementById('resultUrl');
+    urlA.href = data.url; urlA.textContent = data.url;
+    document.getElementById('resultSite').textContent = data.siteName || '';
+    document.getElementById('resultDesc').textContent = data.description || '';
+
+    const detailsBody = document.getElementById('resultDetails');
+    detailsBody.innerHTML = '';
+    if (Array.isArray(data.details) && data.details.length) {
+      document.getElementById('resultDetailsWrap').style.display = '';
+      for (const d of data.details) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<th>' + escape(d.key) + '</th><td>' + escape(d.value) + '</td>';
+        detailsBody.appendChild(tr);
+      }
+    } else {
+      document.getElementById('resultDetailsWrap').style.display = 'none';
+    }
+
+    document.getElementById('resultImageCount').textContent = data.imageCount || 0;
+    const imgs = document.getElementById('resultImages');
+    imgs.innerHTML = '';
+    for (const img of (data.images || [])) {
+      const div = document.createElement('div');
+      div.className = 'scraper-image';
+      const dlUrl = '/url-scraper/api/download?url=' + encodeURIComponent(img.url);
+      div.innerHTML =
+        '<img loading="lazy" src="' + escape(img.url) + '" alt="' + escape(img.alt || '') + '">' +
+        '<div class="scraper-image-actions">' +
+        '<a href="' + escape(img.url) + '" target="_blank" rel="noopener">View</a>' +
+        '<a class="scraper-download-link" href="' + dlUrl + '">Download</a>' +
+        '</div>';
+      imgs.appendChild(div);
+    }
+
+    resultEl.style.display = '';
+  }
+
+  form.addEventListener('submit', scrape);
+  submitBtn.addEventListener('click', scrape);
+})();
+</script>
+
+<%- include('partials/footer') %>
