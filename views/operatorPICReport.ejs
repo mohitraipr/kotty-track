@@ -101,40 +101,156 @@
         <span class="badge badge-primary"><%= rows.length %> records</span>
       </div>
       <div class="card-body p-0">
+        <%
+          function statusBadge(s) {
+            if (!s || s === 'N/A' || s === '—') return '<span class="text-muted">—</span>';
+            const m = String(s).toLowerCase();
+            if (m === 'completed') return '<span class="badge badge-success">Completed</span>';
+            if (m === 'partial')   return '<span class="badge badge-warning">Partial</span>';
+            if (m === 'in progress') return '<span class="badge badge-info">In Progress</span>';
+            if (m === 'pending approval') return '<span class="badge badge-warning">Pending Approval</span>';
+            if (m === 'denied')    return '<span class="badge badge-danger">Denied</span>';
+            if (m === 'not started') return '<span class="badge badge-neutral">Not Started</span>';
+            return '<span class="badge badge-neutral">' + s + '</span>';
+          }
+          function qtyOrDash(v) {
+            if (v === '' || v === null || v === undefined) return '<span class="text-muted">—</span>';
+            if (v === '—') return '<span class="text-muted">—</span>';
+            return v;
+          }
+        %>
         <div class="table-container" style="border: none; border-radius: 0;">
           <div class="table-responsive">
-            <table class="table mb-0">
+            <table class="table table-sm mb-0" style="font-size: var(--text-xs);">
               <thead>
                 <tr>
                   <th>Lot No</th>
+                  <th>Ext Lot</th>
+                  <th>Sort</th>
                   <th>SKU</th>
-                  <th>Total Pieces</th>
-                  <th>Department</th>
-                  <th>Status</th>
+                  <th>Type</th>
+                  <th>Cut</th>
                   <th>Created</th>
+                  <th>Age</th>
+                  <th>Current Stage</th>
+                  <th>Pending</th>
+                  <th>In Stage</th>
+                  <th>Stitch</th>
+                  <th>Assembly</th>
+                  <th>Washing</th>
+                  <th>Wash-In</th>
+                  <th>Finishing</th>
+                  <th>Rewash</th>
+                  <th>Rejects</th>
                 </tr>
               </thead>
               <tbody>
-                <% rows.slice(0, 10).forEach(row => { %>
+                <% rows.slice(0, 50).forEach(row => { %>
                 <tr>
-                  <td><strong style="color: var(--terracotta);"><%= row.lot_no %></strong></td>
-                  <td><%= row.sku %></td>
-                  <td><%= row.total_pieces %></td>
-                  <td><%= row.department || 'N/A' %></td>
+                  <td><strong style="color: var(--terracotta);"><%= row.lotNo %></strong></td>
+                  <td><%= row.externalLotNo || '—' %></td>
+                  <td><%= row.sortNo || '—' %></td>
+                  <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= row.sku %>"><%= row.sku %></td>
                   <td>
-                    <% if (row.status === 'completed') { %>
-                      <span class="badge badge-success">Completed</span>
-                    <% } else if (row.status === 'pending') { %>
-                      <span class="badge badge-warning">Pending</span>
-                    <% } else if (row.status === 'inline') { %>
-                      <span class="badge badge-info">In-Line</span>
-                    <% } else if (row.status === 'denied') { %>
-                      <span class="badge badge-danger">Denied</span>
+                    <span class="badge <%= row.lotType === 'Denim' ? 'badge-primary' : 'badge-info' %>">
+                      <%= row.lotType %>
+                    </span>
+                  </td>
+                  <td><%= row.totalCut %></td>
+                  <td><%= row.createdAt %></td>
+                  <td><%= row.daysSinceCreated %>d</td>
+                  <td>
+                    <% if (row.currentStage === 'Done') { %>
+                      <span class="badge badge-success">Done</span>
                     <% } else { %>
-                      <span class="badge badge-neutral"><%= row.status %></span>
+                      <span class="badge badge-warning"><%= row.currentStage %></span>
                     <% } %>
                   </td>
-                  <td><%= row.created_at ? new Date(row.created_at).toLocaleDateString() : 'N/A' %></td>
+                  <td><strong><%= row.currentPendingQty || 0 %></strong></td>
+                  <td><%= row.daysInStage === '' ? '—' : row.daysInStage + 'd' %></td>
+                  <td>
+                    <%- statusBadge(row.stitchStatus) %><br>
+                    <small class="text-muted">
+                      <%- qtyOrDash(row.stitchInQty) %> →
+                      <%- qtyOrDash(row.stitchOutQty) %>
+                      <% if (row.stitchPendingQty > 0) { %>
+                        <span class="text-danger">(<%= row.stitchPendingQty %> pend)</span>
+                      <% } %>
+                    </small>
+                  </td>
+                  <td>
+                    <%- statusBadge(row.assemblyStatus) %><br>
+                    <small class="text-muted">
+                      <%- qtyOrDash(row.assemblyInQty) %> →
+                      <%- qtyOrDash(row.assemblyOutQty) %>
+                      <% if (typeof row.assemblyPendingQty === 'number' && row.assemblyPendingQty > 0) { %>
+                        <span class="text-danger">(<%= row.assemblyPendingQty %> pend)</span>
+                      <% } %>
+                    </small>
+                  </td>
+                  <td>
+                    <%- statusBadge(row.washingStatus) %><br>
+                    <small class="text-muted">
+                      <%- qtyOrDash(row.washingInQty_in) %> →
+                      <%- qtyOrDash(row.washingOutQty) %>
+                      <% if (typeof row.washingPendingQty === 'number' && row.washingPendingQty > 0) { %>
+                        <span class="text-danger">(<%= row.washingPendingQty %> pend)</span>
+                      <% } %>
+                    </small>
+                  </td>
+                  <td>
+                    <%- statusBadge(row.washInStatus) %><br>
+                    <small class="text-muted">
+                      <%- qtyOrDash(row.washInInQty) %> →
+                      <%- qtyOrDash(row.washInOutQty) %>
+                      <% if (typeof row.washInPendingQty === 'number' && row.washInPendingQty > 0) { %>
+                        <span class="text-danger">(<%= row.washInPendingQty %> pend)</span>
+                      <% } %>
+                    </small>
+                  </td>
+                  <td>
+                    <%- statusBadge(row.finishingStatus) %><br>
+                    <small class="text-muted">
+                      <%- qtyOrDash(row.finishingInQty) %> →
+                      <%- qtyOrDash(row.finishingOutQty) %>
+                      <% if (row.finishingPendingQty > 0) { %>
+                        <span class="text-danger">(<%= row.finishingPendingQty %> pend)</span>
+                      <% } %>
+                    </small>
+                  </td>
+                  <td>
+                    <% if (row.rewashRequestedQty > 0) { %>
+                      <small>
+                        Req: <strong><%= row.rewashRequestedQty %></strong><br>
+                        <% if (row.rewashPendingQty > 0) { %>
+                          <span class="text-warning">Pend: <%= row.rewashPendingQty %></span><br>
+                        <% } %>
+                        <% if (row.rewashCompletedQty > 0) { %>
+                          <span class="text-success">Done: <%= row.rewashCompletedQty %></span>
+                        <% } %>
+                      </small>
+                    <% } else { %>
+                      <span class="text-muted">—</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (row.totalRejectQty > 0) { %>
+                      <strong class="text-danger"><%= row.totalRejectQty %></strong><br>
+                      <small class="text-muted">
+                        <% if (row.stitchRejectQty > 0) { %>St:<%= row.stitchRejectQty %><br><% } %>
+                        <% if (row.washInRejectQty > 0) { %>WI:<%= row.washInRejectQty %><br><% } %>
+                        <% if (row.finishingRejectQty > 0) { %>Fn:<%= row.finishingRejectQty %><% } %>
+                      </small>
+                      <% const reasons = [row.stitchRejectReasons, row.washInRejectReasons, row.finishingRejectReasons].filter(Boolean).join('; '); %>
+                      <% if (reasons) { %>
+                        <br><small title="<%= reasons %>" style="cursor: help; color: var(--text-secondary);">
+                          <i class="bi bi-info-circle"></i> reasons
+                        </small>
+                      <% } %>
+                    <% } else { %>
+                      <span class="text-muted">—</span>
+                    <% } %>
+                  </td>
                 </tr>
                 <% }); %>
               </tbody>
@@ -142,11 +258,11 @@
           </div>
         </div>
       </div>
-      <% if (rows.length > 10) { %>
+      <% if (rows.length > 50) { %>
       <div class="card-footer">
         <p class="text-muted mb-0" style="font-size: var(--text-sm);">
           <i class="bi bi-info-circle me-1"></i>
-          Showing first 10 of <%= rows.length %> records. Download the full report to see all data.
+          Showing first 50 of <%= rows.length %> records. Download the full report to see all data.
         </p>
       </div>
       <% } %>

@@ -1041,8 +1041,14 @@ function classifyStage({ assign, inQty, outQty, nextAssign, isApplicable }) {
 
 // Build a flat, user-friendly row: per-stage In/Out/Pending/Status/Inline + a top-level rollup.
 function buildEnhancedRow({
-  lot, isDenim, totalCut, sums, assigns, rewashQty
+  lot, isDenim, totalCut, sums, assigns,
+  rewash = { requested: 0, pending: 0, completed: 0 },
+  rejects = {}
 }) {
+  // Back-compat shim: callers may still pass `rewashQty` (a number for pending).
+  if (typeof arguments[0].rewashQty === 'number') {
+    rewash = { requested: 0, pending: arguments[0].rewashQty, completed: 0 };
+  }
   const { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty } = sums;
   const { stAssign, asmAssign, washAssign, washInAssign, finAssign } = assigns;
 
@@ -1172,7 +1178,23 @@ function buildEnhancedRow({
     washInPendingQty: isDenim ? washIn.pending : '—',
     washInStatus:    washIn.status,
     washInInline:    isDenim ? washIn.inline : '—',
-    rewashPendingQty: rewashQty || 0,
+
+    // rewash (pieces sent back from wash-in to washing for re-processing)
+    rewashRequestedQty: rewash.requested || 0,
+    rewashPendingQty:   rewash.pending   || 0,
+    rewashCompletedQty: rewash.completed || 0,
+
+    // rejects per stage (pieces removed from production due to defects)
+    stitchRejectQty:     rejects.stitching   ? rejects.stitching.pieces   : 0,
+    stitchRejectReasons: rejects.stitching   ? rejects.stitching.reasons  : '',
+    washInRejectQty:     rejects.washing_in  ? rejects.washing_in.pieces  : 0,
+    washInRejectReasons: rejects.washing_in  ? rejects.washing_in.reasons : '',
+    finishingRejectQty:     rejects.finishing ? rejects.finishing.pieces  : 0,
+    finishingRejectReasons: rejects.finishing ? rejects.finishing.reasons : '',
+    totalRejectQty:
+      ((rejects.stitching  && rejects.stitching.pieces)  || 0) +
+      ((rejects.washing_in && rejects.washing_in.pieces) || 0) +
+      ((rejects.finishing  && rejects.finishing.pieces)  || 0),
 
     // finishing
     finishingOp:        opName(finAssign),
@@ -1234,7 +1256,10 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Wash-In Pending Qty',  key: 'washInPendingQty',   width: 12 },
   { header: 'Wash-In Status',       key: 'washInStatus',       width: 16 },
   { header: 'Wash-In Inline?',      key: 'washInInline',       width: 9  },
-  { header: 'Rewash Pending Qty',   key: 'rewashPendingQty',   width: 12 },
+
+  { header: 'Rewash Requested',     key: 'rewashRequestedQty', width: 11 },
+  { header: 'Rewash Pending',       key: 'rewashPendingQty',   width: 11 },
+  { header: 'Rewash Completed',     key: 'rewashCompletedQty', width: 11 },
 
   { header: 'Finishing Operator',     key: 'finishingOp',          width: 14 },
   { header: 'Finishing Assigned On',  key: 'finishingAssignedOn',  width: 19 },
@@ -1242,7 +1267,15 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Finishing In Qty',       key: 'finishingInQty',       width: 11 },
   { header: 'Finishing Out Qty',      key: 'finishingOutQty',      width: 11 },
   { header: 'Finishing Pending Qty',  key: 'finishingPendingQty',  width: 12 },
-  { header: 'Finishing Status',       key: 'finishingStatus',      width: 16 }
+  { header: 'Finishing Status',       key: 'finishingStatus',      width: 16 },
+
+  { header: 'Stitch Rejects',         key: 'stitchRejectQty',         width: 11 },
+  { header: 'Stitch Reject Reasons',  key: 'stitchRejectReasons',     width: 28 },
+  { header: 'Wash-In Rejects',        key: 'washInRejectQty',         width: 11 },
+  { header: 'Wash-In Reject Reasons', key: 'washInRejectReasons',     width: 28 },
+  { header: 'Finishing Rejects',      key: 'finishingRejectQty',      width: 11 },
+  { header: 'Finishing Reject Reasons', key: 'finishingRejectReasons', width: 28 },
+  { header: 'Total Rejects',          key: 'totalRejectQty',          width: 11 }
 ];
 
 // Aggregates and last-assignment data for multiple lots in one go
@@ -2037,18 +2070,43 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     // 3) Aggregate per-lot quantities and fetch last assignments in a batched manner
     const { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
 
-    // --- Rewash Pending Quantities ---
+    // --- Rewash quantities (requested / pending / completed) ---
     const [rewashRows] = await pool.query(
-      `SELECT lot_no, SUM(total_requested) AS pendingQty
+      `SELECT lot_no,
+              SUM(total_requested) AS requestedQty,
+              SUM(CASE WHEN status='pending'   THEN total_requested ELSE 0 END) AS pendingQty,
+              SUM(CASE WHEN status='completed' THEN total_requested ELSE 0 END) AS completedQty
          FROM rewash_requests
-        WHERE status = 'pending'
-          AND lot_no IN (?)
+        WHERE lot_no IN (?)
         GROUP BY lot_no`,
       [lotNos]
     );
     const rewashMap = {};
     for (const row of rewashRows) {
-      rewashMap[row.lot_no] = parseFloat(row.pendingQty) || 0;
+      rewashMap[row.lot_no] = {
+        requested: parseFloat(row.requestedQty)  || 0,
+        pending:   parseFloat(row.pendingQty)    || 0,
+        completed: parseFloat(row.completedQty)  || 0
+      };
+    }
+
+    // --- Rejects by lot + stage (with concatenated reasons) ---
+    const [rejectRows] = await pool.query(
+      `SELECT lot_no, stage,
+              COALESCE(SUM(total_pieces),0) AS pieces,
+              GROUP_CONCAT(DISTINCT NULLIF(reason,'') ORDER BY reason SEPARATOR '; ') AS reasons
+         FROM reject_data
+        WHERE lot_no IN (?)
+        GROUP BY lot_no, stage`,
+      [lotNos]
+    );
+    const rejectMap = {}; // { lot_no: { stitching:{pieces,reasons}, washing_in:..., finishing:... } }
+    for (const r of rejectRows) {
+      if (!rejectMap[r.lot_no]) rejectMap[r.lot_no] = {};
+      rejectMap[r.lot_no][r.stage] = {
+        pieces:  parseFloat(r.pieces) || 0,
+        reasons: r.reasons || ''
+      };
     }
 
     // 5) Now build finalData from these maps
@@ -2065,7 +2123,8 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const washedQty    = sums.washedQty     || 0;
       const washingInQty = sums.washingInQty  || 0;
       const finishedQty  = sums.finishedQty   || 0;
-      const rewashQty    = rewashMap[lotNo]   || 0;
+      const rewashInfo   = rewashMap[lotNo]   || { requested:0, pending:0, completed:0 };
+      const rejectsInfo  = rejectMap[lotNo]   || {};
 
       // Last assignments
       const stAssign  = stitchMap[lotNo]  || null;
@@ -2118,54 +2177,15 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         }
       }
 
-      finalData.push({
-        lotNo,
-        sku: lot.sku,
-        lotType: denim ? "Denim" : "Hosiery",
+      finalData.push(buildEnhancedRow({
+        lot,
+        isDenim: denim,
         totalCut,
-        createdAt: lot.created_at
-          ? new Date(lot.created_at)
-              .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })
-              .replace(/\//g, '-')
-          : "",
-        remark: lot.remark || "",
-
-        // Stitching
-        stitchAssignedOn:   statuses.stitchingAssignedOn,
-        stitchApprovedOn:   statuses.stitchingApprovedOn,
-        stitchOp:           statuses.stitchingOp,
-        stitchStatus:       statuses.stitchingStatus,
-        stitchedQty,
-
-        // Assembly
-        assemblyAssignedOn: statuses.assemblyAssignedOn,
-        assemblyApprovedOn: statuses.assemblyApprovedOn,
-        assemblyOp:         statuses.assemblyOp,
-        assemblyStatus:     statuses.assemblyStatus,
-        assembledQty,
-
-        // Washing
-        washingAssignedOn:  statuses.washingAssignedOn,
-        washingApprovedOn:  statuses.washingApprovedOn,
-        washingOp:          statuses.washingOp,
-        washingStatus:      statuses.washingStatus,
-        washedQty,
-
-        // WashingIn
-        washingInAssignedOn: statuses.washingInAssignedOn,
-        washingInApprovedOn: statuses.washingInApprovedOn,
-        washingInOp:         statuses.washingInOp,
-        washingInStatus:     statuses.washingInStatus,
-        washingInQty,
-        rewashPendingQty: rewashQty,
-
-        // Finishing
-        finishingAssignedOn: statuses.finishingAssignedOn,
-        finishingApprovedOn: statuses.finishingApprovedOn,
-        finishingOp:         statuses.finishingOp,
-        finishingStatus:     statuses.finishingStatus,
-        finishedQty
-      });
+        sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
+        assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
+        rewash: rewashInfo,
+        rejects: rejectsInfo
+      }));
     }
 
     // 6) If download => Excel (v2 user-friendly schema)
@@ -2176,64 +2196,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const sheet = workbook.addWorksheet("PIC-Report");
       sheet.columns = PIC_REPORT_V2_COLUMNS;
 
-      for (const lot of lots) {
-        const lotNo = lot.lot_no;
-        const denim = isDenimLot(lot);
-        const totalCut = parseFloat(lot.total_pieces) || 0;
-        const sums = lotSumsMap[lotNo] || {
-          stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0
-        };
-        const assigns = {
-          stAssign:     stitchMap[lotNo] || null,
-          asmAssign:    asmMap[lotNo]    || null,
-          washAssign:   washMap[lotNo]   || null,
-          washInAssign: winMap[lotNo]    || null,
-          finAssign:    finMap[lotNo]    || null
-        };
-
-        // honour department + status filters by re-running the existing classifier
-        const statuses = getDepartmentStatuses({
-          isDenim: denim,
-          totalCut,
-          stitchedQty:  sums.stitchedQty,
-          assembledQty: sums.assembledQty,
-          washedQty:    sums.washedQty,
-          washingInQty: sums.washingInQty,
-          finishedQty:  sums.finishedQty,
-          stAssign:     assigns.stAssign,
-          asmAssign:    assigns.asmAssign,
-          washAssign:   assigns.washAssign,
-          washInAssign: assigns.washInAssign,
-          finAssign:    assigns.finAssign
-        });
-        const deptResult = filterByDept({
-          department, isDenim: denim,
-          stitchingStatus: statuses.stitchingStatus,
-          assemblyStatus:  statuses.assemblyStatus,
-          washingStatus:   statuses.washingStatus,
-          washingInStatus: statuses.washingInStatus,
-          finishingStatus: statuses.finishingStatus
-        });
-        if (!deptResult.showRow) continue;
-        if (status !== "all") {
-          const actualStatus = deptResult.actualStatus.toLowerCase();
-          if (status === "not_assigned") {
-            if (!actualStatus.startsWith("in ")) continue;
-          } else {
-            const want = status.toLowerCase();
-            if (want === "inline" && actualStatus.includes("in-line")) {
-              // pass
-            } else if (!actualStatus.includes(want)) {
-              continue;
-            }
-          }
-        }
-
-        sheet.addRow(buildEnhancedRow({
-          lot, isDenim: denim, totalCut, sums, assigns,
-          rewashQty: rewashMap[lotNo] || 0
-        }));
-      }
+      for (const r of finalData) sheet.addRow(r);
 
       // Header styling
       sheet.getRow(1).font = { bold: true };
@@ -2480,6 +2443,47 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     // 4) Last assignments per lot (same as pic-report)
     const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
 
+    // 4a) Rewash totals per lot (lot-level aggregate; same as pic-report)
+    const [rewashRows2] = await pool.query(
+      `SELECT lot_no,
+              SUM(total_requested) AS requestedQty,
+              SUM(CASE WHEN status='pending'   THEN total_requested ELSE 0 END) AS pendingQty,
+              SUM(CASE WHEN status='completed' THEN total_requested ELSE 0 END) AS completedQty
+         FROM rewash_requests
+        WHERE lot_no IN (?)
+        GROUP BY lot_no`,
+      [lotNos]
+    );
+    const rewashMap = {};
+    for (const r of rewashRows2) {
+      rewashMap[r.lot_no] = {
+        requested: parseFloat(r.requestedQty)  || 0,
+        pending:   parseFloat(r.pendingQty)    || 0,
+        completed: parseFloat(r.completedQty)  || 0
+      };
+    }
+
+    // 4b) Rejects per lot+size+stage
+    const [sizeRejectRows] = await pool.query(
+      `SELECT rd.lot_no, rd.stage, rds.size_label,
+              COALESCE(SUM(rds.pieces),0) AS pieces,
+              GROUP_CONCAT(DISTINCT NULLIF(rd.reason,'') ORDER BY rd.reason SEPARATOR '; ') AS reasons
+         FROM reject_data rd
+         JOIN reject_data_sizes rds ON rds.reject_data_id = rd.id
+        WHERE rd.lot_no IN (?)
+        GROUP BY rd.lot_no, rd.stage, rds.size_label`,
+      [lotNos]
+    );
+    const rejectSizeMap = {}; // key = lot|size, val = {stitching:{pieces,reasons}, ...}
+    for (const r of sizeRejectRows) {
+      const key = `${r.lot_no}|${r.size_label}`;
+      if (!rejectSizeMap[key]) rejectSizeMap[key] = {};
+      rejectSizeMap[key][r.stage] = {
+        pieces: parseFloat(r.pieces) || 0,
+        reasons: r.reasons || ''
+      };
+    }
+
     // 5) Build final data
     const finalData = [];
     for (const row of rows) {
@@ -2540,52 +2544,32 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         }
       }
 
-      finalData.push({
-        lotNo,
-        sku_size: `${row.sku}_${sizeLabel}`,
+      const lotForBuilder = {
+        lot_no: lotNo,
         sku: row.sku,
-        size: sizeLabel,
-        lotType: denim ? "Denim" : "Hosiery",
-        totalCut,
-        createdAt: row.created_at
-          ? new Date(row.created_at)
-              .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })
-              .replace(/\//g, '-')
-          : "",
-        remark: row.remark || "",
-
-        stitchAssignedOn:   statuses.stitchingAssignedOn,
-        stitchApprovedOn:   statuses.stitchingApprovedOn,
-        stitchOp:           statuses.stitchingOp,
-        stitchStatus:       statuses.stitchingStatus,
-        stitchedQty,
-
-        assemblyAssignedOn: statuses.assemblyAssignedOn,
-        assemblyApprovedOn: statuses.assemblyApprovedOn,
-        assemblyOp:         statuses.assemblyOp,
-        assemblyStatus:     statuses.assemblyStatus,
-        assembledQty,
-
-        washingAssignedOn:  statuses.washingAssignedOn,
-        washingApprovedOn:  statuses.washingApprovedOn,
-        washingOp:          statuses.washingOp,
-        washingStatus:      statuses.washingStatus,
-        washedQty,
-
-        washingInAssignedOn: statuses.washingInAssignedOn,
-        washingInApprovedOn: statuses.washingInApprovedOn,
-        washingInOp:         statuses.washingInOp,
-        washingInStatus:     statuses.washingInStatus,
-        washingInQty,
-
-        finishingAssignedOn: statuses.finishingAssignedOn,
-        finishingApprovedOn: statuses.finishingApprovedOn,
-        finishingOp:         statuses.finishingOp,
-        finishingStatus:     statuses.finishingStatus,
-        finishedQty,
-        dispatchedQty:       (dispatchMap[`${lotNo}|${sizeLabel}`] || {}).dispatchedQty || 0,
-        destinations:        (dispatchMap[`${lotNo}|${sizeLabel}`] || {}).destinations || ''
+        remark: row.remark,
+        created_at: row.created_at
+      };
+      const enriched = buildEnhancedRow({
+        lot: lotForBuilder,
+        isDenim: denim,
+        totalCut: stitchedQty, // baseline at size granularity (no per-size cut count)
+        sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
+        assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
+        rewash: rewashMap[lotNo] || { requested:0, pending:0, completed:0 },
+        rejects: rejectSizeMap[`${lotNo}|${sizeLabel}`] || {}
       });
+      // size-specific overrides
+      enriched.size = sizeLabel;
+      enriched.sku_size = `${row.sku}_${sizeLabel}`;
+      enriched.totalCut = totalCut;       // show the lot total for context
+      enriched.stitchInQty = '';          // unknown per size
+      enriched.stitchPendingQty = '';     // unknown per size
+      const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
+      enriched.dispatchedQty = dispatch.dispatchedQty || 0;
+      enriched.destinations  = dispatch.destinations  || '';
+
+      finalData.push(enriched);
     }
 
     if (download === "1") {
@@ -2594,7 +2578,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 
       const sheet = workbook.addWorksheet("PIC-Size-Report");
 
-      // Build size-aware columns: same shape as PIC v2 + Size + dispatch columns
+      // Size-aware column set: same shape as PIC v2 + Size + dispatch columns
       const sizeCols = [
         { header: 'Lot No',              key: 'lotNo',             width: 14 },
         { header: 'External Lot No',     key: 'externalLotNo',     width: 14 },
@@ -2611,13 +2595,14 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         { header: 'Days In Stage',       key: 'daysInStage',       width: 10 },
         { header: 'Remark',              key: 'remark',            width: 26 }
       ];
-      // Append the per-stage columns from the v2 schema (skip the identification block we already have)
       const stageColKeys = new Set([
         'stitchOp','stitchAssignedOn','stitchApprovedOn','stitchInQty','stitchOutQty','stitchPendingQty','stitchStatus','stitchInline',
         'assemblyOp','assemblyAssignedOn','assemblyApprovedOn','assemblyInQty','assemblyOutQty','assemblyPendingQty','assemblyStatus','assemblyInline',
         'washingOp','washingAssignedOn','washingApprovedOn','washingInQty_in','washingOutQty','washingPendingQty','washingStatus','washingInline',
-        'washInOp','washInAssignedOn','washInApprovedOn','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline','rewashPendingQty',
-        'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus'
+        'washInOp','washInAssignedOn','washInApprovedOn','washInInQty','washInOutQty','washInPendingQty','washInStatus','washInInline',
+        'rewashRequestedQty','rewashPendingQty','rewashCompletedQty',
+        'finishingOp','finishingAssignedOn','finishingApprovedOn','finishingInQty','finishingOutQty','finishingPendingQty','finishingStatus',
+        'stitchRejectQty','stitchRejectReasons','washInRejectQty','washInRejectReasons','finishingRejectQty','finishingRejectReasons','totalRejectQty'
       ]);
       for (const c of PIC_REPORT_V2_COLUMNS) {
         if (stageColKeys.has(c.key)) sizeCols.push(c);
@@ -2626,89 +2611,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       sizeCols.push({ header: 'Dispatch Destination', key: 'destinations',  width: 26 });
       sheet.columns = sizeCols;
 
-      for (const row of rows) {
-        const lotNo = row.lot_no;
-        const sizeLabel = row.size_label;
-        const denim = isDenimLot(row);
-        const totalCut = parseFloat(row.total_pieces) || 0;
-        const sums = sizeSumsMap[`${lotNo}|${sizeLabel}`] || {
-          stitchedQty: 0, assembledQty: 0, washedQty: 0, washingInQty: 0, finishedQty: 0
-        };
-        const assigns = {
-          stAssign:     stitchMap[lotNo] || null,
-          asmAssign:    asmMap[lotNo]    || null,
-          washAssign:   washMap[lotNo]   || null,
-          washInAssign: winMap[lotNo]    || null,
-          finAssign:    finMap[lotNo]    || null
-        };
-
-        // department/status filters via existing classifier (lot-level)
-        const statuses = getDepartmentStatuses({
-          isDenim: denim,
-          totalCut,
-          stitchedQty:  sums.stitchedQty,
-          assembledQty: sums.assembledQty,
-          washedQty:    sums.washedQty,
-          washingInQty: sums.washingInQty,
-          finishedQty:  sums.finishedQty,
-          stAssign:     assigns.stAssign,
-          asmAssign:    assigns.asmAssign,
-          washAssign:   assigns.washAssign,
-          washInAssign: assigns.washInAssign,
-          finAssign:    assigns.finAssign
-        });
-        const deptResult = filterByDept({
-          department, isDenim: denim,
-          stitchingStatus: statuses.stitchingStatus,
-          assemblyStatus:  statuses.assemblyStatus,
-          washingStatus:   statuses.washingStatus,
-          washingInStatus: statuses.washingInStatus,
-          finishingStatus: statuses.finishingStatus
-        });
-        if (!deptResult.showRow) continue;
-        if (status !== "all") {
-          const actualStatus = deptResult.actualStatus.toLowerCase();
-          if (status === "not_assigned") {
-            if (!actualStatus.startsWith("in ")) continue;
-          } else {
-            const want = status.toLowerCase();
-            if (want === "inline" && actualStatus.includes("in-line")) {
-              // pass
-            } else if (!actualStatus.includes(want)) {
-              continue;
-            }
-          }
-        }
-
-        // Build a size-level enhanced row. We don't have a per-size cut quantity, so
-        // we use stitchedQty (size) as the "input" baseline for the stitch stage —
-        // pending-at-stitch is therefore unknowable per size and shown as blank.
-        const lotForBuilder = {
-          lot_no: lotNo,
-          sku: row.sku,
-          remark: row.remark,
-          created_at: row.created_at
-        };
-        const enriched = buildEnhancedRow({
-          lot: lotForBuilder,
-          isDenim: denim,
-          totalCut: sums.stitchedQty, // baseline at size granularity
-          sums,
-          assigns,
-          rewashQty: 0
-        });
-        // size-specific overrides
-        enriched.size = sizeLabel;
-        enriched.sku_size = `${row.sku}_${sizeLabel}`;
-        enriched.totalCut = totalCut;       // show the lot total for context
-        enriched.stitchInQty = '';          // unknown per size
-        enriched.stitchPendingQty = '';     // unknown per size
-        const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
-        enriched.dispatchedQty = dispatch.dispatchedQty || 0;
-        enriched.destinations  = dispatch.destinations  || '';
-
-        sheet.addRow(enriched);
-      }
+      for (const r of finalData) sheet.addRow(r);
 
       sheet.getRow(1).font = { bold: true };
       sheet.views = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
