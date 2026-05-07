@@ -913,11 +913,6 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
     return res.status(500).json({ error: `EasyEcom API not configured for warehouse: ${warehouseName}` });
   }
 
-  // Long inventory pulls (~85k SKUs ≈ 10-15 min) must outlive Node's
-  // default 5-min request timeout. Match the /logs/download-live route.
-  req.setTimeout(30 * 60 * 1000); // 30 min
-  res.setTimeout(30 * 60 * 1000);
-
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
