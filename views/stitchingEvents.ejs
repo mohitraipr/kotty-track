@@ -985,7 +985,7 @@
     </div>
 
     <div class="sx-sizes-label">
-      Pieces by size <span class="total">total cut <span id="totalCut">0</span></span>
+      Pieces by size <span class="total"><span id="totalLabel">total cut</span> <span id="totalCut">0</span></span>
     </div>
     <div class="sx-chip-row" id="sizeChips"></div>
   </section>
@@ -1074,6 +1074,10 @@ const BASE = '/stitchingdashboard';
 const STAGE_LABEL = 'Stitching';
 // Stage feature flags. Per-stage views override these at generation time.
 const STAGE_FEATURES = { rewash: false, dispatch: false };
+// Human-readable name of the upstream stage / source pool. Used by the
+// "total ready" label and "waiting for upstream" empty-state copy.
+const UPSTREAM_LABEL = 'cutting';
+const UPSTREAM_NOUN  = 'cut';
 
 let currentLot = null;
 let currentState = null;
@@ -1193,6 +1197,7 @@ function renderState() {
 
   const totalCut = upstream_sizes.reduce((a, s) => a + (Number(s.cut_qty || s.stitched_qty || s.assembled_qty || s.washed_qty || s.upstream_qty) || 0), 0);
   el('totalCut').textContent = fmt(totalCut);
+  const totalLbl = el('totalLabel'); if (totalLbl) totalLbl.textContent = 'total ' + UPSTREAM_NOUN;
 
   // size chips (compact)
   const chips = el('sizeChips'); chips.textContent = '';
@@ -1253,9 +1258,35 @@ async function renderActions() {
   if (cards === 0) {
     const card = document.createElement('div');
     card.className = 'sx-action-card is-empty';
+    const agg = currentState.stage_aggregates || { approved: 0, completed: 0, rejected: 0, inline: 0 };
+    const upstreamPool = (currentState.upstream_sizes || []).reduce(
+      (a, s) => a + (Number(s.cut_qty || s.stitched_qty || s.assembled_qty || s.washed_qty || s.upstream_qty) || 0), 0
+    );
+    let mark = '✓';
+    let title = '';
+    let sub = '';
+    if (upstreamPool === 0 && agg.approved === 0) {
+      // Nothing has reached this stage yet
+      mark = '⌛';
+      title = `Not ready yet — waiting for ${UPSTREAM_LABEL} to finish this lot.`;
+      sub = `As soon as pieces are completed at ${UPSTREAM_LABEL}, they'll show up here for you to take.`;
+    } else if (agg.approved > 0 && agg.inline === 0) {
+      // Everything that came in has been completed/rejected
+      title = `This lot is fully processed at ${STAGE_LABEL.toLowerCase()}.`;
+      sub = 'Nothing for you to do here.';
+    } else if (agg.inline > 0) {
+      // Owner-locked: someone else is mid-batch
+      mark = '👥';
+      title = 'Other operators are working on this lot.';
+      sub = `${fmt(agg.inline)} pieces are inline with someone else's batch — you can't act on them.`;
+    } else {
+      // upstream pool > 0 but available = 0 (everything taken, none open)
+      title = `Nothing left to take — everyone took what they needed.`;
+      sub = 'Wait for them to mark their pieces done.';
+    }
     card.innerHTML = `
-      <div class="sx-empty-mark">✓</div>
-      <p>This lot is fully processed at ${STAGE_LABEL.toLowerCase()}.<small>Nothing for you to do here.</small></p>
+      <div class="sx-empty-mark">${mark}</div>
+      <p>${escapeText(title)}<small>${escapeText(sub)}</small></p>
     `;
     wrap.appendChild(card);
     el('actionsHeading').textContent = '— this lot —';
