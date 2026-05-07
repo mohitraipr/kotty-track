@@ -319,9 +319,17 @@ app.use((req, res) => {
 // Start Server (ALB terminates SSL; your app listens over HTTP)
 // Cloud Run sets process.env.PORT, global.env is for secure-env
 const PORT = process.env.PORT || global.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+// Long-running endpoints (e.g. EasyEcom inventory pull, ~85k SKUs over ~15
+// min) need to outlive Node's default 5-minute requestTimeout. Cloud Run's
+// own request timeout is 30 min and that's the real cap.
+server.requestTimeout = 30 * 60 * 1000;   // 30 min
+server.headersTimeout = 65 * 1000;        // keep small; headers should arrive fast
+server.keepAliveTimeout = 75 * 1000;      // standard for behind LB
+server.timeout = 0;                        // no idle socket timeout
 
 
 
