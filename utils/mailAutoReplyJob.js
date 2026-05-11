@@ -45,22 +45,37 @@ async function lookupAwbForOrder(orderId) {
   return null;
 }
 
-async function recordInitial(email, classification, orderId) {
+async function recordInitial(email, classification, orderId, runId = null) {
   await pool.query(
     `INSERT INTO mail_replies
        (message_id, thread_id, from_address, to_address, subject, order_id,
-        status, classification)
-     VALUES (?, ?, ?, ?, ?, ?, 'initial', ?)
+        status, classification, run_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'initial', ?, ?)
      ON DUPLICATE KEY UPDATE
        order_id = COALESCE(VALUES(order_id), order_id),
-       classification = COALESCE(VALUES(classification), classification)`,
+       classification = COALESCE(VALUES(classification), classification),
+       run_id = VALUES(run_id)`,
     [
       email.messageId, email.threadId || null,
       email.fromAddress || null, email.toAddress || null,
       (email.subject || '').slice(0, 500),
-      orderId || null, classification || null,
+      orderId || null, classification || null, runId,
     ]
   );
+}
+
+async function markSkipped(messageId, skipReason, runId) {
+  // Update the most-recent row for this email with the reason it stayed in
+  // 'initial' on this run. Safe to call multiple times — only sets when row
+  // still in 'initial' so we never overwrite a successful 'replied' state.
+  try {
+    await pool.query(
+      `UPDATE mail_replies
+         SET skip_reason = ?, run_id = COALESCE(?, run_id)
+       WHERE message_id = ? AND status = 'initial'`,
+      [skipReason, runId, messageId]
+    );
+  } catch (_) { /* best-effort */ }
 }
 
 async function recordReplied(email, orderId, awb, videoUrl) {
@@ -84,15 +99,17 @@ async function recordReplied(email, orderId, awb, videoUrl) {
   );
 }
 
-async function processOneEmail(email, stats) {
+async function processOneEmail(email, stats, runId) {
   // Skip our own outbound mails (anti-loop)
   if ((email.fromAddress || '').toLowerCase().includes(OUR_SENDER)) {
     stats.skipped_own++;
+    // don't even write a row for our own mails — too noisy
     return;
   }
 
   if (await isAlreadyReplied(email.messageId)) {
     stats.skipped_already_replied++;
+    await markSkipped(email.messageId, 'already_replied', runId);
     return;
   }
 
@@ -107,22 +124,25 @@ async function processOneEmail(email, stats) {
 
   const details = zohoMail.extractOrderDetails(bodyText, email.subject || '');
   const classification = zohoMail.classifyEmail(email.subject || '', bodyText);
-  await recordInitial(email, classification, details.orderId);
+  await recordInitial(email, classification, details.orderId, runId);
 
   if (!details.orderId) {
     stats.skipped_no_order_id++;
+    await markSkipped(email.messageId, 'no_order_id', runId);
     return;
   }
 
   const awbResult = await lookupAwbForOrder(details.orderId);
   if (!awbResult) {
     stats.skipped_no_awb++;
+    await markSkipped(email.messageId, 'no_awb', runId);
     return;
   }
 
   const video = await findVideoByAwb(awbResult.awb);
   if (!video) {
     stats.skipped_no_video++;
+    await markSkipped(email.messageId, 'no_video', runId);
     return;
   }
 
@@ -149,7 +169,49 @@ async function processOneEmail(email, stats) {
   }
 }
 
-async function runMailAutoReply() {
+async function startRun({ triggeredBy = 'cron', userId = null } = {}) {
+  try {
+    const [result] = await pool.query(
+      `INSERT INTO mail_reply_runs (started_at, triggered_by, triggered_user_id)
+       VALUES (NOW(), ?, ?)`,
+      [triggeredBy, userId]
+    );
+    return result.insertId;
+  } catch (err) {
+    // table may not exist yet on a server that hasn't run the migration —
+    // log once, never throw. The cron still works without the run log.
+    if (!startRun._warned) {
+      console.warn('[mailAutoReply] could not insert run row (table missing?)', err.message);
+      startRun._warned = true;
+    }
+    return null;
+  }
+}
+
+async function finishRun(runId, stats, errorMessage = null) {
+  if (!runId) return;
+  try {
+    await pool.query(
+      `UPDATE mail_reply_runs
+         SET finished_at = NOW(),
+             fetched = ?, processed = ?, replied = ?, errors = ?,
+             skipped_own = ?, skipped_already_replied = ?,
+             skipped_no_order_id = ?, skipped_no_awb = ?, skipped_no_video = ?,
+             duration_ms = TIMESTAMPDIFF(MICROSECOND, started_at, NOW()) DIV 1000,
+             error_message = ?,
+             stats_json = ?
+       WHERE id = ?`,
+      [
+        stats.fetched, stats.processed, stats.replied, stats.errors,
+        stats.skipped_own, stats.skipped_already_replied,
+        stats.skipped_no_order_id, stats.skipped_no_awb, stats.skipped_no_video,
+        errorMessage, JSON.stringify(stats), runId,
+      ]
+    );
+  } catch (_) { /* best-effort */ }
+}
+
+async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
   if (!zohoMail.isConfigured()) {
     console.log('[mailAutoReply] Zoho not configured, skipping');
     return { skipped: 'not_configured' };
@@ -161,12 +223,15 @@ async function runMailAutoReply() {
     skipped_no_order_id: 0, skipped_no_awb: 0, skipped_no_video: 0,
   };
 
+  const runId = await startRun({ triggeredBy, userId });
+
   let emails = [];
   try {
     emails = await zohoMail.getEmails('inbox', MAX_EMAILS_PER_RUN, 0);
   } catch (err) {
     console.error('[mailAutoReply] fetch failed:', err.message);
-    return { error: err.message };
+    await finishRun(runId, stats, err.message);
+    return { error: err.message, run_id: runId };
   }
   stats.fetched = emails.length;
 
@@ -180,15 +245,17 @@ async function runMailAutoReply() {
   for (const email of recent) {
     stats.processed++;
     try {
-      await processOneEmail(email, stats);
+      await processOneEmail(email, stats, runId);
     } catch (err) {
       stats.errors++;
+      await markSkipped(email.messageId, 'error', runId);
       console.error('[mailAutoReply] error on', email.messageId, err.message);
     }
   }
 
-  console.log(`[mailAutoReply] done in ${Date.now() - startedAt}ms`, stats);
-  return stats;
+  await finishRun(runId, stats, null);
+  console.log(`[mailAutoReply] done in ${Date.now() - startedAt}ms run=${runId}`, stats);
+  return { ...stats, run_id: runId };
 }
 
 module.exports = { runMailAutoReply };
