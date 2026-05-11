@@ -9,6 +9,7 @@ const { isAuthenticated, isOnlyMohitOperator } = require('../middlewares/auth');
 const zohoMail = require('../utils/zohoMailClient');
 const { findVideosByAwb, formatFileSize } = require('../utils/s3Client');
 const { pool } = require('../config/db');
+const { runMailAutoReply } = require('../utils/mailAutoReplyJob');
 
 // In-memory storage for Excel mappings (Order ID -> AWB)
 // Also persisted to database for durability
@@ -251,6 +252,40 @@ function getSessionKey(req) {
 
 // ==================== PAGE ROUTES ====================
 
+// Helper: fetch last run + needs-attention counts for the dashboard card.
+// Returns null fields if the migration hasn't been run yet (degrades gracefully).
+async function getAutoReplySummary() {
+  const summary = { lastRun: null, needsAttention: [], totalNeedsAttention: 0 };
+  try {
+    const [[run]] = await pool.query(
+      `SELECT id, started_at, finished_at, triggered_by,
+              fetched, processed, replied, errors,
+              skipped_own, skipped_already_replied,
+              skipped_no_order_id, skipped_no_awb, skipped_no_video,
+              duration_ms, error_message
+       FROM mail_reply_runs
+       ORDER BY started_at DESC LIMIT 1`
+    );
+    summary.lastRun = run || null;
+
+    const [reasons] = await pool.query(
+      `SELECT skip_reason, COUNT(*) AS n
+       FROM mail_replies
+       WHERE status = 'initial'
+         AND skip_reason IS NOT NULL
+         AND created_at > NOW() - INTERVAL 7 DAY
+       GROUP BY skip_reason
+       ORDER BY n DESC`
+    );
+    summary.needsAttention = reasons;
+    summary.totalNeedsAttention = reasons.reduce((a, r) => a + Number(r.n || 0), 0);
+  } catch (err) {
+    // Tables not yet migrated — return empty summary, view shows hint.
+    summary.migrationPending = /doesn'?t exist|Unknown table/i.test(err.message);
+  }
+  return summary;
+}
+
 // Main Mail Manager page
 router.get('/', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
   const sessionKey = getSessionKey(req);
@@ -268,11 +303,65 @@ router.get('/', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
     }
   }
 
+  const autoReply = await getAutoReplySummary();
+
   res.render('mailManager', {
     user: req.session.user,
     mappingCount,
-    zohoStatus
+    zohoStatus,
+    autoReply,
   });
+});
+
+// JSON refresh — same data the card renders, callable from the page to
+// re-fetch after "Run now" without a full reload.
+router.get('/auto-reply/summary', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  res.json({ ok: true, ...(await getAutoReplySummary()) });
+});
+
+// Trigger a manual run from the page (same job, same user audited via
+// triggered_user_id in mail_reply_runs).
+router.post('/auto-reply/run', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const result = await runMailAutoReply({
+      triggeredBy: 'manual',
+      userId: req.session?.user?.id || null,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// List of emails sitting in 'initial' with a skip_reason — what the
+// operator needs to look at manually. Filter by ?reason=no_order_id etc.
+router.get('/auto-reply/needs-attention', isAuthenticated, isOnlyMohitOperator, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit, 10) || 50));
+    const reason = req.query.reason || null;
+    const allowed = new Set(['no_order_id', 'no_awb', 'no_video', 'already_replied', 'not_target_class', 'our_own', 'error']);
+    if (reason && !allowed.has(reason)) {
+      return res.status(400).json({ ok: false, error: 'Invalid reason' });
+    }
+    const params = [];
+    let filter = `status = 'initial' AND skip_reason IS NOT NULL`;
+    if (reason) { filter += ' AND skip_reason = ?'; params.push(reason); }
+    params.push(limit);
+    const [rows] = await pool.query(
+      `SELECT id, message_id, from_address, subject, order_id, awb,
+              skip_reason, classification, created_at
+       FROM mail_replies
+       WHERE ${filter}
+       ORDER BY created_at DESC LIMIT ?`,
+      params
+    );
+    res.json({ ok: true, count: rows.length, items: rows });
+  } catch (err) {
+    if (/doesn'?t exist|Unknown table/i.test(err.message)) {
+      return res.json({ ok: true, items: [], warning: 'Run sql/mail_reply_visibility.sql first.' });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ==================== EXCEL MAPPING ROUTES ====================

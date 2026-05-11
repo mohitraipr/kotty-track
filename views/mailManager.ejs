@@ -334,6 +334,234 @@
           </div>
         </div>
 
+        <!-- Auto-reply cron status + needs-attention -->
+        <style>
+          .ar-card .ar-row { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+          .ar-card .ar-row + .ar-row { margin-top:.5rem; }
+          .ar-stat { display:inline-flex; align-items:center; gap:.35rem; font-size:.875rem; }
+          .ar-pill { padding:.125rem .5rem; border-radius:9999px; font-weight:600; font-size:.75rem; font-variant-numeric:tabular-nums; }
+          .ar-pill.ok { background:#dcfce7; color:#15803d; }
+          .ar-pill.warn { background:#fef3c7; color:#92400e; }
+          .ar-pill.err { background:#fee2e2; color:#b91c1c; }
+          .ar-pill.muted { background:#f1f5f9; color:#475569; }
+          .ar-reason-list { list-style:none; padding:0; margin:.5rem 0 0; }
+          .ar-reason-list li { display:flex; justify-content:space-between; padding:.25rem 0; font-size:.8125rem; border-top:1px dashed #e5e7eb; }
+          .ar-reason-list li:first-child { border-top:none; }
+          .ar-reason-list .lbl { color:#475569; }
+          .ar-reason-list .lbl a { color:inherit; text-decoration:underline dotted; cursor:pointer; }
+          .ar-reason-list .val { font-weight:700; font-variant-numeric:tabular-nums; color:#0f172a; }
+          .ar-empty { font-size:.8125rem; color:#64748b; padding:.5rem 0; }
+
+          .ar-modal { position:fixed; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(4px); z-index:1080; display:none; align-items:flex-start; justify-content:center; padding:3rem 1rem; }
+          .ar-modal.show { display:flex; }
+          .ar-modal-card { background:#fff; border-radius:14px; max-width:760px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 24px 48px rgba(0,0,0,.18); overflow:hidden; }
+          .ar-modal-head { padding:.875rem 1.125rem; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+          .ar-modal-title { font-weight:700; }
+          .ar-modal-body { padding:.5rem 1.125rem 1.125rem; overflow-y:auto; }
+          .ar-modal-close { background:transparent; border:none; font-size:1.5rem; line-height:1; cursor:pointer; color:#64748b; }
+          .ar-row-table { width:100%; font-size:.8125rem; border-collapse:collapse; }
+          .ar-row-table th, .ar-row-table td { border-bottom:1px solid #f1f5f9; padding:.5rem .375rem; text-align:left; vertical-align:top; }
+          .ar-row-table th { font-size:.6875rem; text-transform:uppercase; letter-spacing:.04em; color:#64748b; font-weight:700; }
+          .ar-row-table td.subject { max-width:280px; word-break:break-word; }
+          .ar-row-table .from { color:#475569; font-size:.75rem; }
+        </style>
+
+        <div class="kotty-card mb-3 ar-card" id="autoReplyCard"
+             data-migration-pending="<%= autoReply && autoReply.migrationPending ? '1' : '' %>">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-robot me-2"></i>Auto-reply</span>
+            <button class="btn btn-sm btn-kotty-primary" id="arRunBtn">
+              <i class="bi bi-play-fill"></i> Run now
+            </button>
+          </div>
+          <div class="card-body py-3">
+            <% if (autoReply && autoReply.migrationPending) { %>
+              <div class="ar-empty">
+                Run <code>sql/mail_reply_visibility.sql</code> to enable visibility.
+              </div>
+            <% } else if (autoReply && autoReply.lastRun) { %>
+              <% const r = autoReply.lastRun; %>
+              <div class="ar-row">
+                <span class="ar-stat">
+                  <i class="bi bi-clock-history" style="color:var(--terracotta,#c2410c);"></i>
+                  Last run:
+                  <strong id="arLastRun" data-iso="<%= r.started_at %>"><%= new Date(r.started_at).toLocaleString() %></strong>
+                </span>
+                <span class="ar-pill <%= r.error_message ? 'err' : (r.replied > 0 ? 'ok' : 'muted') %>" id="arVerdict">
+                  <% if (r.error_message) { %>FAILED<% } else if (r.replied > 0) { %>✓ <%= r.replied %> replied<% } else { %>nothing to reply<% } %>
+                </span>
+              </div>
+              <div class="ar-row" style="flex-wrap:wrap;">
+                <span class="ar-stat" title="Fetched from Zoho inbox">
+                  <span class="ar-pill muted">Fetched <span id="arFetched"><%= r.fetched %></span></span>
+                </span>
+                <span class="ar-stat" title="Replied this run">
+                  <span class="ar-pill ok">Replied <span id="arReplied"><%= r.replied %></span></span>
+                </span>
+                <span class="ar-stat" title="Skipped (any reason)">
+                  <span class="ar-pill warn">Skipped <span id="arSkipped"><%= (Number(r.skipped_own||0)+Number(r.skipped_already_replied||0)+Number(r.skipped_no_order_id||0)+Number(r.skipped_no_awb||0)+Number(r.skipped_no_video||0)) %></span></span>
+                </span>
+                <% if (Number(r.errors||0) > 0) { %>
+                <span class="ar-stat" title="Errors this run">
+                  <span class="ar-pill err">Errors <span id="arErrors"><%= r.errors %></span></span>
+                </span>
+                <% } %>
+              </div>
+              <% if (r.error_message) { %>
+                <div class="ar-empty" style="color:#b91c1c;">⚠ <%= r.error_message %></div>
+              <% } %>
+            <% } else { %>
+              <div class="ar-empty">No cron runs recorded yet. Next scheduled run: 9:00 AM / 9:00 PM IST.</div>
+            <% } %>
+
+            <div style="margin-top:.875rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569;">
+                  Needs attention (7 days)
+                </span>
+                <span class="ar-pill warn" id="arNeedsTotal"><%= autoReply && autoReply.totalNeedsAttention || 0 %></span>
+              </div>
+              <% const reasons = (autoReply && autoReply.needsAttention) || []; %>
+              <% if (reasons.length === 0) { %>
+                <div class="ar-empty">Nothing waiting on you. ✓</div>
+              <% } else { %>
+                <ul class="ar-reason-list" id="arReasonList">
+                  <% reasons.forEach(function(row) {
+                       const label = {
+                         no_order_id: 'No customer order # in email',
+                         no_awb: 'Order ID found but no AWB uploaded',
+                         no_video: 'AWB known but no video in S3',
+                         already_replied: 'Already replied (dup)',
+                         not_target_class: 'Not a CCTV/AJIO target',
+                         our_own: 'Our own outbound',
+                         error: 'Errored',
+                       }[row.skip_reason] || row.skip_reason; %>
+                    <li>
+                      <span class="lbl">
+                        <a data-reason="<%= row.skip_reason %>" onclick="arOpenList('<%= row.skip_reason %>')">
+                          <%= label %>
+                        </a>
+                      </span>
+                      <span class="val"><%= row.n %></span>
+                    </li>
+                  <% }) %>
+                </ul>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="ar-modal" id="arModal" onclick="if(event.target.id==='arModal')arCloseList()">
+          <div class="ar-modal-card">
+            <div class="ar-modal-head">
+              <span class="ar-modal-title" id="arModalTitle">Emails</span>
+              <button class="ar-modal-close" onclick="arCloseList()" aria-label="Close">&times;</button>
+            </div>
+            <div class="ar-modal-body" id="arModalBody">Loading…</div>
+          </div>
+        </div>
+
+        <script>
+          (function() {
+            const card = document.getElementById('autoReplyCard');
+            if (!card) return;
+            const runBtn = document.getElementById('arRunBtn');
+            const fmtNum = (n) => Number(n || 0).toLocaleString();
+            const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
+
+            async function refresh() {
+              try {
+                const r = await fetch('/mail-manager/auto-reply/summary', { credentials: 'include' });
+                if (!r.ok) return;
+                const data = await r.json();
+                if (data.lastRun) {
+                  const lr = data.lastRun;
+                  const lrEl = document.getElementById('arLastRun');
+                  if (lrEl) lrEl.textContent = new Date(lr.started_at).toLocaleString();
+                  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmtNum(v); };
+                  set('arFetched', lr.fetched);
+                  set('arReplied', lr.replied);
+                  set('arSkipped', (lr.skipped_own || 0) + (lr.skipped_already_replied || 0) +
+                                    (lr.skipped_no_order_id || 0) + (lr.skipped_no_awb || 0) + (lr.skipped_no_video || 0));
+                  const verdict = document.getElementById('arVerdict');
+                  if (verdict) {
+                    verdict.className = 'ar-pill ' + (lr.error_message ? 'err' : (lr.replied > 0 ? 'ok' : 'muted'));
+                    verdict.textContent = lr.error_message ? 'FAILED' : (lr.replied > 0 ? '✓ ' + lr.replied + ' replied' : 'nothing to reply');
+                  }
+                }
+                const tot = document.getElementById('arNeedsTotal');
+                if (tot) tot.textContent = data.totalNeedsAttention || 0;
+              } catch (_) {}
+            }
+
+            runBtn.addEventListener('click', async () => {
+              const orig = runBtn.innerHTML;
+              runBtn.disabled = true;
+              runBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Running…';
+              try {
+                const r = await fetch('/mail-manager/auto-reply/run', { method: 'POST', credentials: 'include' });
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || 'Run failed');
+                // Brief flash then refresh card with new data
+                runBtn.innerHTML = '<i class="bi bi-check2"></i> Done — ' + (data.replied || 0) + ' replied';
+                await refresh();
+              } catch (err) {
+                runBtn.innerHTML = '<i class="bi bi-x-circle"></i> ' + (err.message || 'Failed');
+              } finally {
+                setTimeout(() => { runBtn.disabled = false; runBtn.innerHTML = orig; }, 2500);
+              }
+            });
+
+            // Modal: show the actual emails behind a skip_reason
+            const titleMap = {
+              no_order_id: 'Emails missing a customer order number',
+              no_awb: 'Order ID found but no AWB uploaded',
+              no_video: 'AWB known but no video in S3',
+              already_replied: 'Already replied (duplicate threads)',
+              error: 'Errored during processing',
+            };
+            window.arOpenList = async function(reason) {
+              const modal = document.getElementById('arModal');
+              const body = document.getElementById('arModalBody');
+              const title = document.getElementById('arModalTitle');
+              title.textContent = titleMap[reason] || ('Emails: ' + reason);
+              body.textContent = 'Loading…';
+              modal.classList.add('show');
+              try {
+                const r = await fetch('/mail-manager/auto-reply/needs-attention?reason=' + encodeURIComponent(reason) + '&limit=200', { credentials: 'include' });
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || 'Failed');
+                if (!data.items || !data.items.length) {
+                  body.innerHTML = '<div class="ar-empty">No emails in this bucket. ✓</div>';
+                  return;
+                }
+                let html = '<table class="ar-row-table"><thead><tr>'
+                         + '<th>Received</th><th>Subject / From</th><th>Order ID</th><th></th>'
+                         + '</tr></thead><tbody>';
+                for (const it of data.items) {
+                  const when = it.created_at ? new Date(it.created_at).toLocaleString() : '';
+                  html += '<tr>'
+                       +   '<td>' + escapeHtml(when) + '</td>'
+                       +   '<td class="subject">'
+                       +     '<div>' + escapeHtml(it.subject || '(no subject)') + '</div>'
+                       +     '<div class="from">' + escapeHtml(it.from_address || '') + '</div>'
+                       +   '</td>'
+                       +   '<td>' + escapeHtml(it.order_id || '—') + '</td>'
+                       +   '<td><button class="btn btn-sm btn-outline-secondary" onclick="window.openEmailInPanel && window.openEmailInPanel(\'' + escapeHtml(it.message_id) + '\')">Open</button></td>'
+                       + '</tr>';
+                }
+                html += '</tbody></table>';
+                body.innerHTML = html;
+              } catch (err) {
+                body.innerHTML = '<div class="ar-empty" style="color:#b91c1c;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+              }
+            };
+            window.arCloseList = function() {
+              document.getElementById('arModal').classList.remove('show');
+            };
+          })();
+        </script>
+
         <!-- Excel Mapping Upload -->
         <div class="kotty-card mb-3">
           <div class="card-header">
