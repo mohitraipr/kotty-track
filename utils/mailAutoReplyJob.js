@@ -211,11 +211,22 @@ async function finishRun(runId, stats, errorMessage = null) {
   } catch (_) { /* best-effort */ }
 }
 
-async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
-  if (!zohoMail.isConfigured()) {
-    console.log('[mailAutoReply] Zoho not configured, skipping');
-    return { skipped: 'not_configured' };
+// Coerce any thrown value to a useful string. zohoMailClient.makeRequest
+// rejects with a plain {status, data} object — not an Error — so a naive
+// `err.message` gives 'undefined' and we lose the actual Zoho response.
+function errToString(err) {
+  if (!err) return 'unknown';
+  if (err.message) return String(err.message);
+  if (err.status || err.data) {
+    let body;
+    try { body = typeof err.data === 'string' ? err.data : JSON.stringify(err.data); }
+    catch (_) { body = '[unserializable]'; }
+    return `HTTP ${err.status || '?'}: ${String(body || '').slice(0, 800)}`;
   }
+  try { return JSON.stringify(err).slice(0, 800); } catch (_) { return String(err); }
+}
+
+async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
   const startedAt = Date.now();
   const stats = {
     fetched: 0, processed: 0, replied: 0, errors: 0,
@@ -223,15 +234,26 @@ async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
     skipped_no_order_id: 0, skipped_no_awb: 0, skipped_no_video: 0,
   };
 
+  // Persist the run row FIRST — even failed runs (zoho misconfigured, fetch
+  // failed, etc.) should be visible on the dashboard so the operator sees
+  // "Last run: FAILED — <reason>" instead of an empty card.
   const runId = await startRun({ triggeredBy, userId });
+
+  if (!zohoMail.isConfigured()) {
+    const msg = 'Zoho not configured: set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN';
+    console.log('[mailAutoReply]', msg);
+    await finishRun(runId, stats, msg);
+    return { error: msg, run_id: runId };
+  }
 
   let emails = [];
   try {
     emails = await zohoMail.getEmails('inbox', MAX_EMAILS_PER_RUN, 0);
   } catch (err) {
-    console.error('[mailAutoReply] fetch failed:', err.message);
-    await finishRun(runId, stats, err.message);
-    return { error: err.message, run_id: runId };
+    const msg = errToString(err);
+    console.error('[mailAutoReply] fetch failed:', msg);
+    await finishRun(runId, stats, msg);
+    return { error: msg, run_id: runId };
   }
   stats.fetched = emails.length;
 
@@ -249,7 +271,7 @@ async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
     } catch (err) {
       stats.errors++;
       await markSkipped(email.messageId, 'error', runId);
-      console.error('[mailAutoReply] error on', email.messageId, err.message);
+      console.error('[mailAutoReply] error on', email.messageId, errToString(err));
     }
   }
 
