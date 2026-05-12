@@ -484,29 +484,7 @@
 
       <!-- INDENT TAB PANE -->
       <div class="tab-pane fade" id="indent-panel" role="tabpanel" aria-labelledby="indent-tab">
-        <div class="kotty-card">
-          <div class="kotty-card-header">
-            <h3><i class="bi bi-box-seam"></i> Raise Material Requirement</h3>
-          </div>
-          <div class="kotty-card-body">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <span style="font-weight: 600;">Add Items</span>
-              <button type="button" class="kotty-btn kotty-btn-primary kotty-btn-sm" onclick="addIndentItem()"><i class="bi bi-plus"></i> Add Item</button>
-            </div>
-            <div id="indentItems" style="margin-bottom: 20px;"></div>
-            <button type="button" class="kotty-btn kotty-btn-success kotty-btn-block" id="btnSubmitIndent" onclick="submitIndent()">
-              <i class="bi bi-send"></i> Submit Requirements
-            </button>
-          </div>
-        </div>
-        <div class="kotty-card" style="margin-top: 20px;">
-          <div class="kotty-card-header">
-            <h3><i class="bi bi-list-check"></i> My Recent Requests</h3>
-          </div>
-          <div class="kotty-card-body" id="indentRequestsList">
-            <div style="text-align: center; padding: 24px; color: var(--text-muted);">Click Indent tab to load...</div>
-          </div>
-        </div>
+        <%- include('partials/indentWrapper', { user: user, stage: 'Cutting' }) %>
       </div>
     </div>
   </div>
