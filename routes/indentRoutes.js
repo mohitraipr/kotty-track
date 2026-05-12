@@ -68,6 +68,12 @@ async function logStatusChange(requestId, userId, previousStatus, newStatus, not
 // One-time migration - auto-run on first load
 let migrationRan = false;
 let migrationRunning = false;
+
+// Middleware so every /indent route — including /api/* — triggers the migration once.
+router.use(async (req, res, next) => {
+  try { await ensureMigration(); } catch (e) { /* logged inside */ }
+  next();
+});
 async function ensureMigration() {
   if (migrationRan || migrationRunning) return;
   migrationRunning = true;

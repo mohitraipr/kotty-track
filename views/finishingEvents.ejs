@@ -1001,6 +1001,7 @@
     <div class="sx-info-tabs">
       <button class="sx-info-tab active" id="tabWork" onclick="switchInfoTab('work')">My Work</button>
       <button class="sx-info-tab" id="tabPayments" onclick="switchInfoTab('payments')">My Payments</button>
+      <button class="sx-info-tab" id="tabIndent" onclick="switchInfoTab('indent')">Material Indent</button>
     </div>
 
     <!-- My Work -->
@@ -1048,14 +1049,11 @@
         <div class="sx-placeholder"><div class="sx-placeholder-mark">·</div><p>Loading…</p></div>
       </div>
     </div>
-  </section>
 
-  <!-- ─── Material Indent (lot-aware wrapper) ─── -->
-  <section class="sx-info" style="margin-top:16px;">
-    <h2 style="margin:0 0 12px;font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;">
-      <i class="bi bi-box-seam"></i> Material Indent
-    </h2>
-    <%- include('partials/indentWrapper', { user: user, stage: 'Finishing' }) %>
+    <!-- Material Indent (lot-aware wrapper) -->
+    <div class="sx-info-body" id="indentTab" style="display: none;">
+      <%- include('partials/indentWrapper', { user: user, stage: 'Finishing' }) %>
+    </div>
   </section>
 </main>
 
@@ -1848,10 +1846,12 @@ function switchInfoTab(tab) {
   infoTab = tab;
   el('tabWork').classList.toggle('active', tab === 'work');
   el('tabPayments').classList.toggle('active', tab === 'payments');
+  var tInd = el('tabIndent'); if (tInd) tInd.classList.toggle('active', tab === 'indent');
   el('workTab').style.display = tab === 'work' ? 'block' : 'none';
   el('paymentsTab').style.display = tab === 'payments' ? 'block' : 'none';
+  var iTab = el('indentTab'); if (iTab) iTab.style.display = tab === 'indent' ? 'block' : 'none';
   if (tab === 'work') loadHistory();
-  else loadPayments();
+  else if (tab === 'payments') loadPayments();
 }
 
 async function loadHistory() {
