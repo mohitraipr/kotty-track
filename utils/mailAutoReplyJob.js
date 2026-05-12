@@ -14,6 +14,11 @@ const { findVideoByAwb, formatFileSize } = require('./s3Client');
 const LOOKBACK_DAYS = parseInt(process.env.MAIL_REPLY_LOOKBACK_DAYS || '7', 10);
 const MAX_EMAILS_PER_RUN = parseInt(process.env.MAIL_REPLY_MAX_PER_RUN || '200', 10);
 const OUR_SENDER = (process.env.OUR_SENDER_EMAIL || 'sales@kotty.in').toLowerCase();
+// Search terms run against Zoho's /messages/search with searchKey
+// entire:<term>::in:Inbox. Comma-separated env override. Each term is
+// queried once per run and results are de-duplicated by message_id.
+// 'cctv' covers Ajio CCTV-footage requests which is the main target.
+const SEARCH_TERMS = (process.env.MAIL_REPLY_SEARCH_TERMS || 'cctv').split(',').map(s => s.trim()).filter(Boolean);
 
 async function isAlreadyReplied(messageId) {
   const [[row]] = await pool.query(
@@ -246,9 +251,20 @@ async function runMailAutoReply({ triggeredBy = 'cron', userId = null } = {}) {
     return { error: msg, run_id: runId };
   }
 
+  // Use the /messages/search endpoint (the only inbox-listing endpoint
+  // that reliably works on Zoho's IN data center for this account).
+  // Run each search term, de-dup by message_id.
+  const seenIds = new Set();
   let emails = [];
   try {
-    emails = await zohoMail.getEmails('inbox', MAX_EMAILS_PER_RUN, 0);
+    for (const term of SEARCH_TERMS) {
+      const batch = await zohoMail.searchEmails(term, MAX_EMAILS_PER_RUN, 0, 'Inbox');
+      for (const e of (batch || [])) {
+        if (!e.messageId || seenIds.has(e.messageId)) continue;
+        seenIds.add(e.messageId);
+        emails.push(e);
+      }
+    }
   } catch (err) {
     const msg = errToString(err);
     console.error('[mailAutoReply] fetch failed:', msg);
