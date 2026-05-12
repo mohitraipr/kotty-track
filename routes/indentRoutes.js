@@ -124,6 +124,74 @@ async function ensureMigration() {
       await pool.query(`CREATE INDEX idx_indent_requests_lot ON indent_requests(lot_no)`);
       await pool.query(`CREATE INDEX idx_indent_requests_stage ON indent_requests(filler_stage)`);
     }
+
+    // ---- Lot-aware indent system migration ----
+    // item_categories table
+    await pool.query(`CREATE TABLE IF NOT EXISTS item_categories (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(50) NOT NULL UNIQUE,
+      display_label VARCHAR(80) NOT NULL,
+      unit_default VARCHAR(20) NOT NULL DEFAULT 'PCS',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await pool.query(`INSERT IGNORE INTO item_categories (name, display_label, unit_default) VALUES
+      ('zipper','Zipper','PCS'),
+      ('button','Button','PCS'),
+      ('dhaga','Dhaga (Thread)','CONE'),
+      ('elastic','Elastic','MTR'),
+      ('other','Other','PCS')`);
+
+    // goods_inventory: category_id + variant_number
+    const [catCol] = await pool.query(`SHOW COLUMNS FROM goods_inventory LIKE 'category_id'`);
+    if (catCol.length === 0) {
+      await pool.query(`ALTER TABLE goods_inventory ADD COLUMN category_id INT UNSIGNED DEFAULT NULL,
+                        ADD COLUMN variant_number VARCHAR(50) DEFAULT NULL`);
+      await pool.query(`CREATE INDEX idx_goods_category ON goods_inventory(category_id)`);
+    }
+
+    // Auto-classify existing goods rows by description heuristic (one-shot, only nulls)
+    await pool.query(`UPDATE goods_inventory g
+      JOIN item_categories c ON c.name = CASE
+        WHEN LOWER(g.description_of_goods) LIKE '%zip%' THEN 'zipper'
+        WHEN LOWER(g.description_of_goods) LIKE '%button%' OR LOWER(g.description_of_goods) LIKE '%btn%' THEN 'button'
+        WHEN LOWER(g.description_of_goods) LIKE '%dhaga%' OR LOWER(g.description_of_goods) LIKE '%thread%' THEN 'dhaga'
+        WHEN LOWER(g.description_of_goods) LIKE '%elastic%' THEN 'elastic'
+        ELSE 'other' END
+      SET g.category_id = c.id
+      WHERE g.category_id IS NULL`);
+
+    // cutting_lots.lot_type
+    const [ltCol] = await pool.query(`SHOW COLUMNS FROM cutting_lots LIKE 'lot_type'`);
+    if (ltCol.length === 0) {
+      await pool.query(`ALTER TABLE cutting_lots ADD COLUMN lot_type ENUM('denim','hosiery','other') DEFAULT NULL`);
+      await pool.query(`CREATE INDEX idx_cutting_lots_type ON cutting_lots(lot_type)`);
+    }
+    // Backfill lot_type from fabric_type
+    await pool.query(`UPDATE cutting_lots SET lot_type = CASE
+      WHEN LOWER(fabric_type) LIKE '%denim%' THEN 'denim'
+      WHEN LOWER(fabric_type) LIKE '%hosi%' OR LOWER(fabric_type) LIKE '%knit%' THEN 'hosiery'
+      ELSE 'other' END
+      WHERE lot_type IS NULL`);
+
+    // lot_material_consumption table
+    await pool.query(`CREATE TABLE IF NOT EXISTS lot_material_consumption (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      indent_request_id BIGINT UNSIGNED NOT NULL,
+      lot_no VARCHAR(50) NOT NULL,
+      filler_stage VARCHAR(50) DEFAULT NULL,
+      category_id INT UNSIGNED DEFAULT NULL,
+      variant_number VARCHAR(50) DEFAULT NULL,
+      goods_id BIGINT UNSIGNED DEFAULT NULL,
+      planned_qty DECIMAL(12,2) NOT NULL,
+      final_qty DECIMAL(12,2) DEFAULT NULL,
+      status ENUM('open','proceeding','arrived','cancelled') DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      finalized_at DATETIME DEFAULT NULL,
+      INDEX idx_lmc_lot (lot_no),
+      INDEX idx_lmc_indent (indent_request_id),
+      INDEX idx_lmc_cat (category_id, lot_no)
+    )`);
+
     migrationRan = true;
     console.log('Store/indent migration completed successfully');
   } catch (err) {
@@ -269,12 +337,16 @@ router.get('/manage', isAuthenticated, isStoreManager, async (req, res) => {
         `SELECT ir.*, uf.username AS filler_name,
                 up.username AS proceeded_by_name,
                 ua.username AS arrived_by_name,
-                g.qty AS current_stock, g.shade
+                g.qty AS current_stock, g.shade, g.variant_number,
+                ic.name AS category_name, ic.display_label AS category_label,
+                cl.sku AS lot_sku, cl.total_pieces AS lot_total_pieces, cl.lot_type
            FROM indent_requests ir
       LEFT JOIN users uf ON ir.filler_id = uf.id
       LEFT JOIN users up ON ir.proceeded_by = up.id
       LEFT JOIN users ua ON ir.arrived_by = ua.id
       LEFT JOIN goods_inventory g ON ir.goods_id = g.id
+      LEFT JOIN item_categories ic ON ic.id = g.category_id
+      LEFT JOIN cutting_lots cl ON cl.lot_no = ir.lot_no
        ORDER BY ir.created_at DESC
           LIMIT 400`
       ),
@@ -341,6 +413,11 @@ router.post('/requests/:id/proceed', isAuthenticated, isStoreManager, async (req
               proceeded_by = ?
         WHERE id = ?`,
       [req.session.user.id, requestId]
+    );
+
+    await pool.query(
+      `UPDATE lot_material_consumption SET status = 'proceeding' WHERE indent_request_id = ?`,
+      [requestId]
     );
 
     await logStatusChange(requestId, req.session.user.id, request.status, 'proceeding');
@@ -422,6 +499,16 @@ router.post('/requests/:id/arrive', isAuthenticated, isStoreManager, async (req,
         );
       }
     }
+
+    // Finalize lot-material consumption rows tied to this indent
+    await conn.query(
+      `UPDATE lot_material_consumption
+          SET status = 'arrived',
+              final_qty = COALESCE(?, planned_qty),
+              finalized_at = NOW()
+        WHERE indent_request_id = ?`,
+      [parsedQuantity, requestId]
+    );
 
     await conn.commit();
 
@@ -562,31 +649,183 @@ router.get('/manage/export', isAuthenticated, isStoreManager, async (req, res) =
   }
 });
 
-// JSON search for Select2 item dropdown
+// JSON search for Select2 item dropdown (optional category_id filter)
 router.get('/api/items', isAuthenticated, async (req, res) => {
   const q = req.query.q || '';
+  const categoryId = parseInt(req.query.category_id, 10);
+  const categoryName = (req.query.category || '').toLowerCase().trim();
   try {
+    let where = `(g.description_of_goods LIKE CONCAT('%', ?, '%') OR g.shade LIKE CONCAT('%', ?, '%') OR g.variant_number LIKE CONCAT('%', ?, '%'))`;
+    const params = [q, q, q];
+    if (Number.isInteger(categoryId) && categoryId > 0) {
+      where += ' AND g.category_id = ?';
+      params.push(categoryId);
+    } else if (categoryName) {
+      where += ' AND c.name = ?';
+      params.push(categoryName);
+    }
     const [rows] = await pool.query(
-      `SELECT id, description_of_goods, shade, size, unit, qty
-         FROM goods_inventory
-        WHERE description_of_goods LIKE CONCAT('%', ?, '%')
-           OR shade LIKE CONCAT('%', ?, '%')
-        ORDER BY description_of_goods, shade, size
+      `SELECT g.id, g.description_of_goods, g.shade, g.size, g.unit, g.qty,
+              g.category_id, g.variant_number, c.name AS category_name, c.display_label AS category_label
+         FROM goods_inventory g
+    LEFT JOIN item_categories c ON c.id = g.category_id
+        WHERE ${where}
+        ORDER BY g.description_of_goods, g.variant_number, g.shade, g.size
         LIMIT 50`,
-      [q, q]
+      params
     );
     res.json(rows.map(r => ({
       id: r.id,
       text: r.description_of_goods +
+        (r.variant_number ? ' ' + r.variant_number : '') +
         (r.shade ? ' - ' + r.shade : '') +
         (r.size ? ' (' + r.size + ')' : '') +
         ' [' + r.unit + ']' +
         ' (Stock: ' + r.qty + ')',
-      unit: r.unit
+      unit: r.unit,
+      category_id: r.category_id,
+      category_name: r.category_name,
+      variant_number: r.variant_number
     })));
   } catch (err) {
     console.error('Error searching items:', err);
     res.json([]);
+  }
+});
+
+// GET /indent/api/categories - list item categories
+router.get('/api/categories', isAuthenticated, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT id, name, display_label, unit_default FROM item_categories ORDER BY id');
+    res.json({ success: true, categories: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /indent/api/my-approved-lots?lot_type=denim
+// Returns lots that the calling stage worker has approved/is processing,
+// with total approved pieces (for auto-suggest qty) and lot_type.
+router.get('/api/my-approved-lots', isAuthenticated, canCreateStageIndent, async (req, res) => {
+  const userId = req.session.user.id;
+  const userRole = req.session.user.role;
+  const lotType = (req.query.lot_type || '').toLowerCase();
+  try {
+    let rows = [];
+    if (userRole === 'stitching_master') {
+      // Lots assigned & approved to this stitching master, with cutting lot info
+      const [r] = await pool.query(
+        `SELECT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
+           FROM stitching_assignments sa
+           JOIN cutting_lots c ON c.id = sa.cutting_lot_id
+          WHERE sa.user_id = ? AND sa.isApproved = 1
+            ${lotType ? 'AND c.lot_type = ?' : ''}
+          ORDER BY sa.approved_on DESC
+          LIMIT 200`,
+        lotType ? [userId, lotType] : [userId]
+      );
+      rows = r;
+    } else if (userRole === 'cutting_master') {
+      const [r] = await pool.query(
+        `SELECT lot_no, sku, total_pieces, lot_type, fabric_type
+           FROM cutting_lots
+          WHERE user_id = ?
+            ${lotType ? 'AND lot_type = ?' : ''}
+          ORDER BY created_at DESC LIMIT 200`,
+        lotType ? [userId, lotType] : [userId]
+      );
+      rows = r;
+    } else {
+      // For finishing/jeans-assembly/washing-in/operator: pull from their data table and join cutting_lots
+      const stageTables = {
+        finishing_master: 'finishing_data',
+        jeans_assembly_master: 'jeans_assembly_data',
+        washing_in_master: 'washing_in_data',
+        operator: 'stitching_data'
+      };
+      const t = stageTables[userRole];
+      if (t) {
+        const [r] = await pool.query(
+          `SELECT DISTINCT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
+             FROM ${t} s
+             JOIN cutting_lots c ON c.lot_no = s.lot_no
+            WHERE ${userRole === 'operator' ? '1=1' : 's.user_id = ?'}
+              ${lotType ? 'AND c.lot_type = ?' : ''}
+            ORDER BY s.created_at DESC
+            LIMIT 200`,
+          userRole === 'operator'
+            ? (lotType ? [lotType] : [])
+            : (lotType ? [userId, lotType] : [userId])
+        );
+        rows = r;
+      }
+    }
+    res.json({ success: true, lots: rows });
+  } catch (err) {
+    console.error('Error /my-approved-lots:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /indent/api/lot-summary?lot_no=XXX
+// Returns lot details + prior indent/consumption for the lot.
+router.get('/api/lot-summary', isAuthenticated, async (req, res) => {
+  const lotNo = (req.query.lot_no || '').trim();
+  if (!lotNo) return res.status(400).json({ success: false, error: 'lot_no required' });
+  try {
+    const [[lot]] = await pool.query(
+      `SELECT id, lot_no, sku, total_pieces, lot_type, fabric_type, remark
+         FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
+      [lotNo]
+    );
+    const [consumption] = await pool.query(
+      `SELECT lmc.*, c.name AS category_name, c.display_label AS category_label,
+              ir.status AS indent_status, ir.goods_description, u.username AS filler_name
+         FROM lot_material_consumption lmc
+    LEFT JOIN item_categories c ON c.id = lmc.category_id
+    LEFT JOIN indent_requests ir ON ir.id = lmc.indent_request_id
+    LEFT JOIN users u ON u.id = ir.filler_id
+        WHERE lmc.lot_no = ?
+        ORDER BY lmc.created_at DESC`,
+      [lotNo]
+    );
+    res.json({ success: true, lot: lot || null, consumption });
+  } catch (err) {
+    console.error('Error /lot-summary:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /indent/api/bom-suggest?lot_nos=A,B,C&stage=Stitching
+// Returns suggested BOM lines (zipper/button/dhaga25/dhaga50/elastic) for given lots.
+router.get('/api/bom-suggest', isAuthenticated, canCreateStageIndent, async (req, res) => {
+  const lotNos = (req.query.lot_nos || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (lotNos.length === 0) return res.json({ success: true, suggestions: [], lots: [] });
+  try {
+    const [lots] = await pool.query(
+      `SELECT lot_no, sku, total_pieces, lot_type FROM cutting_lots WHERE lot_no IN (?)`,
+      [lotNos]
+    );
+    const totalPieces = lots.reduce((s, l) => s + (Number(l.total_pieces) || 0), 0);
+    const hasDenim = lots.some(l => l.lot_type === 'denim');
+    const hasHosiery = lots.some(l => l.lot_type === 'hosiery');
+
+    const suggestions = [];
+    if (hasDenim) {
+      suggestions.push({ category: 'zipper', label: 'Zipper', default_qty: totalPieces, unit: 'PCS', editable_variant: true, auto: true });
+      suggestions.push({ category: 'button', label: 'Button', default_qty: totalPieces, unit: 'PCS', editable_variant: true, auto: true });
+    }
+    if (hasHosiery) {
+      suggestions.push({ category: 'elastic', label: 'Elastic', default_qty: 0, unit: 'MTR', editable_variant: true, auto: true });
+    }
+    // Dhaga always — both 25 and 50 — qty manual (cones)
+    suggestions.push({ category: 'dhaga', variant_number: '25', label: 'Dhaga 25 No.', default_qty: 0, unit: 'CONE', editable_variant: false, auto: true });
+    suggestions.push({ category: 'dhaga', variant_number: '50', label: 'Dhaga 50 No.', default_qty: 0, unit: 'CONE', editable_variant: false, auto: true });
+
+    res.json({ success: true, lots, total_pieces: totalPieces, suggestions });
+  } catch (err) {
+    console.error('Error /bom-suggest:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -791,8 +1030,8 @@ router.post('/stage-create', isAuthenticated, canCreateStageIndent, async (req, 
     return res.status(400).json({ success: false, error: 'No items provided' });
   }
 
-  if (items.length > 10) {
-    return res.status(400).json({ success: false, error: 'Maximum 10 items per request' });
+  if (items.length > 30) {
+    return res.status(400).json({ success: false, error: 'Maximum 30 items per request' });
   }
 
   const userId = req.session.user.id;
@@ -806,9 +1045,13 @@ router.post('/stage-create', isAuthenticated, canCreateStageIndent, async (req, 
     await conn.beginTransaction();
 
     const insertedIds = [];
+    const duplicates = [];
 
     for (const item of items) {
-      const { goods_id, goods_description, quantity, lot_no, remark } = item;
+      const { goods_id, goods_description, quantity, remark, category_id, variant_number } = item;
+      // lot_nos: new array form; lot_no: legacy single. Falls back to [null].
+      let lotNos = Array.isArray(item.lot_nos) ? item.lot_nos.filter(Boolean) : null;
+      if (!lotNos || lotNos.length === 0) lotNos = [item.lot_no || null];
 
       if (!quantity || parseFloat(quantity) <= 0) {
         continue;
@@ -816,12 +1059,17 @@ router.post('/stage-create', isAuthenticated, canCreateStageIndent, async (req, 
 
       let resolvedGoodsId = null;
       let resolvedDescription = '';
+      let resolvedCategoryId = category_id ? parseInt(category_id, 10) : null;
+      let resolvedVariant = variant_number ? String(variant_number).trim().substring(0, 50) : null;
 
       if (goods_id && parseInt(goods_id, 10) > 0) {
         const [[goodsItem]] = await conn.query('SELECT * FROM goods_inventory WHERE id = ?', [goods_id]);
         if (goodsItem) {
           resolvedGoodsId = goodsItem.id;
+          if (!resolvedCategoryId) resolvedCategoryId = goodsItem.category_id || null;
+          if (!resolvedVariant) resolvedVariant = goodsItem.variant_number || null;
           resolvedDescription = goodsItem.description_of_goods +
+            (goodsItem.variant_number ? ' ' + goodsItem.variant_number : '') +
             (goodsItem.shade ? ' - ' + goodsItem.shade : '') +
             (goodsItem.size ? ' (' + goodsItem.size + ')' : '') +
             ' [' + goodsItem.unit + ']';
@@ -834,31 +1082,78 @@ router.post('/stage-create', isAuthenticated, canCreateStageIndent, async (req, 
         continue;
       }
 
-      const [result] = await conn.query(
-        `INSERT INTO indent_requests
-           (filler_id, lot_no, filler_stage, goods_id, goods_description, quantity_requested, request_date, remark)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          userId,
-          lot_no || null,
-          fillerStage,
-          resolvedGoodsId,
-          resolvedDescription,
-          parseFloat(quantity),
-          requestDate,
-          remark ? remark.trim().substring(0, 255) : null
-        ]
-      );
+      const qty = parseFloat(quantity);
+      // For multi-lot indents, qty is split proportionally if a per-lot qty array isn't sent.
+      // Default: same qty replicated per lot UNLESS item.split_evenly === true.
+      const qtyPerLot = item.split_evenly && lotNos.length > 1
+        ? +(qty / lotNos.length).toFixed(2)
+        : qty;
 
-      insertedIds.push(result.insertId);
+      for (const lot of lotNos) {
+        // Duplicate guard: an open/proceeding indent already exists for this (lot, category, variant)
+        if (lot && resolvedCategoryId) {
+          const [dup] = await conn.query(
+            `SELECT ir.id FROM indent_requests ir
+              WHERE ir.lot_no = ? AND ir.status IN ('open','proceeding')
+                AND EXISTS (SELECT 1 FROM lot_material_consumption lmc
+                             WHERE lmc.indent_request_id = ir.id
+                               AND lmc.category_id = ?
+                               AND COALESCE(lmc.variant_number,'') = COALESCE(?, ''))
+              LIMIT 1`,
+            [lot, resolvedCategoryId, resolvedVariant]
+          );
+          if (dup.length > 0 && !item.allow_duplicate) {
+            duplicates.push({ lot_no: lot, category_id: resolvedCategoryId, variant_number: resolvedVariant });
+            continue;
+          }
+        }
+
+        const [result] = await conn.query(
+          `INSERT INTO indent_requests
+             (filler_id, lot_no, filler_stage, goods_id, goods_description, quantity_requested, request_date, remark)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            lot || null,
+            fillerStage,
+            resolvedGoodsId,
+            resolvedDescription,
+            qtyPerLot,
+            requestDate,
+            remark ? remark.trim().substring(0, 255) : null
+          ]
+        );
+
+        // Always write consumption audit row when lot is known
+        if (lot) {
+          await conn.query(
+            `INSERT INTO lot_material_consumption
+               (indent_request_id, lot_no, filler_stage, category_id, variant_number, goods_id, planned_qty, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
+            [result.insertId, lot, fillerStage, resolvedCategoryId, resolvedVariant, resolvedGoodsId, qtyPerLot]
+          );
+        }
+
+        insertedIds.push(result.insertId);
+      }
     }
 
     await conn.commit();
 
+    if (insertedIds.length === 0 && duplicates.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Duplicate indent already pending for this lot+item.',
+        duplicates,
+        count: 0
+      });
+    }
+
     res.json({
       success: true,
       message: `Created ${insertedIds.length} indent request(s)`,
-      count: insertedIds.length
+      count: insertedIds.length,
+      duplicates
     });
   } catch (error) {
     if (conn) await conn.rollback();
@@ -876,10 +1171,13 @@ router.get('/my-requests', isAuthenticated, canCreateStageIndent, async (req, re
 
   try {
     const [requests] = await pool.query(
-      `SELECT id, goods_description, quantity_requested, lot_no, filler_stage, status, remark, created_at
-         FROM indent_requests
-        WHERE filler_id = ?
-        ORDER BY created_at DESC
+      `SELECT ir.id, ir.goods_description, ir.quantity_requested, ir.lot_no, ir.filler_stage,
+              ir.status, ir.remark, ir.created_at,
+              cl.sku AS lot_sku, cl.lot_type
+         FROM indent_requests ir
+    LEFT JOIN cutting_lots cl ON cl.lot_no = ir.lot_no
+        WHERE ir.filler_id = ?
+        ORDER BY ir.created_at DESC
         LIMIT ?`,
       [userId, limit]
     );

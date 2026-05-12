@@ -1,0 +1,474 @@
+<%#
+  Lot-aware indent wrapper. Drop into any stage dashboard inside the existing
+  <div class="tab-content" id="indentTab"> slot, OR include directly to render its own pane.
+
+  Locals expected:
+    - user           : req.session.user
+    - stage          : (optional) display name e.g. "Stitching"
+    - paneOnly=true  : if including OUTSIDE a tab-content wrapper, this still works.
+
+  The partial brings its own scoped CSS (.iw-*) and JS (window.IndentWrapper namespace).
+%>
+<% const __iw_role = (user && user.role) || ''; %>
+<% const __iw_isStitching = __iw_role === 'stitching_master'; %>
+<% const __iw_stage = (typeof stage !== 'undefined' && stage) ? stage : ''; %>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<style>
+  .iw-wrap { font-family: inherit; color: #1f2937; }
+  .iw-section { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .iw-section-head { padding: 14px 18px; background: linear-gradient(135deg,#1e3a8a,#1e40af); color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  .iw-section-head h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .iw-section-body { padding: 16px; }
+  .iw-helper { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .iw-label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .iw-input, .iw-select { width: 100%; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; }
+  .iw-input:focus, .iw-select:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 3px rgba(30,64,175,0.1); }
+  .iw-row { display: grid; grid-template-columns: 2fr 1fr 80px 80px; gap: 10px; align-items: end; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 10px; }
+  .iw-row.auto { background: #eff6ff; border-color: #bfdbfe; }
+  .iw-row.custom { background: #fff7ed; border-color: #fed7aa; }
+  .iw-row__main { display: flex; flex-direction: column; gap: 4px; }
+  .iw-row__title { font-size: 14px; font-weight: 600; color: #111827; display: flex; align-items: center; gap: 8px; }
+  .iw-pill { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 700; border-radius: 999px; background: #1e40af; color: #fff; text-transform: uppercase; letter-spacing: 0.4px; }
+  .iw-pill.gray { background: #6b7280; }
+  .iw-pill.amber { background: #d97706; }
+  .iw-btn { padding: 10px 18px; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .iw-btn-primary { background: #1e40af; color: #fff; }
+  .iw-btn-primary:hover { background: #1e3a8a; }
+  .iw-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .iw-btn-ghost { background: #fff; color: #1e40af; border: 1px solid #1e40af; }
+  .iw-btn-ghost:hover { background: #eff6ff; }
+  .iw-btn-x { background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 18px; padding: 4px 8px; }
+  .iw-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .iw-stat { background: #f3f4f6; padding: 10px 12px; border-radius: 8px; }
+  .iw-stat-num { font-size: 18px; font-weight: 700; color: #1e40af; }
+  .iw-stat-lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+  .iw-empty { padding: 28px; text-align: center; color: #9ca3af; }
+  .iw-empty i { font-size: 36px; display: block; margin-bottom: 8px; opacity: 0.5; }
+  .iw-req-item { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #f3f4f6; gap: 12px; }
+  .iw-req-item:last-child { border-bottom: none; }
+  .iw-req-desc { font-weight: 500; color: #111827; font-size: 13px; }
+  .iw-req-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .iw-req-lot { font-family: monospace; background: #e0e7ff; color: #3730a3; padding: 1px 6px; border-radius: 4px; font-size: 10px; }
+  .iw-status { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .iw-status.open { background: #fef3c7; color: #92400e; }
+  .iw-status.proceeding { background: #cffafe; color: #155e75; }
+  .iw-status.arrived { background: #d1fae5; color: #065f46; }
+  .select2-container { font-size: 14px; }
+  .select2-container .select2-selection--multiple, .select2-container .select2-selection--single { min-height: 38px; border-color: #d1d5db; border-radius: 8px; }
+  @media (max-width: 640px) {
+    .iw-row { grid-template-columns: 1fr 1fr; }
+    .iw-row__main { grid-column: 1 / -1; }
+  }
+</style>
+
+<div class="iw-wrap" id="iwWrap"
+     data-role="<%= __iw_role %>"
+     data-stage="<%= __iw_stage %>"
+     data-stitching="<%= __iw_isStitching ? '1' : '0' %>">
+
+  <% if (__iw_isStitching) { %>
+  <!-- ============== STITCHING: lot picker + auto BOM ============== -->
+  <div class="iw-section">
+    <div class="iw-section-head">
+      <h3><i class="bi bi-collection"></i> Step 1 · Select Lots (denim shown by default)</h3>
+      <div>
+        <select id="iwLotTypeFilter" class="iw-select" style="width:auto; color:#111;">
+          <option value="denim">Denim</option>
+          <option value="hosiery">Hosiery</option>
+          <option value="">All approved</option>
+        </select>
+      </div>
+    </div>
+    <div class="iw-section-body">
+      <label class="iw-label">Search & pick lots you have approved</label>
+      <select id="iwLotPicker" multiple style="width:100%"></select>
+      <div class="iw-helper">Type lot no. or SKU. All selected lots will be summed for zipper / button quantities.</div>
+
+      <div id="iwLotSummary" class="iw-summary" style="margin-top:14px;display:none;"></div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- ============== Step 2: Items (auto + manual) ============== -->
+  <div class="iw-section">
+    <div class="iw-section-head">
+      <h3>
+        <i class="bi bi-box-seam"></i>
+        <%= __iw_isStitching ? 'Step 2 · Material Requirements' : 'Raise Material Requirement' %>
+      </h3>
+      <button type="button" class="iw-btn iw-btn-ghost" id="iwAddCustom"><i class="bi bi-plus"></i> Add Item</button>
+    </div>
+    <div class="iw-section-body">
+      <% if (!__iw_isStitching) { %>
+        <label class="iw-label">Lot No (optional)</label>
+        <select id="iwSingleLot" class="iw-select" style="margin-bottom:12px;">
+          <option value="">-- No lot / general --</option>
+        </select>
+      <% } %>
+
+      <div id="iwRows"></div>
+
+      <button type="button" class="iw-btn iw-btn-primary" id="iwSubmit" style="margin-top:12px;">
+        <i class="bi bi-send"></i> <span>Submit Indent</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============== Recent Requests ============== -->
+  <div class="iw-section">
+    <div class="iw-section-head" style="background: linear-gradient(135deg,#374151,#1f2937);">
+      <h3><i class="bi bi-clock-history"></i> My Recent Requests</h3>
+    </div>
+    <div id="iwRecent" class="iw-empty">
+      <div class="spinner"></div>
+      <div>Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Defer until jQuery + Select2 are available (they're loaded on the host dashboards).
+  function ready(fn) {
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) return fn();
+    setTimeout(function(){ ready(fn); }, 80);
+  }
+  ready(init);
+
+  function init() {
+    var $ = window.jQuery;
+    var wrap = document.getElementById('iwWrap');
+    if (!wrap) return;
+    var isStitching = wrap.dataset.stitching === '1';
+
+    var state = {
+      lots: [],              // currently selected lot rows {lot_no, sku, total_pieces, lot_type}
+      bom: [],               // auto-suggested BOM rows
+      customCount: 0,
+      categories: [],        // [{id,name,display_label,unit_default}]
+      submitting: false
+    };
+
+    function toast(msg, type) {
+      if (window.showToast) return window.showToast(msg, type || 'info');
+      alert(msg);
+    }
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); });
+    }
+
+    // ---- Load categories once
+    fetch('/indent/api/categories').then(r=>r.json()).then(function(d){
+      state.categories = d.categories || [];
+    }).catch(function(){});
+
+    // ---- Stitching: lot picker (Select2 AJAX backed by /api/my-approved-lots)
+    if (isStitching) {
+      function loadLotsForPicker() {
+        var type = document.getElementById('iwLotTypeFilter').value;
+        return fetch('/indent/api/my-approved-lots' + (type ? '?lot_type=' + encodeURIComponent(type) : ''))
+          .then(r => r.json())
+          .then(function(d) { return d.lots || []; });
+      }
+      var $picker = $('#iwLotPicker');
+      $picker.select2({
+        placeholder: 'Search lot no. or SKU…',
+        width: '100%',
+        data: []
+      });
+      function refreshPicker() {
+        loadLotsForPicker().then(function(lots){
+          var options = lots.map(function(l){
+            return { id: l.lot_no, text: (l.lot_no || '').toUpperCase() + ' • ' + (l.sku || '') + ' • ' + (l.total_pieces || 0) + ' pcs (' + (l.lot_type || '-') + ')', _row: l };
+          });
+          $picker.empty().select2({ placeholder: 'Search lot no. or SKU…', width: '100%', data: options, multiple: true });
+        });
+      }
+      refreshPicker();
+      document.getElementById('iwLotTypeFilter').addEventListener('change', refreshPicker);
+
+      $picker.on('change', function(){
+        var selected = $picker.select2('data') || [];
+        state.lots = selected.map(function(opt){ return opt._row || { lot_no: opt.id }; });
+        renderLotSummary();
+        loadBomSuggestions();
+      });
+    } else {
+      // Non-stitching: load recent lots for the single-select
+      fetch('/indent/recent-lots').then(r=>r.json()).then(function(d){
+        var sel = document.getElementById('iwSingleLot');
+        if (!sel) return;
+        (d.lots || []).forEach(function(l){
+          var o = document.createElement('option');
+          o.value = l; o.textContent = String(l).toUpperCase();
+          sel.appendChild(o);
+        });
+      });
+      // Render an empty custom row so user can start typing
+      addCustomRow();
+    }
+
+    function renderLotSummary() {
+      var box = document.getElementById('iwLotSummary');
+      if (!box) return;
+      if (state.lots.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      var totalPcs = state.lots.reduce(function(s,l){ return s + (Number(l.total_pieces)||0); }, 0);
+      var denim = state.lots.filter(function(l){ return l.lot_type === 'denim'; }).length;
+      var hosiery = state.lots.filter(function(l){ return l.lot_type === 'hosiery'; }).length;
+      box.style.display = '';
+      box.innerHTML =
+        '<div class="iw-stat"><div class="iw-stat-num">' + state.lots.length + '</div><div class="iw-stat-lbl">Lots</div></div>' +
+        '<div class="iw-stat"><div class="iw-stat-num">' + totalPcs + '</div><div class="iw-stat-lbl">Total Pieces</div></div>' +
+        '<div class="iw-stat"><div class="iw-stat-num">' + denim + '</div><div class="iw-stat-lbl">Denim</div></div>' +
+        '<div class="iw-stat"><div class="iw-stat-num">' + hosiery + '</div><div class="iw-stat-lbl">Hosiery</div></div>';
+    }
+
+    function loadBomSuggestions() {
+      if (state.lots.length === 0) {
+        state.bom = [];
+        renderRows();
+        return;
+      }
+      var lotNos = state.lots.map(function(l){ return l.lot_no; }).join(',');
+      fetch('/indent/api/bom-suggest?lot_nos=' + encodeURIComponent(lotNos))
+        .then(r => r.json())
+        .then(function(d) {
+          if (!d.success) return;
+          state.bom = (d.suggestions || []).map(function(s, idx){
+            return Object.assign({}, s, {
+              key: 'auto_' + idx,
+              qty: s.default_qty || 0,
+              variant_input: s.variant_number || ''
+            });
+          });
+          renderRows();
+        });
+    }
+
+    function renderRows() {
+      var host = document.getElementById('iwRows');
+      host.innerHTML = '';
+      // 1) Auto BOM rows
+      state.bom.forEach(function(b){
+        host.appendChild(buildAutoRow(b));
+      });
+      // 2) Custom rows (re-render any present)
+      Array.from(document.querySelectorAll('[data-custom-row]')).forEach(function(){});
+      // Custom rows live independently — we don't blow them away on bom refresh.
+      // But on the very first render they may not exist. Re-mount preserved customs:
+      state._customs = state._customs || [];
+      state._customs.forEach(function(c){ host.appendChild(buildCustomRow(c)); });
+
+      if (state.bom.length === 0 && state._customs.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'iw-empty';
+        empty.innerHTML = '<i class="bi bi-inbox"></i><div>' +
+          (isStitching ? 'Select one or more lots above to auto-load zipper / button / dhaga.' :
+                         'Click "Add Item" to start.') + '</div>';
+        host.appendChild(empty);
+      }
+    }
+
+    function buildAutoRow(b) {
+      var div = document.createElement('div');
+      div.className = 'iw-row auto';
+      div.dataset.kind = 'auto';
+      div.dataset.category = b.category;
+      div.dataset.variant = b.variant_number || '';
+      var variantPicker = '';
+      if (b.editable_variant) {
+        // Show a variant search box (e.g. button#16/#20, zipper 8in/10in)
+        variantPicker =
+          '<div><label class="iw-label">Variant</label>' +
+          '<input class="iw-input iw-variant" placeholder="e.g. #16, 8in" value="' + esc(b.variant_input || '') + '"></div>';
+      } else {
+        variantPicker =
+          '<div><label class="iw-label">Variant</label>' +
+          '<input class="iw-input" readonly value="' + esc(b.variant_number || '-') + '"></div>';
+      }
+      div.innerHTML =
+        '<div class="iw-row__main">' +
+          '<div class="iw-row__title">' +
+            '<span class="iw-pill">AUTO</span> ' + esc(b.label) +
+          '</div>' +
+          '<div class="iw-helper">Category: ' + esc(b.category) + (b.auto && b.default_qty ? ' · suggested qty = total pieces' : '') + '</div>' +
+        '</div>' +
+        variantPicker +
+        '<div><label class="iw-label">Qty</label>' +
+          '<input type="number" class="iw-input iw-qty" min="0" step="1" value="' + (b.qty || 0) + '"></div>' +
+        '<div><label class="iw-label">Unit</label>' +
+          '<input class="iw-input" readonly value="' + esc(b.unit || '') + '"></div>';
+      return div;
+    }
+
+    function buildCustomRow(c) {
+      var div = document.createElement('div');
+      div.className = 'iw-row custom';
+      div.dataset.kind = 'custom';
+      div.dataset.customKey = c.key;
+      div.innerHTML =
+        '<div class="iw-row__main">' +
+          '<div class="iw-row__title">' +
+            '<span class="iw-pill amber">CUSTOM</span> ' +
+            '<button type="button" class="iw-btn-x" data-remove="' + c.key + '" title="Remove">&times;</button>' +
+          '</div>' +
+          '<label class="iw-label" style="margin-top:6px;">Search Item</label>' +
+          '<select class="iw-goods" style="width:100%;"></select>' +
+        '</div>' +
+        '<div><label class="iw-label">Variant</label>' +
+          '<input class="iw-input iw-variant" placeholder="optional"></div>' +
+        '<div><label class="iw-label">Qty</label>' +
+          '<input type="number" class="iw-input iw-qty" min="0" step="0.01"></div>' +
+        '<div><label class="iw-label">Unit</label>' +
+          '<input class="iw-input iw-unit" readonly></div>';
+      // Init Select2 for the goods search
+      setTimeout(function(){
+        var $sel = $(div).find('.iw-goods');
+        $sel.select2({
+          placeholder: 'Search any item…',
+          allowClear: true,
+          width: '100%',
+          minimumInputLength: 1,
+          ajax: {
+            url: '/indent/api/items',
+            dataType: 'json', delay: 250,
+            data: function(p){ return { q: p.term }; },
+            processResults: function(d){ return { results: d }; }
+          }
+        });
+        $sel.on('select2:select', function(e){
+          var d = e.params.data || {};
+          $(div).find('.iw-unit').val(d.unit || '');
+          if (d.variant_number) $(div).find('.iw-variant').val(d.variant_number);
+          div.dataset.goodsId = d.id;
+          div.dataset.categoryId = d.category_id || '';
+          div.dataset.categoryName = d.category_name || '';
+        });
+      }, 0);
+      div.querySelector('[data-remove]').addEventListener('click', function(){
+        state._customs = state._customs.filter(function(x){ return x.key !== c.key; });
+        renderRows();
+      });
+      return div;
+    }
+
+    function addCustomRow() {
+      state._customs = state._customs || [];
+      state._customs.push({ key: 'c_' + (++state.customCount) });
+      renderRows();
+    }
+    document.getElementById('iwAddCustom').addEventListener('click', addCustomRow);
+
+    // ---- Recent requests
+    function loadRecent() {
+      fetch('/indent/my-requests?limit=20').then(r=>r.json()).then(function(d){
+        var host = document.getElementById('iwRecent');
+        if (!d.success || !d.requests || d.requests.length === 0) {
+          host.className = 'iw-empty';
+          host.innerHTML = '<i class="bi bi-inbox"></i><div>No requests yet</div>';
+          return;
+        }
+        host.className = '';
+        host.innerHTML = '';
+        d.requests.forEach(function(r){
+          var item = document.createElement('div');
+          item.className = 'iw-req-item';
+          var lotBit = r.lot_no ? ' <span class="iw-req-lot">' + esc(String(r.lot_no).toUpperCase()) + '</span>' : '';
+          var skuBit = r.lot_sku ? ' · ' + esc(r.lot_sku) : '';
+          item.innerHTML =
+            '<div>' +
+              '<div class="iw-req-desc">' + esc(r.goods_description) + '</div>' +
+              '<div class="iw-req-meta">Qty ' + esc(r.quantity_requested) + lotBit + skuBit + ' · ' + new Date(r.created_at).toLocaleDateString('en-IN') + '</div>' +
+            '</div>' +
+            '<span class="iw-status ' + esc(r.status) + '">' + esc(r.status) + '</span>';
+          host.appendChild(item);
+        });
+      }).catch(function(){
+        document.getElementById('iwRecent').innerHTML = '<div class="iw-empty"><i class="bi bi-exclamation-circle"></i><div>Failed to load</div></div>';
+      });
+    }
+    loadRecent();
+
+    // ---- Submit
+    document.getElementById('iwSubmit').addEventListener('click', function(){
+      if (state.submitting) return;
+      var items = [];
+
+      // Auto BOM rows
+      Array.from(document.querySelectorAll('.iw-row.auto')).forEach(function(r){
+        var qty = parseFloat(r.querySelector('.iw-qty').value) || 0;
+        if (qty <= 0) return;
+        var variantInput = r.querySelector('.iw-variant');
+        var variant = variantInput ? variantInput.value.trim() : (r.dataset.variant || '');
+        // Find a goods_id by category+variant via lookup (best-effort; backend can resolve if null)
+        items.push({
+          goods_id: null,
+          goods_description: r.querySelector('.iw-row__title').textContent.trim().replace(/^AUTO\s*/, '') + (variant ? ' ' + variant : ''),
+          quantity: qty,
+          category_id: null,
+          category_name: r.dataset.category,
+          variant_number: variant || null,
+          lot_nos: isStitching ? state.lots.map(function(l){return l.lot_no;}) : [document.getElementById('iwSingleLot') ? document.getElementById('iwSingleLot').value || null : null],
+          split_evenly: false
+        });
+      });
+
+      // Custom rows
+      Array.from(document.querySelectorAll('.iw-row.custom')).forEach(function(r){
+        var $sel = $(r).find('.iw-goods');
+        var goodsId = $sel.val();
+        var qty = parseFloat(r.querySelector('.iw-qty').value) || 0;
+        if (qty <= 0) return;
+        var variant = r.querySelector('.iw-variant').value.trim();
+        items.push({
+          goods_id: goodsId || null,
+          goods_description: $sel.find(':selected').text() || null,
+          quantity: qty,
+          category_id: r.dataset.categoryId || null,
+          variant_number: variant || null,
+          lot_nos: isStitching ? state.lots.map(function(l){return l.lot_no;}) : [document.getElementById('iwSingleLot') ? document.getElementById('iwSingleLot').value || null : null]
+        });
+      });
+
+      if (items.length === 0) { toast('Enter at least one quantity', 'warning'); return; }
+      if (isStitching && state.lots.length === 0) { toast('Pick at least one lot first', 'warning'); return; }
+
+      state.submitting = true;
+      var btn = document.getElementById('iwSubmit');
+      btn.disabled = true;
+      var prevHtml = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner"></span> Submitting…';
+
+      fetch('/indent/stage-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      })
+      .then(r => r.json().then(function(d){ return { status: r.status, body: d }; }))
+      .then(function(res){
+        var d = res.body;
+        if (d.success) {
+          var msg = 'Submitted ' + d.count + ' indent line(s)';
+          if (d.duplicates && d.duplicates.length) msg += ' · skipped ' + d.duplicates.length + ' duplicate(s)';
+          toast(msg, 'success');
+          // Reset custom rows + reload recent. Keep selected lots for re-use.
+          state._customs = [];
+          state.bom.forEach(function(b){ b.qty = b.default_qty || 0; });
+          renderRows();
+          loadRecent();
+        } else if (res.status === 409) {
+          toast('All lines are duplicates of existing pending indents.', 'warning');
+        } else {
+          toast(d.error || 'Failed to submit', 'error');
+        }
+      })
+      .catch(function(err){ toast('Error: ' + err.message, 'error'); })
+      .finally(function(){
+        state.submitting = false; btn.disabled = false; btn.innerHTML = prevHtml;
+      });
+    });
+  }
+})();
+</script>
