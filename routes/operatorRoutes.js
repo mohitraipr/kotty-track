@@ -3847,7 +3847,7 @@ router.post('/api/sku-categories', isAuthenticated, isOperator, async (req, res)
       return res.status(400).json({ error: 'Category name is required' });
     }
     const catName = name.trim().toUpperCase();
-    await pool.query('INSERT INTO sku_categories (name, created_by) VALUES (?, ?)', [catName, req.session.user.id]);
+    await pool.query('INSERT INTO sku_categories (name) VALUES (?)', [catName]);
     return res.json({ success: true, message: 'Category added' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
