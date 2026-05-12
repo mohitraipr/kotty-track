@@ -199,18 +199,27 @@ async function getEmails(folderId = 'inbox', limit = 50, start = 0) {
   const token = await getAccessToken();
   const accountId = await getAccountId();
 
+  // Zoho's /folders/{folderId}/messages route requires a numeric folder
+  // ID (e.g. 7000000000045), NOT the literal string 'inbox'. Calling it
+  // with 'inbox' yields HTTP 404 URL_RULE_NOT_CONFIGURED.
+  //
+  // The /messages/view endpoint lists recent messages without a folder
+  // ID — by default it returns inbox messages. This is the same endpoint
+  // getSentEmails() uses (with includesent=true) and which the mail
+  // manager UI exercises successfully today.
   const params = new URLSearchParams({
-    limit: limit.toString(),
-    start: start.toString()
+    limit: String(limit),
+    start: String(start),
+    includeto: 'true',
   });
 
   const options = {
     hostname: ZOHO_MAIL_BASE[ZOHO_DC] || ZOHO_MAIL_BASE.IN,
-    path: `/api/accounts/${accountId}/folders/${folderId}/messages?${params.toString()}`,
+    path: `/api/accounts/${accountId}/messages/view?${params.toString()}`,
     method: 'GET',
     headers: {
-      'Authorization': `Zoho-oauthtoken ${token}`
-    }
+      'Authorization': `Zoho-oauthtoken ${token}`,
+    },
   };
 
   const result = await makeRequest(options);
