@@ -780,6 +780,44 @@
       </div>
     </div>
 
+    <!-- Customer Support & Media (Mail, Video, VMS, Returns) -->
+    <div class="action-category">
+      <div class="category-header">
+        <div class="category-icon inventory"><i class="bi bi-envelope-paper-fill"></i></div>
+        <span class="category-title">Customer Support & Media</span>
+      </div>
+      <div class="category-actions">
+        <% if (user && user.username && user.username.toLowerCase() === 'mohitoperator') { %>
+        <a href="/mail-manager" class="action-card">
+          <i class="bi bi-envelope-open"></i>
+          <span class="action-card-title">Mail Manager</span>
+        </a>
+        <% } %>
+        <a href="/video-finder" class="action-card">
+          <i class="bi bi-camera-video"></i>
+          <span class="action-card-title">Video Finder</span>
+        </a>
+        <a href="/vms" class="action-card">
+          <i class="bi bi-record-circle"></i>
+          <span class="action-card-title">VMS Recorder</span>
+        </a>
+        <a href="/vms-operator" class="action-card">
+          <i class="bi bi-upload"></i>
+          <span class="action-card-title">AWB Uploads</span>
+        </a>
+        <a href="/return-grn/dashboard" class="action-card">
+          <i class="bi bi-arrow-counterclockwise"></i>
+          <span class="action-card-title">Returns</span>
+        </a>
+        <% if (user && user.username && user.username.toLowerCase() === 'mohitoperator') { %>
+        <a href="/admin/user-roles" class="action-card">
+          <i class="bi bi-people-fill"></i>
+          <span class="action-card-title">Manage User Roles</span>
+        </a>
+        <% } %>
+      </div>
+    </div>
+
     <!-- Reports -->
     <div class="action-category">
       <div class="category-header">

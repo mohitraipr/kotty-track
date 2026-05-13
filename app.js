@@ -144,6 +144,8 @@ app.use(usageTrackerMiddleware);
 
 // Import Routes
 const authRoutes = require('./routes/authRoutes');
+const launcherRoutes = require('./routes/launcherRoutes');
+const adminUserRolesRoutes = require('./routes/adminUserRolesRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const operatorRoutes = require('./routes/operatorRoutes');
@@ -198,6 +200,8 @@ const returnGrnRoutes = require('./routes/returnGrnRoutes');
 // Health check for Cloud Run (must be before auth middleware)
 app.use('/health', healthRoutes);
 app.use('/', authRoutes);
+app.use('/', launcherRoutes);                       // /launcher + /switch-role
+app.use('/admin/user-roles', adminUserRolesRoutes); // mohitOperator-only
 app.use('/admin', adminRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/operator', operatorRoutes);

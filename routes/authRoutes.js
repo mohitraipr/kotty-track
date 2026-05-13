@@ -6,11 +6,41 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
 const { closeSessionLog } = require('../middlewares/sessionActivity');
 
+// Resolves all roles a user has (via user_roles table). Returns array of
+// role names. Always includes the primary role (back-compat for accounts
+// whose user_roles row hasn't been backfilled yet).
+async function loadAvailableRoles(userId, primaryRoleName) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT r.name FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       WHERE ur.user_id = ?`,
+      [userId]
+    );
+    const names = rows.map(r => r.name).filter(Boolean);
+    if (primaryRoleName && !names.includes(primaryRoleName)) names.unshift(primaryRoleName);
+    return names.length ? names : (primaryRoleName ? [primaryRoleName] : []);
+  } catch (_err) {
+    // table missing (migration not run yet) — fall back to single role
+    return primaryRoleName ? [primaryRoleName] : [];
+  }
+}
+
+// Where to send a freshly-authenticated user. If they have >1 role,
+// the launcher lets them pick which "hat" to wear; otherwise straight
+// to their single dashboard (today's behaviour preserved).
+function postLoginRedirect(user) {
+  if (Array.isArray(user.availableRoles) && user.availableRoles.length > 1) {
+    return '/launcher';
+  }
+  return getDashboardForRole(user.roleName);
+}
+
 // GET /login
 router.get('/login', (req, res) => {
-  // If user is already logged in, redirect to their dashboard
+  // If user is already logged in, redirect to their dashboard / launcher
   if (req.session && req.session.user) {
-    return res.redirect(getDashboardForRole(req.session.user.roleName));
+    return res.redirect(postLoginRedirect(req.session.user));
   }
   res.render('login');
 });
@@ -117,12 +147,20 @@ router.post('/login', async (req, res) => {
     // Log successful login
     await logSecurityEvent('LOGIN_SUCCESS', username, clientIP, userAgent, { user_id: user.id, role: user.roleName });
 
-    // Set user session
+    // Load every role this user has access to (via user_roles M2M).
+    // If a user has >1 role, the post-login redirect sends them to the
+    // launcher instead of a fixed dashboard.
+    const availableRoles = await loadAvailableRoles(user.id, user.roleName);
+
+    // Set user session. `roleName` is the ACTIVE role (mutable across
+    // /switch-role calls); `primaryRoleName` is the default (= users.role_id).
     req.session.user = {
       id: user.id,
       username: user.username,
       roleName: user.roleName,
-      role: user.roleName
+      role: user.roleName,
+      primaryRoleName: user.roleName,
+      availableRoles,
     };
 
     // Create a session log for usage tracking
@@ -141,8 +179,8 @@ router.post('/login', async (req, res) => {
       console.error('Error creating session log:', logErr);
     }
 
-    // Redirect based on role using the helper function
-    res.redirect(getDashboardForRole(user.roleName));
+    // Redirect: launcher if >1 role, else single dashboard
+    res.redirect(postLoginRedirect(req.session.user));
   } catch (err) {
     console.error('Error during login:', err);
     req.flash('error', 'An error occurred during login.');
@@ -155,7 +193,7 @@ router.get('/dashboard', (req, res) => {
   if (!req.session || !req.session.user) {
     return res.redirect('/login');
   }
-  res.redirect(getDashboardForRole(req.session.user.roleName));
+  res.redirect(postLoginRedirect(req.session.user));
 });
 
 // GET /logout
@@ -186,5 +224,9 @@ router.post('/logout', async (req, res) => {
     res.redirect('/login');
   });
 });
+
+// Exported so launcherRoutes can reuse the same role→URL map without
+// duplicating it.
+router.getDashboardForRole = getDashboardForRole;
 
 module.exports = router;

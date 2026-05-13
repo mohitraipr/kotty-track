@@ -1,0 +1,219 @@
+<%- include('partials/header', { pageTitle: 'Manage User Roles' }) %>
+
+<style>
+  body { background: #f5f7fb; }
+  .aur-page {
+    max-width: 1100px; margin: 0 auto;
+    padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 4rem;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #0f172a;
+  }
+  .aur-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+  .aur-head h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .aur-head .sub { color: #475569; font-size: 0.9rem; }
+
+  .aur-toolbar {
+    display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap;
+    margin-bottom: 1rem;
+    background: #fff; padding: 0.75rem 0.875rem;
+    border: 1px solid #e5e8ee; border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .aur-toolbar input[type="search"] {
+    flex: 1 1 240px; min-width: 0;
+    border: 1px solid #e5e8ee; border-radius: 10px;
+    padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.9rem;
+  }
+  .aur-toolbar input[type="search"]:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px #eef2ff; }
+  .aur-toolbar .hint { color: #64748b; font-size: 0.8rem; }
+
+  table.aur-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,0.05); }
+  .aur-table th, .aur-table td { padding: 0.625rem 0.75rem; border-top: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.875rem; }
+  .aur-table th { background: #f8fafc; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; font-weight: 700; border-top: none; }
+  .aur-table tr:hover td { background: #fafbfd; }
+  .aur-table td.user { font-weight: 600; color: #0f172a; }
+  .aur-table td.inactive { color: #94a3b8; }
+
+  .role-pill {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.2rem 0.5rem; margin: 0.125rem 0.125rem 0.125rem 0;
+    background: #eef2ff; color: #4338ca; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .role-pill.primary { background: #4f46e5; color: #fff; }
+  .role-pill .x {
+    cursor: pointer; opacity: 0.6; font-size: 0.85rem; line-height: 1;
+    background: none; border: none; padding: 0; color: inherit;
+  }
+  .role-pill .x:hover { opacity: 1; }
+  .role-pill.primary .x { display: none; }
+
+  .row-actions { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+  .row-actions select { padding: 0.375rem 0.5rem; border: 1px solid #e5e8ee; border-radius: 8px; font-family: inherit; font-size: 0.8125rem; background: #fff; }
+  .row-actions button { padding: 0.375rem 0.625rem; border: 1px solid #e5e8ee; background: #fff; color: #0f172a; border-radius: 8px; font-family: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+  .row-actions button.grant { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .row-actions button.grant:hover { background: #4338ca; }
+  .row-actions button.set-primary:hover { background: #f8fafc; }
+
+  .aur-empty { padding: 2rem; text-align: center; color: #64748b; font-size: 0.9rem; }
+  .aur-flash { padding: 0.625rem 0.875rem; border-radius: 10px; margin-bottom: 0.75rem; font-size: 0.875rem; display: none; }
+  .aur-flash.show { display: block; }
+  .aur-flash.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .aur-flash.error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+</style>
+
+<main class="aur-page">
+  <header class="aur-head">
+    <div>
+      <h1>Manage User Roles</h1>
+      <div class="sub">Grant additional roles, revoke them, or change a user's primary (default) role.</div>
+    </div>
+    <div class="sub">Signed in as <strong><%= user.username %></strong></div>
+  </header>
+
+  <div class="aur-flash" id="aurFlash"></div>
+
+  <div class="aur-toolbar">
+    <input type="search" id="aurSearch" placeholder="Search by username or user ID…" />
+    <span class="hint">Roles tagged <span class="role-pill primary">primary</span> are the user's default landing.</span>
+  </div>
+
+  <table class="aur-table">
+    <thead>
+      <tr>
+        <th style="width: 60px;">ID</th>
+        <th>Username</th>
+        <th>Roles</th>
+        <th style="width: 340px;">Add / change primary</th>
+      </tr>
+    </thead>
+    <tbody id="aurBody">
+      <tr><td colspan="4" class="aur-empty">Loading…</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<script>
+  const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const flashEl = document.getElementById('aurFlash');
+  function showFlash(msg, kind = 'success') {
+    flashEl.className = 'aur-flash show ' + kind;
+    flashEl.textContent = msg;
+    setTimeout(() => flashEl.classList.remove('show'), 3500);
+  }
+
+  let allRoles = [];
+  async function loadRoles() {
+    const r = await fetch('/admin/user-roles/api/roles', { credentials: 'include' });
+    const data = await r.json();
+    allRoles = (data.ok && data.roles) || [];
+  }
+
+  async function loadUsers(search = '') {
+    const tbody = document.getElementById('aurBody');
+    tbody.innerHTML = '<tr><td colspan="4" class="aur-empty">Loading…</td></tr>';
+    const r = await fetch('/admin/user-roles/api/users?search=' + encodeURIComponent(search), { credentials: 'include' });
+    const data = await r.json();
+    if (!data.ok) {
+      tbody.innerHTML = '<tr><td colspan="4" class="aur-empty">' + escapeHtml(data.error || 'Failed to load.') + '</td></tr>';
+      return;
+    }
+    if (!data.users.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="aur-empty">No users found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    data.users.forEach((u) => {
+      const tr = document.createElement('tr');
+      // pills
+      const pills = u.roles.map((roleName, idx) => {
+        const isPrimary = roleName === u.primary_role_name;
+        const rid = u.role_ids[idx];
+        return `
+          <span class="role-pill ${isPrimary ? 'primary' : ''}">
+            ${escapeHtml(roleName)}
+            ${isPrimary ? '' : '<button class="x" title="Revoke" onclick="revokeRole(' + u.id + ', ' + rid + ')">×</button>'}
+          </span>`;
+      }).join('');
+
+      // add-role + set-primary controls
+      const ownedSet = new Set(u.role_ids);
+      const grantableOpts = allRoles
+        .filter(r => !ownedSet.has(r.id))
+        .map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`)
+        .join('');
+      const primaryOpts = u.roles
+        .map((roleName, idx) => `<option value="${u.role_ids[idx]}" ${u.role_ids[idx] === u.primary_role_id ? 'selected' : ''}>${escapeHtml(roleName)}</option>`)
+        .join('');
+
+      tr.innerHTML = `
+        <td>${u.id}</td>
+        <td class="user ${u.is_active ? '' : 'inactive'}">${escapeHtml(u.username)}${u.is_active ? '' : ' (inactive)'}</td>
+        <td>${pills}</td>
+        <td class="row-actions">
+          <select id="grantSel_${u.id}">
+            <option value="">— add role —</option>${grantableOpts}
+          </select>
+          <button class="grant" onclick="grantRole(${u.id})">Grant</button>
+          <span style="color:#94a3b8;">·</span>
+          <select id="primarySel_${u.id}">${primaryOpts}</select>
+          <button class="set-primary" onclick="setPrimary(${u.id})">Set primary</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function postJSON(url, body) {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    return { ok: r.ok && data.ok, data };
+  }
+
+  async function grantRole(userId) {
+    const sel = document.getElementById('grantSel_' + userId);
+    const roleId = parseInt(sel.value, 10);
+    if (!roleId) { showFlash('Pick a role to grant.', 'error'); return; }
+    const { ok, data } = await postJSON('/admin/user-roles/grant', { user_id: userId, role_id: roleId });
+    if (!ok) { showFlash(data.error || 'Failed to grant.', 'error'); return; }
+    showFlash('Role granted.');
+    await loadUsers(document.getElementById('aurSearch').value);
+  }
+
+  async function revokeRole(userId, roleId) {
+    if (!confirm('Revoke this role?')) return;
+    const { ok, data } = await postJSON('/admin/user-roles/revoke', { user_id: userId, role_id: roleId });
+    if (!ok) { showFlash(data.error || 'Failed to revoke.', 'error'); return; }
+    showFlash('Role revoked.');
+    await loadUsers(document.getElementById('aurSearch').value);
+  }
+
+  async function setPrimary(userId) {
+    const sel = document.getElementById('primarySel_' + userId);
+    const roleId = parseInt(sel.value, 10);
+    if (!roleId) { showFlash('Pick a role to set as primary.', 'error'); return; }
+    const { ok, data } = await postJSON('/admin/user-roles/set-primary', { user_id: userId, role_id: roleId });
+    if (!ok) { showFlash(data.error || 'Failed to change primary.', 'error'); return; }
+    showFlash('Primary role updated. User will see the new default on next login.');
+    await loadUsers(document.getElementById('aurSearch').value);
+  }
+
+  // debounce search
+  let searchT;
+  document.getElementById('aurSearch').addEventListener('input', (e) => {
+    clearTimeout(searchT);
+    searchT = setTimeout(() => loadUsers(e.target.value), 250);
+  });
+
+  (async () => {
+    await loadRoles();
+    await loadUsers();
+  })();
+</script>
+
+<%- include('partials/footer') %>
