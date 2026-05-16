@@ -146,6 +146,7 @@ app.use(usageTrackerMiddleware);
 const authRoutes = require('./routes/authRoutes');
 const launcherRoutes = require('./routes/launcherRoutes');
 const adminUserRolesRoutes = require('./routes/adminUserRolesRoutes');
+const returnChallanRoutes = require('./routes/returnChallanRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const operatorRoutes = require('./routes/operatorRoutes');
@@ -202,6 +203,7 @@ app.use('/health', healthRoutes);
 app.use('/', authRoutes);
 app.use('/', launcherRoutes);                       // /launcher + /switch-role
 app.use('/admin/user-roles', adminUserRolesRoutes); // mohitOperator-only
+app.use('/return-challan', returnChallanRoutes);    // returnchallan role
 app.use('/admin', adminRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/operator', operatorRoutes);

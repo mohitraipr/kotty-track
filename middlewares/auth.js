@@ -169,6 +169,29 @@ function isPOCreator(req, res, next) {
   return hasRole('po_creator')(req, res, next);
 }
 
+// returnchallan: dedicated dashboard for paper return-challan logging.
+// MohitOperator + admin also have access for ops/debug.
+function isReturnChallan(req, res, next) {
+  const user = req.session?.user;
+  if (!user) {
+    if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    req.flash('error', 'Please login first.');
+    return res.redirect('/login');
+  }
+  const role = (user.roleName || '').toLowerCase();
+  const username = (user.username || '').toLowerCase();
+  if (role === 'returnchallan' || role === 'admin' || username === 'mohitoperator') {
+    return next();
+  }
+  if (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1) {
+    return res.status(403).json({ error: 'Permission denied' });
+  }
+  req.flash('error', 'You do not have permission to view this page.');
+  return res.redirect('/');
+}
+
 function isNowiPOOrganization(req, res, next) {
   return hasRole('nowipoorganization')(req, res, next);
 }
@@ -308,6 +331,7 @@ module.exports = {
     isMohitOperator,
     isOnlyMohitOperator,
     isPOCreator,
+    isReturnChallan,
     isNowiPOOrganization,
     isVendorFiles,
     isVideoFinder,

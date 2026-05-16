@@ -83,6 +83,7 @@ function getDashboardForRole(roleName) {
     'vmsoperator': '/vms-operator',
     'return_grn': '/return-grn/scan',
     'returns_operator': '/return-grn/dashboard',
+    'returnchallan': '/return-challan',
   };
 
   // If role not found, log it for debugging and return a safe default
