@@ -77,13 +77,14 @@ function getDashboardForRole(roleName) {
     'quality_assurance': '/department/dashboard',
     'challan_dashboard': '/challandashboard',
     'productviewer': '/product-links',
-    'wishlinkops': '/webhook/logs',
+    'wishlinkops': '/inventory-ops/logs',
     'videofinder': '/video-finder',
     'videocreator': '/vms',
     'vmsoperator': '/vms-operator',
     'return_grn': '/return-grn/scan',
     'returns_operator': '/return-grn/dashboard',
     'returnchallan': '/return-challan',
+    'production_manager': '/pm',
   };
 
   // If role not found, log it for debugging and return a safe default

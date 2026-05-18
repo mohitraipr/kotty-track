@@ -275,6 +275,21 @@
       </ul>
     </div>
 
+  <% } else if (userRole === 'production_manager') { %>
+
+    <!-- PRODUCTION MANAGER NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Production</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/pm" class="sidebar-link <%= isActive('/pm') %>">
+            <i class="sidebar-icon bi bi-scissors"></i>
+            <span class="sidebar-text">Cutting Plan</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
   <% } else if (userRole === 'fabric_manager') { %>
 
     <!-- FABRIC MANAGER NAVIGATION -->
@@ -318,6 +333,12 @@
           <a href="/admin/settings" class="sidebar-link <%= isActive('/admin/settings') %>">
             <i class="sidebar-icon bi bi-gear"></i>
             <span class="sidebar-text">Settings</span>
+          </a>
+        </li>
+        <li class="sidebar-menu-item">
+          <a href="/pm" class="sidebar-link <%= isActive('/pm') %>">
+            <i class="sidebar-icon bi bi-scissors"></i>
+            <span class="sidebar-text">Production Manager</span>
           </a>
         </li>
       </ul>

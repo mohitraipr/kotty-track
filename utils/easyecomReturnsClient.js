@@ -758,6 +758,154 @@ async function getAllCompletedReturns(options = {}) {
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Production Manager additions (V2.1 endpoints; legacy auth path)
+// ---------------------------------------------------------------------------
+
+function ensureAxiosForWarehouse(warehouseKey, timeoutMs = 60000) {
+  return (async () => {
+    const jwt = await authenticateWithCredentials(warehouseKey);
+    if (!jwt) throw new Error(`EasyEcom not configured for warehouse: ${warehouseKey}`);
+    return axios.create({
+      baseURL: EASYECOM_API_BASE,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      timeout: timeoutMs,
+    });
+  })();
+}
+
+// GET /Products/GetProductMaster — full SKU/style catalog with custom fields.
+// Returns an async generator of product rows; paginates via response.nextUrl when present.
+async function* getProductMaster(warehouse = 'faridabad', { customFields = 1 } = {}) {
+  const api = await ensureAxiosForWarehouse(warehouse, 120000);
+  let nextUrl = null;
+  let page = 1;
+  do {
+    const resp = nextUrl
+      ? await api.get(nextUrl)
+      : await api.get('/Products/GetProductMaster', { params: { custom_fields: customFields } });
+    const data = resp.data && resp.data.data;
+    const rows = Array.isArray(data) ? data : (Array.isArray(data?.products) ? data.products : []);
+    for (const r of rows) yield r;
+    nextUrl = resp.data?.nextUrl || null;
+    if (!nextUrl) break;
+    page++;
+    await new Promise(r => setTimeout(r, 400));
+  } while (true);
+}
+
+// GET /inventory/getInventorySnapshotApi — returns an index of daily CSV files.
+// Each row: { c_id, companyname, job_type_id, entry_date, file_url }
+async function listInventorySnapshots({ startDate, endDate }, warehouse = 'faridabad') {
+  const api = await ensureAxiosForWarehouse(warehouse, 60000);
+  const resp = await api.get('/inventory/getInventorySnapshotApi', {
+    params: { start_date: startDate, end_date: endDate },
+  });
+  return (resp.data?.data || []).filter(r => r && r.file_url);
+}
+
+// Download a CSV from a snapshot file_url. Returns the raw CSV text.
+// Snapshot URLs are pre-signed S3 — no auth needed.
+async function downloadSnapshotCsv(fileUrl) {
+  const resp = await axios.get(fileUrl, { timeout: 600000, responseType: 'text' });
+  return resp.data;
+}
+
+// Minimal RFC-4180 CSV parser. Returns array of objects keyed on header row.
+// Handles quoted fields, embedded commas, escaped quotes ("").
+function parseCsv(text) {
+  if (!text) return [];
+  const out = [];
+  let i = 0, field = '', row = [], inQuotes = false;
+  const pushField = () => { row.push(field); field = ''; };
+  const pushRow = () => { if (row.length > 1 || row[0] !== '') out.push(row); row = []; };
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === ',') { pushField(); i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { pushField(); pushRow(); i++; continue; }
+    field += c; i++;
+  }
+  if (field !== '' || row.length) { pushField(); pushRow(); }
+  if (!out.length) return [];
+  const header = out[0].map(h => String(h).trim());
+  return out.slice(1).map(r => {
+    const obj = {};
+    for (let k = 0; k < header.length; k++) obj[header[k]] = r[k];
+    return obj;
+  });
+}
+
+// POST /reports/queue — async report generation. Returns reportId.
+async function queueReport(reportType, params = {}, warehouse = 'faridabad') {
+  const api = await ensureAxiosForWarehouse(warehouse, 60000);
+  const body = Object.keys(params).length ? { reportType, params } : { reportType };
+  const resp = await api.post('/reports/queue', body);
+  const reportId = resp.data?.data?.reportId || resp.data?.reportId;
+  if (!reportId) throw new Error(`Queue failed for ${reportType}: ${JSON.stringify(resp.data).slice(0,200)}`);
+  return String(reportId);
+}
+
+// GET /reports/list — returns list of available reports with their statuses.
+async function listReports(warehouse = 'faridabad') {
+  const api = await ensureAxiosForWarehouse(warehouse, 30000);
+  const resp = await api.get('/reports/list');
+  return resp.data?.data || resp.data || [];
+}
+
+// Polls /reports/list until the given reportId is ready, then downloads via /reports/download.
+// Returns parsed rows (array of objects).
+async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pollIntervalMs = 5000, maxWaitMs = 600000 } = {}) {
+  const api = await ensureAxiosForWarehouse(warehouse, 120000);
+  const start = Date.now();
+  let ready = false;
+  while (Date.now() - start < maxWaitMs) {
+    let entry = null;
+    try {
+      const list = await listReports(warehouse);
+      entry = (Array.isArray(list) ? list : []).find(r =>
+        String(r.reportId || r.id || r.report_id) === String(reportId)
+      );
+    } catch (_) {}
+    const status = (entry?.status || entry?.report_status || '').toString().toLowerCase();
+    if (status.includes('complete') || status.includes('ready') || status === 'done') { ready = true; break; }
+    if (status.includes('fail') || status.includes('error')) {
+      throw new Error(`Report ${reportId} failed: ${JSON.stringify(entry).slice(0,200)}`);
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+  if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
+  const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'text' });
+  const text = typeof dl.data === 'string' ? dl.data : JSON.stringify(dl.data);
+  return parseCsv(text);
+}
+
+// Convenience wrappers — queue + poll + download for the reports we care about.
+async function fetchMiniSalesReport({ startDate, endDate, warehouseIds = '', invoiceType = 'ALL', dateType = 'ORDER_DATE' }, warehouse = 'faridabad') {
+  const reportId = await queueReport('MINI_SALES_REPORT', {
+    invoiceType, warehouseIds, dateType, startDate, endDate,
+  }, warehouse);
+  return waitForAndDownloadReport(reportId, warehouse);
+}
+
+async function fetchInventoryAgingReport(warehouse = 'faridabad') {
+  const reportId = await queueReport('INVENTORY_AGING_REPORT', {}, warehouse);
+  return waitForAndDownloadReport(reportId, warehouse);
+}
+
+async function fetchStatusWiseStockReport(warehouse = 'faridabad') {
+  const reportId = await queueReport('STATUS_WISE_STOCK_REPORT', {}, warehouse);
+  return waitForAndDownloadReport(reportId, warehouse);
+}
+
 module.exports = {
   // Order operations
   getOrder,
@@ -778,6 +926,18 @@ module.exports = {
   // Inventory operations (live API, includes virtual inventory)
   authenticateWithCredentials,
   getInventoryFromApi,
+
+  // Production Manager additions
+  getProductMaster,
+  listInventorySnapshots,
+  downloadSnapshotCsv,
+  parseCsv,
+  queueReport,
+  listReports,
+  waitForAndDownloadReport,
+  fetchMiniSalesReport,
+  fetchInventoryAgingReport,
+  fetchStatusWiseStockReport,
 
   // Webhook handling
   parseReturnWebhook,
