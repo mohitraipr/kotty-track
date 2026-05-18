@@ -148,7 +148,7 @@ const featureSections = [
       'Stock adjustments run inside transactions to keep quantities balanced and capture who performed each movement.',
       'Excel exports, SSE alert streams, and webhook log viewers give store teams real-time visibility into stock events.'
     ],
-    modules: ['routes/inventoryRoutes.js', 'routes/storeAdminRoutes.js', 'routes/inventoryWebhook.js']
+    modules: ['routes/inventoryRoutes.js', 'routes/storeAdminRoutes.js', 'routes/inventoryOpsRoutes.js']
   },
   {
     id: 'procurement',
@@ -177,7 +177,7 @@ const featureSections = [
       'routes/flipkartIssueStatusRoutes.js',
       'routes/apiAuthRoutes.js',
       'routes/apiRoutes.js',
-      'routes/inventoryWebhook.js'
+      'routes/inventoryOpsRoutes.js'
     ]
   },
   {

@@ -47,16 +47,28 @@ function resolvePeriod(periodKey = '1d') {
 
 async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, warehouseId, sku }) {
   const window = resolvePeriod(periodKey);
-  const params = [window.start];
+  // Selling-days denominator excludes OOS days. Snapshot window starts at the
+  // floor of window.start so day-level GROUP BY aligns with snapshot_date.
+  const snapshotStart = new Date(window.start);
+  snapshotStart.setHours(0, 0, 0, 0);
+
+  const params = [snapshotStart, window.start];
   let sql = `
     SELECT
       es.sku,
       eo.warehouse_id,
       eo.marketplace_id,
       COALESCE(SUM(es.quantity), 0) AS order_count,
-      MAX(eo.order_date) AS last_order_date
+      MAX(eo.order_date) AS last_order_date,
+      COALESCE(MAX(sd.selling_days), 0) AS selling_days
     FROM ee_suborders es
     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+    LEFT JOIN (
+      SELECT sku, COUNT(DISTINCT snapshot_date) AS selling_days
+      FROM ee_inventory_daily_snapshot
+      WHERE snapshot_date >= ? AND qty > 0
+      GROUP BY sku
+    ) sd ON sd.sku = es.sku
     WHERE eo.import_date >= ?
       AND EXISTS (
         SELECT 1 FROM ee_replenishment_rules r
@@ -82,14 +94,25 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
   sql += '\nGROUP BY es.sku, eo.warehouse_id, eo.marketplace_id\nORDER BY order_count DESC';
 
   const [rows] = await pool.query(sql, params);
-  return rows.map((row) => ({
-    ...row,
-    period: window.key,
-    window_start: window.start,
-    window_end: window.end,
-    drr_orders: row.order_count ? window.days / row.order_count : null,
-    drr_per_day: window.days ? row.order_count / window.days : 0,
-  }));
+  return rows.map((row) => {
+    const orderCount = Number(row.order_count) || 0;
+    const sellingDays = Number(row.selling_days) || 0;
+    const calendarDays = window.days;
+    const warmingUp = sellingDays < 7;
+    const denomDays = warmingUp ? calendarDays : sellingDays;
+    const drrPerDay = denomDays > 0 ? orderCount / denomDays : 0;
+    return {
+      ...row,
+      period: window.key,
+      window_start: window.start,
+      window_end: window.end,
+      calendar_days: calendarDays,
+      selling_days: sellingDays,
+      drr_orders: orderCount ? calendarDays / orderCount : null,
+      drr_per_day: drrPerDay,
+      dataQuality: warmingUp ? 'warming_up' : 'ok',
+    };
+  });
 }
 
 async function getDrrForSku(pool, { sku, warehouseId, periodKey = '7d' }) {
@@ -495,6 +518,279 @@ async function getSlowMovers(pool, { warehouseIds } = {}) {
   });
 }
 
+// --- Production Manager helpers (Phase C) -----------------------------------
+
+const DEFAULT_LEAD_TIME = 12;
+const DEFAULT_SAFETY_DAYS = 3;
+
+async function getLeadTimeForSku(pool, sku, style) {
+  const candidates = [];
+  if (sku) candidates.push(['sku', sku]);
+  if (style) candidates.push(['style', style]);
+  for (const [scope, key] of candidates) {
+    const [rows] = await pool.query(
+      `SELECT default_lead_time_days, fabric_lead_time_days, safety_days, override_drr
+       FROM pm_style_lead_times
+       WHERE scope = ? AND key_value = ?
+       LIMIT 1`,
+      [scope, key]
+    );
+    if (rows[0]) {
+      return {
+        lead_time: Number(rows[0].default_lead_time_days ?? DEFAULT_LEAD_TIME),
+        fabric_lead_time: Number(rows[0].fabric_lead_time_days ?? 0),
+        safety_days: Number(rows[0].safety_days ?? DEFAULT_SAFETY_DAYS),
+        override_drr: rows[0].override_drr != null ? Number(rows[0].override_drr) : null,
+      };
+    }
+  }
+  return {
+    lead_time: DEFAULT_LEAD_TIME,
+    fabric_lead_time: 0,
+    safety_days: DEFAULT_SAFETY_DAYS,
+    override_drr: null,
+  };
+}
+
+// Company-wide SOH + DRR aggregation across warehouses
+async function getDohForSku(pool, { sku }) {
+  if (!sku) return null;
+  const aggregates = await getOrderAggregates(pool, { periodKey: '7d', sku });
+  let orderCount = 0;
+  let sellingDays = 0;
+  let calendarDays = 7;
+  let warming = false;
+  for (const row of aggregates) {
+    orderCount += Number(row.order_count) || 0;
+    sellingDays = Math.max(sellingDays, Number(row.selling_days) || 0);
+    calendarDays = row.calendar_days || calendarDays;
+    if (row.dataQuality === 'warming_up') warming = true;
+  }
+  const denom = sellingDays >= 7 ? sellingDays : calendarDays;
+  const drr = denom > 0 ? orderCount / denom : 0;
+
+  const [[sohRow]] = await pool.query(
+    `SELECT COALESCE(SUM(inventory), 0) AS soh
+     FROM ee_inventory_health WHERE sku = ?`,
+    [sku]
+  );
+  const soh = Number(sohRow?.soh) || 0;
+  const doh = drr > 0 ? soh / drr : null;
+
+  return {
+    sku,
+    soh,
+    drr,
+    doh,
+    dataQuality: warming || sellingDays < 7 ? 'warming_up' : 'ok',
+  };
+}
+
+async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
+  // Resolve window for snapshot-based selling days
+  const presetHours = PERIOD_PRESETS[periodKey]?.hours
+    || (Number(String(periodKey).replace(/[^0-9]/g, '')) * 24)
+    || 720;
+  const windowDays = presetHours / 24;
+  const snapshotStart = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+  snapshotStart.setHours(0, 0, 0, 0);
+
+  // Company-wide aggregation per SKU
+  const [rows] = await pool.query(
+    `SELECT
+        es.sku,
+        COALESCE(SUM(es.quantity), 0) AS order_count,
+        COALESCE(MAX(sd.selling_days), 0) AS selling_days
+     FROM ee_suborders es
+     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+     LEFT JOIN (
+       SELECT sku, COUNT(DISTINCT snapshot_date) AS selling_days
+       FROM ee_inventory_daily_snapshot
+       WHERE snapshot_date >= ? AND qty > 0
+       GROUP BY sku
+     ) sd ON sd.sku = es.sku
+     WHERE eo.import_date >= ?
+     GROUP BY es.sku`,
+    [snapshotStart, snapshotStart]
+  );
+
+  // Sellable SOH = only "Available" status from STATUS_WISE_STOCK_REPORT.
+  // Falls back to ee_inventory_health.inventory if no stock-status data yet
+  // (i.e. before the first nightly pull populates ee_stock_status).
+  const [stockStatusRows] = await pool.query(
+    `SELECT sku, COALESCE(SUM(qty), 0) AS soh
+     FROM ee_stock_status
+     WHERE status = 'Available'
+     GROUP BY sku`
+  );
+  const sohMap = new Map(stockStatusRows.map((r) => [r.sku, Number(r.soh) || 0]));
+  if (sohMap.size === 0) {
+    const [fallback] = await pool.query(
+      `SELECT sku, COALESCE(SUM(inventory), 0) AS soh
+       FROM ee_inventory_health
+       GROUP BY sku`
+    );
+    for (const r of fallback) sohMap.set(r.sku, Number(r.soh) || 0);
+  }
+  const sohRows = [...sohMap.entries()].map(([sku, soh]) => ({ sku, soh }));
+
+  // Include SKUs that have stock but no orders in window
+  const allSkus = new Set([
+    ...rows.map((r) => r.sku),
+    ...sohRows.map((r) => r.sku),
+  ]);
+
+  const results = [];
+  for (const sku of allSkus) {
+    const row = rows.find((r) => r.sku === sku) || { order_count: 0, selling_days: 0 };
+    const orderCount = Number(row.order_count) || 0;
+    const sellingDays = Number(row.selling_days) || 0;
+    const warming = sellingDays < 7;
+    const denom = warming ? windowDays : sellingDays;
+    let drr = denom > 0 ? orderCount / denom : 0;
+
+    const lt = await getLeadTimeForSku(pool, sku, null);
+    if (lt.override_drr !== null) drr = lt.override_drr;
+
+    const soh = sohMap.get(sku) || 0;
+
+    const [[openLot]] = await pool.query(
+      `SELECT COALESCE(SUM(qty), 0) AS qty
+       FROM pm_open_cutting_lots
+       WHERE sku = ? AND closed_at IS NULL`,
+      [sku]
+    );
+    const openLotQty = Number(openLot?.qty) || 0;
+
+    const horizon = lt.lead_time + lt.safety_days;
+    const [[poRow]] = await pool.query(
+      `SELECT COALESCE(SUM(qty), 0) AS qty
+       FROM pm_marketplace_po_lines
+       WHERE sku = ?
+         AND required_by_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)`,
+      [sku, horizon]
+    );
+    const upcomingPoQty = Number(poRow?.qty) || 0;
+
+    const suggested = Math.max(
+      0,
+      horizon * drr - soh - openLotQty + upcomingPoQty
+    );
+
+    const doh = drr > 0 ? soh / drr : null;
+    let trigger = 'green';
+    if (doh !== null && doh <= lt.lead_time) trigger = 'red';
+    else if (doh !== null && doh <= horizon) trigger = 'orange';
+
+    results.push({
+      sku,
+      soh,
+      drr,
+      doh,
+      lead_time: lt.lead_time,
+      safety_days: lt.safety_days,
+      fabric_lead_time: lt.fabric_lead_time,
+      open_lot_qty: openLotQty,
+      upcoming_po_qty: upcomingPoQty,
+      selling_days: sellingDays,
+      window_days: windowDays,
+      suggested_cut_qty: Math.round(suggested),
+      trigger,
+      dataQuality: warming ? 'warming_up' : 'ok',
+    });
+  }
+
+  results.sort((a, b) => b.suggested_cut_qty - a.suggested_cut_qty);
+  return results;
+}
+
+async function getDeadStock(pool, { days = 45 } = {}) {
+  // Prefer INVENTORY_AGING_REPORT — true age-based dead stock signal.
+  // Falls back to the DRR=0 heuristic if the aging table hasn't been populated yet.
+  const [agingRows] = await pool.query(
+    `SELECT sku,
+            COALESCE(SUM(qty), 0) AS soh,
+            MAX(oldest_age_days) AS oldest_age_days,
+            MAX(avg_age_days) AS avg_age_days
+     FROM ee_inventory_aging
+     WHERE oldest_age_days >= ?
+     GROUP BY sku
+     HAVING soh > 0
+     ORDER BY soh DESC`,
+    [days]
+  );
+  if (agingRows.length > 0) {
+    return agingRows.map((r) => ({
+      sku: r.sku,
+      soh: Number(r.soh) || 0,
+      orders_in_window: null,
+      drr_per_day: 0,
+      window_days: days,
+      oldest_age_days: r.oldest_age_days != null ? Number(r.oldest_age_days) : null,
+      avg_age_days: r.avg_age_days != null ? Number(r.avg_age_days) : null,
+      source: 'aging_report',
+    }));
+  }
+
+  const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const [rows] = await pool.query(
+    `SELECT h.sku,
+            COALESCE(SUM(h.inventory), 0) AS soh,
+            COALESCE(o.order_count, 0) AS orders_in_window
+     FROM ee_inventory_health h
+     LEFT JOIN (
+       SELECT es.sku, SUM(es.quantity) AS order_count
+       FROM ee_suborders es
+       INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+       WHERE eo.import_date >= ?
+       GROUP BY es.sku
+     ) o ON o.sku = h.sku
+     GROUP BY h.sku, o.order_count
+     HAVING soh > 0 AND orders_in_window = 0
+     ORDER BY soh DESC`,
+    [start]
+  );
+  return rows.map((r) => ({
+    sku: r.sku,
+    soh: Number(r.soh) || 0,
+    orders_in_window: Number(r.orders_in_window) || 0,
+    drr_per_day: 0,
+    window_days: days,
+    source: 'drr_heuristic',
+  }));
+}
+
+async function recomputeAllHealth(pool) {
+  const [rules] = await pool.query(
+    `SELECT DISTINCT sku, warehouse_id
+     FROM ee_replenishment_rules
+     WHERE making_time_days IS NOT NULL`
+  );
+  let count = 0;
+  let errors = 0;
+  for (const rule of rules) {
+    try {
+      const [[invRow]] = await pool.query(
+        `SELECT inventory FROM ee_inventory_health
+         WHERE sku = ? AND (? IS NULL OR warehouse_id = ?)
+         ORDER BY updated_at DESC LIMIT 1`,
+        [rule.sku, rule.warehouse_id, rule.warehouse_id]
+      );
+      const inventory = Number(invRow?.inventory) || 0;
+      await refreshInventoryHealth(pool, {
+        sku: rule.sku,
+        warehouseId: rule.warehouse_id,
+        inventory,
+      });
+      count++;
+    } catch (err) {
+      errors++;
+      console.error(`[recomputeAllHealth] ${rule.sku}/${rule.warehouse_id}:`, err.message);
+    }
+  }
+  return { count, errors };
+}
+
 module.exports = {
   PERIOD_PRESETS,
   resolvePeriod,
@@ -507,4 +803,8 @@ module.exports = {
   getInventoryRunway,
   getMomentumWithGrowth,
   getSlowMovers,
+  getDohForSku,
+  getCuttingRecommendations,
+  getDeadStock,
+  recomputeAllHealth,
 };

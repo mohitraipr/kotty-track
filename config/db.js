@@ -44,6 +44,15 @@ if (isSocketPath) {
 
 const pool = mysql.createPool(connectionConfig);
 
+// Force every new connection's session time_zone to IST so NOW(), CURRENT_TIMESTAMP,
+// and TIMESTAMP/DATETIME columns line up with the driver's '+05:30' interpretation.
+// Without this, Cloud SQL defaults to UTC and timestamps display 5:30h behind reality.
+pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+05:30'", (err) => {
+    if (err) console.error('Failed to set session time_zone:', err.message);
+  });
+});
+
 // Test the connection
 async function testConnection() {
   try {

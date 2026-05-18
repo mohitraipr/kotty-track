@@ -22,7 +22,6 @@ if (process.env.K_SERVICE || process.env.NODE_ENV === 'production') {
 }
 
 const { markSessionActivity } = require('./middlewares/sessionActivity');
-const { initHealthQueue } = require('./utils/healthRefreshQueue');
 
 // Ensure the application runs in IST regardless of server settings
 process.env.TZ = 'Asia/Kolkata';
@@ -175,7 +174,8 @@ const dihariRoutes = require('./routes/dihadiRoutes');
 const operatorEmployeeRoutes = require('./routes/operatorEmployeeRoutes');
 const flipkartReturnRoutes = require('./routes/flipkartReturnRoutes');
 const flipkartIssueStatusRoutes = require('./routes/flipkartIssueStatusRoutes');
-const inventoryWebhook = require('./routes/inventoryWebhook');
+const inventoryOpsRoutes = require('./routes/inventoryOpsRoutes');
+const productionManagerRoutes = require('./routes/productionManagerRoutes');
 const skuRoutes = require('./routes/skuRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const apiAuthRoutes = require('./routes/apiAuthRoutes');
@@ -233,7 +233,8 @@ app.use('/supervisor', employeeRoutes);
 app.use('/', dihariRoutes);
 app.use('/flipkart', flipkartReturnRoutes);
 app.use('/flipkart', flipkartIssueStatusRoutes);
-app.use('/webhook', inventoryWebhook);
+app.use('/inventory-ops', inventoryOpsRoutes);
+app.use('/pm', productionManagerRoutes);
 app.use('/purchase', purchaseRoutes);
 const accountsChallanRoutes = require('./routes/accountsChallanRoutes');
 app.use('/accounts-challan', accountsChallanRoutes);
@@ -255,11 +256,9 @@ app.use('/api/po-admin', poAdminApiRoutes);
 app.use('/returns', returnRoutes);
 app.use('/return-grn', returnGrnRoutes);
 
-// Initialize the background health refresh queue with the database pool
 const { pool } = require('./config/db');
-initHealthQueue(pool);
 
-// Start scheduled jobs (Ajio recon, mail auto-reply, etc.)
+// Start scheduled jobs (Ajio recon, mail auto-reply, EasyEcom pull worker, etc.)
 const { startCronJobs } = require('./utils/scheduler');
 startCronJobs();
 
@@ -286,6 +285,16 @@ app.use('/vms-operator', vmsOperatorRoutes);
 // Home Route
 app.get('/', (req, res) => {
     res.redirect('/login');
+});
+
+// TEMP DIAGNOSTIC — remove after redirect-loop is fixed
+app.get('/whoami', (req, res) => {
+    res.json({
+        hasSession: !!req.session,
+        hasUser: !!(req.session && req.session.user),
+        user: req.session?.user || null,
+        url: req.originalUrl,
+    });
 });
 
 const challanDashboardRoutes = require('./routes/challanDashboardRoutes');

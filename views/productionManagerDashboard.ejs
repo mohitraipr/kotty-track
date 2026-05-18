@@ -1,0 +1,715 @@
+<%- include('partials/header', { pageTitle: 'Production Manager' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/pm' }) %>
+
+<style>
+  body { background: #f5f7fb; }
+  .pm {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --border: #e5e8ee;
+    --border-2: #eef0f4;
+    --text: #0f172a;
+    --text-2: #475569;
+    --text-3: #94a3b8;
+    --primary: #4f46e5;
+    --primary-h: #4338ca;
+    --primary-s: #eef2ff;
+    --success: #16a34a;
+    --success-s: #dcfce7;
+    --warning: #d97706;
+    --warning-s: #fef3c7;
+    --danger: #dc2626;
+    --danger-s: #fee2e2;
+    --shadow: 0 1px 3px rgba(15,23,42,0.05);
+    --shadow-l: 0 10px 24px rgba(15,23,42,0.08);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .pm-page {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 4rem;
+  }
+  .pm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+  .pm-head h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .pm-head .who { color: var(--text-2); font-size: 0.85rem; }
+  .pm-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+  .pm-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    padding: 0.45rem 0.85rem; border-radius: 10px;
+    font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    transition: all .12s; display: inline-flex; align-items: center; gap: 0.35rem;
+  }
+  .pm-btn:hover { background: var(--bg); border-color: #cbd5e1; }
+  .pm-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .pm-btn.primary:hover { background: var(--primary-h); }
+  .pm-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .pm-btn.success { background: var(--success); color: #fff; border-color: var(--success); }
+  .pm-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .pm-banner {
+    margin-bottom: 1rem; padding: 0.75rem 1rem;
+    border-radius: 12px; border: 1px solid var(--warning);
+    background: var(--warning-s); color: #7c4a03;
+    font-size: 0.875rem; display: none;
+  }
+  .pm-banner.show { display: block; }
+
+  .pm-tabs {
+    display: flex; gap: 0.4rem; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); margin-bottom: 1rem;
+  }
+  .pm-tab {
+    border: none; background: transparent; padding: 0.6rem 1rem;
+    font-weight: 600; font-size: 0.9rem; color: var(--text-2);
+    cursor: pointer; border-radius: 10px 10px 0 0;
+    border-bottom: 3px solid transparent; margin-bottom: -1px;
+  }
+  .pm-tab:hover { color: var(--text); }
+  .pm-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-s); }
+
+  .pm-panel { display: none; }
+  .pm-panel.active { display: block; }
+
+  .pm-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: var(--shadow);
+    overflow: hidden; margin-bottom: 1rem;
+  }
+  .pm-card-head {
+    padding: 0.875rem 1.125rem; border-bottom: 1px solid var(--border-2);
+    display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    background: linear-gradient(180deg, #fafbfd 0%, #ffffff 100%);
+  }
+  .pm-card-head h2 { font-size: 1rem; font-weight: 700; margin: 0; }
+  .pm-card-body { padding: 1rem 1.125rem; }
+
+  .pm-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .pm-toolbar input[type="text"], .pm-toolbar select, .pm-toolbar input[type="number"], .pm-toolbar input[type="date"] {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.4rem 0.7rem; font-family: inherit; font-size: 0.875rem;
+  }
+  .pm-toolbar input:focus, .pm-toolbar select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-s); }
+
+  .pm-table-wrap { overflow-x: auto; }
+  table.pm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  table.pm-table thead th {
+    background: #f8fafc; color: var(--text-2);
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 0.55rem 0.75rem; text-align: left;
+    border-bottom: 1px solid var(--border-2); white-space: nowrap;
+  }
+  table.pm-table tbody td {
+    padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-2);
+    vertical-align: middle;
+  }
+  table.pm-table tbody tr:hover { background: #fafbfd; }
+  table.pm-table tr.clickable { cursor: pointer; }
+
+  .pm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+  .pm-dot.red    { background: var(--danger); }
+  .pm-dot.amber  { background: var(--warning); }
+  .pm-dot.green  { background: var(--success); }
+  .pm-pill {
+    display: inline-block; padding: 0.15rem 0.55rem; border-radius: 9999px;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .pm-pill.red   { background: var(--danger-s);  color: var(--danger); }
+  .pm-pill.amber { background: var(--warning-s); color: var(--warning); }
+  .pm-pill.green { background: var(--success-s); color: var(--success); }
+
+  .pm-empty { padding: 2rem; text-align: center; color: var(--text-3); font-size: 0.9rem; }
+
+  .pm-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.4);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .pm-modal-backdrop.show { display: flex; }
+  .pm-modal {
+    background: var(--card); border-radius: 16px; box-shadow: var(--shadow-l);
+    width: min(560px, 96vw); padding: 1.25rem;
+  }
+  .pm-modal h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.75rem; }
+  .pm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+  .pm-field { display: flex; flex-direction: column; gap: 0.25rem; }
+  .pm-field label {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-2);
+  }
+  .pm-field input, .pm-field select {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.45rem 0.7rem; font-family: inherit; font-size: 0.9rem;
+  }
+  .pm-field input:focus, .pm-field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-s); }
+
+  .pm-drop {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 1.5rem; text-align: center; color: var(--text-2);
+    background: #fafbfd; cursor: pointer; transition: all .12s;
+  }
+  .pm-drop:hover, .pm-drop.dragging { border-color: var(--primary); background: var(--primary-s); color: var(--primary); }
+  .pm-drop input { display: none; }
+</style>
+
+<div class="pm">
+<div class="pm-page">
+
+  <div class="pm-head">
+    <div>
+      <h1>Production Manager</h1>
+      <div class="who">Cutting recommendations • DRR • Open lots • Marketplace POs</div>
+    </div>
+    <div class="pm-actions">
+      <a class="pm-btn" href="/pm/api/recommendations.csv">Export CSV</a>
+      <% if (userRole === 'admin') { %>
+        <button class="pm-btn primary" id="pullNowBtn">Run Pull Now</button>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="pm-banner <%= warming ? 'show' : '' %>" id="warmingBanner">
+    DRR warming up: inventory snapshot history &lt; 7 days. Calendar-day DRR is being used as fallback.
+  </div>
+
+  <nav class="pm-tabs" role="tablist">
+    <button class="pm-tab active" data-tab="cutting">Cutting Today</button>
+    <button class="pm-tab" data-tab="dead">Dead Stock</button>
+    <button class="pm-tab" data-tab="lots">Open Lots</button>
+    <button class="pm-tab" data-tab="pos">Marketplace POs</button>
+    <button class="pm-tab" data-tab="config">Config</button>
+  </nav>
+
+  <!-- CUTTING TODAY -->
+  <section class="pm-panel active" data-panel="cutting">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>Cutting Today</h2>
+        <div class="pm-toolbar">
+          <input type="text" id="cuttingSearch" placeholder="Search style…">
+          <select id="cuttingTrigger">
+            <option value="all">All triggers</option>
+            <option value="red">Red (≤ LT)</option>
+            <option value="amber">Amber (≤ LT+safety)</option>
+            <option value="green">Green</option>
+          </select>
+          <button class="pm-btn" id="cuttingRefresh">Refresh</button>
+        </div>
+      </div>
+      <div class="pm-card-body">
+        <div class="pm-table-wrap">
+          <table class="pm-table" id="cuttingTable">
+            <thead>
+              <tr>
+                <th>Style</th>
+                <th>Total SOH</th>
+                <th>Avg DRR</th>
+                <th>Worst-size DOH</th>
+                <th>Sizes below LT</th>
+                <th>Open-lot qty</th>
+                <th>Upcoming MP-PO</th>
+                <th>Suggested action</th>
+                <th>Trigger</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEAD STOCK -->
+  <section class="pm-panel" data-panel="dead">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>Dead Stock</h2>
+        <div class="pm-toolbar">
+          <label style="font-size:0.75rem; color: var(--text-2);">Window (days)</label>
+          <input type="number" id="deadDays" value="45" min="7" max="365" style="width:6rem;">
+          <button class="pm-btn" id="deadRefresh">Refresh</button>
+        </div>
+      </div>
+      <div class="pm-card-body">
+        <div class="pm-table-wrap">
+          <table class="pm-table" id="deadTable">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Style</th>
+                <th>Size</th>
+                <th>SOH</th>
+                <th>Days Dormant</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPEN LOTS -->
+  <section class="pm-panel" data-panel="lots">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>Open Cutting Lots</h2>
+        <div class="pm-toolbar">
+          <button class="pm-btn primary" id="addLotBtn">+ Add Lot</button>
+        </div>
+      </div>
+      <div class="pm-card-body">
+        <div class="pm-table-wrap">
+          <table class="pm-table" id="lotsTable">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Style</th>
+                <th>Size</th>
+                <th>Qty</th>
+                <th>Expected completion</th>
+                <th>Created at</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MARKETPLACE POS -->
+  <section class="pm-panel" data-panel="pos">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>Marketplace POs</h2>
+        <div class="pm-toolbar">
+          <span style="font-size:0.75rem; color: var(--text-2);">
+            Expected columns: <code>marketplace, po_number, sku, size, qty, required_by_date</code>
+          </span>
+        </div>
+      </div>
+      <div class="pm-card-body">
+        <label class="pm-drop" id="poDrop">
+          <input type="file" id="poFile" accept=".xlsx">
+          <div>Drop an .xlsx here or click to choose</div>
+          <div style="font-size:0.75rem; color: var(--text-3); margin-top: 0.25rem;">Up to 25 MB</div>
+        </label>
+        <div id="poUploadStatus" style="margin-top: 0.75rem; font-size: 0.875rem;"></div>
+        <div class="pm-table-wrap" style="margin-top: 1rem;">
+          <table class="pm-table" id="posTable">
+            <thead>
+              <tr>
+                <th>Marketplace</th>
+                <th>PO Number</th>
+                <th>Lines</th>
+                <th>Total Qty</th>
+                <th>Status</th>
+                <th>Uploaded</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONFIG -->
+  <section class="pm-panel" data-panel="config">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>Lead Time Overrides</h2>
+      </div>
+      <div class="pm-card-body">
+        <form id="configForm" class="pm-grid" style="margin-bottom: 1rem;">
+          <div class="pm-field">
+            <label>Scope</label>
+            <select name="scope">
+              <option value="style">Style</option>
+              <option value="sku">SKU</option>
+            </select>
+          </div>
+          <div class="pm-field">
+            <label>Key (style/SKU)</label>
+            <input type="text" name="key_value" required>
+          </div>
+          <div class="pm-field">
+            <label>Default LT (days)</label>
+            <input type="number" name="default_lead_time_days" min="0">
+          </div>
+          <div class="pm-field">
+            <label>Fabric LT (days)</label>
+            <input type="number" name="fabric_lead_time_days" min="0">
+          </div>
+          <div class="pm-field">
+            <label>Safety (days)</label>
+            <input type="number" name="safety_days" min="0">
+          </div>
+          <div class="pm-field">
+            <label>Override DRR</label>
+            <input type="number" name="override_drr" step="0.001" min="0">
+          </div>
+          <div class="pm-field" style="justify-content: end;">
+            <label>&nbsp;</label>
+            <button type="submit" class="pm-btn primary">Save Override</button>
+          </div>
+        </form>
+        <div class="pm-table-wrap">
+          <table class="pm-table" id="configTable">
+            <thead>
+              <tr>
+                <th>Scope</th>
+                <th>Key</th>
+                <th>Default LT</th>
+                <th>Fabric LT</th>
+                <th>Safety</th>
+                <th>Override DRR</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<!-- Add-lot modal -->
+<div class="pm-modal-backdrop" id="lotModal">
+  <div class="pm-modal">
+    <h3>Add Open Cutting Lot</h3>
+    <form id="lotForm" class="pm-grid">
+      <div class="pm-field"><label>SKU</label><input type="text" name="sku" required></div>
+      <div class="pm-field"><label>Style</label><input type="text" name="style"></div>
+      <div class="pm-field"><label>Size</label><input type="text" name="size"></div>
+      <div class="pm-field"><label>Qty</label><input type="number" name="qty" min="1" required></div>
+      <div class="pm-field" style="grid-column: 1 / -1;">
+        <label>Expected completion date</label>
+        <input type="date" name="expected_completion_date" required>
+      </div>
+      <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 0.5rem;">
+        <button type="button" class="pm-btn" id="lotCancel">Cancel</button>
+        <button type="submit" class="pm-btn primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const $  = (id) => document.getElementById(id);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function fmtNum(v, digits = 0) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
+  return Number(v).toFixed(digits);
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Tabs
+$$('.pm-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    $$('.pm-tab').forEach(b => b.classList.toggle('active', b === btn));
+    $$('.pm-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tab));
+    if (tab === 'cutting') loadCutting();
+    else if (tab === 'dead') loadDead();
+    else if (tab === 'lots') loadLots();
+    else if (tab === 'pos')  loadPos();
+    else if (tab === 'config') loadConfig();
+  });
+});
+
+// ── CUTTING TODAY ───────────────────────────────────────────────
+async function loadCutting() {
+  const search = $('cuttingSearch').value.trim();
+  const trigger = $('cuttingTrigger').value;
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (trigger && trigger !== 'all') params.set('trigger', trigger);
+  const tbody = $('cuttingTable').querySelector('tbody');
+  tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/api/styles?' + params.toString(), { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    if (json.dataQuality === 'warming_up') $('warmingBanner').classList.add('show');
+    const items = json.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">No styles.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(s => `
+      <tr class="clickable" data-style="${escapeHtml(s.style)}">
+        <td><strong>${escapeHtml(s.style)}</strong></td>
+        <td>${fmtNum(s.total_soh)}</td>
+        <td>${fmtNum(s.avg_drr, 2)}</td>
+        <td>${s.worst_size_doh == null ? '—' : fmtNum(s.worst_size_doh, 1)}</td>
+        <td>${fmtNum(s.sizes_below_lt)}</td>
+        <td>${fmtNum(s.open_lot_qty)}</td>
+        <td>${fmtNum(s.upcoming_po_qty)}</td>
+        <td>${escapeHtml(s.suggested_action || '')} ${s.suggested_cut_qty ? `· <strong>${fmtNum(s.suggested_cut_qty)}</strong>` : ''}</td>
+        <td><span class="pm-pill ${escapeHtml(s.trigger || 'green')}">${escapeHtml(s.trigger || 'green')}</span></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('tr.clickable').forEach(tr => {
+      tr.addEventListener('click', () => {
+        window.location.href = '/pm/style/' + encodeURIComponent(tr.dataset.style);
+      });
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+$('cuttingSearch').addEventListener('input', debounce(loadCutting, 250));
+$('cuttingTrigger').addEventListener('change', loadCutting);
+$('cuttingRefresh').addEventListener('click', loadCutting);
+
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+// ── DEAD STOCK ─────────────────────────────────────────────────
+async function loadDead() {
+  const days = parseInt($('deadDays').value, 10) || 45;
+  const tbody = $('deadTable').querySelector('tbody');
+  tbody.innerHTML = `<tr><td colspan="5" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/api/dead-stock?days=' + days, { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="5" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    const items = json.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="pm-empty">No dead stock.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(d => `
+      <tr>
+        <td>${escapeHtml(d.sku)}</td>
+        <td>${escapeHtml(d.style)}</td>
+        <td>${escapeHtml(d.size)}</td>
+        <td>${fmtNum(d.soh)}</td>
+        <td>${fmtNum(d.days_dormant)}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+$('deadRefresh').addEventListener('click', loadDead);
+
+// ── OPEN LOTS ──────────────────────────────────────────────────
+async function loadLots() {
+  const tbody = $('lotsTable').querySelector('tbody');
+  tbody.innerHTML = `<tr><td colspan="7" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/open-lots', { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="7" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    const items = json.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="pm-empty">No open lots.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(l => `
+      <tr>
+        <td>${escapeHtml(l.sku)}</td>
+        <td>${escapeHtml(l.style)}</td>
+        <td>${escapeHtml(l.size)}</td>
+        <td>${fmtNum(l.qty)}</td>
+        <td>${l.expected_completion_date ? new Date(l.expected_completion_date).toISOString().slice(0,10) : ''}</td>
+        <td>${l.created_at ? new Date(l.created_at).toISOString().slice(0,16).replace('T',' ') : ''}</td>
+        <td><button class="pm-btn danger" data-close="${l.id}">Close</button></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('[data-close]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Close this lot?')) return;
+        const id = btn.dataset.close;
+        const r = await fetch('/pm/open-lots/' + id + '/close', { method: 'POST', headers: { Accept: 'application/json' } });
+        const j = await r.json();
+        if (!j.ok) alert(j.error || 'Failed');
+        loadLots();
+      });
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+$('addLotBtn').addEventListener('click', () => $('lotModal').classList.add('show'));
+$('lotCancel').addEventListener('click', () => $('lotModal').classList.remove('show'));
+$('lotForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = {};
+  for (const [k, v] of fd.entries()) body[k] = v;
+  const r = await fetch('/pm/open-lots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!j.ok) return alert(j.error || 'Failed');
+  $('lotModal').classList.remove('show');
+  e.target.reset();
+  loadLots();
+});
+
+// ── MARKETPLACE POS ────────────────────────────────────────────
+async function loadPos() {
+  const tbody = $('posTable').querySelector('tbody');
+  tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/marketplace-pos', { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    const items = json.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">No POs uploaded.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(p => `
+      <tr>
+        <td>${escapeHtml(p.marketplace)}</td>
+        <td>${escapeHtml(p.po_number)}</td>
+        <td>${fmtNum(p.lines_count)}</td>
+        <td>${fmtNum(p.total_qty)}</td>
+        <td>${escapeHtml(p.status)}</td>
+        <td>${p.uploaded_at ? new Date(p.uploaded_at).toISOString().slice(0,16).replace('T',' ') : ''}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+const poDrop = $('poDrop');
+const poFile = $('poFile');
+['dragenter', 'dragover'].forEach(ev => poDrop.addEventListener(ev, e => {
+  e.preventDefault(); poDrop.classList.add('dragging');
+}));
+['dragleave', 'drop'].forEach(ev => poDrop.addEventListener(ev, e => {
+  e.preventDefault(); poDrop.classList.remove('dragging');
+}));
+poDrop.addEventListener('drop', e => {
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) uploadPo(e.dataTransfer.files[0]);
+});
+poFile.addEventListener('change', () => {
+  if (poFile.files && poFile.files[0]) uploadPo(poFile.files[0]);
+});
+async function uploadPo(file) {
+  const status = $('poUploadStatus');
+  status.textContent = 'Uploading ' + file.name + '…';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/pm/marketplace-pos/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) {
+      status.style.color = 'var(--danger)';
+      status.textContent = 'Failed: ' + (j.error || 'unknown error');
+      return;
+    }
+    status.style.color = 'var(--success)';
+    status.textContent = `Parsed ${j.pos_created || 1} PO(s), ${j.lines_count} line(s).`;
+    loadPos();
+  } catch (err) {
+    status.style.color = 'var(--danger)';
+    status.textContent = 'Failed: ' + err.message;
+  }
+}
+
+// ── CONFIG ─────────────────────────────────────────────────────
+async function loadConfig() {
+  const tbody = $('configTable').querySelector('tbody');
+  tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/config/lead-times', { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    const items = json.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">No overrides yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(c => `
+      <tr>
+        <td>${escapeHtml(c.scope)}</td>
+        <td>${escapeHtml(c.key_value)}</td>
+        <td>${fmtNum(c.default_lead_time_days)}</td>
+        <td>${fmtNum(c.fabric_lead_time_days)}</td>
+        <td>${fmtNum(c.safety_days)}</td>
+        <td>${c.override_drr == null ? '—' : fmtNum(c.override_drr, 3)}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+$('configForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = {};
+  for (const [k, v] of fd.entries()) body[k] = v;
+  const r = await fetch('/pm/config/lead-times', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!j.ok) return alert(j.error || 'Failed');
+  e.target.reset();
+  loadConfig();
+});
+
+// ── Pull now (admin only) ──────────────────────────────────────
+const pullBtn = $('pullNowBtn');
+if (pullBtn) {
+  pullBtn.addEventListener('click', async () => {
+    pullBtn.disabled = true; pullBtn.textContent = 'Queuing…';
+    try {
+      const r = await fetch('/pm/pull-now', { method: 'POST', headers: { Accept: 'application/json' } });
+      const j = await r.json();
+      if (j.ok) {
+        pullBtn.textContent = 'Queued ✓';
+        setTimeout(() => { pullBtn.textContent = 'Run Pull Now'; pullBtn.disabled = false; }, 2500);
+      } else {
+        alert(j.error || 'Failed to queue.');
+        pullBtn.textContent = 'Run Pull Now'; pullBtn.disabled = false;
+      }
+    } catch (err) {
+      alert('Failed: ' + err.message);
+      pullBtn.textContent = 'Run Pull Now'; pullBtn.disabled = false;
+    }
+  });
+}
+
+// Initial load
+loadCutting();
+</script>
+
+<%- include('partials/footer') %>

@@ -6,6 +6,8 @@
 const cron = require('node-cron');
 const { syncAjioShipments } = require('./ajioShipmentSync');
 const { runMailAutoReply } = require('./mailAutoReplyJob');
+const { runPullWorker } = require('./easyecomPullWorker');
+const { pool } = require('../config/db');
 
 const TZ = process.env.CRON_TIMEZONE || 'Asia/Kolkata';
 const disabled = process.env.DISABLE_CRON === '1' || process.env.DISABLE_CRON === 'true';
@@ -55,6 +57,25 @@ function startCronJobs() {
   );
 
   console.log(`[cron] scheduled mail auto-reply (9 AM, 9 PM ${TZ})`);
+
+  // EasyEcom pull worker: nightly 02:30 IST. Opt-in via PM_PULL_ENABLED=1.
+  // Replaces the retired EasyEcom webhook ingestion.
+  if (process.env.PM_PULL_ENABLED === '1' || process.env.PM_PULL_ENABLED === 'true') {
+    cron.schedule(
+      process.env.PM_PULL_CRON || '30 2 * * *',
+      async () => {
+        try {
+          await runPullWorker(pool);
+        } catch (err) {
+          console.error('[cron] easyecom pull worker failed:', err);
+        }
+      },
+      { timezone: TZ }
+    );
+    console.log(`[cron] scheduled easyecom pull worker (02:30 ${TZ})`);
+  } else {
+    console.log('[cron] easyecom pull worker DISABLED (set PM_PULL_ENABLED=1 to enable)');
+  }
 }
 
 module.exports = { startCronJobs };

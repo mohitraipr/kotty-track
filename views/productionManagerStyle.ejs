@@ -1,0 +1,168 @@
+<%- include('partials/header', { pageTitle: 'PM · ' + style }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/pm' }) %>
+
+<style>
+  body { background: #f5f7fb; }
+  .pm {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --border: #e5e8ee;
+    --border-2: #eef0f4;
+    --text: #0f172a;
+    --text-2: #475569;
+    --text-3: #94a3b8;
+    --primary: #4f46e5;
+    --primary-h: #4338ca;
+    --primary-s: #eef2ff;
+    --success: #16a34a;
+    --success-s: #dcfce7;
+    --warning: #d97706;
+    --warning-s: #fef3c7;
+    --danger: #dc2626;
+    --danger-s: #fee2e2;
+    --shadow: 0 1px 3px rgba(15,23,42,0.05);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--text);
+  }
+  .pm-page { max-width: 1500px; margin: 0 auto; padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 4rem; }
+  .pm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+  .pm-head h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .pm-back { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.875rem; }
+  .pm-back:hover { text-decoration: underline; }
+
+  .pm-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .pm-card-head { padding: 0.875rem 1.125rem; border-bottom: 1px solid var(--border-2); background: linear-gradient(180deg, #fafbfd 0%, #ffffff 100%); display:flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .pm-card-head h2 { font-size: 1rem; font-weight: 700; margin: 0; }
+  .pm-card-body { padding: 1rem 1.125rem; }
+
+  .pm-pill {
+    display: inline-block; padding: 0.2rem 0.65rem; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 700;
+  }
+  .pm-pill.real { background: var(--success-s); color: var(--success); }
+  .pm-pill.warming { background: var(--warning-s); color: var(--warning); }
+  .pm-pill.red   { background: var(--danger-s);  color: var(--danger); }
+  .pm-pill.amber { background: var(--warning-s); color: var(--warning); }
+  .pm-pill.green { background: var(--success-s); color: var(--success); }
+  .pm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 0.35rem; }
+  .pm-dot.red { background: var(--danger); }
+  .pm-dot.amber { background: var(--warning); }
+  .pm-dot.green { background: var(--success); }
+
+  .pm-table-wrap { overflow-x: auto; }
+  table.pm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  table.pm-table thead th {
+    background: #f8fafc; color: var(--text-2);
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 0.55rem 0.75rem; text-align: left;
+    border-bottom: 1px solid var(--border-2); white-space: nowrap;
+  }
+  table.pm-table tbody td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-2); }
+  table.pm-table tbody tr:hover { background: #fafbfd; }
+  .pm-empty { padding: 2rem; text-align: center; color: var(--text-3); font-size: 0.9rem; }
+  .pm-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    padding: 0.4rem 0.8rem; border-radius: 10px; font-weight: 600; font-size: 0.85rem;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;
+  }
+  .pm-btn:hover { background: var(--bg); }
+</style>
+
+<div class="pm">
+<div class="pm-page">
+
+  <div class="pm-head">
+    <div>
+      <a class="pm-back" href="/pm">← All styles</a>
+      <h1 style="margin-top: 0.5rem;">Style: <%= style %></h1>
+    </div>
+    <div>
+      <a class="pm-btn" href="/pm/api/recommendations.csv?style=<%= encodeURIComponent(style) %>">Export CSV</a>
+    </div>
+  </div>
+
+  <div class="pm-card">
+    <div class="pm-card-head">
+      <h2>Size-level recommendation</h2>
+      <div id="qualityPill"></div>
+    </div>
+    <div class="pm-card-body">
+      <div class="pm-table-wrap">
+        <table class="pm-table" id="sizesTable">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Size</th>
+              <th>SOH</th>
+              <th>DRR</th>
+              <th>Selling-days / window</th>
+              <th>DOH</th>
+              <th>Lead time</th>
+              <th>Open-lot qty</th>
+              <th>MP-PO due in LT</th>
+              <th>Suggested cut qty</th>
+              <th>Trigger</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const STYLE = <%- JSON.stringify(style) %>;
+function fmtNum(v, digits = 0) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
+  return Number(v).toFixed(digits);
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+(async function load() {
+  const tbody = document.querySelector('#sizesTable tbody');
+  tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">Loading…</td></tr>`;
+  try {
+    const r = await fetch('/pm/api/sizes?style=' + encodeURIComponent(STYLE), { headers: { Accept: 'application/json' } });
+    const json = await r.json();
+    if (!json.ok && json.warning) {
+      tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      return;
+    }
+    const items = json.items || [];
+    const warming = items.some(r => r.dataQuality === 'warming_up');
+    document.getElementById('qualityPill').innerHTML = warming
+      ? `<span class="pm-pill warming">Warming up — using calendar days</span>`
+      : `<span class="pm-pill real">Real (≥7 selling days)</span>`;
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">No sizes for this style.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(r => `
+      <tr>
+        <td>${escapeHtml(r.sku)}</td>
+        <td>${escapeHtml(r.size)}</td>
+        <td>${fmtNum(r.soh)}</td>
+        <td>${fmtNum(r.drr, 3)}</td>
+        <td>${fmtNum(r.selling_days)} / ${fmtNum(r.calendar_days)}</td>
+        <td>${r.doh == null ? '—' : fmtNum(r.doh, 1)}</td>
+        <td>${fmtNum(r.lead_time)}${r.safety_days ? ' + ' + fmtNum(r.safety_days) : ''}</td>
+        <td>${fmtNum(r.open_lot_qty)}</td>
+        <td>${fmtNum(r.upcoming_po_qty)}</td>
+        <td><strong>${fmtNum(r.suggested_cut_qty)}</strong></td>
+        <td><span class="pm-dot ${escapeHtml(r.trigger || 'green')}"></span>${escapeHtml(r.trigger || 'green')}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+})();
+</script>
+
+<%- include('partials/footer') %>
