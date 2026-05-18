@@ -190,29 +190,44 @@ async function pullSnapshotsForWarehouse(pool, warehouseId, runStartedAt, window
 // Step 2 — Orders (getAllOrders)
 // ────────────────────────────────────────────────────────────────────
 
+// EasyEcom enforces a max 7-day window per call to /orders/V2/getAllOrders.
+// We chunk the requested window into 7-day pieces and concatenate results.
 async function pullOrders(pool, runStartedAt, bootstrapMode) {
   const stepStart = Date.now();
   const windowDays = bootstrapMode ? 30 : 3;
-  const end = new Date();
-  const start = new Date(end.getTime() - windowDays * 24 * 60 * 60 * 1000);
-  const startStr = `${ymd(start)} 00:00:00`;
-  const endStr = `${ymd(end)} 23:59:59`;
+  const CHUNK_DAYS = 7;
+  const now = new Date();
+
+  // Build a list of [chunkStart, chunkEnd] covering windowDays back from now.
+  const chunks = [];
+  let cursor = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+  while (cursor < now) {
+    const chunkEnd = new Date(Math.min(cursor.getTime() + CHUNK_DAYS * 24 * 60 * 60 * 1000, now.getTime()));
+    chunks.push([
+      `${ymd(cursor)} 00:00:00`,
+      `${ymd(new Date(chunkEnd.getTime() - 1))} 23:59:59`,
+    ]);
+    cursor = new Date(chunkEnd.getTime());
+  }
 
   let totalOrders = 0;
   let totalSubs = 0;
 
   for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
-    try {
-      const counts = await pullOrdersForWarehouse(pool, warehouseKey, Number(warehouseIdStr), startStr, endStr);
-      totalOrders += counts.orders;
-      totalSubs += counts.subs;
-    } catch (err) {
-      console.error(`[pullWorker] orders pull failed for ${warehouseKey}:`, err.message);
-      await logStep(pool, runStartedAt, `orders:${warehouseKey}`, 'error', err.message, Date.now() - stepStart);
+    for (const [startStr, endStr] of chunks) {
+      try {
+        const counts = await pullOrdersForWarehouse(pool, warehouseKey, Number(warehouseIdStr), startStr, endStr);
+        totalOrders += counts.orders;
+        totalSubs += counts.subs;
+      } catch (err) {
+        console.error(`[pullWorker] orders pull failed for ${warehouseKey} ${startStr}..${endStr}:`, err.message);
+        await logStep(pool, runStartedAt, `orders:${warehouseKey}`, 'error',
+          `${startStr}..${endStr}: ${err.message}`, Date.now() - stepStart);
+      }
     }
   }
   await logStep(pool, runStartedAt, 'orders', 'ok',
-    `mode=${bootstrapMode ? 'bootstrap' : 'steady'} window=${windowDays}d orders=${totalOrders} subs=${totalSubs}`,
+    `mode=${bootstrapMode ? 'bootstrap' : 'steady'} window=${windowDays}d chunks=${chunks.length} orders=${totalOrders} subs=${totalSubs}`,
     Date.now() - stepStart);
 }
 
