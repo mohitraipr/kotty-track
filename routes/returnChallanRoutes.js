@@ -24,6 +24,7 @@ router.use(isAuthenticated, isReturnChallan);
 
 const PAGE_SIZE = 100;
 const EDIT_WINDOW_HOURS = 24;
+const MAX_IMAGES_PER_CHALLAN = 15;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -360,9 +361,41 @@ router.get('/api/entries', async (req, res) => {
       [...whereParams, PAGE_SIZE, offset]
     );
 
-    // Presign thumbnails in parallel (small set, fine to await all)
+    // Fetch v2 child images for this page in one query.
+    const ids = rows.map(r => r.id);
+    let imagesByChallan = {};
+    if (ids.length) {
+      const [imgRows] = await pool.query(
+        `SELECT id, challan_id, s3_key, sort_order
+           FROM return_challan_images
+          WHERE challan_id IN (?)
+          ORDER BY challan_id, sort_order ASC, id ASC`,
+        [ids]
+      );
+      // Presign in parallel
+      const signed = await Promise.all(imgRows.map(async (ir) => ({
+        ...ir,
+        url: await generatePresignedUrl(ir.s3_key, 3 * 24 * 3600).catch(() => null),
+      })));
+      for (const ir of signed) {
+        (imagesByChallan[ir.challan_id] = imagesByChallan[ir.challan_id] || []).push({
+          id: ir.id,
+          key: ir.s3_key,
+          url: ir.url,
+        });
+      }
+    }
+
+    // Build items. Back-compat: if row has no v2 images but a legacy
+    // image_s3_key, surface it as a single-element images[] so v1 entries
+    // still render.
     const items = await Promise.all(rows.map(async (r) => {
-      const thumb = await presignThumb(r.image_s3_key);
+      let images = imagesByChallan[r.id] || [];
+      if (!images.length && r.image_s3_key) {
+        const url = await presignThumb(r.image_s3_key);
+        images = [{ id: null, key: r.image_s3_key, url }];
+      }
+      const first = images[0] || null;
       return {
         id: r.id,
         challan_no: r.challan_no,
@@ -372,8 +405,10 @@ router.get('/api/entries', async (req, res) => {
         brand_name: r.brand_name,
         is_branded: !!r.is_branded,
         price: Number(r.price),
-        image_s3_key: r.image_s3_key,
-        thumbnail_url: thumb,
+        image_s3_key: r.image_s3_key, // legacy single-image column (back-compat)
+        thumbnail_url: first ? first.url : null, // back-compat alias
+        images, // v2: [{id, key, url}]
+        image_count: images.length,
         name: r.name,
         challan_date: r.challan_date,
         punching_no: r.punching_no,
@@ -408,12 +443,35 @@ router.get('/api/entries', async (req, res) => {
 });
 
 router.post('/api/entries', async (req, res) => {
+  let conn;
   try {
     const base = cleanBaseFields(req.body);
     const customData = await cleanCustomData(req.body.custom_data);
+
+    // v2: array of S3 keys for the entry's images, max 15.
+    const imageKeys = Array.isArray(req.body.image_s3_keys)
+      ? req.body.image_s3_keys
+          .map(k => (k == null ? '' : String(k).trim()))
+          .filter(Boolean)
+      : [];
+    if (imageKeys.length > MAX_IMAGES_PER_CHALLAN) {
+      return res.status(400).json({
+        ok: false,
+        error: `Maximum ${MAX_IMAGES_PER_CHALLAN} images per challan.`,
+      });
+    }
+
     const challanNo = await nextChallanNumber();
 
-    const [result] = await pool.query(
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // Back-compat: if no v2 array provided but legacy single key is, keep it
+    // in the legacy column. Otherwise leave NULL (v2 entries live in the
+    // child table only).
+    const legacyKey = imageKeys.length === 0 ? (base.image_s3_key || null) : null;
+
+    const [result] = await conn.query(
       `INSERT INTO return_challans
          (challan_no, description, qty, category, brand_name, is_branded,
           price, image_s3_key, name, challan_date, punching_no, department,
@@ -427,7 +485,7 @@ router.post('/api/entries', async (req, res) => {
         base.brand_name || null,
         base.is_branded || 0,
         base.price || 0,
-        base.image_s3_key || null,
+        legacyKey,
         base.name || null,
         base.challan_date || null,
         base.punching_no || null,
@@ -436,14 +494,33 @@ router.post('/api/entries', async (req, res) => {
         req.session.user.id,
       ]
     );
-    res.json({ ok: true, id: result.insertId, challan_no: challanNo });
+    const challanId = result.insertId;
+
+    if (imageKeys.length) {
+      const rows = imageKeys.map((key, idx) => [
+        challanId, key, (idx + 1) * 10, req.session.user.id,
+      ]);
+      await conn.query(
+        `INSERT INTO return_challan_images
+           (challan_id, s3_key, sort_order, uploaded_by)
+         VALUES ?`,
+        [rows]
+      );
+    }
+
+    await conn.commit();
+    res.json({ ok: true, id: challanId, challan_no: challanNo, image_count: imageKeys.length });
   } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
     console.error('[return-challan] create error', err);
     res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
 router.patch('/api/entries/:id', async (req, res) => {
+  let conn;
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ ok: false, error: 'Invalid id.' });
@@ -451,36 +528,111 @@ router.patch('/api/entries/:id', async (req, res) => {
     const base = cleanBaseFields(req.body);
     const customData = await cleanCustomData(req.body.custom_data);
 
-    const sets = [];
-    const params = [];
-    for (const [col, val] of Object.entries(base)) {
-      sets.push(`${col} = ?`);
-      params.push(val === undefined ? null : val);
-    }
-    if (req.body.custom_data !== undefined) {
-      sets.push('custom_data = ?');
-      params.push(Object.keys(customData).length ? JSON.stringify(customData) : null);
-    }
-    if (!sets.length) return res.status(400).json({ ok: false, error: 'Nothing to update.' });
+    // v2: image add/remove arrays
+    const imagesToAdd = Array.isArray(req.body.images_to_add)
+      ? req.body.images_to_add.map(k => (k == null ? '' : String(k).trim())).filter(Boolean)
+      : [];
+    const imagesToRemove = Array.isArray(req.body.images_to_remove)
+      ? req.body.images_to_remove.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0)
+      : [];
 
-    params.push(id, EDIT_WINDOW_HOURS);
-    const [result] = await pool.query(
-      `UPDATE return_challans
-          SET ${sets.join(', ')}
+    const hasImageChanges = imagesToAdd.length > 0 || imagesToRemove.length > 0;
+    const hasBaseChanges = Object.keys(base).length > 0 || req.body.custom_data !== undefined;
+    if (!hasImageChanges && !hasBaseChanges) {
+      return res.status(400).json({ ok: false, error: 'Nothing to update.' });
+    }
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    // Edit-window guard: lock the row and verify created_at < 24h ago.
+    const [[entry]] = await conn.query(
+      `SELECT id, created_at FROM return_challans
         WHERE id = ?
-          AND created_at > (NOW() - INTERVAL ? HOUR)`,
-      params
+          AND created_at > (NOW() - INTERVAL ? HOUR)
+        FOR UPDATE`,
+      [id, EDIT_WINDOW_HOURS]
     );
-    if (result.affectedRows === 0) {
-      // Either id is wrong or the edit window passed
+    if (!entry) {
+      await conn.rollback();
       return res.status(403).json({
         ok: false,
         error: `Edit window passed (entries can only be edited within ${EDIT_WINDOW_HOURS} hours).`,
       });
     }
+
+    // Base + custom field UPDATE (only if requested)
+    if (hasBaseChanges) {
+      const sets = [];
+      const params = [];
+      for (const [col, val] of Object.entries(base)) {
+        sets.push(`${col} = ?`);
+        params.push(val === undefined ? null : val);
+      }
+      if (req.body.custom_data !== undefined) {
+        sets.push('custom_data = ?');
+        params.push(Object.keys(customData).length ? JSON.stringify(customData) : null);
+      }
+      if (sets.length) {
+        params.push(id);
+        await conn.query(
+          `UPDATE return_challans SET ${sets.join(', ')} WHERE id = ?`,
+          params
+        );
+      }
+    }
+
+    // Image removals — scoped to this challan to prevent cross-challan tampering.
+    if (imagesToRemove.length) {
+      await conn.query(
+        `DELETE FROM return_challan_images
+          WHERE challan_id = ? AND id IN (?)`,
+        [id, imagesToRemove]
+      );
+    }
+
+    // Image additions — append after current max sort_order.
+    if (imagesToAdd.length) {
+      const [[maxRow]] = await conn.query(
+        `SELECT COALESCE(MAX(sort_order), 0) AS m
+           FROM return_challan_images WHERE challan_id = ?`,
+        [id]
+      );
+      const baseSort = Number(maxRow.m) || 0;
+      const rows = imagesToAdd.map((key, idx) => [
+        id, key, baseSort + (idx + 1) * 10, req.session.user.id,
+      ]);
+      await conn.query(
+        `INSERT INTO return_challan_images
+           (challan_id, s3_key, sort_order, uploaded_by)
+         VALUES ?`,
+        [rows]
+      );
+    }
+
+    // Enforce 15-image cap after applying all changes.
+    if (hasImageChanges) {
+      const [[cntRow]] = await conn.query(
+        `SELECT COUNT(*) AS n FROM return_challan_images WHERE challan_id = ?`,
+        [id]
+      );
+      if (Number(cntRow.n) > MAX_IMAGES_PER_CHALLAN) {
+        await conn.rollback();
+        return res.status(400).json({
+          ok: false,
+          error: `Maximum ${MAX_IMAGES_PER_CHALLAN} images per challan (have ${cntRow.n}).`,
+        });
+      }
+    }
+
+    await conn.commit();
     res.json({ ok: true });
   } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[return-challan] edit error', err);
     res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -489,6 +641,18 @@ router.patch('/api/entries/:id', async (req, res) => {
 router.get('/export.xlsx', async (req, res) => {
   try {
     const search = String(req.query.search || '').trim();
+    const fromRaw = String(req.query.from || '').trim();
+    const toRaw   = String(req.query.to   || '').trim();
+    // date_field: 'challan_date' (paper date) or 'created_at' (system entry).
+    // Bad values fall back to challan_date silently so the download still works.
+    const allowedDateFields = new Set(['challan_date', 'created_at']);
+    const dateField = allowedDateFields.has(String(req.query.date_field || ''))
+      ? String(req.query.date_field)
+      : 'challan_date';
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = isoRe.test(fromRaw) ? fromRaw : null;
+    const to   = isoRe.test(toRaw)   ? toRaw   : null;
+
     const params = [];
     let where = 'WHERE 1=1';
     if (search) {
@@ -500,6 +664,15 @@ router.get('/export.xlsx', async (req, res) => {
       const like = `%${search}%`;
       for (let i = 0; i < 7; i++) params.push(like);
     }
+    if (from) {
+      where += ` AND c.${dateField} >= ?`;
+      params.push(from);
+    }
+    if (to) {
+      // DATE_ADD makes `to` inclusive even when dateField is a DATETIME.
+      where += ` AND c.${dateField} < DATE_ADD(?, INTERVAL 1 DAY)`;
+      params.push(to);
+    }
 
     const [rows] = await pool.query(
       `SELECT c.*, u.username AS created_by_username
@@ -509,6 +682,22 @@ router.get('/export.xlsx', async (req, res) => {
         ORDER BY c.created_at DESC, c.id DESC`,
       params
     );
+
+    // Fan out child images for image count + key list columns.
+    const ids = rows.map(r => r.id);
+    let imagesByChallan = {};
+    if (ids.length) {
+      const [imgRows] = await pool.query(
+        `SELECT challan_id, s3_key, sort_order
+           FROM return_challan_images
+          WHERE challan_id IN (?)
+          ORDER BY challan_id, sort_order ASC, id ASC`,
+        [ids]
+      );
+      for (const ir of imgRows) {
+        (imagesByChallan[ir.challan_id] = imagesByChallan[ir.challan_id] || []).push(ir.s3_key);
+      }
+    }
 
     const fields = await getActiveFieldDefs();
 
@@ -529,7 +718,8 @@ router.get('/export.xlsx', async (req, res) => {
       { header: 'Price',      key: 'price', width: 12 },
       { header: 'Punching No',key: 'punching_no', width: 14 },
       { header: 'Department', key: 'department', width: 18 },
-      { header: 'Image Key',  key: 'image_s3_key', width: 40 },
+      { header: 'Image Count',key: 'image_count', width: 12 },
+      { header: 'Image Keys', key: 'image_keys', width: 60 },
     ];
     const customCols = fields.map((f) => ({
       header: f.label, key: `custom__${f.field_key}`, width: 18,
@@ -547,6 +737,9 @@ router.get('/export.xlsx', async (req, res) => {
       fields.forEach((f) => {
         customCells[`custom__${f.field_key}`] = custom[f.field_key] == null ? '' : custom[f.field_key];
       });
+      // Aggregate image keys: child rows (v2) + legacy single column (back-compat)
+      const childKeys = imagesByChallan[r.id] || [];
+      const allKeys = childKeys.length ? childKeys : (r.image_s3_key ? [r.image_s3_key] : []);
       ws.addRow({
         challan_no:   r.challan_no,
         challan_date: r.challan_date ? new Date(r.challan_date).toISOString().slice(0, 10) : '',
@@ -559,7 +752,8 @@ router.get('/export.xlsx', async (req, res) => {
         price:        Number(r.price) || 0,
         punching_no:  r.punching_no || '',
         department:   r.department || '',
-        image_s3_key: r.image_s3_key || '',
+        image_count:  allKeys.length,
+        image_keys:   allKeys.join(', '),
         ...customCells,
         created_by_username: r.created_by_username || '',
         created_at_str: r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').slice(0, 19) : '',

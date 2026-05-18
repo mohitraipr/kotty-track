@@ -126,6 +126,125 @@
   .rc-image-status.error { color: var(--danger); }
   .rc-image-status.done { color: var(--success); }
 
+  /* v2: multi-image gallery in the form */
+  .rc-gallery {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .rc-gallery .tile {
+    position: relative;
+    width: 100px; height: 100px;
+    border-radius: 10px; overflow: hidden;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+  }
+  .rc-gallery .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .rc-gallery .tile.queued-remove { opacity: 0.35; }
+  .rc-gallery .tile.queued-remove::after {
+    content: 'REMOVED'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; color: var(--danger);
+    background: rgba(255,255,255,0.6);
+  }
+  .rc-gallery .tile .x {
+    position: absolute; top: 4px; right: 4px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(15,23,42,0.75); color: #fff;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; line-height: 1;
+  }
+  .rc-gallery .tile .x:hover { background: var(--danger); }
+  .rc-gallery .tile.queued-remove .x { background: var(--success); }
+  .rc-gallery .tile .upload-overlay {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700; color: var(--primary);
+  }
+  .rc-gallery .tile.failed { border-color: var(--danger); }
+  .rc-gallery .tile.failed .upload-overlay { background: var(--danger-s); color: var(--danger); }
+  .rc-gallery .add-tile {
+    width: 100px; height: 100px;
+    border: 2px dashed var(--border); border-radius: 10px;
+    background: #fafbfd;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.25rem; cursor: pointer;
+    color: var(--text-3); font-size: 1.5rem;
+    transition: all 0.12s;
+  }
+  .rc-gallery .add-tile:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-s); }
+  .rc-gallery .add-tile .lbl { font-size: 0.7rem; font-weight: 600; color: inherit; }
+  .rc-image-count {
+    font-size: 0.75rem; color: var(--text-2); margin-top: 0.5rem;
+  }
+  .rc-image-count .cap { color: var(--danger); font-weight: 600; }
+
+  /* Table cell thumb + count badge */
+  .rc-thumb-wrap { position: relative; display: inline-block; }
+  .rc-thumb-badge {
+    position: absolute; bottom: 2px; right: 2px;
+    background: var(--primary); color: #fff;
+    font-size: 0.65rem; font-weight: 700;
+    padding: 1px 5px; border-radius: 9999px;
+    pointer-events: none; line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* Lightbox prev/next + dot indicators */
+  .rc-light .light-content { position: relative; max-width: 95%; max-height: 95%; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+  .rc-light .nav-btn {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); color: #fff;
+    border: none; cursor: pointer; font-size: 1.25rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s;
+  }
+  .rc-light .nav-btn:hover { background: rgba(255,255,255,0.3); }
+  .rc-light .nav-btn.prev { left: -64px; }
+  .rc-light .nav-btn.next { right: -64px; }
+  .rc-light .nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .rc-light .dots { display: flex; gap: 0.375rem; }
+  .rc-light .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.35); cursor: pointer;
+    transition: all 0.12s;
+    border: none; padding: 0;
+  }
+  .rc-light .dot.active { background: #fff; width: 24px; border-radius: 4px; }
+  .rc-light .counter { color: rgba(255,255,255,0.8); font-size: 0.875rem; font-weight: 600; }
+  @media (max-width: 640px) {
+    .rc-light .nav-btn.prev { left: 8px; }
+    .rc-light .nav-btn.next { right: 8px; }
+  }
+
+  /* Export popover */
+  .rc-export-wrap { position: relative; }
+  .rc-export-popover {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: var(--shadow-l);
+    width: 320px; padding: 1rem; z-index: 50;
+    display: none;
+  }
+  .rc-export-popover.show { display: block; animation: slideIn 0.15s ease-out; }
+  .rc-export-popover h4 { margin: 0 0 0.625rem; font-size: 0.85rem; font-weight: 700; color: var(--text); }
+  .rc-export-popover .row { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.625rem; }
+  .rc-export-popover .row label {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-2);
+  }
+  .rc-export-popover input[type="date"], .rc-export-popover select {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.4rem 0.55rem; font-family: inherit; font-size: 0.875rem;
+    background: var(--card); color: var(--text);
+  }
+  .rc-export-popover input[type="date"]:focus, .rc-export-popover select:focus {
+    outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-s);
+  }
+  .rc-export-popover .check-line { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.8125rem; color: var(--text-2); }
+  .rc-export-popover .footer { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
   .rc-form-footer {
     display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap;
     padding-top: 0.875rem; margin-top: 0.875rem;
@@ -279,7 +398,35 @@
     </div>
     <div class="rc-actions">
       <button class="rc-btn" onclick="openFields()"><i class="bi bi-sliders"></i> Manage custom fields</button>
-      <a class="rc-btn" id="exportBtn" href="/return-challan/export.xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+      <div class="rc-export-wrap">
+        <button class="rc-btn" id="exportBtn" onclick="toggleExportPopover()"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+        <div class="rc-export-popover" id="exportPopover">
+          <h4>Export to Excel</h4>
+          <div class="row">
+            <label for="expFrom">From</label>
+            <input type="date" id="expFrom" />
+          </div>
+          <div class="row">
+            <label for="expTo">To</label>
+            <input type="date" id="expTo" />
+          </div>
+          <div class="row">
+            <label for="expDateField">Filter by</label>
+            <select id="expDateField">
+              <option value="challan_date">Challan date (paper)</option>
+              <option value="created_at">Created date (system)</option>
+            </select>
+          </div>
+          <div class="check-line">
+            <input type="checkbox" id="expIncludeSearch" />
+            <label for="expIncludeSearch">Also apply current search</label>
+          </div>
+          <div class="footer">
+            <button class="rc-btn" onclick="closeExportPopover()">Cancel</button>
+            <button class="rc-btn primary" onclick="doExport()">Download</button>
+          </div>
+        </div>
+      </div>
       <button class="rc-btn primary" onclick="openForm()"><i class="bi bi-plus-lg"></i> New entry</button>
     </div>
   </header>
@@ -296,7 +443,6 @@
     <div class="rc-form-body">
       <form id="entryForm" autocomplete="off">
         <input type="hidden" name="id" id="fId" />
-        <input type="hidden" name="image_s3_key" id="fImageKey" />
 
         <div class="rc-grid">
           <div class="rc-field">
@@ -350,13 +496,16 @@
             <textarea id="fDesc" name="description" placeholder="Item description, condition notes..."></textarea>
           </div>
           <div class="rc-field rc-field-full">
-            <label>Image</label>
-            <div class="rc-image-zone" id="imgZone" onclick="document.getElementById('imgInput').click()">
-              <div class="icon"><i class="bi bi-cloud-arrow-up"></i></div>
-              <div class="hint">Tap to capture with camera or pick from gallery</div>
+            <label>Images <span style="color: var(--text-3); text-transform: none; letter-spacing: normal; font-weight: 500;">(up to 15)</span></label>
+            <div class="rc-gallery" id="imgGallery">
+              <!-- thumbnails injected here -->
+              <div class="add-tile" id="addTile" onclick="document.getElementById('imgInput').click()">
+                <i class="bi bi-camera"></i>
+                <span class="lbl">Add</span>
+              </div>
             </div>
-            <input type="file" id="imgInput" accept="image/*" capture="environment" style="display:none;" onchange="onImagePicked(event)">
-            <div class="rc-image-status" id="imgStatus"></div>
+            <input type="file" id="imgInput" accept="image/*" capture="environment" multiple style="display:none;" onchange="onImagesPicked(event)">
+            <div class="rc-image-count" id="imgCount"></div>
           </div>
         </div>
 
@@ -433,8 +582,16 @@
   </div>
 </div>
 
-<!-- ─── Image lightbox ─── -->
-<div class="rc rc-light" id="lightbox" onclick="closeLightbox()"><img id="lightImg" /></div>
+<!-- ─── Image lightbox (with prev/next + dots) ─── -->
+<div class="rc rc-light" id="lightbox" onclick="if(event.target.id==='lightbox')closeLightbox()">
+  <div class="light-content">
+    <button class="nav-btn prev" id="lightPrev" onclick="event.stopPropagation();lightboxNav(-1)" aria-label="Previous">‹</button>
+    <img id="lightImg" />
+    <button class="nav-btn next" id="lightNext" onclick="event.stopPropagation();lightboxNav(1)" aria-label="Next">›</button>
+    <div class="counter" id="lightCounter">—</div>
+    <div class="dots" id="lightDots"></div>
+  </div>
+</div>
 
 <div class="rc rc-toasts" id="toasts"></div>
 
@@ -442,6 +599,7 @@
 'use strict';
 
 // ─── State ───────────────────────────────────────────
+const MAX_IMAGES = 15;
 let fields = [];          // active custom fields
 let allFieldDefs = [];    // ALL field defs (for the modal)
 let entries = [];
@@ -450,6 +608,18 @@ let totalPages = 1;
 let totalCount = 0;
 let searchQuery = '';
 let searchT = null;
+
+// Form image state. Three buckets:
+//   existing:    images already saved on the server (edit mode only)
+//                each: { id, key, url, removed: false }
+//   added:       images uploaded during this form session (create or edit)
+//                each: { tempId, key, url, uploading: false, failed: false }
+// Counts: total = existing.length - existing.filter(removed).length + added.length
+let formImages = { existing: [], added: [] };
+let formImageTempSeq = 0;
+
+// Lightbox state: list of {url, key} + current index
+let lightbox = { images: [], index: 0 };
 
 // ─── Helpers ─────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -496,9 +666,7 @@ async function api(method, url, body) {
 function openForm(entry) {
   $('formCard').classList.add('show');
   $('imgInput').value = '';
-  $('imgStatus').textContent = '';
-  $('imgStatus').className = 'rc-image-status';
-  resetImage();
+  formImages = { existing: [], added: [] };
   if (entry) {
     $('formTitle').textContent = 'Edit return challan';
     $('editingPill').classList.add('show');
@@ -514,19 +682,27 @@ function openForm(entry) {
     $('fQty').value = entry.qty != null ? entry.qty : 0;
     $('fPrice').value = entry.price != null ? entry.price : 0;
     $('fDesc').value = entry.description || '';
-    $('fImageKey').value = entry.image_s3_key || '';
-    if (entry.thumbnail_url) showImagePreview(entry.thumbnail_url);
+    // Seed existing-images. Server returns images[] with id/key/url; for
+    // legacy single-image entries the synthetic id is null — those rows
+    // get a synthetic temp id so the user can "remove" them locally (the
+    // server treats them as a removal of the legacy column on edit).
+    formImages.existing = (entry.images || []).map((im) => ({
+      id: im.id != null ? im.id : null,   // null => legacy single-image
+      key: im.key,
+      url: im.url,
+      removed: false,
+    }));
     populateCustomFieldsForm(entry.custom_data || {});
   } else {
     $('formTitle').textContent = 'New return challan';
     $('editingPill').classList.remove('show');
     $('entryForm').reset();
     $('fId').value = '';
-    $('fImageKey').value = '';
     $('fChallanNo').value = '';
     $('fChallanDate').value = new Date().toISOString().slice(0, 10);
     populateCustomFieldsForm({});
   }
+  renderGallery();
   $('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -534,46 +710,141 @@ function closeForm() {
   $('formCard').classList.remove('show');
 }
 
-// ─── Image upload ────────────────────────────────────
-function resetImage() {
-  $('imgZone').classList.remove('has-image');
-  $('imgZone').innerHTML = `
-    <div class="icon"><i class="bi bi-cloud-arrow-up"></i></div>
-    <div class="hint">Tap to capture with camera or pick from gallery</div>
-  `;
-}
-function showImagePreview(url) {
-  $('imgZone').classList.add('has-image');
-  $('imgZone').innerHTML = `<img src="${url}" alt="Captured image" />`;
+// ─── Multi-image gallery ────────────────────────────
+function currentImageCount() {
+  const kept = formImages.existing.filter(x => !x.removed).length;
+  const added = formImages.added.filter(x => !x.failed).length;
+  return kept + added;
 }
 
-async function onImagePicked(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    toast('Please choose an image file.', 'error');
-    return;
+function renderGallery() {
+  const gal = $('imgGallery');
+  // Wipe then re-add tiles + Add tile in order.
+  gal.innerHTML = '';
+
+  // Existing images (kept or queued-for-removal)
+  formImages.existing.forEach((im, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile' + (im.removed ? ' queued-remove' : '');
+    tile.innerHTML = `
+      <img src="${esc(im.url || '')}" alt="image" />
+      <button type="button" class="x" title="${im.removed ? 'Restore' : 'Remove'}"
+              onclick="toggleRemoveExisting(${i})">${im.removed ? '↺' : '×'}</button>
+    `;
+    tile.querySelector('img').onclick = () => openGalleryFromForm('existing', i);
+    gal.appendChild(tile);
+  });
+
+  // Newly-added images
+  formImages.added.forEach((im, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'tile' + (im.failed ? ' failed' : '');
+    tile.innerHTML = `
+      <img src="${esc(im.url || '')}" alt="image" />
+      <button type="button" class="x" title="Remove" onclick="removeAdded(${i})">×</button>
+      ${im.uploading ? '<div class="upload-overlay">Uploading…</div>' :
+        im.failed   ? '<div class="upload-overlay">Failed</div>' : ''}
+    `;
+    if (!im.uploading && !im.failed) {
+      tile.querySelector('img').onclick = () => openGalleryFromForm('added', i);
+    }
+    gal.appendChild(tile);
+  });
+
+  // Add tile (or cap message)
+  const count = currentImageCount();
+  const addTile = document.createElement('div');
+  if (count >= MAX_IMAGES) {
+    addTile.className = 'add-tile';
+    addTile.style.cursor = 'default';
+    addTile.style.opacity = '0.5';
+    addTile.innerHTML = `<i class="bi bi-check2-circle"></i><span class="lbl">15 / 15</span>`;
+  } else {
+    addTile.className = 'add-tile';
+    addTile.id = 'addTile';
+    addTile.onclick = () => $('imgInput').click();
+    addTile.innerHTML = `<i class="bi bi-camera"></i><span class="lbl">Add</span>`;
   }
-  // Preview locally
-  const reader = new FileReader();
-  reader.onload = (ev) => showImagePreview(ev.target.result);
-  reader.readAsDataURL(file);
+  gal.appendChild(addTile);
 
-  // Sign + upload to S3
-  const ext = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase();
-  $('imgStatus').textContent = 'Uploading…';
-  $('imgStatus').className = 'rc-image-status uploading';
+  const cnt = $('imgCount');
+  if (count === 0) cnt.textContent = '';
+  else if (count >= MAX_IMAGES) cnt.innerHTML = `<span class="cap">${count} / ${MAX_IMAGES} — remove one to add another.</span>`;
+  else cnt.textContent = `${count} / ${MAX_IMAGES} images`;
+}
+
+window.toggleRemoveExisting = function(i) {
+  const im = formImages.existing[i];
+  if (!im) return;
+  im.removed = !im.removed;
+  renderGallery();
+};
+
+window.removeAdded = function(i) {
+  const im = formImages.added[i];
+  if (!im) return;
+  formImages.added.splice(i, 1);
+  renderGallery();
+};
+
+// Open lightbox over the current form gallery (kept existing + new added)
+function openGalleryFromForm(bucket, idx) {
+  const list = [];
+  formImages.existing.forEach((im) => { if (!im.removed) list.push({ url: im.url, key: im.key }); });
+  formImages.added.forEach((im) => { if (!im.failed && !im.uploading) list.push({ url: im.url, key: im.key }); });
+  // Find the starting index in the unified list
+  let start = 0;
+  if (bucket === 'existing') {
+    let n = 0;
+    for (let i = 0; i <= idx; i++) if (!formImages.existing[i].removed) n++;
+    start = Math.max(0, n - 1);
+  } else {
+    const existingKept = formImages.existing.filter(x => !x.removed).length;
+    start = existingKept + idx;
+  }
+  openLightbox(list, start);
+}
+
+async function onImagesPicked(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = ''; // allow re-picking same file
+  if (!files.length) return;
+
+  let count = currentImageCount();
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    if (count >= MAX_IMAGES) {
+      toast(`Maximum ${MAX_IMAGES} images per challan.`, 'error');
+      break;
+    }
+    count++;
+
+    // Push a placeholder tile immediately
+    const tempId = ++formImageTempSeq;
+    const localUrl = URL.createObjectURL(file);
+    const slot = { tempId, key: null, url: localUrl, uploading: true, failed: false };
+    formImages.added.push(slot);
+    renderGallery();
+
+    // Upload in the background (don't await — let the user keep picking)
+    uploadOne(file, slot);
+  }
+}
+
+async function uploadOne(file, slot) {
   try {
+    const ext = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase();
     const sign = await api('POST', '/return-challan/api/image/sign', { content_type: file.type, ext });
     const putRes = await fetch(sign.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
     if (!putRes.ok) throw new Error('Upload failed (HTTP ' + putRes.status + ')');
-    $('fImageKey').value = sign.key;
-    $('imgStatus').textContent = '✓ Image uploaded';
-    $('imgStatus').className = 'rc-image-status done';
+    slot.key = sign.key;
+    slot.uploading = false;
   } catch (err) {
-    $('imgStatus').textContent = '✗ ' + (err.message || 'Upload failed');
-    $('imgStatus').className = 'rc-image-status error';
-    $('fImageKey').value = '';
+    slot.uploading = false;
+    slot.failed = true;
+    toast('Upload failed: ' + (err.message || 'unknown'), 'error');
+  } finally {
+    renderGallery();
   }
 }
 
@@ -629,6 +900,15 @@ function collectCustomFields() {
 $('entryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = $('fId').value;
+
+  // Refuse to submit while uploads are still in flight.
+  if (formImages.added.some(x => x.uploading)) {
+    toast('Wait for image uploads to finish.', 'error');
+    return;
+  }
+  // Drop failed uploads from the payload.
+  const newKeys = formImages.added.filter(x => !x.failed && x.key).map(x => x.key);
+
   const body = {
     description: $('fDesc').value,
     qty: $('fQty').value,
@@ -636,13 +916,28 @@ $('entryForm').addEventListener('submit', async (e) => {
     brand_name: $('fBrand').value,
     is_branded: $('fIsBranded').checked,
     price: $('fPrice').value,
-    image_s3_key: $('fImageKey').value || null,
     name: $('fName').value,
     challan_date: $('fChallanDate').value,
     punching_no: $('fPunching').value,
     department: $('fDept').value,
     custom_data: collectCustomFields(),
   };
+
+  if (id) {
+    // EDIT: send images_to_add (keys) and images_to_remove (server ids).
+    // Legacy single-image entries: removing them clears image_s3_key.
+    const toRemoveIds = formImages.existing
+      .filter(x => x.removed && x.id != null)
+      .map(x => x.id);
+    const hasLegacyRemoval = formImages.existing.some(x => x.removed && x.id == null);
+    body.images_to_add = newKeys;
+    body.images_to_remove = toRemoveIds;
+    if (hasLegacyRemoval) body.image_s3_key = null; // clear legacy column
+  } else {
+    // CREATE: pass the new keys as the initial array.
+    body.image_s3_keys = newKeys;
+  }
+
   const btn = $('saveBtn');
   btn.disabled = true; btn.textContent = id ? 'Saving…' : 'Creating…';
   try {
@@ -716,8 +1011,16 @@ function renderTable() {
   body.innerHTML = '';
   entries.forEach((e) => {
     const tr = document.createElement('tr');
-    const thumb = e.thumbnail_url
-      ? `<img src="${esc(e.thumbnail_url)}" class="thumb" alt="thumb" onclick="zoomImage('${esc(e.thumbnail_url)}')" />`
+    // Multi-image table cell: first image + "+N" badge for the rest.
+    const imgs = Array.isArray(e.images) ? e.images : [];
+    const firstUrl = imgs[0]?.url || e.thumbnail_url || null;
+    const total = imgs.length || (e.thumbnail_url ? 1 : 0);
+    const thumb = firstUrl
+      ? `<div class="rc-thumb-wrap">
+           <img src="${esc(firstUrl)}" class="thumb" alt="thumb"
+                onclick="openGalleryForEntry(${e.id}, 0)" />
+           ${total > 1 ? `<span class="rc-thumb-badge">+${total - 1}</span>` : ''}
+         </div>`
       : `<span class="thumb-empty"><i class="bi bi-image"></i></span>`;
     const branded = e.is_branded
       ? `<span class="rc-pill branded">Branded</span>`
@@ -765,7 +1068,7 @@ function updatePagination() {
   $('nextBtn').disabled = currentPage >= totalPages;
 
   // Update export URL to include search query
-  $('exportBtn').href = '/return-challan/export.xlsx' + (searchQuery ? ('?search=' + encodeURIComponent(searchQuery)) : '');
+  // Export URL is now built by the popover at click time.
 }
 
 function goPage(delta) {
@@ -877,11 +1180,85 @@ async function addNewField() {
 }
 
 // ─── Image lightbox ──────────────────────────────────
-function zoomImage(url) {
-  $('lightImg').src = url;
+// ─── Lightbox (with prev/next + dots) ───────────────
+function openLightbox(images, startIdx) {
+  if (!images || !images.length) return;
+  lightbox.images = images;
+  lightbox.index = Math.max(0, Math.min(startIdx || 0, images.length - 1));
+  paintLightbox();
   $('lightbox').classList.add('show');
 }
+function paintLightbox() {
+  const cur = lightbox.images[lightbox.index];
+  if (!cur) return;
+  $('lightImg').src = cur.url || '';
+  $('lightCounter').textContent = (lightbox.index + 1) + ' / ' + lightbox.images.length;
+  $('lightPrev').disabled = lightbox.index === 0;
+  $('lightNext').disabled = lightbox.index === lightbox.images.length - 1;
+  const single = lightbox.images.length <= 1;
+  $('lightPrev').style.display = single ? 'none' : '';
+  $('lightNext').style.display = single ? 'none' : '';
+  $('lightCounter').style.display = single ? 'none' : '';
+  const dots = $('lightDots');
+  if (single) { dots.innerHTML = ''; return; }
+  dots.innerHTML = lightbox.images
+    .map((_, i) => `<button class="dot ${i === lightbox.index ? 'active' : ''}" onclick="event.stopPropagation();gotoLightbox(${i})"></button>`)
+    .join('');
+}
+window.lightboxNav = function(delta) {
+  const next = lightbox.index + delta;
+  if (next < 0 || next >= lightbox.images.length) return;
+  lightbox.index = next;
+  paintLightbox();
+};
+window.gotoLightbox = function(i) {
+  if (i < 0 || i >= lightbox.images.length) return;
+  lightbox.index = i;
+  paintLightbox();
+};
 function closeLightbox() { $('lightbox').classList.remove('show'); }
+
+// Open from a table row id
+window.openGalleryForEntry = function(entryId, startIdx) {
+  const e = entries.find(x => x.id === entryId);
+  if (!e) return;
+  const imgs = (e.images && e.images.length) ? e.images :
+               (e.thumbnail_url ? [{ url: e.thumbnail_url, key: e.image_s3_key }] : []);
+  openLightbox(imgs, startIdx || 0);
+};
+
+// ─── Export popover ────────────────────────────────
+function toggleExportPopover() {
+  const p = $('exportPopover');
+  if (p.classList.contains('show')) { closeExportPopover(); return; }
+  // Default: include current search if there is one
+  $('expIncludeSearch').checked = !!searchQuery;
+  p.classList.add('show');
+}
+function closeExportPopover() {
+  $('exportPopover').classList.remove('show');
+}
+function doExport() {
+  const from = $('expFrom').value;
+  const to   = $('expTo').value;
+  const dateField = $('expDateField').value || 'challan_date';
+  const includeSearch = $('expIncludeSearch').checked;
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to)   params.set('to', to);
+  params.set('date_field', dateField);
+  if (includeSearch && searchQuery) params.set('search', searchQuery);
+  const qs = params.toString();
+  closeExportPopover();
+  window.location = '/return-challan/export.xlsx' + (qs ? ('?' + qs) : '');
+}
+// Click outside the popover to close
+document.addEventListener('click', (e) => {
+  const pop = $('exportPopover');
+  if (!pop.classList.contains('show')) return;
+  if (pop.contains(e.target) || $('exportBtn').contains(e.target)) return;
+  closeExportPopover();
+});
 
 // ─── Loaders ─────────────────────────────────────────
 async function loadActiveFields() {
@@ -895,9 +1272,16 @@ async function loadActiveFields() {
 
 // ─── Init ────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
+  // Lightbox: arrows + escape
+  if ($('lightbox').classList.contains('show')) {
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft')  lightboxNav(-1);
+    else if (e.key === 'ArrowRight') lightboxNav(1);
+    return;
+  }
   if (e.key === 'Escape') {
-    if ($('lightbox').classList.contains('show')) closeLightbox();
-    else if ($('fieldsModal').classList.contains('show')) closeFields();
+    if ($('fieldsModal').classList.contains('show')) closeFields();
+    else if ($('exportPopover').classList.contains('show')) closeExportPopover();
   }
 });
 

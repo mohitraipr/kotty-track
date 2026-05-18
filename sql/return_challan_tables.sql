@@ -54,3 +54,19 @@ CREATE TABLE IF NOT EXISTS return_challan_field_defs (
 
 -- ─── 4) Register the role ────────────────────────────────────────────
 INSERT IGNORE INTO roles (name) VALUES ('returnchallan');
+
+-- ─── 5) v2: multi-image (max 15 per challan) ─────────────────────────
+-- Each challan can have up to 15 photos. The legacy
+-- return_challans.image_s3_key column above stays for back-compat reads
+-- of pre-v2 rows; new entries write only to this child table.
+CREATE TABLE IF NOT EXISTS return_challan_images (
+  id           INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  challan_id   INT NOT NULL,
+  s3_key       VARCHAR(500) NOT NULL,
+  sort_order   INT NOT NULL DEFAULT 100,   -- preserves upload order
+  uploaded_by  INT NULL,
+  uploaded_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_rci_challan (challan_id, sort_order),
+  CONSTRAINT fk_rci_challan FOREIGN KEY (challan_id) REFERENCES return_challans(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rci_user    FOREIGN KEY (uploaded_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
