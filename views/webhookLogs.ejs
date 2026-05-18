@@ -693,7 +693,7 @@
         <button class="btn btn-success" onclick="startDownload()">
           <i class="bi bi-download"></i> Download Excel
         </button>
-        <a href="/webhook/order/logs" class="btn btn-secondary">
+        <a href="/inventory-ops/order/logs" class="btn btn-secondary">
           <i class="bi bi-box-seam"></i> Order Logs
         </a>
       </div>
@@ -940,7 +940,7 @@
       confirmBtn.disabled = true;
 
       try {
-        let url = '/webhook/logs/download-count';
+        let url = '/inventory-ops/logs/download-count';
         if (selectedWarehouse) url += '?warehouse_id=' + selectedWarehouse;
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         const data = await res.json();
@@ -1002,7 +1002,7 @@
       }, 500);
 
       const link = document.createElement('a');
-      let downloadUrl = '/webhook/logs/download-excel';
+      let downloadUrl = '/inventory-ops/logs/download-excel';
       if (selectedWarehouse) downloadUrl += '?warehouse_id=' + selectedWarehouse;
       link.href = downloadUrl;
       link.download = 'inventory_' + warehouseName + '.xlsx';
@@ -1050,7 +1050,7 @@
 
       try {
         // First check if there's an active or completed job
-        const statusRes = await fetch('/webhook/logs/download-status?warehouse=' + warehouseName, { credentials: 'include' });
+        const statusRes = await fetch('/inventory-ops/logs/download-status?warehouse=' + warehouseName, { credentials: 'include' });
         const status = await statusRes.json();
 
         if (status.lastCompleted) {
@@ -1132,7 +1132,7 @@
       actions.style.display = 'none';
 
       // Use SSE for real-time progress
-      currentEventSource = new EventSource('/webhook/logs/fetch-live?warehouse=' + warehouseName);
+      currentEventSource = new EventSource('/inventory-ops/logs/fetch-live?warehouse=' + warehouseName);
 
       currentEventSource.addEventListener('start', (e) => {
         const data = JSON.parse(e.data);

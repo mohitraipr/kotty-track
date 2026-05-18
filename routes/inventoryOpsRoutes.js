@@ -3,8 +3,8 @@
 // Read-only inventory log views + Vinay's live-download tooling.
 // Split out of routes/inventoryWebhook.js when the EasyEcom webhook receivers
 // were retired (replaced by utils/easyecomPullWorker.js).
-// Mounted at /inventory-ops; legacy URLs under /webhook/logs/* and
-// /webhook/order/logs continue to work only via the new mount point.
+// Mounted at /inventory-ops. Legacy /webhook/logs/* URLs are no longer routed —
+// use /inventory-ops/logs/* and /inventory-ops/order/logs.
 
 const express = require('express');
 const router = express.Router();
