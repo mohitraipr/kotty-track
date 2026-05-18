@@ -460,4 +460,85 @@ router.post('/pull-now', async (req, res) => {
   }
 });
 
+// ─── Temp debug: run a single EasyEcom call and return the raw response ──
+// Admin-only. Lets us see what EasyEcom actually returns without trawling
+// through Cloud Run logs. Examples:
+//   GET /pm/debug-ee?what=snapshot&warehouse=faridabad&days=30
+//   GET /pm/debug-ee?what=mini-sales&warehouse=faridabad&days=7
+//   GET /pm/debug-ee?what=orders&warehouse=faridabad&days=7
+// Remove after debugging.
+router.get('/debug-ee', async (req, res) => {
+  if (req.session.user.roleName !== 'admin') {
+    return res.status(403).json({ ok: false, error: 'admin role required.' });
+  }
+  const { what = 'snapshot', warehouse = 'faridabad', days = '7' } = req.query;
+  const client = require('../utils/easyecomReturnsClient');
+  const axios = require('axios');
+  const days_n = Math.min(Math.max(parseInt(days, 10) || 7, 1), 90);
+  const end = new Date();
+  const start = new Date(end.getTime() - days_n * 24 * 60 * 60 * 1000);
+  const fmt = (d) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  };
+  const fmtDay = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  try {
+    if (what === 'snapshot') {
+      const files = await client.listInventorySnapshots(
+        { startDate: fmt(start), endDate: fmt(end) }, warehouse
+      );
+      return res.json({ ok: true, what, warehouse, params: { startDate: fmt(start), endDate: fmt(end) }, count: files.length, sample: files.slice(0, 3), files });
+    }
+    if (what === 'mini-sales') {
+      // Queue + poll inline so we see the exact error if 400.
+      const token = await client.authenticateWithCredentials(warehouse);
+      const api = axios.create({
+        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: 60000, validateStatus: () => true,
+      });
+      const body = {
+        reportType: 'MINI_SALES_REPORT',
+        params: { invoiceType: 'ALL', dateType: 'ORDER_DATE', startDate: fmtDay(start), endDate: fmtDay(end) },
+      };
+      const resp = await api.post('/reports/queue', body);
+      return res.json({ ok: resp.status < 300, what, status: resp.status, requestBody: body, response: resp.data });
+    }
+    if (what === 'orders') {
+      const token = await client.authenticateWithCredentials(warehouse);
+      const api = axios.create({
+        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: 60000, validateStatus: () => true,
+      });
+      const params = { start_date: fmt(start), end_date: fmt(end) };
+      const resp = await api.get('/orders/V2/getAllOrders', { params });
+      const data = resp.data?.data || {};
+      const ordersArr = data.orders || data.invoices || [];
+      return res.json({
+        ok: resp.status < 300, what, status: resp.status, params,
+        responseShape: { code: resp.data?.code, message: resp.data?.message, hasOrdersField: !!data.orders, hasInvoicesField: !!data.invoices, count: ordersArr.length, nextUrl: data.nextUrl || null },
+        sampleFirst: ordersArr[0] || null,
+      });
+    }
+    if (what === 'locations') {
+      const token = await client.authenticateWithCredentials(warehouse);
+      const api = axios.create({
+        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: 60000, validateStatus: () => true,
+      });
+      const resp = await api.get('/getAllLocation');
+      return res.json({ ok: resp.status < 300, what, status: resp.status, response: resp.data });
+    }
+    return res.status(400).json({ ok: false, error: `unknown what=${what}. Try snapshot|mini-sales|orders|locations` });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false, error: err.message,
+      eeStatus: err.response?.status, eeBody: err.response?.data,
+    });
+  }
+});
+
 module.exports = router;

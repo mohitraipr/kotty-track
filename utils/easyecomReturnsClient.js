@@ -889,10 +889,12 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
 }
 
 // Convenience wrappers — queue + poll + download for the reports we care about.
-async function fetchMiniSalesReport({ startDate, endDate, warehouseIds = '', invoiceType = 'ALL', dateType = 'ORDER_DATE' }, warehouse = 'faridabad') {
-  const reportId = await queueReport('MINI_SALES_REPORT', {
-    invoiceType, warehouseIds, dateType, startDate, endDate,
-  }, warehouse);
+async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceType = 'ALL', dateType = 'ORDER_DATE' }, warehouse = 'faridabad') {
+  // EasyEcom rejects empty/missing warehouseIds with a 400 — only pass the
+  // param when caller supplied a non-empty location-key list.
+  const params = { invoiceType, dateType, startDate, endDate };
+  if (warehouseIds && String(warehouseIds).trim()) params.warehouseIds = warehouseIds;
+  const reportId = await queueReport('MINI_SALES_REPORT', params, warehouse);
   return waitForAndDownloadReport(reportId, warehouse);
 }
 
