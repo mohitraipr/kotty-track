@@ -80,22 +80,28 @@ async function computeAdvancedAnalytics(startDate, endDate) {
   return cache.fetchCached(cacheKey, async () => {
     const analytics = {};
 
+    // Sourced from *_events (truth source) — counts pieces that have been
+    // completed in each stage. Pending = lots whose finished total is below
+    // their cut total.
     const totalsQ = pool.query(`
     SELECT
-      (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots)     AS totalCut,
-      (SELECT COALESCE(SUM(total_pieces),0) FROM stitching_data)   AS totalStitched,
-      (SELECT COALESCE(SUM(total_pieces),0) FROM washing_data)     AS totalWashed,
-      (SELECT COALESCE(SUM(total_pieces),0) FROM finishing_data)   AS totalFinished,
-      (SELECT COUNT(*) FROM cutting_lots)                          AS totalCount,
+      (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots) AS totalCut,
+      (SELECT COALESCE(SUM(pieces),0)
+         FROM stitching_events WHERE event_type='complete')    AS totalStitched,
+      (SELECT COALESCE(SUM(pieces),0)
+         FROM washing_events   WHERE event_type='complete')    AS totalWashed,
+      (SELECT COALESCE(SUM(pieces),0)
+         FROM finishing_events WHERE event_type='complete')    AS totalFinished,
+      (SELECT COUNT(*) FROM cutting_lots)                      AS totalCount,
       (
         SELECT COUNT(*)
           FROM cutting_lots c
           LEFT JOIN (
-            SELECT lot_no, COALESCE(SUM(total_pieces),0) AS sumFinish
-              FROM finishing_data
-             GROUP BY lot_no
-          ) fd ON c.lot_no = fd.lot_no
-         WHERE fd.sumFinish < c.total_pieces
+            SELECT cutting_lot_id, COALESCE(SUM(pieces),0) AS sumFinish
+              FROM finishing_events WHERE event_type='complete'
+             GROUP BY cutting_lot_id
+          ) fd ON c.id = fd.cutting_lot_id
+         WHERE COALESCE(fd.sumFinish,0) < c.total_pieces
       ) AS pendingLots
     `);
 
@@ -111,23 +117,32 @@ async function computeAdvancedAnalytics(startDate, endDate) {
     const topQuery = skuQuery + 'GROUP BY sku ORDER BY total DESC LIMIT 10';
     const bottomQuery = skuQuery + 'GROUP BY sku ORDER BY total ASC LIMIT 10';
 
+    // Turnaround: lots whose finishing-complete events sum to >= cut total.
     const turnaroundQ = pool.query(`
-      SELECT c.lot_no, c.created_at AS cut_date, MAX(f.created_at) AS finish_date,
-             c.total_pieces, COALESCE(SUM(f.total_pieces),0) as sumFin
+      SELECT c.lot_no,
+             c.created_at AS cut_date,
+             MAX(f.created_at) AS finish_date,
+             c.total_pieces,
+             COALESCE(SUM(f.pieces),0) AS sumFin
         FROM cutting_lots c
-        LEFT JOIN finishing_data f ON c.lot_no = f.lot_no
-       GROUP BY c.lot_no
+        LEFT JOIN finishing_events f
+               ON f.cutting_lot_id = c.id
+              AND f.event_type='complete'
+       GROUP BY c.id, c.lot_no, c.created_at, c.total_pieces
        HAVING sumFin >= c.total_pieces
     `);
+    // Approval rates from events: per stage, approved-events / (approved + rejected events).
     const stitchRateQ = pool.query(`
-      SELECT COUNT(*) AS totalAssigned,
-             SUM(CASE WHEN isApproved=1 THEN 1 ELSE 0 END) AS approvedCount
-        FROM stitching_assignments
+      SELECT
+        SUM(CASE WHEN event_type IN ('approve','reject') THEN 1 ELSE 0 END) AS totalAssigned,
+        SUM(CASE WHEN event_type='approve' THEN 1 ELSE 0 END)               AS approvedCount
+        FROM stitching_events
     `);
     const washRateQ = pool.query(`
-      SELECT COUNT(*) AS totalAssigned,
-             SUM(CASE WHEN is_approved=1 THEN 1 ELSE 0 END) AS approvedCount
-        FROM washing_assignments
+      SELECT
+        SUM(CASE WHEN event_type IN ('approve','reject') THEN 1 ELSE 0 END) AS totalAssigned,
+        SUM(CASE WHEN event_type='approve' THEN 1 ELSE 0 END)               AS approvedCount
+        FROM washing_events
     `);
 
     const [
@@ -215,35 +230,34 @@ router.get("/dashboard/washer-activity", isAuthenticated, isOperator, async (req
       return res.status(400).json({ error: "startDate cannot be after endDate" });
     }
 
-    // Fixed: Optimized to filter users first before joining
+    // Events-sourced washer activity. A washer counts as "active" if they
+    // have any approve/complete event for washing in the window. Approved
+    // lots = distinct lots they took into washing (event_type='approve');
+    // completed lots = distinct lots they marked complete in washing.
     const [rows] = await pool.query(
-      `SELECT
-         u.id AS washer_id,
-         u.username,
-         COALESCE(ap.approvedLots, 0) AS approvedLots,
-         COALESCE(wc.completedLots, 0) AS completedLots
-       FROM (
-         SELECT DISTINCT user_id FROM washing_assignments WHERE DATE(approved_on) BETWEEN ? AND ?
-         UNION
-         SELECT DISTINCT user_id FROM washing_data WHERE DATE(created_at) BETWEEN ? AND ?
-       ) active_washers
-       JOIN users u ON u.id = active_washers.user_id
-       LEFT JOIN (
-         SELECT wa.user_id, COUNT(DISTINCT jd.lot_no) AS approvedLots
-           FROM washing_assignments wa
-           LEFT JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-          WHERE wa.is_approved = 1
-            AND DATE(wa.approved_on) BETWEEN ? AND ?
-          GROUP BY wa.user_id
-       ) ap ON ap.user_id = u.id
-       LEFT JOIN (
-         SELECT wd.user_id, COUNT(DISTINCT wd.lot_no) AS completedLots
-           FROM washing_data wd
-          WHERE DATE(wd.created_at) BETWEEN ? AND ?
-          GROUP BY wd.user_id
-       ) wc ON wc.user_id = u.id
-      ORDER BY u.username ASC`,
-      [startDate, endDate, startDate, endDate, startDate, endDate, startDate, endDate]
+      `SELECT u.id AS washer_id,
+              u.username,
+              COALESCE(ap.approvedLots,  0) AS approvedLots,
+              COALESCE(wc.completedLots, 0) AS completedLots
+         FROM (
+           SELECT DISTINCT operator_id AS user_id FROM washing_events
+            WHERE DATE(created_at) BETWEEN ? AND ?
+         ) active_washers
+         JOIN users u ON u.id = active_washers.user_id
+         LEFT JOIN (
+           SELECT operator_id AS user_id, COUNT(DISTINCT cutting_lot_id) AS approvedLots
+             FROM washing_events
+            WHERE event_type='approve' AND DATE(created_at) BETWEEN ? AND ?
+            GROUP BY operator_id
+         ) ap ON ap.user_id = u.id
+         LEFT JOIN (
+           SELECT operator_id AS user_id, COUNT(DISTINCT cutting_lot_id) AS completedLots
+             FROM washing_events
+            WHERE event_type='complete' AND DATE(created_at) BETWEEN ? AND ?
+            GROUP BY operator_id
+         ) wc ON wc.user_id = u.id
+        ORDER BY u.username ASC`,
+      [startDate, endDate, startDate, endDate, startDate, endDate]
     );
 
     return res.json({ data: rows });
@@ -312,12 +326,15 @@ router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
 
     const [[totals]] = await pool.query(`
       SELECT
-        (SELECT COUNT(*) FROM cutting_lots)                                  AS lotCount,
-        (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots)             AS totalPieces,
-        (SELECT COALESCE(SUM(total_pieces),0) FROM stitching_data)           AS totalStitched,
-        (SELECT COALESCE(SUM(total_pieces),0) FROM washing_data)             AS totalWashed,
-        (SELECT COALESCE(SUM(total_pieces),0) FROM finishing_data)           AS totalFinished,
-        (SELECT COUNT(*) FROM users)                                        AS userCount
+        (SELECT COUNT(*) FROM cutting_lots)                          AS lotCount,
+        (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots)     AS totalPieces,
+        (SELECT COALESCE(SUM(pieces),0) FROM stitching_events
+           WHERE event_type='complete')                              AS totalStitched,
+        (SELECT COALESCE(SUM(pieces),0) FROM washing_events
+           WHERE event_type='complete')                              AS totalWashed,
+        (SELECT COALESCE(SUM(pieces),0) FROM finishing_events
+           WHERE event_type='complete')                              AS totalFinished,
+        (SELECT COUNT(*) FROM users)                                 AS userCount
     `);
 
     const lotCount = totals.lotCount;
@@ -539,42 +556,27 @@ router.get("/dashboard/employees/download", isAuthenticated, isOperator, async (
 
 router.get("/dashboard/lot-departments/download", isAuthenticated, isOperator, async (req, res) => {
   try {
-    const rows = await cache.fetchCached("lotDeptCounts", async () => {
+    // Events-sourced per-stage completion counts. Each "complete" event
+    // counts once (so a lot with multiple partial completions per stage
+    // shows the higher number, matching prior behaviour).
+    const rows = await cache.fetchCached("lotDeptCounts-ev", async () => {
       const [data] = await pool.query(`
         SELECT cl.lot_no,
                cl.sku,
                cl.total_pieces AS pieces,
-               counts.cutting,
-               counts.stitching,
-               counts.washing,
-               counts.washing_in,
-               counts.finishing,
-               counts.assembly
-        FROM (
-          SELECT lot_no,
-                 SUM(stage='cutting')    AS cutting,
-                 SUM(stage='stitching')  AS stitching,
-                 SUM(stage='washing')    AS washing,
-                 SUM(stage='washing_in') AS washing_in,
-                 SUM(stage='finishing')  AS finishing,
-                 SUM(stage='assembly')   AS assembly
-          FROM (
-            SELECT lot_no, 'cutting'    AS stage FROM cutting_lots
-            UNION ALL
-            SELECT lot_no, 'stitching'  AS stage FROM stitching_data
-            UNION ALL
-            SELECT lot_no, 'washing'    AS stage FROM washing_data
-            UNION ALL
-            SELECT lot_no, 'washing_in' AS stage FROM washing_in_data
-            UNION ALL
-            SELECT lot_no, 'finishing'  AS stage FROM finishing_data
-            UNION ALL
-            SELECT lot_no, 'assembly'   AS stage FROM jeans_assembly_data
-          ) AS t1
-          GROUP BY lot_no
-        ) AS counts
-        JOIN cutting_lots cl ON counts.lot_no = cl.lot_no
-        ORDER BY cl.lot_no
+               1                                                            AS cutting,
+               (SELECT COUNT(*) FROM stitching_events e
+                 WHERE e.cutting_lot_id = cl.id AND e.event_type='complete') AS stitching,
+               (SELECT COUNT(*) FROM washing_events e
+                 WHERE e.cutting_lot_id = cl.id AND e.event_type='complete') AS washing,
+               (SELECT COUNT(*) FROM washing_in_events e
+                 WHERE e.cutting_lot_id = cl.id AND e.event_type='complete') AS washing_in,
+               (SELECT COUNT(*) FROM finishing_events e
+                 WHERE e.cutting_lot_id = cl.id AND e.event_type='complete') AS finishing,
+               (SELECT COUNT(*) FROM jeans_assembly_events e
+                 WHERE e.cutting_lot_id = cl.id AND e.event_type='complete') AS assembly
+          FROM cutting_lots cl
+         ORDER BY cl.lot_no
       `);
       return data;
     });
@@ -617,11 +619,16 @@ router.get("/debug/lot-journey", async (req, res) => {
         cl.remark,
         DATE_FORMAT(cl.created_at, '%Y-%m-%d') as created_date,
         u.username as cutting_master,
-        COALESCE((SELECT SUM(total_pieces) FROM stitching_data WHERE lot_no = cl.lot_no), 0) as stitched,
-        COALESCE((SELECT SUM(total_pieces) FROM jeans_assembly_data WHERE lot_no = cl.lot_no), 0) as assembled,
-        COALESCE((SELECT SUM(total_pieces) FROM washing_data WHERE lot_no = cl.lot_no), 0) as washed,
-        COALESCE((SELECT SUM(total_pieces) FROM washing_in_data WHERE lot_no = cl.lot_no), 0) as wash_in,
-        COALESCE((SELECT SUM(total_pieces) FROM finishing_data WHERE lot_no = cl.lot_no), 0) as finished
+        COALESCE((SELECT SUM(pieces) FROM stitching_events
+          WHERE cutting_lot_id = cl.id AND event_type='complete'), 0) as stitched,
+        COALESCE((SELECT SUM(pieces) FROM jeans_assembly_events
+          WHERE cutting_lot_id = cl.id AND event_type='complete'), 0) as assembled,
+        COALESCE((SELECT SUM(pieces) FROM washing_events
+          WHERE cutting_lot_id = cl.id AND event_type='complete'), 0) as washed,
+        COALESCE((SELECT SUM(pieces) FROM washing_in_events
+          WHERE cutting_lot_id = cl.id AND event_type='complete'), 0) as wash_in,
+        COALESCE((SELECT SUM(pieces) FROM finishing_events
+          WHERE cutting_lot_id = cl.id AND event_type='complete'), 0) as finished
       FROM cutting_lots cl
       LEFT JOIN users u ON cl.user_id = u.id
     `;
@@ -692,28 +699,30 @@ router.get("/debug/lot-journey", async (req, res) => {
 });
 
 async function buildWasherMonthlySummary(prefix) {
-  // Cache the summary for 5 minutes to avoid repeated heavy queries
-  return cache.fetchCached(`washerSummary-${prefix}`, async () => {
+  // Sourced from washing_events (truth source). One approve event = an
+  // assignment of `pieces` to this washer in that month; one complete event
+  // = pieces completed by this washer in that month.
+  return cache.fetchCached(`washerSummary-ev-${prefix}`, async () => {
   const [assignRows] = await pool.query(
-    `SELECT wa.user_id, u.username,
-            DATE_FORMAT(wa.assigned_on,'%Y-%m') AS month,
-            wa.sizes_json, jd.lot_no,
+    `SELECT we.operator_id AS user_id, u.username,
+            DATE_FORMAT(we.created_at,'%Y-%m') AS month,
+            we.pieces, cl.lot_no,
             cl.total_pieces AS cutting_pieces,
             cl.remark
-       FROM washing_assignments wa
-       JOIN users u ON wa.user_id = u.id
-       JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-       LEFT JOIN cutting_lots cl ON jd.lot_no = cl.lot_no
-      WHERE jd.lot_no LIKE ?`,
+       FROM washing_events we
+       JOIN users u        ON u.id = we.operator_id
+       JOIN cutting_lots cl ON cl.id = we.cutting_lot_id
+      WHERE we.event_type = 'approve' AND cl.lot_no LIKE ?`,
     [prefix]
   );
   const [compRows] = await pool.query(
-    `SELECT user_id,
-            DATE_FORMAT(created_at,'%Y-%m') AS month,
-            SUM(total_pieces) AS completed
-       FROM washing_data
-      WHERE lot_no LIKE ?
-      GROUP BY user_id, month`,
+    `SELECT we.operator_id AS user_id,
+            DATE_FORMAT(we.created_at,'%Y-%m') AS month,
+            SUM(we.pieces) AS completed
+       FROM washing_events we
+       JOIN cutting_lots cl ON cl.id = we.cutting_lot_id
+      WHERE we.event_type = 'complete' AND cl.lot_no LIKE ?
+      GROUP BY we.operator_id, month`,
     [prefix]
   );
 
@@ -727,13 +736,8 @@ async function buildWasherMonthlySummary(prefix) {
   }
 
   assignRows.forEach(r => {
-    let pcs = 0;
-    try {
-      const arr = JSON.parse(r.sizes_json || '[]');
-      if (Array.isArray(arr)) for (const s of arr) pcs += parseInt(s.pieces, 10) || 0;
-    } catch { pcs = 0; }
     const entry = ensure(r.user_id, r.month, r.username);
-    entry.assigned += pcs;
+    entry.assigned += parseFloat(r.pieces) || 0;
     if (!entry._lots.has(r.lot_no)) {
       entry._lots.add(r.lot_no);
       if (!r.remark || !r.remark.toLowerCase().includes('date')) {
@@ -1277,185 +1281,6 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Finishing Reject Reasons', key: 'finishingRejectReasons', width: 28 },
   { header: 'Total Rejects',          key: 'totalRejectQty',          width: 11 }
 ];
-
-// Aggregates and last-assignment data for multiple lots in one go
-async function fetchLotAggregates(lotNos = []) {
-  if (!lotNos.length) {
-    return {
-      lotSumsMap: {},
-      stitchMap: {},
-      asmMap: {},
-      washMap: {},
-      winMap: {},
-      finMap: {}
-    };
-  }
-
-  // Use count + first/last lot as cache key instead of joining all 7000+ lot numbers
-  const sorted = lotNos.slice().sort();
-  const cacheKey = `lotAgg-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
-  return cache.fetchCached(cacheKey, async () => {
-    const sumsQ = pool.query(`
-      SELECT 'stitched' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
-        FROM stitching_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'assembled' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
-        FROM jeans_assembly_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'washed' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
-        FROM washing_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'washing_in' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
-        FROM washing_in_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-
-      UNION ALL
-
-      SELECT 'finished' AS sumType, lot_no, COALESCE(SUM(total_pieces),0) AS sumVal
-        FROM finishing_data
-       WHERE lot_no IN (?)
-       GROUP BY lot_no
-    `, [lotNos, lotNos, lotNos, lotNos, lotNos]);
-
-    const stQ = pool.query(`
-      SELECT c.lot_no, sa.id, sa.isApproved AS is_approved,
-             sa.assigned_on, sa.approved_on, sa.user_id,
-             u.username AS opName
-        FROM stitching_assignments sa
-        JOIN cutting_lots c ON sa.cutting_lot_id = c.id
-        LEFT JOIN users u ON sa.user_id = u.id
-        LEFT JOIN stitching_assignments sa2
-               ON sa2.cutting_lot_id = sa.cutting_lot_id
-              AND sa2.assigned_on > sa.assigned_on
-       WHERE sa2.id IS NULL
-         AND c.lot_no IN (?)
-    `, [lotNos]);
-
-    const asmQ = pool.query(`
-      SELECT sd.lot_no, ja.id, ja.is_approved,
-             ja.assigned_on, ja.approved_on, ja.user_id,
-             u.username AS opName
-        FROM jeans_assembly_assignments ja
-        JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-        LEFT JOIN users u ON ja.user_id = u.id
-        LEFT JOIN jeans_assembly_assignments ja2
-               ON ja2.stitching_assignment_id = ja.stitching_assignment_id
-              AND ja2.assigned_on > ja.assigned_on
-       WHERE ja2.id IS NULL
-         AND sd.lot_no IN (?)
-    `, [lotNos]);
-
-    const washQ = pool.query(`
-      SELECT jd.lot_no, wa.id, wa.is_approved,
-             wa.assigned_on, wa.approved_on, wa.user_id,
-             u.username AS opName
-        FROM washing_assignments wa
-        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-        LEFT JOIN users u ON wa.user_id = u.id
-        LEFT JOIN washing_assignments wa2
-               ON wa2.jeans_assembly_assignment_id = wa.jeans_assembly_assignment_id
-              AND wa2.assigned_on > wa.assigned_on
-       WHERE wa2.id IS NULL
-         AND jd.lot_no IN (?)
-    `, [lotNos]);
-
-    const winQ = pool.query(`
-      SELECT wd.lot_no, wia.id, wia.is_approved,
-             wia.assigned_on, wia.approved_on, wia.user_id,
-             u.username AS opName
-        FROM washing_in_assignments wia
-        JOIN washing_data wd ON wia.washing_data_id = wd.id
-        LEFT JOIN users u ON wia.user_id = u.id
-        LEFT JOIN washing_in_assignments wia2
-               ON wia2.washing_data_id = wia.washing_data_id
-              AND wia2.assigned_on > wia.assigned_on
-       WHERE wia2.id IS NULL
-         AND wd.lot_no IN (?)
-    `, [lotNos]);
-
-    const finQ = pool.query(`
-      SELECT
-        CASE
-          WHEN fa.washing_in_data_id IS NOT NULL THEN wid.lot_no
-          WHEN fa.stitching_assignment_id IS NOT NULL THEN sd.lot_no
-        END AS lot_no,
-        fa.id, fa.is_approved, fa.assigned_on, fa.approved_on, fa.user_id,
-        u.username AS opName
-      FROM finishing_assignments fa
-      LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-      LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-      LEFT JOIN users u         ON fa.user_id = u.id
-      LEFT JOIN finishing_assignments fa2
-             ON (
-                  fa.washing_in_data_id IS NOT NULL
-                  AND fa.washing_in_data_id = fa2.washing_in_data_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-                OR (
-                  fa.stitching_assignment_id IS NOT NULL
-                  AND fa.stitching_assignment_id = fa2.stitching_assignment_id
-                  AND fa2.assigned_on > fa.assigned_on
-                )
-      WHERE fa2.id IS NULL
-        AND (
-             (wid.lot_no IN (?) AND wid.lot_no IS NOT NULL)
-             OR
-             (sd.lot_no IN (?) AND sd.lot_no IS NOT NULL)
-            )
-    `, [lotNos, lotNos]);
-
-    const [
-      [sumRows],
-      [stRows],
-      [asmRows],
-      [washRows],
-      [winRows],
-      [finRows]
-    ] = await Promise.all([sumsQ, stQ, asmQ, washQ, winQ, finQ]);
-
-    const lotSumsMap = {};
-    lotNos.forEach(ln => {
-      lotSumsMap[ln] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
-    });
-    for (const row of sumRows) {
-      const m = lotSumsMap[row.lot_no];
-      if (!m) continue;
-      switch (row.sumType) {
-        case 'stitched':   m.stitchedQty   = parseFloat(row.sumVal) || 0; break;
-        case 'assembled':  m.assembledQty  = parseFloat(row.sumVal) || 0; break;
-        case 'washed':     m.washedQty     = parseFloat(row.sumVal) || 0; break;
-        case 'washing_in': m.washingInQty  = parseFloat(row.sumVal) || 0; break;
-        case 'finished':   m.finishedQty   = parseFloat(row.sumVal) || 0; break;
-      }
-    }
-
-    const stitchMap = {};
-    stRows.forEach(r => { stitchMap[r.lot_no] = r; });
-    const asmMap = {};
-    asmRows.forEach(r => { asmMap[r.lot_no] = r; });
-    const washMap = {};
-    washRows.forEach(r => { washMap[r.lot_no] = r; });
-    const winMap = {};
-    winRows.forEach(r => { winMap[r.lot_no] = r; });
-    const finMap = {};
-    finRows.forEach(r => { if (r.lot_no) finMap[r.lot_no] = r; });
-
-    return { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap };
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Event-sourced aggregates (truth source for PIC reports).
@@ -2692,80 +2517,54 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 router.get("/stitching-tat", isAuthenticated, isOperator, async (req, res) => {
   try {
     const { download = "0" } = req.query;
-    const masterCards = await cache.fetchCached(`tat-summary-${download}`, async () => {
-      // 1) Identify all users (Stitching Masters) who have either
-      //    pending or in-line lots
-      const [masters] = await pool.query(`
-        SELECT DISTINCT u.id, u.username
-          FROM users u
-          JOIN stitching_assignments sa ON sa.user_id = u.id
-          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-          JOIN users cu ON cl.user_id = cu.id
-         WHERE (
-                sa.isApproved IS NULL
-                OR
-                (
-                  sa.isApproved = 1
-                  AND (
-                    (
-                      (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
-                      AND NOT EXISTS (
-                        SELECT 1
-                          FROM jeans_assembly_assignments ja
-                          JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                         WHERE sd.lot_no = cl.lot_no
-                           AND ja.is_approved IS NOT NULL
-                      )
-                    )
-                    OR
-                    (
-                      (cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%'))
-                      AND NOT EXISTS (
-                        SELECT 1
-                          FROM finishing_assignments fa
-                          JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                         WHERE sd.lot_no = cl.lot_no
-                           AND fa.is_approved IS NOT NULL
-                      )
-                    )
-                  )
-                )
-              )
-      `);
-
+    const masterCards = await cache.fetchCached(`tat-summary-ev-${download}`, async () => {
+      // Sourced from stitching_events (truth source).
+      //
+      //   inLinePieces    = approved - completed - rejected
+      //                     (currently being stitched by this master)
+      //   pendingApproval = completed by master, but downstream (assembly for
+      //                     denim / finishing for hosiery) hasn't taken
+      //                     delivery yet
+      //
+      // For hosiery-era / pre-events lots, downstream may live only in the
+      // legacy *_data tables — those are treated as "handed off" so a lot
+      // that's been long-since cleared doesn't sit forever in pendingApproval.
       const [summary] = await pool.query(`
-        SELECT sa.user_id,
-               u.username,
-               SUM(CASE WHEN sa.isApproved IS NULL THEN cl.total_pieces ELSE 0 END) AS pendingApproval,
-               SUM(CASE WHEN sa.isApproved = 1 AND (
-                     ((cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%'))) AND NOT EXISTS (
-                          SELECT 1 FROM jeans_assembly_assignments ja
-                           JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no AND ja.is_approved IS NOT NULL
-                     ))
-                     OR
-                     ((cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%')) AND NOT EXISTS (
-                          SELECT 1 FROM finishing_assignments fa
-                           JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                          WHERE sd.lot_no = cl.lot_no AND fa.is_approved IS NOT NULL
-                     ))
-                 ) THEN cl.total_pieces ELSE 0 END) AS inLinePieces
-          FROM stitching_assignments sa
-          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-          JOIN users u ON sa.user_id = u.id
-          JOIN users cu ON cl.user_id = cu.id
-         GROUP BY sa.user_id, u.username
-         HAVING pendingApproval > 0 OR inLinePieces > 0
+        SELECT t.user_id, u.username,
+               SUM(t.inLinePcs)      AS inLinePieces,
+               SUM(t.unhandedOffPcs) AS pendingApproval
+          FROM (
+            SELECT se.operator_id AS user_id,
+                   cl.id          AS cutting_lot_id,
+                   GREATEST(0,
+                     SUM(CASE WHEN se.event_type='approve'  THEN se.pieces ELSE 0 END)
+                     - SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END)
+                     - SUM(CASE WHEN se.event_type='reject'   THEN se.pieces ELSE 0 END)
+                   ) AS inLinePcs,
+                   CASE
+                     WHEN SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END) > 0
+                      AND NOT EXISTS (SELECT 1 FROM jeans_assembly_events ae WHERE ae.cutting_lot_id=cl.id AND ae.event_type='approve')
+                      AND NOT EXISTS (SELECT 1 FROM finishing_events fe      WHERE fe.cutting_lot_id=cl.id AND fe.event_type='approve')
+                      AND NOT EXISTS (SELECT 1 FROM jeans_assembly_data jd   WHERE jd.lot_no=cl.lot_no)
+                      AND NOT EXISTS (SELECT 1 FROM finishing_data fd        WHERE fd.lot_no=cl.lot_no)
+                     THEN SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END)
+                     ELSE 0
+                   END AS unhandedOffPcs
+              FROM stitching_events se
+              JOIN cutting_lots cl ON cl.id = se.cutting_lot_id
+             GROUP BY se.operator_id, cl.id
+          ) t
+          JOIN users u ON u.id = t.user_id
+         GROUP BY t.user_id, u.username
+         HAVING inLinePieces > 0 OR pendingApproval > 0
       `);
 
-      const cards = summary.map(r => ({
+      return summary.map(r => ({
         masterId: r.user_id,
         username: r.username,
         pendingApproval: parseFloat(r.pendingApproval) || 0,
-        inLinePieces: parseFloat(r.inLinePieces) || 0
+        inLinePieces:    parseFloat(r.inLinePieces) || 0
       }));
-
-      return cards;
     });
 
     // 3) If ?download=1 => produce Excel summary
@@ -2820,99 +2619,66 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
       return res.status(400).send("Invalid Master ID");
     }
     const { download = "0" } = req.query;
-    const data = await cache.fetchCached(`tat-detail-${masterId}`, async () => {
+    const data = await cache.fetchCached(`tat-detail-ev-${masterId}`, async () => {
       const [[masterUser]] = await pool.query(
         `SELECT id, username FROM users WHERE id = ?`,
         [masterId]
       );
       if (!masterUser) return null;
 
-      const [assignments] = await pool.query(`
-        SELECT sa.id AS stitching_assignment_id,
-               sa.isApproved AS stitchIsApproved,
-               sa.assigned_on AS stitchAssignedOn,
-               cl.lot_no,
+      // Events-sourced: per (master, lot) get totals + timestamps. Surface
+      // only lots still in line or completed but not handed off downstream.
+      const [rows] = await pool.query(`
+        SELECT cl.lot_no,
                cl.sku,
                cl.total_pieces,
                cl.remark AS cutting_remark,
-               cl.flow_type,
-               u.is_denim_cutter,
-               asm.next_on AS asm_next_on,
-               fin.next_on AS fin_next_on
-          FROM stitching_assignments sa
-          JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-          JOIN users u ON cl.user_id = u.id
-          LEFT JOIN (
-                SELECT sd.lot_no, MIN(ja.assigned_on) AS next_on
-                  FROM jeans_assembly_assignments ja
-                  JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                 WHERE ja.is_approved IS NOT NULL
-                 GROUP BY sd.lot_no
-          ) asm ON asm.lot_no = cl.lot_no
-          LEFT JOIN (
-                SELECT sd.lot_no, MIN(fa.assigned_on) AS next_on
-                  FROM finishing_assignments fa
-                  JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                 WHERE fa.is_approved IS NOT NULL
-                 GROUP BY sd.lot_no
-          ) fin ON fin.lot_no = cl.lot_no
-         WHERE sa.user_id = ?
-           AND (
-                sa.isApproved IS NULL
-                OR (
-                     sa.isApproved = 1
-                     AND (
-                       ( (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
-                         AND asm.next_on IS NULL )
-                       OR
-                       ( (cl.flow_type = 'hosiery' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 0) OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL AND cl.lot_no NOT LIKE 'AK%' AND cl.lot_no NOT LIKE 'UM%'))
-                         AND fin.next_on IS NULL )
-                     )
-                   )
-              )
-         ORDER BY sa.assigned_on DESC
+               MIN(CASE WHEN se.event_type='approve'  THEN se.created_at END) AS firstApproveAt,
+               MAX(CASE WHEN se.event_type='complete' THEN se.created_at END) AS lastCompleteAt,
+               SUM(CASE WHEN se.event_type='approve'  THEN se.pieces ELSE 0 END) AS approvedPcs,
+               SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END) AS completedPcs,
+               SUM(CASE WHEN se.event_type='reject'   THEN se.pieces ELSE 0 END) AS rejectedPcs,
+               (SELECT MIN(ae.created_at) FROM jeans_assembly_events ae
+                 WHERE ae.cutting_lot_id = cl.id AND ae.event_type='approve') AS asmFirstApproveAt,
+               (SELECT MIN(fe.created_at) FROM finishing_events fe
+                 WHERE fe.cutting_lot_id = cl.id AND fe.event_type='approve') AS finFirstApproveAt,
+               -- legacy downstream presence (older lots may have no events)
+               (SELECT 1 FROM jeans_assembly_data jd WHERE jd.lot_no = cl.lot_no LIMIT 1) AS asmLegacyExists,
+               (SELECT 1 FROM finishing_data fd      WHERE fd.lot_no = cl.lot_no LIMIT 1) AS finLegacyExists
+          FROM stitching_events se
+          JOIN cutting_lots cl ON cl.id = se.cutting_lot_id
+         WHERE se.operator_id = ?
+         GROUP BY cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark
+         ORDER BY firstApproveAt DESC
       `, [masterId]);
 
       const detailRows = [];
-      const currentDate = new Date();
-      for (const a of assignments) {
-        const {
-          lot_no,
-          sku,
-          total_pieces,
-          cutting_remark,
-          flow_type,
-          is_denim_cutter,
-          stitchAssignedOn,
-          stitchIsApproved,
-          asm_next_on,
-          fin_next_on
-        } = a;
+      const now = new Date();
+      for (const r of rows) {
+        const inLinePcs = Math.max(0,
+          (Number(r.approvedPcs) || 0) - (Number(r.completedPcs) || 0) - (Number(r.rejectedPcs) || 0)
+        );
+        const nextOn = r.asmFirstApproveAt || r.finFirstApproveAt || null;
+        const handedOff = !!nextOn || !!r.asmLegacyExists || !!r.finLegacyExists;
 
-        let nextAssignedOn = null;
-        const isDenim = isDenimLot(lot_no, is_denim_cutter, flow_type);
-        if (stitchIsApproved === 1) {
-          nextAssignedOn = isDenim ? asm_next_on : fin_next_on;
-        }
+        let status = null;
+        if (inLinePcs > 0) status = "In Line";
+        else if ((Number(r.completedPcs) || 0) > 0 && !handedOff) status = "Awaiting Handoff";
+        if (!status) continue; // already handed off
 
-        let tatDays = 0;
-        if (stitchAssignedOn) {
-          const startMs = new Date(stitchAssignedOn).getTime();
-          const endMs = nextAssignedOn
-            ? new Date(nextAssignedOn).getTime()
-            : currentDate.getTime();
-          tatDays = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
-        }
+        const startMs = r.firstApproveAt ? new Date(r.firstApproveAt).getTime() : null;
+        const endMs   = nextOn ? new Date(nextOn).getTime() : now.getTime();
+        const tatDays = startMs ? Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24)) : 0;
 
         detailRows.push({
-          lotNo: lot_no,
-          sku,
-          totalPieces: total_pieces,
-          cuttingRemark: cutting_remark || "",
-          assignedOn: stitchAssignedOn,
-          nextDeptAssignedOn: nextAssignedOn,
+          lotNo: r.lot_no,
+          sku: r.sku,
+          totalPieces: r.total_pieces,
+          cuttingRemark: r.cutting_remark || "",
+          assignedOn: r.firstApproveAt,
+          nextDeptAssignedOn: nextOn,
           tatDays,
-          status: stitchIsApproved === null ? "Pending Approval" : "In Line"
+          status
         });
       }
       return { masterUser, detailRows };
@@ -3144,18 +2910,35 @@ router.route("/urgent-tat")
         return res.end(noMapHtml);
       }
 
-      const [rows] = await cache.fetchCached(`urgent-${userIds.join('-')}`, async () =>
+      // Earliest stitching-approve event per (operator, lot). A lot still
+      // 'urgent' for the operator when it isn't yet completed, isn't handed
+      // off downstream, and was approved more than 20 days ago.
+      const [rows] = await cache.fetchCached(`urgent-ev-${userIds.join('-')}`, async () =>
         pool.query(
-          `SELECT sa.user_id, u.username,
-                  cl.lot_no, cl.remark,
-                  sa.assigned_on
-             FROM stitching_assignments sa
-             JOIN cutting_lots cl ON sa.cutting_lot_id = cl.id
-             JOIN users u         ON sa.user_id = u.id
-            WHERE sa.assigned_on IS NOT NULL
-              AND DATEDIFF(NOW(), sa.assigned_on) > 20
-              AND sa.user_id IN (?)
-            ORDER BY sa.user_id, sa.assigned_on`,
+          `SELECT t.user_id, u.username, cl.lot_no, cl.remark, t.assigned_on
+             FROM (
+               SELECT se.operator_id AS user_id, se.cutting_lot_id,
+                      MIN(se.created_at) AS assigned_on,
+                      SUM(CASE WHEN se.event_type='approve'  THEN se.pieces ELSE 0 END) AS approvedPcs,
+                      SUM(CASE WHEN se.event_type='complete' THEN se.pieces ELSE 0 END) AS completedPcs
+                 FROM stitching_events se
+                WHERE se.operator_id IN (?)
+                GROUP BY se.operator_id, se.cutting_lot_id
+             ) t
+             JOIN cutting_lots cl ON cl.id = t.cutting_lot_id
+             JOIN users u         ON u.id = t.user_id
+            WHERE t.assigned_on IS NOT NULL
+              AND DATEDIFF(NOW(), t.assigned_on) > 20
+              AND t.approvedPcs > t.completedPcs
+              AND NOT EXISTS (
+                SELECT 1 FROM jeans_assembly_events ae
+                 WHERE ae.cutting_lot_id = cl.id AND ae.event_type='approve'
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM finishing_events fe
+                 WHERE fe.cutting_lot_id = cl.id AND fe.event_type='approve'
+              )
+            ORDER BY t.user_id, t.assigned_on`,
           [userIds]
         )
       );
@@ -3893,6 +3676,104 @@ router.delete('/api/sku-categories/:id', isAuthenticated, isOperator, async (req
   } catch (error) {
     console.error('Error deleting SKU category:', error);
     return res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
+/**
+ * GET /operator/api/lot-sizes?lot_no=<lotNo>
+ * Shared endpoint used by the "expand-on-click" pattern in every dashboard
+ * that lists lots. Returns per-size pieces for every stage of the lot,
+ * sourced from the *_event_sizes tables (truth source) plus
+ * finishing_dispatches for dispatched qty.
+ */
+router.get('/api/lot-sizes', isAuthenticated, async (req, res) => {
+  try {
+    const lotNoRaw = (req.query.lot_no || '').trim();
+    if (!lotNoRaw) {
+      return res.status(400).json({ error: 'lot_no query param required' });
+    }
+    // Look up cutting_lot by lot_no (case-insensitive — DB collation usually
+    // handles this, but trim and pass as-is).
+    const [lotRows] = await pool.query(
+      `SELECT id, lot_no, sku FROM cutting_lots WHERE lot_no = ? LIMIT 1`,
+      [lotNoRaw]
+    );
+    if (!lotRows.length) {
+      return res.json({ lot_no: lotNoRaw, sku: null, totalCut: 0, sizes: [] });
+    }
+    const lot = lotRows[0];
+
+    // Per-size cut baseline from cutting_lot_sizes.
+    const [cutRows] = await pool.query(
+      `SELECT size_label, COALESCE(total_pieces,0) AS pieces
+         FROM cutting_lot_sizes
+        WHERE cutting_lot_id = ?`,
+      [lot.id]
+    );
+
+    // Per-size event sums (stitched / assembled / washed / washing_in / finished).
+    const sizeEventSums = await fetchLotSizeEventSums([lot.lot_no]);
+
+    // Per-size dispatched from finishing_dispatches.
+    const [dispRows] = await pool.query(
+      `SELECT size_label, COALESCE(SUM(quantity),0) AS dispatched
+         FROM finishing_dispatches
+        WHERE lot_no = ?
+        GROUP BY size_label`,
+      [lot.lot_no]
+    );
+    const dispMap = {};
+    for (const r of dispRows) dispMap[r.size_label] = parseFloat(r.dispatched) || 0;
+
+    // Build the union of size labels found anywhere (cut / events / dispatch).
+    const labelSet = new Set();
+    cutRows.forEach(r => labelSet.add(r.size_label));
+    Object.keys(sizeEventSums).forEach(k => {
+      const [ln, sz] = k.split('|');
+      if (ln === lot.lot_no) labelSet.add(sz);
+    });
+    Object.keys(dispMap).forEach(sz => labelSet.add(sz));
+
+    const cutMap = {};
+    cutRows.forEach(r => { cutMap[r.size_label] = parseFloat(r.pieces) || 0; });
+
+    // Numeric-aware sort: pure numbers first (ascending), then strings A→Z.
+    const labels = Array.from(labelSet).sort((a, b) => {
+      const na = parseFloat(a);
+      const nb = parseFloat(b);
+      const aNum = !isNaN(na) && /^\d+(\.\d+)?$/.test(String(a).trim());
+      const bNum = !isNaN(nb) && /^\d+(\.\d+)?$/.test(String(b).trim());
+      if (aNum && bNum) return na - nb;
+      if (aNum) return -1;
+      if (bNum) return 1;
+      return String(a).localeCompare(String(b));
+    });
+
+    const sizes = labels.map(sz => {
+      const ev = sizeEventSums[`${lot.lot_no}|${sz}`] || {};
+      return {
+        size_label: sz,
+        cut:        cutMap[sz] || 0,
+        stitched:   ev.stitchedQty   || 0,
+        assembled:  ev.assembledQty  || 0,
+        washed:     ev.washedQty     || 0,
+        washing_in: ev.washingInQty  || 0,
+        finished:   ev.finishedQty   || 0,
+        dispatched: dispMap[sz]      || 0,
+      };
+    });
+
+    const totalCut = sizes.reduce((s, r) => s + (r.cut || 0), 0);
+
+    return res.json({
+      lot_no: lot.lot_no,
+      sku: lot.sku,
+      totalCut,
+      sizes,
+    });
+  } catch (err) {
+    console.error('GET /operator/api/lot-sizes error:', err);
+    return res.status(500).json({ error: 'Failed to fetch lot sizes' });
   }
 });
 

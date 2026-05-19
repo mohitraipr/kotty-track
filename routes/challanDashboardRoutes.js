@@ -134,16 +134,23 @@ async function getNextChallanCounter (washerId) {
 
 // --------------------------------------------------------------------
 // HELPER: exclude lots already in a challan
+// Works against any id-bearing alias (legacy washing_assignments.id or
+// the offset event_id used by the events-sourced rows).
 // --------------------------------------------------------------------
-const EXCLUDE_USED_LOTS_CLAUSE = `
+const EXCLUDE_USED_LOTS_CLAUSE_FOR = (idExpr) => `
   NOT EXISTS (
     SELECT 1
       FROM challan ch
      WHERE JSON_SEARCH(
-             ch.items,'one',CAST(wa.id AS CHAR),NULL,'$[*].washing_id'
+             ch.items,'one',CAST(${idExpr} AS CHAR),NULL,'$[*].washing_id'
            ) IS NOT NULL
   )
 `;
+
+// Events-sourced rows surface to the UI with washing_id = EVENT_ID_OFFSET + event_id
+// so they cannot collide with legacy washing_assignments.id values (low thousands).
+// On create we decode back.
+const EVENT_ID_OFFSET = 100000000;
 
 // ====================================================================
 // GET /challandashboard  – dashboard
@@ -160,23 +167,50 @@ router.get('/', isAuthenticated, async (req,res)=>{
     const limit  = 50;
 
     const [assignments] = await pool.query(`
-      SELECT
-        wa.id        AS washing_id,
-        jd.lot_no, jd.sku, jd.total_pieces,
-        jd.remark    AS assembly_remark,
-        c.remark     AS cutting_remark,
-        wa.target_day, wa.assigned_on,
-        wa.is_approved, wa.assignment_remark,
-        u.username   AS washer_username,
-        m.username   AS master_username
-      FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-      JOIN cutting_lots        c  ON jd.lot_no = c.lot_no
-      JOIN users               u  ON wa.user_id = u.id
-      JOIN users               m  ON wa.jeans_assembly_master_id = m.id
-      WHERE ${EXCLUDE_USED_LOTS_CLAUSE}
-        AND wa.is_approved = 1
-      ORDER BY wa.assigned_on DESC
+      ( SELECT
+          wa.id        AS washing_id,
+          jd.lot_no, jd.sku, jd.total_pieces,
+          jd.remark    AS assembly_remark,
+          c.remark     AS cutting_remark,
+          wa.target_day, wa.assigned_on,
+          wa.is_approved, wa.assignment_remark,
+          u.username   AS washer_username,
+          m.username   AS master_username
+        FROM washing_assignments wa
+        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+        JOIN cutting_lots        c  ON jd.lot_no = c.lot_no
+        JOIN users               u  ON wa.user_id = u.id
+        JOIN users               m  ON wa.jeans_assembly_master_id = m.id
+        WHERE ${EXCLUDE_USED_LOTS_CLAUSE_FOR('wa.id')}
+          AND wa.is_approved = 1 )
+      UNION ALL
+      ( SELECT
+          we.id + ${EVENT_ID_OFFSET}  AS washing_id,
+          c.lot_no, c.sku, c.total_pieces,
+          NULL          AS assembly_remark,
+          c.remark      AS cutting_remark,
+          NULL          AS target_day,
+          we.created_at AS assigned_on,
+          1             AS is_approved,
+          we.remark     AS assignment_remark,
+          u.username    AS washer_username,
+          COALESCE((SELECT u2.username
+                      FROM jeans_assembly_events je
+                      JOIN users u2 ON u2.id = je.operator_id
+                     WHERE je.cutting_lot_id = c.id AND je.event_type='complete'
+                     ORDER BY je.created_at DESC LIMIT 1), '') AS master_username
+        FROM washing_events we
+        JOIN cutting_lots c ON c.id = we.cutting_lot_id
+        JOIN users u        ON u.id = we.operator_id
+        WHERE we.event_type = 'approve'
+          -- Avoid double-listing if a legacy washing_assignments row exists for this lot.
+          AND NOT EXISTS (
+            SELECT 1 FROM washing_assignments wa
+              JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+             WHERE jd.lot_no = c.lot_no AND wa.is_approved = 1
+          )
+          AND ${EXCLUDE_USED_LOTS_CLAUSE_FOR(`we.id + ${EVENT_ID_OFFSET}`)} )
+      ORDER BY assigned_on DESC
       LIMIT ? OFFSET ?`,
       [limit, offset]
     );
@@ -208,45 +242,81 @@ router.get('/search', isAuthenticated, async (req,res)=>{
     const offset  = parseInt(req.query.offset,10)||0;
     const limit   = 50;
 
-    let sql = `
-      SELECT
-        wa.id        AS washing_id,
-        jd.lot_no, jd.sku, jd.total_pieces,
-        jd.remark    AS assembly_remark,
-        c.remark     AS cutting_remark,
-        wa.target_day, wa.assigned_on,
-        wa.is_approved, wa.assignment_remark,
-        u.username   AS washer_username,
-        m.username   AS master_username
-      FROM washing_assignments wa
-      JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-      JOIN cutting_lots        c  ON jd.lot_no = c.lot_no
-      JOIN users               u  ON wa.user_id = u.id
-      JOIN users               m  ON wa.jeans_assembly_master_id = m.id
-      WHERE ${EXCLUDE_USED_LOTS_CLAUSE}
-        AND wa.is_approved = 1`;
-    const params = [];
+    // Build the search predicate once; applied to both halves of the UNION.
+    let searchClauseLegacy = '';
+    let searchClauseEvent  = '';
+    const searchParams = [];
 
     if (search.includes(',')) {
       const terms = search.split(',').map(t=>t.trim()).filter(Boolean);
       if (!terms.length) return res.json({assignments:[]});
-      const conds = [];
+      const condsLegacy = [], condsEvent = [];
       for (const t of terms) {
         const like = `%${t}%`;
-        conds.push('(jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)');
-        params.push(like,like,like);
+        condsLegacy.push('(jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)');
+        condsEvent .push('(c.sku  LIKE ? OR c.lot_no  LIKE ? OR c.remark LIKE ?)');
+        searchParams.push(like,like,like);
       }
-      sql += ` AND (${conds.join(' OR ')})`;
+      searchClauseLegacy = ` AND (${condsLegacy.join(' OR ')})`;
+      searchClauseEvent  = ` AND (${condsEvent .join(' OR ')})`;
     } else if (search) {
       const like = `%${search}%`;
-      sql += ` AND (jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)`;
-      params.push(like,like,like);
+      searchClauseLegacy = ` AND (jd.sku LIKE ? OR jd.lot_no LIKE ? OR c.remark LIKE ?)`;
+      searchClauseEvent  = ` AND (c.sku  LIKE ? OR c.lot_no  LIKE ? OR c.remark LIKE ?)`;
+      searchParams.push(like,like,like);
     }
 
-    sql += ` ORDER BY wa.assigned_on DESC LIMIT ? OFFSET ?`;
-    params.push(limit,offset);
+    const sql = `
+      ( SELECT
+          wa.id        AS washing_id,
+          jd.lot_no, jd.sku, jd.total_pieces,
+          jd.remark    AS assembly_remark,
+          c.remark     AS cutting_remark,
+          wa.target_day, wa.assigned_on,
+          wa.is_approved, wa.assignment_remark,
+          u.username   AS washer_username,
+          m.username   AS master_username
+        FROM washing_assignments wa
+        JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+        JOIN cutting_lots        c  ON jd.lot_no = c.lot_no
+        JOIN users               u  ON wa.user_id = u.id
+        JOIN users               m  ON wa.jeans_assembly_master_id = m.id
+        WHERE ${EXCLUDE_USED_LOTS_CLAUSE_FOR('wa.id')}
+          AND wa.is_approved = 1
+          ${searchClauseLegacy} )
+      UNION ALL
+      ( SELECT
+          we.id + ${EVENT_ID_OFFSET}  AS washing_id,
+          c.lot_no, c.sku, c.total_pieces,
+          NULL          AS assembly_remark,
+          c.remark      AS cutting_remark,
+          NULL          AS target_day,
+          we.created_at AS assigned_on,
+          1             AS is_approved,
+          we.remark     AS assignment_remark,
+          u.username    AS washer_username,
+          COALESCE((SELECT u2.username
+                      FROM jeans_assembly_events je
+                      JOIN users u2 ON u2.id = je.operator_id
+                     WHERE je.cutting_lot_id = c.id AND je.event_type='complete'
+                     ORDER BY je.created_at DESC LIMIT 1), '') AS master_username
+        FROM washing_events we
+        JOIN cutting_lots c ON c.id = we.cutting_lot_id
+        JOIN users u        ON u.id = we.operator_id
+        WHERE we.event_type = 'approve'
+          AND NOT EXISTS (
+            SELECT 1 FROM washing_assignments wa
+              JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
+             WHERE jd.lot_no = c.lot_no AND wa.is_approved = 1
+          )
+          AND ${EXCLUDE_USED_LOTS_CLAUSE_FOR(`we.id + ${EVENT_ID_OFFSET}`)}
+          ${searchClauseEvent} )
+      ORDER BY assigned_on DESC
+      LIMIT ? OFFSET ?
+    `;
+    const params = [...searchParams, ...searchParams, limit, offset];
 
-    const [assignments] = await pool.query(sql,params);
+    const [assignments] = await pool.query(sql, params);
     res.json({assignments});
   } catch (err) {
     console.error('[ERROR] GET /challandashboard/search:',err);
@@ -324,11 +394,29 @@ router.post('/create', isAuthenticated, async (req,res)=>{
       conn.release(); return res.redirect('/challandashboard');
     }
 
-    const [[{total:approvedCnt}]] = await conn.query(
-      `SELECT COUNT(*) AS total FROM washing_assignments
-        WHERE id IN (?) AND is_approved=1`,
-      [washingIds]
-    );
+    // Split into legacy washing_assignments ids vs offset-encoded
+    // washing_events.id (decoded via EVENT_ID_OFFSET).
+    const legacyIds = washingIds.filter(id => id < EVENT_ID_OFFSET);
+    const eventIds  = washingIds.filter(id => id >= EVENT_ID_OFFSET)
+                                .map(id => id - EVENT_ID_OFFSET);
+
+    let approvedCnt = 0;
+    if (legacyIds.length) {
+      const [[{total}]] = await conn.query(
+        `SELECT COUNT(*) AS total FROM washing_assignments
+          WHERE id IN (?) AND is_approved=1`,
+        [legacyIds]
+      );
+      approvedCnt += total;
+    }
+    if (eventIds.length) {
+      const [[{total}]] = await conn.query(
+        `SELECT COUNT(*) AS total FROM washing_events
+          WHERE id IN (?) AND event_type='approve'`,
+        [eventIds]
+      );
+      approvedCnt += total;
+    }
     if (approvedCnt !== washingIds.length) {
       req.flash('error','Some selected lots are not approved or missing');
       conn.release(); return res.redirect('/challandashboard');

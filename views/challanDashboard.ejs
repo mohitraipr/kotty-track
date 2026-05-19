@@ -86,6 +86,7 @@
         <table class="table mb-0" id="assignmentsTable">
           <thead>
             <tr>
+              <th style="width: 28px;"></th>
               <th style="width: 50px;">
                 <input type="checkbox" id="selectAllCheckbox" class="form-check-input" style="margin: 0; cursor: pointer;">
               </th>
@@ -106,7 +107,8 @@
           <tbody>
             <% if (assignments && assignments.length) { %>
               <% assignments.forEach(a => { %>
-                <tr data-id="<%= a.washing_id %>">
+                <tr data-id="<%= a.washing_id %>" data-lot-no="<%= a.lot_no %>">
+                  <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                   <td>
                     <input type="checkbox" class="rowCheckbox form-check-input" style="cursor: pointer;">
                   </td>
@@ -134,7 +136,7 @@
               <% }); %>
             <% } else { %>
               <tr id="noRecordsRow">
-                <td colspan="13" class="text-center py-5">
+                <td colspan="14" class="text-center py-5">
                   <div class="empty-state">
                     <i class="bi bi-inbox empty-state-icon" style="font-size: 48px;"></i>
                     <h4 class="empty-state-title mt-3">No Records Found</h4>
@@ -484,6 +486,21 @@
       assignments.forEach(a => {
         const tr = document.createElement('tr');
         tr.setAttribute('data-id', a.washing_id);
+        if (a.lot_no) tr.setAttribute('data-lot-no', a.lot_no);
+
+        // Expand chevron cell
+        const tdToggle = document.createElement('td');
+        const btnToggle = document.createElement('button');
+        btnToggle.type = 'button';
+        btnToggle.className = 'lse-toggle';
+        btnToggle.setAttribute('aria-expanded', 'false');
+        btnToggle.setAttribute('aria-label', 'Show size breakdown');
+        const chevSpan = document.createElement('span');
+        chevSpan.className = 'lse-chevron';
+        chevSpan.innerHTML = '&#9654;';
+        btnToggle.appendChild(chevSpan);
+        tdToggle.appendChild(btnToggle);
+        tr.appendChild(tdToggle);
 
         // Checkbox cell
         const tdCheckbox = document.createElement('td');
@@ -673,10 +690,10 @@
             tr.classList.add('selected');
             selectedRows.push({
               washing_id: tr.getAttribute('data-id'),
-              lot_no: tr.children[2].textContent,
-              sku: tr.children[3].textContent,
-              total_pieces: tr.children[4].textContent,
-              cutting_remark: tr.children[6].textContent
+              lot_no: tr.children[3].textContent,
+              sku: tr.children[4].textContent,
+              total_pieces: tr.children[5].textContent,
+              cutting_remark: tr.children[7].textContent
             });
           } else {
             tr.classList.remove('selected');
@@ -783,5 +800,6 @@
   // Ensure handlers are attached after the DOM loads.
   document.addEventListener('DOMContentLoaded', attachCheckboxHandlers);
 </script>
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

@@ -434,6 +434,7 @@
       <table class="kotty-table">
         <thead>
           <tr>
+            <th style="width:28px;"></th>
             <th>Lot No</th>
             <th>SKU</th>
             <th>Fabric</th>
@@ -447,11 +448,12 @@
         <tbody>
           <% if (lots.length === 0) { %>
           <tr>
-            <td colspan="8" class="text-center text-muted py-4">No lots found</td>
+            <td colspan="9" class="text-center text-muted py-4">No lots found</td>
           </tr>
           <% } else { %>
           <% lots.forEach(lot => { %>
-          <tr>
+          <tr data-lot-no="<%= lot.lot_no %>">
+            <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
             <td><span class="lot-no"><%= lot.lot_no %></span></td>
             <td><span class="sku"><%= lot.sku || '-' %></span></td>
             <td><%= lot.fabric_type || '-' %></td>
@@ -530,5 +532,7 @@
     <% } %>
   </div>
 </div>
+
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

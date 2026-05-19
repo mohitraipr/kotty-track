@@ -39,6 +39,7 @@
           <table class="table mb-0">
             <thead>
               <tr>
+                <th style="width:28px;"></th>
                 <th>Lot No</th>
                 <th>SKU</th>
                 <th>Status</th>
@@ -58,7 +59,8 @@
                  // Extra label in the TAT cell => e.g. "4 (TAT Crossed)" or "2 (Within TAT)"
                  const tatLabel = isDelayed ? "TAT Crossed" : "Within TAT";
               %>
-                <tr class="<%= rowClass %>">
+                <tr class="<%= rowClass %>" data-lot-no="<%= row.lotNo %>">
+                  <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                   <td>
                     <span class="fw-medium" style="color: var(--terracotta);"><%= row.lotNo %></span>
                   </td>
@@ -148,5 +150,7 @@
     margin-left: 0 !important;
   }
 </style>
+
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

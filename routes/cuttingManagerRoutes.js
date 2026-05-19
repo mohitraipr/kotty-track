@@ -607,9 +607,12 @@ router.get('/assign-stitching/lots', isAuthenticated, isCuttingManager, async (r
         c.created_at
       FROM cutting_lots c
       WHERE c.user_id = ?
-        AND c.id NOT IN (
-          SELECT s.cutting_lot_id 
-          FROM stitching_assignments s
+        AND NOT EXISTS (
+          SELECT 1 FROM stitching_assignments s WHERE s.cutting_lot_id = c.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM stitching_events se
+           WHERE se.cutting_lot_id = c.id AND se.event_type='approve'
         )
       ORDER BY c.created_at DESC
     `,
