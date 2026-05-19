@@ -1457,6 +1457,164 @@ async function fetchLotAggregates(lotNos = []) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Event-sourced aggregates (truth source for PIC reports).
+//
+// The legacy *_assignments / *_data tables are only partially kept in sync —
+// roughly half of recent activity flows through the *_events tables instead.
+// These helpers read directly from *_events / *_event_sizes so the reports
+// reflect real lot location (e.g. AK5237 sitting inline at washer ADS even
+// though washing_assignments has no row for it).
+//
+// Mapping back to the legacy shape:
+//   stitchedQty   = SUM(stitching_events.complete)
+//   assembledQty  = SUM(jeans_assembly_events.complete)
+//   washedQty     = SUM(washing_events.complete)
+//   washingInQty  = SUM(washing_in_events.complete)
+//   finishedQty   = SUM(finishing_events.complete)
+//
+//   stitchMap[lot] / asmMap / washMap / winMap / finMap = a synthetic
+//   "assignment-like" object built from the latest approve event for the
+//   stage (is_approved=1, assigned_on=approved_on=latest approve ts,
+//   opName=latest approver username). null when no approve event yet.
+// ---------------------------------------------------------------------------
+async function fetchLotEventAggregates(lotNos = []) {
+  if (!lotNos.length) {
+    return {
+      lotSumsMap: {}, stitchMap: {}, asmMap: {}, washMap: {}, winMap: {}, finMap: {}
+    };
+  }
+  const sorted = lotNos.slice().sort();
+  const cacheKey = `lotAggEv-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
+  return cache.fetchCached(cacheKey, async () => {
+    const aggSql = (table, key) => `
+      SELECT '${key}' AS stage, cl.lot_no,
+             SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END) AS completed
+        FROM ${table} e
+        JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE cl.lot_no IN (?)
+       GROUP BY cl.lot_no
+    `;
+    const aggQ = pool.query(
+      [
+        aggSql('stitching_events',       'stitched'),
+        aggSql('jeans_assembly_events',  'assembled'),
+        aggSql('washing_events',         'washed'),
+        aggSql('washing_in_events',      'washing_in'),
+        aggSql('finishing_events',       'finished'),
+      ].join('\nUNION ALL\n'),
+      [lotNos, lotNos, lotNos, lotNos, lotNos]
+    );
+
+    // Per-stage approve events, ordered so the first row per lot is the latest.
+    const opSql = (table) => `
+      SELECT cl.lot_no, e.created_at, u.username AS opName, e.operator_id
+        FROM ${table} e
+        JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+        JOIN users u ON u.id = e.operator_id
+       WHERE cl.lot_no IN (?) AND e.event_type = 'approve'
+       ORDER BY e.created_at DESC, e.id DESC
+    `;
+    const stApprovesQ  = pool.query(opSql('stitching_events'),       [lotNos]);
+    const asmApprovesQ = pool.query(opSql('jeans_assembly_events'),  [lotNos]);
+    const washApprovesQ= pool.query(opSql('washing_events'),         [lotNos]);
+    const winApprovesQ = pool.query(opSql('washing_in_events'),      [lotNos]);
+    const finApprovesQ = pool.query(opSql('finishing_events'),       [lotNos]);
+
+    const [
+      [aggRows],
+      [stApproves],
+      [asmApproves],
+      [washApproves],
+      [winApproves],
+      [finApproves],
+    ] = await Promise.all([aggQ, stApprovesQ, asmApprovesQ, washApprovesQ, winApprovesQ, finApprovesQ]);
+
+    const lotSumsMap = {};
+    lotNos.forEach(ln => {
+      lotSumsMap[ln] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
+    });
+    for (const r of aggRows) {
+      const m = lotSumsMap[r.lot_no];
+      if (!m) continue;
+      const completed = parseFloat(r.completed) || 0;
+      switch (r.stage) {
+        case 'stitched':   m.stitchedQty   = completed; break;
+        case 'assembled':  m.assembledQty  = completed; break;
+        case 'washed':     m.washedQty     = completed; break;
+        case 'washing_in': m.washingInQty  = completed; break;
+        case 'finished':   m.finishedQty   = completed; break;
+      }
+    }
+
+    const latestApproveMap = (rows) => {
+      const m = {};
+      for (const r of rows) {
+        if (m[r.lot_no]) continue; // first occurrence is latest (DESC order)
+        m[r.lot_no] = {
+          is_approved: 1,
+          assigned_on: r.created_at,
+          approved_on: r.created_at,
+          opName:      r.opName,
+          user_id:     r.operator_id,
+        };
+      }
+      return m;
+    };
+
+    return {
+      lotSumsMap,
+      stitchMap: latestApproveMap(stApproves),
+      asmMap:    latestApproveMap(asmApproves),
+      washMap:   latestApproveMap(washApproves),
+      winMap:    latestApproveMap(winApproves),
+      finMap:    latestApproveMap(finApproves),
+    };
+  });
+}
+
+// Per-(lot, size) completed pieces by stage, from *_event_sizes.
+async function fetchLotSizeEventSums(lotNos = []) {
+  if (!lotNos.length) return {};
+  const sorted = lotNos.slice().sort();
+  const cacheKey = `lotSizeEv-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
+  return cache.fetchCached(cacheKey, async () => {
+    const sizeSql = (eventsTbl, sizesTbl, key) => `
+      SELECT '${key}' AS stage, cl.lot_no, s.size_label,
+             COALESCE(SUM(s.pieces),0) AS completed
+        FROM ${sizesTbl} s
+        JOIN ${eventsTbl} e ON e.id = s.event_id
+        JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+       WHERE cl.lot_no IN (?) AND e.event_type='complete'
+       GROUP BY cl.lot_no, s.size_label
+    `;
+    const [rows] = await pool.query(
+      [
+        sizeSql('stitching_events',      'stitching_event_sizes',      'stitched'),
+        sizeSql('jeans_assembly_events', 'jeans_assembly_event_sizes', 'assembled'),
+        sizeSql('washing_events',        'washing_event_sizes',        'washed'),
+        sizeSql('washing_in_events',     'washing_in_event_sizes',     'washing_in'),
+        sizeSql('finishing_events',      'finishing_event_sizes',      'finished'),
+      ].join('\nUNION ALL\n'),
+      [lotNos, lotNos, lotNos, lotNos, lotNos]
+    );
+    const map = {}; // key = `${lot_no}|${size_label}`
+    for (const r of rows) {
+      const k = `${r.lot_no}|${r.size_label}`;
+      if (!map[k]) map[k] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
+      const completed = parseFloat(r.completed) || 0;
+      switch (r.stage) {
+        case 'stitched':   map[k].stitchedQty   = completed; break;
+        case 'assembled':  map[k].assembledQty  = completed; break;
+        case 'washed':     map[k].washedQty     = completed; break;
+        case 'washing_in': map[k].washingInQty  = completed; break;
+        case 'finished':   map[k].finishedQty   = completed; break;
+      }
+    }
+    return map;
+  });
+}
+
 /**
  * The chain logic you want:
  * DENIM: Cut → Stitching → Assembly → Washing → WashingIn → Finishing
@@ -1954,66 +2112,22 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
       } else if (dateFilter === "assignedOn") {
-        if (department === "stitching") {
+        // Sourced from *_events tables — same approach as the rest of the report.
+        const evtTable = {
+          stitching:  'stitching_events',
+          assembly:   'jeans_assembly_events',
+          washing:    'washing_events',
+          washing_in: 'washing_in_events',
+          finishing:  'finishing_events',
+        }[department];
+        if (evtTable) {
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM stitching_assignments sa
-                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(sa.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "assembly") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM jeans_assembly_assignments ja
-                JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(ja.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "washing") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM washing_assignments wa
-                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wa.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "washing_in") {
-          // <-- Updated to join washing_data instead of washing_in_data
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM washing_in_assignments wia
-                JOIN washing_data wd
-                  ON wia.washing_data_id = wd.id
-                JOIN cutting_lots c2
-                  ON wd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wia.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "finishing") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM finishing_assignments fa
-                LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wid.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(fa.assigned_on) BETWEEN ? AND ?
+                FROM ${evtTable} e
+               WHERE e.cutting_lot_id = cl.id
+                 AND e.event_type = 'approve'
+                 AND DATE(e.created_at) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -2068,7 +2182,9 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
     }
 
     // 3) Aggregate per-lot quantities and fetch last assignments in a batched manner
-    const { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
+    // Sourced from *_events tables — the legacy *_assignments / *_data tables
+    // are only partially kept in sync (see fetchLotEventAggregates).
+    const { lotSumsMap, stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotEventAggregates(lotNos);
 
     // --- Rewash quantities (requested / pending / completed) ---
     const [rewashRows] = await pool.query(
@@ -2256,63 +2372,21 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         dateWhere = " AND DATE(cl.created_at) BETWEEN ? AND ? ";
         dateParams.push(startDate, endDate);
       } else if (dateFilter === "assignedOn") {
-        if (department === "stitching") {
+        const evtTable = {
+          stitching:  'stitching_events',
+          assembly:   'jeans_assembly_events',
+          washing:    'washing_events',
+          washing_in: 'washing_in_events',
+          finishing:  'finishing_events',
+        }[department];
+        if (evtTable) {
           dateWhere = `
             AND EXISTS (
               SELECT 1
-                FROM stitching_assignments sa
-                JOIN cutting_lots c2 ON sa.cutting_lot_id = c2.id
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(sa.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "assembly") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM jeans_assembly_assignments ja
-                JOIN stitching_data sd ON ja.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON sd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(ja.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "washing") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM washing_assignments wa
-                JOIN jeans_assembly_data jd ON wa.jeans_assembly_assignment_id = jd.id
-                JOIN cutting_lots c2 ON jd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wa.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "washing_in") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM washing_in_assignments wia
-                JOIN washing_data wd ON wia.washing_data_id = wd.id
-                JOIN cutting_lots c2 ON wd.lot_no = c2.lot_no
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(wia.assigned_on) BETWEEN ? AND ?
-            )
-          `;
-          dateParams.push(startDate, endDate);
-        } else if (department === "finishing") {
-          dateWhere = `
-            AND EXISTS (
-              SELECT 1
-                FROM finishing_assignments fa
-                LEFT JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
-                LEFT JOIN stitching_data sd ON fa.stitching_assignment_id = sd.id
-                JOIN cutting_lots c2 ON (wid.lot_no = c2.lot_no OR sd.lot_no = c2.lot_no)
-               WHERE c2.lot_no = cl.lot_no
-                 AND DATE(fa.assigned_on) BETWEEN ? AND ?
+                FROM ${evtTable} e
+               WHERE e.cutting_lot_id = cl.id
+                 AND e.event_type = 'approve'
+                 AND DATE(e.created_at) BETWEEN ? AND ?
             )
           `;
           dateParams.push(startDate, endDate);
@@ -2366,46 +2440,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       }
     }
 
-    // 3) Get sums grouped by lot_no and size_label
-    const [sumRows] = await pool.query(`
-      SELECT 'stitched' AS sumType, sd.lot_no, sds.size_label, COALESCE(SUM(sds.pieces),0) AS sumVal
-        FROM stitching_data_sizes sds
-        JOIN stitching_data sd ON sds.stitching_data_id = sd.id
-       WHERE sd.lot_no IN (?)
-       GROUP BY sd.lot_no, sds.size_label
-
-      UNION ALL
-
-      SELECT 'assembled' AS sumType, jd.lot_no, jds.size_label, COALESCE(SUM(jds.pieces),0) AS sumVal
-        FROM jeans_assembly_data_sizes jds
-        JOIN jeans_assembly_data jd ON jds.jeans_assembly_data_id = jd.id
-       WHERE jd.lot_no IN (?)
-       GROUP BY jd.lot_no, jds.size_label
-
-      UNION ALL
-
-      SELECT 'washed' AS sumType, wd.lot_no, wds.size_label, COALESCE(SUM(wds.pieces),0) AS sumVal
-        FROM washing_data_sizes wds
-        JOIN washing_data wd ON wds.washing_data_id = wd.id
-       WHERE wd.lot_no IN (?)
-       GROUP BY wd.lot_no, wds.size_label
-
-      UNION ALL
-
-      SELECT 'washing_in' AS sumType, wid.lot_no, wids.size_label, COALESCE(SUM(wids.pieces),0) AS sumVal
-        FROM washing_in_data_sizes wids
-        JOIN washing_in_data wid ON wids.washing_in_data_id = wid.id
-       WHERE wid.lot_no IN (?)
-       GROUP BY wid.lot_no, wids.size_label
-
-      UNION ALL
-
-      SELECT 'finished' AS sumType, fd.lot_no, fds.size_label, COALESCE(SUM(fds.pieces),0) AS sumVal
-        FROM finishing_data_sizes fds
-        JOIN finishing_data fd ON fds.finishing_data_id = fd.id
-       WHERE fd.lot_no IN (?)
-       GROUP BY fd.lot_no, fds.size_label
-    `, [lotNos, lotNos, lotNos, lotNos, lotNos]);
+    // 3) Per-(lot, size) completed pieces by stage — sourced from *_event_sizes
+    //    (truth source; the legacy *_data_sizes tables are only partial).
+    const sizeEventSums = await fetchLotSizeEventSums(lotNos);
 
     // Query for dispatched quantities and destinations
     const [dispatchRows] = await pool.query(`
@@ -2426,22 +2463,14 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
     const sizeSumsMap = {};
     for (const r of rows) {
       const key = `${r.lot_no}|${r.size_label}`;
-      sizeSumsMap[key] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
-    }
-    for (const row of sumRows) {
-      const key = `${row.lot_no}|${row.size_label}`;
-      if (!sizeSumsMap[key]) continue;
-      switch (row.sumType) {
-        case 'stitched':   sizeSumsMap[key].stitchedQty   = parseFloat(row.sumVal) || 0; break;
-        case 'assembled':  sizeSumsMap[key].assembledQty  = parseFloat(row.sumVal) || 0; break;
-        case 'washed':     sizeSumsMap[key].washedQty     = parseFloat(row.sumVal) || 0; break;
-        case 'washing_in': sizeSumsMap[key].washingInQty  = parseFloat(row.sumVal) || 0; break;
-        case 'finished':   sizeSumsMap[key].finishedQty   = parseFloat(row.sumVal) || 0; break;
-      }
+      const fromEvents = sizeEventSums[key];
+      sizeSumsMap[key] = fromEvents
+        ? { ...fromEvents }
+        : { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
     }
 
-    // 4) Last assignments per lot (same as pic-report)
-    const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotAggregates(lotNos);
+    // 4) Latest approve event per lot+stage (same shape as pic-report).
+    const { stitchMap, asmMap, washMap, winMap, finMap } = await fetchLotEventAggregates(lotNos);
 
     // 4a) Rewash totals per lot (lot-level aggregate; same as pic-report)
     const [rewashRows2] = await pool.query(
@@ -2553,7 +2582,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       const enriched = buildEnhancedRow({
         lot: lotForBuilder,
         isDenim: denim,
-        totalCut: stitchedQty, // baseline at size granularity (no per-size cut count)
+        totalCut, // per-size cut from cutting_lot_sizes — correct baseline
         sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
         assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
         rewash: rewashMap[lotNo] || { requested:0, pending:0, completed:0 },
@@ -2562,9 +2591,6 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       // size-specific overrides
       enriched.size = sizeLabel;
       enriched.sku_size = `${row.sku}_${sizeLabel}`;
-      enriched.totalCut = totalCut;       // show the lot total for context
-      enriched.stitchInQty = '';          // unknown per size
-      enriched.stitchPendingQty = '';     // unknown per size
       const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
       enriched.dispatchedQty = dispatch.dispatchedQty || 0;
       enriched.destinations  = dispatch.destinations  || '';
