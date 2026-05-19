@@ -124,6 +124,7 @@
             <table class="table table-sm mb-0" style="font-size: var(--text-xs);">
               <thead>
                 <tr>
+                  <th style="width:28px;"></th>
                   <th>Lot No</th>
                   <th>Ext Lot</th>
                   <th>Sort</th>
@@ -146,7 +147,8 @@
               </thead>
               <tbody>
                 <% rows.slice(0, 50).forEach(row => { %>
-                <tr>
+                <tr data-lot-no="<%= row.lotNo %>">
+                  <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                   <td><strong style="color: var(--terracotta);"><%= row.lotNo %></strong></td>
                   <td><%= row.externalLotNo || '—' %></td>
                   <td><%= row.sortNo || '—' %></td>
@@ -394,5 +396,6 @@
     }
   }
 </script>
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

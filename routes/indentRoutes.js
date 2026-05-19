@@ -719,14 +719,17 @@ router.get('/api/my-approved-lots', isAuthenticated, canCreateStageIndent, async
   try {
     let rows = [];
     if (userRole === 'stitching_master') {
-      // Lots assigned & approved to this stitching master, with cutting lot info
+      // Lots this stitching master has approved (taken in) — sourced from
+      // stitching_events. Distinct lots, ordered by most-recent approve.
       const [r] = await pool.query(
-        `SELECT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
-           FROM stitching_assignments sa
-           JOIN cutting_lots c ON c.id = sa.cutting_lot_id
-          WHERE sa.user_id = ? AND sa.isApproved = 1
+        `SELECT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type,
+                MAX(se.created_at) AS approved_on
+           FROM stitching_events se
+           JOIN cutting_lots c ON c.id = se.cutting_lot_id
+          WHERE se.operator_id = ? AND se.event_type = 'approve'
             ${lotType ? 'AND c.lot_type = ?' : ''}
-          ORDER BY sa.approved_on DESC
+          GROUP BY c.id, c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
+          ORDER BY approved_on DESC
           LIMIT 200`,
         lotType ? [userId, lotType] : [userId]
       );

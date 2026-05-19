@@ -129,6 +129,7 @@
                 <table class="table mb-0">
                   <thead>
                     <tr>
+                      <th style="width:28px;"></th>
                       <th>Lot No</th>
                       <th>Total Pieces</th>
                       <th>Stitched</th>
@@ -139,7 +140,8 @@
                   </thead>
                   <tbody>
                     <% detailedAssignments.forEach(function(asg) { %>
-                      <tr>
+                      <tr data-lot-no="<%= asg.lot_no %>">
+                        <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                         <td>
                           <span class="fw-medium" style="color: var(--terracotta);"><%= asg.lot_no %></span>
                         </td>
@@ -210,5 +212,7 @@
     margin-left: 0 !important;
   }
 </style>
+
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

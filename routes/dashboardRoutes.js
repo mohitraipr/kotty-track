@@ -454,7 +454,13 @@ router.get('/rejected-lots', isAuthenticated, async (req, res) => {
     const params = [];
     const dateFilter = `AND approved_on >= DATE_SUB(NOW(), INTERVAL ? DAY)`;
 
-    // Stitching rejections (isApproved = 0)
+    // Rejections come from BOTH the legacy *_assignments tables (is_approved
+    // = 0, or 2 for finishing) AND the *_events tables (event_type='reject').
+    // The events feed is the truth source for newer activity; legacy still
+    // holds historical denials. Union them.
+    const eventDateFilter = `AND e.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)`;
+
+    // --- Stitching ---
     if (stage === 'all' || stage === 'stitching') {
       queries.push(`
         SELECT
@@ -476,9 +482,23 @@ router.get('/rejected-lots', isAuthenticated, async (req, res) => {
       `);
       params.push(daysAgo);
       if (search) { params.push(`%${search}%`, `%${search}%`); }
+
+      queries.push(`
+        SELECT 'Stitching' AS stage, cl.lot_no, cl.sku,
+               e.created_at AS rejected_on,
+               u.username AS assigned_to, NULL AS assigner,
+               e.remark AS rejection_reason, e.pieces AS total_pieces
+          FROM stitching_events e
+          JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          JOIN users u ON u.id = e.operator_id
+         WHERE e.event_type='reject' ${eventDateFilter}
+         ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
     }
 
-    // Assembly rejections
+    // --- Assembly ---
     if (stage === 'all' || stage === 'assembly') {
       queries.push(`
         SELECT
@@ -491,40 +511,70 @@ router.get('/rejected-lots', isAuthenticated, async (req, res) => {
           ja.assignment_remark AS rejection_reason,
           sd.total_pieces
         FROM jeans_assembly_assignments ja
-        JOIN stitching_data sd ON sd.id = ja.stitching_data_id
+        JOIN stitching_data sd ON sd.id = ja.stitching_assignment_id
         JOIN users u_assigned ON u_assigned.id = ja.user_id
-        LEFT JOIN users u_assigner ON u_assigner.id = ja.assigner_stitching_master
+        LEFT JOIN users u_assigner ON u_assigner.id = ja.stitching_master_id
         WHERE ja.is_approved = 0 ${dateFilter}
         ${search ? 'AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)' : ''}
       `);
       params.push(daysAgo);
       if (search) { params.push(`%${search}%`, `%${search}%`); }
-    }
 
-    // Washing rejections
-    if (stage === 'all' || stage === 'washing') {
       queries.push(`
-        SELECT
-          'Washing' AS stage,
-          ad.lot_no,
-          ad.sku,
-          wa.approved_on AS rejected_on,
-          u_assigned.username AS assigned_to,
-          u_assigner.username AS assigner,
-          wa.assignment_remark AS rejection_reason,
-          ad.total_pieces
-        FROM washing_assignments wa
-        JOIN assembly_data ad ON ad.id = wa.assembly_data_id
-        JOIN users u_assigned ON u_assigned.id = wa.user_id
-        LEFT JOIN users u_assigner ON u_assigner.id = wa.assigner_assembly_master
-        WHERE wa.is_approved = 0 ${dateFilter}
-        ${search ? 'AND (ad.lot_no LIKE ? OR ad.sku LIKE ?)' : ''}
+        SELECT 'Assembly' AS stage, cl.lot_no, cl.sku,
+               e.created_at AS rejected_on,
+               u.username AS assigned_to, NULL AS assigner,
+               e.remark AS rejection_reason, e.pieces AS total_pieces
+          FROM jeans_assembly_events e
+          JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          JOIN users u ON u.id = e.operator_id
+         WHERE e.event_type='reject' ${eventDateFilter}
+         ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
       `);
       params.push(daysAgo);
       if (search) { params.push(`%${search}%`, `%${search}%`); }
     }
 
-    // Washing-In rejections
+    // --- Washing ---
+    // (legacy query reference to non-existent assembly_data dropped; replaced
+    // with jeans_assembly_data, the actual upstream table.)
+    if (stage === 'all' || stage === 'washing') {
+      queries.push(`
+        SELECT
+          'Washing' AS stage,
+          jd.lot_no,
+          jd.sku,
+          wa.approved_on AS rejected_on,
+          u_assigned.username AS assigned_to,
+          u_assigner.username AS assigner,
+          wa.assignment_remark AS rejection_reason,
+          jd.total_pieces
+        FROM washing_assignments wa
+        JOIN jeans_assembly_data jd ON jd.id = wa.jeans_assembly_assignment_id
+        JOIN users u_assigned ON u_assigned.id = wa.user_id
+        LEFT JOIN users u_assigner ON u_assigner.id = wa.jeans_assembly_master_id
+        WHERE wa.is_approved = 0 ${dateFilter}
+        ${search ? 'AND (jd.lot_no LIKE ? OR jd.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+
+      queries.push(`
+        SELECT 'Washing' AS stage, cl.lot_no, cl.sku,
+               e.created_at AS rejected_on,
+               u.username AS assigned_to, NULL AS assigner,
+               e.remark AS rejection_reason, e.pieces AS total_pieces
+          FROM washing_events e
+          JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          JOIN users u ON u.id = e.operator_id
+         WHERE e.event_type='reject' ${eventDateFilter}
+         ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+    }
+
+    // --- Washing-In ---
     if (stage === 'all' || stage === 'washing_in') {
       queries.push(`
         SELECT
@@ -539,15 +589,29 @@ router.get('/rejected-lots', isAuthenticated, async (req, res) => {
         FROM washing_in_assignments wia
         JOIN washing_data wd ON wd.id = wia.washing_data_id
         JOIN users u_assigned ON u_assigned.id = wia.user_id
-        LEFT JOIN users u_assigner ON u_assigner.id = wia.assigner_washing_master
+        LEFT JOIN users u_assigner ON u_assigner.id = wia.washing_master_id
         WHERE wia.is_approved = 0 ${dateFilter}
         ${search ? 'AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)' : ''}
       `);
       params.push(daysAgo);
       if (search) { params.push(`%${search}%`, `%${search}%`); }
+
+      queries.push(`
+        SELECT 'Washing-In' AS stage, cl.lot_no, cl.sku,
+               e.created_at AS rejected_on,
+               u.username AS assigned_to, NULL AS assigner,
+               e.remark AS rejection_reason, e.pieces AS total_pieces
+          FROM washing_in_events e
+          JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          JOIN users u ON u.id = e.operator_id
+         WHERE e.event_type='reject' ${eventDateFilter}
+         ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
     }
 
-    // Finishing rejections (is_approved = 2)
+    // --- Finishing ---
     if (stage === 'all' || stage === 'finishing') {
       queries.push(`
         SELECT
@@ -565,6 +629,20 @@ router.get('/rejected-lots', isAuthenticated, async (req, res) => {
         JOIN users u_assigned ON u_assigned.id = fa.user_id
         WHERE fa.is_approved = 2 ${dateFilter}
         ${search ? 'AND (COALESCE(wid.lot_no, sd.lot_no) LIKE ? OR COALESCE(wid.sku, sd.sku) LIKE ?)' : ''}
+      `);
+      params.push(daysAgo);
+      if (search) { params.push(`%${search}%`, `%${search}%`); }
+
+      queries.push(`
+        SELECT 'Finishing' AS stage, cl.lot_no, cl.sku,
+               e.created_at AS rejected_on,
+               u.username AS assigned_to, NULL AS assigner,
+               e.remark AS rejection_reason, e.pieces AS total_pieces
+          FROM finishing_events e
+          JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          JOIN users u ON u.id = e.operator_id
+         WHERE e.event_type='reject' ${eventDateFilter}
+         ${search ? 'AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)' : ''}
       `);
       params.push(daysAgo);
       if (search) { params.push(`%${search}%`, `%${search}%`); }

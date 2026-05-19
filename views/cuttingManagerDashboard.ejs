@@ -328,6 +328,7 @@
               <table class="kotty-table">
                 <thead>
                   <tr>
+                    <th style="width:28px;"></th>
                     <th data-i18n="idLabel">ID</th>
                     <th data-i18n="lotNumberLabel">Lot Number</th>
                     <th data-i18n="skuLabel">SKU</th>
@@ -344,10 +345,11 @@
                 </thead>
                 <tbody>
                   <% if (cuttingLots.length === 0) { %>
-                    <tr><td colspan="12" class="text-center" style="padding: 40px;" data-i18n="noCuttingLotsAvailable">No cutting lots available.</td></tr>
+                    <tr><td colspan="13" class="text-center" style="padding: 40px;" data-i18n="noCuttingLotsAvailable">No cutting lots available.</td></tr>
                   <% } else { %>
                     <% cuttingLots.forEach(lot => { %>
-                      <tr>
+                      <tr data-lot-no="<%= lot.lot_no %>">
+                        <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                         <td><%= lot.id %></td>
                         <td><strong><%= lot.lot_no %></strong></td>
                         <td><%= lot.sku %></td>
@@ -1151,5 +1153,6 @@ document.getElementById('lotForm').addEventListener('submit', function(e) {
 
 loadSkuCategories();
 </script>
+<script src="/public/js/lot-size-expand.js"></script>
 
 <%- include('partials/footer') %>

@@ -309,116 +309,55 @@ router.get('/api/eligible-lots', isAuthenticated, isOperator, async (req, res) =
     const params = [];
     const searchLike = `%${search}%`;
 
-    // Different queries based on stage - getting approved qty from next department
-    if (stage === 'stitching') {
-      // Stitching eligible when jeans_assembly_assignments.is_approved = 1
-      query = `
-        SELECT
-          sd.id AS source_id,
-          sd.lot_no,
-          sd.sku,
-          sd.total_pieces AS qty,
-          sd.user_id,
-          u.username,
-          sd.created_at
-        FROM stitching_data sd
-        JOIN users u ON sd.user_id = u.id
-        JOIN jeans_assembly_assignments ja ON ja.stitching_assignment_id = sd.id
-        WHERE ja.is_approved = 1
-          AND (sd.lot_no LIKE ? OR sd.sku LIKE ?)
-          AND NOT EXISTS (
-            SELECT 1 FROM stage_payments sp
-            WHERE sp.lot_no = sd.lot_no
-              AND sp.stage = 'stitching'
-              AND sp.user_id = sd.user_id
-              AND sp.status != 'cancelled'
-          )
-        ORDER BY sd.created_at DESC
-        LIMIT 100
-      `;
-      params.push(searchLike, searchLike);
-    } else if (stage === 'assembly') {
-      // Assembly eligible when washing_assignments.is_approved = 1
-      query = `
-        SELECT
-          jd.id AS source_id,
-          jd.lot_no,
-          jd.sku,
-          jd.total_pieces AS qty,
-          jd.user_id,
-          u.username,
-          jd.created_at
-        FROM jeans_assembly_data jd
-        JOIN users u ON jd.user_id = u.id
-        JOIN washing_assignments wa ON wa.jeans_assembly_assignment_id = jd.id
-        WHERE wa.is_approved = 1
-          AND (jd.lot_no LIKE ? OR jd.sku LIKE ?)
-          AND NOT EXISTS (
-            SELECT 1 FROM stage_payments sp
-            WHERE sp.lot_no = jd.lot_no
-              AND sp.stage = 'assembly'
-              AND sp.user_id = jd.user_id
-              AND sp.status != 'cancelled'
-          )
-        ORDER BY jd.created_at DESC
-        LIMIT 100
-      `;
-      params.push(searchLike, searchLike);
-    } else if (stage === 'washing') {
-      // Washing eligible when washing_in_assignments.is_approved = 1
-      query = `
-        SELECT
-          wd.id AS source_id,
-          wd.lot_no,
-          wd.sku,
-          wd.total_pieces AS qty,
-          wd.user_id,
-          u.username,
-          wd.created_at
-        FROM washing_data wd
-        JOIN users u ON wd.user_id = u.id
-        JOIN washing_in_assignments wia ON wia.washing_data_id = wd.id
-        WHERE wia.is_approved = 1
-          AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
-          AND NOT EXISTS (
-            SELECT 1 FROM stage_payments sp
-            WHERE sp.lot_no = wd.lot_no
-              AND sp.stage = 'washing'
-              AND sp.user_id = wd.user_id
-              AND sp.status != 'cancelled'
-          )
-        ORDER BY wd.created_at DESC
-        LIMIT 100
-      `;
-      params.push(searchLike, searchLike);
-    } else if (stage === 'finishing') {
-      // Finishing - just needs to exist in finishing_data
-      query = `
-        SELECT
-          fd.id AS source_id,
-          fd.lot_no,
-          fd.sku,
-          fd.total_pieces AS qty,
-          fd.user_id,
-          u.username,
-          fd.created_at
-        FROM finishing_data fd
-        JOIN users u ON fd.user_id = u.id
-        WHERE (fd.lot_no LIKE ? OR fd.sku LIKE ?)
-          AND NOT EXISTS (
-            SELECT 1 FROM stage_payments sp
-            WHERE sp.lot_no = fd.lot_no
-              AND sp.stage = 'finishing'
-              AND sp.user_id = fd.user_id
-              AND sp.status != 'cancelled'
-          )
-        ORDER BY fd.created_at DESC
-        LIMIT 100
-      `;
-      params.push(searchLike, searchLike);
-    } else {
+    // Eligibility is sourced from the *_events tables (truth source).
+    // Per-(lot, operator) a row is eligible when the operator has a
+    // 'complete' event in their stage AND the downstream stage has any
+    // 'approve' event (i.e. taken delivery), AND no non-cancelled payment
+    // exists yet. Finishing has no downstream — completion alone qualifies.
+    const stageConfig = {
+      stitching: { eventsTbl: 'stitching_events',      downstream: ['jeans_assembly_events', 'finishing_events'] },
+      assembly:  { eventsTbl: 'jeans_assembly_events', downstream: ['washing_events'] },
+      washing:   { eventsTbl: 'washing_events',        downstream: ['washing_in_events'] },
+      finishing: { eventsTbl: 'finishing_events',      downstream: [] },
+    }[stage];
+
+    if (!stageConfig) {
       return res.json({ lots: [], message: 'Stage not configured' });
     }
+
+    const downstreamClause = stageConfig.downstream.length
+      ? `AND (${stageConfig.downstream.map(t =>
+          `EXISTS (SELECT 1 FROM ${t} d WHERE d.cutting_lot_id = cl.id AND d.event_type='approve')`
+        ).join(' OR ')})`
+      : '';
+
+    query = `
+      SELECT
+        MIN(e.id)            AS source_id,
+        cl.lot_no            AS lot_no,
+        cl.sku               AS sku,
+        SUM(e.pieces)        AS qty,
+        e.operator_id        AS user_id,
+        u.username           AS username,
+        MIN(e.created_at)    AS created_at
+      FROM ${stageConfig.eventsTbl} e
+      JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+      JOIN users u         ON u.id = e.operator_id
+      WHERE e.event_type = 'complete'
+        ${downstreamClause}
+        AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)
+        AND NOT EXISTS (
+          SELECT 1 FROM stage_payments sp
+          WHERE sp.lot_no  = cl.lot_no
+            AND sp.stage   = ?
+            AND sp.user_id = e.operator_id
+            AND sp.status != 'cancelled'
+        )
+      GROUP BY cl.id, e.operator_id, cl.lot_no, cl.sku, u.username
+      ORDER BY MIN(e.created_at) DESC
+      LIMIT 100
+    `;
+    params.push(searchLike, searchLike, stage);
 
     const [lots] = await pool.query(query, params);
 
