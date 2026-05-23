@@ -379,6 +379,18 @@
 
   .sx-action-form { display: none; padding: 1rem 1.25rem 1.25rem 1.5rem; border-top: 1px solid var(--c-border); background: #fafbfd; }
   .sx-action-card.expanded .sx-action-form { display: block; }
+  /* TAKE/REWASH/REJECT: keep splits always visible, hide toggle + form's redundant submit (hero CTA submits) */
+  .sx-action-card.always-open .sx-action-form { display: block; }
+  .sx-action-card.always-open .sx-action-toggle { display: none; }
+  .sx-action-card.always-open [data-action="take-submit"] { display: none; }
+  /* Auto-derived TAKE: read-only input, no stepper buttons */
+  .sx-stepper.is-take-readonly button { display: none; }
+  .sx-stepper.is-take-readonly input {
+    width: 5rem; font-weight: 700; font-size: 1.05rem;
+    background: var(--c-primary-soft); border-color: transparent;
+    color: var(--c-primary); cursor: default;
+  }
+  .sx-stepper.is-take-readonly input:focus { outline: none; box-shadow: none; }
   .sx-form-helper {
     font-size: 0.8125rem; color: var(--c-text-2);
     margin: 0 0 0.75rem;
@@ -1483,13 +1495,9 @@ function buildTakeCard() {
       <div class="sx-bucket-row">
         <div class="sx-bucket">
           <span class="sx-bucket-tag take">Take</span>
-          <div class="sx-stepper">
-            <button type="button" data-step="-10">−10</button>
-            <button type="button" data-step="-1">−</button>
-            <input type="number" min="0" max="${avail}" value="${avail}"
+          <div class="sx-stepper is-take-readonly">
+            <input type="number" min="0" max="${avail}" value="${avail}" readonly
                    data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="take" />
-            <button type="button" data-step="1">+</button>
-            <button type="button" data-step="10">+10</button>
           </div>
         </div>
       </div>
@@ -1536,19 +1544,33 @@ function buildTakeCard() {
     list.appendChild(row);
   });
 
+  // Splits are ALWAYS visible — no toggle to fish for. Hero CTA is the single submit.
+  card.classList.add('always-open');
   card.querySelector('[data-action="take-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
-  card.querySelector('[data-action="take-confirm"]').addEventListener('click', () => doTakeAll());
+  card.querySelector('[data-action="take-confirm"]').addEventListener('click', () => {
+    // Route based on current state: pure all-take → fast path; any exception → submit splits.
+    if (cardHasException(card)) doTakeFromForm(card);
+    else                        doTakeAll();
+  });
   card.querySelector('[data-action="take-submit"]').addEventListener('click', () => doTakeFromForm(card));
 
   recalcTakeTotal(card);
   return card;
 }
 
+function cardHasException(card) {
+  let has = false;
+  card.querySelectorAll('input[data-kind="rewash"], input[data-kind="reject"]').forEach(i => {
+    if ((parseInt(i.value, 10) || 0) > 0) has = true;
+  });
+  return has;
+}
+
 function recalcTakeTotal(card) {
-  // Per size: take + rewash + reject must not exceed available.
-  // Cascade reduction: when the sum exceeds avail, trim the input that
-  // just changed (we don't know which, so trim deterministically — last
-  // bucket in the order reject→rewash→take).
+  // Bidirectional rule the operators actually want:
+  //   TAKE is fully auto-derived (= avail − rewash − reject). They never deduct from Take.
+  //   They only ever touch Rewash or Reject (cap-and-clamp inside avail), and Take
+  //   re-fills the remainder automatically.
   const groups = {};
   card.querySelectorAll('[data-list="take-sizes"] input[data-size]').forEach(i => {
     const k = i.dataset.size;
@@ -1558,30 +1580,21 @@ function recalcTakeTotal(card) {
   let totalTake = 0, totalRewash = 0, totalReject = 0;
   for (const k of Object.keys(groups)) {
     const g = groups[k];
-    let take   = parseInt((g.take||{}).value,   10) || 0;
-    let rewash = parseInt((g.rewash||{}).value, 10) || 0;
-    let reject = parseInt((g.reject||{}).value, 10) || 0;
-    if (take < 0) take = 0;
-    if (rewash < 0) rewash = 0;
-    if (reject < 0) reject = 0;
-    let sum = take + rewash + reject;
-    if (sum > g.avail) {
-      // Trim from reject first, then rewash, then take.
-      let over = sum - g.avail;
-      const cuts = [['reject', () => reject], ['rewash', () => rewash], ['take', () => take]];
-      for (const [name, _] of cuts) {
-        if (over <= 0) break;
-        const cur = name === 'reject' ? reject : name === 'rewash' ? rewash : take;
-        const trim = Math.min(cur, over);
-        if (name === 'reject') reject -= trim;
-        else if (name === 'rewash') rewash -= trim;
-        else take -= trim;
-        over -= trim;
-      }
-      if (g.take)   g.take.value   = take;
-      if (g.rewash) g.rewash.value = rewash;
-      if (g.reject) g.reject.value = reject;
+    let rewash = Math.max(0, parseInt((g.rewash||{}).value, 10) || 0);
+    let reject = Math.max(0, parseInt((g.reject||{}).value, 10) || 0);
+    // Per-bucket cap: each bucket can't exceed total available.
+    rewash = Math.min(g.avail, rewash);
+    reject = Math.min(g.avail, reject);
+    // Combined cap: rewash + reject ≤ avail. Trim the most recently changed
+    // by preferring to keep the smaller of the two intact (best-effort —
+    // we don't have a last-touched signal, so cap reject first).
+    if (rewash + reject > g.avail) {
+      reject = Math.max(0, g.avail - rewash);
     }
+    const take = Math.max(0, g.avail - rewash - reject);
+    if (g.take   && g.take.value   !== String(take))   g.take.value   = take;
+    if (g.rewash && g.rewash.value !== String(rewash)) g.rewash.value = rewash;
+    if (g.reject && g.reject.value !== String(reject)) g.reject.value = reject;
     totalTake   += take;
     totalRewash += rewash;
     totalReject += reject;
@@ -1589,6 +1602,21 @@ function recalcTakeTotal(card) {
   const t1 = card.querySelector('[data-display="take-total"]');   if (t1) t1.textContent = fmt(totalTake);
   const t2 = card.querySelector('[data-display="rewash-total"]'); if (t2) t2.textContent = fmt(totalRewash);
   const t3 = card.querySelector('[data-display="reject-total"]'); if (t3) t3.textContent = fmt(totalReject);
+
+  // Live hero CTA: defaults to "Yes, take all X"; morphs to "Submit X take · Y rewash · Z reject"
+  // once any exception is set. Same button submits the right payload (see take-confirm handler).
+  const cta = card.querySelector('[data-action="take-confirm"]');
+  if (cta) {
+    const hasEx = totalRewash > 0 || totalReject > 0;
+    if (!hasEx) {
+      cta.innerHTML = '<span class="sx-action-cta-check">✓</span>Yes, take all ' + fmt(totalTake) + ' pieces';
+    } else {
+      const parts = ['<strong>' + fmt(totalTake) + '</strong> take'];
+      if (totalRewash > 0) parts.push('<strong>' + fmt(totalRewash) + '</strong> rewash');
+      if (totalReject > 0) parts.push('<strong>' + fmt(totalReject) + '</strong> reject');
+      cta.innerHTML = '<span class="sx-action-cta-check">✓</span>Submit ' + parts.join(' · ');
+    }
+  }
 }
 
 async function doTakeAll() {
