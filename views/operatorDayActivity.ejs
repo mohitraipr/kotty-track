@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Day Activity — Operator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body { background: #f6f7fb; }
+    .page-head {
+      background: linear-gradient(135deg, #1f2937, #111827);
+      color: #fff;
+      padding: 22px 24px;
+      border-radius: 0 0 14px 14px;
+      margin-bottom: 18px;
+    }
+    .page-head h1 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: 0.2px; }
+    .page-head .sub { color: #cbd5e1; font-size: 0.9rem; margin-top: 4px; }
+    .today-pill {
+      display: inline-block; background: #16a34a; color: #fff;
+      padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; margin-left: 10px;
+      vertical-align: middle;
+    }
+    .controls {
+      display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap;
+    }
+    .controls input[type=date] {
+      background: #fff; border: 0; padding: 6px 10px; border-radius: 8px;
+      font-weight: 500;
+    }
+    .stage-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .stage-card h3 {
+      font-size: 0.95rem; font-weight: 600; margin: 0 0 4px; color: #111827;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .stage-card .stage-sub { color: #6b7280; font-size: 0.78rem; margin-bottom: 10px; }
+    .dept-chip { font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; }
+    .dept-chip.denim { background: #dbeafe; color: #1e40af; }
+    .dept-chip.hosiery { background: #fef3c7; color: #92400e; }
+    .dept-chip.none { background: #f3f4f6; color: #6b7280; }
+    table.activity { width: 100%; font-size: 0.88rem; }
+    table.activity th { color: #6b7280; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3px; }
+    table.activity td, table.activity th { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+    .empty { color: #9ca3af; font-size: 0.85rem; padding: 8px 0; }
+    .rollup-strip {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 12px 16px; margin-bottom: 14px;
+    }
+    .rollup-strip .stage-row { display: flex; align-items: center; gap: 14px; font-size: 0.88rem; padding: 4px 0; }
+    .rollup-strip .stage-name { width: 180px; font-weight: 500; color: #111827; }
+    .badge-bar { display: inline-flex; gap: 10px; }
+    .badge-bar .b { font-size: 0.78rem; padding: 2px 10px; border-radius: 6px; }
+    .b.denim { background: #dbeafe; color: #1e40af; }
+    .b.hosiery { background: #fef3c7; color: #92400e; }
+    .num { font-variant-numeric: tabular-nums; }
+    .totals { color: #374151; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>
+      <i class="bi bi-calendar-check"></i>
+      Day Activity
+      <span id="todayPill" class="today-pill" style="display:none;">Today</span>
+    </h1>
+    <div class="sub" id="dayLabel">Loading…</div>
+    <div class="controls">
+      <label class="text-light small mb-0">Pick a day:</label>
+      <input type="date" id="dayPicker" value="<%= today %>" max="<%= today %>">
+      <a href="/operator/dashboard" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-arrow-left"></i> Back
+      </a>
+    </div>
+  </div>
+
+  <div class="container-fluid" style="max-width: 1280px;">
+    <!-- Department roll-up -->
+    <div class="rollup-strip">
+      <div class="text-muted text-uppercase small mb-2" style="letter-spacing:0.4px;">
+        <i class="bi bi-bar-chart-line"></i> Department roll-up (lots)
+      </div>
+      <div id="rollup"></div>
+    </div>
+
+    <!-- 1. Cutting created -->
+    <div class="stage-card">
+      <h3><i class="bi bi-scissors"></i> Cutting — Lots Created</h3>
+      <div class="stage-sub">Counted from <code>cutting_lots.created_at</code></div>
+      <div id="cuttingCreated"></div>
+    </div>
+
+    <!-- 1b. Cutting assigned out -->
+    <div class="stage-card">
+      <h3><i class="bi bi-arrow-right-circle"></i> Cutting → Stitching Handoff</h3>
+      <div class="stage-sub">Counted from <code>stitching_assignments.assigned_on</code></div>
+      <div id="cuttingAssigned"></div>
+    </div>
+
+    <!-- 2. Stitching approved -->
+    <div class="stage-card">
+      <h3><i class="bi bi-check2-square"></i> Stitching — Approved</h3>
+      <div class="stage-sub">Event <code>stitching_events</code> · event_type = approve</div>
+      <div id="stitching"></div>
+    </div>
+
+    <!-- 3. Jeans Assembly approved -->
+    <div class="stage-card">
+      <h3><i class="bi bi-check2-square"></i> Jeans Assembly — Approved <span class="dept-chip denim">denim only</span></h3>
+      <div class="stage-sub">Event <code>jeans_assembly_events</code> · event_type = approve</div>
+      <div id="jeans_assembly"></div>
+    </div>
+
+    <!-- 4. Washing approved -->
+    <div class="stage-card">
+      <h3><i class="bi bi-droplet"></i> Washing — Approved <span class="dept-chip denim">denim only</span></h3>
+      <div class="stage-sub">Event <code>washing_events</code> · event_type = approve</div>
+      <div id="washing"></div>
+    </div>
+
+    <!-- 5. Washing-In approved -->
+    <div class="stage-card">
+      <h3><i class="bi bi-box-arrow-in-down"></i> Washing-In — Approved <span class="dept-chip denim">denim only</span></h3>
+      <div class="stage-sub">Event <code>washing_in_events</code> · event_type = approve</div>
+      <div id="washing_in"></div>
+    </div>
+
+    <!-- 6. Finishing approved -->
+    <div class="stage-card">
+      <h3><i class="bi bi-flag"></i> Finishing — Approved</h3>
+      <div class="stage-sub">Event <code>finishing_events</code> · event_type = approve · denim & hosiery converge here</div>
+      <div id="finishing"></div>
+    </div>
+
+    <div class="text-muted small mb-4">
+      Server time: <span id="serverNow"></span> (IST)
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function deptChip(dept) {
+    const cls = dept === 'denim' ? 'denim' : (dept === 'hosiery' ? 'hosiery' : 'none');
+    const label = dept || '—';
+    return `<span class="dept-chip ${cls}">${label}</span>`;
+  }
+
+  function renderStageTable(rows) {
+    if (!rows || rows.length === 0) {
+      return '<div class="empty">No activity on this day.</div>';
+    }
+    let lots = 0, pieces = 0;
+    const body = rows.map(r => {
+      lots   += Number(r.lots)   || 0;
+      pieces += Number(r.pieces) || 0;
+      return `<tr>
+        <td>${r.master || '<em>unknown</em>'}</td>
+        <td>${deptChip(r.dept)}</td>
+        <td class="num text-end">${Number(r.lots).toLocaleString()}</td>
+        <td class="num text-end">${Number(r.pieces).toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+    return `<table class="activity">
+      <thead><tr>
+        <th>Master</th><th>Dept</th><th class="text-end">Lots</th><th class="text-end">Pieces</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr class="totals">
+        <td colspan="2" class="text-end">Total</td>
+        <td class="num text-end">${lots.toLocaleString()}</td>
+        <td class="num text-end">${pieces.toLocaleString()}</td>
+      </tr></tfoot>
+    </table>`;
+  }
+
+  function renderHandoff(rows) {
+    if (!rows || rows.length === 0) {
+      return '<div class="empty">No handoffs on this day.</div>';
+    }
+    let total = 0;
+    const body = rows.map(r => {
+      total += Number(r.lots) || 0;
+      return `<tr>
+        <td>${r.cutting_master || '<em>unknown</em>'}</td>
+        <td><i class="bi bi-arrow-right text-muted"></i></td>
+        <td>${r.stitching_master || '<em>unknown</em>'}</td>
+        <td>${deptChip(r.dept)}</td>
+        <td class="num text-end">${Number(r.lots).toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+    return `<table class="activity">
+      <thead><tr>
+        <th>Cutting Master</th><th></th><th>Stitching Master</th><th>Dept</th><th class="text-end">Lots</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr class="totals">
+        <td colspan="4" class="text-end">Total</td>
+        <td class="num text-end">${total.toLocaleString()}</td>
+      </tr></tfoot>
+    </table>`;
+  }
+
+  function renderRollup(rollup) {
+    const order = [
+      ['cutting_created', 'Cutting — Created'],
+      ['stitching',       'Stitching — Approved'],
+      ['jeans_assembly',  'Jeans Assembly — Approved'],
+      ['washing',         'Washing — Approved'],
+      ['washing_in',      'Washing-In — Approved'],
+      ['finishing',       'Finishing — Approved'],
+    ];
+    return order.map(([k, label]) => {
+      const a = (rollup && rollup[k]) || { denim: { lots: 0 }, hosiery: { lots: 0 } };
+      return `<div class="stage-row">
+        <span class="stage-name">${label}</span>
+        <span class="badge-bar">
+          <span class="b denim">Denim · ${Number(a.denim.lots).toLocaleString()} lots</span>
+          <span class="b hosiery">Hosiery · ${Number(a.hosiery.lots).toLocaleString()} lots</span>
+        </span>
+      </div>`;
+    }).join('');
+  }
+
+  function formatDayLabel(ymd) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) + ' (IST)';
+  }
+
+  async function load(day) {
+    const url = '/operator/day-activity/data?day=' + encodeURIComponent(day);
+    const r = await fetch(url);
+    if (!r.ok) {
+      $('dayLabel').textContent = 'Failed to load.';
+      return;
+    }
+    const data = await r.json();
+
+    $('dayLabel').textContent = formatDayLabel(data.day);
+    $('todayPill').style.display = data.isToday ? 'inline-block' : 'none';
+    $('serverNow').textContent = data.serverNow;
+
+    // pin picker max to server today
+    const picker = $('dayPicker');
+    picker.max = data.today;
+    if (picker.value !== data.day) picker.value = data.day;
+
+    $('rollup').innerHTML          = renderRollup(data.rollup);
+    $('cuttingCreated').innerHTML  = renderStageTable(data.cuttingCreated);
+    $('cuttingAssigned').innerHTML = renderHandoff(data.cuttingAssigned);
+    $('stitching').innerHTML       = renderStageTable(data.stages.stitching);
+    $('jeans_assembly').innerHTML  = renderStageTable(data.stages.jeans_assembly);
+    $('washing').innerHTML         = renderStageTable(data.stages.washing);
+    $('washing_in').innerHTML      = renderStageTable(data.stages.washing_in);
+    $('finishing').innerHTML       = renderStageTable(data.stages.finishing);
+  }
+
+  $('dayPicker').addEventListener('change', (e) => {
+    const v = e.target.value;
+    if (v) load(v);
+  });
+
+  load($('dayPicker').value);
+</script>
+</body>
+</html>
