@@ -3777,4 +3777,133 @@ router.get('/api/lot-sizes', isAuthenticated, async (req, res) => {
   }
 });
 
+/**************************************************
+ * Day Activity — which master did what on a given day,
+ * across cutting → finishing. Day boundary is IST
+ * (pool sets session tz +05:30; process.env.TZ=Asia/Kolkata).
+ **************************************************/
+router.get('/day-activity', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [[row]] = await pool.query("SELECT CURDATE() AS today, NOW() AS server_now");
+    const today = formatYMD(row.today);
+    return res.render('operatorDayActivity', { today, serverNow: row.server_now });
+  } catch (err) {
+    console.error('GET /operator/day-activity error:', err);
+    return res.status(500).send('Failed to load Day Activity');
+  }
+});
+
+function formatYMD(d) {
+  const x = new Date(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  const day = String(x.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+router.get('/day-activity/data', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [[srv]] = await pool.query("SELECT CURDATE() AS today, NOW() AS server_now");
+    const todayStr = formatYMD(srv.today);
+    const dayParam = (req.query.day || '').trim();
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : todayStr;
+    if (day > todayStr) {
+      return res.status(400).json({ error: 'Cannot query future dates', today: todayStr });
+    }
+
+    // 1) Cutting — lots created per cutting master
+    const [cuttingCreated] = await pool.query(
+      `SELECT cl.user_id AS master_id,
+              u.username AS master,
+              cl.flow_type AS dept,
+              COUNT(*) AS lots,
+              COALESCE(SUM(cl.total_pieces),0) AS pieces
+         FROM cutting_lots cl
+    LEFT JOIN users u ON u.id = cl.user_id
+        WHERE DATE(cl.created_at) = ?
+     GROUP BY cl.user_id, cl.flow_type
+     ORDER BY lots DESC, pieces DESC`,
+      [day]
+    );
+
+    // 1b) Cutting — lots assigned out to stitching master
+    const [cuttingAssigned] = await pool.query(
+      `SELECT cu.id   AS cutting_master_id,
+              cu.username AS cutting_master,
+              su.id   AS stitching_master_id,
+              su.username AS stitching_master,
+              cl.flow_type AS dept,
+              COUNT(*) AS lots
+         FROM stitching_assignments sa
+         JOIN cutting_lots cl ON cl.id = sa.cutting_lot_id
+    LEFT JOIN users cu ON cu.id = cl.user_id
+    LEFT JOIN users su ON su.id = sa.user_id
+        WHERE DATE(sa.assigned_on) = ?
+     GROUP BY cu.id, su.id, cl.flow_type
+     ORDER BY lots DESC`,
+      [day]
+    );
+
+    // 2..6) Stage approvals — same shape across event tables
+    const stageTables = [
+      { key: 'stitching',       table: 'stitching_events' },
+      { key: 'jeans_assembly',  table: 'jeans_assembly_events' },
+      { key: 'washing',         table: 'washing_events' },
+      { key: 'washing_in',      table: 'washing_in_events' },
+      { key: 'finishing',       table: 'finishing_events' },
+    ];
+
+    const stages = {};
+    for (const { key, table } of stageTables) {
+      const [rows] = await pool.query(
+        `SELECT e.operator_id      AS master_id,
+                u.username         AS master,
+                cl.flow_type       AS dept,
+                COUNT(DISTINCT e.cutting_lot_id) AS lots,
+                COALESCE(SUM(e.pieces),0)        AS pieces
+           FROM \`${table}\` e
+           JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+      LEFT JOIN users u ON u.id = e.operator_id
+          WHERE e.event_type = 'approve'
+            AND DATE(e.created_at) = ?
+       GROUP BY e.operator_id, cl.flow_type
+       ORDER BY lots DESC, pieces DESC`,
+        [day]
+      );
+      stages[key] = rows;
+    }
+
+    // Department roll-up per stage
+    const rollup = {};
+    const allBuckets = {
+      cutting_created: cuttingCreated,
+      ...stages,
+    };
+    for (const [k, rows] of Object.entries(allBuckets)) {
+      const agg = { denim: { lots: 0, pieces: 0 }, hosiery: { lots: 0, pieces: 0 } };
+      for (const r of rows) {
+        const d = (r.dept === 'denim' || r.dept === 'hosiery') ? r.dept : null;
+        if (!d) continue;
+        agg[d].lots   += Number(r.lots)   || 0;
+        agg[d].pieces += Number(r.pieces) || 0;
+      }
+      rollup[k] = agg;
+    }
+
+    return res.json({
+      day,
+      today: todayStr,
+      isToday: day === todayStr,
+      serverNow: srv.server_now,
+      cuttingCreated,
+      cuttingAssigned,
+      stages,
+      rollup,
+    });
+  } catch (err) {
+    console.error('GET /operator/day-activity/data error:', err);
+    return res.status(500).json({ error: 'Failed to load day activity' });
+  }
+});
+
 module.exports = router;
