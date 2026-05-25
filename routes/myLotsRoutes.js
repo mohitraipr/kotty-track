@@ -10,6 +10,7 @@
 
 const express = require('express');
 const router = express.Router();
+const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated } = require('../middlewares/auth');
 
@@ -22,9 +23,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/data', isAuthenticated, async (req, res) => {
-  const userId = req.session.user.id;
-  try {
+async function loadUserLots(userId) {
     // 1) Find every cutting_lot_id the current user touched — via legacy
     //    assignments OR via the new events tables. The events tables are
     //    authoritative now; a user can have events without an assignment.
@@ -71,14 +70,10 @@ router.get('/data', isAuthenticated, async (req, res) => {
        userId, userId, userId, userId, userId]
     );
 
-    if (lotIdRows.length === 0) {
-      return res.json({ user: req.session.user, lots: [] });
-    }
+    if (lotIdRows.length === 0) return [];
 
     const lotIds = lotIdRows.map(r => r.lot_id).filter(x => x);
-    if (lotIds.length === 0) {
-      return res.json({ user: req.session.user, lots: [] });
-    }
+    if (lotIds.length === 0) return [];
 
     // 2) Load lot metadata.
     const [lots] = await pool.query(
@@ -355,10 +350,110 @@ router.get('/data', isAuthenticated, async (req, res) => {
       return db - da;
     });
 
-    return res.json({ user: req.session.user, lots: result });
+    return result;
+}
+
+router.get('/data', isAuthenticated, async (req, res) => {
+  try {
+    const lots = await loadUserLots(req.session.user.id);
+    return res.json({ user: req.session.user, lots });
   } catch (err) {
     console.error('GET /my-lots/data error:', err);
     return res.status(500).json({ error: 'Failed to load my-lots data' });
+  }
+});
+
+router.get('/download', isAuthenticated, async (req, res) => {
+  try {
+    const lots = await loadUserLots(req.session.user.id);
+
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet('My Lots');
+    sheet.columns = [
+      { header: 'Lot No',         key: 'lot_no',          width: 14 },
+      { header: 'SKU',            key: 'sku',             width: 22 },
+      { header: 'Dept',           key: 'flow_type',       width: 10 },
+      { header: 'Pieces',         key: 'pieces',          width: 10 },
+      { header: 'Remark',         key: 'remark',          width: 28 },
+      { header: 'Created',        key: 'created_at',      width: 14 },
+      { header: 'Cutter',         key: 'cutter',          width: 18 },
+      { header: 'Current Stage',  key: 'current_stage',   width: 14 },
+      { header: 'Stitching',      key: 'stitching',       width: 22 },
+      { header: 'Stitching Status', key: 'stitching_status', width: 13 },
+      { header: 'Stitching Date', key: 'stitching_date',  width: 12 },
+      { header: 'Assembly',       key: 'assembly',        width: 22 },
+      { header: 'Assembly Status', key: 'assembly_status', width: 13 },
+      { header: 'Assembly Date',  key: 'assembly_date',   width: 12 },
+      { header: 'Washing',        key: 'washing',         width: 22 },
+      { header: 'Washing Status', key: 'washing_status',  width: 13 },
+      { header: 'Washing Date',   key: 'washing_date',    width: 12 },
+      { header: 'Wash-In',        key: 'washing_in',      width: 22 },
+      { header: 'Wash-In Status', key: 'washing_in_status', width: 13 },
+      { header: 'Wash-In Date',   key: 'washing_in_date', width: 12 },
+      { header: 'Finishing',      key: 'finishing',       width: 22 },
+      { header: 'Finishing Status', key: 'finishing_status', width: 13 },
+      { header: 'Finishing Date', key: 'finishing_date',  width: 12 },
+    ];
+
+    const completedFlagMap = {
+      stitching: 'stitching_completed', assembly: 'assembly_completed',
+      washing: 'washing_completed', washing_in: 'washing_in_completed',
+      finishing: 'finishing_completed',
+    };
+
+    const fmt = d => {
+      if (!d) return '';
+      const x = new Date(d);
+      if (isNaN(x.getTime())) return '';
+      return x.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+    };
+
+    const stageInfo = (lot, stage) => {
+      const data = lot[stage];
+      if (!data) return { name: '', status: 'Not assigned', date: '' };
+      const completed = lot[completedFlagMap[stage]] || data.completed;
+      if (completed) {
+        return { name: data.name || '', status: 'Completed', date: fmt(data.completed_on || data.approved_on || data.assigned_on) };
+      }
+      if (data.approved) {
+        return { name: data.name || '', status: 'Approved', date: fmt(data.approved_on || data.assigned_on) };
+      }
+      return { name: data.name || '', status: 'Assigned', date: fmt(data.assigned_on) };
+    };
+
+    for (const lot of lots) {
+      const isDenim = lot.flow_type === 'denim';
+      const naStages = isDenim ? [] : ['assembly', 'washing', 'washing_in'];
+      const row = {
+        lot_no: lot.lot_no, sku: lot.sku, flow_type: lot.flow_type,
+        pieces: lot.pieces, remark: lot.remark || '',
+        created_at: fmt(lot.created_at),
+        cutter: lot.cutter ? lot.cutter.name || '' : '',
+        current_stage: lot.current_stage,
+      };
+      for (const s of ['stitching','assembly','washing','washing_in','finishing']) {
+        if (naStages.includes(s)) {
+          row[s] = 'N/A'; row[s + '_status'] = '—'; row[s + '_date'] = '';
+        } else {
+          const i = stageInfo(lot, s);
+          row[s] = i.name; row[s + '_status'] = i.status; row[s + '_date'] = i.date;
+        }
+      }
+      sheet.addRow(row);
+    }
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    const today = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="MyLots-${today}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('GET /my-lots/download error:', err);
+    return res.status(500).send('Failed to export My Lots');
   }
 });
 
