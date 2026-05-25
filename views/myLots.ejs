@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Lots — Track your work</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body { background: #f6f7fb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page-head {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #fff; padding: 22px 24px; margin-bottom: 18px;
+      border-radius: 0 0 14px 14px;
+    }
+    .page-head h1 { font-size: 1.35rem; font-weight: 600; margin: 0; }
+    .page-head .sub { color: #94a3b8; font-size: 0.9rem; margin-top: 4px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+    .controls input, .controls select {
+      background: #fff; border: 0; padding: 6px 10px; border-radius: 8px;
+      font-size: 0.88rem;
+    }
+    .counts { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+    .count-pill {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 10px 14px; min-width: 130px;
+    }
+    .count-pill .num { font-size: 1.4rem; font-weight: 600; color: #111827; }
+    .count-pill .label { font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
+    .lot-card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .lot-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .lot-no { font-weight: 600; font-size: 1.05rem; color: #111827; }
+    .lot-meta { font-size: 0.8rem; color: #6b7280; }
+    .dept-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
+    .dept-chip.denim { background: #dbeafe; color: #1e40af; }
+    .dept-chip.hosiery { background: #fef3c7; color: #92400e; }
+    .dept-chip.unknown { background: #f3f4f6; color: #6b7280; }
+    .timeline {
+      display: flex; gap: 0; flex-wrap: nowrap; overflow-x: auto;
+      padding: 4px 0;
+    }
+    .step {
+      flex: 1; min-width: 130px; padding: 8px 10px;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+    .step + .step { border-left-color: #e5e7eb; }
+    .step .stage-name {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px;
+      color: #6b7280; margin-bottom: 4px; font-weight: 500;
+    }
+    .step .master {
+      font-weight: 500; font-size: 0.88rem; color: #111827;
+    }
+    .step .ts { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
+    .step.completed { background: linear-gradient(to right, rgba(34,197,94,0.05), transparent); }
+    .step.completed .stage-name { color: #16a34a; }
+    .step.completed .stage-name::after { content: ' ✓'; }
+    .step.approved { background: linear-gradient(to right, rgba(59,130,246,0.06), transparent); }
+    .step.approved .stage-name { color: #2563eb; }
+    .step.assigned { background: linear-gradient(to right, rgba(251,191,36,0.08), transparent); }
+    .step.assigned .stage-name { color: #d97706; }
+    .step.empty .master { color: #9ca3af; font-style: italic; }
+    .step.me { box-shadow: inset 3px 0 0 #6366f1; background: linear-gradient(to right, rgba(99,102,241,0.08), transparent); }
+    .step.me::after {
+      content: 'YOU'; position: absolute; top: 4px; right: 6px;
+      background: #6366f1; color: #fff; font-size: 0.6rem;
+      padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px;
+    }
+    .step.current { box-shadow: inset 0 -2px 0 #f59e0b; }
+    .step.current .stage-name { color: #f59e0b; font-weight: 600; }
+    .step.na { opacity: 0.4; }
+    .step.na .master::before { content: '—'; }
+    .step.na .master { color: transparent; }
+    .empty-state {
+      background: #fff; border: 1px dashed #d1d5db; border-radius: 12px;
+      padding: 40px 20px; text-align: center; color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-head">
+    <h1><i class="bi bi-bag-check"></i> My Lots</h1>
+    <div class="sub">Every lot you've touched — and who has it next.</div>
+    <div class="controls">
+      <input type="text" id="search" placeholder="Filter by lot / SKU" style="width: 220px;">
+      <select id="stageFilter">
+        <option value="">All stages</option>
+        <option value="with_me">With me now</option>
+        <option value="Done">Completed</option>
+        <option value="stitching">In stitching</option>
+        <option value="assembly">In assembly</option>
+        <option value="washing">In washing</option>
+        <option value="washing_in">In wash-in</option>
+        <option value="finishing">In finishing</option>
+      </select>
+      <select id="flowFilter">
+        <option value="">All depts</option>
+        <option value="denim">Denim</option>
+        <option value="hosiery">Hosiery</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="container-fluid" style="max-width: 1400px;">
+    <div class="counts" id="counts"></div>
+    <div id="list"></div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const ME = <%- JSON.stringify({ id: user.id, username: user.username, role: user.roleName }) %>;
+  let ALL = [];
+
+  function fmtDate(s) {
+    if (!s) return '';
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  }
+
+  function stepClass(stage, lot) {
+    const data = lot[stage];
+    const completedFlag = {
+      stitching: 'stitching_completed', assembly: 'assembly_completed',
+      washing: 'washing_completed', washing_in: 'washing_in_completed',
+      finishing: 'finishing_completed',
+    }[stage];
+    const classes = ['step'];
+
+    const isDenim = lot.flow_type === 'denim';
+    const naForHosiery = !isDenim && ['assembly','washing','washing_in'].includes(stage);
+    if (naForHosiery) { classes.push('na'); return classes.join(' '); }
+
+    if (lot[completedFlag]) classes.push('completed');
+    else if (data && data.approved) classes.push('approved');
+    else if (data) classes.push('assigned');
+    else classes.push('empty');
+
+    if (data && data.is_me) classes.push('me');
+    if (lot.current_stage === stage) classes.push('current');
+    return classes.join(' ');
+  }
+
+  function stepHtml(stageKey, stageLabel, lot) {
+    const data = lot[stageKey];
+    const classes = stepClass(stageKey, lot);
+    if (classes.includes('na')) {
+      return `<div class="${classes}">
+        <div class="stage-name">${stageLabel}</div>
+        <div class="master">—</div>
+      </div>`;
+    }
+    const name = data ? (data.name || `user#${data.user_id}`) : 'Not assigned';
+    const ts  = data ? (data.approved ? `Approved ${fmtDate(data.approved_on)}` : `Assigned ${fmtDate(data.assigned_on)}`) : '';
+    return `<div class="${classes}">
+      <div class="stage-name">${stageLabel}</div>
+      <div class="master">${name}</div>
+      <div class="ts">${ts}</div>
+    </div>`;
+  }
+
+  function lotCard(lot) {
+    const cutterName = lot.cutter.name || `user#${lot.cutter.user_id}`;
+    const cutterCls = (lot.cutter.is_me ? 'step me' : 'step') + ' approved';
+    const cuttingStep = `<div class="${cutterCls}">
+      <div class="stage-name">Cutting</div>
+      <div class="master">${cutterName}</div>
+      <div class="ts">Cut ${fmtDate(lot.created_at)}</div>
+    </div>`;
+
+    return `<div class="lot-card">
+      <div class="lot-head">
+        <div>
+          <span class="lot-no">${lot.lot_no}</span>
+          <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
+          <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
+        </div>
+        <div class="lot-meta">Current stage: <strong>${lot.current_stage}</strong></div>
+      </div>
+      <div class="timeline">
+        ${cuttingStep}
+        ${stepHtml('stitching',  'Stitching',  lot)}
+        ${stepHtml('assembly',   'Assembly',   lot)}
+        ${stepHtml('washing',    'Washing',    lot)}
+        ${stepHtml('washing_in', 'Wash-In',    lot)}
+        ${stepHtml('finishing',  'Finishing',  lot)}
+      </div>
+    </div>`;
+  }
+
+  function isLotWithMe(lot) {
+    const stage = lot.current_stage;
+    if (stage === 'Done') return false;
+    const ref = lot[stage];
+    return !!(ref && ref.is_me);
+  }
+
+  function renderCounts(items) {
+    const total = items.length;
+    const withMe = items.filter(isLotWithMe).length;
+    const done = items.filter(l => l.current_stage === 'Done').length;
+    const denim = items.filter(l => l.flow_type === 'denim').length;
+    const hos   = items.filter(l => l.flow_type === 'hosiery').length;
+    $('counts').innerHTML = `
+      <div class="count-pill"><div class="num">${total}</div><div class="label">Total lots</div></div>
+      <div class="count-pill"><div class="num">${withMe}</div><div class="label">With me now</div></div>
+      <div class="count-pill"><div class="num">${done}</div><div class="label">Completed</div></div>
+      <div class="count-pill"><div class="num">${denim}</div><div class="label">Denim</div></div>
+      <div class="count-pill"><div class="num">${hos}</div><div class="label">Hosiery</div></div>
+    `;
+  }
+
+  function applyFilters() {
+    const q = $('search').value.trim().toLowerCase();
+    const stage = $('stageFilter').value;
+    const flow = $('flowFilter').value;
+    let items = ALL;
+    if (q) {
+      items = items.filter(l =>
+        (l.lot_no || '').toLowerCase().includes(q) ||
+        (l.sku || '').toLowerCase().includes(q)
+      );
+    }
+    if (flow) items = items.filter(l => l.flow_type === flow);
+    if (stage === 'with_me') items = items.filter(isLotWithMe);
+    else if (stage) items = items.filter(l => l.current_stage === stage);
+
+    renderCounts(items);
+    $('list').innerHTML = items.length
+      ? items.map(lotCard).join('')
+      : `<div class="empty-state"><i class="bi bi-inbox" style="font-size:32px;"></i><div style="margin-top:10px;">No lots match your filter.</div></div>`;
+  }
+
+  async function load() {
+    $('list').innerHTML = '<div class="empty-state">Loading…</div>';
+    const r = await fetch('/my-lots/data');
+    if (!r.ok) {
+      $('list').innerHTML = '<div class="empty-state">Failed to load. ' + r.status + '</div>';
+      return;
+    }
+    const data = await r.json();
+    ALL = data.lots || [];
+    applyFilters();
+  }
+
+  ['search','stageFilter','flowFilter'].forEach(id => {
+    $(id).addEventListener('input', applyFilters);
+    $(id).addEventListener('change', applyFilters);
+  });
+
+  load();
+</script>
+</body>
+</html>
