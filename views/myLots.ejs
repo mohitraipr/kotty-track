@@ -90,7 +90,7 @@
     <h1><i class="bi bi-bag-check"></i> My Lots</h1>
     <div class="sub">Every lot you've touched — and who has it next.</div>
     <div class="controls">
-      <input type="text" id="search" placeholder="Filter by lot / SKU" style="width: 220px;">
+      <input type="text" id="search" placeholder="Filter by lot / SKU / remark" style="width: 260px;">
       <select id="stageFilter">
         <option value="">All stages</option>
         <option value="with_me">With me now</option>
@@ -126,20 +126,23 @@
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
   }
 
+  const COMPLETED_FLAG = {
+    stitching: 'stitching_completed', assembly: 'assembly_completed',
+    washing: 'washing_completed', washing_in: 'washing_in_completed',
+    finishing: 'finishing_completed',
+  };
+
   function stepClass(stage, lot) {
     const data = lot[stage];
-    const completedFlag = {
-      stitching: 'stitching_completed', assembly: 'assembly_completed',
-      washing: 'washing_completed', washing_in: 'washing_in_completed',
-      finishing: 'finishing_completed',
-    }[stage];
     const classes = ['step'];
 
     const isDenim = lot.flow_type === 'denim';
     const naForHosiery = !isDenim && ['assembly','washing','washing_in'].includes(stage);
     if (naForHosiery) { classes.push('na'); return classes.join(' '); }
 
-    if (lot[completedFlag]) classes.push('completed');
+    // Status precedence: completed > approved > assigned > empty.
+    // Events are the source of truth — see route step 8.
+    if (lot[COMPLETED_FLAG[stage]] || (data && data.completed)) classes.push('completed');
     else if (data && data.approved) classes.push('approved');
     else if (data) classes.push('assigned');
     else classes.push('empty');
@@ -159,7 +162,16 @@
       </div>`;
     }
     const name = data ? (data.name || `user#${data.user_id}`) : 'Not assigned';
-    const ts  = data ? (data.approved ? `Approved ${fmtDate(data.approved_on)}` : `Assigned ${fmtDate(data.assigned_on)}`) : '';
+    let ts = '';
+    if (data) {
+      if (lot[COMPLETED_FLAG[stageKey]] || data.completed) {
+        ts = `Completed${data.completed_on ? ' ' + fmtDate(data.completed_on) : ''}`;
+      } else if (data.approved) {
+        ts = `Approved${data.approved_on ? ' ' + fmtDate(data.approved_on) : ''}`;
+      } else if (data.assigned_on) {
+        ts = `Assigned ${fmtDate(data.assigned_on)}`;
+      }
+    }
     return `<div class="${classes}">
       <div class="stage-name">${stageLabel}</div>
       <div class="master">${name}</div>
@@ -176,12 +188,17 @@
       <div class="ts">Cut ${fmtDate(lot.created_at)}</div>
     </div>`;
 
+    const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const remarkHtml = lot.remark
+      ? `<div class="lot-meta" style="margin-top:4px;"><i class="bi bi-chat-left-text"></i> ${esc(lot.remark)}</div>`
+      : '';
     return `<div class="lot-card">
       <div class="lot-head">
         <div>
           <span class="lot-no">${lot.lot_no}</span>
           <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
           <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
+          ${remarkHtml}
         </div>
         <div class="lot-meta">Current stage: <strong>${lot.current_stage}</strong></div>
       </div>
@@ -226,7 +243,8 @@
     if (q) {
       items = items.filter(l =>
         (l.lot_no || '').toLowerCase().includes(q) ||
-        (l.sku || '').toLowerCase().includes(q)
+        (l.sku || '').toLowerCase().includes(q) ||
+        (l.remark || '').toLowerCase().includes(q)
       );
     }
     if (flow) items = items.filter(l => l.flow_type === flow);
