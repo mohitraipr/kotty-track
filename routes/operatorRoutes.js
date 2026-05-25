@@ -3906,4 +3906,18 @@ router.get('/day-activity/data', isAuthenticated, isOperator, async (req, res) =
   }
 });
 
+/**
+ * GET /operator/rewash-download
+ * ALL rewash requests — operator has system-wide visibility.
+ */
+router.get('/rewash-download', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { exportRewashExcel } = require('../utils/rewashExport');
+    await exportRewashExcel(res); // no scope → all
+  } catch (err) {
+    console.error('GET /operator/rewash-download error:', err);
+    return res.status(500).send('Failed to export rewash list');
+  }
+});
+
 module.exports = router;

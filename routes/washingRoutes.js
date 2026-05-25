@@ -1977,4 +1977,18 @@ router.post('/complete-rewash/:id', isAuthenticated, isWashingMaster, async (req
   }
 });
 
+/**
+ * GET /washingdashboard/rewash-download
+ * Washer's own rewash requests only (filtered by washer_id).
+ */
+router.get('/rewash-download', isAuthenticated, isWashingMaster, async (req, res) => {
+  try {
+    const { exportRewashExcel } = require('../utils/rewashExport');
+    await exportRewashExcel(res, { washerId: req.session.user.id });
+  } catch (err) {
+    console.error('GET /washingdashboard/rewash-download error:', err);
+    return res.status(500).send('Failed to export rewash list');
+  }
+});
+
 module.exports = router;
