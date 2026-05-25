@@ -641,9 +641,9 @@ router.post('/event/approve', isAuthenticated, isWashingInMaster, async (req, re
 
       const totalRewash = cleanRewash.reduce((a, s) => a + s.pieces, 0);
       const [rrIns] = await conn.query(
-        `INSERT INTO rewash_requests (washing_data_id, user_id, lot_no, sku, total_requested, status)
-         VALUES (?, ?, ?, ?, ?, 'pending')`,
-        [wd.id, userId, wd.lot_no, wd.sku, totalRewash]
+        `INSERT INTO rewash_requests (washing_data_id, washer_id, user_id, lot_no, sku, total_requested, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+        [wd.id, wd.user_id, userId, wd.lot_no, wd.sku, totalRewash]
       );
       rewashRequestId = rrIns.insertId;
 
@@ -1811,9 +1811,9 @@ router.post('/assign-rewash', isAuthenticated, isWashingInMaster, async (req, re
     // 3) Insert into rewash_requests
     const [rr] = await conn.query(`
       INSERT INTO rewash_requests
-        (washing_data_id, user_id, lot_no, sku, total_requested, status)
-      VALUES (?, ?, ?, ?, ?, 'pending')
-    `, [wd.id, userId, wd.lot_no, wd.sku, totalReq]);
+        (washing_data_id, washer_id, user_id, lot_no, sku, total_requested, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+    `, [wd.id, wd.user_id, userId, wd.lot_no, wd.sku, totalReq]);
     const rewashId = rr.insertId;
 
     // 4) Insert each size & deduct from washing_data_sizes + log in washing_data_updates
