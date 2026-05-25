@@ -38,7 +38,7 @@ router.get('/', isAuthenticated, isOperator, async (req, res) => {
   return res.render('operatorLotTat', { tat: TAT_DAYS });
 });
 
-async function loadLotTat({ days, search, flow, overdue, limit }) {
+async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
   const params = [];
   let where = '1=1';
   if (days && Number(days) > 0) {
@@ -50,9 +50,13 @@ async function loadLotTat({ days, search, flow, overdue, limit }) {
     params.push(flow);
   }
   if (search && search.trim()) {
-    where += ' AND (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)';
+    where += ' AND (cl.lot_no LIKE ? OR cl.sku LIKE ?)';
     const q = `%${search.trim()}%`;
-    params.push(q, q, q);
+    params.push(q, q);
+  }
+  if (remark && remark.trim()) {
+    where += ' AND cl.remark LIKE ?';
+    params.push(`%${remark.trim()}%`);
   }
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 2000);
   params.push(safeLimit);
@@ -214,6 +218,7 @@ router.get('/data', isAuthenticated, isOperator, async (req, res) => {
     const lots = await loadLotTat({
       days: req.query.days,
       search: req.query.search,
+      remark: req.query.remark,
       flow: req.query.flow,
       overdue: req.query.overdue,
       limit: req.query.limit,
@@ -230,6 +235,7 @@ router.get('/download', isAuthenticated, isOperator, async (req, res) => {
     const lots = await loadLotTat({
       days: req.query.days,
       search: req.query.search,
+      remark: req.query.remark,
       flow: req.query.flow,
       overdue: req.query.overdue,
       limit: req.query.limit || 2000,
