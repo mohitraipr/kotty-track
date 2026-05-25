@@ -25,7 +25,9 @@ router.get('/', isAuthenticated, async (req, res) => {
 router.get('/data', isAuthenticated, async (req, res) => {
   const userId = req.session.user.id;
   try {
-    // 1) Find every cutting_lot_id the current user touched.
+    // 1) Find every cutting_lot_id the current user touched — via legacy
+    //    assignments OR via the new events tables. The events tables are
+    //    authoritative now; a user can have events without an assignment.
     const [lotIdRows] = await pool.query(
       `
       SELECT id AS lot_id FROM cutting_lots WHERE user_id = ?
@@ -59,8 +61,14 @@ router.get('/data', isAuthenticated, async (req, res) => {
                              OR cl.lot_no = wd2.lot_no
                              OR cl.lot_no = wid2.lot_no
        WHERE fa.user_id = ?
+      UNION SELECT cutting_lot_id FROM stitching_events      WHERE operator_id = ?
+      UNION SELECT cutting_lot_id FROM jeans_assembly_events WHERE operator_id = ?
+      UNION SELECT cutting_lot_id FROM washing_events        WHERE operator_id = ?
+      UNION SELECT cutting_lot_id FROM washing_in_events     WHERE operator_id = ?
+      UNION SELECT cutting_lot_id FROM finishing_events      WHERE operator_id = ?
       `,
-      [userId, userId, userId, userId, userId, userId]
+      [userId, userId, userId, userId, userId, userId,
+       userId, userId, userId, userId, userId]
     );
 
     if (lotIdRows.length === 0) {
@@ -249,24 +257,71 @@ router.get('/data', isAuthenticated, async (req, res) => {
       }
     }
 
-    // 8) Completion flags from *_events.
-    const stageEventTables = [
-      ['stitching_events',      'stitching_completed'],
-      ['jeans_assembly_events', 'assembly_completed'],
-      ['washing_events',        'washing_completed'],
-      ['washing_in_events',     'washing_in_completed'],
-      ['finishing_events',      'finishing_completed'],
+    // 8) Events are the truth source for approve / complete state.
+    //    For each stage we collect:
+    //      - has approve event  → "approved"
+    //      - has complete event → "completed"
+    //      - latest operator + timestamp for either, so we can fill in
+    //        stage data even when no legacy assignment row exists.
+    const stageEventMap = [
+      ['stitching_events',      'stitching'],
+      ['jeans_assembly_events', 'assembly'],
+      ['washing_events',        'washing'],
+      ['washing_in_events',     'washing_in'],
+      ['finishing_events',      'finishing'],
     ];
-    for (const [t, flag] of stageEventTables) {
+    for (const [t, stageKey] of stageEventMap) {
       const [rows] = await pool.query(
-        `SELECT cutting_lot_id FROM \`${t}\`
-          WHERE cutting_lot_id IN (?) AND event_type='complete'
-          GROUP BY cutting_lot_id`,
+        `SELECT e.cutting_lot_id, e.event_type, e.operator_id, e.created_at, u.username
+           FROM \`${t}\` e
+      LEFT JOIN users u ON u.id = e.operator_id
+          WHERE e.cutting_lot_id IN (?)
+            AND e.event_type IN ('approve','complete')
+          ORDER BY e.created_at DESC`,
         [lotIds]
       );
+      // Group: per lot, latest approve + latest complete.
+      const perLot = {};
       for (const r of rows) {
-        const lot = lotById[r.cutting_lot_id];
-        if (lot) lot[flag] = true;
+        const slot = perLot[r.cutting_lot_id] || (perLot[r.cutting_lot_id] = {});
+        if (r.event_type === 'approve' && !slot.approve) slot.approve = r;
+        if (r.event_type === 'complete' && !slot.complete) slot.complete = r;
+      }
+      for (const [lotIdStr, ev] of Object.entries(perLot)) {
+        const lot = lotById[lotIdStr];
+        if (!lot) continue;
+        const approved  = !!ev.approve;
+        const completed = !!ev.complete;
+        if (stageKey === 'stitching')  lot.stitching_completed   = completed;
+        if (stageKey === 'assembly')   lot.assembly_completed    = completed;
+        if (stageKey === 'washing')    lot.washing_completed     = completed;
+        if (stageKey === 'washing_in') lot.washing_in_completed  = completed;
+        if (stageKey === 'finishing')  lot.finishing_completed   = completed;
+
+        // If we have an assignment row, override its approved flag with
+        // event truth. If no assignment row exists, synthesise stage data
+        // from the latest approve/complete event so the timeline still
+        // shows the master who actually did the work.
+        const existing = lot[stageKey];
+        const evOperator = ev.complete || ev.approve;
+        if (existing) {
+          existing.approved = approved || existing.approved;
+          existing.completed = completed;
+          if (approved && ev.approve) existing.approved_on = ev.approve.created_at;
+          if (completed && ev.complete) existing.completed_on = ev.complete.created_at;
+        } else if (evOperator) {
+          lot[stageKey] = {
+            user_id: evOperator.operator_id,
+            name: evOperator.username,
+            is_me: evOperator.operator_id === userId,
+            assigned_on: ev.approve ? ev.approve.created_at : null,
+            approved,
+            approved_on: ev.approve ? ev.approve.created_at : null,
+            completed,
+            completed_on: ev.complete ? ev.complete.created_at : null,
+            synthetic: true,
+          };
+        }
       }
     }
 
