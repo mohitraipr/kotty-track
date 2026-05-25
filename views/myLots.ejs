@@ -90,7 +90,7 @@
     <h1><i class="bi bi-bag-check"></i> My Lots</h1>
     <div class="sub">Every lot you've touched — and who has it next.</div>
     <div class="controls">
-      <input type="text" id="search" placeholder="Filter by lot / SKU" style="width: 220px;">
+      <input type="text" id="search" placeholder="Filter by lot / SKU / remark" style="width: 260px;">
       <select id="stageFilter">
         <option value="">All stages</option>
         <option value="with_me">With me now</option>
@@ -188,12 +188,17 @@
       <div class="ts">Cut ${fmtDate(lot.created_at)}</div>
     </div>`;
 
+    const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const remarkHtml = lot.remark
+      ? `<div class="lot-meta" style="margin-top:4px;"><i class="bi bi-chat-left-text"></i> ${esc(lot.remark)}</div>`
+      : '';
     return `<div class="lot-card">
       <div class="lot-head">
         <div>
           <span class="lot-no">${lot.lot_no}</span>
           <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
           <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
+          ${remarkHtml}
         </div>
         <div class="lot-meta">Current stage: <strong>${lot.current_stage}</strong></div>
       </div>
@@ -238,7 +243,8 @@
     if (q) {
       items = items.filter(l =>
         (l.lot_no || '').toLowerCase().includes(q) ||
-        (l.sku || '').toLowerCase().includes(q)
+        (l.sku || '').toLowerCase().includes(q) ||
+        (l.remark || '').toLowerCase().includes(q)
       );
     }
     if (flow) items = items.filter(l => l.flow_type === flow);

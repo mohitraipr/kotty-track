@@ -83,7 +83,7 @@ router.get('/data', isAuthenticated, async (req, res) => {
     // 2) Load lot metadata.
     const [lots] = await pool.query(
       `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.flow_type, cl.created_at,
-              cl.user_id AS cutter_id, cu.username AS cutter_name
+              cl.remark, cl.user_id AS cutter_id, cu.username AS cutter_name
          FROM cutting_lots cl
     LEFT JOIN users cu ON cu.id = cl.user_id
         WHERE cl.id IN (?)
@@ -99,6 +99,7 @@ router.get('/data', isAuthenticated, async (req, res) => {
         lot_id: l.id,
         lot_no: l.lot_no,
         sku: l.sku,
+        remark: l.remark || '',
         pieces: Number(l.total_pieces) || 0,
         flow_type: l.flow_type || 'unknown',
         created_at: l.created_at,

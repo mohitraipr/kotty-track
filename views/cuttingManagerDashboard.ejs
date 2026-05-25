@@ -284,9 +284,14 @@
         <h1 class="page-title" data-i18n="cuttingManagerDashboardTitle">Cutting Manager Dashboard</h1>
         <p class="page-subtitle"><span data-i18n="welcomeUser">Welcome</span>, <strong><%= user.username %></strong> (<%= user.roleName %>)</p>
       </div>
-      <a href="/payments/my-payments" class="kotty-btn kotty-btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
-        <i class="bi bi-wallet2"></i> My Payments
-      </a>
+      <div style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
+        <a href="/my-lots" class="kotty-btn kotty-btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+          <i class="bi bi-bag-check"></i> My Lots
+        </a>
+        <a href="/payments/my-payments" class="kotty-btn kotty-btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
+          <i class="bi bi-wallet2"></i> My Payments
+        </a>
+      </div>
     </div>
 
     <% if (error && error.length > 0) { %>
