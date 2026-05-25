@@ -2362,4 +2362,77 @@ router.get('/history-download', isAuthenticated, isFinishingMaster, async (req, 
   }
 });
 
+/**
+ * GET /finishingdashboard/dispatch-download
+ * Excel dump of every dispatch row (warehouse / PO / return / other)
+ * for the current finishing master's lots. One row per
+ * (lot, destination, size).
+ */
+router.get('/dispatch-download', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const [rows] = await pool.query(
+      `SELECT fd.lot_no, fd.sku,
+              d.destination,
+              fd.destination_remark,
+              d.size_label,
+              d.quantity,
+              d.total_sent,
+              d.sent_at,
+              fd.total_pieces AS batch_total,
+              cl.remark        AS cutting_remark
+         FROM finishing_dispatches d
+         JOIN finishing_data fd ON fd.id = d.finishing_data_id
+    LEFT JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
+        WHERE fd.user_id = ?
+     ORDER BY d.sent_at DESC, fd.lot_no, d.destination, d.size_label`,
+      [userId]
+    );
+
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet('Dispatches');
+    sheet.columns = [
+      { header: 'Lot No',          key: 'lot_no',          width: 14 },
+      { header: 'SKU',             key: 'sku',             width: 22 },
+      { header: 'Destination',     key: 'destination',     width: 14 },
+      { header: 'Destination Note', key: 'destination_remark', width: 24 },
+      { header: 'Size',            key: 'size_label',      width: 8  },
+      { header: 'Qty Dispatched',  key: 'quantity',        width: 12 },
+      { header: 'Total Sent',      key: 'total_sent',      width: 12 },
+      { header: 'Batch Total',     key: 'batch_total',     width: 12 },
+      { header: 'Dispatched On',   key: 'sent_at',         width: 14 },
+      { header: 'Cutting Remark',  key: 'cutting_remark',  width: 22 },
+    ];
+
+    const fmt = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '';
+    for (const r of rows) {
+      sheet.addRow({
+        lot_no: r.lot_no, sku: r.sku,
+        destination: r.destination || '',
+        destination_remark: r.destination_remark || '',
+        size_label: r.size_label || '',
+        quantity: r.quantity || 0,
+        total_sent: r.total_sent || 0,
+        batch_total: r.batch_total || 0,
+        sent_at: fmt(r.sent_at),
+        cutting_remark: r.cutting_remark || '',
+      });
+    }
+
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
+
+    const today = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Dispatches-${today}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[ERROR] GET /dispatch-download =>', err);
+    return res.status(500).send('Failed to export dispatch list');
+  }
+});
+
 module.exports = router;

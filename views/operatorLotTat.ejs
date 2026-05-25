@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lot TAT — Operator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body { background: #f6f7fb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page-head {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #fff; padding: 22px 24px; margin-bottom: 18px;
+      border-radius: 0 0 14px 14px;
+    }
+    .page-head h1 { font-size: 1.35rem; font-weight: 600; margin: 0; }
+    .page-head .sub { color: #94a3b8; font-size: 0.9rem; margin-top: 4px; }
+    .tat-banner {
+      display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px;
+      font-size: 0.78rem; color: #cbd5e1;
+    }
+    .tat-banner .item strong { color: #fff; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+    .controls input, .controls select {
+      background: #fff; border: 0; padding: 6px 10px; border-radius: 8px;
+      font-size: 0.88rem;
+    }
+    .counts { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+    .count-pill {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 10px 14px; min-width: 130px;
+    }
+    .count-pill .num { font-size: 1.4rem; font-weight: 600; color: #111827; }
+    .count-pill .label { font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
+    .lot-card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .lot-card.overdue { border-color: #fca5a5; box-shadow: 0 0 0 1px #fca5a5; }
+    .lot-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .lot-no { font-weight: 600; font-size: 1.05rem; color: #111827; }
+    .lot-meta { font-size: 0.8rem; color: #6b7280; }
+    .dept-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; }
+    .dept-chip.denim { background: #dbeafe; color: #1e40af; }
+    .dept-chip.hosiery { background: #fef3c7; color: #92400e; }
+    .dept-chip.unknown { background: #f3f4f6; color: #6b7280; }
+    .timeline { display: flex; gap: 0; flex-wrap: nowrap; overflow-x: auto; padding: 4px 0; }
+    .step {
+      flex: 1; min-width: 150px; padding: 8px 10px;
+      border-left: 3px solid transparent; position: relative;
+    }
+    .step + .step { border-left-color: #e5e7eb; }
+    .step .stage-name {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px;
+      color: #6b7280; margin-bottom: 4px; font-weight: 500;
+    }
+    .step .master { font-weight: 500; font-size: 0.88rem; color: #111827; }
+    .step .ts { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
+    .step .days {
+      font-size: 0.85rem; font-weight: 600; color: #111827; margin-top: 3px;
+    }
+    .step .tat-tag {
+      font-size: 0.68rem; color: #9ca3af;
+    }
+    .step.done .stage-name { color: #16a34a; }
+    .step.done .stage-name::after { content: ' ✓'; }
+    .step.done { background: linear-gradient(to right, rgba(34,197,94,0.05), transparent); }
+    .step.in-progress { background: linear-gradient(to right, rgba(251,191,36,0.08), transparent); }
+    .step.in-progress .stage-name { color: #d97706; }
+    .step.in-progress.overdue { background: linear-gradient(to right, rgba(239,68,68,0.12), transparent); }
+    .step.in-progress.overdue .stage-name { color: #b91c1c; font-weight: 600; }
+    .step.in-progress.overdue .days { color: #b91c1c; }
+    .step.done.overdue .days { color: #b91c1c; }
+    .step.done.overdue .stage-name { color: #b91c1c; }
+    .step.not-started { opacity: 0.45; }
+    .step.not-started .master::before { content: '—'; }
+    .step.not-started .master { color: transparent; }
+    .step.na { opacity: 0.4; }
+    .step.na .master::before { content: '—'; }
+    .step.na .master { color: transparent; }
+    .empty-state {
+      background: #fff; border: 1px dashed #d1d5db; border-radius: 12px;
+      padding: 40px 20px; text-align: center; color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-head">
+    <h1><i class="bi bi-speedometer2"></i> Lot TAT</h1>
+    <div class="sub">All lots, per-stage elapsed days vs TAT (from events).</div>
+    <div class="tat-banner">
+      <span class="item">Cutting <strong>3d</strong></span>
+      <span class="item">Stitching <strong>7d</strong></span>
+      <span class="item">Assembly <strong>7d</strong></span>
+      <span class="item">Washing <strong>15d</strong></span>
+      <span class="item">Wash-In <strong>7d</strong></span>
+      <span class="item">Finishing <strong>7d</strong></span>
+    </div>
+    <div class="controls">
+      <input type="text" id="search" placeholder="Filter by lot / SKU / remark" style="width: 260px;">
+      <select id="flowFilter">
+        <option value="">All depts</option>
+        <option value="denim">Denim</option>
+        <option value="hosiery">Hosiery</option>
+      </select>
+      <select id="daysFilter">
+        <option value="30" selected>Last 30 days</option>
+        <option value="7">Last 7 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 180 days</option>
+        <option value="">All time</option>
+      </select>
+      <label style="color:#cbd5e1; font-size:0.85rem;">
+        <input type="checkbox" id="overdueFilter"> Overdue only
+      </label>
+      <a id="dlBtn" href="#" class="btn btn-sm btn-light" style="margin-left:auto;">
+        <i class="bi bi-file-earmark-excel"></i> Download Excel
+      </a>
+      <a href="/operator/dashboard" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-arrow-left"></i> Back
+      </a>
+    </div>
+  </div>
+
+  <div class="container-fluid" style="max-width: 1400px;">
+    <div class="counts" id="counts"></div>
+    <div id="list"></div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function fmtDate(s) {
+    if (!s) return '';
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  }
+
+  function stepClass(t, lot) {
+    const cls = ['step'];
+    const isDenim = lot.flow_type === 'denim';
+    if (!isDenim && ['assembly','washing','washing_in'].includes(t.stage)) {
+      cls.push('na'); return cls.join(' ');
+    }
+    if (t.not_started) cls.push('not-started');
+    else if (t.in_progress) cls.push('in-progress');
+    else cls.push('done');
+    if (t.overdue) cls.push('overdue');
+    return cls.join(' ');
+  }
+
+  function stepHtml(t, lot) {
+    const cls = stepClass(t, lot);
+    const label = {
+      cutting: 'Cutting', stitching: 'Stitching', assembly: 'Assembly',
+      washing: 'Washing', washing_in: 'Wash-In', finishing: 'Finishing',
+    }[t.stage];
+    if (cls.includes('na')) {
+      return `<div class="${cls}">
+        <div class="stage-name">${label}</div>
+        <div class="master">—</div>
+        <div class="tat-tag">TAT ${t.tat}d</div>
+      </div>`;
+    }
+    if (cls.includes('not-started')) {
+      return `<div class="${cls}">
+        <div class="stage-name">${label}</div>
+        <div class="master">Not started</div>
+        <div class="tat-tag">TAT ${t.tat}d</div>
+      </div>`;
+    }
+    let dayLine;
+    if (t.in_progress) {
+      dayLine = `<div class="days">${t.days}d <span style="font-weight:400;color:#9ca3af;">ongoing</span></div>`;
+    } else {
+      dayLine = `<div class="days">${t.days}d</div>`;
+    }
+    return `<div class="${cls}">
+      <div class="stage-name">${label}</div>
+      <div class="master">${t.master || '—'}</div>
+      <div class="ts">${fmtDate(t.entered)}${t.exited ? ' → ' + fmtDate(t.exited) : ''}</div>
+      ${dayLine}
+      <div class="tat-tag">TAT ${t.tat}d ${t.overdue ? '· over' : ''}</div>
+    </div>`;
+  }
+
+  function lotCard(lot) {
+    const stages = lot.timeline.map(t => stepHtml(t, lot)).join('');
+    const overdueCls = lot.any_overdue ? ' overdue' : '';
+    return `<div class="lot-card${overdueCls}">
+      <div class="lot-head">
+        <div>
+          <span class="lot-no">${lot.lot_no}</span>
+          <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
+          <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
+          ${lot.remark ? `<div class="lot-meta" style="margin-top:4px;"><i class="bi bi-chat-left-text"></i> ${escapeHtml(lot.remark)}</div>` : ''}
+        </div>
+        <div class="lot-meta">Current: <strong>${lot.current_stage}</strong>${lot.any_overdue ? ' · <span style="color:#b91c1c;">OVERDUE</span>' : ''}</div>
+      </div>
+      <div class="timeline">${stages}</div>
+    </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderCounts(items) {
+    const total = items.length;
+    const overdue = items.filter(l => l.any_overdue).length;
+    const denim = items.filter(l => l.flow_type === 'denim').length;
+    const hos   = items.filter(l => l.flow_type === 'hosiery').length;
+    $('counts').innerHTML = `
+      <div class="count-pill"><div class="num">${total}</div><div class="label">Total lots</div></div>
+      <div class="count-pill" style="border-color:#fecaca;"><div class="num" style="color:#b91c1c;">${overdue}</div><div class="label">Overdue</div></div>
+      <div class="count-pill"><div class="num">${denim}</div><div class="label">Denim</div></div>
+      <div class="count-pill"><div class="num">${hos}</div><div class="label">Hosiery</div></div>
+    `;
+  }
+
+  function buildQS() {
+    const qs = new URLSearchParams();
+    const s = $('search').value.trim();
+    if (s) qs.set('search', s);
+    if ($('flowFilter').value) qs.set('flow', $('flowFilter').value);
+    if ($('daysFilter').value) qs.set('days', $('daysFilter').value);
+    if ($('overdueFilter').checked) qs.set('overdue', '1');
+    return qs.toString();
+  }
+
+  async function load() {
+    $('list').innerHTML = '<div class="empty-state">Loading…</div>';
+    const qs = buildQS();
+    $('dlBtn').href = '/operator/lot-tat/download' + (qs ? '?' + qs : '');
+    const r = await fetch('/operator/lot-tat/data' + (qs ? '?' + qs : ''));
+    if (!r.ok) {
+      $('list').innerHTML = '<div class="empty-state">Failed to load. ' + r.status + '</div>';
+      return;
+    }
+    const data = await r.json();
+    const lots = data.lots || [];
+    renderCounts(lots);
+    $('list').innerHTML = lots.length
+      ? lots.map(lotCard).join('')
+      : `<div class="empty-state"><i class="bi bi-inbox" style="font-size:32px;"></i><div style="margin-top:10px;">No lots match your filter.</div></div>`;
+  }
+
+  let typingTimer;
+  $('search').addEventListener('input', () => { clearTimeout(typingTimer); typingTimer = setTimeout(load, 300); });
+  ['flowFilter','daysFilter','overdueFilter'].forEach(id => {
+    $(id).addEventListener('change', load);
+  });
+
+  load();
+</script>
+</body>
+</html>
