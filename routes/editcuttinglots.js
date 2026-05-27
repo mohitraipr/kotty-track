@@ -188,10 +188,11 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
 
     // Rolls available in inventory for this lot's fabric_type (for the autocomplete)
     const [availableRolls] = await pool.query(
-      `SELECT roll_no, per_roll_weight, unit
-         FROM fabric_invoice_rolls
-        WHERE fabric_type = ? AND per_roll_weight > 0
-     ORDER BY roll_no`,
+      `SELECT fir.roll_no, fir.per_roll_weight, fir.unit
+         FROM fabric_invoice_rolls fir
+         JOIN fabric_invoices fi ON fi.id = fir.invoice_id
+        WHERE fi.fabric_type = ? AND fir.per_roll_weight > 0
+     ORDER BY fir.roll_no`,
       [lot.fabric_type]
     );
 
@@ -656,8 +657,11 @@ router.post('/editcuttinglots/add-roll', isAuthenticated, isOperator, upload.non
 
     // Inventory check — deplete fabric_invoice_rolls if the roll exists there
     const [[inv]] = await conn.query(
-      `SELECT roll_no, per_roll_weight FROM fabric_invoice_rolls
-        WHERE roll_no = ? AND fabric_type = ? FOR UPDATE`,
+      `SELECT fir.roll_no, fir.per_roll_weight
+         FROM fabric_invoice_rolls fir
+         JOIN fabric_invoices fi ON fi.id = fir.invoice_id
+        WHERE fir.roll_no = ? AND fi.fabric_type = ?
+        FOR UPDATE`,
       [roll_no, lot.fabric_type]
     );
     let resolvedFullWeight = full_weight;
