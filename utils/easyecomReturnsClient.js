@@ -947,9 +947,26 @@ async function getAllLocationKeys(warehouse = 'faridabad') {
       .map(String);
   }
 
+  // Final fallback: probe one inventory row via getInventoryDetailsV3 — it
+  // always returns location_key per item. Single small call (limit=1).
   if (!extracted.length) {
-    const sampleShape = rows[0] ? JSON.stringify(rows[0]).slice(0, 300) : 'no rows';
-    throw new Error(`No location keys resolved for ${warehouse}. Last sample: ${sampleShape}`);
+    try {
+      const resp = await api.get('/getInventoryDetailsV3', { params: { limit: 1, includeLocations: 1 } });
+      const items = resp.data?.data?.inventoryData || [];
+      const seen = new Set();
+      for (const it of items) {
+        const k = it.location_key || it.locationKey;
+        if (k) seen.add(String(k));
+      }
+      extracted = Array.from(seen);
+      console.log(`[getAllLocationKeys:${warehouse}] inventory probe yielded ${extracted.length} key(s): ${extracted.join(',')}`);
+    } catch (err) {
+      console.warn(`[getAllLocationKeys:${warehouse}] inventory probe failed: ${err.response?.status || ''} ${err.message}`);
+    }
+  }
+
+  if (!extracted.length) {
+    throw new Error(`No location keys resolved for ${warehouse}. /getAllLocation, /account/v1/api/locations and inventory probe all empty.`);
   }
 
   const joined = extracted.join(',');
