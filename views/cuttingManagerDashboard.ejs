@@ -178,6 +178,12 @@
     transition: width 0.3s ease-in-out;
   }
   .kotty-progress-bar.danger { background: var(--danger); }
+  .weightUsedInput.over-weight {
+    border-color: var(--danger, #dc2626) !important;
+    background: #fef2f2 !important;
+    color: #b91c1c !important;
+    font-weight: 600;
+  }
   .autocomplete { position: relative; width: 100%; }
   .autocomplete-items {
     position: absolute;
@@ -466,6 +472,15 @@
               <hr class="section-divider"/>
               <div class="mb-3">
                 <h4 class="section-title"><i class="bi bi-list"></i><span data-i18n="sizesAndPatterns">Sizes and Patterns</span></h4>
+                <div class="bulk-size-row mb-2" style="display:flex; gap:8px; align-items:center;">
+                  <input type="text" class="kotty-input" id="bulkSizeInput"
+                         placeholder="Quick entry: 26-1,28-2,30-2,32-1,34-1"
+                         style="flex:1;" />
+                  <button type="button" class="kotty-btn kotty-btn-primary kotty-btn-sm" id="bulkSizeApplyBtn">
+                    <i class="bi bi-lightning-charge"></i> Apply
+                  </button>
+                </div>
+                <div id="bulkSizeError" class="text-danger small mb-2" style="display:none;"></div>
                 <div id="sizesContainer"></div>
                 <button type="button" class="kotty-btn kotty-btn-secondary kotty-btn-sm" id="addSizeBtn"><i class="bi bi-plus-circle"></i><span data-i18n="addNewSize">Add New Size</span></button>
               </div>
@@ -539,15 +554,12 @@
       </div>
     </div>
     <div class="row g-3 mt-1">
-      <div class="col-md-6">
+      <div class="col-md-12">
         <label class="kotty-form-label" data-i18n="fullWeightLabel">Full Roll Weight</label>
         <input type="number" step="0.01" class="kotty-input fullWeightInput" name="roll_full_weight[]" min="0" required placeholder="Full weight" />
       </div>
-      <div class="col-md-6">
-        <label class="kotty-form-label" data-i18n="remainingWeightLabel">Remaining Weight</label>
-        <input type="number" step="0.01" class="kotty-input remainingWeightInput" name="roll_remaining_weight[]" min="0" required placeholder="Remaining weight" />
-      </div>
     </div>
+    <input type="hidden" class="remainingWeightInput" name="roll_remaining_weight[]" />
     <div class="mt-3">
       <label class="kotty-form-label"><i class="bi bi-graph-up"></i><span data-i18n="weightUsageProgress">Weight Usage Progress</span></label>
       <div class="kotty-progress">
@@ -723,7 +735,6 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
       rollSection.querySelector('.availableWeightTxt').textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
       fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
       fullWeightInput.readOnly = true;
-      remainingWeightInput.max = selectedRoll.per_roll_weight;
     } else {
       rollSection.querySelector('.availableWeightTxt').textContent = '0';
       fullWeightInput.readOnly = false;
@@ -737,13 +748,15 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
 
   fullWeightInput.addEventListener('input', () => {
     rollSection.querySelector('.availableWeightTxt').textContent = parseFloat(fullWeightInput.value || 0).toFixed(2);
-    remainingWeightInput.max = fullWeightInput.value || '';
     updateWeightUsed(rollSection);
     updateWeightProgress(rollSection);
     checkRollsCompletion();
   });
-  remainingWeightInput.addEventListener('input', () => { updateWeightUsed(rollSection); updateWeightProgress(rollSection); checkRollsCompletion(); });
-  rollSection.querySelector('.layersInput').addEventListener('input', checkRollsCompletion);
+  rollSection.querySelector('.layersInput').addEventListener('input', () => {
+    updateWeightUsed(rollSection);
+    updateWeightProgress(rollSection);
+    checkRollsCompletion();
+  });
 }
 
 function addNewSize() {
@@ -761,9 +774,17 @@ function addNewRoll() {
   newRoll.removeAttribute('id');
   rollsContainer.appendChild(newRoll);
   newRoll.querySelector('.remove-roll-btn').addEventListener('click', () => { newRoll.remove(); updateTotalPieces(); checkRollsCompletion(); });
-  newRoll.querySelector('.layersInput').addEventListener('input', () => { updateTotalPieces(); checkRollsCompletion(); });
-  newRoll.querySelector('.fullWeightInput').addEventListener('input', () => { newRoll.querySelector('.remainingWeightInput').max = newRoll.querySelector('.fullWeightInput').value || ''; updateWeightUsed(newRoll); updateWeightProgress(newRoll); checkRollsCompletion(); });
-  newRoll.querySelector('.remainingWeightInput').addEventListener('input', () => { updateWeightUsed(newRoll); updateWeightProgress(newRoll); checkRollsCompletion(); });
+  newRoll.querySelector('.layersInput').addEventListener('input', () => {
+    updateTotalPieces();
+    updateWeightUsed(newRoll);
+    updateWeightProgress(newRoll);
+    checkRollsCompletion();
+  });
+  newRoll.querySelector('.fullWeightInput').addEventListener('input', () => {
+    updateWeightUsed(newRoll);
+    updateWeightProgress(newRoll);
+    checkRollsCompletion();
+  });
   const currentFabricType = fabricTypeSel.value;
   if (currentFabricType) initializeRollNoAutocomplete(newRoll, currentFabricType);
 }
@@ -783,10 +804,31 @@ function updateWeightProgress(rollSection) {
 }
 
 function updateWeightUsed(rollSection) {
-  const fullWeight = parseFloat(rollSection.querySelector('.fullWeightInput').value);
-  const remainingWeight = parseFloat(rollSection.querySelector('.remainingWeightInput').value);
-  const used = isNaN(fullWeight) || isNaN(remainingWeight) ? '' : Math.max(fullWeight - remainingWeight, 0).toFixed(2);
-  rollSection.querySelector('.weightUsedInput').value = used;
+  // weight_used = table_length × layers
+  // remaining_weight is back-filled (hidden) so the existing backend
+  // contract stays intact: server recomputes used = full - remaining.
+  const tableLength = parseFloat(document.getElementById('table_length').value);
+  const layers      = parseFloat(rollSection.querySelector('.layersInput').value);
+  const full        = parseFloat(rollSection.querySelector('.fullWeightInput').value);
+  const usedInput   = rollSection.querySelector('.weightUsedInput');
+  const remInput    = rollSection.querySelector('.remainingWeightInput');
+
+  if (isNaN(tableLength) || isNaN(layers)) {
+    usedInput.value = '';
+    remInput.value = '';
+    usedInput.classList.remove('over-weight');
+    return;
+  }
+  const used = tableLength * layers;
+  usedInput.value = used.toFixed(2);
+
+  if (isNaN(full)) {
+    remInput.value = '';
+    usedInput.classList.remove('over-weight');
+    return;
+  }
+  remInput.value = Math.max(full - used, 0).toFixed(2);
+  usedInput.classList.toggle('over-weight', used > full);
 }
 
 function updateTotalPieces() {
@@ -839,12 +881,75 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkRollsCompletion() {
   const allRollSections = rollsContainer.querySelectorAll('.roll-section');
   if (allRollSections.length === 0) { createLotBtn.disabled = true; return; }
-  let allFilled = true;
-  allRollSections.forEach(roll => {
-    if (!roll.querySelector('.rollNoSel').value.trim() || !roll.querySelector('.layersInput').value.trim() || !roll.querySelector('.fullWeightInput').value.trim() || !roll.querySelector('.remainingWeightInput').value.trim()) allFilled = false;
-  });
+  const tableLengthOk = !!document.getElementById('table_length').value.trim();
+  let allFilled = tableLengthOk;
+  if (allFilled) {
+    allRollSections.forEach(roll => {
+      if (
+        !roll.querySelector('.rollNoSel').value.trim() ||
+        !roll.querySelector('.layersInput').value.trim() ||
+        !roll.querySelector('.fullWeightInput').value.trim() ||
+        roll.querySelector('.weightUsedInput').classList.contains('over-weight')
+      ) allFilled = false;
+    });
+  }
   createLotBtn.disabled = !allFilled;
 }
+
+// Re-run weight computation across every roll when table length changes
+document.getElementById('table_length').addEventListener('input', () => {
+  rollsContainer.querySelectorAll('.roll-section').forEach(rs => {
+    updateWeightUsed(rs);
+    updateWeightProgress(rs);
+  });
+  checkRollsCompletion();
+});
+
+// Bulk size input — parse "26-1,28-2,30-2,32-1,34-1" and rebuild #sizesContainer
+function parseBulkSizeInput(text) {
+  if (!text || !text.trim()) return { ok: false, error: 'Empty input' };
+  const validSizes = Array.from(document.querySelectorAll('#sizeTemplate .sizeLabelSel option'))
+    .map(o => o.value).filter(v => v);
+  const pairs = [];
+  const seen = new Set();
+  for (const raw of text.split(',')) {
+    const t = raw.trim();
+    if (!t) continue;
+    const m = t.match(/^([A-Za-z0-9]+)\s*-\s*(\d+(?:\.\d+)?)$/);
+    if (!m) return { ok: false, error: `Could not parse "${t}" — expected size-count e.g. 28-2` };
+    const size = m[1].toUpperCase();
+    const count = parseFloat(m[2]);
+    if (!validSizes.includes(size)) return { ok: false, error: `Unknown size "${size}"` };
+    if (count <= 0) return { ok: false, error: `Pattern count must be > 0 for ${size}` };
+    if (seen.has(size)) return { ok: false, error: `Duplicate size "${size}"` };
+    seen.add(size);
+    pairs.push({ size_label: size, pattern_count: count });
+  }
+  if (!pairs.length) return { ok: false, error: 'No valid pairs parsed' };
+  return { ok: true, pairs };
+}
+
+function applyBulkSizes(pairs) {
+  sizesContainer.innerHTML = '';
+  for (const { size_label, pattern_count } of pairs) {
+    addNewSize();
+    const last = sizesContainer.lastElementChild;
+    last.querySelector('.sizeLabelSel').value = size_label;
+    last.querySelector('.patternCountInput').value = pattern_count;
+  }
+  updateTotalPieces();
+}
+
+document.getElementById('bulkSizeApplyBtn').addEventListener('click', () => {
+  const errEl = document.getElementById('bulkSizeError');
+  const res = parseBulkSizeInput(document.getElementById('bulkSizeInput').value);
+  if (!res.ok) { errEl.textContent = res.error; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  applyBulkSizes(res.pairs);
+});
+document.getElementById('bulkSizeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('bulkSizeApplyBtn').click(); }
+});
 
 document.getElementById('lotForm').addEventListener('submit', function(e) { document.getElementById('createLotBtn').disabled = true; });
 
