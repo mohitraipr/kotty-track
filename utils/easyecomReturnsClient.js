@@ -917,17 +917,44 @@ async function getAllLocationKeys(warehouse = 'faridabad') {
   const key = warehouse.toLowerCase();
   if (cachedLocationKeys[key]) return cachedLocationKeys[key];
   const api = await ensureAxiosForWarehouse(warehouse, 30000);
-  const resp = await api.get('/getAllLocation');
-  const rows = resp.data?.data || [];
-  const keys = rows
-    .map(r => r.location_key || r.locationKey || r.token)
+
+  const FIELD_CANDIDATES = ['location_key', 'locationKey', 'token', 'location_token', 'companyToken', 'company_token', 'key'];
+  const tryEndpoint = async (path) => {
+    try {
+      const resp = await api.get(path);
+      const data = resp.data?.data ?? resp.data ?? [];
+      const rows = Array.isArray(data) ? data : (data?.locations || data?.companies || []);
+      const sample = JSON.stringify(rows[0] || {}).slice(0, 400);
+      console.log(`[getAllLocationKeys:${warehouse}] ${path} → ${rows.length} rows. Sample keys: ${rows[0] ? Object.keys(rows[0]).join(',') : 'n/a'}. Sample: ${sample}`);
+      return rows;
+    } catch (err) {
+      console.warn(`[getAllLocationKeys:${warehouse}] ${path} failed: ${err.response?.status || ''} ${err.message}`);
+      return [];
+    }
+  };
+
+  let rows = await tryEndpoint('/getAllLocation');
+  let extracted = rows
+    .map(r => FIELD_CANDIDATES.map(f => r[f]).find(Boolean))
     .filter(Boolean)
     .map(String);
-  if (!keys.length) {
-    throw new Error(`/getAllLocation returned no location_key entries for ${warehouse}`);
+
+  if (!extracted.length) {
+    rows = await tryEndpoint('/account/v1/api/locations');
+    extracted = rows
+      .map(r => FIELD_CANDIDATES.map(f => r[f]).find(Boolean))
+      .filter(Boolean)
+      .map(String);
   }
-  const joined = keys.join(',');
+
+  if (!extracted.length) {
+    const sampleShape = rows[0] ? JSON.stringify(rows[0]).slice(0, 300) : 'no rows';
+    throw new Error(`No location keys resolved for ${warehouse}. Last sample: ${sampleShape}`);
+  }
+
+  const joined = extracted.join(',');
   cachedLocationKeys[key] = joined;
+  console.log(`[getAllLocationKeys:${warehouse}] Resolved ${extracted.length} location key(s): ${joined.slice(0, 200)}`);
   return joined;
 }
 
