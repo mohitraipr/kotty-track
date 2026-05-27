@@ -401,7 +401,7 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
   }
 
   const warehouseKey = warehouseName.toLowerCase();
-  const { getInventoryFromApi, isConfigured } = require('../utils/easyecomReturnsClient');
+  const { fetchFullInventoryReport, isConfigured } = require('../utils/easyecomReturnsClient');
 
   if (!isConfigured(warehouseName)) {
     return res.status(500).json({ error: `EasyEcom API not configured for warehouse: ${warehouseName}` });
@@ -477,7 +477,7 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
   });
 
   try {
-    sendEvent('start', { jobId, warehouse: warehouseName, message: 'Starting inventory fetch...' });
+    sendEvent('start', { jobId, warehouse: warehouseName, message: 'Queueing inventory report at EasyEcom...' });
 
     const tempDir = os.tmpdir();
     const filePath = path.join(tempDir, `inventory_${jobId}.csv`);
@@ -503,38 +503,80 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
       'Source Batch Code', 'Remarks', 'Force Allocate',
     ]);
 
-    let rowCount = 0;
-
-    for await (const item of getInventoryFromApi(warehouseName)) {
-      const currentJob = activeDownloads.get(warehouseKey);
-      if (currentJob?.cancelled) {
-        activeDownloads.delete(warehouseKey);
-        csvStream.end();
-        try { fs.unlinkSync(filePath); } catch (_) {}
-        sendEvent('error', { message: 'Download cancelled' });
-        res.end();
-        return;
+    // Adaptive header pickup — FULL_INVENTORY_REPORT column names are not
+    // contract-stable, so we try common variants.
+    const pickField = (row, candidates) => {
+      for (const k of candidates) {
+        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
       }
+      return undefined;
+    };
+    const SKU_KEYS  = ['sku', 'SKU', 'Sku', 'Product Code', 'Product Code*', 'productCode', 'product_code'];
+    const QTY_KEYS  = ['available', 'Available', 'availableInventory', 'Available Quantity', 'Available Qty', 'Qty Available', 'qty', 'Quantity', 'Quantity*', 'Inventory', 'inventoryCount', 'inventory_count', 'Stock'];
+    const BIN_KEYS  = ['Shelf Code', 'Shelf Code*', 'Shelf', 'shelf', 'shelf_code', 'Bin', 'Bin Code', 'bin', 'bin_code', 'Location', 'Location Key', 'location_key', 'Sub Location', 'sub_location'];
+
+    const onProgress = (info) => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const job = activeDownloads.get(warehouseKey);
+      const rowCount = job?.rowCount || 0;
+      let message;
+      switch (info.phase) {
+        case 'queueing':       message = 'Queueing report at EasyEcom...'; break;
+        case 'queued':         message = `Report queued (id ${info.reportId}). Waiting for generation...`; break;
+        case 'polling':        message = `Report status: ${info.status || 'pending'} (${info.elapsed || elapsed}s)`; break;
+        case 'downloading':    message = 'Report ready. Downloading CSV...'; break;
+        case 'downloading_s3': message = 'Downloading CSV from S3...'; break;
+        case 'parsing':        message = 'Parsing CSV...'; break;
+        case 'parsed':         message = `Parsed ${(info.rowCount || 0).toLocaleString()} rows. Writing output...`; break;
+        default:               message = info.phase;
+      }
+      sendEvent('progress', { fetched: rowCount, message, elapsed });
+    };
+
+    const reportRows = await fetchFullInventoryReport(
+      warehouseName,
+      { statuses: 'Available' },
+      onProgress
+    );
+
+    // Cancellation check between phases (we cannot interrupt EasyEcom's
+    // server-side report generation, but we can abandon the write).
+    if (activeDownloads.get(warehouseKey)?.cancelled) {
+      activeDownloads.delete(warehouseKey);
+      csvStream.end();
+      try { fs.unlinkSync(filePath); } catch (_) {}
+      sendEvent('error', { message: 'Download cancelled' });
+      res.end();
+      return;
+    }
+
+    let rowCount = 0;
+    let skipped = 0;
+    for (const r of reportRows) {
+      const sku = pickField(r, SKU_KEYS);
+      if (!sku) { skipped++; continue; }
+      const qtyRaw = pickField(r, QTY_KEYS);
+      const qty = qtyRaw === undefined ? 0 : (Number(qtyRaw) || 0);
+      const shelf = pickField(r, BIN_KEYS) || 'default';
 
       const drainPromise = writeRow([
-        item.sku, item.total_qty, 'default', 'replace',
+        sku, qty, shelf, 'replace',
         '', '', '', '', '', '',
       ]);
       if (drainPromise) await drainPromise;
       rowCount++;
 
-      if (rowCount % 100 === 0) {
-        activeDownloads.set(warehouseKey, { jobId, startTime, rowCount, cancelled: false });
-      }
-
       if (rowCount % 500 === 0) {
+        activeDownloads.set(warehouseKey, { jobId, startTime, rowCount, cancelled: false });
         sendEvent('progress', {
           fetched: rowCount,
-          message: `Fetched ${rowCount.toLocaleString()} SKUs...`,
+          message: `Wrote ${rowCount.toLocaleString()} rows...`,
           elapsed: Math.round((Date.now() - startTime) / 1000)
         });
       }
     }
+    activeDownloads.set(warehouseKey, { jobId, startTime, rowCount, cancelled: false });
+    if (skipped) console.log(`[fetch-live/report] skipped ${skipped} rows missing SKU for ${warehouseName}`);
 
     await new Promise((resolve, reject) => {
       csvStream.end((err) => (err ? reject(err) : resolve()));
