@@ -521,6 +521,7 @@ router.get('/logs/fetch-live', isAuthenticated, allowRoles(['wishlinkops', 'mohi
       const rowCount = job?.rowCount || 0;
       let message;
       switch (info.phase) {
+        case 'resolving_locations': message = 'Resolving warehouse locations...'; break;
         case 'queueing':       message = 'Queueing report at EasyEcom...'; break;
         case 'queued':         message = `Report queued (id ${info.reportId}). Waiting for generation...`; break;
         case 'polling':        message = `Report status: ${info.status || 'pending'} (${info.elapsed || elapsed}s)`; break;

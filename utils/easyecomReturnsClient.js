@@ -908,22 +908,49 @@ async function fetchStatusWiseStockReport(warehouse = 'faridabad') {
   return waitForAndDownloadReport(reportId, warehouse);
 }
 
+// Per-warehouse cache of comma-joined location_key strings. EasyEcom requires
+// `selectedLocations` for FULL_INVENTORY_REPORT and the keys are stable, so we
+// only fetch them once per process.
+const cachedLocationKeys = {};
+
+async function getAllLocationKeys(warehouse = 'faridabad') {
+  const key = warehouse.toLowerCase();
+  if (cachedLocationKeys[key]) return cachedLocationKeys[key];
+  const api = await ensureAxiosForWarehouse(warehouse, 30000);
+  const resp = await api.get('/getAllLocation');
+  const rows = resp.data?.data || [];
+  const keys = rows
+    .map(r => r.location_key || r.locationKey || r.token)
+    .filter(Boolean)
+    .map(String);
+  if (!keys.length) {
+    throw new Error(`/getAllLocation returned no location_key entries for ${warehouse}`);
+  }
+  const joined = keys.join(',');
+  cachedLocationKeys[key] = joined;
+  return joined;
+}
+
 // FULL_INVENTORY_REPORT — queues, polls, follows the S3 downloadUrl if present,
 // and returns parsed rows. Emits onProgress({phase, status, elapsed, reportId})
 // callbacks so the SSE route can stream user-visible progress while the report
-// bakes server-side at EasyEcom.
+// bakes server-side at EasyEcom. `selectedLocations` is required by EasyEcom;
+// if caller omits it, we auto-discover via /getAllLocation.
 async function fetchFullInventoryReport(
   warehouse = 'faridabad',
   { statuses = 'Available', locations = '', skus = '', bins = '' } = {},
   onProgress = () => {}
 ) {
+  onProgress({ phase: 'resolving_locations' });
+  const selectedLocations = locations || await getAllLocationKeys(warehouse);
+
   const params = {
     skus,
     bins,
     inventoryStatuses: statuses,
+    selectedLocations,
     uomDetails: 1,
   };
-  if (locations) params.selectedLocations = locations;
 
   onProgress({ phase: 'queueing' });
   const reportId = await queueReport('FULL_INVENTORY_REPORT', params, warehouse);
