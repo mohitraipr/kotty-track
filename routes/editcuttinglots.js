@@ -409,17 +409,13 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                     <h5 class="mb-2"><i class="bi bi-plus-circle"></i> Add a missed roll</h5>
                     <p class="text-muted small mb-2">
                       Inserts a new roll into this lot, recomputes total pieces, and (if the roll exists in inventory) deducts the used weight from <code>fabric_invoice_rolls</code>.
-                      Weight used auto-computes from <strong>table length × layers</strong>${lot.table_length ? ` (table length = <strong>${lot.table_length}</strong>)` : ''}.
+                      Enter <strong>Weight Used</strong> manually.
                     </p>
                     ${downstreamHits.length ? `
                       <div class="alert alert-warning py-2 mb-2 small">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <strong>Heads-up:</strong> this lot has already moved into <strong>${downstreamHits.join(', ')}</strong>.
                         Adding pieces upstream is allowed (downstream stages track their own qty), but the next-stage master will see more pieces available than before.
-                      </div>` : ''}
-                    ${!lot.table_length ? `
-                      <div class="alert alert-danger py-2 mb-2 small">
-                        This lot has no <strong>table_length</strong> — Weight Used can't be computed. Set table_length on the lot first.
                       </div>` : ''}
                     <div class="row g-2">
                       <div class="col-md-4">
@@ -440,7 +436,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Weight Used</label>
-                        <input type="number" step="0.01" class="form-control" id="addRollWeightUsed" readonly>
+                        <input type="number" step="0.01" min="0" class="form-control" id="addRollWeightUsed" placeholder="Weight used">
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Remaining</label>
@@ -449,7 +445,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                     </div>
                     <div id="addRollError" class="text-danger small mt-2" style="display:none;"></div>
                     <div class="mt-3">
-                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn"${lot.table_length ? '' : ' disabled'}>
+                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn">
                         <i class="bi bi-plus-circle"></i> Add roll to lot
                       </button>
                     </div>
@@ -515,7 +511,6 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           recalcTotals();
 
           // ───── Add-missed-roll wiring ─────
-          const TABLE_LENGTH = ${lot.table_length ? Number(lot.table_length) : 'null'};
           const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
           const addRollNo        = document.getElementById('addRollNo');
           const addRollLayers    = document.getElementById('addRollLayers');
@@ -526,19 +521,13 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           const addRollErr       = document.getElementById('addRollError');
           const addRollBtn       = document.getElementById('addRollBtn');
 
+          // Weight Used is entered manually now; we only derive the Remaining display.
           function recomputeAddRollWeights() {
-            const layers = parseFloat(addRollLayers.value);
-            const full   = parseFloat(addRollFullW.value);
-            if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value = ''; addRollRem.value = ''; return; }
-            const used = TABLE_LENGTH * layers;
-            addRollUsed.value = used.toFixed(2);
-            if (!isNaN(full)) {
-              addRollRem.value = Math.max(full - used, 0).toFixed(2);
-              addRollUsed.classList.toggle('text-danger', used > full);
-            } else {
-              addRollRem.value = '';
-              addRollUsed.classList.remove('text-danger');
-            }
+            const used = parseFloat(addRollUsed.value);
+            const full = parseFloat(addRollFullW.value);
+            if (isNaN(used) || isNaN(full)) { addRollRem.value = ''; addRollUsed.classList.remove('text-danger'); return; }
+            addRollRem.value = Math.max(full - used, 0).toFixed(2);
+            addRollUsed.classList.toggle('text-danger', used > full);
           }
           addRollNo.addEventListener('change', () => {
             const inv = ROLL_INVENTORY.find(r => r.roll_no === addRollNo.value.trim());
@@ -552,7 +541,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             }
             recomputeAddRollWeights();
           });
-          addRollLayers.addEventListener('input', recomputeAddRollWeights);
+          addRollUsed.addEventListener('input', recomputeAddRollWeights);
           addRollFullW.addEventListener('input', recomputeAddRollWeights);
 
           addRollBtn.addEventListener('click', async () => {
@@ -564,7 +553,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             if (!roll_no)            return showErr('Pick a roll number.');
             if (!(layers > 0))       return showErr('Layers must be greater than 0.');
             if (!(full_weight > 0))  return showErr('Full weight must be greater than 0.');
-            if (!(weight_used >= 0)) return showErr('Weight used could not be computed (check table length and layers).');
+            if (!(weight_used >= 0)) return showErr('Enter a valid Weight Used (0 or more).');
             if (weight_used > full_weight) return showErr('Weight used (' + weight_used.toFixed(2) + ') cannot exceed full weight (' + full_weight.toFixed(2) + ').');
 
             addRollBtn.disabled = true;
