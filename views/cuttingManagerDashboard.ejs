@@ -550,7 +550,7 @@
       </div>
       <div class="col-md-4">
         <label class="kotty-form-label" data-i18n="weightUsedLabel">Weight Used</label>
-        <input type="number" step="0.01" class="kotty-input weightUsedInput" name="weight_used[]" min="0" required placeholder="Weight used (calculated)" readonly />
+        <input type="number" step="0.01" class="kotty-input weightUsedInput" name="weight_used[]" min="0" required placeholder="Weight used" />
       </div>
     </div>
     <div class="row g-3 mt-1">
@@ -760,6 +760,11 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
     updateWeightProgress(rollSection);
     checkRollsCompletion();
   });
+  weightUsedInput.addEventListener('input', () => {
+    updateWeightUsed(rollSection);
+    updateWeightProgress(rollSection);
+    checkRollsCompletion();
+  });
 }
 
 function addNewSize() {
@@ -788,6 +793,11 @@ function addNewRoll() {
     updateWeightProgress(newRoll);
     checkRollsCompletion();
   });
+  newRoll.querySelector('.weightUsedInput').addEventListener('input', () => {
+    updateWeightUsed(newRoll);
+    updateWeightProgress(newRoll);
+    checkRollsCompletion();
+  });
   const currentFabricType = fabricTypeSel.value;
   if (currentFabricType) initializeRollNoAutocomplete(newRoll, currentFabricType);
 }
@@ -807,25 +817,15 @@ function updateWeightProgress(rollSection) {
 }
 
 function updateWeightUsed(rollSection) {
-  // weight_used = table_length × layers
-  // remaining_weight is back-filled (hidden) so the existing backend
-  // contract stays intact: server recomputes used = full - remaining.
-  const tableLength = parseFloat(document.getElementById('table_length').value);
-  const layers      = parseFloat(rollSection.querySelector('.layersInput').value);
-  const full        = parseFloat(rollSection.querySelector('.fullWeightInput').value);
-  const usedInput   = rollSection.querySelector('.weightUsedInput');
-  const remInput    = rollSection.querySelector('.remainingWeightInput');
+  // Weight Used is entered MANUALLY now (previous behaviour). We only derive the
+  // hidden remaining_weight so the existing backend contract stays intact: the
+  // server recomputes used = full - remaining.
+  const usedInput = rollSection.querySelector('.weightUsedInput');
+  const remInput  = rollSection.querySelector('.remainingWeightInput');
+  const used      = parseFloat(usedInput.value);
+  const full      = parseFloat(rollSection.querySelector('.fullWeightInput').value);
 
-  if (isNaN(tableLength) || isNaN(layers)) {
-    usedInput.value = '';
-    remInput.value = '';
-    usedInput.classList.remove('over-weight');
-    return;
-  }
-  const used = tableLength * layers;
-  usedInput.value = used.toFixed(2);
-
-  if (isNaN(full)) {
+  if (isNaN(used) || isNaN(full)) {
     remInput.value = '';
     usedInput.classList.remove('over-weight');
     return;
