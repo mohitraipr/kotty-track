@@ -293,6 +293,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
 
     if (!lotRows.length) return res.status(404).send('Lot not found.');
     const lot = lotRows[0];
+    const isDenim = (lot.flow_type === 'denim');
 
     // Rolls available in inventory for this lot's fabric_type (for the autocomplete)
     const [availableRolls] = await pool.query(
@@ -409,8 +410,12 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                     <h5 class="mb-2"><i class="bi bi-plus-circle"></i> Add a missed roll</h5>
                     <p class="text-muted small mb-2">
                       Inserts a new roll into this lot, recomputes total pieces, and (if the roll exists in inventory) deducts the used weight from <code>fabric_invoice_rolls</code>.
-                      Enter <strong>Weight Used</strong> manually.
+                      ${isDenim ? 'Weight Used is auto-computed from <strong>table_length × layers</strong>.' : 'Enter <strong>Remaining</strong>; Weight Used is derived automatically.'}
                     </p>
+                    ${isDenim && !lot.table_length ? `
+                      <div class="alert alert-danger py-2 mb-2 small">
+                        This denim lot has no <strong>table_length</strong> — Weight Used can't be computed. Set table_length on the lot first.
+                      </div>` : ''}
                     ${downstreamHits.length ? `
                       <div class="alert alert-warning py-2 mb-2 small">
                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -436,16 +441,16 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Weight Used</label>
-                        <input type="number" step="0.01" min="0" class="form-control" id="addRollWeightUsed" placeholder="Weight used">
+                        <input type="number" step="0.01" min="0" class="form-control" id="addRollWeightUsed" readonly placeholder="Weight used (auto)">
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Remaining</label>
-                        <input type="number" step="0.01" class="form-control" id="addRollRemaining" readonly>
+                        <input type="number" step="0.01" min="0" class="form-control" id="addRollRemaining" ${isDenim ? 'readonly' : 'value="0"'} placeholder="${isDenim ? 'Auto' : 'Remaining (default 0)'}">
                       </div>
                     </div>
                     <div id="addRollError" class="text-danger small mt-2" style="display:none;"></div>
                     <div class="mt-3">
-                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn">
+                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn"${isDenim && !lot.table_length ? ' disabled' : ''}>
                         <i class="bi bi-plus-circle"></i> Add roll to lot
                       </button>
                     </div>
@@ -512,6 +517,8 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
 
           // ───── Add-missed-roll wiring ─────
           const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
+          const IS_DENIM = ${isDenim ? 'true' : 'false'};
+          const TABLE_LENGTH = ${lot.table_length ? Number(lot.table_length) : 'null'};
           const addRollNo        = document.getElementById('addRollNo');
           const addRollLayers    = document.getElementById('addRollLayers');
           const addRollFullW     = document.getElementById('addRollFullWeight');
@@ -521,13 +528,21 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           const addRollErr       = document.getElementById('addRollError');
           const addRollBtn       = document.getElementById('addRollBtn');
 
-          // Weight Used is entered manually now; we only derive the Remaining display.
           function recomputeAddRollWeights() {
-            const used = parseFloat(addRollUsed.value);
             const full = parseFloat(addRollFullW.value);
-            if (isNaN(used) || isNaN(full)) { addRollRem.value = ''; addRollUsed.classList.remove('text-danger'); return; }
-            addRollRem.value = Math.max(full - used, 0).toFixed(2);
-            addRollUsed.classList.toggle('text-danger', used > full);
+            if (IS_DENIM) {
+              const layers = parseFloat(addRollLayers.value);
+              if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value=''; addRollRem.value=''; return; }
+              const used = TABLE_LENGTH * layers;
+              addRollUsed.value = used.toFixed(2);
+              addRollRem.value = isNaN(full) ? '' : Math.max(full - used, 0).toFixed(2);
+              addRollUsed.classList.toggle('text-danger', !isNaN(full) && used > full);
+            } else {
+              const remaining = addRollRem.value === '' ? 0 : parseFloat(addRollRem.value);
+              if (isNaN(full)) { addRollUsed.value=''; addRollUsed.classList.remove('text-danger'); return; }
+              addRollUsed.value = Math.max(full - remaining, 0).toFixed(2);
+              addRollUsed.classList.toggle('text-danger', remaining > full);
+            }
           }
           addRollNo.addEventListener('change', () => {
             const inv = ROLL_INVENTORY.find(r => r.roll_no === addRollNo.value.trim());
@@ -541,8 +556,12 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             }
             recomputeAddRollWeights();
           });
-          addRollUsed.addEventListener('input', recomputeAddRollWeights);
           addRollFullW.addEventListener('input', recomputeAddRollWeights);
+          if (IS_DENIM) {
+            addRollLayers.addEventListener('input', recomputeAddRollWeights);
+          } else {
+            addRollRem.addEventListener('input', recomputeAddRollWeights);
+          }
 
           addRollBtn.addEventListener('click', async () => {
             addRollErr.style.display = 'none';
