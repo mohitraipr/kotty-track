@@ -1,11 +1,13 @@
 // Shared access to the key/value `store_settings` table + the ad-hoc cutting switch.
-const { pool } = require('../config/db');
+// The DB pool is required lazily inside getStoreSetting so that importing the pure
+// helpers (resolveAllowAdhoc/isKnownFabricType) for unit tests does not load config/db.
 
 const ADHOC_KEY = 'allow_adhoc_cutting_entry';
 
 // Reads a store_settings value; returns defaultValue on miss or error.
 async function getStoreSetting(key, defaultValue = null) {
   try {
+    const { pool } = require('../config/db');
     const [[row]] = await pool.query(
       'SELECT setting_value FROM store_settings WHERE setting_key = ?',
       [key]
