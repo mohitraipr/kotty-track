@@ -150,10 +150,19 @@ filter/sort.
 - **Ad-hoc fabric types**: `cutting_lots.fabric_type` values not present in
   `fabric_invoices.fabric_type`.
 
+### Date filter
+
+A date-range filter (from / to, applied to `cutting_lots.created_at`) sits at the
+top of the page and constrains all three tabs. Default range: all-time (empty
+from/to). Filtering by consumption date means Tab 2's "total used" reflects only
+lots within the range, while the roll's current available weight remains the
+live `fabric_invoice_rolls.per_roll_weight`.
+
 ### Exports
 
-Each tab gets an Excel export, matching the existing fabric-manager download
-pattern (e.g. `/fabric-manager/download-excel`, `/invoice/:id/download-rolls`).
+Each tab gets an Excel export honoring the active date filter, matching the
+existing fabric-manager download pattern (e.g. `/fabric-manager/download-excel`,
+`/invoice/:id/download-rolls`).
 
 ### Frontend
 
@@ -162,7 +171,6 @@ existing fabric-manager dashboard styling.
 
 ### Out of scope
 
-- No date-range filter in v1 (show all-time). Can be added later.
 - No edits/writes — analysis is read-only.
 
 ---
