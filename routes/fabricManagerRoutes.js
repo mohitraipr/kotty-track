@@ -9,6 +9,7 @@ const xlsx = require('xlsx');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 const fsPromises = fs.promises;
+const moment = require('moment');
 const { body, validationResult } = require('express-validator');
 const {
   groupConsumptionByFabricType,
@@ -435,15 +436,33 @@ router.post('/insert/invoice',
 // GET /fabric-manager/analysis — consumption analysis (3 tabs + date filter)
 router.get('/analysis', isAuthenticated, isFabricManager, async (req, res) => {
   try {
-    const from = req.query.from || '';
-    const to = req.query.to || '';
+    // Default to the last 30 days when no range is supplied — the all-time
+    // history can exceed Cloud Run's response size limit.
+    const from = req.query.from || moment().subtract(30, 'days').format('YYYY-MM-DD');
+    const to = req.query.to || moment().format('YYYY-MM-DD');
     const data = await loadConsumptionAnalysis(from, to);
+
+    // Bound the rendered payload so the HTML can never exceed the response limit.
+    const DETAIL_CAP = 1500;   // max roll rows rendered in the by-type detail
+    const LEDGER_CAP = 1500;   // max ledger rows rendered
+    const ADHOC_CAP  = 1500;   // max ad-hoc roll rows rendered
+
+    const rollRowCount = data.byType.reduce(
+      (n, g) => n + g.lots.reduce((m, l) => m + l.rolls.length, 0), 0);
+    const detailTruncated = rollRowCount > DETAIL_CAP;
+
     res.render('fabricConsumptionAnalysis', {
       user: req.session.user,
       from, to,
       byType: data.byType,
-      ledger: data.ledger,
-      adHocRolls: data.adHocRolls,
+      detailTruncated,
+      rollRowCount,
+      ledger: data.ledger.slice(0, LEDGER_CAP),
+      ledgerTruncated: data.ledger.length > LEDGER_CAP,
+      ledgerTotal: data.ledger.length,
+      adHocRolls: data.adHocRolls.slice(0, ADHOC_CAP),
+      adHocRollsTruncated: data.adHocRolls.length > ADHOC_CAP,
+      adHocRollsTotal: data.adHocRolls.length,
       adHocTypes: data.adHocTypes,
     });
   } catch (err) {
