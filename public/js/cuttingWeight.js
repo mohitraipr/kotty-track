@@ -30,7 +30,7 @@
     }
 
     // hosiery: operator enters remaining (default 0); used = full - remaining
-    const remaining = num(inputs.remaining) === null ? 0 : num(inputs.remaining);
+    const remaining = num(inputs.remaining) ?? 0;
     if (full === null) {
       return { used: null, remaining, over: false };
     }
