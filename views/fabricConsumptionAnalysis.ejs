@@ -258,19 +258,6 @@
     background: var(--gray-50);
   }
 
-  .empty-cell {
-    text-align: center;
-    padding: 48px 16px !important;
-    color: var(--text-muted);
-  }
-
-  .empty-cell i {
-    font-size: 36px;
-    display: block;
-    margin-bottom: 10px;
-    color: var(--gray-300);
-  }
-
   /* ── Accordion / Fabric Type Groups ──────────────────────── */
   .fabric-group {
     border: 1px solid var(--border-light);
@@ -281,6 +268,10 @@
   }
 
   .fabric-group-header {
+    width: 100%;
+    text-align: left;
+    border: none;
+    font: inherit;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -355,6 +346,10 @@
   }
 
   .lot-card-header {
+    width: 100%;
+    text-align: left;
+    border: none;
+    font: inherit;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -635,7 +630,7 @@
     <!-- Date Filter Bar -->
     <div class="filter-bar no-print">
       <form method="get" action="/fabric-manager/analysis" class="d-flex align-items-center flex-wrap gap-3 w-100">
-        <i class="bi bi-funnel text-terracotta" style="color: var(--terracotta); font-size: 15px;"></i>
+        <i class="bi bi-funnel text-terracotta" style="font-size: 15px;"></i>
         <strong style="font-size: var(--text-sm); color: var(--text-primary);">Filter by Date</strong>
         <div class="filter-divider"></div>
         <div class="filter-group">
@@ -728,7 +723,7 @@
             <% byType.forEach(function(group, gi) { %>
               <div class="fabric-group" id="fabric-group-<%= gi %>">
                 <!-- Group Header -->
-                <div class="fabric-group-header" onclick="toggleGroup(this)">
+                <button type="button" class="fabric-group-header" onclick="toggleGroup(this)">
                   <div class="fabric-group-header-left">
                     <i class="bi bi-chevron-right fabric-group-toggle"></i>
                     <span class="fabric-group-name"><%= group.fabricType || 'Unknown Type' %></span>
@@ -744,7 +739,7 @@
                       <i class="bi bi-layers"></i> <%= group.rollCount %> roll<% if (group.rollCount !== 1) { %>s<% } %>
                     </span>
                   </div>
-                </div>
+                </button>
                 <!-- Group Body: Lots -->
                 <div class="fabric-group-body">
                   <% if (!group.lots || group.lots.length === 0) { %>
@@ -755,7 +750,7 @@
                     <% group.lots.forEach(function(lot, li) { %>
                       <div class="lot-card" id="lot-<%= gi %>-<%= li %>">
                         <!-- Lot Header -->
-                        <div class="lot-card-header" onclick="toggleLot(this)">
+                        <button type="button" class="lot-card-header" onclick="toggleLot(this)">
                           <div class="lot-card-header-left">
                             <i class="bi bi-chevron-right lot-card-toggle"></i>
                             <span class="badge badge-neutral"><%= lot.lotNo %></span>
@@ -769,7 +764,7 @@
                               </span>
                             <% } %>
                           </div>
-                        </div>
+                        </button>
                         <!-- Lot Body -->
                         <div class="lot-card-body">
                           <div class="lot-meta">
