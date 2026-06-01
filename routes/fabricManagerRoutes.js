@@ -10,6 +10,12 @@ const ExcelJS = require('exceljs');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const { body, validationResult } = require('express-validator');
+const {
+  groupConsumptionByFabricType,
+  buildRollLedger,
+  findAdHocRolls,
+  findAdHocFabricTypes,
+} = require('../utils/fabricConsumption');
 
 // Configure Multer for file uploads
 const upload = multer({ 
@@ -69,6 +75,43 @@ async function getInvoicesMap(invoiceNos) {
     const map = new Map();
     rows.forEach(r => map.set(r.invoice_no, { id: r.id, vendor_id: r.vendor_id }));
     return map;
+}
+
+// Loads + computes all analysis datasets for an optional [from, to] date range
+// (inclusive of the whole `to` day). from/to are 'YYYY-MM-DD' strings or null.
+async function loadConsumptionAnalysis(from, to) {
+  const f = from || null;
+  const t = to || null;
+  const consumptionSql = `
+    SELECT cl.fabric_type, cl.lot_no, cl.sku, cl.created_at, u.username AS cutter,
+           cl.id AS cutting_lot_id, clr.roll_no, clr.full_weight, clr.weight_used, clr.remaining_weight
+    FROM cutting_lot_rolls clr
+    JOIN cutting_lots cl ON clr.cutting_lot_id = cl.id
+    JOIN users u ON cl.user_id = u.id
+    WHERE (? IS NULL OR cl.created_at >= ?)
+      AND (? IS NULL OR cl.created_at < DATE_ADD(?, INTERVAL 1 DAY))
+    ORDER BY cl.fabric_type ASC, cl.created_at DESC`;
+  const [consumptionRows] = await pool.query(consumptionSql, [f, f, t, t]);
+
+  const [masterRows] = await pool.query(`
+    SELECT fir.roll_no, fi.fabric_type, v.name AS vendor_name, fir.per_roll_weight, fir.unit
+    FROM fabric_invoice_rolls fir
+    JOIN fabric_invoices fi ON fir.invoice_id = fi.id
+    JOIN vendors v ON fir.vendor_id = v.id`);
+
+  const [lotTypeRows] = await pool.query(`SELECT DISTINCT fabric_type FROM cutting_lots WHERE fabric_type IS NOT NULL`);
+  const [masterTypeRows] = await pool.query(`SELECT DISTINCT fabric_type FROM fabric_invoices WHERE fabric_type IS NOT NULL`);
+
+  const masterRollNos = masterRows.map(m => m.roll_no);
+  const lotFabricTypes = lotTypeRows.map(r => r.fabric_type);
+  const masterFabricTypes = masterTypeRows.map(r => r.fabric_type);
+
+  return {
+    byType: groupConsumptionByFabricType(consumptionRows),
+    ledger: buildRollLedger(consumptionRows, masterRows),
+    adHocRolls: findAdHocRolls(consumptionRows, masterRollNos),
+    adHocTypes: findAdHocFabricTypes(lotFabricTypes, masterFabricTypes),
+  };
 }
 
 /**
@@ -388,6 +431,72 @@ router.post('/insert/invoice',
         }
     }
 );
+
+// GET /fabric-manager/analysis — consumption analysis (3 tabs + date filter)
+router.get('/analysis', isAuthenticated, isFabricManager, async (req, res) => {
+  try {
+    const from = req.query.from || '';
+    const to = req.query.to || '';
+    const data = await loadConsumptionAnalysis(from, to);
+    res.render('fabricConsumptionAnalysis', {
+      user: req.session.user,
+      from, to,
+      byType: data.byType,
+      ledger: data.ledger,
+      adHocRolls: data.adHocRolls,
+      adHocTypes: data.adHocTypes,
+    });
+  } catch (err) {
+    console.error('Error loading fabric consumption analysis:', err);
+    req.flash('error', 'Failed to load fabric consumption analysis.');
+    res.redirect('/fabric-manager/dashboard');
+  }
+});
+
+// GET /fabric-manager/analysis/export?tab=consumption|ledger|adhoc&from=&to=
+router.get('/analysis/export', isAuthenticated, isFabricManager, async (req, res) => {
+  try {
+    const from = req.query.from || '';
+    const to = req.query.to || '';
+    const tab = req.query.tab || 'consumption';
+    const safeTab = ['consumption', 'ledger', 'adhoc'].includes(tab) ? tab : 'consumption';
+    const data = await loadConsumptionAnalysis(from, to);
+
+    const wb = new ExcelJS.Workbook();
+
+    if (tab === 'ledger') {
+      const ws = wb.addWorksheet('Roll Ledger');
+      ws.addRow(['Roll No', 'Fabric Type', 'Vendor', 'Current Available', 'Unit', 'Total Used', 'Lots']);
+      data.ledger.forEach(r => ws.addRow([
+        r.rollNo, r.fabricType, r.vendor,
+        r.currentAvailable == null ? '' : r.currentAvailable, r.unit,
+        r.totalUsed, r.lots.join(', '),
+      ]));
+    } else if (tab === 'adhoc') {
+      const ws1 = wb.addWorksheet('Ad-hoc Rolls');
+      ws1.addRow(['Roll No', 'Fabric Type', 'Full', 'Used', 'Lot No', 'Cutter']);
+      data.adHocRolls.forEach(r => ws1.addRow([r.rollNo, r.fabricType, r.full, r.used, r.lotNo, r.cutter]));
+      const ws2 = wb.addWorksheet('Ad-hoc Fabric Types');
+      ws2.addRow(['Fabric Type (not in fabric data)']);
+      data.adHocTypes.forEach(ft => ws2.addRow([ft]));
+    } else {
+      const ws = wb.addWorksheet('Consumption by Fabric Type');
+      ws.addRow(['Fabric Type', 'Lot No', 'SKU', 'Created At', 'Cutter', 'Roll No', 'Full', 'Used', 'Remaining']);
+      data.byType.forEach(g => g.lots.forEach(l => l.rolls.forEach(roll => {
+        ws.addRow([g.fabricType, l.lotNo, l.sku, l.createdAt, l.cutter, roll.rollNo, roll.full, roll.used, roll.remaining]);
+      })));
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="fabric-${safeTab}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error exporting fabric analysis:', err);
+    req.flash('error', 'Failed to export fabric analysis.');
+    res.redirect('/fabric-manager/analysis');
+  }
+});
 
 /**
  * GET /fabric-manager/invoice/:id/rolls

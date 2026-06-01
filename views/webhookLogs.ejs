@@ -827,8 +827,8 @@
           <label class="source-option selected">
             <input type="radio" name="downloadSource" value="live">
             <span>
-              <strong style="color: var(--success);">Live CSV</strong>
-              <small>Includes virtual inventory</small>
+              <strong style="color: var(--success);">Live Report</strong>
+              <small>Available stock, per location</small>
             </span>
           </label>
         </div>
@@ -909,9 +909,9 @@
           if (isLive) {
             const name = selectedWarehouse === '176318' ? 'Delhi' : 'Faridabad';
             title.textContent = 'Live Inventory Download';
-            subtitle.innerHTML = 'Fetch <strong>' + name + '</strong> from EasyEcom API';
+            subtitle.innerHTML = 'Fetch <strong>' + name + '</strong> (Available, all locations) via EasyEcom report';
             document.getElementById('statRecords').textContent = '~95,000';
-            document.getElementById('statTime').textContent = '~3-5 min';
+            document.getElementById('statTime').textContent = '~1-2 min';
             stats.style.display = 'grid';
             confirmBtn.disabled = false;
           } else {

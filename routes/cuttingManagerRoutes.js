@@ -169,6 +169,13 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
     // Fetch rolls by fabric type
     const rollsByFabricType = await getRollsByFabricType();
 
+    // Determine the cutter's flow type so the form renders in denim or hosiery mode.
+    const [[cutterFlag]] = await pool.query(
+      'SELECT is_denim_cutter FROM users WHERE id = ?',
+      [userId]
+    );
+    const isDenim = !!(cutterFlag && cutterFlag.is_denim_cutter);
+
     res.render('cuttingManagerDashboard', {
       user: req.session.user,
       cuttingLots,
@@ -176,6 +183,7 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
       pendingAssignments,
       rollsByFabricType, // Now includes vendor_name
       generatedLotNumber, // Pass the generated lot number
+      isDenim,
     });
   } catch (err) {
     if (conn) {

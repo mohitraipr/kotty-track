@@ -1,0 +1,983 @@
+<%- include('partials/header', { pageTitle: 'Fabric Consumption Analysis' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/fabric-manager/dashboard' }) %>
+
+<style>
+  /* ── Page shell ─────────────────────────────────────────── */
+  .page-container {
+    padding-top: calc(var(--navbar-height) + 28px);
+    padding-bottom: 48px;
+    min-height: 100vh;
+  }
+
+  .page-wrapper {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ── Page Header ─────────────────────────────────────────── */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .page-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .page-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-lg);
+    background: var(--terracotta-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--terracotta);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .page-header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Breadcrumbs ─────────────────────────────────────────── */
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .breadcrumbs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .breadcrumbs a:hover {
+    color: var(--terracotta);
+  }
+
+  .breadcrumbs .separator {
+    color: var(--gray-300);
+    font-size: 11px;
+  }
+
+  /* ── Date Filter Bar ─────────────────────────────────────── */
+  .filter-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px 22px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .filter-bar label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-right: 4px;
+  }
+
+  .filter-bar .form-control {
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    width: auto;
+  }
+
+  .filter-bar .form-control:focus {
+    outline: none;
+    border-color: var(--terracotta);
+    box-shadow: 0 0 0 3px var(--terracotta-bg);
+  }
+
+  .filter-bar .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-bar .filter-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border-light);
+  }
+
+  /* ── Tabs ────────────────────────────────────────────────── */
+  .analysis-tabs {
+    margin-bottom: 0;
+  }
+
+  .analysis-tabs .nav-tabs {
+    border-bottom: 2px solid var(--border-light);
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0;
+  }
+
+  .analysis-tabs .nav-tabs::-webkit-scrollbar {
+    height: 0;
+  }
+
+  .analysis-tabs .nav-link {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 10px 18px;
+    margin-bottom: -2px;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: transparent;
+  }
+
+  .analysis-tabs .nav-link:hover {
+    color: var(--terracotta);
+    background: var(--terracotta-bg);
+    border-bottom-color: var(--terracotta-light);
+  }
+
+  .analysis-tabs .nav-link.active {
+    color: var(--terracotta);
+    border-bottom-color: var(--terracotta);
+    background: transparent;
+    font-weight: 600;
+  }
+
+  /* ── Tab Panes ────────────────────────────────────────────── */
+  .tab-pane-inner {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-top: none;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .tab-pane-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+  }
+
+  /* ── Table Card ───────────────────────────────────────────── */
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .table-responsive::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: var(--radius-full);
+  }
+
+  .table-responsive::-webkit-scrollbar-track {
+    background: var(--gray-100);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table thead {
+    background: var(--gray-50);
+  }
+
+  .data-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  .data-table th i {
+    margin-right: 6px;
+    color: var(--terracotta);
+  }
+
+  .data-table td {
+    padding: 12px 16px;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* ── Accordion / Fabric Type Groups ──────────────────────── */
+  .fabric-group {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .fabric-group-header {
+    width: 100%;
+    text-align: left;
+    border: none;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--gray-50);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--transition-fast);
+    gap: 12px;
+  }
+
+  .fabric-group-header:hover {
+    background: var(--cream-dark);
+  }
+
+  .fabric-group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .fabric-group-toggle {
+    color: var(--terracotta);
+    font-size: 13px;
+    transition: transform var(--transition-base);
+    flex-shrink: 0;
+  }
+
+  .fabric-group.open .fabric-group-toggle {
+    transform: rotate(90deg);
+  }
+
+  .fabric-group-name {
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .fabric-group-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  .fabric-group-body {
+    display: none;
+    padding: 16px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .fabric-group.open .fabric-group-body {
+    display: block;
+  }
+
+  /* ── Lot Cards ──────────────────────────────────────────── */
+  .lot-card {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .lot-card:last-child {
+    margin-bottom: 0;
+  }
+
+  .lot-card-header {
+    width: 100%;
+    text-align: left;
+    border: none;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--transition-fast);
+  }
+
+  .lot-card-header:hover {
+    background: var(--cream-dark);
+  }
+
+  .lot-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lot-card-toggle {
+    color: var(--text-muted);
+    font-size: 11px;
+    transition: transform var(--transition-base);
+    flex-shrink: 0;
+  }
+
+  .lot-card.open .lot-card-toggle {
+    transform: rotate(90deg);
+  }
+
+  .lot-card-body {
+    display: none;
+    padding: 12px 14px;
+  }
+
+  .lot-card.open .lot-card-body {
+    display: block;
+  }
+
+  .lot-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 10px;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .lot-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .lot-meta i {
+    color: var(--terracotta);
+    font-size: 11px;
+  }
+
+  /* ── Rolls Sub-table ─────────────────────────────────────── */
+  .rolls-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+  }
+
+  .rolls-table th {
+    padding: 7px 10px;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+
+  .rolls-table td {
+    padding: 7px 10px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .rolls-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .rolls-table tbody tr:hover {
+    background: var(--gray-50);
+  }
+
+  /* ── Badges ──────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 9px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .badge-terracotta {
+    background: var(--terracotta-bg);
+    color: var(--terracotta-dark);
+    border: 1px solid rgba(196, 92, 58, 0.2);
+  }
+
+  .badge-info {
+    background: var(--info-light);
+    color: var(--info);
+    border: 1px solid rgba(58, 126, 196, 0.2);
+  }
+
+  .badge-success {
+    background: var(--success-light);
+    color: var(--success);
+    border: 1px solid rgba(45, 138, 95, 0.2);
+  }
+
+  .badge-neutral {
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+  }
+
+  .badge-warning {
+    background: var(--warning-light);
+    color: var(--warning);
+    border: 1px solid rgba(196, 135, 58, 0.2);
+  }
+
+  /* ── Sub-section header ──────────────────────────────────── */
+  .subsection-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    margin-top: 24px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .subsection-header:first-child {
+    margin-top: 0;
+  }
+
+  .subsection-header i {
+    color: var(--terracotta);
+    font-size: 15px;
+  }
+
+  /* ── Empty State ─────────────────────────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state i {
+    font-size: 40px;
+    display: block;
+    margin-bottom: 10px;
+    color: var(--gray-300);
+  }
+
+  .empty-state p {
+    font-size: var(--text-sm);
+    margin: 0;
+  }
+
+  /* ── Ad-hoc type badges list ─────────────────────────────── */
+  .type-badge-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  /* ── Bottom Actions ──────────────────────────────────────── */
+  .bottom-actions {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  /* ── Print ───────────────────────────────────────────────── */
+  @media print {
+    .no-print { display: none !important; }
+    .page-container { padding-top: 0; }
+    .kotty-navbar { display: none !important; }
+    .fabric-group-body { display: block !important; }
+    .lot-card-body { display: block !important; }
+  }
+
+  /* ── Responsive ──────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .page-wrapper { padding: 0 16px; }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .filter-bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .filter-bar .filter-divider {
+      width: 100%;
+      height: 1px;
+    }
+
+    .bottom-actions {
+      flex-direction: column;
+    }
+
+    .bottom-actions .btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .tab-pane-toolbar {
+      justify-content: flex-start;
+    }
+
+    .fabric-group-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>
+
+<div class="page-container">
+  <div class="page-wrapper">
+    <!-- Flash Messages -->
+    <%- include('partials/flashMessages') %>
+
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/fabric-manager/dashboard">Dashboard</a>
+      <span class="separator"><i class="bi bi-chevron-right"></i></span>
+      <span>Consumption Analysis</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-left">
+        <div class="page-icon">
+          <i class="bi bi-graph-up"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Fabric Consumption Analysis</h1>
+          <p class="page-subtitle">Track usage across fabric types, rolls and lots</p>
+        </div>
+      </div>
+      <div class="page-header-actions no-print">
+        <a href="/fabric-manager/dashboard" class="btn btn-secondary btn-sm">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </div>
+
+    <!-- Date Filter Bar -->
+    <div class="filter-bar no-print">
+      <form method="get" action="/fabric-manager/analysis" class="d-flex align-items-center flex-wrap gap-3 w-100">
+        <i class="bi bi-funnel text-terracotta" style="font-size: 15px;"></i>
+        <strong style="font-size: var(--text-sm); color: var(--text-primary);">Filter by Date</strong>
+        <div class="filter-divider"></div>
+        <div class="filter-group">
+          <label for="from">From</label>
+          <input type="date" id="from" name="from" class="form-control" value="<%= from %>">
+        </div>
+        <div class="filter-group">
+          <label for="to">To</label>
+          <input type="date" id="to" name="to" class="form-control" value="<%= to %>">
+        </div>
+        <div class="filter-divider"></div>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-check2"></i> Apply
+        </button>
+        <a href="/fabric-manager/analysis" class="btn btn-outline btn-sm">
+          <i class="bi bi-x-circle"></i> Clear
+        </a>
+      </form>
+    </div>
+
+    <!-- Tabs -->
+    <div class="analysis-tabs">
+      <ul class="nav nav-tabs" id="analysisTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link active"
+            id="tab-consumption"
+            data-bs-toggle="tab"
+            data-bs-target="#pane-consumption"
+            type="button"
+            role="tab"
+            aria-controls="pane-consumption"
+            aria-selected="true"
+          >
+            <i class="bi bi-layers"></i> Consumption by Fabric Type
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="tab-ledger"
+            data-bs-toggle="tab"
+            data-bs-target="#pane-ledger"
+            type="button"
+            role="tab"
+            aria-controls="pane-ledger"
+            aria-selected="false"
+          >
+            <i class="bi bi-journal-text"></i> Roll Ledger
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button
+            class="nav-link"
+            id="tab-adhoc"
+            data-bs-toggle="tab"
+            data-bs-target="#pane-adhoc"
+            type="button"
+            role="tab"
+            aria-controls="pane-adhoc"
+            aria-selected="false"
+          >
+            <i class="bi bi-exclamation-triangle"></i> Unknown / Ad-hoc
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+
+        <!-- ═══════════════════════════════════════════════════
+             TAB 1 — Consumption by Fabric Type
+             ═══════════════════════════════════════════════════ -->
+        <div class="tab-pane fade show active tab-pane-inner" id="pane-consumption" role="tabpanel" aria-labelledby="tab-consumption">
+          <!-- Export button -->
+          <div class="tab-pane-toolbar no-print">
+            <a
+              href="/fabric-manager/analysis/export?tab=consumption&from=<%= encodeURIComponent(from) %>&to=<%= encodeURIComponent(to) %>"
+              class="btn btn-success btn-sm"
+            >
+              <i class="bi bi-file-earmark-excel"></i> Export to Excel
+            </a>
+          </div>
+
+          <% if (!byType || byType.length === 0) { %>
+            <div class="empty-state">
+              <i class="bi bi-inbox"></i>
+              <p>No consumption recorded in this date range.<br>Try adjusting the date filter above.</p>
+            </div>
+          <% } else { %>
+            <% byType.forEach(function(group, gi) { %>
+              <div class="fabric-group" id="fabric-group-<%= gi %>">
+                <!-- Group Header -->
+                <button type="button" class="fabric-group-header" onclick="toggleGroup(this)">
+                  <div class="fabric-group-header-left">
+                    <i class="bi bi-chevron-right fabric-group-toggle"></i>
+                    <span class="fabric-group-name"><%= group.fabricType || 'Unknown Type' %></span>
+                  </div>
+                  <div class="fabric-group-meta">
+                    <span class="badge badge-terracotta">
+                      <i class="bi bi-rulers"></i> <%= group.totalUsed %> used
+                    </span>
+                    <span class="badge badge-info">
+                      <i class="bi bi-folder"></i> <%= group.lotCount %> lot<% if (group.lotCount !== 1) { %>s<% } %>
+                    </span>
+                    <span class="badge badge-neutral">
+                      <i class="bi bi-layers"></i> <%= group.rollCount %> roll<% if (group.rollCount !== 1) { %>s<% } %>
+                    </span>
+                  </div>
+                </button>
+                <!-- Group Body: Lots -->
+                <div class="fabric-group-body">
+                  <% if (!group.lots || group.lots.length === 0) { %>
+                    <div class="empty-state" style="padding: 20px;">
+                      <p style="color: var(--text-muted); font-style: italic; margin: 0;">No lots in this group.</p>
+                    </div>
+                  <% } else { %>
+                    <% group.lots.forEach(function(lot, li) { %>
+                      <div class="lot-card" id="lot-<%= gi %>-<%= li %>">
+                        <!-- Lot Header -->
+                        <button type="button" class="lot-card-header" onclick="toggleLot(this)">
+                          <div class="lot-card-header-left">
+                            <i class="bi bi-chevron-right lot-card-toggle"></i>
+                            <span class="badge badge-neutral"><%= lot.lotNo %></span>
+                            <span style="font-size: var(--text-sm); color: var(--text-primary); font-weight: 500;"><%= lot.sku %></span>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span class="badge badge-terracotta"><%= lot.totalUsed %> used</span>
+                            <% if (lot.cutter) { %>
+                              <span class="badge badge-neutral">
+                                <i class="bi bi-scissors"></i> <%= lot.cutter %>
+                              </span>
+                            <% } %>
+                          </div>
+                        </button>
+                        <!-- Lot Body -->
+                        <div class="lot-card-body">
+                          <div class="lot-meta">
+                            <span><i class="bi bi-calendar3"></i> <%= lot.createdAt %></span>
+                            <span><i class="bi bi-person"></i> <%= lot.cutter || 'N/A' %></span>
+                            <span><i class="bi bi-rulers"></i> Total used: <strong><%= lot.totalUsed %></strong></span>
+                          </div>
+
+                          <% if (!lot.rolls || lot.rolls.length === 0) { %>
+                            <p style="color: var(--text-muted); font-size: var(--text-xs); font-style: italic;">No roll data.</p>
+                          <% } else { %>
+                            <div class="table-responsive" style="border: 1px solid var(--border-light); border-radius: var(--radius-md); overflow: hidden;">
+                              <table class="rolls-table">
+                                <thead>
+                                  <tr>
+                                    <th>Roll No</th>
+                                    <th>Full</th>
+                                    <th>Used</th>
+                                    <th>Remaining</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <% lot.rolls.forEach(function(roll) { %>
+                                    <tr>
+                                      <td><span class="badge badge-neutral"><%= roll.rollNo %></span></td>
+                                      <td><%= roll.full %></td>
+                                      <td><strong style="color: var(--terracotta);"><%= roll.used %></strong></td>
+                                      <td><%= roll.remaining %></td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
+                          <% } %>
+                        </div>
+                      </div>
+                    <% }) %>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             TAB 2 — Roll Ledger
+             ═══════════════════════════════════════════════════ -->
+        <div class="tab-pane fade tab-pane-inner" id="pane-ledger" role="tabpanel" aria-labelledby="tab-ledger">
+          <!-- Export button -->
+          <div class="tab-pane-toolbar no-print">
+            <a
+              href="/fabric-manager/analysis/export?tab=ledger&from=<%= encodeURIComponent(from) %>&to=<%= encodeURIComponent(to) %>"
+              class="btn btn-success btn-sm"
+            >
+              <i class="bi bi-file-earmark-excel"></i> Export to Excel
+            </a>
+          </div>
+
+          <% if (!ledger || ledger.length === 0) { %>
+            <div class="empty-state">
+              <i class="bi bi-journal-x"></i>
+              <p>No ledger entries found for this date range.</p>
+            </div>
+          <% } else { %>
+            <div class="table-card">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th><i class="bi bi-upc-scan"></i> Roll No</th>
+                      <th><i class="bi bi-tag"></i> Fabric Type</th>
+                      <th><i class="bi bi-truck"></i> Vendor</th>
+                      <th><i class="bi bi-archive"></i> Current Available</th>
+                      <th><i class="bi bi-rulers"></i> Total Used</th>
+                      <th><i class="bi bi-folder2-open"></i> Lots</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% ledger.forEach(function(row) { %>
+                      <tr>
+                        <td><span class="badge badge-neutral"><%= row.rollNo %></span></td>
+                        <td><%= row.fabricType || '—' %></td>
+                        <td><%= row.vendor || '—' %></td>
+                        <td>
+                          <% if (row.currentAvailable === null || row.currentAvailable === undefined) { %>
+                            <span style="color: var(--text-muted);">—</span>
+                          <% } else { %>
+                            <span class="badge badge-success"><%= row.currentAvailable %> <%= row.unit || '' %></span>
+                          <% } %>
+                        </td>
+                        <td><strong style="color: var(--terracotta);"><%= row.totalUsed %></strong></td>
+                        <td>
+                          <% if (row.lots && row.lots.length > 0) { %>
+                            <span style="font-size: var(--text-xs); color: var(--text-secondary);"><%= row.lots.join(', ') %></span>
+                          <% } else { %>
+                            <span style="color: var(--text-muted);">—</span>
+                          <% } %>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             TAB 3 — Unknown / Ad-hoc
+             ═══════════════════════════════════════════════════ -->
+        <div class="tab-pane fade tab-pane-inner" id="pane-adhoc" role="tabpanel" aria-labelledby="tab-adhoc">
+          <!-- Export button -->
+          <div class="tab-pane-toolbar no-print">
+            <a
+              href="/fabric-manager/analysis/export?tab=adhoc&from=<%= encodeURIComponent(from) %>&to=<%= encodeURIComponent(to) %>"
+              class="btn btn-success btn-sm"
+            >
+              <i class="bi bi-file-earmark-excel"></i> Export to Excel
+            </a>
+          </div>
+
+          <!-- Sub-section 1: Ad-hoc rolls -->
+          <div class="subsection-header">
+            <i class="bi bi-exclamation-circle"></i>
+            Ad-hoc rolls
+            <span style="font-size: var(--text-sm); font-family: var(--font-body); font-weight: 400; color: var(--text-muted);">
+              (used in cutting but not found in fabric data)
+            </span>
+          </div>
+
+          <% if (!adHocRolls || adHocRolls.length === 0) { %>
+            <div class="empty-state" style="padding: 24px 20px;">
+              <i class="bi bi-check-circle" style="color: var(--success);"></i>
+              <p>No ad-hoc rolls found — all rolls are tracked in fabric data.</p>
+            </div>
+          <% } else { %>
+            <div class="table-card" style="margin-bottom: 28px;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th><i class="bi bi-upc-scan"></i> Roll No</th>
+                      <th><i class="bi bi-tag"></i> Fabric Type</th>
+                      <th><i class="bi bi-rulers"></i> Full</th>
+                      <th><i class="bi bi-dash-circle"></i> Used</th>
+                      <th><i class="bi bi-folder2-open"></i> Lot No</th>
+                      <th><i class="bi bi-scissors"></i> Cutter</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% adHocRolls.forEach(function(roll) { %>
+                      <tr>
+                        <td><span class="badge badge-warning"><%= roll.rollNo %></span></td>
+                        <td><%= roll.fabricType || '—' %></td>
+                        <td><%= roll.full %></td>
+                        <td><strong style="color: var(--terracotta);"><%= roll.used %></strong></td>
+                        <td><span class="badge badge-neutral"><%= roll.lotNo %></span></td>
+                        <td><%= roll.cutter || '—' %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% } %>
+
+          <!-- Sub-section 2: Ad-hoc fabric types -->
+          <div class="subsection-header">
+            <i class="bi bi-question-diamond"></i>
+            Ad-hoc fabric types
+            <span style="font-size: var(--text-sm); font-family: var(--font-body); font-weight: 400; color: var(--text-muted);">
+              (typed on a lot but not in fabric master data)
+            </span>
+          </div>
+
+          <% if (!adHocTypes || adHocTypes.length === 0) { %>
+            <div class="empty-state" style="padding: 24px 20px;">
+              <i class="bi bi-check-circle" style="color: var(--success);"></i>
+              <p>No ad-hoc fabric types — all fabric types are known.</p>
+            </div>
+          <% } else { %>
+            <div class="type-badge-list">
+              <% adHocTypes.forEach(function(typeName) { %>
+                <span class="badge badge-warning" style="font-size: var(--text-sm); padding: 5px 12px;">
+                  <i class="bi bi-question-circle"></i> <%= typeName %>
+                </span>
+              <% }) %>
+            </div>
+          <% } %>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="bottom-actions no-print">
+      <a href="/fabric-manager/dashboard" class="btn btn-outline">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleGroup(header) {
+    const group = header.closest('.fabric-group');
+    group.classList.toggle('open');
+  }
+
+  function toggleLot(header) {
+    const card = header.closest('.lot-card');
+    card.classList.toggle('open');
+  }
+</script>
+
+<%- include('partials/footer') %>

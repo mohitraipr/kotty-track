@@ -908,6 +908,153 @@ async function fetchStatusWiseStockReport(warehouse = 'faridabad') {
   return waitForAndDownloadReport(reportId, warehouse);
 }
 
+// Per-warehouse cache of comma-joined location_key strings. EasyEcom requires
+// `selectedLocations` for FULL_INVENTORY_REPORT and the keys are stable, so we
+// only fetch them once per process.
+const cachedLocationKeys = {};
+
+async function getAllLocationKeys(warehouse = 'faridabad') {
+  const key = warehouse.toLowerCase();
+  if (cachedLocationKeys[key]) return cachedLocationKeys[key];
+  const api = await ensureAxiosForWarehouse(warehouse, 30000);
+
+  const FIELD_CANDIDATES = ['location_key', 'locationKey', 'token', 'location_token', 'companyToken', 'company_token', 'key'];
+  const tryEndpoint = async (path) => {
+    try {
+      const resp = await api.get(path);
+      const data = resp.data?.data ?? resp.data ?? [];
+      const rows = Array.isArray(data) ? data : (data?.locations || data?.companies || []);
+      const sample = JSON.stringify(rows[0] || {}).slice(0, 400);
+      console.log(`[getAllLocationKeys:${warehouse}] ${path} → ${rows.length} rows. Sample keys: ${rows[0] ? Object.keys(rows[0]).join(',') : 'n/a'}. Sample: ${sample}`);
+      return rows;
+    } catch (err) {
+      console.warn(`[getAllLocationKeys:${warehouse}] ${path} failed: ${err.response?.status || ''} ${err.message}`);
+      return [];
+    }
+  };
+
+  let rows = await tryEndpoint('/getAllLocation');
+  let extracted = rows
+    .map(r => FIELD_CANDIDATES.map(f => r[f]).find(Boolean))
+    .filter(Boolean)
+    .map(String);
+
+  if (!extracted.length) {
+    rows = await tryEndpoint('/account/v1/api/locations');
+    extracted = rows
+      .map(r => FIELD_CANDIDATES.map(f => r[f]).find(Boolean))
+      .filter(Boolean)
+      .map(String);
+  }
+
+  // Final fallback: probe one inventory row via getInventoryDetailsV3 — it
+  // always returns location_key per item. Single small call (limit=1).
+  if (!extracted.length) {
+    try {
+      const resp = await api.get('/getInventoryDetailsV3', { params: { limit: 1, includeLocations: 1 } });
+      const items = resp.data?.data?.inventoryData || [];
+      const seen = new Set();
+      for (const it of items) {
+        const k = it.location_key || it.locationKey;
+        if (k) seen.add(String(k));
+      }
+      extracted = Array.from(seen);
+      console.log(`[getAllLocationKeys:${warehouse}] inventory probe yielded ${extracted.length} key(s): ${extracted.join(',')}`);
+    } catch (err) {
+      console.warn(`[getAllLocationKeys:${warehouse}] inventory probe failed: ${err.response?.status || ''} ${err.message}`);
+    }
+  }
+
+  if (!extracted.length) {
+    throw new Error(`No location keys resolved for ${warehouse}. /getAllLocation, /account/v1/api/locations and inventory probe all empty.`);
+  }
+
+  const joined = extracted.join(',');
+  cachedLocationKeys[key] = joined;
+  console.log(`[getAllLocationKeys:${warehouse}] Resolved ${extracted.length} location key(s): ${joined.slice(0, 200)}`);
+  return joined;
+}
+
+// FULL_INVENTORY_REPORT — queues, polls, follows the S3 downloadUrl if present,
+// and returns parsed rows. Emits onProgress({phase, status, elapsed, reportId})
+// callbacks so the SSE route can stream user-visible progress while the report
+// bakes server-side at EasyEcom. `selectedLocations` is required by EasyEcom;
+// if caller omits it, we auto-discover via /getAllLocation.
+async function fetchFullInventoryReport(
+  warehouse = 'faridabad',
+  { statuses = 'Available', locations = '', skus = '', bins = '' } = {},
+  onProgress = () => {}
+) {
+  onProgress({ phase: 'resolving_locations' });
+  const selectedLocations = locations || await getAllLocationKeys(warehouse);
+
+  const params = {
+    skus,
+    bins,
+    inventoryStatuses: statuses,
+    selectedLocations,
+    uomDetails: 1,
+  };
+
+  onProgress({ phase: 'queueing' });
+  const reportId = await queueReport('FULL_INVENTORY_REPORT', params, warehouse);
+  onProgress({ phase: 'queued', reportId });
+
+  const api = await ensureAxiosForWarehouse(warehouse, 120000);
+  const pollIntervalMs = 5000;
+  const maxWaitMs = 900000; // 15 min — FULL_INVENTORY can be slower than smaller reports
+  const start = Date.now();
+  let ready = false;
+  let lastStatus = '';
+  while (Date.now() - start < maxWaitMs) {
+    let entry = null;
+    try {
+      const list = await listReports(warehouse);
+      entry = (Array.isArray(list) ? list : []).find(r =>
+        String(r.reportId || r.id || r.report_id) === String(reportId)
+      );
+    } catch (_) {}
+    const status = (entry?.status || entry?.report_status || entry?.reportStatus || '').toString().toLowerCase();
+    if (status && status !== lastStatus) {
+      lastStatus = status;
+      onProgress({ phase: 'polling', reportId, status, elapsed: Math.round((Date.now() - start) / 1000) });
+    }
+    if (status.includes('complete') || status.includes('ready') || status === 'done') { ready = true; break; }
+    if (status.includes('fail') || status.includes('error')) {
+      throw new Error(`Report ${reportId} failed: ${JSON.stringify(entry).slice(0, 200)}`);
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+  if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
+
+  onProgress({ phase: 'downloading', reportId });
+  const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'text' });
+  const raw = typeof dl.data === 'string' ? dl.data : JSON.stringify(dl.data);
+
+  // EasyEcom may return either (a) raw CSV directly, or (b) a JSON envelope
+  // `{ data: { reportStatus, downloadUrl } }` pointing at a pre-signed S3 CSV.
+  // Handle both.
+  let csvText = raw;
+  if (raw && raw.trimStart().startsWith('{')) {
+    try {
+      const env = JSON.parse(raw);
+      const url = env?.data?.downloadUrl || env?.downloadUrl;
+      if (url) {
+        onProgress({ phase: 'downloading_s3', reportId });
+        const s3 = await axios.get(url, { timeout: 600000, responseType: 'text' });
+        csvText = typeof s3.data === 'string' ? s3.data : JSON.stringify(s3.data);
+      }
+    } catch (_) {
+      // Fall through and treat `raw` as CSV.
+    }
+  }
+
+  onProgress({ phase: 'parsing', reportId });
+  const rows = parseCsv(csvText);
+  onProgress({ phase: 'parsed', reportId, rowCount: rows.length });
+  return rows;
+}
+
 module.exports = {
   // Order operations
   getOrder,
@@ -937,6 +1084,7 @@ module.exports = {
   queueReport,
   listReports,
   waitForAndDownloadReport,
+  fetchFullInventoryReport,
   fetchMiniSalesReport,
   fetchInventoryAgingReport,
   fetchStatusWiseStockReport,

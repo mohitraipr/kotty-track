@@ -9,6 +9,114 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const masterCache = { data: null, expires: 0 };
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Stages whose size breakdowns are keyed by the size_label STRING. Used by the
+// cascade below. Fixed whitelist (never user input) so it's safe to interpolate
+// into table names.
+const SIZE_STAGES = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
+
+/**
+ * Rename a size label for ONE cutting lot across every place a piece breakdown
+ * is tracked by the size_label string, so editing a cut size never desyncs
+ * downstream. Covers BOTH the new event model (*_event_sizes) and the legacy
+ * data model (*_data_sizes / *_data_updates), plus dispatches, rejects, rewash,
+ * self-assignment sizes, production_flow_events, and the assignment sizes_json
+ * blobs. Must run inside the caller's transaction (conn).
+ *
+ * Scope is the single lot (by cutting_lot_id for event/assignment tables, by
+ * lot_no for the legacy data tables). oldLabel/newLabel are exact-match strings.
+ */
+async function cascadeSizeRename(conn, lotId, lotNo, oldLabel, newLabel) {
+  // 1) New event model — *_event_sizes linked to the lot via *_events.cutting_lot_id
+  for (const s of SIZE_STAGES) {
+    await conn.query(
+      `UPDATE ${s}_event_sizes es JOIN ${s}_events e ON es.event_id = e.id
+          SET es.size_label = ?
+        WHERE e.cutting_lot_id = ? AND es.size_label = ?`,
+      [newLabel, lotId, oldLabel]
+    );
+  }
+  // 2) Legacy data model — *_data_sizes / *_data_updates linked via *_data.lot_no
+  for (const s of SIZE_STAGES) {
+    await conn.query(
+      `UPDATE ${s}_data_sizes x JOIN ${s}_data p ON x.${s}_data_id = p.id
+          SET x.size_label = ?
+        WHERE p.lot_no = ? AND x.size_label = ?`,
+      [newLabel, lotNo, oldLabel]
+    );
+    await conn.query(
+      `UPDATE ${s}_data_updates x JOIN ${s}_data p ON x.${s}_data_id = p.id
+          SET x.size_label = ?
+        WHERE p.lot_no = ? AND x.size_label = ?`,
+      [newLabel, lotNo, oldLabel]
+    );
+  }
+  // 3) Direct / other size_label-keyed tables for this lot
+  await conn.query(
+    `UPDATE finishing_dispatches SET size_label = ? WHERE lot_no = ? AND size_label = ?`,
+    [newLabel, lotNo, oldLabel]
+  );
+  await conn.query(
+    `UPDATE reject_data_sizes x JOIN reject_data r ON x.reject_data_id = r.id
+        SET x.size_label = ? WHERE r.lot_no = ? AND x.size_label = ?`,
+    [newLabel, lotNo, oldLabel]
+  );
+  await conn.query(
+    `UPDATE rewash_request_sizes x JOIN rewash_requests r ON x.rewash_request_id = r.id
+        SET x.size_label = ? WHERE r.lot_no = ? AND x.size_label = ?`,
+    [newLabel, lotNo, oldLabel]
+  );
+  await conn.query(
+    `UPDATE size_assignments x JOIN lot_assignments la ON x.lot_assignment_id = la.id
+        SET x.size_label = ? WHERE la.cutting_lot_id = ? AND x.size_label = ?`,
+    [newLabel, lotId, oldLabel]
+  );
+  await conn.query(
+    `UPDATE production_flow_events SET size_label = ? WHERE lot_number = ? AND size_label = ?`,
+    [newLabel, lotNo, oldLabel]
+  );
+  // 4) Assignment sizes_json blobs. Formats vary across tables
+  //    ({"size":..}, {"size_label":..}, ["26",..]) but every label is a quoted
+  //    token and no key/other value equals a label, so a single quoted-token
+  //    REPLACE is correct for all of them.
+  const from = '"' + oldLabel + '"';
+  const to = '"' + newLabel + '"';
+  const like = '%"' + oldLabel + '"%';
+  await conn.query(
+    `UPDATE stitching_assignments SET sizes_json = REPLACE(sizes_json, ?, ?)
+      WHERE cutting_lot_id = ? AND sizes_json LIKE ?`,
+    [from, to, lotId, like]
+  );
+  await conn.query(
+    `UPDATE jeans_assembly_assignments ja
+        JOIN stitching_assignments sa ON ja.stitching_assignment_id = sa.id
+        SET ja.sizes_json = REPLACE(ja.sizes_json, ?, ?)
+      WHERE sa.cutting_lot_id = ? AND ja.sizes_json LIKE ?`,
+    [from, to, lotId, like]
+  );
+  await conn.query(
+    `UPDATE washing_assignments wa
+        JOIN jeans_assembly_assignments ja ON wa.jeans_assembly_assignment_id = ja.id
+        JOIN stitching_assignments sa ON ja.stitching_assignment_id = sa.id
+        SET wa.sizes_json = REPLACE(wa.sizes_json, ?, ?)
+      WHERE sa.cutting_lot_id = ? AND wa.sizes_json LIKE ?`,
+    [from, to, lotId, like]
+  );
+  await conn.query(
+    `UPDATE washing_in_assignments wia
+        JOIN washing_data wd ON wia.washing_data_id = wd.id
+        SET wia.sizes_json = REPLACE(wia.sizes_json, ?, ?)
+      WHERE wd.lot_no = ? AND wia.sizes_json LIKE ?`,
+    [from, to, lotNo, like]
+  );
+  await conn.query(
+    `UPDATE finishing_assignments fa
+        JOIN washing_in_data wid ON fa.washing_in_data_id = wid.id
+        SET fa.sizes_json = REPLACE(fa.sizes_json, ?, ?)
+      WHERE wid.lot_no = ? AND fa.sizes_json LIKE ?`,
+    [from, to, lotNo, like]
+  );
+}
+
 /**
  * GET /operator/editcuttinglots
  * Renders the main page with cutting master selection.
@@ -185,6 +293,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
 
     if (!lotRows.length) return res.status(404).send('Lot not found.');
     const lot = lotRows[0];
+    const isDenim = (lot.flow_type === 'denim');
 
     // Rolls available in inventory for this lot's fabric_type (for the autocomplete)
     const [availableRolls] = await pool.query(
@@ -245,13 +354,24 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                 <!-- Sizes & Rolls Tab -->
                 <div class="tab-pane fade" id="tab-sizes" role="tabpanel">
                   <h5>Sizes & Patterns</h5>
+                  <p class="text-muted small mb-2">
+                    You can rename a <strong>Size</strong> (e.g. fix a wrong/duplicate label) and set
+                    <strong>Total Pieces</strong> per size directly. Total Pieces (lot) is the sum of all sizes below.
+                  </p>
+                  ${downstreamHits.length ? `
+                    <div class="alert alert-warning py-2 mb-2 small">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      <strong>Heads-up:</strong> this lot has already moved into <strong>${downstreamHits.join(', ')}</strong>.
+                      Renaming a size here will be <strong>cascaded</strong> to those stages so nothing desyncs.
+                    </div>` : ''}
                   ${sizes.map((size) => `
                     <div class="mb-3 border p-2 rounded">
                       <input type="hidden" name="size_id[]" value="${size.id}">
+                      <input type="hidden" name="orig_size_label[]" value="${size.size_label}">
                       <div class="row">
                         <div class="col-md-4">
                           <label class="form-label">Size</label>
-                          <input type="text" class="form-control" value="${size.size_label}" readonly>
+                          <input type="text" maxlength="10" class="form-control sizeLabelInput" name="size_label[]" value="${size.size_label}" required>
                         </div>
                         <div class="col-md-4">
                           <label class="form-label">Pattern Count</label>
@@ -259,7 +379,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                         </div>
                         <div class="col-md-4">
                           <label class="form-label">Total Pieces (This Size)</label>
-                          <input type="number" class="form-control sizeTotalPieces" value="${size.total_pieces}" readonly>
+                          <input type="number" step="1" min="0" class="form-control sizeTotalPieces" name="size_pieces[]" value="${size.total_pieces}" required>
                         </div>
                       </div>
                     </div>
@@ -290,17 +410,17 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                     <h5 class="mb-2"><i class="bi bi-plus-circle"></i> Add a missed roll</h5>
                     <p class="text-muted small mb-2">
                       Inserts a new roll into this lot, recomputes total pieces, and (if the roll exists in inventory) deducts the used weight from <code>fabric_invoice_rolls</code>.
-                      Weight used auto-computes from <strong>table length × layers</strong>${lot.table_length ? ` (table length = <strong>${lot.table_length}</strong>)` : ''}.
+                      ${isDenim ? 'Weight Used is auto-computed from <strong>table_length × layers</strong>.' : 'Enter <strong>Remaining</strong>; Weight Used is derived automatically.'}
                     </p>
+                    ${isDenim && !lot.table_length ? `
+                      <div class="alert alert-danger py-2 mb-2 small">
+                        This denim lot has no <strong>table_length</strong> — Weight Used can't be computed. Set table_length on the lot first.
+                      </div>` : ''}
                     ${downstreamHits.length ? `
                       <div class="alert alert-warning py-2 mb-2 small">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <strong>Heads-up:</strong> this lot has already moved into <strong>${downstreamHits.join(', ')}</strong>.
                         Adding pieces upstream is allowed (downstream stages track their own qty), but the next-stage master will see more pieces available than before.
-                      </div>` : ''}
-                    ${!lot.table_length ? `
-                      <div class="alert alert-danger py-2 mb-2 small">
-                        This lot has no <strong>table_length</strong> — Weight Used can't be computed. Set table_length on the lot first.
                       </div>` : ''}
                     <div class="row g-2">
                       <div class="col-md-4">
@@ -321,16 +441,16 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Weight Used</label>
-                        <input type="number" step="0.01" class="form-control" id="addRollWeightUsed" readonly>
+                        <input type="number" step="0.01" min="0" class="form-control" id="addRollWeightUsed" readonly placeholder="Weight used (auto)">
                       </div>
                       <div class="col-md-2">
                         <label class="form-label">Remaining</label>
-                        <input type="number" step="0.01" class="form-control" id="addRollRemaining" readonly>
+                        <input type="number" step="0.01" min="0" class="form-control" id="addRollRemaining" ${isDenim ? 'readonly' : 'value="0"'} placeholder="${isDenim ? 'Auto' : 'Remaining (default 0)'}">
                       </div>
                     </div>
                     <div id="addRollError" class="text-danger small mt-2" style="display:none;"></div>
                     <div class="mt-3">
-                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn"${lot.table_length ? '' : ' disabled'}>
+                      <button type="button" class="btn btn-primary btn-sm" id="addRollBtn"${isDenim && !lot.table_length ? ' disabled' : ''}>
                         <i class="bi bi-plus-circle"></i> Add roll to lot
                       </button>
                     </div>
@@ -379,35 +499,26 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           </div>
         </div>
         <script>
-          // Recalculate total pieces dynamically.
+          // Lot total = sum of the (editable) per-size piece counts.
           function recalcTotals() {
             const container = document.getElementById("editFormWrapper");
-            const patternInputs = container.querySelectorAll(".patternCountInput");
-            const layerInputs = container.querySelectorAll(".layersInput");
-            let totalPatterns = 0, totalLayers = 0;
-            patternInputs.forEach(input => {
-              totalPatterns += parseFloat(input.value) || 0;
+            const sizeTotalFields = container.querySelectorAll(".sizeTotalPieces");
+            let totalPieces = 0;
+            sizeTotalFields.forEach(input => {
+              totalPieces += parseFloat(input.value) || 0;
             });
-            layerInputs.forEach(input => {
-              totalLayers += parseFloat(input.value) || 0;
-            });
-            const totalPieces = totalPatterns * totalLayers;
             const totalDisplay = container.querySelector("#totalPiecesDisplay");
             if(totalDisplay) totalDisplay.textContent = totalPieces.toFixed(2);
-            const sizeTotalFields = container.querySelectorAll(".sizeTotalPieces");
-            patternInputs.forEach((input, idx) => {
-              const pattern = parseFloat(input.value) || 0;
-              if(sizeTotalFields[idx]) sizeTotalFields[idx].value = (pattern * totalLayers).toFixed(2);
-            });
           }
-          document.querySelectorAll(".patternCountInput, .layersInput").forEach(input => {
+          document.querySelectorAll(".sizeTotalPieces").forEach(input => {
             input.addEventListener("input", recalcTotals);
           });
           recalcTotals();
 
           // ───── Add-missed-roll wiring ─────
-          const TABLE_LENGTH = ${lot.table_length ? Number(lot.table_length) : 'null'};
           const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
+          const IS_DENIM = ${isDenim ? 'true' : 'false'};
+          const TABLE_LENGTH = ${Number.isFinite(Number(lot.table_length)) ? Number(lot.table_length) : 'null'};
           const addRollNo        = document.getElementById('addRollNo');
           const addRollLayers    = document.getElementById('addRollLayers');
           const addRollFullW     = document.getElementById('addRollFullWeight');
@@ -417,18 +528,22 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           const addRollErr       = document.getElementById('addRollError');
           const addRollBtn       = document.getElementById('addRollBtn');
 
+          // Mirrors CuttingWeight.computeRollWeights() in public/js/cuttingWeight.js
+          // (inlined here because this form is a server-rendered HTML fragment).
           function recomputeAddRollWeights() {
-            const layers = parseFloat(addRollLayers.value);
-            const full   = parseFloat(addRollFullW.value);
-            if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value = ''; addRollRem.value = ''; return; }
-            const used = TABLE_LENGTH * layers;
-            addRollUsed.value = used.toFixed(2);
-            if (!isNaN(full)) {
-              addRollRem.value = Math.max(full - used, 0).toFixed(2);
-              addRollUsed.classList.toggle('text-danger', used > full);
+            const full = parseFloat(addRollFullW.value);
+            if (IS_DENIM) {
+              const layers = parseFloat(addRollLayers.value);
+              if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value=''; addRollRem.value=''; return; }
+              const used = TABLE_LENGTH * layers;
+              addRollUsed.value = used.toFixed(2);
+              addRollRem.value = isNaN(full) ? '' : Math.max(full - used, 0).toFixed(2);
+              addRollUsed.classList.toggle('text-danger', !isNaN(full) && used > full);
             } else {
-              addRollRem.value = '';
-              addRollUsed.classList.remove('text-danger');
+              const remaining = addRollRem.value === '' ? 0 : parseFloat(addRollRem.value);
+              if (isNaN(full)) { addRollUsed.value=''; addRollUsed.classList.remove('text-danger'); return; }
+              addRollUsed.value = Math.max(full - remaining, 0).toFixed(2);
+              addRollUsed.classList.toggle('text-danger', remaining > full);
             }
           }
           addRollNo.addEventListener('change', () => {
@@ -443,8 +558,12 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             }
             recomputeAddRollWeights();
           });
-          addRollLayers.addEventListener('input', recomputeAddRollWeights);
           addRollFullW.addEventListener('input', recomputeAddRollWeights);
+          if (IS_DENIM) {
+            addRollLayers.addEventListener('input', recomputeAddRollWeights);
+          } else {
+            addRollRem.addEventListener('input', recomputeAddRollWeights);
+          }
 
           addRollBtn.addEventListener('click', async () => {
             addRollErr.style.display = 'none';
@@ -455,7 +574,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             if (!roll_no)            return showErr('Pick a roll number.');
             if (!(layers > 0))       return showErr('Layers must be greater than 0.');
             if (!(full_weight > 0))  return showErr('Full weight must be greater than 0.');
-            if (!(weight_used >= 0)) return showErr('Weight used could not be computed (check table length and layers).');
+            if (!(weight_used >= 0)) return showErr('Enter a valid Weight Used (0 or more).');
             if (weight_used > full_weight) return showErr('Weight used (' + weight_used.toFixed(2) + ') cannot exceed full weight (' + full_weight.toFixed(2) + ').');
 
             addRollBtn.disabled = true;
@@ -528,8 +647,14 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   const { managerId, lotId } = req.query;
   if (!managerId || !lotId) return res.status(400).json({ success: false, error: 'Manager and Lot IDs required.' });
   const { sku, fabric_type, remark } = req.body;
-  let { size_id, pattern_count } = req.body;
-  if (!Array.isArray(size_id)) { size_id = [size_id]; pattern_count = [pattern_count]; }
+  let { size_id, pattern_count, size_label, orig_size_label, size_pieces } = req.body;
+  if (!Array.isArray(size_id)) {
+    size_id = [size_id];
+    pattern_count = [pattern_count];
+    size_label = [size_label];
+    orig_size_label = [orig_size_label];
+    size_pieces = [size_pieces];
+  }
   let { roll_id, layers, weight_used } = req.body;
   if (!Array.isArray(roll_id)) { roll_id = [roll_id]; layers = [layers]; weight_used = [weight_used]; }
   let { assignment_id, assigned_to } = req.body;
@@ -550,12 +675,38 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
       [sku, fabric_type, remark, lotId]
     );
 
-    let totalPatterns = 0;
+    // Need the lot_no to cascade size renames into the legacy data tables.
+    const [[lotRow]] = await conn.query(`SELECT lot_no FROM cutting_lots WHERE id = ? FOR UPDATE`, [lotId]);
+    if (!lotRow) throw new Error('Lot not found.');
+    const lotNo = lotRow.lot_no;
+
+    // Validate the resulting labels: non-empty, within length, and unique within the lot
+    // (no unique constraint exists on cutting_lot_sizes, but allowing two sizes to share
+    // a label would make downstream cascades ambiguous).
+    const newLabels = size_label.map(s => String(s == null ? '' : s).trim());
+    if (newLabels.some(l => l === '')) throw new Error('Size label cannot be empty.');
+    if (newLabels.some(l => l.length > 10)) throw new Error('Size label too long (max 10 characters).');
+    const dupLabel = newLabels.find((l, i) => newLabels.indexOf(l) !== i);
+    if (dupLabel) throw new Error(`Duplicate size label "${dupLabel}" — each size must be unique within the lot.`);
+
+    let totalPieces = 0;
     for (let i = 0; i < size_id.length; i++) {
       const newPattern = parseFloat(pattern_count[i]);
+      const newPieces = parseFloat(size_pieces[i]);
+      const newLabel = newLabels[i];
+      const oldLabel = String(orig_size_label[i] == null ? '' : orig_size_label[i]).trim();
       if (isNaN(newPattern) || newPattern < 0) throw new Error('Invalid pattern count.');
-      totalPatterns += newPattern;
-      await conn.query(`UPDATE cutting_lot_sizes SET pattern_count = ? WHERE id = ?`, [newPattern, size_id[i]]);
+      if (isNaN(newPieces) || newPieces < 0) throw new Error(`Invalid total pieces for size "${newLabel}".`);
+      totalPieces += newPieces;
+      // Per-size pieces are now authoritative (set directly), no longer derived from pattern × layers.
+      await conn.query(
+        `UPDATE cutting_lot_sizes SET size_label = ?, pattern_count = ?, total_pieces = ? WHERE id = ? AND cutting_lot_id = ?`,
+        [newLabel, newPattern, newPieces, size_id[i], lotId]
+      );
+      // Cascade a rename across every downstream stage so nothing desyncs by size_label.
+      if (oldLabel && newLabel !== oldLabel) {
+        await cascadeSizeRename(conn, lotId, lotNo, oldLabel, newLabel);
+      }
     }
 
     const rollPlaceholders = roll_id.map(() => '?').join(',');
@@ -596,9 +747,8 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
       await conn.query(`UPDATE stitching_assignments SET user_id = ? WHERE id = ?`, [newAssignedTo, assignment_id[i]]);
     }
 
-    const totalPieces = totalLayers * totalPatterns;
+    // Lot total is the sum of the (now authoritative) per-size piece counts.
     await conn.query(`UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`, [totalPieces, lotId]);
-    await conn.query(`UPDATE cutting_lot_sizes SET total_pieces = pattern_count * ? WHERE cutting_lot_id = ?`, [totalLayers, lotId]);
 
     await conn.commit();
     conn.release();
@@ -696,19 +846,24 @@ router.post('/editcuttinglots/add-roll', isAuthenticated, isOperator, upload.non
       [lotId, roll_no, weight_used, layers, newRollPieces, resolvedFullWeight, remaining_weight]
     );
 
-    // Recompute lot + per-size totals after the new roll
+    // Increment each size by this roll's contribution (pattern_count × new layers),
+    // preserving any manual per-size piece overrides made on the edit form. Then the
+    // lot total is the sum of the per-size pieces.
+    await conn.query(
+      `UPDATE cutting_lot_sizes SET total_pieces = total_pieces + (pattern_count * ?) WHERE cutting_lot_id = ?`,
+      [layers, lotId]
+    );
+    const [[sizeSumRow]] = await conn.query(
+      `SELECT COALESCE(SUM(total_pieces), 0) AS sum_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+    const newLotPieces = Number(sizeSumRow.sum_pieces) || 0;
+    await conn.query(`UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`, [newLotPieces, lotId]);
     const [[layersRow]] = await conn.query(
       `SELECT COALESCE(SUM(layers), 0) AS sum_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?`,
       [lotId]
     );
     const sumLayers = Number(layersRow.sum_layers) || 0;
-    const newLotPieces = sumLayers * sumPatterns;
-
-    await conn.query(`UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`, [newLotPieces, lotId]);
-    await conn.query(
-      `UPDATE cutting_lot_sizes SET total_pieces = pattern_count * ? WHERE cutting_lot_id = ?`,
-      [sumLayers, lotId]
-    );
 
     await conn.commit();
     res.json({
