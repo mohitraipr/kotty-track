@@ -4,6 +4,7 @@ const multer  = require('multer');
 const upload = multer(); // This will parse multipart/form-data
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
+const { allowAdhocCuttingEntry } = require('../utils/storeSettings');
 
 // simple in-memory cache for cutting masters
 const masterCache = { data: null, expires: 0 };
@@ -305,6 +306,8 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
       [lot.fabric_type]
     );
 
+    const allowAdhoc = await allowAdhocCuttingEntry();
+
     // Has any downstream stage seen this lot?
     const downstreamHits = downstream.filter(d => d.c > 0).map(d => d.stage);
 
@@ -518,6 +521,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           // ───── Add-missed-roll wiring ─────
           const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
           const IS_DENIM = ${isDenim ? 'true' : 'false'};
+          const ALLOW_ADHOC = ${allowAdhoc ? 'true' : 'false'};
           const TABLE_LENGTH = ${Number.isFinite(Number(lot.table_length)) ? Number(lot.table_length) : 'null'};
           const addRollNo        = document.getElementById('addRollNo');
           const addRollLayers    = document.getElementById('addRollLayers');
@@ -572,6 +576,9 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             const full_weight = parseFloat(addRollFullW.value);
             const weight_used = parseFloat(addRollUsed.value);
             if (!roll_no)            return showErr('Pick a roll number.');
+            if (!ALLOW_ADHOC && !ROLL_INVENTORY.some(r => r.roll_no === roll_no)) {
+              return showErr('Roll is not in fabric inventory; ad-hoc entry is disabled.');
+            }
             if (!(layers > 0))       return showErr('Layers must be greater than 0.');
             if (!(full_weight > 0))  return showErr('Full weight must be greater than 0.');
             if (!(weight_used >= 0)) return showErr('Enter a valid Weight Used (0 or more).');
@@ -806,6 +813,7 @@ router.post('/editcuttinglots/add-roll', isAuthenticated, isOperator, upload.non
     if (dup) throw new Error('This roll number is already in this lot.');
 
     // Inventory check — deplete fabric_invoice_rolls if the roll exists there
+    const allowAdhoc = await allowAdhocCuttingEntry();
     const [[inv]] = await conn.query(
       `SELECT fir.roll_no, fir.per_roll_weight
          FROM fabric_invoice_rolls fir
@@ -828,6 +836,8 @@ router.post('/editcuttinglots/add-roll', isAuthenticated, isOperator, upload.non
       if (upd.affectedRows === 0) {
         throw new Error(`Insufficient inventory for roll ${roll_no}.`);
       }
+    } else if (!allowAdhoc) {
+      throw new Error(`Roll ${roll_no} is not in fabric inventory. Ad-hoc entry is disabled.`);
     }
     const remaining_weight = Math.max(resolvedFullWeight - weight_used, 0);
 
