@@ -764,16 +764,13 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
     updateWeightProgress(rollSection);
     checkRollsCompletion();
   });
-  weightUsedInput.addEventListener('input', () => {
-    updateWeightUsed(rollSection);
-    updateWeightProgress(rollSection);
-    checkRollsCompletion();
-  });
-  remainingWeightInput.addEventListener('input', () => {
-    updateWeightUsed(rollSection);
-    updateWeightProgress(rollSection);
-    checkRollsCompletion();
-  });
+  if (FLOW_MODE === 'hosiery') {
+    remainingWeightInput.addEventListener('input', () => {
+      updateWeightUsed(rollSection);
+      updateWeightProgress(rollSection);
+      checkRollsCompletion();
+    });
+  }
 }
 
 function addNewSize() {
@@ -802,16 +799,13 @@ function addNewRoll() {
     updateWeightProgress(newRoll);
     checkRollsCompletion();
   });
-  newRoll.querySelector('.weightUsedInput').addEventListener('input', () => {
-    updateWeightUsed(newRoll);
-    updateWeightProgress(newRoll);
-    checkRollsCompletion();
-  });
-  newRoll.querySelector('.remainingWeightInput').addEventListener('input', () => {
-    updateWeightUsed(newRoll);
-    updateWeightProgress(newRoll);
-    checkRollsCompletion();
-  });
+  if (FLOW_MODE === 'hosiery') {
+    newRoll.querySelector('.remainingWeightInput').addEventListener('input', () => {
+      updateWeightUsed(newRoll);
+      updateWeightProgress(newRoll);
+      checkRollsCompletion();
+    });
+  }
   const currentFabricType = fabricTypeSel.value;
   if (currentFabricType) initializeRollNoAutocomplete(newRoll, currentFabricType);
 }
