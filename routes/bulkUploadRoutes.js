@@ -7,6 +7,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, isCuttingManager } = require('../middlewares/auth');
+const { allowAdhocCuttingEntry, isKnownFabricType } = require('../utils/storeSettings');
 
 // Set up Multer for Excel file uploads
 const storage = multer.diskStorage({
@@ -183,6 +184,16 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
     await conn.beginTransaction();
     console.log('Database transaction started for bulk lot upload.');
 
+    // Load ad-hoc switch and known fabric types once (before the per-lot loop)
+    const allowAdhoc = await allowAdhocCuttingEntry();
+    let knownFabricTypes = [];
+    if (!allowAdhoc) {
+      const [knownTypeRows] = await conn.query(
+        'SELECT DISTINCT fabric_type FROM fabric_invoices WHERE fabric_type IS NOT NULL'
+      );
+      knownFabricTypes = knownTypeRows.map((r) => r.fabric_type);
+    }
+
     // Process each lot row from the Lots sheet
     for (const lot of lotsData) {
       const lotSizes = sizesData[lot.lot_no] || [];
@@ -190,6 +201,10 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
       const sumPatterns = lotSizes.reduce((sum, s) => sum + s.pattern_count, 0);
       const sumLayers = lotRolls.reduce((sum, r) => sum + r.layers, 0);
       const totalPieces = sumPatterns * sumLayers;
+
+      if (!allowAdhoc && !isKnownFabricType(lot.fabric_type, knownFabricTypes)) {
+        throw new Error(`Fabric type "${lot.fabric_type}" for lot ${lot.lot_no} is not in the fabric database. Ad-hoc entry is disabled.`);
+      }
 
       const [result] = await conn.query(
         `INSERT INTO cutting_lots (lot_no, sku, fabric_type, remark, user_id, total_pieces)
