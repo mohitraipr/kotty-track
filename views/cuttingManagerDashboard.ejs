@@ -457,7 +457,7 @@
                 </div>
                 <div class="col-md-4">
                   <label for="table_length" class="kotty-form-label"><i class="bi bi-rulers"></i><span data-i18n="tableLengthLabel">Table Length</span></label>
-                  <input type="number" class="kotty-input" id="table_length" name="table_length" placeholder="Enter table length" min="0" step="0.01" />
+                  <input type="number" class="kotty-input" id="table_length" name="table_length" <%= isDenim ? 'required' : '' %> placeholder="<%= isDenim ? 'Table length (required for denim)' : 'Table length (optional)' %>" min="0" step="0.01" />
                 </div>
                 <div class="col-md-4">
                   <label for="remark" class="kotty-form-label"><i class="bi bi-chat-left-text"></i><span data-i18n="remarkLabel">Remark</span></label>
@@ -550,7 +550,7 @@
       </div>
       <div class="col-md-4">
         <label class="kotty-form-label" data-i18n="weightUsedLabel">Weight Used</label>
-        <input type="number" step="0.01" class="kotty-input weightUsedInput" name="weight_used[]" min="0" required placeholder="Weight used" />
+        <input type="number" step="0.01" class="kotty-input weightUsedInput" name="weight_used[]" min="0" readonly placeholder="Weight used (auto)" />
       </div>
     </div>
     <div class="row g-3 mt-1">
@@ -560,7 +560,7 @@
       </div>
       <div class="col-md-6">
         <label class="kotty-form-label" data-i18n="remainingWeightLabel">Remaining Weight</label>
-        <input type="number" step="0.01" class="kotty-input remainingWeightInput" name="roll_remaining_weight[]" min="0" required readonly placeholder="Auto (full − used)" />
+        <input type="number" step="0.01" class="kotty-input remainingWeightInput" name="roll_remaining_weight[]" min="0" <%= isDenim ? 'readonly' : 'value="0"' %> placeholder="<%= isDenim ? 'Auto (full − used)' : 'Remaining (default 0)' %>" />
       </div>
     </div>
     <div class="mt-3">
@@ -573,7 +573,11 @@
   </div>
 </div>
 
+<script src="/public/js/cuttingWeight.js"></script>
 <script>
+const IS_DENIM = <%= isDenim ? 'true' : 'false' %>;
+const FLOW_MODE = IS_DENIM ? 'denim' : 'hosiery';
+
 const langData = {
   en: { cuttingManagerDashboardTitle: "Cutting Manager Dashboard", welcomeUser: "Welcome", existingCuttingLots: "Existing Cutting Lots", createNewCuttingLot: "Create New Cutting Lot", idLabel: "ID", lotNumberLabel: "Lot Number", skuLabel: "SKU", fabricTypeLabel: "Fabric Type", tableLengthLabel: "Table Length", remarkLabel: "Remark", imageLabel: "Image", createdByLabel: "Created By", creationTimeLabel: "Creation Time", totalPiecesLabel: "Total Pieces", sizesLabel: "Sizes", actionsLabel: "Actions", noCuttingLotsAvailable: "No cutting lots available.", sizeLabel: "Size", patternCountLabel: "Pattern Count", lotNumberGenerated: "Lot Number (Generated)", createLotBtn: "Create Lot", remove: "Remove", rollNumber: "Roll Number", layersLabel: "Layers", weightUsedLabel: "Weight Used (Calculated)", weightUsageProgress: "Weight Usage Progress", availableLabel: "Available", sizesAndPatterns: "Sizes and Patterns", rollsUsed: "Rolls Used", addNewSize: "Add New Size", addAnotherRoll: "Add Another Roll", totalPiecesCalc: "Total Pieces (Calculated)", fullWeightLabel: "Full Roll Weight", remainingWeightLabel: "Remaining Weight" },
   hi: { cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड", welcomeUser: "स्वागत हे", existingCuttingLots: "मौजूदा काटिंग लॉट्स", createNewCuttingLot: "नया काटिंग लॉट बनाएं", idLabel: "आईडी", lotNumberLabel: "लॉट नंबर", skuLabel: "एसकेयू", fabricTypeLabel: "फैब्रिक प्रकार", tableLengthLabel: "टेबल लंबाई", remarkLabel: "टिप्पणी", imageLabel: "छवि", createdByLabel: "बनाने वाले", creationTimeLabel: "बनाने का समय", totalPiecesLabel: "कुल पीस", sizesLabel: "साइज़", actionsLabel: "कार्रवाई", noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।", sizeLabel: "साइज़", patternCountLabel: "पैटर्न की संख्या", lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)", createLotBtn: "लॉट तैयार करें", remove: "हटाएं", rollNumber: "रोल नंबर", layersLabel: "लेयर्स", weightUsedLabel: "उपयोग किया गया वज़न (गणना)", weightUsageProgress: "वज़न उपयोग की प्रगति", availableLabel: "उपलब्ध", sizesAndPatterns: "साइज़ और पैटर्न", rollsUsed: "उपयोग किए गए रोल्स", addNewSize: "नया साइज़ जोड़ें", addAnotherRoll: "एक और रोल जोड़ें", totalPiecesCalc: "कुल पीस (हिसाब से)", fullWeightLabel: "रोल का कुल वज़न", remainingWeightLabel: "बचा हुआ वज़न" }
@@ -765,6 +769,11 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
     updateWeightProgress(rollSection);
     checkRollsCompletion();
   });
+  remainingWeightInput.addEventListener('input', () => {
+    updateWeightUsed(rollSection);
+    updateWeightProgress(rollSection);
+    checkRollsCompletion();
+  });
 }
 
 function addNewSize() {
@@ -798,6 +807,11 @@ function addNewRoll() {
     updateWeightProgress(newRoll);
     checkRollsCompletion();
   });
+  newRoll.querySelector('.remainingWeightInput').addEventListener('input', () => {
+    updateWeightUsed(newRoll);
+    updateWeightProgress(newRoll);
+    checkRollsCompletion();
+  });
   const currentFabricType = fabricTypeSel.value;
   if (currentFabricType) initializeRollNoAutocomplete(newRoll, currentFabricType);
 }
@@ -817,21 +831,29 @@ function updateWeightProgress(rollSection) {
 }
 
 function updateWeightUsed(rollSection) {
-  // Weight Used is entered MANUALLY now (previous behaviour). We only derive the
-  // hidden remaining_weight so the existing backend contract stays intact: the
-  // server recomputes used = full - remaining.
   const usedInput = rollSection.querySelector('.weightUsedInput');
   const remInput  = rollSection.querySelector('.remainingWeightInput');
-  const used      = parseFloat(usedInput.value);
-  const full      = parseFloat(rollSection.querySelector('.fullWeightInput').value);
+  const full      = rollSection.querySelector('.fullWeightInput').value;
 
-  if (isNaN(used) || isNaN(full)) {
-    remInput.value = '';
-    usedInput.classList.remove('over-weight');
-    return;
+  let res;
+  if (FLOW_MODE === 'denim') {
+    res = CuttingWeight.computeRollWeights('denim', {
+      tableLength: document.getElementById('table_length').value,
+      layers: rollSection.querySelector('.layersInput').value,
+      full: full,
+    });
+    if (res.used === null) { usedInput.value = ''; remInput.value = ''; usedInput.classList.remove('over-weight'); return; }
+    usedInput.value = res.used.toFixed(2);
+    remInput.value  = res.remaining === null ? '' : res.remaining.toFixed(2);
+  } else {
+    res = CuttingWeight.computeRollWeights('hosiery', {
+      full: full,
+      remaining: remInput.value,
+    });
+    if (res.used === null) { usedInput.value = ''; usedInput.classList.remove('over-weight'); return; }
+    usedInput.value = res.used.toFixed(2);
   }
-  remInput.value = Math.max(full - used, 0).toFixed(2);
-  usedInput.classList.toggle('over-weight', used > full);
+  usedInput.classList.toggle('over-weight', res.over);
 }
 
 function updateTotalPieces() {
@@ -884,8 +906,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function checkRollsCompletion() {
   const allRollSections = rollsContainer.querySelectorAll('.roll-section');
   if (allRollSections.length === 0) { createLotBtn.disabled = true; return; }
-  const tableLengthOk = !!document.getElementById('table_length').value.trim();
-  let allFilled = tableLengthOk;
+  let allFilled = true;
+  if (FLOW_MODE === 'denim') {
+    const tl = parseFloat(document.getElementById('table_length').value);
+    if (!(tl > 0)) allFilled = false;
+  }
   if (allFilled) {
     allRollSections.forEach(roll => {
       if (
@@ -899,14 +924,17 @@ function checkRollsCompletion() {
   createLotBtn.disabled = !allFilled;
 }
 
-// Re-run weight computation across every roll when table length changes
-document.getElementById('table_length').addEventListener('input', () => {
-  rollsContainer.querySelectorAll('.roll-section').forEach(rs => {
-    updateWeightUsed(rs);
-    updateWeightProgress(rs);
+// Re-run weight computation across every roll when table length changes (denim only)
+const tableLengthInput = document.getElementById('table_length');
+if (tableLengthInput && FLOW_MODE === 'denim') {
+  tableLengthInput.addEventListener('input', () => {
+    rollsContainer.querySelectorAll('.roll-section:not(.d-none)').forEach(rs => {
+      updateWeightUsed(rs);
+      updateWeightProgress(rs);
+    });
+    checkRollsCompletion();
   });
-  checkRollsCompletion();
-});
+}
 
 // Bulk size input — parse "26-1,28-2,30-2,32-1,34-1" and rebuild #sizesContainer
 function parseBulkSizeInput(text) {
