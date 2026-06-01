@@ -459,6 +459,7 @@ router.get('/analysis/export', isAuthenticated, isFabricManager, async (req, res
     const from = req.query.from || '';
     const to = req.query.to || '';
     const tab = req.query.tab || 'consumption';
+    const safeTab = ['consumption', 'ledger', 'adhoc'].includes(tab) ? tab : 'consumption';
     const data = await loadConsumptionAnalysis(from, to);
 
     const wb = new ExcelJS.Workbook();
@@ -486,7 +487,7 @@ router.get('/analysis/export', isAuthenticated, isFabricManager, async (req, res
       })));
     }
 
-    res.setHeader('Content-Disposition', `attachment; filename="fabric-${tab}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="fabric-${safeTab}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await wb.xlsx.write(res);
     res.end();

@@ -746,7 +746,7 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
       rollSection.querySelector('.availableWeightTxt').textContent = '0';
       fullWeightInput.readOnly = false;
       fullWeightInput.value = '';
-      remainingWeightInput.value = '';
+      remainingWeightInput.value = (FLOW_MODE === 'hosiery') ? '0' : '';
     }
     updateWeightUsed(rollSection);
     updateWeightProgress(rollSection);
@@ -868,7 +868,7 @@ function populateRollNos(selectedFabricType) {
     rollSection.querySelector('.availableWeightTxt').textContent = '0';
     rollSection.querySelector('.weightUsedInput').value = '';
     rollSection.querySelector('.fullWeightInput').value = '';
-    rollSection.querySelector('.remainingWeightInput').value = '';
+    rollSection.querySelector('.remainingWeightInput').value = (FLOW_MODE === 'hosiery') ? '0' : '';
     rollSection.querySelector('.fullWeightInput').readOnly = false;
     const progressBar = rollSection.querySelector('.kotty-progress-bar');
     progressBar.style.width = '0%';
@@ -888,6 +888,18 @@ fabricTypeSel.addEventListener('change', () => {
 
 addSizeBtn.addEventListener('click', addNewSize);
 addRollBtn.addEventListener('click', addNewRoll);
+
+(function attachRemainingNormalizer() {
+  const lotForm = document.getElementById('lotForm');
+  if (!lotForm) return;
+  lotForm.addEventListener('submit', () => {
+    if (FLOW_MODE !== 'hosiery') return;
+    rollsContainer.querySelectorAll('.roll-section:not(.d-none) .remainingWeightInput').forEach(inp => {
+      if (inp.value === '' || inp.value === null) inp.value = '0';
+    });
+  });
+})();
+
 addNewSize();
 
 document.addEventListener('DOMContentLoaded', () => {
