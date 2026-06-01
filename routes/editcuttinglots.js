@@ -518,7 +518,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           // ───── Add-missed-roll wiring ─────
           const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
           const IS_DENIM = ${isDenim ? 'true' : 'false'};
-          const TABLE_LENGTH = ${lot.table_length ? Number(lot.table_length) : 'null'};
+          const TABLE_LENGTH = ${Number.isFinite(Number(lot.table_length)) ? Number(lot.table_length) : 'null'};
           const addRollNo        = document.getElementById('addRollNo');
           const addRollLayers    = document.getElementById('addRollLayers');
           const addRollFullW     = document.getElementById('addRollFullWeight');
@@ -528,6 +528,8 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
           const addRollErr       = document.getElementById('addRollError');
           const addRollBtn       = document.getElementById('addRollBtn');
 
+          // Mirrors CuttingWeight.computeRollWeights() in public/js/cuttingWeight.js
+          // (inlined here because this form is a server-rendered HTML fragment).
           function recomputeAddRollWeights() {
             const full = parseFloat(addRollFullW.value);
             if (IS_DENIM) {
