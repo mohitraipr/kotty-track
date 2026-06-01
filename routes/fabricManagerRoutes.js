@@ -453,6 +453,50 @@ router.get('/analysis', isAuthenticated, isFabricManager, async (req, res) => {
   }
 });
 
+// GET /fabric-manager/analysis/export?tab=consumption|ledger|adhoc&from=&to=
+router.get('/analysis/export', isAuthenticated, isFabricManager, async (req, res) => {
+  try {
+    const from = req.query.from || '';
+    const to = req.query.to || '';
+    const tab = req.query.tab || 'consumption';
+    const data = await loadConsumptionAnalysis(from, to);
+
+    const wb = new ExcelJS.Workbook();
+
+    if (tab === 'ledger') {
+      const ws = wb.addWorksheet('Roll Ledger');
+      ws.addRow(['Roll No', 'Fabric Type', 'Vendor', 'Current Available', 'Unit', 'Total Used', 'Lots']);
+      data.ledger.forEach(r => ws.addRow([
+        r.rollNo, r.fabricType, r.vendor,
+        r.currentAvailable == null ? '' : r.currentAvailable, r.unit,
+        r.totalUsed, r.lots.join(', '),
+      ]));
+    } else if (tab === 'adhoc') {
+      const ws1 = wb.addWorksheet('Ad-hoc Rolls');
+      ws1.addRow(['Roll No', 'Fabric Type', 'Full', 'Used', 'Lot No', 'Cutter']);
+      data.adHocRolls.forEach(r => ws1.addRow([r.rollNo, r.fabricType, r.full, r.used, r.lotNo, r.cutter]));
+      const ws2 = wb.addWorksheet('Ad-hoc Fabric Types');
+      ws2.addRow(['Fabric Type (not in fabric data)']);
+      data.adHocTypes.forEach(ft => ws2.addRow([ft]));
+    } else {
+      const ws = wb.addWorksheet('Consumption by Fabric Type');
+      ws.addRow(['Fabric Type', 'Lot No', 'SKU', 'Created At', 'Cutter', 'Roll No', 'Full', 'Used', 'Remaining']);
+      data.byType.forEach(g => g.lots.forEach(l => l.rolls.forEach(roll => {
+        ws.addRow([g.fabricType, l.lotNo, l.sku, l.createdAt, l.cutter, roll.rollNo, roll.full, roll.used, roll.remaining]);
+      })));
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="fabric-${tab}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error exporting fabric analysis:', err);
+    req.flash('error', 'Failed to export fabric analysis.');
+    res.redirect('/fabric-manager/analysis');
+  }
+});
+
 /**
  * GET /fabric-manager/invoice/:id/rolls
  * View rolls for a specific fabric invoice.
