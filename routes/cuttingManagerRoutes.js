@@ -9,6 +9,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const generateLotNumber = require('../utils/generateLotNumber'); // Import the utility function
 const { cache } = require('../utils/cache');
+const { allowAdhocCuttingEntry, isKnownFabricType } = require('../utils/storeSettings');
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
@@ -176,6 +177,8 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
     );
     const isDenim = !!(cutterFlag && cutterFlag.is_denim_cutter);
 
+    const allowAdhoc = await allowAdhocCuttingEntry();
+
     res.render('cuttingManagerDashboard', {
       user: req.session.user,
       cuttingLots,
@@ -184,6 +187,7 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
       rollsByFabricType, // Now includes vendor_name
       generatedLotNumber, // Pass the generated lot number
       isDenim,
+      allowAdhoc,
     });
   } catch (err) {
     if (conn) {
@@ -240,6 +244,17 @@ router.post(
           [userId]
         );
         const flowType = cutter && cutter.is_denim_cutter ? 'denim' : 'hosiery';
+
+        // Enforce ad-hoc cutting entry switch
+        const allowAdhoc = await allowAdhocCuttingEntry();
+        if (!allowAdhoc) {
+          const [knownTypeRows] = await conn.query(
+            'SELECT DISTINCT fabric_type FROM fabric_invoices WHERE fabric_type IS NOT NULL'
+          );
+          if (!isKnownFabricType(fabric_type, knownTypeRows.map((r) => r.fabric_type))) {
+            throw new Error(`Fabric type "${fabric_type}" is not in the fabric database. Ad-hoc entry is disabled.`);
+          }
+        }
 
         // Insert the new cutting lot with total_pieces = 0
         const [result] = await conn.query(
@@ -370,6 +385,9 @@ router.post(
                 throw new Error(`Insufficient weight or invalid roll ${r.roll_no}`);
               }
             } else {
+              if (!allowAdhoc) {
+                throw new Error(`Roll ${r.roll_no} is not in fabric inventory. Ad-hoc entry is disabled.`);
+              }
               if (isNaN(r.full_weight) || isNaN(r.remaining_weight)) {
                 throw new Error(`Full and remaining weights are required for roll ${r.roll_no}`);
               }

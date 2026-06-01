@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isAdmin } = require('../middlewares/auth');
+const { allowAdhocCuttingEntry } = require('../utils/storeSettings');
 const { body, validationResult } = require('express-validator');
 
 // Utility: Fetch existing tables (cached to avoid heavy INFORMATION_SCHEMA calls)
@@ -63,13 +64,16 @@ router.get('/', isAuthenticated, isAdmin, async (req, res) => {
     const dashboards = dashboardsData[0];
     const auditLogs = auditLogData[0];
 
+    const allowAdhoc = await allowAdhocCuttingEntry();
+
     res.render('admin', {
       user: req.session.user,
       roles,
       users,
       dashboards,
       existingTables,
-      auditLogs
+      auditLogs,
+      allowAdhoc
     });
   } catch (err) {
     console.error('Error loading admin page:', err);
@@ -417,5 +421,25 @@ router.post(
     }
   }
 );
+
+// POST /admin/settings — toggle the ad-hoc cutting entry switch
+router.post('/settings', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    // An unchecked checkbox is not submitted, so absence => 'false'.
+    const raw = req.body.allow_adhoc_cutting_entry;
+    const allow = (raw === 'on' || raw === 'true') ? 'true' : 'false';
+    await pool.query(
+      `INSERT INTO store_settings (setting_key, setting_value)
+       VALUES ('allow_adhoc_cutting_entry', ?)
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+      [allow]
+    );
+    req.flash('success', `Ad-hoc cutting entry ${allow === 'true' ? 'ENABLED' : 'DISABLED'}.`);
+  } catch (err) {
+    console.error('Error updating ad-hoc cutting setting:', err);
+    req.flash('error', 'Failed to update the cutting entry setting.');
+  }
+  res.redirect('/admin');
+});
 
 module.exports = router;

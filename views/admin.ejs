@@ -551,6 +551,22 @@
           </div>
         <% }); %>
       </div>
+
+      <!-- Cutting Entry setting -->
+      <h3 class="section-header"><i class="bi bi-scissors"></i> Cutting Entry</h3>
+      <div class="admin-table-container" style="padding: 20px;">
+        <form method="POST" action="/admin/settings" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0;">
+            <input type="checkbox" name="allow_adhoc_cutting_entry" value="true" <%= allowAdhoc ? 'checked' : '' %>>
+            Allow cutters to enter fabric types / roll numbers <strong>not in the fabric database</strong>
+          </label>
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </form>
+        <p class="text-muted small" style="margin-top:6px; margin-bottom:0;">
+          Off (recommended): cutters can only pick existing fabric types and rolls. Currently
+          <strong><%= allowAdhoc ? 'ON (ad-hoc allowed)' : 'OFF (ad-hoc blocked)' %></strong>.
+        </p>
+      </div>
     </div>
 
     <!-- Create Dashboard Tab -->

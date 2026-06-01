@@ -577,6 +577,7 @@
 <script>
 const IS_DENIM = <%= isDenim ? 'true' : 'false' %>;
 const FLOW_MODE = IS_DENIM ? 'denim' : 'hosiery';
+const ALLOW_ADHOC = <%= allowAdhoc ? 'true' : 'false' %>;
 
 const langData = {
   en: { cuttingManagerDashboardTitle: "Cutting Manager Dashboard", welcomeUser: "Welcome", existingCuttingLots: "Existing Cutting Lots", createNewCuttingLot: "Create New Cutting Lot", idLabel: "ID", lotNumberLabel: "Lot Number", skuLabel: "SKU", fabricTypeLabel: "Fabric Type", tableLengthLabel: "Table Length", remarkLabel: "Remark", imageLabel: "Image", createdByLabel: "Created By", creationTimeLabel: "Creation Time", totalPiecesLabel: "Total Pieces", sizesLabel: "Sizes", actionsLabel: "Actions", noCuttingLotsAvailable: "No cutting lots available.", sizeLabel: "Size", patternCountLabel: "Pattern Count", lotNumberGenerated: "Lot Number (Generated)", createLotBtn: "Create Lot", remove: "Remove", rollNumber: "Roll Number", layersLabel: "Layers", weightUsedLabel: "Weight Used (Calculated)", weightUsageProgress: "Weight Usage Progress", availableLabel: "Available", sizesAndPatterns: "Sizes and Patterns", rollsUsed: "Rolls Used", addNewSize: "Add New Size", addAnotherRoll: "Add Another Roll", totalPiecesCalc: "Total Pieces (Calculated)", fullWeightLabel: "Full Roll Weight", remainingWeightLabel: "Remaining Weight" },
@@ -611,7 +612,7 @@ function debounce(func, delay) {
   return function(...args) { clearTimeout(t); t = setTimeout(() => func.apply(this, args), delay); };
 }
 
-function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = []) {
+function initializeAutocomplete(inputField, hiddenField, optionsContainer, data = [], strict = false) {
   function populateOptions() {
     optionsContainer.innerHTML = '';
     data.forEach(item => {
@@ -678,7 +679,16 @@ function initializeAutocomplete(inputField, hiddenField, optionsContainer, data 
 
     const typedValue = inputField.value.trim();
     const matchingOption = data.find(d => (typeof d === 'object' ? d.value : d).toLowerCase() === typedValue.toLowerCase());
-    hiddenField.value = matchingOption ? (typeof matchingOption === 'object' ? matchingOption.value : matchingOption) : typedValue;
+    if (matchingOption) {
+      hiddenField.value = typeof matchingOption === 'object' ? matchingOption.value : matchingOption;
+      inputField.classList.remove('is-invalid');
+    } else if (strict) {
+      hiddenField.value = '';
+      if (typedValue) inputField.classList.add('is-invalid');
+      else inputField.classList.remove('is-invalid');
+    } else {
+      hiddenField.value = typedValue;
+    }
     hiddenField.dispatchEvent(new Event('change'));
     checkRollsCompletion();
   }, 300));
@@ -687,6 +697,7 @@ function initializeAutocomplete(inputField, hiddenField, optionsContainer, data 
     if (e.target && e.target.matches('li.list-group-item') && !e.target.classList.contains('no-results')) {
       hiddenField.value = e.target.dataset.value;
       inputField.value = e.target.textContent;
+      inputField.classList.remove('is-invalid');
       optionsContainer.classList.remove('d-block');
       optionsContainer.classList.add('d-none');
       inputField.setAttribute('aria-expanded', 'false');
@@ -698,8 +709,19 @@ function initializeAutocomplete(inputField, hiddenField, optionsContainer, data 
   inputField.addEventListener('blur', () => {
     const value = inputField.value.trim();
     if (value && !hiddenField.value) {
-      hiddenField.value = value;
-      hiddenField.dispatchEvent(new Event('change'));
+      if (strict) {
+        const matched = data.find(d => (typeof d === 'object' ? d.value : d).toLowerCase() === value.toLowerCase());
+        if (matched) {
+          hiddenField.value = typeof matched === 'object' ? matched.value : matched;
+          inputField.classList.remove('is-invalid');
+        } else {
+          inputField.classList.add('is-invalid');
+          // keep hiddenField.value = '' — do not accept free text
+        }
+      } else {
+        hiddenField.value = value;
+      }
+      if (hiddenField.value) hiddenField.dispatchEvent(new Event('change'));
     }
   });
 
@@ -722,7 +744,8 @@ function initializeAutocomplete(inputField, hiddenField, optionsContainer, data 
 }
 
 const fabricTypes = Object.keys(rollsByFabricType);
-initializeAutocomplete(fabricTypeSearch, fabricTypeSel, fabricTypeOptions, fabricTypes.map(ft => ({ displayText: ft, value: ft })));
+initializeAutocomplete(fabricTypeSearch, fabricTypeSel, fabricTypeOptions,
+  fabricTypes.map(ft => ({ displayText: ft, value: ft })), !ALLOW_ADHOC);
 
 function initializeRollNoAutocomplete(rollSection, fabricType) {
   const rollNoSel = rollSection.querySelector('.rollNoSel');
@@ -733,7 +756,7 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
   const remainingWeightInput = rollSection.querySelector('.remainingWeightInput');
   const availableRolls = rollsByFabricType[fabricType] || [];
   const rollData = availableRolls.map(roll => ({ displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`, value: roll.roll_no, availableWeight: roll.per_roll_weight, unit: roll.unit }));
-  initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData);
+  initializeAutocomplete(rollNoSearch, rollNoSel, rollNoOptions, rollData, !ALLOW_ADHOC);
   rollNoSearch.placeholder = `Search Roll (${fabricType})...`;
 
   rollNoSel.addEventListener('change', () => {
@@ -743,10 +766,20 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
       fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
       fullWeightInput.readOnly = true;
     } else {
-      rollSection.querySelector('.availableWeightTxt').textContent = '0';
-      fullWeightInput.readOnly = false;
-      fullWeightInput.value = '';
-      remainingWeightInput.value = (FLOW_MODE === 'hosiery') ? '0' : '';
+      if (!ALLOW_ADHOC) {
+        // Unknown roll not permitted — reset the selection
+        rollNoSel.value = '';
+        rollNoSearch.classList.add('is-invalid');
+        fullWeightInput.readOnly = true;
+        fullWeightInput.value = '';
+        remainingWeightInput.value = '';
+        rollSection.querySelector('.availableWeightTxt').textContent = '0';
+      } else {
+        rollSection.querySelector('.availableWeightTxt').textContent = '0';
+        fullWeightInput.readOnly = false;
+        fullWeightInput.value = '';
+        remainingWeightInput.value = (FLOW_MODE === 'hosiery') ? '0' : '';
+      }
     }
     updateWeightUsed(rollSection);
     updateWeightProgress(rollSection);
@@ -863,7 +896,7 @@ function populateRollNos(selectedFabricType) {
     const rollSection = rollNoSel.closest('.roll-section');
     const availableRolls = rollsByFabricType[selectedFabricType] || [];
     const rollData = availableRolls.map(roll => ({ displayText: `${roll.roll_no} (Available: ${roll.per_roll_weight} ${roll.unit}) (Vendor: ${roll.vendor_name})`, value: roll.roll_no, availableWeight: roll.per_roll_weight }));
-    initializeAutocomplete(rollSection.querySelector('.rollNo_search'), rollNoSel, rollSection.querySelector('.autocomplete-items'), rollData);
+    initializeAutocomplete(rollSection.querySelector('.rollNo_search'), rollNoSel, rollSection.querySelector('.autocomplete-items'), rollData, !ALLOW_ADHOC);
     rollSection.querySelector('.rollNo_search').placeholder = `Search Roll (${selectedFabricType})...`;
     rollSection.querySelector('.availableWeightTxt').textContent = '0';
     rollSection.querySelector('.weightUsedInput').value = '';
