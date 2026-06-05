@@ -7,6 +7,7 @@ const {
   isIndentFiller,
   isStoreManager
 } = require('../middlewares/auth');
+const { getUnits, ensureUnit, ensureUnitsTable } = require('../utils/unitsMaster');
 
 const ALLOWED_STATUSES = ['open', 'proceeding', 'arrived'];
 
@@ -95,6 +96,8 @@ async function ensureMigration() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`);
     await pool.query(`INSERT IGNORE INTO store_settings (setting_key, setting_value) VALUES ('allow_freetext_indent', 'true')`);
+    // Units master (canonical unit-of-measure list for item types)
+    await ensureUnitsTable(pool);
     // Add columns to incoming_data
     const [incCols] = await pool.query(`SHOW COLUMNS FROM incoming_data LIKE 'invoice_number'`);
     if (incCols.length === 0) {
@@ -338,7 +341,7 @@ router.post('/create', isAuthenticated, isIndentFiller, async (req, res) => {
 router.get('/manage', isAuthenticated, isStoreManager, async (req, res) => {
   try {
     await ensureMigration();
-    const [[requests], [statsRows], allowFreetext, [goods]] = await Promise.all([
+    const [[requests], [statsRows], allowFreetext, [goods], units] = await Promise.all([
       pool.query(
         `SELECT ir.*, uf.username AS filler_name,
                 up.username AS proceeded_by_name,
@@ -362,7 +365,8 @@ router.get('/manage', isAuthenticated, isStoreManager, async (req, res) => {
           GROUP BY status`
       ),
       getStoreSetting('allow_freetext_indent', 'true'),
-      pool.query('SELECT * FROM goods_inventory ORDER BY description_of_goods, shade, size')
+      pool.query('SELECT * FROM goods_inventory ORDER BY description_of_goods, shade, size'),
+      getUnits(pool)
     ]);
 
     const stats = ALLOWED_STATUSES.reduce((acc, status) => {
@@ -380,6 +384,7 @@ router.get('/manage', isAuthenticated, isStoreManager, async (req, res) => {
       requests,
       stats,
       goods,
+      units,
       allowFreetext: allowFreetext === 'true'
     });
   } catch (error) {
@@ -866,9 +871,10 @@ router.post('/manage/items/create', isAuthenticated, isStoreManager, async (req,
     return res.redirect('/indent/manage');
   }
   try {
+    const unitNorm = await ensureUnit(pool, unit);
     await pool.query(
       'INSERT INTO goods_inventory (description_of_goods, shade, unit, size, qty) VALUES (?, ?, ?, ?, 0)',
-      [description.trim(), shade || null, unit, size || null]
+      [description.trim(), shade || null, unitNorm, size || null]
     );
     req.flash('success', 'Item type created.');
   } catch (err) {

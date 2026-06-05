@@ -270,13 +270,11 @@
             </div>
             <div class="form-col">
               <label>Unit <span class="req">*</span></label>
-              <select name="unit" class="field" required>
-                <option value="">Select</option>
-                <option value="PCS">PCS</option>
-                <option value="ROLL">ROLL</option>
-                <option value="CONE">CONE</option>
-                <option value="GROSS">GROSS</option>
-              </select>
+              <input list="unitsList" name="unit" class="field" required placeholder="Select or type a unit"
+                     autocomplete="off" oninput="this.value=this.value.toUpperCase()">
+              <datalist id="unitsList">
+                <% (units || []).forEach(function(u){ %><option value="<%= u %>"></option><% }); %>
+              </datalist>
             </div>
             <div class="form-col">
               <label>Size</label>
