@@ -76,6 +76,7 @@ function getDashboardForRole(roleName) {
     'checking': '/department/dashboard',
     'quality_assurance': '/department/dashboard',
     'challan_dashboard': '/challandashboard',
+    'mohitteam': '/tasks',
     'productviewer': '/product-links',
     'wishlinkops': '/inventory-ops/logs',
     'videofinder': '/video-finder',
