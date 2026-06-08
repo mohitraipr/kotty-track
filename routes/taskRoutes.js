@@ -127,7 +127,9 @@ router.get('/', gate, (req, res) => {
 // JSON API
 // ---------------------------------------------------------------------------
 
-// List tasks. view=all (team) | mine (assigned to me). Optional project_id.
+// List tasks the current user is involved in (creator OR assignee) — a user
+// NEVER sees other people's personal tasks. view=all = everything I'm involved
+// in; view=mine = assigned to me. Optional project_id.
 router.get('/api/tasks', gate, async (req, res) => {
   try {
     const me = req.session.user.id;
@@ -136,9 +138,16 @@ router.get('/api/tasks', gate, async (req, res) => {
 
     const where = [];
     const params = [];
-    if (view === 'mine') { where.push('t.assigned_to = ?'); params.push(me); }
+    if (view === 'mine') {
+      where.push('t.assigned_to = ?');
+      params.push(me);
+    } else {
+      // Visibility rule: only tasks I created or that are assigned to me.
+      where.push('(t.created_by = ? OR t.assigned_to = ?)');
+      params.push(me, me);
+    }
     if (projectId) { where.push('t.project_id = ?'); params.push(projectId); }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const whereSql = `WHERE ${where.join(' AND ')}`;
 
     const [rows] = await pool.query(
       `${TASK_SELECT} ${whereSql}
@@ -448,13 +457,18 @@ router.get('/api/tasks/:id/history', gate, async (req, res) => {
 // Projects: list (with task counts) + create.
 router.get('/api/projects', gate, async (req, res) => {
   try {
+    const me = req.session.user.id;
+    // task_count reflects only the caller's own tasks in each project — never
+    // a global count that would leak how much work others have.
     const [projects] = await pool.query(
       `SELECT p.id, p.name, p.project_key, p.color,
               COUNT(t.id) AS task_count
          FROM task_projects p
-         LEFT JOIN user_tasks t ON t.project_id = p.id
+         LEFT JOIN user_tasks t
+           ON t.project_id = p.id AND (t.created_by = ? OR t.assigned_to = ?)
         GROUP BY p.id
-        ORDER BY p.name`
+        ORDER BY p.name`,
+      [me, me]
     );
     res.json({ projects });
   } catch (err) {
@@ -487,10 +501,18 @@ router.post('/api/projects', gate, async (req, res) => {
   }
 });
 
-// Distinct tags (for filter + autocomplete).
+// Distinct tags from the caller's own tasks (for filter + autocomplete).
 router.get('/api/tags', gate, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT DISTINCT tag FROM user_task_tags ORDER BY tag');
+    const me = req.session.user.id;
+    const [rows] = await pool.query(
+      `SELECT DISTINCT tg.tag
+         FROM user_task_tags tg
+         JOIN user_tasks t ON t.id = tg.task_id
+        WHERE t.created_by = ? OR t.assigned_to = ?
+        ORDER BY tg.tag`,
+      [me, me]
+    );
     res.json({ tags: rows.map((r) => r.tag) });
   } catch (err) {
     console.error('Error GET /tasks/api/tags:', err);
