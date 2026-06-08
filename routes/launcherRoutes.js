@@ -50,6 +50,7 @@ const ROLE_META = {
   checking:             { label: 'Checking',               icon: 'clipboard-check', desc: 'QA checking' },
   quality_assurance:    { label: 'Quality Assurance',      icon: 'patch-check',    desc: 'QA dashboard' },
   challan_dashboard:    { label: 'Challan',                icon: 'receipt',        desc: 'Challan dashboard' },
+  mohitteam:            { label: 'Tasks',                  icon: 'check2-square',  desc: 'Personal to-dos + team tasks' },
   productviewer:        { label: 'Product Links',          icon: 'link-45deg',     desc: 'View product links' },
   wishlinkops:          { label: 'Wishlink Ops',           icon: 'plug',           desc: 'Inventory hooks + Wishlink ops' },
   videofinder:          { label: 'Video Finder',           icon: 'camera-video',   desc: 'CCTV by AWB / keyword' },
