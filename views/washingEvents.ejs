@@ -1682,7 +1682,7 @@ function buildDoneCard(approve) {
   const card = document.createElement('div');
   card.className = 'sx-action-card is-done';
   card.dataset.approveId = String(approve.event_id);
-  const sizesText = Object.entries(approve.sizes).map(([k,v]) => '<strong>' + escapeText(k) + '</strong> ' + fmt(v)).join(' · ');
+  const sizesText = Object.entries(approve.remaining_sizes).map(([k,v]) => '<strong>' + escapeText(k) + '</strong> ' + fmt(v)).join(' · ');
   const when = new Date(approve.approved_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
   card.innerHTML = `
@@ -1703,7 +1703,7 @@ function buildDoneCard(approve) {
       <span class="arrow">⌄</span> Or some pieces are still being worked / spoiled
     </button>
     <div class="sx-action-form">
-      <p class="sx-form-helper">Pre-filled with the full inline amount per size. Reduce if some pieces aren't done yet.</p>
+      <p class="sx-form-helper">Pre-filled with the remaining pieces per size. Reduce if some aren't done yet.</p>
       <div class="sx-input-list" data-list="done-sizes"></div>
       <div class="sx-form-row"><input type="text" data-input="done-remark" placeholder="Completion note (optional)" /></div>
       <div class="sx-totals">
@@ -1728,7 +1728,7 @@ function buildDoneCard(approve) {
 
   // Done size inputs (pre-filled with size's full approved qty as cap)
   const dList = card.querySelector('[data-list="done-sizes"]');
-  Object.entries(approve.sizes).forEach(([label, full]) => {
+  Object.entries(approve.remaining_sizes).forEach(([label, full]) => {
     const row = document.createElement('div');
     row.className = 'sx-input-row';
     row.innerHTML = `
@@ -1748,7 +1748,7 @@ function buildDoneCard(approve) {
 
   // Reject inputs (default 0)
   const rList = card.querySelector('[data-list="reject-sizes"]');
-  Object.entries(approve.sizes).forEach(([label, full]) => {
+  Object.entries(approve.remaining_sizes).forEach(([label, full]) => {
     const row = document.createElement('div');
     row.className = 'sx-reject-row';
     row.innerHTML = `
@@ -1792,7 +1792,7 @@ function bindStepper(row, onChange) {
 }
 
 function recalcDoneTotals(card, approve) {
-  const caps = approve.sizes;
+  const caps = approve.remaining_sizes;
   const doneInputs = card.querySelectorAll('input[data-kind="done"]');
   const rejInputs = card.querySelectorAll('input[data-kind="reject"]');
   const rejBySize = {}; rejInputs.forEach(i => rejBySize[i.dataset.size] = i);
@@ -1819,7 +1819,7 @@ function recalcDoneTotals(card, approve) {
 }
 
 async function doMarkDoneAll(approve) {
-  const completed = Object.entries(approve.sizes).map(([size_label, pieces]) => ({ size_label, pieces }));
+  const completed = Object.entries(approve.remaining_sizes).map(([size_label, pieces]) => ({ size_label, pieces }));
   const total = completed.reduce((a, s) => a + s.pieces, 0);
   if (!confirm('Mark ' + fmt(total) + ' pieces of ' + (currentLot.lot_no || '').toUpperCase() + ' as done?')) return;
   await doMarkDoneRequest(approve.event_id, completed, [], null, null);

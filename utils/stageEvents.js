@@ -180,7 +180,7 @@ async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
     }
   }
 
-  // Pull size breakdowns per approve in one round trip
+  // Pull approve size breakdowns per approve in one round trip
   const [sizes] = await conn.query(
     `
       SELECT s.event_id, s.size_label, s.pieces
@@ -195,10 +195,42 @@ async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
     sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
   }
 
+  // Per-size pieces already consumed (completed OR rejected) against each
+  // approve. Used to expose REMAINING per size so the "complete" form pre-fills
+  // what's left to do, not the full approved amount. Both complete and reject
+  // consume the approved pool (mirrors the server-side per-size cap).
+  const [childSizes] = await conn.query(
+    `
+      SELECT e.parent_event_id, s.size_label, SUM(s.pieces) AS pieces
+      FROM ${events} e
+      JOIN ${eventSizes} s ON s.event_id = e.id
+      WHERE e.parent_event_id IN (?)
+        AND e.event_type IN ('complete','reject')
+      GROUP BY e.parent_event_id, s.size_label
+    `,
+    [approveIds]
+  );
+  const childSizeMap = {};
+  for (const cs of childSizes) {
+    const pid = cs.parent_event_id;
+    if (!childSizeMap[pid]) childSizeMap[pid] = {};
+    childSizeMap[pid][cs.size_label] =
+      (childSizeMap[pid][cs.size_label] || 0) + (Number(cs.pieces) || 0);
+  }
+
   return approves
     .map(a => {
       const child = childMap[a.id] || { completed: 0, rejected: 0 };
       const inline = a.approved - child.completed - child.rejected;
+      const approvedSizes = sizeMap[a.id] || {};
+      const consumed = childSizeMap[a.id] || {};
+      // Remaining per size; drop sizes with nothing left so the form shows only
+      // what still needs completing.
+      const remaining_sizes = {};
+      for (const [label, qty] of Object.entries(approvedSizes)) {
+        const rem = (Number(qty) || 0) - (consumed[label] || 0);
+        if (rem > 0) remaining_sizes[label] = rem;
+      }
       return {
         event_id: a.id,
         approved: a.approved,
@@ -208,7 +240,8 @@ async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
         approved_at: a.created_at,
         operator: a.operator,
         remark: a.remark,
-        sizes: sizeMap[a.id] || {},
+        sizes: approvedSizes,
+        remaining_sizes,
       };
     })
     .filter(a => a.inline > 0);
