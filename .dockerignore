@@ -1,0 +1,27 @@
+# Keep the Docker build context lean and deterministic.
+# NOTE: do NOT ignore `frontend/` itself — the frontend-builder stage needs its
+# source. Only its node_modules is excluded (npm ci installs fresh in-stage).
+
+# Dependencies (final image gets node_modules from the builder stage)
+node_modules
+frontend/node_modules
+
+# Built island assets — provided by the frontend-builder stage, never from local
+public/tasks
+
+# VCS / local / runtime
+.git
+.gitignore
+logs
+uploads
+*.log
+
+# Secrets & env (injected by Cloud Run at runtime)
+.env
+.env.*
+
+# Editor / OS / local tooling
+.DS_Store
+.idea
+.vscode
+.claude

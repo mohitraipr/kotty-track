@@ -1,0 +1,24 @@
+<%- include('partials/header', { pageTitle: 'Tasks', additionalCSS: [] }) %>
+<!-- Vite-built island stylesheet(s); injected here (not via additionalJS, which omits type=module) -->
+<%- cssTags %>
+
+<%- include('partials/navbar', { user: user, dashboardUrl: '/tasks' }) %>
+<%- include('partials/sidebar', { user: user, req: req }) %>
+
+<main class="kotty-main">
+  <div class="content-wrapper">
+    <%- include('partials/flashMessages') %>
+
+    <!-- React + shadcn island mounts here. All Tailwind/shadcn styles are scoped to #tasks-root. -->
+    <div id="tasks-root" data-user-id="<%= user.id %>" data-user-role="<%= user.role %>"></div>
+  </div>
+</main>
+
+<!--
+  ES-module bundle. Placed inside <body> before the footer (the footer closes
+  </body></html>). As a module it is deferred, so it runs after Bootstrap's
+  classic script and window.KottyTrack are available.
+-->
+<%- jsTag %>
+
+<%- include('partials/footer', {}) %>

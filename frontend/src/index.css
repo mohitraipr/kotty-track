@@ -1,0 +1,139 @@
+/*
+ * Tailwind v4, deliberately scoped for an island that shares the page with the
+ * app's Bootstrap chrome (navbar/sidebar/footer).
+ *
+ * We import only the `theme` and `utilities` layers — NOT Tailwind's global
+ * `preflight` — so the global element reset never touches the Bootstrap chrome.
+ * The few preflight rules that shadcn utilities actually depend on (box-sizing,
+ * default border-style/color) are re-added below, scoped under #tasks-root.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Map shadcn semantic tokens to the CSS variables defined under #tasks-root. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "DM Serif Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/*
+ * Brand-tied light theme tokens + base styles. Scoped to #tasks-root. Radix
+ * portals (dialog/select/dropdown) are rendered INTO #tasks-root via a custom
+ * container (see lib/portal.ts), so they inherit these tokens and the reset.
+ */
+#tasks-root {
+  --background: #faf7f2; /* warm paper */
+  --foreground: #2b2622;
+  --card: #ffffff;
+  --card-foreground: #2b2622;
+  --popover: #ffffff;
+  --popover-foreground: #2b2622;
+  --primary: #c45c3a; /* kotty terracotta */
+  --primary-foreground: #ffffff;
+  --secondary: #f1eae3;
+  --secondary-foreground: #2b2622;
+  --muted: #f1eae3;
+  --muted-foreground: #7a716a;
+  --accent: #efe6dc;
+  --accent-foreground: #2b2622;
+  --destructive: #c23b22;
+  --destructive-foreground: #ffffff;
+  --success: #2d8a5f;
+  --success-foreground: #ffffff;
+  --border: #e7ddd2;
+  --input: #e7ddd2;
+  --ring: #c45c3a;
+  --radius: 0.625rem;
+
+  color: var(--foreground);
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Minimal, scoped preflight — only the parts shadcn utilities rely on. */
+#tasks-root *,
+#tasks-root *::before,
+#tasks-root *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--border);
+}
+#tasks-root h1,
+#tasks-root h2,
+#tasks-root h3,
+#tasks-root h4,
+#tasks-root p,
+#tasks-root figure {
+  margin: 0;
+}
+#tasks-root button {
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+#tasks-root button:disabled {
+  cursor: default;
+}
+#tasks-root input,
+#tasks-root textarea,
+#tasks-root select {
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+#tasks-root ul,
+#tasks-root ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#tasks-root svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+#tasks-root [hidden] {
+  display: none;
+}
+
+/* Subtle list-entry reveal used by the task list. */
+@keyframes tasks-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tasks-rise {
+  animation: tasks-rise 0.35s ease both;
+}
