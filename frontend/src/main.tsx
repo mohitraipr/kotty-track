@@ -7,9 +7,10 @@ const el = document.getElementById("tasks-root")
 if (el) {
   const meId = Number(el.dataset.userId)
   const isAdmin = el.dataset.userRole === "admin"
+  const username = el.dataset.username || "user"
   createRoot(el).render(
     <StrictMode>
-      <App meId={meId} isAdmin={isAdmin} />
+      <App meId={meId} isAdmin={isAdmin} username={username} />
     </StrictMode>
   )
 }

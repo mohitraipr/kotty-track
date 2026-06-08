@@ -1,24 +1,31 @@
-<%- include('partials/header', { pageTitle: 'Tasks', additionalCSS: [] }) %>
-<!-- Vite-built island stylesheet(s); injected here (not via additionalJS, which omits type=module) -->
-<%- cssTags %>
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Tasks · Kotty</title>
 
-<%- include('partials/navbar', { user: user, dashboardUrl: '/tasks' }) %>
-<%- include('partials/sidebar', { user: user, req: req }) %>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Geist (Linear-adjacent grotesque) + Geist Mono for metadata -->
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-<main class="kotty-main">
-  <div class="content-wrapper">
-    <%- include('partials/flashMessages') %>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #08090a; overflow: hidden; }
+    #tasks-root { height: 100vh; height: 100dvh; }
+  </style>
 
-    <!-- React + shadcn island mounts here. All Tailwind/shadcn styles are scoped to #tasks-root. -->
-    <div id="tasks-root" data-user-id="<%= user.id %>" data-user-role="<%= user.role %>"></div>
-  </div>
-</main>
+  <!-- Vite-built island stylesheet(s) -->
+  <%- cssTags %>
+</head>
+<body>
+  <!-- Full-screen React + shadcn island. Owns the whole viewport (no app chrome). -->
+  <div id="tasks-root"
+       data-user-id="<%= user.id %>"
+       data-user-role="<%= user.role %>"
+       data-username="<%= user.username %>"></div>
 
-<!--
-  ES-module bundle. Placed inside <body> before the footer (the footer closes
-  </body></html>). As a module it is deferred, so it runs after Bootstrap's
-  classic script and window.KottyTrack are available.
--->
-<%- jsTag %>
-
-<%- include('partials/footer', {}) %>
+  <%- jsTag %>
+</body>
+</html>

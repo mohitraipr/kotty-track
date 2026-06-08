@@ -1,18 +1,21 @@
 // utils/taskLogic.js
 //
-// Pure domain logic for the user-tasks feature: status enum, legal transitions,
-// and the permission matrix. Kept side-effect free (no DB, no req) so it can be
-// unit-tested directly and reused by routes/taskRoutes.js. The HTTP layer loads
-// the task row, calls classifyTask() to get capabilities, then enforces them.
+// Pure domain logic for the tasks feature (v2, Linear-like): status set,
+// priority scale, and the permission matrix. Side-effect free so it can be
+// unit-tested directly and shared by routes/taskRoutes.js.
+//
+// v2 uses a FREE-FORM status model (any -> any) to support a kanban board,
+// gated only by who may change a task's status. The strict forward-only
+// lifecycle from v1 is intentionally gone.
 
-const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'];
-const TASK_PRIORITIES = ['low', 'medium', 'high'];
-
-// Strictly-forward lifecycle: open -> in_progress -> done.
-const FORWARD_TRANSITIONS = { open: 'in_progress', in_progress: 'done' };
+// Canonical board statuses (these are the board columns).
+const TASK_STATUSES = ['todo', 'in_progress', 'done', 'blocked'];
+// 'cancelled' is retained only so legacy v1 rows remain readable/settable.
+const STORED_STATUSES = [...TASK_STATUSES, 'cancelled'];
+const TASK_PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'];
 
 function isValidStatus(status) {
-  return TASK_STATUSES.includes(status);
+  return STORED_STATUSES.includes(status);
 }
 
 function isValidPriority(priority) {
@@ -22,12 +25,9 @@ function isValidPriority(priority) {
 /**
  * Classify a task relative to a user and return their capabilities.
  *
- * Permission matrix (v1):
- *  - Personal (creator == assignee): full control.
- *  - Creator only (someone else is the assignee): edit fields, reassign, cancel,
- *    delete — but NOT advance status.
- *  - Assignee only (someone else created it): advance status (forward) only.
- *  - Admin: full control regardless of relationship.
+ * - Creator/admin: edit fields, reassign, set status, delete.
+ * - Assignee: set status (move it across the board) — no edit/reassign/delete.
+ * - Admin: everything.
  *
  * @param {{created_by:number, assigned_to:number}} task
  * @param {number} userId
@@ -35,7 +35,7 @@ function isValidPriority(priority) {
  */
 function classifyTask(task, userId, isAdmin = false) {
   const isCreator = Number(task.created_by) === Number(userId);
-  const isAssignee = Number(task.assigned_to) === Number(userId);
+  const isAssignee = task.assigned_to != null && Number(task.assigned_to) === Number(userId);
   const isPersonal = isCreator && isAssignee;
 
   return {
@@ -45,41 +45,27 @@ function classifyTask(task, userId, isAdmin = false) {
     isAdmin: !!isAdmin,
     canEditFields: isCreator || isAdmin,
     canReassign: isCreator || isAdmin,
-    canAdvance: isAssignee || isAdmin,
-    canCancel: isCreator || isAdmin,
+    canSetStatus: isCreator || isAssignee || isAdmin,
     canDelete: isCreator || isAdmin,
   };
 }
 
 /**
- * Is a status change from `from` to `to` legal for a user with `caps`?
- * - Forward only: open -> in_progress -> done (requires caps.canAdvance).
- * - Cancel: any non-terminal state -> cancelled (requires caps.canCancel).
- * - No backward moves, no skipping, no reopen, no no-op.
- *
- * @param {string} from current status
- * @param {string} to requested status
- * @param {ReturnType<typeof classifyTask>} caps
+ * Free-form status change: any valid target (not a no-op), allowed for anyone
+ * who may set this task's status.
  */
-function canTransition(from, to, caps) {
-  if (!isValidStatus(from) || !isValidStatus(to)) return false;
+function canSetStatus(from, to, caps) {
+  if (!isValidStatus(to)) return false;
   if (from === to) return false;
-
-  if (to === 'cancelled') {
-    return !!caps.canCancel && from !== 'done' && from !== 'cancelled';
-  }
-  if (FORWARD_TRANSITIONS[from] === to) {
-    return !!caps.canAdvance;
-  }
-  return false;
+  return !!caps.canSetStatus;
 }
 
 module.exports = {
   TASK_STATUSES,
+  STORED_STATUSES,
   TASK_PRIORITIES,
-  FORWARD_TRANSITIONS,
   isValidStatus,
   isValidPriority,
   classifyTask,
-  canTransition,
+  canSetStatus,
 };
