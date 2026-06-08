@@ -363,6 +363,21 @@
       </ul>
     </div>
 
+  <% } else if (userRole === 'mohitteam') { %>
+
+    <!-- MOHITTEAM NAVIGATION -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Team</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-menu-item">
+          <a href="/tasks" class="sidebar-link <%= isActive('/tasks') %>">
+            <i class="sidebar-icon bi bi-check2-square"></i>
+            <span class="sidebar-text">Tasks</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
   <% } %>
 
   <!-- Common Section for All Roles -->
