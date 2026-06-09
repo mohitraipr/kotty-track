@@ -384,6 +384,102 @@
       layerInputs.forEach(function(input) { input.addEventListener("input", recalcTotals); });
       recalcTotals();
 
+      // ───── Add-missed-roll wiring ─────
+      // The edit-form fragment ships an inert JSON config (#addRollConfig) plus the
+      // add-roll inputs. Scripts injected via innerHTML never run, so we wire the
+      // add-roll UI here, in the live page context. (Mirrors the logic that used to
+      // live — dead — inside the fragment's <script> block.)
+      (function wireAddRoll() {
+        var cfgEl = modalContainer.querySelector("#addRollConfig");
+        var addRollBtn = modalContainer.querySelector("#addRollBtn");
+        if (!cfgEl || !addRollBtn) return;
+        var cfg;
+        try { cfg = JSON.parse(cfgEl.textContent); } catch (e) { return; }
+        var ROLL_INVENTORY = cfg.rollInventory || [];
+        var IS_DENIM = !!cfg.isDenim;
+        var ALLOW_ADHOC = !!cfg.allowAdhoc;
+        var TABLE_LENGTH = (cfg.tableLength === null || cfg.tableLength === undefined) ? null : Number(cfg.tableLength);
+
+        var addRollNo    = modalContainer.querySelector("#addRollNo");
+        var addRollLayers = modalContainer.querySelector("#addRollLayers");
+        var addRollFullW = modalContainer.querySelector("#addRollFullWeight");
+        var addRollUsed  = modalContainer.querySelector("#addRollWeightUsed");
+        var addRollRem   = modalContainer.querySelector("#addRollRemaining");
+        var addRollAvail = modalContainer.querySelector("#addRollAvail");
+        var addRollErr   = modalContainer.querySelector("#addRollError");
+
+        function showErr(m) { addRollErr.textContent = m; addRollErr.style.display = "block"; addRollBtn.disabled = false; }
+
+        // Mirrors CuttingWeight.computeRollWeights() in public/js/cuttingWeight.js.
+        function recomputeAddRollWeights() {
+          var full = parseFloat(addRollFullW.value);
+          if (IS_DENIM) {
+            var layers = parseFloat(addRollLayers.value);
+            if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value = ""; addRollRem.value = ""; return; }
+            var used = TABLE_LENGTH * layers;
+            addRollUsed.value = used.toFixed(2);
+            addRollRem.value = isNaN(full) ? "" : Math.max(full - used, 0).toFixed(2);
+            addRollUsed.classList.toggle("text-danger", !isNaN(full) && used > full);
+          } else {
+            var remaining = addRollRem.value === "" ? 0 : parseFloat(addRollRem.value);
+            if (isNaN(full)) { addRollUsed.value = ""; addRollUsed.classList.remove("text-danger"); return; }
+            addRollUsed.value = Math.max(full - remaining, 0).toFixed(2);
+            addRollUsed.classList.toggle("text-danger", remaining > full);
+          }
+        }
+
+        addRollNo.addEventListener("change", function() {
+          var val = addRollNo.value.trim();
+          var inv = ROLL_INVENTORY.find(function(r) { return r.roll_no === val; });
+          if (inv) {
+            addRollFullW.value = Number(inv.per_roll_weight).toFixed(2);
+            addRollFullW.readOnly = true;
+            addRollAvail.textContent = "Available in inventory: " + inv.per_roll_weight + " " + (inv.unit || "");
+          } else {
+            addRollFullW.readOnly = false;
+            addRollAvail.textContent = "New roll (manual entry — not in inventory)";
+          }
+          recomputeAddRollWeights();
+        });
+        addRollFullW.addEventListener("input", recomputeAddRollWeights);
+        if (IS_DENIM) {
+          addRollLayers.addEventListener("input", recomputeAddRollWeights);
+        } else {
+          addRollRem.addEventListener("input", recomputeAddRollWeights);
+        }
+
+        addRollBtn.addEventListener("click", function() {
+          addRollErr.style.display = "none";
+          var roll_no = (addRollNo.value || "").trim();
+          var layers = parseFloat(addRollLayers.value);
+          var full_weight = parseFloat(addRollFullW.value);
+          var weight_used = parseFloat(addRollUsed.value);
+          if (!roll_no) return showErr("Pick a roll number.");
+          if (!ALLOW_ADHOC && !ROLL_INVENTORY.some(function(r) { return r.roll_no === roll_no; })) {
+            return showErr("Roll is not in fabric inventory; ad-hoc entry is disabled.");
+          }
+          if (!(layers > 0)) return showErr("Layers must be greater than 0.");
+          if (!(full_weight > 0)) return showErr("Full weight must be greater than 0.");
+          if (!(weight_used >= 0)) return showErr("Enter a valid Weight Used (0 or more).");
+          if (weight_used > full_weight) return showErr("Weight used (" + weight_used.toFixed(2) + ") cannot exceed full weight (" + full_weight.toFixed(2) + ").");
+
+          addRollBtn.disabled = true;
+          var fd = new FormData();
+          fd.append("roll_no", roll_no);
+          fd.append("layers", layers);
+          fd.append("full_weight", full_weight);
+          fd.append("weight_used", weight_used);
+          fetch("/operator/editcuttinglots/add-roll?managerId=" + managerId + "&lotId=" + lotId, { method: "POST", body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.success) return showErr(data.error || "Failed to add roll.");
+              alert("Roll added. Total pieces is now " + data.total_pieces + ".");
+              loadEditForm(managerId, lotId); // refresh the modal in place
+            })
+            .catch(function(e) { showErr("Network error: " + e.message); });
+        });
+      })();
+
       var updateForm = modalContainer.querySelector("#updateLotForm");
       if (updateForm) {
         updateForm.addEventListener("submit", function(e) {

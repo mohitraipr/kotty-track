@@ -501,140 +501,22 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
             </form>
           </div>
         </div>
-        <script>
-          // Lot total = sum of the (editable) per-size piece counts.
-          function recalcTotals() {
-            const container = document.getElementById("editFormWrapper");
-            const sizeTotalFields = container.querySelectorAll(".sizeTotalPieces");
-            let totalPieces = 0;
-            sizeTotalFields.forEach(input => {
-              totalPieces += parseFloat(input.value) || 0;
-            });
-            const totalDisplay = container.querySelector("#totalPiecesDisplay");
-            if(totalDisplay) totalDisplay.textContent = totalPieces.toFixed(2);
-          }
-          document.querySelectorAll(".sizeTotalPieces").forEach(input => {
-            input.addEventListener("input", recalcTotals);
-          });
-          recalcTotals();
-
-          // ───── Add-missed-roll wiring ─────
-          const ROLL_INVENTORY = ${JSON.stringify(availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })))};
-          const IS_DENIM = ${isDenim ? 'true' : 'false'};
-          const ALLOW_ADHOC = ${allowAdhoc ? 'true' : 'false'};
-          const TABLE_LENGTH = ${Number.isFinite(Number(lot.table_length)) ? Number(lot.table_length) : 'null'};
-          const addRollNo        = document.getElementById('addRollNo');
-          const addRollLayers    = document.getElementById('addRollLayers');
-          const addRollFullW     = document.getElementById('addRollFullWeight');
-          const addRollUsed      = document.getElementById('addRollWeightUsed');
-          const addRollRem       = document.getElementById('addRollRemaining');
-          const addRollAvail     = document.getElementById('addRollAvail');
-          const addRollErr       = document.getElementById('addRollError');
-          const addRollBtn       = document.getElementById('addRollBtn');
-
-          // Mirrors CuttingWeight.computeRollWeights() in public/js/cuttingWeight.js
-          // (inlined here because this form is a server-rendered HTML fragment).
-          function recomputeAddRollWeights() {
-            const full = parseFloat(addRollFullW.value);
-            if (IS_DENIM) {
-              const layers = parseFloat(addRollLayers.value);
-              if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value=''; addRollRem.value=''; return; }
-              const used = TABLE_LENGTH * layers;
-              addRollUsed.value = used.toFixed(2);
-              addRollRem.value = isNaN(full) ? '' : Math.max(full - used, 0).toFixed(2);
-              addRollUsed.classList.toggle('text-danger', !isNaN(full) && used > full);
-            } else {
-              const remaining = addRollRem.value === '' ? 0 : parseFloat(addRollRem.value);
-              if (isNaN(full)) { addRollUsed.value=''; addRollUsed.classList.remove('text-danger'); return; }
-              addRollUsed.value = Math.max(full - remaining, 0).toFixed(2);
-              addRollUsed.classList.toggle('text-danger', remaining > full);
-            }
-          }
-          addRollNo.addEventListener('change', () => {
-            const inv = ROLL_INVENTORY.find(r => r.roll_no === addRollNo.value.trim());
-            if (inv) {
-              addRollFullW.value = inv.per_roll_weight.toFixed(2);
-              addRollFullW.readOnly = true;
-              addRollAvail.textContent = 'Available in inventory: ' + inv.per_roll_weight + ' ' + (inv.unit || '');
-            } else {
-              addRollFullW.readOnly = false;
-              addRollAvail.textContent = 'New roll (manual entry — not in inventory)';
-            }
-            recomputeAddRollWeights();
-          });
-          addRollFullW.addEventListener('input', recomputeAddRollWeights);
-          if (IS_DENIM) {
-            addRollLayers.addEventListener('input', recomputeAddRollWeights);
-          } else {
-            addRollRem.addEventListener('input', recomputeAddRollWeights);
-          }
-
-          addRollBtn.addEventListener('click', async () => {
-            addRollErr.style.display = 'none';
-            const roll_no = (addRollNo.value || '').trim();
-            const layers  = parseFloat(addRollLayers.value);
-            const full_weight = parseFloat(addRollFullW.value);
-            const weight_used = parseFloat(addRollUsed.value);
-            if (!roll_no)            return showErr('Pick a roll number.');
-            if (!ALLOW_ADHOC && !ROLL_INVENTORY.some(r => r.roll_no === roll_no)) {
-              return showErr('Roll is not in fabric inventory; ad-hoc entry is disabled.');
-            }
-            if (!(layers > 0))       return showErr('Layers must be greater than 0.');
-            if (!(full_weight > 0))  return showErr('Full weight must be greater than 0.');
-            if (!(weight_used >= 0)) return showErr('Enter a valid Weight Used (0 or more).');
-            if (weight_used > full_weight) return showErr('Weight used (' + weight_used.toFixed(2) + ') cannot exceed full weight (' + full_weight.toFixed(2) + ').');
-
-            addRollBtn.disabled = true;
-            try {
-              const fd = new FormData();
-              fd.append('roll_no', roll_no);
-              fd.append('layers', layers);
-              fd.append('full_weight', full_weight);
-              fd.append('weight_used', weight_used);
-              const r = await fetch('/operator/editcuttinglots/add-roll?managerId=${managerId}&lotId=${lot.id}', { method: 'POST', body: fd });
-              const data = await r.json();
-              if (!data.success) return showErr(data.error || 'Failed to add roll.');
-              alert('Roll added. Total pieces is now ' + data.total_pieces + '.');
-              // Reload the edit form to reflect new state
-              const ev = new Event('change');
-              document.getElementById('masterSelect') && document.getElementById('masterSelect').dispatchEvent(ev);
-            } catch (e) {
-              showErr('Network error: ' + e.message);
-            } finally {
-              addRollBtn.disabled = false;
-            }
-            function showErr(m) { addRollErr.textContent = m; addRollErr.style.display = 'block'; addRollBtn.disabled = false; }
-          });
-          
-          // Handle form submission via AJAX.
-          document.getElementById("updateLotForm").addEventListener("submit", function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            // Debug: Log all form fields.
-            for (let [key, value] of formData.entries()) {
-              console.log("Form field:", key, value);
-            }
-            fetch("/operator/editcuttinglots/update?managerId=${managerId}&lotId=${lot.id}", {
-              method: "POST",
-              body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-              if(data.success){
-                alert("Lot updated successfully.");
-                // Collapse the accordion.
-                document.getElementById("editFormWrapper").parentNode.parentNode.style.display = "none";
-                // Optionally refresh the lot list.
-                document.getElementById("masterSelect").dispatchEvent(new Event("change"));
-              } else {
-                alert("Update failed: " + data.error);
-              }
-            })
-            .catch(err => {
-              console.error("Error updating lot:", err);
-              alert("An error occurred during update.");
-            });
-          });
+        <!--
+          Add-missed-roll config. Inert (type="application/json") so it survives
+          innerHTML injection; the parent page's attachFormListeners() reads it and
+          wires up the add-roll UI. (A normal <script> would NOT execute when the
+          fragment is inserted via innerHTML — which is exactly why the previous
+          inline wiring here was dead.)
+        -->
+        <script type="application/json" id="addRollConfig">
+          ${JSON.stringify({
+            rollInventory: availableRolls.map(r => ({ roll_no: r.roll_no, per_roll_weight: Number(r.per_roll_weight) || 0, unit: r.unit || '' })),
+            isDenim,
+            allowAdhoc,
+            tableLength: Number.isFinite(Number(lot.table_length)) ? Number(lot.table_length) : null,
+            managerId,
+            lotId: lot.id
+          })}
         </script>
       </div>
     `;
