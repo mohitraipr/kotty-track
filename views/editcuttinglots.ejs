@@ -392,7 +392,11 @@
       (function wireAddRoll() {
         var cfgEl = modalContainer.querySelector("#addRollConfig");
         var addRollBtn = modalContainer.querySelector("#addRollBtn");
-        if (!cfgEl || !addRollBtn) return;
+        var rowsContainer = modalContainer.querySelector("#addRollRows");
+        var rowTemplate = modalContainer.querySelector("#addRollRowTemplate");
+        var addRowBtn = modalContainer.querySelector("#addRollAddRow");
+        var addRollErr = modalContainer.querySelector("#addRollError");
+        if (!cfgEl || !addRollBtn || !rowsContainer || !rowTemplate) return;
         var cfg;
         try { cfg = JSON.parse(cfgEl.textContent); } catch (e) { return; }
         var ROLL_INVENTORY = cfg.rollInventory || [];
@@ -400,80 +404,125 @@
         var ALLOW_ADHOC = !!cfg.allowAdhoc;
         var TABLE_LENGTH = (cfg.tableLength === null || cfg.tableLength === undefined) ? null : Number(cfg.tableLength);
 
-        var addRollNo    = modalContainer.querySelector("#addRollNo");
-        var addRollLayers = modalContainer.querySelector("#addRollLayers");
-        var addRollFullW = modalContainer.querySelector("#addRollFullWeight");
-        var addRollUsed  = modalContainer.querySelector("#addRollWeightUsed");
-        var addRollRem   = modalContainer.querySelector("#addRollRemaining");
-        var addRollAvail = modalContainer.querySelector("#addRollAvail");
-        var addRollErr   = modalContainer.querySelector("#addRollError");
-
         function showErr(m) { addRollErr.textContent = m; addRollErr.style.display = "block"; addRollBtn.disabled = false; }
+        function clearErr() { addRollErr.style.display = "none"; }
 
-        // Mirrors CuttingWeight.computeRollWeights() in public/js/cuttingWeight.js.
-        function recomputeAddRollWeights() {
-          var full = parseFloat(addRollFullW.value);
+        // Show/hide Remove buttons (hidden when only one row remains).
+        function refreshRemoveButtons() {
+          var rows = rowsContainer.querySelectorAll(".add-roll-row");
+          rows.forEach(function(row) {
+            var btn = row.querySelector(".arr-remove");
+            if (btn) btn.style.visibility = (rows.length > 1) ? "visible" : "hidden";
+          });
+        }
+
+        // Mirrors CuttingWeight.computeRollWeights(), scoped to one row.
+        function recomputeRow(row) {
+          var fullEl = row.querySelector(".arr-full");
+          var usedEl = row.querySelector(".arr-used");
+          var remEl  = row.querySelector(".arr-rem");
+          var full = parseFloat(fullEl.value);
           if (IS_DENIM) {
-            var layers = parseFloat(addRollLayers.value);
-            if (isNaN(layers) || TABLE_LENGTH == null) { addRollUsed.value = ""; addRollRem.value = ""; return; }
+            var layers = parseFloat(row.querySelector(".arr-layers").value);
+            if (isNaN(layers) || TABLE_LENGTH == null) { usedEl.value = ""; remEl.value = ""; return; }
             var used = TABLE_LENGTH * layers;
-            addRollUsed.value = used.toFixed(2);
-            addRollRem.value = isNaN(full) ? "" : Math.max(full - used, 0).toFixed(2);
-            addRollUsed.classList.toggle("text-danger", !isNaN(full) && used > full);
+            usedEl.value = used.toFixed(2);
+            remEl.value = isNaN(full) ? "" : Math.max(full - used, 0).toFixed(2);
+            usedEl.classList.toggle("text-danger", !isNaN(full) && used > full);
           } else {
-            var remaining = addRollRem.value === "" ? 0 : parseFloat(addRollRem.value);
-            if (isNaN(full)) { addRollUsed.value = ""; addRollUsed.classList.remove("text-danger"); return; }
-            addRollUsed.value = Math.max(full - remaining, 0).toFixed(2);
-            addRollUsed.classList.toggle("text-danger", remaining > full);
+            var remaining = remEl.value === "" ? 0 : parseFloat(remEl.value);
+            if (isNaN(full)) { usedEl.value = ""; usedEl.classList.remove("text-danger"); return; }
+            usedEl.value = Math.max(full - remaining, 0).toFixed(2);
+            usedEl.classList.toggle("text-danger", remaining > full);
           }
         }
 
-        addRollNo.addEventListener("change", function() {
-          var val = addRollNo.value.trim();
-          var inv = ROLL_INVENTORY.find(function(r) { return r.roll_no === val; });
-          if (inv) {
-            addRollFullW.value = Number(inv.per_roll_weight).toFixed(2);
-            addRollFullW.readOnly = true;
-            addRollAvail.textContent = "Available in inventory: " + inv.per_roll_weight + " " + (inv.unit || "");
+        function attachRowListeners(row) {
+          var rollNoEl = row.querySelector(".arr-roll-no");
+          var fullEl   = row.querySelector(".arr-full");
+          var availEl  = row.querySelector(".arr-avail");
+
+          rollNoEl.addEventListener("change", function() {
+            var val = rollNoEl.value.trim();
+            var inv = ROLL_INVENTORY.find(function(r) { return r.roll_no === val; });
+            if (inv) {
+              fullEl.value = Number(inv.per_roll_weight).toFixed(2);
+              fullEl.readOnly = true;
+              availEl.textContent = "Available in inventory: " + inv.per_roll_weight + " " + (inv.unit || "");
+            } else {
+              fullEl.readOnly = false;
+              availEl.textContent = "New roll (manual entry — not in inventory)";
+            }
+            recomputeRow(row);
+          });
+          fullEl.addEventListener("input", function() { recomputeRow(row); });
+          if (IS_DENIM) {
+            row.querySelector(".arr-layers").addEventListener("input", function() { recomputeRow(row); });
           } else {
-            addRollFullW.readOnly = false;
-            addRollAvail.textContent = "New roll (manual entry — not in inventory)";
+            row.querySelector(".arr-rem").addEventListener("input", function() { recomputeRow(row); });
           }
-          recomputeAddRollWeights();
-        });
-        addRollFullW.addEventListener("input", recomputeAddRollWeights);
-        if (IS_DENIM) {
-          addRollLayers.addEventListener("input", recomputeAddRollWeights);
-        } else {
-          addRollRem.addEventListener("input", recomputeAddRollWeights);
+          var removeBtn = row.querySelector(".arr-remove");
+          if (removeBtn) removeBtn.addEventListener("click", function() {
+            if (rowsContainer.querySelectorAll(".add-roll-row").length <= 1) return;
+            row.remove();
+            refreshRemoveButtons();
+          });
         }
+
+        // Wire the initial row, then enable adding more.
+        rowsContainer.querySelectorAll(".add-roll-row").forEach(attachRowListeners);
+        refreshRemoveButtons();
+
+        if (addRowBtn) addRowBtn.addEventListener("click", function() {
+          var newRow = rowTemplate.content.firstElementChild.cloneNode(true);
+          rowsContainer.appendChild(newRow);
+          attachRowListeners(newRow);
+          refreshRemoveButtons();
+          var rn = newRow.querySelector(".arr-roll-no");
+          if (rn) rn.focus();
+        });
 
         addRollBtn.addEventListener("click", function() {
-          addRollErr.style.display = "none";
-          var roll_no = (addRollNo.value || "").trim();
-          var layers = parseFloat(addRollLayers.value);
-          var full_weight = parseFloat(addRollFullW.value);
-          var weight_used = parseFloat(addRollUsed.value);
-          if (!roll_no) return showErr("Pick a roll number.");
-          if (!ALLOW_ADHOC && !ROLL_INVENTORY.some(function(r) { return r.roll_no === roll_no; })) {
-            return showErr("Roll is not in fabric inventory; ad-hoc entry is disabled.");
+          clearErr();
+          var rows = Array.prototype.slice.call(rowsContainer.querySelectorAll(".add-roll-row"));
+          var payload = [];
+          var seen = {};
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var roll_no = (row.querySelector(".arr-roll-no").value || "").trim();
+            var layers = parseFloat(row.querySelector(".arr-layers").value);
+            var full_weight = parseFloat(row.querySelector(".arr-full").value);
+            var weight_used = parseFloat(row.querySelector(".arr-used").value);
+            // Skip fully-empty rows.
+            if (!roll_no && isNaN(layers) && isNaN(full_weight) && isNaN(weight_used)) continue;
+            var label = "Row " + (payload.length + 1);
+            if (!roll_no) return showErr(label + ": pick a roll number.");
+            if (!ALLOW_ADHOC && !ROLL_INVENTORY.some(function(r) { return r.roll_no === roll_no; })) {
+              return showErr(label + " (" + roll_no + "): not in fabric inventory; ad-hoc entry is disabled.");
+            }
+            if (!(layers > 0)) return showErr(label + " (" + roll_no + "): layers must be greater than 0.");
+            if (!(full_weight > 0)) return showErr(label + " (" + roll_no + "): full weight must be greater than 0.");
+            if (!(weight_used >= 0)) return showErr(label + " (" + roll_no + "): enter a valid Weight Used (0 or more).");
+            if (weight_used > full_weight) return showErr(label + " (" + roll_no + "): weight used (" + weight_used.toFixed(2) + ") cannot exceed full weight (" + full_weight.toFixed(2) + ").");
+            if (seen[roll_no]) return showErr(label + " (" + roll_no + "): duplicated in the batch.");
+            seen[roll_no] = true;
+            payload.push({ roll_no: roll_no, layers: layers, full_weight: full_weight, weight_used: weight_used });
           }
-          if (!(layers > 0)) return showErr("Layers must be greater than 0.");
-          if (!(full_weight > 0)) return showErr("Full weight must be greater than 0.");
-          if (!(weight_used >= 0)) return showErr("Enter a valid Weight Used (0 or more).");
-          if (weight_used > full_weight) return showErr("Weight used (" + weight_used.toFixed(2) + ") cannot exceed full weight (" + full_weight.toFixed(2) + ").");
+          if (!payload.length) return showErr("Enter at least one roll.");
 
           addRollBtn.disabled = true;
           var fd = new FormData();
-          fd.append("roll_no", roll_no);
-          fd.append("layers", layers);
-          fd.append("full_weight", full_weight);
-          fd.append("weight_used", weight_used);
-          fetch("/operator/editcuttinglots/add-roll?managerId=" + managerId + "&lotId=" + lotId, { method: "POST", body: fd })
+          payload.forEach(function(p) {
+            fd.append("roll_no[]", p.roll_no);
+            fd.append("layers[]", p.layers);
+            fd.append("full_weight[]", p.full_weight);
+            fd.append("weight_used[]", p.weight_used);
+          });
+          fetch("/operator/editcuttinglots/add-rolls?managerId=" + managerId + "&lotId=" + lotId, { method: "POST", body: fd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-              if (!data.success) return showErr(data.error || "Failed to add roll.");
-              alert("Roll added. Total pieces is now " + data.total_pieces + ".");
+              if (!data.success) return showErr(data.error || "Failed to add rolls.");
+              alert("Added " + data.added + " roll(s). Total pieces is now " + data.total_pieces + ".");
               loadEditForm(managerId, lotId); // refresh the modal in place
             })
             .catch(function(e) { showErr("Network error: " + e.message); });

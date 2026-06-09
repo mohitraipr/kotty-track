@@ -311,6 +311,37 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
     // Has any downstream stage seen this lot?
     const downstreamHits = downstream.filter(d => d.c > 0).map(d => d.stage);
 
+    // Markup for a single add-roll row. Shared by the initial row and the
+    // <template> the client clones for "Add another row". Uses classes (not ids)
+    // since the form now holds many of these rows.
+    const addRollRowMarkup = `
+      <div class="add-roll-row row g-2 align-items-end mb-2">
+        <div class="col-md-3">
+          <label class="form-label">Roll Number</label>
+          <input type="text" class="form-control arr-roll-no" list="addRollNoOptions" placeholder="Pick or type roll #" autocomplete="off">
+          <div class="form-text arr-avail" style="font-size:0.75rem;color:#6b7280;"></div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Layers</label>
+          <input type="number" min="1" step="1" class="form-control arr-layers" placeholder="Layers">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Full Weight</label>
+          <input type="number" step="0.01" min="0" class="form-control arr-full" placeholder="Full">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Weight Used</label>
+          <input type="number" step="0.01" min="0" class="form-control arr-used" readonly placeholder="Weight used (auto)">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Remaining</label>
+          <input type="number" step="0.01" min="0" class="form-control arr-rem" ${isDenim ? 'readonly' : 'value="0"'} placeholder="${isDenim ? 'Auto' : 'Remaining (default 0)'}">
+        </div>
+        <div class="col-md-1">
+          <button type="button" class="btn btn-outline-danger btn-sm arr-remove" title="Remove this row"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>`;
+
     // Build the combined edit form HTML.
     let html = `
       <div id="editFormWrapper">
@@ -412,7 +443,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                   <div class="mt-4 p-3 border rounded" style="background:#f8fafc;">
                     <h5 class="mb-2"><i class="bi bi-plus-circle"></i> Add a missed roll</h5>
                     <p class="text-muted small mb-2">
-                      Inserts a new roll into this lot, recomputes total pieces, and (if the roll exists in inventory) deducts the used weight from <code>fabric_invoice_rolls</code>.
+                      Inserts one or more rolls into this lot, recomputes total pieces, and (if a roll exists in inventory) deducts the used weight from <code>fabric_invoice_rolls</code>. All rows are added together — if any row is invalid, nothing is saved.
                       ${isDenim ? 'Weight Used is auto-computed from <strong>table_length × layers</strong>.' : 'Enter <strong>Remaining</strong>; Weight Used is derived automatically.'}
                     </p>
                     ${isDenim && !lot.table_length ? `
@@ -425,36 +456,20 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                         <strong>Heads-up:</strong> this lot has already moved into <strong>${downstreamHits.join(', ')}</strong>.
                         Adding pieces upstream is allowed (downstream stages track their own qty), but the next-stage master will see more pieces available than before.
                       </div>` : ''}
-                    <div class="row g-2">
-                      <div class="col-md-4">
-                        <label class="form-label">Roll Number</label>
-                        <input type="text" class="form-control" id="addRollNo" list="addRollNoOptions" placeholder="Pick or type roll #" autocomplete="off">
-                        <datalist id="addRollNoOptions">
-                          ${availableRolls.map(r => `<option value="${r.roll_no}" label="Avail ${r.per_roll_weight} ${r.unit || ''}"></option>`).join('')}
-                        </datalist>
-                        <div class="form-text" id="addRollAvail" style="font-size:0.75rem;color:#6b7280;"></div>
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label">Layers</label>
-                        <input type="number" min="1" step="1" class="form-control" id="addRollLayers" placeholder="Layers">
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label">Full Weight</label>
-                        <input type="number" step="0.01" min="0" class="form-control" id="addRollFullWeight" placeholder="Full">
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label">Weight Used</label>
-                        <input type="number" step="0.01" min="0" class="form-control" id="addRollWeightUsed" readonly placeholder="Weight used (auto)">
-                      </div>
-                      <div class="col-md-2">
-                        <label class="form-label">Remaining</label>
-                        <input type="number" step="0.01" min="0" class="form-control" id="addRollRemaining" ${isDenim ? 'readonly' : 'value="0"'} placeholder="${isDenim ? 'Auto' : 'Remaining (default 0)'}">
-                      </div>
+                    <datalist id="addRollNoOptions">
+                      ${availableRolls.map(r => `<option value="${r.roll_no}" label="Avail ${r.per_roll_weight} ${r.unit || ''}"></option>`).join('')}
+                    </datalist>
+                    <div id="addRollRows">${addRollRowMarkup}</div>
+                    <template id="addRollRowTemplate">${addRollRowMarkup}</template>
+                    <div class="mt-2">
+                      <button type="button" class="btn btn-outline-secondary btn-sm" id="addRollAddRow">
+                        <i class="bi bi-plus"></i> Add another row
+                      </button>
                     </div>
                     <div id="addRollError" class="text-danger small mt-2" style="display:none;"></div>
                     <div class="mt-3">
                       <button type="button" class="btn btn-primary btn-sm" id="addRollBtn"${isDenim && !lot.table_length ? ' disabled' : ''}>
-                        <i class="bi bi-plus-circle"></i> Add roll to lot
+                        <i class="bi bi-plus-circle"></i> Add rolls to lot
                       </button>
                     </div>
                   </div>
@@ -770,6 +785,150 @@ router.post('/editcuttinglots/add-roll', isAuthenticated, isOperator, upload.non
     await conn.rollback();
     console.error('Error in POST /operator/editcuttinglots/add-roll:', err);
     res.json({ success: false, error: err.message || 'Failed to add roll.' });
+  } finally {
+    conn.release();
+  }
+});
+
+/**
+ * POST /operator/editcuttinglots/add-rolls?managerId=…&lotId=…
+ * Batch version of add-roll. Accepts parallel arrays roll_no[], layers[],
+ * full_weight[], weight_used[]. All rows are added in ONE transaction
+ * (all-or-nothing): if any row fails validation/duplicate/inventory checks,
+ * nothing is saved and the error names the offending row.
+ */
+router.post('/editcuttinglots/add-rolls', isAuthenticated, isOperator, upload.none(), async (req, res) => {
+  const { managerId, lotId } = req.query;
+  if (!managerId || !lotId) {
+    return res.status(400).json({ success: false, error: 'Manager and Lot IDs required.' });
+  }
+  // Normalize to arrays (a single row arrives as scalars).
+  let { roll_no, layers, full_weight, weight_used } = req.body;
+  if (!Array.isArray(roll_no)) { roll_no = [roll_no]; layers = [layers]; full_weight = [full_weight]; weight_used = [weight_used]; }
+
+  // Parse + drop fully-empty rows.
+  const rows = [];
+  for (let i = 0; i < roll_no.length; i++) {
+    const rn = (roll_no[i] || '').trim();
+    const ly = layers[i], fw = full_weight[i], wu = weight_used[i];
+    const blank = !rn && (ly === undefined || ly === '') && (fw === undefined || fw === '') && (wu === undefined || wu === '');
+    if (blank) continue;
+    rows.push({
+      idx: rows.length + 1, // 1-based for messages
+      roll_no: rn,
+      layers: parseFloat(ly),
+      full_weight: parseFloat(fw),
+      weight_used: parseFloat(wu),
+    });
+  }
+  if (!rows.length) return res.json({ success: false, error: 'Add at least one roll.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Confirm the lot belongs to this manager + load fabric_type
+    const [[lot]] = await conn.query(
+      `SELECT id, fabric_type, table_length FROM cutting_lots WHERE id = ? AND user_id = ? FOR UPDATE`,
+      [lotId, managerId]
+    );
+    if (!lot) throw new Error('Lot not found for this manager.');
+
+    const allowAdhoc = await allowAdhocCuttingEntry();
+
+    // Roll numbers already in this lot — duplicate guard (vs existing + within batch).
+    const [existingRolls] = await conn.query(
+      `SELECT roll_no FROM cutting_lot_rolls WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+    const seen = new Set(existingRolls.map(r => r.roll_no));
+
+    // Σ(pattern_count) once — used for every row's total_pieces.
+    const [[patternsRow]] = await conn.query(
+      `SELECT COALESCE(SUM(pattern_count), 0) AS sum_patterns FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+    const sumPatterns = Number(patternsRow.sum_patterns) || 0;
+
+    const insertValues = [];
+    let batchLayers = 0;
+    for (const row of rows) {
+      const label = `Row ${row.idx}${row.roll_no ? ` (${row.roll_no})` : ''}`;
+      if (!row.roll_no) throw new Error(`${label}: roll number is required.`);
+      if (!(row.layers > 0)) throw new Error(`${label}: layers must be > 0.`);
+      if (!(row.full_weight > 0)) throw new Error(`${label}: full weight must be > 0.`);
+      if (!(row.weight_used >= 0)) throw new Error(`${label}: weight used must be ≥ 0.`);
+      if (row.weight_used > row.full_weight) throw new Error(`${label}: weight used cannot exceed full weight.`);
+      if (seen.has(row.roll_no)) throw new Error(`${label}: this roll number is already in this lot (or duplicated in the batch).`);
+
+      // Inventory lookup — deplete fabric_invoice_rolls if the roll exists there.
+      const [[inv]] = await conn.query(
+        `SELECT fir.roll_no, fir.per_roll_weight
+           FROM fabric_invoice_rolls fir
+           JOIN fabric_invoices fi ON fi.id = fir.invoice_id
+          WHERE fir.roll_no = ? AND fi.fabric_type = ?
+          FOR UPDATE`,
+        [row.roll_no, lot.fabric_type]
+      );
+      let resolvedFullWeight = row.full_weight;
+      if (inv) {
+        resolvedFullWeight = parseFloat(inv.per_roll_weight);
+        if (row.weight_used > resolvedFullWeight) {
+          throw new Error(`${label}: weight used (${row.weight_used}) exceeds inventory available (${resolvedFullWeight}).`);
+        }
+        const [upd] = await conn.query(
+          `UPDATE fabric_invoice_rolls SET per_roll_weight = per_roll_weight - ?
+            WHERE roll_no = ? AND per_roll_weight >= ?`,
+          [row.weight_used, row.roll_no, row.weight_used]
+        );
+        if (upd.affectedRows === 0) throw new Error(`${label}: insufficient inventory.`);
+      } else if (!allowAdhoc) {
+        throw new Error(`${label}: roll is not in fabric inventory. Ad-hoc entry is disabled.`);
+      }
+      const remaining_weight = Math.max(resolvedFullWeight - row.weight_used, 0);
+      const rollPieces = row.layers * sumPatterns;
+      insertValues.push([lotId, row.roll_no, row.weight_used, row.layers, rollPieces, resolvedFullWeight, remaining_weight]);
+      seen.add(row.roll_no);
+      batchLayers += row.layers;
+    }
+
+    // Bulk insert all rows.
+    const placeholders = insertValues.map(() => '(?, ?, ?, ?, ?, ?, ?, NOW())').join(', ');
+    await conn.query(
+      `INSERT INTO cutting_lot_rolls
+         (cutting_lot_id, roll_no, weight_used, layers, total_pieces, full_weight, remaining_weight, created_at)
+       VALUES ${placeholders}`,
+      insertValues.flat()
+    );
+
+    // Increment each size by the whole batch's layer contribution, then recompute lot total.
+    await conn.query(
+      `UPDATE cutting_lot_sizes SET total_pieces = total_pieces + (pattern_count * ?) WHERE cutting_lot_id = ?`,
+      [batchLayers, lotId]
+    );
+    const [[sizeSumRow]] = await conn.query(
+      `SELECT COALESCE(SUM(total_pieces), 0) AS sum_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+    const newLotPieces = Number(sizeSumRow.sum_pieces) || 0;
+    await conn.query(`UPDATE cutting_lots SET total_pieces = ? WHERE id = ?`, [newLotPieces, lotId]);
+    const [[layersRow]] = await conn.query(
+      `SELECT COALESCE(SUM(layers), 0) AS sum_layers FROM cutting_lot_rolls WHERE cutting_lot_id = ?`,
+      [lotId]
+    );
+
+    await conn.commit();
+    res.json({
+      success: true,
+      added: insertValues.length,
+      total_pieces: newLotPieces,
+      sum_layers: Number(layersRow.sum_layers) || 0,
+      sum_patterns: sumPatterns,
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.error('Error in POST /operator/editcuttinglots/add-rolls:', err);
+    res.json({ success: false, error: err.message || 'Failed to add rolls.' });
   } finally {
     conn.release();
   }
