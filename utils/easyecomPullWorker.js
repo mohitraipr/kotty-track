@@ -23,6 +23,7 @@ const {
 const { recomputeAllHealth } = require('./easyecomAnalytics');
 
 const EASYECOM_API_BASE = global.env?.EASYECOM_API_BASE || process.env.EASYECOM_API_BASE || 'https://api.easyecom.io';
+const EASYECOM_API_KEY = global.env?.EASYECOM_API_KEY || process.env.EASYECOM_API_KEY || '';
 
 // EasyEcom c_id (warehouse) → credential key in easyecomReturnsClient.
 const WAREHOUSE_KEY_BY_ID = {
@@ -253,7 +254,7 @@ async function pullOrdersForWarehouse(pool, warehouseKey, warehouseId, startStr,
 
   const api = axios.create({
     baseURL: EASYECOM_API_BASE,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(EASYECOM_API_KEY ? { 'x-api-key': EASYECOM_API_KEY } : {}) },
     timeout: 120000,
   });
 
@@ -354,47 +355,65 @@ async function persistOrderBatch(pool, orders, fallbackWarehouseId) {
 // Step 3 — MINI_SALES_REPORT  (per-day per-SKU sales for cross-check)
 // ────────────────────────────────────────────────────────────────────
 
+// Aggregate one downloaded mini-sales report (per suborder LINE) to (sku, sale_date)
+// rows for ee_sales_daily, dropping cancellations. Kept as a helper so each 7-day
+// chunk is parsed, reduced, and released before the next — bounds memory.
+function aggregateMiniSales(rows, warehouseId) {
+  const agg = new Map();
+  for (const r of rows) {
+    const status = String(pickField(r, ['Order Status', 'order_status']) || '');
+    if (/cancel/i.test(status)) continue;
+    const sku = pickField(r, ['SKU', 'sku', 'Product Code']);
+    const dateStr = pickField(r, ['Order Date', 'order_date', 'Invoice Date', 'invoice_date', 'date']);
+    if (!sku || !dateStr) continue;
+    const qty = Number(pickField(r, ['Item Quantity', 'Suborder Quantity', 'quantity', 'qty', 'Quantity'])) || 0;
+    const rev = Number(pickField(r, ['Selling Price', 'total_amount', 'amount', 'Revenue'])) || 0;
+    const saleDate = String(dateStr).slice(0, 10);
+    const key = String(sku).toUpperCase() + '|' + saleDate;
+    const cur = agg.get(key) || { sku: String(sku).toUpperCase(), saleDate, qty: 0, rev: 0 };
+    cur.qty += qty; cur.rev += rev;
+    agg.set(key, cur);
+  }
+  return [...agg.values()].map((a) => [a.sku, warehouseId, a.saleDate, a.qty, a.rev || null, 'mini_sales_report']);
+}
+
 async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
   const stepStart = Date.now();
-  const end = new Date();
-  const start = new Date(end.getTime() - windowDays * 24 * 60 * 60 * 1000);
-  const startDate = ymd(start);
-  const endDate = ymd(end);
-
+  const CHUNK_DAYS = 7; // one ~7-day report (~35k lines) in memory at a time — avoids OOM on a 30d pull
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - windowDays * MS_DAY);
   let totalRows = 0;
+
   for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
     const warehouseId = Number(warehouseIdStr);
     try {
-      const rows = await fetchMiniSalesReport({ startDate, endDate }, warehouseKey);
-      const upsert = [];
-      for (const r of rows) {
-        const sku = pickField(r, ['sku', 'SKU', 'Product Code']);
-        const dateStr = pickField(r, ['order_date', 'Order Date', 'invoice_date', 'Invoice Date', 'date']);
-        const qty = Number(pickField(r, ['quantity', 'qty', 'Quantity', 'Order Quantity'])) || 0;
-        const revenue = Number(pickField(r, ['total_amount', 'amount', 'Revenue', 'Selling Price'])) || null;
-        if (!sku || !dateStr) continue;
-        const saleDate = String(dateStr).slice(0, 10);
-        upsert.push([String(sku).toUpperCase(), warehouseId, saleDate, qty, revenue, 'mini_sales_report']);
-      }
-      if (upsert.length) {
+      let cursor = new Date(windowStart);
+      while (cursor <= now) {
+        const chunkEnd = new Date(Math.min(cursor.getTime() + (CHUNK_DAYS - 1) * MS_DAY, now.getTime()));
+        const startDate = ymd(cursor);
+        const endDate = ymd(chunkEnd);
+        let rows = await fetchMiniSalesReport({ startDate, endDate }, warehouseKey);
+        const upsert = aggregateMiniSales(rows, warehouseId);
+        rows = null; // release the parsed report before the next chunk
         for (let i = 0; i < upsert.length; i += 1000) {
-          const chunk = upsert.slice(i, i + 1000);
           await pool.query(
             `INSERT INTO ee_sales_daily (sku, warehouse_id, sale_date, qty, revenue, source)
              VALUES ?
              ON DUPLICATE KEY UPDATE qty = VALUES(qty), revenue = VALUES(revenue), synced_at = CURRENT_TIMESTAMP`,
-            [chunk]
+            [upsert.slice(i, i + 1000)]
           );
         }
+        totalRows += upsert.length;
+        cursor = new Date(chunkEnd.getTime() + MS_DAY); // next day after this chunk — no overlap
       }
-      totalRows += upsert.length;
     } catch (err) {
       console.error(`[pullWorker] mini sales report failed for ${warehouseKey}:`, err.message);
       await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, 'error', err.message, Date.now() - stepStart);
     }
   }
   await logStep(pool, runStartedAt, 'mini_sales', 'ok',
-    `window=${windowDays}d rows=${totalRows} ${startDate}..${endDate}`, Date.now() - stepStart);
+    `window=${windowDays}d chunk=${CHUNK_DAYS}d rows=${totalRows}`, Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -685,4 +704,4 @@ function triggerNow(pool, opts = {}) {
   return Promise.resolve().then(() => runPullWorker(pool, opts));
 }
 
-module.exports = { runPullWorker, triggerNow, pullSnapshotsFromPrimary };
+module.exports = { runPullWorker, triggerNow, pullSnapshotsFromPrimary, pullOrders, pullMiniSalesReport };
