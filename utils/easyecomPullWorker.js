@@ -73,117 +73,133 @@ async function listDistinctWarehouses(pool) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Step 1 — Snapshot CSV ingestion (per warehouse)
+// Step 1 — Inventory snapshot ingestion (PRIMARY-location, account-wide)
 // ────────────────────────────────────────────────────────────────────
+//
+// EasyEcom's Inventory Snapshot is an ACCOUNT-LEVEL report owned by the PRIMARY
+// location ("Kotty Lifestyle", c_id 173969). A single daily CSV covers every
+// warehouse; each row carries a `Company Token` (= a secondary location_key) that
+// we map back to our warehouse_id. Authenticating against a secondary warehouse
+// returns an empty snapshot, so this MUST run against the primary location.
 
-async function pullSnapshotsForWarehouse(pool, warehouseId, runStartedAt, windowDays) {
+const PRIMARY_SNAPSHOT_C_ID = 173969; // bookkeeping marker for ee_snapshot_files
+const WAREHOUSE_ID_BY_LOCATION_KEY = {
+  ee30270084289: 173983, // Faridabad
+  en31088037124: 176318, // Delhi
+};
+
+// EasyEcom guards text cells with a leading backtick (Excel-injection guard); some
+// values also carry a trailing comma. Strip both before using the SKU.
+function cleanCsvSku(v) {
+  return String(v == null ? '' : v).replace(/`/g, '').replace(/,+\s*$/, '').trim().toUpperCase();
+}
+
+async function pullSnapshotsFromPrimary(pool, runStartedAt, windowDays) {
   const stepStart = Date.now();
-  const warehouseKey = WAREHOUSE_KEY_BY_ID[warehouseId];
-  if (!warehouseKey) {
-    await logStep(pool, runStartedAt, `snapshot:${warehouseId}`, 'error',
-      `No credential mapping for warehouse_id ${warehouseId}`, Date.now() - stepStart);
-    return;
-  }
-
   const end = new Date();
   const start = new Date(end.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const startStr = `${ymd(start)} 00:00:00`;
   const endStr = `${ymd(end)} 23:59:59`;
 
+  let files;
   try {
-    const files = await listInventorySnapshots({ startDate: startStr, endDate: endStr }, warehouseKey);
-    if (!files.length) {
-      await logStep(pool, runStartedAt, `snapshot:${warehouseId}`, 'partial',
-        `No CSV files returned for ${startStr}..${endStr}`, Date.now() - stepStart);
-      return;
-    }
-
-    // Skip files we've already ingested.
-    const [existing] = await pool.query(
-      `SELECT entry_date FROM ee_snapshot_files WHERE warehouse_id = ?`, [warehouseId]
-    );
-    const have = new Set(existing.map(r => new Date(r.entry_date).toISOString().slice(0, 19)));
-
-    let newFiles = 0;
-    let totalRows = 0;
-    let latestDate = null;
-    let latestRows = [];
-
-    for (const f of files) {
-      const entryDateStr = String(f.entry_date).slice(0, 19).replace('T', ' ');
-      const isoKey = new Date(entryDateStr).toISOString().slice(0, 19);
-      if (have.has(isoKey)) continue;
-
-      let csvText;
-      try {
-        csvText = await downloadSnapshotCsv(f.file_url);
-      } catch (err) {
-        console.error(`[pullWorker] snapshot CSV download failed (${entryDateStr}):`, err.message);
-        continue;
-      }
-      const rows = parseCsv(csvText);
-      const snapshotDate = entryDateStr.slice(0, 10);
-      const upsertRows = [];
-      for (const r of rows) {
-        const sku = pickField(r, ['sku', 'SKU', 'Product Code', 'productCode', 'product_code']);
-        const qtyRaw = pickField(r, ['available', 'availableInventory', 'Available Quantity', 'Available', 'qty', 'Inventory', 'inventoryCount', 'inventory_count', 'Quantity']);
-        if (!sku) continue;
-        const qty = Number(qtyRaw) || 0;
-        upsertRows.push([String(sku).toUpperCase(), warehouseId, snapshotDate, qty]);
-      }
-
-      if (upsertRows.length) {
-        // Chunk inserts of 1000 to keep packet size sane.
-        for (let i = 0; i < upsertRows.length; i += 1000) {
-          const chunk = upsertRows.slice(i, i + 1000);
-          await pool.query(
-            `INSERT INTO ee_inventory_daily_snapshot (sku, warehouse_id, snapshot_date, qty)
-             VALUES ?
-             ON DUPLICATE KEY UPDATE qty = VALUES(qty)`,
-            [chunk]
-          );
-        }
-      }
-
-      await pool.query(
-        `INSERT INTO ee_snapshot_files (warehouse_id, entry_date, file_url, row_count)
-         VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE row_count = VALUES(row_count), ingested_at = CURRENT_TIMESTAMP`,
-        [warehouseId, entryDateStr, f.file_url, upsertRows.length]
-      );
-
-      newFiles++;
-      totalRows += upsertRows.length;
-      if (!latestDate || entryDateStr > latestDate) {
-        latestDate = entryDateStr;
-        latestRows = upsertRows;
-      }
-    }
-
-    // Push the latest snapshot into ee_inventory_health.inventory so the
-    // dashboard's "current SOH" matches the most recent close-of-business.
-    if (latestRows.length) {
-      for (let i = 0; i < latestRows.length; i += 500) {
-        const chunk = latestRows.slice(i, i + 500);
-        const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(',');
-        const values = [];
-        for (const [sku, wh, , qty] of chunk) values.push(sku, wh, qty, 'green');
-        await pool.query(
-          `INSERT INTO ee_inventory_health (sku, warehouse_id, inventory, status)
-           VALUES ${placeholders}
-           ON DUPLICATE KEY UPDATE inventory = VALUES(inventory), updated_at = CURRENT_TIMESTAMP`,
-          values
-        );
-      }
-    }
-
-    await logStep(pool, runStartedAt, `snapshot:${warehouseId}`, 'ok',
-      `files_new=${newFiles}/${files.length} rows=${totalRows} latest=${latestDate || 'n/a'}`,
-      Date.now() - stepStart);
+    files = await listInventorySnapshots({ startDate: startStr, endDate: endStr }, 'primary');
   } catch (err) {
-    console.error(`[pullWorker] snapshot pull failed for ${warehouseKey}:`, err.message);
-    await logStep(pool, runStartedAt, `snapshot:${warehouseId}`, 'error', err.message, Date.now() - stepStart);
+    console.error('[pullWorker] snapshot list (primary) failed:', err.message);
+    await logStep(pool, runStartedAt, 'snapshot', 'error', `list: ${err.message}`, Date.now() - stepStart);
+    return;
   }
+  if (!files.length) {
+    await logStep(pool, runStartedAt, 'snapshot', 'partial',
+      `No snapshot files for ${startStr}..${endStr}`, Date.now() - stepStart);
+    return;
+  }
+
+  // Skip files we've already ingested (tracked under the primary c_id).
+  const [existing] = await pool.query(
+    `SELECT entry_date FROM ee_snapshot_files WHERE warehouse_id = ?`, [PRIMARY_SNAPSHOT_C_ID]
+  );
+  const have = new Set(existing.map(r => new Date(r.entry_date).toISOString().slice(0, 19)));
+
+  let newFiles = 0;
+  let totalRows = 0;
+  let skippedRows = 0;
+  let latestDate = null;
+  let latestHealth = [];
+
+  for (const f of files) {
+    const entryDateStr = String(f.entry_date).slice(0, 19).replace('T', ' ');
+    const isoKey = new Date(entryDateStr).toISOString().slice(0, 19);
+    if (have.has(isoKey)) continue;
+    const snapshotDate = entryDateStr.slice(0, 10);
+
+    let csvText;
+    try {
+      csvText = await downloadSnapshotCsv(f.file_url);
+    } catch (err) {
+      console.error(`[pullWorker] snapshot CSV download failed (${entryDateStr}):`, err.message);
+      continue;
+    }
+    const rows = parseCsv(csvText);
+    const upsertRows = [];
+    const healthRows = [];
+    for (const r of rows) {
+      const locKey = String(pickField(r, ['Company Token', 'company_token', 'companytoken']) || '').trim();
+      const warehouseId = WAREHOUSE_ID_BY_LOCATION_KEY[locKey];
+      if (!warehouseId) { skippedRows++; continue; } // not one of our two warehouses
+      const sku = cleanCsvSku(pickField(r, ['SKU', 'sku', 'Product Code']));
+      if (!sku) continue;
+      const qty = Number(pickField(r, ['Available Quantity', 'available', 'Available', 'availableInventory'])) || 0;
+      upsertRows.push([sku, warehouseId, snapshotDate, qty]);
+      healthRows.push([sku, warehouseId, qty]);
+    }
+
+    // Chunk inserts of 1000 to keep packet size sane.
+    for (let i = 0; i < upsertRows.length; i += 1000) {
+      const chunk = upsertRows.slice(i, i + 1000);
+      await pool.query(
+        `INSERT INTO ee_inventory_daily_snapshot (sku, warehouse_id, snapshot_date, qty)
+         VALUES ?
+         ON DUPLICATE KEY UPDATE qty = VALUES(qty)`,
+        [chunk]
+      );
+    }
+
+    await pool.query(
+      `INSERT INTO ee_snapshot_files (warehouse_id, entry_date, file_url, row_count)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE row_count = VALUES(row_count), ingested_at = CURRENT_TIMESTAMP`,
+      [PRIMARY_SNAPSHOT_C_ID, entryDateStr, f.file_url, upsertRows.length]
+    );
+
+    newFiles++;
+    totalRows += upsertRows.length;
+    if (!latestDate || entryDateStr > latestDate) {
+      latestDate = entryDateStr;
+      latestHealth = healthRows;
+    }
+  }
+
+  // Push the latest snapshot into ee_inventory_health.inventory so the dashboard's
+  // "current SOH" matches the most recent close-of-business.
+  if (latestHealth.length) {
+    for (let i = 0; i < latestHealth.length; i += 500) {
+      const chunk = latestHealth.slice(i, i + 500);
+      const placeholders = chunk.map(() => '(?, ?, ?, ?)').join(',');
+      const values = [];
+      for (const [sku, wh, qty] of chunk) values.push(sku, wh, qty, 'green');
+      await pool.query(
+        `INSERT INTO ee_inventory_health (sku, warehouse_id, inventory, status)
+         VALUES ${placeholders}
+         ON DUPLICATE KEY UPDATE inventory = VALUES(inventory), updated_at = CURRENT_TIMESTAMP`,
+        values
+      );
+    }
+  }
+
+  await logStep(pool, runStartedAt, 'snapshot', 'ok',
+    `files_new=${newFiles}/${files.length} rows=${totalRows} skipped=${skippedRows} latest=${latestDate || 'n/a'}`,
+    Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -611,16 +627,13 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
   }
   const windowDays = bootstrapMode ? 30 : 3;
 
-  // Inventory snapshots
+  // Inventory snapshots — account-wide, from the PRIMARY location. Bootstrap pulls a
+  // deeper window so selling-days DRR has real history immediately (configurable).
+  const snapshotWindowDays = bootstrapMode
+    ? Number(process.env.EASYECOM_SNAPSHOT_BACKFILL_DAYS || global.env?.EASYECOM_SNAPSHOT_BACKFILL_DAYS || 60)
+    : Math.max(windowDays, 3);
   try {
-    const warehouses = await listDistinctWarehouses(pool);
-    if (!warehouses.length) {
-      await logStep(pool, runStartedAt, 'snapshot', 'partial', 'No warehouses in ee_user_warehouses', 0);
-    } else {
-      for (const wh of warehouses) {
-        await pullSnapshotsForWarehouse(pool, wh, runStartedAt, windowDays);
-      }
-    }
+    await pullSnapshotsFromPrimary(pool, runStartedAt, snapshotWindowDays);
   } catch (err) {
     await logStep(pool, runStartedAt, 'snapshot', 'error', err.message, 0);
   }
@@ -672,4 +685,4 @@ function triggerNow(pool, opts = {}) {
   return Promise.resolve().then(() => runPullWorker(pool, opts));
 }
 
-module.exports = { runPullWorker, triggerNow };
+module.exports = { runPullWorker, triggerNow, pullSnapshotsFromPrimary };

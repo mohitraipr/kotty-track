@@ -69,7 +69,7 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
       WHERE snapshot_date >= ? AND qty > 0
       GROUP BY sku
     ) sd ON sd.sku = es.sku
-    WHERE eo.import_date >= ?
+    WHERE eo.order_date >= ?
       AND EXISTS (
         SELECT 1 FROM ee_replenishment_rules r
         WHERE r.sku = es.sku
@@ -609,7 +609,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
        WHERE snapshot_date >= ? AND qty > 0
        GROUP BY sku
      ) sd ON sd.sku = es.sku
-     WHERE eo.import_date >= ?
+     WHERE eo.order_date >= ?
      GROUP BY es.sku`,
     [snapshotStart, snapshotStart]
   );

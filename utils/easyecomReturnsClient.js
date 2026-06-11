@@ -19,16 +19,29 @@ const EASYECOM_PASSWORD = global.env?.EASYECOM_PASSWORD || process.env.EASYECOM_
 const EASYECOM_DELHI_EMAIL = global.env?.EASYECOM_DELHI_EMAIL || process.env.EASYECOM_DELHI_EMAIL || '';
 const EASYECOM_DELHI_PASSWORD = global.env?.EASYECOM_DELHI_PASSWORD || process.env.EASYECOM_DELHI_PASSWORD || '';
 
+// Location keys (Seller IDs) — MANDATORY for the V2.1 `/access/token` auth.
+// Defaults are the resolved Seller IDs for our two warehouses (from ee_orders /
+// ee_inventory_snapshots); override via env only if EasyEcom changes them.
+const EASYECOM_LOCATION_KEY = global.env?.EASYECOM_LOCATION_KEY || process.env.EASYECOM_LOCATION_KEY || 'ee30270084289';
+const EASYECOM_DELHI_LOCATION_KEY = global.env?.EASYECOM_DELHI_LOCATION_KEY || process.env.EASYECOM_DELHI_LOCATION_KEY || 'en31088037124';
+// Primary/parent location ("Kotty Lifestyle", c_id 173969). Account-level reports
+// (inventory snapshot, getAllLocation) are PRIMARY-only; the two warehouses above are
+// SECONDARY locations and return empty for those endpoints. Used by the PM snapshot pull.
+const EASYECOM_PRIMARY_LOCATION_KEY = global.env?.EASYECOM_PRIMARY_LOCATION_KEY || process.env.EASYECOM_PRIMARY_LOCATION_KEY || 'ne30265212961';
+
 // Warehouse credentials mapping
 const WAREHOUSE_CREDENTIALS = {
-  faridabad: { email: EASYECOM_EMAIL, password: EASYECOM_PASSWORD, c_id: 173983 },
-  delhi: { email: EASYECOM_DELHI_EMAIL, password: EASYECOM_DELHI_PASSWORD, c_id: 176318 },
+  faridabad: { email: EASYECOM_EMAIL, password: EASYECOM_PASSWORD, c_id: 173983, location_key: EASYECOM_LOCATION_KEY },
+  delhi: { email: EASYECOM_DELHI_EMAIL, password: EASYECOM_DELHI_PASSWORD, c_id: 176318, location_key: EASYECOM_DELHI_LOCATION_KEY },
+  // Authenticated with the all-location API user (Faridabad creds), which can access the primary.
+  primary: { email: EASYECOM_EMAIL, password: EASYECOM_PASSWORD, c_id: 173969, location_key: EASYECOM_PRIMARY_LOCATION_KEY },
 };
 
 // Cached JWT tokens per warehouse
 const cachedTokens = {
   faridabad: { token: null, expiry: null },
   delhi: { token: null, expiry: null },
+  primary: { token: null, expiry: null },
 };
 
 /**
@@ -54,17 +67,23 @@ async function authenticateWithCredentials(warehouse = 'faridabad') {
   try {
     console.log(`Authenticating with EasyEcom for ${warehouse}...`);
 
-    const response = await axios.post(`${EASYECOM_API_BASE}/getApiToken`, {
+    // V2.1 auth: POST /access/token with the warehouse location_key (Seller ID).
+    // The deprecated /getApiToken path now returns 403 for this account, and the
+    // V2.1 data endpoints (snapshot, orders V2, reports) only accept a token minted
+    // here. No x-api-key header is required for this account.
+    const response = await axios.post(`${EASYECOM_API_BASE}/access/token`, {
       email: creds.email,
-      password: creds.password
+      password: creds.password,
+      location_key: creds.location_key,
     }, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 30000
     });
 
-    // Extract token from response
+    // Extract token. V2.1 /access/token nests it at data.token.jwt_token;
+    // keep legacy fallbacks for safety.
     const data = response.data;
-    const token = data.data?.jwt_token || data.jwt_token || data.token || data.access_token;
+    const token = data.data?.token?.jwt_token || data.data?.jwt_token || data.jwt_token || data.token || data.access_token;
 
     if (token) {
       cache.token = token;
@@ -875,7 +894,8 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
         String(r.reportId || r.id || r.report_id) === String(reportId)
       );
     } catch (_) {}
-    const status = (entry?.status || entry?.report_status || '').toString().toLowerCase();
+    // EasyEcom returns status under `reportStatus` (e.g. "COMPLETED").
+    const status = (entry?.reportStatus || entry?.report_status || entry?.status || '').toString().toLowerCase();
     if (status.includes('complete') || status.includes('ready') || status === 'done') { ready = true; break; }
     if (status.includes('fail') || status.includes('error')) {
       throw new Error(`Report ${reportId} failed: ${JSON.stringify(entry).slice(0,200)}`);
@@ -883,17 +903,31 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
     await new Promise(r => setTimeout(r, pollIntervalMs));
   }
   if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
+  // /reports/download returns either raw CSV, or a JSON envelope
+  // { data: { reportStatus, downloadUrl } } pointing at a pre-signed S3 CSV. Handle both.
   const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'text' });
-  const text = typeof dl.data === 'string' ? dl.data : JSON.stringify(dl.data);
-  return parseCsv(text);
+  let csvText = typeof dl.data === 'string' ? dl.data : JSON.stringify(dl.data);
+  if (csvText && csvText.trimStart().startsWith('{')) {
+    try {
+      const env = JSON.parse(csvText);
+      const url = env?.data?.downloadUrl || env?.downloadUrl;
+      if (url) {
+        const s3 = await axios.get(url, { timeout: 600000, responseType: 'text' });
+        csvText = typeof s3.data === 'string' ? s3.data : JSON.stringify(s3.data);
+      }
+    } catch (_) { /* treat as raw CSV */ }
+  }
+  return parseCsv(csvText);
 }
 
 // Convenience wrappers — queue + poll + download for the reports we care about.
 async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceType = 'ALL', dateType = 'ORDER_DATE' }, warehouse = 'faridabad') {
-  // EasyEcom rejects empty/missing warehouseIds with a 400 — only pass the
-  // param when caller supplied a non-empty location-key list.
+  // warehouseIds is the location_key (Seller ID) and is effectively required —
+  // default to this warehouse's Seller ID when the caller didn't supply one.
+  const creds = WAREHOUSE_CREDENTIALS[(warehouse || 'faridabad').toLowerCase()] || WAREHOUSE_CREDENTIALS.faridabad;
+  const whIds = (warehouseIds && String(warehouseIds).trim()) ? warehouseIds : creds.location_key;
   const params = { invoiceType, dateType, startDate, endDate };
-  if (warehouseIds && String(warehouseIds).trim()) params.warehouseIds = warehouseIds;
+  if (whIds) params.warehouseIds = whIds;
   const reportId = await queueReport('MINI_SALES_REPORT', params, warehouse);
   return waitForAndDownloadReport(reportId, warehouse);
 }
