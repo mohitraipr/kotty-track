@@ -586,7 +586,96 @@ async function getDohForSku(pool, { sku }) {
   };
 }
 
-async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
+// Clean-day demand metrics per size-SKU, company-wide. Gap/dup-safe.
+// A day counts as a clean in-stock day only if it was in stock the WHOLE day:
+// current snapshot qty>0 AND the most-recent-PRIOR present snapshot qty>0
+// (prior = previous existing row, so calendar gaps are skipped, not treated as
+// stockouts). Numerator (sales) and denominator (day count) both restricted to
+// those clean days together. Stockout uplift reads stockout_days (qty=0), never
+// the clean-day fraction. Per-size sigma is the std of the clean-day demand series.
+async function computeCleanDayMetrics(pool, windowStart) {
+  // Company-wide daily stock series (sum warehouses, one row per (sku, date)).
+  // Restrict the (expensive) stock series to SKUs that actually sold in the window
+  // — SKUs with no sales have DRR 0 regardless, so their series is wasted work.
+  const [snapRows] = await pool.query(
+    `SELECT s.sku, DATE_FORMAT(s.snapshot_date, '%Y-%m-%d') AS d, SUM(s.qty) AS qty
+     FROM ee_inventory_daily_snapshot s
+     INNER JOIN (
+       SELECT DISTINCT es.sku
+       FROM ee_suborders es
+       INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+       WHERE eo.order_date >= ?
+     ) sold ON sold.sku = s.sku
+     WHERE s.snapshot_date >= ?
+     GROUP BY s.sku, d
+     ORDER BY s.sku, d`,
+    [windowStart, windowStart]
+  );
+  // Daily sales by SKU on order_date.
+  const [saleRows] = await pool.query(
+    `SELECT es.sku, DATE_FORMAT(eo.order_date, '%Y-%m-%d') AS d, SUM(es.quantity) AS qty
+     FROM ee_suborders es
+     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+     WHERE eo.order_date >= ?
+     GROUP BY es.sku, d`,
+    [windowStart]
+  );
+  const salesBySku = new Map();
+  for (const r of saleRows) {
+    if (!salesBySku.has(r.sku)) salesBySku.set(r.sku, new Map());
+    salesBySku.get(r.sku).set(r.d, Number(r.qty) || 0);
+  }
+
+  const metrics = new Map();
+  let curSku = null;
+  let series = [];
+  const finalize = () => {
+    if (!curSku) return;
+    const sales = salesBySku.get(curSku) || new Map();
+    const observed = series.length;
+    let cleanDays = 0;
+    let stockoutDays = 0;
+    let cleanSales = 0;
+    const dailyDemand = [];
+    for (let i = 0; i < series.length; i++) {
+      if (series[i].qty === 0) stockoutDays++;
+      // clean day: in stock at both bookends (i and the previous PRESENT snapshot i-1)
+      if (i >= 1 && series[i].qty > 0 && series[i - 1].qty > 0) {
+        cleanDays++;
+        const s = sales.get(series[i].d) || 0;
+        cleanSales += s;
+        dailyDemand.push(s);
+      }
+    }
+    const drr = cleanDays > 0 ? cleanSales / cleanDays : 0;
+    const availability = observed > 0 ? 1 - stockoutDays / observed : 1;
+    // uplift off stockout_days; the 0.5 floor caps the boost at 2x.
+    const buyDrr = drr / Math.max(availability, 0.5);
+    let sigma = 0;
+    if (dailyDemand.length > 0) {
+      const mean = dailyDemand.reduce((a, b) => a + b, 0) / dailyDemand.length;
+      sigma = Math.sqrt(dailyDemand.reduce((a, b) => a + (b - mean) * (b - mean), 0) / dailyDemand.length);
+    }
+    metrics.set(curSku, {
+      drr,
+      buy_drr: buyDrr,
+      clean_days: cleanDays,
+      stockout_days: stockoutDays,
+      observed_days: observed,
+      availability,
+      sigma,
+      data_quality: cleanDays === 0 ? 'no_clean_days' : (cleanDays < 7 ? 'low_sample' : 'ok'),
+    });
+  };
+  for (const r of snapRows) {
+    if (r.sku !== curSku) { finalize(); curSku = r.sku; series = []; }
+    series.push({ d: r.d, qty: Number(r.qty) || 0 });
+  }
+  finalize();
+  return metrics;
+}
+
+async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
   // Resolve window for snapshot-based selling days
   const presetHours = PERIOD_PRESETS[periodKey]?.hours
     || (Number(String(periodKey).replace(/[^0-9]/g, '')) * 24)
@@ -671,6 +760,17 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
     override_drr: cfg.override_drr != null ? Number(cfg.override_drr) : null,
   } : { lead_time: DEFAULT_LEAD_TIME, fabric_lead_time: 0, safety_days: DEFAULT_SAFETY_DAYS, override_drr: null };
 
+  // Clean-day demand (P1). DRR_MODE: 'shadow' (default — legacy drives output,
+  // clean-day computed alongside for diffing), 'cleanday' (clean-day drives), or
+  // 'legacy'. At cutover (mode='cleanday') the legacy/warming_up path is removed.
+  const DRR_MODE = String(
+    process.env.PM_DRR_MODE || (typeof global !== 'undefined' && global.env && global.env.PM_DRR_MODE) || 'shadow'
+  ).toLowerCase();
+  // Keep the clean-day series OFF the live /pm path. Compute it only when it
+  // drives output (cutover mode) or when a shadow diff is explicitly requested.
+  const includeCleanDay = DRR_MODE === 'cleanday' || shadow === true;
+  const cleanMetrics = includeCleanDay ? await computeCleanDayMetrics(pool, snapshotStart) : new Map();
+
   const results = [];
   for (const sku of allSkus) {
     const row = rowMap.get(sku) || { order_count: 0, selling_days: 0 };
@@ -678,9 +778,13 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
     const sellingDays = Number(row.selling_days) || 0;
     const warming = sellingDays < 7;
     const denom = warming ? windowDays : sellingDays;
-    let drr = denom > 0 ? orderCount / denom : 0;
+    const legacyDrr = denom > 0 ? orderCount / denom : 0;
+
+    const cd = cleanMetrics.get(sku) || null;
+    const cleandayDrr = cd ? cd.buy_drr : 0;
 
     const lt = resolveLeadTime(ltMap.get(sku));
+    let drr = DRR_MODE === 'cleanday' ? cleandayDrr : legacyDrr;
     if (lt.override_drr !== null) drr = lt.override_drr;
 
     const soh = sohMap.get(sku) || 0;
@@ -700,6 +804,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
     if (doh !== null && doh <= lt.lead_time) trigger = 'red';
     else if (doh !== null && doh <= horizon) trigger = 'orange';
 
+    const drrDiffPct = legacyDrr > 0 ? ((cleandayDrr - legacyDrr) / legacyDrr) * 100 : (cleandayDrr > 0 ? Infinity : 0);
     results.push({
       sku,
       soh,
@@ -715,6 +820,17 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
       suggested_cut_qty: Math.round(suggested),
       trigger,
       dataQuality: warming ? 'warming_up' : 'ok',
+      // P1 shadow fields (clean-day demand model):
+      drr_mode: DRR_MODE,
+      drr_legacy: legacyDrr,
+      drr_cleanday: cleandayDrr,
+      drr_diff_pct: drrDiffPct,
+      clean_days: cd ? cd.clean_days : 0,
+      stockout_days: cd ? cd.stockout_days : 0,
+      observed_days: cd ? cd.observed_days : 0,
+      availability: cd ? cd.availability : null,
+      demand_sigma: cd ? cd.sigma : 0,
+      cleanday_quality: cd ? cd.data_quality : 'no_snapshot',
     });
   }
 
