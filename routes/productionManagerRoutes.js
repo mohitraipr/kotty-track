@@ -11,6 +11,7 @@ const ExcelJS = require('exceljs');
 const { pool } = require('../config/db');
 const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const analytics = require('../utils/easyecomAnalytics');
+const skuResolver = require('../utils/skuResolver');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -539,6 +540,82 @@ router.get('/debug-ee', async (req, res) => {
       eeStatus: err.response?.status, eeBody: err.response?.data,
     });
   }
+});
+
+// ─── Resolver: cutting-style -> ecom size-SKU map (pm_sku_resolution) ──
+// Validates filled templates and loads pm_sku_resolution. Per-row validation
+// against distinct ee_suborders; rejects with reasons; partial uploads fine.
+
+function parseResolverSheet(ws, required) {
+  const headers = [];
+  ws.getRow(1).eachCell((cell, col) => {
+    headers.push({ col, k: String(cell.value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') });
+  });
+  const headerMap = {};
+  for (const key of required) {
+    const h = headers.find((x) => x.k === key) || headers.find((x) => x.k.startsWith(key));
+    if (h) headerMap[key] = h.col;
+  }
+  for (const r of required) if (!headerMap[r]) return { error: `Missing required column: ${r}` };
+  const cellText = (v) => {
+    if (v == null) return '';
+    if (typeof v === 'object') {
+      if ('text' in v) return v.text;
+      if ('result' in v) return v.result;
+      if ('richText' in v) return v.richText.map((t) => t.text).join('');
+    }
+    return v;
+  };
+  const rows = [];
+  for (let i = 2; i <= ws.rowCount; i++) {
+    const row = ws.getRow(i);
+    const obj = {};
+    for (const k of required) obj[k] = String(cellText(row.getCell(headerMap[k]).value)).trim();
+    rows.push(obj);
+  }
+  return { rows };
+}
+
+// POST /pm/resolver/upload-sizes — filled size template (cl_sku, size_label, size_sku)
+router.post('/resolver/upload-sizes', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded.' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+    const ws = wb.worksheets[0];
+    if (!ws) return res.status(400).json({ ok: false, error: 'Workbook has no sheets.' });
+    const parsed = parseResolverSheet(ws, ['cl_sku', 'size_label', 'size_sku']);
+    if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
+    const result = await skuResolver.loadSizeRows(pool, parsed.rows, req.session?.user?.id || null);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[pm] resolver upload-sizes error', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /pm/resolver/upload-styles — filled style sheet (style, ruling = waist|letter|skip)
+router.post('/resolver/upload-styles', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded.' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+    const ws = wb.worksheets[0];
+    if (!ws) return res.status(400).json({ ok: false, error: 'Workbook has no sheets.' });
+    const parsed = parseResolverSheet(ws, ['style', 'ruling']);
+    if (parsed.error) return res.status(400).json({ ok: false, error: parsed.error });
+    const summary = await skuResolver.loadStyleRulings(pool, parsed.rows, req.session?.user?.id || null);
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    console.error('[pm] resolver upload-styles error', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/resolver/status — counts of resolved/excluded mappings
+router.get('/resolver/status', async (req, res) => {
+  try { res.json({ ok: true, ...(await skuResolver.getResolutionStatus(pool)) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 module.exports = router;
