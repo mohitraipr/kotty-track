@@ -69,7 +69,7 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
       WHERE snapshot_date >= ? AND qty > 0
       GROUP BY sku
     ) sd ON sd.sku = es.sku
-    WHERE eo.import_date >= ?
+    WHERE eo.order_date >= ?
       AND EXISTS (
         SELECT 1 FROM ee_replenishment_rules r
         WHERE r.sku = es.sku
@@ -609,7 +609,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
        WHERE snapshot_date >= ? AND qty > 0
        GROUP BY sku
      ) sd ON sd.sku = es.sku
-     WHERE eo.import_date >= ?
+     WHERE eo.order_date >= ?
      GROUP BY es.sku`,
     [snapshotStart, snapshotStart]
   );
@@ -640,37 +640,55 @@ async function getCuttingRecommendations(pool, { periodKey = '30d' } = {}) {
     ...sohRows.map((r) => r.sku),
   ]);
 
+  // Bulk-load every per-SKU input ONCE. Previously the loop below issued a
+  // lead-time + open-lot + PO query per SKU — an N+1 explosion that was cheap at
+  // ~2k SKUs but turns into ~100k sequential queries once the snapshot pull
+  // populates ee_inventory_health with ~25k SKUs. These four queries replace it.
+  const rowMap = new Map(rows.map((r) => [r.sku, r]));
+  const [ltRows] = await pool.query(
+    `SELECT key_value, default_lead_time_days, fabric_lead_time_days, safety_days, override_drr
+     FROM pm_style_lead_times WHERE scope = 'sku'`
+  );
+  const ltMap = new Map(ltRows.map((r) => [r.key_value, r]));
+  const [openLotRows] = await pool.query(
+    `SELECT sku, COALESCE(SUM(qty), 0) AS qty FROM pm_open_cutting_lots
+     WHERE closed_at IS NULL GROUP BY sku`
+  );
+  const openLotMap = new Map(openLotRows.map((r) => [r.sku, Number(r.qty) || 0]));
+  const [poRows] = await pool.query(
+    `SELECT sku, DATEDIFF(required_by_date, CURDATE()) AS days_out, COALESCE(SUM(qty), 0) AS qty
+     FROM pm_marketplace_po_lines WHERE required_by_date >= CURDATE() GROUP BY sku, days_out`
+  );
+  const poMap = new Map();
+  for (const r of poRows) {
+    if (!poMap.has(r.sku)) poMap.set(r.sku, []);
+    poMap.get(r.sku).push({ daysOut: Number(r.days_out), qty: Number(r.qty) || 0 });
+  }
+  const resolveLeadTime = (cfg) => cfg ? {
+    lead_time: Number(cfg.default_lead_time_days ?? DEFAULT_LEAD_TIME),
+    fabric_lead_time: Number(cfg.fabric_lead_time_days ?? 0),
+    safety_days: Number(cfg.safety_days ?? DEFAULT_SAFETY_DAYS),
+    override_drr: cfg.override_drr != null ? Number(cfg.override_drr) : null,
+  } : { lead_time: DEFAULT_LEAD_TIME, fabric_lead_time: 0, safety_days: DEFAULT_SAFETY_DAYS, override_drr: null };
+
   const results = [];
   for (const sku of allSkus) {
-    const row = rows.find((r) => r.sku === sku) || { order_count: 0, selling_days: 0 };
+    const row = rowMap.get(sku) || { order_count: 0, selling_days: 0 };
     const orderCount = Number(row.order_count) || 0;
     const sellingDays = Number(row.selling_days) || 0;
     const warming = sellingDays < 7;
     const denom = warming ? windowDays : sellingDays;
     let drr = denom > 0 ? orderCount / denom : 0;
 
-    const lt = await getLeadTimeForSku(pool, sku, null);
+    const lt = resolveLeadTime(ltMap.get(sku));
     if (lt.override_drr !== null) drr = lt.override_drr;
 
     const soh = sohMap.get(sku) || 0;
-
-    const [[openLot]] = await pool.query(
-      `SELECT COALESCE(SUM(qty), 0) AS qty
-       FROM pm_open_cutting_lots
-       WHERE sku = ? AND closed_at IS NULL`,
-      [sku]
-    );
-    const openLotQty = Number(openLot?.qty) || 0;
+    const openLotQty = openLotMap.get(sku) || 0;
 
     const horizon = lt.lead_time + lt.safety_days;
-    const [[poRow]] = await pool.query(
-      `SELECT COALESCE(SUM(qty), 0) AS qty
-       FROM pm_marketplace_po_lines
-       WHERE sku = ?
-         AND required_by_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)`,
-      [sku, horizon]
-    );
-    const upcomingPoQty = Number(poRow?.qty) || 0;
+    const upcomingPoQty = (poMap.get(sku) || [])
+      .reduce((s, p) => s + (p.daysOut <= horizon ? p.qty : 0), 0);
 
     const suggested = Math.max(
       0,
