@@ -586,6 +586,16 @@ async function getDohForSku(pool, { sku }) {
   };
 }
 
+// Strip the trailing size token from an ecom size-SKU to get the style/base code
+// for dashboard grouping: KTTLADIESJEANS823M -> KTTLADIESJEANS823,
+// KTTLADIESJEANS1003_3XL -> KTTLADIESJEANS1003, KTTMENSJEANS381_28 -> KTTMENSJEANS381.
+function deriveStyle(sku) {
+  const s = String(sku || '').toUpperCase();
+  // _3XL.._6XL and _<waist> require the underscore (so ...823 + XL isn't read as 3XL);
+  // XXL/XL/XS/S/M/L attach directly. Longest alternatives first.
+  return s.replace(/(?:_(?:3XL|4XL|5XL|6XL)|_\d{2,3}|XXL|XL|XS|S|M|L)$/, '') || s;
+}
+
 // Clean-day demand metrics per size-SKU, company-wide. Gap/dup-safe.
 // A day counts as a clean in-stock day only if it was in stock the WHOLE day:
 // current snapshot qty>0 AND the most-recent-PRIOR present snapshot qty>0
@@ -601,10 +611,9 @@ async function computeCleanDayMetrics(pool, windowStart) {
     `SELECT s.sku, DATE_FORMAT(s.snapshot_date, '%Y-%m-%d') AS d, SUM(s.qty) AS qty
      FROM ee_inventory_daily_snapshot s
      INNER JOIN (
-       SELECT DISTINCT es.sku
-       FROM ee_suborders es
-       INNER JOIN ee_orders eo ON es.order_id = eo.order_id
-       WHERE eo.order_date >= ?
+       SELECT DISTINCT sku
+       FROM ee_sales_daily
+       WHERE sale_date >= ? AND source = 'mini_sales_report'
      ) sold ON sold.sku = s.sku
      WHERE s.snapshot_date >= ?
      GROUP BY s.sku, d
@@ -613,11 +622,10 @@ async function computeCleanDayMetrics(pool, windowStart) {
   );
   // Daily sales by SKU on order_date.
   const [saleRows] = await pool.query(
-    `SELECT es.sku, DATE_FORMAT(eo.order_date, '%Y-%m-%d') AS d, SUM(es.quantity) AS qty
-     FROM ee_suborders es
-     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
-     WHERE eo.order_date >= ?
-     GROUP BY es.sku, d`,
+    `SELECT sku, DATE_FORMAT(sale_date, '%Y-%m-%d') AS d, SUM(qty) AS qty
+     FROM ee_sales_daily
+     WHERE sale_date >= ? AND source = 'mini_sales_report'
+     GROUP BY sku, d`,
     [windowStart]
   );
   const salesBySku = new Map();
@@ -687,19 +695,18 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
   // Company-wide aggregation per SKU
   const [rows] = await pool.query(
     `SELECT
-        es.sku,
-        COALESCE(SUM(es.quantity), 0) AS order_count,
+        s.sku,
+        COALESCE(SUM(s.qty), 0) AS order_count,
         COALESCE(MAX(sd.selling_days), 0) AS selling_days
-     FROM ee_suborders es
-     INNER JOIN ee_orders eo ON es.order_id = eo.order_id
+     FROM ee_sales_daily s
      LEFT JOIN (
        SELECT sku, COUNT(DISTINCT snapshot_date) AS selling_days
        FROM ee_inventory_daily_snapshot
        WHERE snapshot_date >= ? AND qty > 0
        GROUP BY sku
-     ) sd ON sd.sku = es.sku
-     WHERE eo.order_date >= ?
-     GROUP BY es.sku`,
+     ) sd ON sd.sku = s.sku
+     WHERE s.sale_date >= ? AND s.source = 'mini_sales_report'
+     GROUP BY s.sku`,
     [snapshotStart, snapshotStart]
   );
 
@@ -769,10 +776,40 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
   // Keep the clean-day series OFF the live /pm path. Compute it only when it
   // drives output (cutover mode) or when a shadow diff is explicitly requested.
   const includeCleanDay = DRR_MODE === 'cleanday' || shadow === true;
+  // GUARD (shadow diff): clean-day DRR is meaningless if sales don't cover the
+  // snapshot window. Refuse the diff below 90% coverage and print it — this is
+  // the lesson from the half-backfilled-orders incident, made permanent.
+  if (shadow === true) {
+    const [[cov]] = await pool.query(
+      `SELECT
+         (SELECT COUNT(DISTINCT snapshot_date) FROM ee_inventory_daily_snapshot WHERE snapshot_date >= ?) AS snap_days,
+         (SELECT COUNT(DISTINCT sale_date) FROM ee_sales_daily WHERE sale_date >= ? AND source = 'mini_sales_report') AS sale_days`,
+      [snapshotStart, snapshotStart]
+    );
+    const snapDays = Number(cov.snap_days) || 0;
+    const saleDays = Number(cov.sale_days) || 0;
+    const coverage = snapDays > 0 ? saleDays / snapDays : 0;
+    if (coverage < 0.9) {
+      throw new Error(
+        `[shadow-diff guard] sales cover only ${(coverage * 100).toFixed(0)}% of the snapshot window ` +
+        `(sales_days=${saleDays}, snapshot_days=${snapDays}; need >=90%). Backfill orders to the snapshot window first.`
+      );
+    }
+  }
   const cleanMetrics = includeCleanDay ? await computeCleanDayMetrics(pool, snapshotStart) : new Map();
+
+  // SKUs actually tracked in inventory (have a snapshot). Sold-but-untracked SKUs
+  // — 2-piece sets / bundles / virtual SKUs — have no cuttable lot, so exclude them
+  // (they otherwise dominate the recs with 0-stock noise and a bogus '(unknown)' style).
+  const [snapPresentRows] = await pool.query(
+    `SELECT DISTINCT sku FROM ee_inventory_daily_snapshot WHERE snapshot_date >= ?`,
+    [snapshotStart]
+  );
+  const snapPresent = new Set(snapPresentRows.map((r) => r.sku));
 
   const results = [];
   for (const sku of allSkus) {
+    if (!snapPresent.has(sku)) continue; // untracked/bundle SKU — not a cuttable lot
     const row = rowMap.get(sku) || { order_count: 0, selling_days: 0 };
     const orderCount = Number(row.order_count) || 0;
     const sellingDays = Number(row.selling_days) || 0;
@@ -800,13 +837,18 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     );
 
     const doh = drr > 0 ? soh / drr : null;
+    // Thin-sample SKUs (clean_days < 7) aren't trustworthy cut targets in cleanday mode.
+    const lowConfidence = DRR_MODE === 'cleanday' && cd && (cd.data_quality === 'low_sample' || cd.data_quality === 'no_clean_days');
     let trigger = 'green';
     if (doh !== null && doh <= lt.lead_time) trigger = 'red';
     else if (doh !== null && doh <= horizon) trigger = 'orange';
+    if (lowConfidence && trigger === 'red') trigger = 'orange'; // demote noisy thin-sample reds
 
     const drrDiffPct = legacyDrr > 0 ? ((cleandayDrr - legacyDrr) / legacyDrr) * 100 : (cleandayDrr > 0 ? Infinity : 0);
     results.push({
       sku,
+      style: deriveStyle(sku),
+      low_confidence: !!lowConfidence,
       soh,
       drr,
       doh,

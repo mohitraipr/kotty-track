@@ -4,6 +4,7 @@
  */
 
 const axios = require('axios');
+const JSZip = require('jszip');
 
 // Configuration from environment
 // Uses global.env from secure-env (loaded in app.js) with fallback to process.env
@@ -76,7 +77,7 @@ async function authenticateWithCredentials(warehouse = 'faridabad') {
       password: creds.password,
       location_key: creds.location_key,
     }, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(EASYECOM_API_KEY ? { 'x-api-key': EASYECOM_API_KEY } : {}) },
       timeout: 30000
     });
 
@@ -787,7 +788,7 @@ function ensureAxiosForWarehouse(warehouseKey, timeoutMs = 60000) {
     if (!jwt) throw new Error(`EasyEcom not configured for warehouse: ${warehouseKey}`);
     return axios.create({
       baseURL: EASYECOM_API_BASE,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}`, ...(EASYECOM_API_KEY ? { 'x-api-key': EASYECOM_API_KEY } : {}) },
       timeout: timeoutMs,
     });
   })();
@@ -903,19 +904,27 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
     await new Promise(r => setTimeout(r, pollIntervalMs));
   }
   if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
-  // /reports/download returns either raw CSV, or a JSON envelope
-  // { data: { reportStatus, downloadUrl } } pointing at a pre-signed S3 CSV. Handle both.
-  const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'text' });
-  let csvText = typeof dl.data === 'string' ? dl.data : JSON.stringify(dl.data);
-  if (csvText && csvText.trimStart().startsWith('{')) {
+  // Download. EasyEcom returns the report as raw CSV, a ZIP (PK magic), or a JSON
+  // envelope { data: { downloadUrl } } pointing at an S3 file (usually a ZIP).
+  const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'arraybuffer' });
+  let buf = Buffer.from(dl.data);
+  if (buf.slice(0, 1).toString() === '{') {
     try {
-      const env = JSON.parse(csvText);
+      const env = JSON.parse(buf.toString('utf8'));
       const url = env?.data?.downloadUrl || env?.downloadUrl;
       if (url) {
-        const s3 = await axios.get(url, { timeout: 600000, responseType: 'text' });
-        csvText = typeof s3.data === 'string' ? s3.data : JSON.stringify(s3.data);
+        const s3 = await axios.get(url, { responseType: 'arraybuffer', timeout: 600000 });
+        buf = Buffer.from(s3.data);
       }
-    } catch (_) { /* treat as raw CSV */ }
+    } catch (_) { /* treat buf as the file itself */ }
+  }
+  let csvText;
+  if (buf.slice(0, 2).toString() === 'PK') {
+    const zip = await JSZip.loadAsync(buf);
+    const name = Object.keys(zip.files).find((n) => n.toLowerCase().endsWith('.csv')) || Object.keys(zip.files)[0];
+    csvText = name ? await zip.files[name].async('string') : '';
+  } else {
+    csvText = buf.toString('utf8');
   }
   return parseCsv(csvText);
 }
