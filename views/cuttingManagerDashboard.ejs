@@ -326,6 +326,9 @@
       <button class="kotty-tab" id="indent-tab" data-bs-toggle="tab" data-bs-target="#indent-panel" type="button" role="tab" aria-controls="indent-panel" aria-selected="false">
         <i class="bi bi-box-seam"></i><span>Raise Indent</span>
       </button>
+      <a class="kotty-tab" href="/manual-lot">
+        <i class="bi bi-pencil-square"></i><span>Manual Lot Mapping</span>
+      </a>
     </div>
 
     <div class="tab-content" id="dashboardTabsContent">
@@ -342,6 +345,7 @@
                     <th style="width:28px;"></th>
                     <th data-i18n="idLabel">ID</th>
                     <th data-i18n="lotNumberLabel">Lot Number</th>
+                    <th data-i18n="manualLotNumber">Manual Lot No</th>
                     <th data-i18n="skuLabel">SKU</th>
                     <th data-i18n="fabricTypeLabel">Fabric Type</th>
                     <th data-i18n="tableLengthLabel">Table Length</th>
@@ -356,13 +360,14 @@
                 </thead>
                 <tbody>
                   <% if (cuttingLots.length === 0) { %>
-                    <tr><td colspan="13" class="text-center" style="padding: 40px;" data-i18n="noCuttingLotsAvailable">No cutting lots available.</td></tr>
+                    <tr><td colspan="14" class="text-center" style="padding: 40px;" data-i18n="noCuttingLotsAvailable">No cutting lots available.</td></tr>
                   <% } else { %>
                     <% cuttingLots.forEach(lot => { %>
                       <tr data-lot-no="<%= lot.lot_no %>">
                         <td><button type="button" class="lse-toggle" aria-expanded="false" aria-label="Show size breakdown"><span class="lse-chevron">&#9654;</span></button></td>
                         <td><%= lot.id %></td>
                         <td><strong><%= lot.lot_no %></strong></td>
+                        <td><%= lot.manual_lot_number || 'N/A' %></td>
                         <td><%= lot.sku %></td>
                         <td><%= lot.fabric_type %></td>
                         <td><%= lot.table_length ?? 'N/A' %></td>
@@ -406,6 +411,10 @@
                 <div class="col-md-4">
                   <label for="lot_no" class="kotty-form-label"><i class="bi bi-hash"></i><span data-i18n="lotNumberGenerated">Lot Number (Generated)</span></label>
                   <input type="text" class="kotty-input" id="lot_no" name="lot_no" value="<%= generatedLotNumber %>" readonly />
+                </div>
+                <div class="col-md-4">
+                  <label for="manual_lot_number" class="kotty-form-label"><i class="bi bi-pencil-square"></i><span data-i18n="manualLotNumber">Manual Lot Number</span></label>
+                  <input type="text" class="kotty-input" id="manual_lot_number" name="manual_lot_number" required placeholder="Handwritten / physical lot number" />
                 </div>
                 <!-- SKU Builder -->
                 <div class="col-md-8">

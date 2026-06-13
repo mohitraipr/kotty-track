@@ -1368,10 +1368,11 @@ router.get('/challan/:id', isAuthenticated, isStitchingMaster, async (req, res) 
 
     // 1) Verify the user owns this stitching_data record
     const [[row]] = await pool.query(`
-      SELECT *
-      FROM stitching_data
-      WHERE id = ?
-        AND user_id = ?
+      SELECT sd.*, cl.manual_lot_number
+      FROM stitching_data sd
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      WHERE sd.id = ?
+        AND sd.user_id = ?
     `, [entryId, userId]);
     if (!row) {
       req.flash('error', 'Challan not found or no permission.');

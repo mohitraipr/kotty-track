@@ -1,0 +1,131 @@
+<%- include('partials/header', { pageTitle: 'Manual Lot Number Mapping' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/cutting-manager/dashboard' }) %>
+
+<main class="main-content" style="margin-left: 0;">
+  <div class="container-fluid" style="max-width: var(--content-max-width);">
+    <!-- Alerts -->
+    <% if (error && error.length) { %>
+      <div class="alert alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <div><% error.forEach(msg => { %><div><%= msg %></div><% }); %></div>
+      </div>
+    <% } %>
+    <% if (success && success.length) { %>
+      <div class="alert alert-success" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
+        <div><% success.forEach(msg => { %><div><%= msg %></div><% }); %></div>
+      </div>
+    <% } %>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="bi bi-pencil-square me-2" style="color: var(--terracotta);"></i>Manual Lot Number Mapping
+      </h1>
+      <p class="page-subtitle">Assign a manual (handwritten / physical) lot number to existing cutting lots. The system lot number is never changed.</p>
+    </div>
+
+    <!-- Bulk Excel Upload -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="card-title"><i class="bi bi-file-earmark-spreadsheet me-2" style="color: var(--terracotta);"></i>Bulk Map via Excel</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <a href="/manual-lot/template" class="btn btn-secondary">
+            <i class="bi bi-download me-1"></i> Download Template
+          </a>
+          <form action="/manual-lot/upload" method="POST" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center">
+            <input type="file" name="excelFile" class="form-input" accept=".xlsx" required />
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload me-1"></i> Upload &amp; Map
+            </button>
+          </form>
+        </div>
+        <small class="text-muted d-block mt-2">Columns: <strong>System Lot No</strong>, <strong>Manual Lot Number</strong>. Rows are matched by the system lot number.</small>
+
+        <% if (uploadResult) { %>
+          <div class="alert alert-info mt-3" role="alert">
+            <div><strong>Upload result:</strong> <%= uploadResult.matched %> mapped, <%= uploadResult.skipped %> skipped (blank), <%= uploadResult.unmatched.length %> unmatched.</div>
+            <% if (uploadResult.unmatched.length) { %>
+              <div class="mt-1"><strong>Unmatched system lot numbers:</strong> <%= uploadResult.unmatched.join(', ') %></div>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <form action="/manual-lot" method="GET" class="row align-items-end g-3">
+          <div class="col-md-8">
+            <label class="form-label" style="font-weight: 500;">
+              <i class="bi bi-search me-2" style="color: var(--terracotta);"></i>Search Lots
+            </label>
+            <input type="text" name="search" class="form-input" placeholder="Search by System Lot No, SKU, Remark, or Manual Lot No..." value="<%= search %>" />
+          </div>
+          <div class="col-md-4">
+            <button class="btn btn-primary btn-lg w-100" type="submit">
+              <i class="bi bi-search me-2"></i> Search
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Lots Table -->
+    <div class="table-container">
+      <div class="card-header">
+        <h5 class="card-title"><i class="bi bi-box-seam me-2" style="color: var(--terracotta);"></i>Cutting Lots</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th><i class="bi bi-hash me-1"></i>ID</th>
+              <th><i class="bi bi-tag me-1"></i>System Lot No</th>
+              <th><i class="bi bi-upc me-1"></i>SKU</th>
+              <th><i class="bi bi-scissors me-1"></i>Remark</th>
+              <th><i class="bi bi-pencil-square me-1"></i>Manual Lot Number</th>
+              <th><i class="bi bi-clock me-1"></i>Created On</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (lots && lots.length) { %>
+              <% lots.forEach(lot => { %>
+                <tr>
+                  <td><span style="font-family: var(--font-mono); font-size: var(--text-sm);"><%= lot.id %></span></td>
+                  <td><strong><%= lot.lot_no %></strong></td>
+                  <td><%= lot.sku %></td>
+                  <td style="font-size: var(--text-sm); color: var(--text-secondary);"><%= lot.remark || '' %></td>
+                  <td>
+                    <form action="/manual-lot/update" method="POST" class="d-flex gap-2 align-items-center">
+                      <input type="hidden" name="id" value="<%= lot.id %>" />
+                      <input type="hidden" name="search" value="<%= search %>" />
+                      <input type="text" name="manual_lot_number" class="form-input" value="<%= lot.manual_lot_number || '' %>" placeholder="Manual lot no" style="width: 160px; padding: 6px 10px; font-size: var(--text-sm);" />
+                      <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Save</button>
+                    </form>
+                  </td>
+                  <td style="font-size: var(--text-sm); color: var(--text-secondary);"><%= lot.created_at ? new Date(lot.created_at).toLocaleString() : '' %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="6" class="text-center" style="padding: 48px 24px;">
+                  <div class="empty-state">
+                    <i class="bi bi-inbox empty-state-icon" style="font-size: 48px; color: var(--text-muted);"></i>
+                    <h5 class="empty-state-title mt-3">No Lots Found</h5>
+                    <p class="empty-state-text">Try a different search.</p>
+                  </div>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer') %>

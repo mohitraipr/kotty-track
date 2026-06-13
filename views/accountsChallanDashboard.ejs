@@ -139,6 +139,7 @@
                 <tr
                   data-id="<%= a.cutting_id %>"
                   data-lot="<%= a.lot_no %>"
+                  data-manual="<%= a.manual_lot_number || '' %>"
                   data-sku="<%= a.sku %>"
                   data-total="<%= a.total_pieces %>"
                   data-remaining="<%= a.remaining_pieces %>"
@@ -147,7 +148,7 @@
                     <input type="checkbox" class="rowCheckbox" style="width: 18px; height: 18px; accent-color: var(--terracotta);">
                   </td>
                   <td><span style="font-family: var(--font-mono); font-size: var(--text-sm);"><%= a.cutting_id %></span></td>
-                  <td><strong><%= a.lot_no %></strong></td>
+                  <td><strong><%= a.display_lot %></strong></td>
                   <td><%= a.sku %></td>
                   <td><%= a.total_pieces %></td>
                   <td><%= a.issued_pieces %></td>
@@ -247,6 +248,7 @@
       const row = document.createElement('tr');
       row.dataset.id = a.cutting_id;
       row.dataset.lot = a.lot_no;
+      row.dataset.manual = a.manual_lot_number || '';
       row.dataset.sku = a.sku;
       row.dataset.total = a.total_pieces;
       row.dataset.remaining = a.remaining_pieces;
@@ -255,7 +257,7 @@
           <input type="checkbox" class="rowCheckbox" style="width: 18px; height: 18px; accent-color: var(--terracotta);">
         </td>
         <td><span style="font-family: var(--font-mono); font-size: var(--text-sm);">${a.cutting_id}</span></td>
-        <td><strong>${a.lot_no}</strong></td>
+        <td><strong>${a.display_lot || a.lot_no}</strong></td>
         <td>${a.sku}</td>
         <td>${a.total_pieces}</td>
         <td>${a.issued_pieces}</td>
@@ -339,6 +341,7 @@
       selected.push({
         cutting_id: row.dataset.id,
         lot_no: row.dataset.lot,
+        manual_lot_number: row.dataset.manual || '',
         sku: row.dataset.sku,
         total_pieces: row.dataset.total,
         challan_pieces: qty,

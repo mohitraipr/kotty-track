@@ -58,10 +58,11 @@ router.get('/bulk-upload/template', isAuthenticated, isCuttingManager, async (re
       { header: 'Lot No', key: 'lot_no', width: 15 },
       { header: 'SKU', key: 'sku', width: 15 },
       { header: 'Fabric Type', key: 'fabric_type', width: 15 },
-      { header: 'Remark', key: 'remark', width: 20 }
+      { header: 'Remark', key: 'remark', width: 20 },
+      { header: 'Manual Lot No', key: 'manual_lot_number', width: 18 }
     ];
     // Add an example row
-    lotsSheet.addRow({ lot_no: 'LOT001', sku: 'SKU001', fabric_type: 'Cotton', remark: 'Older lot' });
+    lotsSheet.addRow({ lot_no: 'LOT001', sku: 'SKU001', fabric_type: 'Cotton', remark: 'Older lot', manual_lot_number: 'A-1024' });
 
     // Sheet 2: Sizes
     const sizesSheet = workbook.addWorksheet('Sizes');
@@ -133,9 +134,12 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
       const sku = row.getCell(2).value;
       const fabric_type = row.getCell(3).value;
       const remark = row.getCell(4).value;
-      console.log(`Row ${rowNumber} - Lot No: ${lot_no}, SKU: ${sku}, Fabric Type: ${fabric_type}, Remark: ${remark}`);
+      // Manual lot number is optional here so historical sheets keep working;
+      // it is required on the single create-lot form going forward.
+      const manual_lot_number = row.getCell(5).value;
+      console.log(`Row ${rowNumber} - Lot No: ${lot_no}, SKU: ${sku}, Fabric Type: ${fabric_type}, Remark: ${remark}, Manual Lot No: ${manual_lot_number}`);
       if (lot_no && sku && fabric_type) {
-        lotsData.push({ lot_no, sku, fabric_type, remark });
+        lotsData.push({ lot_no, sku, fabric_type, remark, manual_lot_number });
       }
     });
     console.log('Lots data extracted:', lotsData.length);
@@ -206,10 +210,13 @@ router.post('/bulk-upload/upload-lots', isAuthenticated, isCuttingManager, uploa
         throw new Error(`Fabric type "${lot.fabric_type}" for lot ${lot.lot_no} is not in the fabric database. Ad-hoc entry is disabled.`);
       }
 
+      const manualLotNo = lot.manual_lot_number
+        ? lot.manual_lot_number.toString().trim() || null
+        : null;
       const [result] = await conn.query(
-        `INSERT INTO cutting_lots (lot_no, sku, fabric_type, remark, user_id, total_pieces)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [lot.lot_no, lot.sku, lot.fabric_type, lot.remark || null, req.session.user.id, totalPieces]
+        `INSERT INTO cutting_lots (lot_no, manual_lot_number, sku, fabric_type, remark, user_id, total_pieces)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [lot.lot_no, manualLotNo, lot.sku, lot.fabric_type, lot.remark || null, req.session.user.id, totalPieces]
       );
       const cuttingLotId = result.insertId;
 

@@ -1347,7 +1347,7 @@ router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) 
     const userId = req.session.user.id;
     const entryId = req.params.id;
     const [[row]] = await pool.query(`
-      SELECT fd.*, cl.remark AS cutting_remark
+      SELECT fd.*, cl.remark AS cutting_remark, cl.manual_lot_number
       FROM finishing_data fd
       LEFT JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
       WHERE fd.id = ? AND fd.user_id = ?

@@ -519,10 +519,10 @@
       td1.appendChild(indexBadge);
       tr.appendChild(td1);
 
-      // Cell 2: Lot No
+      // Cell 2: Lot No (manual number replaces the system number for display)
       const td2 = document.createElement('td');
       const lotStrong = document.createElement('strong');
-      lotStrong.textContent = row.lot_no || '';
+      lotStrong.textContent = row.manual_lot_number || row.lot_no || '';
       td2.appendChild(lotStrong);
       tr.appendChild(td2);
 

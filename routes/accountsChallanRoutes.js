@@ -60,15 +60,15 @@ function buildAssignmentsQuery({ search, limit, offset }) {
         const conds = [];
         for (const term of terms) {
           const like = `%${term}%`;
-          conds.push('(c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ?)');
-          params.push(like, like, like);
+          conds.push('(c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ? OR c.manual_lot_number LIKE ?)');
+          params.push(like, like, like, like);
         }
         whereClause += ` AND (${conds.join(' OR ')})`;
       }
     } else {
       const like = `%${search}%`;
-      whereClause += ' AND (c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ?)';
-      params.push(like, like, like);
+      whereClause += ' AND (c.sku LIKE ? OR c.lot_no LIKE ? OR c.remark LIKE ? OR c.manual_lot_number LIKE ?)';
+      params.push(like, like, like, like);
     }
   }
 
@@ -76,6 +76,8 @@ function buildAssignmentsQuery({ search, limit, offset }) {
     SELECT
       c.id AS cutting_id,
       c.lot_no,
+      c.manual_lot_number,
+      COALESCE(NULLIF(c.manual_lot_number, ''), c.lot_no) AS display_lot,
       c.sku,
       c.total_pieces,
       c.remark AS cutting_remark,
@@ -131,6 +133,15 @@ router.get('/search', isAuthenticated, isAccountsAdmin, async (req, res) => {
     console.error('[ERROR] GET /accounts-challan/search:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /accounts-challan/generate — the generation form is produced by POSTing
+// selected rows from the dashboard. A GET here means a refresh / Back button /
+// bookmark / direct nav (no selected rows in the body), which would otherwise
+// 404 with "Cannot GET". Send the user back to the dashboard to re-select.
+router.get('/generate', isAuthenticated, isAccountsAdmin, (req, res) => {
+  req.flash('error', 'Please select lots and click "Generate Challan" again.');
+  res.redirect('/accounts-challan');
 });
 
 router.post('/generate', isAuthenticated, isAccountsAdmin, async (req, res) => {
@@ -241,6 +252,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
     const [assignmentRows] = await conn.query(
       `SELECT
          c.lot_no,
+         c.manual_lot_number,
          c.sku,
          c.total_pieces,
          IFNULL(SUM(dci.issued_pieces), 0) AS issued_pieces
@@ -291,6 +303,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
           entryType: 'mix',
           washing_id: null,
           lot_no: customLabel,
+          manual_lot_number: null,
           customLabel,
           sku: mixSku,
           total_pieces: requestedPieces,
@@ -341,6 +354,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
         entryType,
         washing_id: null,
         lot_no: assignment.lot_no,
+        manual_lot_number: assignment.manual_lot_number || null,
         sku: assignment.sku,
         total_pieces: requestedPieces,
         lot_total_pieces: assignment.total_pieces,
@@ -398,6 +412,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
       challanId,
       item.entryType === 'mix' ? null : item.washing_id,
       item.entryType === 'mix' ? item.customLabel : item.lot_no,
+      item.entryType === 'mix' ? null : (item.manual_lot_number || null),
       item.sku,
       item.entryType === 'mix' ? item.total_pieces : item.lot_total_pieces,
       item.total_pieces,
@@ -408,7 +423,7 @@ router.post('/create', isAuthenticated, isAccountsAdmin, async (req, res) => {
 
     await conn.query(
       `INSERT INTO dc_challan_items
-        (challan_id, washing_id, lot_no, sku, total_pieces, issued_pieces, item_type, custom_label, sku_override)
+        (challan_id, washing_id, lot_no, manual_lot_number, sku, total_pieces, issued_pieces, item_type, custom_label, sku_override)
        VALUES ?`,
       [insertItemValues]
     );
@@ -491,8 +506,9 @@ router.get('/list', isAuthenticated, isAccountsAdmin, async (req, res) => {
         AND (
           challan_no LIKE ?
           OR JSON_SEARCH(items,'one',?,NULL,'$[*].lot_no') IS NOT NULL
+          OR JSON_SEARCH(items,'one',?,NULL,'$[*].manual_lot_number') IS NOT NULL
         )`;
-      params.push(`%${search}%`, search);
+      params.push(`%${search}%`, search, search);
     }
 
     sql += ' ORDER BY created_at DESC LIMIT 200';
