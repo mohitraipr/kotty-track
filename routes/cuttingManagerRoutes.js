@@ -561,7 +561,7 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
     // Fetch lot, sizes and rolls concurrently
     const [[lotRows], [sizes], [rolls]] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.table_length, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
+        `SELECT l.id, l.lot_no, l.manual_lot_number, l.sku, l.fabric_type, l.remark, l.table_length, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ?`,

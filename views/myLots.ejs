@@ -198,7 +198,7 @@
     return `<div class="lot-card">
       <div class="lot-head">
         <div>
-          <span class="lot-no">${lot.lot_no}</span>
+          <span class="lot-no">${lot.display_lot || lot.lot_no}</span>
           <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
           <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
           ${remarkHtml}
@@ -246,6 +246,7 @@
     if (q) {
       items = items.filter(l =>
         (l.lot_no || '').toLowerCase().includes(q) ||
+        (l.manual_lot_number || '').toLowerCase().includes(q) ||
         (l.sku || '').toLowerCase().includes(q) ||
         (l.remark || '').toLowerCase().includes(q)
       );
