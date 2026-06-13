@@ -22,6 +22,10 @@ const s3Client = new S3Client({
 const listingCache = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
+// How many date-folder listings to fetch from S3 concurrently when scanning
+// the full upload history for an AWB (bounds wasted work while overlapping I/O).
+const FOLDER_FETCH_CONCURRENCY = 10;
+
 /**
  * List objects under a prefix (with caching)
  */
@@ -129,34 +133,58 @@ async function deleteObject(key) {
   }
 }
 
+// Matches top-level date folders like "2026-04-20/"
+const DATE_FOLDER_RE = /^\d{4}-\d{2}-\d{2}\/$/;
+
 /**
- * Generate candidate date folders to search (today + last N days + packing date window)
+ * List actual top-level YYYY-MM-DD/ date folders in the bucket, newest-first.
+ * One delimited LIST per page (cheap); cached via listingCache (10-min TTL).
+ * This replaces the old fixed "last N days" window so searches cover the
+ * full upload history instead of silently missing older videos.
  */
-function getCandidateFolders(packingDates = [], searchDays = 14, packingBefore = 3, packingAfter = 5) {
-  const candidateDates = new Set();
-  const today = new Date();
+async function listDateFolders(useCache = true) {
+  const cacheKey = `datefolders:${S3_PREFIX}`;
 
-  // Add last N days
-  for (let i = 0; i < searchDays; i++) {
-    const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-    candidateDates.add(formatDateFolder(d));
-  }
-
-  // Add packing date windows
-  for (const packDate of packingDates) {
-    if (packDate instanceof Date && !isNaN(packDate)) {
-      for (let delta = -packingBefore; delta <= packingAfter; delta++) {
-        const d = new Date(packDate.getTime() + delta * 24 * 60 * 60 * 1000);
-        candidateDates.add(formatDateFolder(d));
-      }
+  if (useCache) {
+    const cached = listingCache.get(cacheKey);
+    if (cached && Date.now() - cached.time < CACHE_TTL_MS) {
+      return cached.data;
     }
   }
 
-  return Array.from(candidateDates).sort().reverse();
-}
+  const folders = [];
+  let continuationToken = null;
 
-function formatDateFolder(date) {
-  return date.toISOString().slice(0, 10) + '/';
+  try {
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: S3_BUCKET,
+        Prefix: S3_PREFIX || undefined,
+        Delimiter: '/',
+        ContinuationToken: continuationToken,
+        MaxKeys: 1000,
+      });
+
+      const response = await s3Client.send(command);
+      for (const cp of response.CommonPrefixes || []) {
+        // Strip the configured S3_PREFIX before matching the date pattern
+        const rel = S3_PREFIX ? cp.Prefix.slice(S3_PREFIX.length) : cp.Prefix;
+        if (DATE_FOLDER_RE.test(rel)) {
+          folders.push(rel);
+        }
+      }
+
+      continuationToken = response.IsTruncated ? response.NextContinuationToken : null;
+    } while (continuationToken);
+
+    // Newest date first so early-exit on full hits stays fast for recent AWBs
+    folders.sort().reverse();
+    listingCache.set(cacheKey, { data: folders, time: Date.now() });
+    return folders;
+  } catch (err) {
+    console.error('S3 listDateFolders error:', err);
+    return [];
+  }
 }
 
 /**
@@ -167,30 +195,41 @@ async function findVideosByAwb(awbList, packingDatesMap = {}) {
   if (!awbList || !awbList.length) return new Map();
 
   const awbSet = new Set(awbList.map((awb) => awb.toUpperCase().trim()).filter(Boolean));
-  const packingDates = Object.values(packingDatesMap).filter((d) => d instanceof Date);
-  const folders = getCandidateFolders(packingDates);
+  // Search the full upload history (newest-first). packingDatesMap is accepted
+  // for backwards-compat but no longer narrows the window — older videos were
+  // being silently missed by the old fixed 14-day window.
+  const folders = await listDateFolders();
 
   const hits = new Map();
 
-  // Search each folder
-  for (const folder of folders) {
+  // Process folders in newest-first batches: list each batch's folders
+  // concurrently (overlaps S3 round-trips) but scan them in date order so the
+  // early-exit still short-circuits once every AWB is found. A recent AWB is
+  // found in the first batch; a full miss costs ceil(folders/BATCH) round-trips
+  // instead of one per folder.
+  for (let i = 0; i < folders.length; i += FOLDER_FETCH_CONCURRENCY) {
     if (awbSet.size === 0) break; // All found
 
-    const objects = await listObjects(folder);
-    for (const obj of objects) {
-      const keyUpper = obj.key.toUpperCase();
+    const batch = folders.slice(i, i + FOLDER_FETCH_CONCURRENCY);
+    const listings = await Promise.all(batch.map((folder) => listObjects(folder)));
 
-      for (const awb of awbSet) {
-        if (keyUpper.includes(awb)) {
-          const url = await generatePresignedUrl(obj.key);
-          hits.set(awb, {
-            key: obj.key,
-            url,
-            size: obj.size,
-            lastModified: obj.lastModified,
-          });
-          awbSet.delete(awb);
-          break;
+    for (const objects of listings) {
+      if (awbSet.size === 0) break;
+      for (const obj of objects) {
+        const keyUpper = obj.keyUpper || obj.key.toUpperCase();
+
+        for (const awb of awbSet) {
+          if (keyUpper.includes(awb)) {
+            const url = await generatePresignedUrl(obj.key);
+            hits.set(awb, {
+              key: obj.key,
+              url,
+              size: obj.size,
+              lastModified: obj.lastModified,
+            });
+            awbSet.delete(awb);
+            break;
+          }
         }
       }
     }
@@ -200,16 +239,25 @@ async function findVideosByAwb(awbList, packingDatesMap = {}) {
 }
 
 /**
- * Pre-load all video objects from date folders (for bulk searches)
- * Returns array of all objects across all folders
+ * Pre-load all video objects from date folders (for bulk searches).
+ * By default loads the ENTIRE upload history; pass `searchDays` to cap to the
+ * N most-recent date folders. Each object carries a precomputed `keyUpper` so
+ * repeated chunk searches don't re-uppercase the same keys.
+ * Returns array of all objects across all folders.
  */
-async function preloadAllVideos(searchDays = 14) {
-  const folders = getCandidateFolders([], searchDays);
-  const allObjects = [];
+async function preloadAllVideos(searchDays = null) {
+  let folders = await listDateFolders(); // already newest-first
+  if (searchDays && searchDays > 0) {
+    folders = folders.slice(0, searchDays);
+  }
 
+  const allObjects = [];
   for (const folder of folders) {
     const objects = await listObjects(folder);
-    allObjects.push(...objects);
+    for (const obj of objects) {
+      obj.keyUpper = obj.key.toUpperCase();
+      allObjects.push(obj);
+    }
   }
 
   return allObjects;
@@ -230,7 +278,7 @@ async function findVideosByAwbFromCache(awbList, preloadedObjects) {
   for (const obj of preloadedObjects) {
     if (awbSet.size === 0) break; // All found
 
-    const keyUpper = obj.key.toUpperCase();
+    const keyUpper = obj.keyUpper || obj.key.toUpperCase();
 
     for (const awb of awbSet) {
       if (keyUpper.includes(awb)) {
@@ -311,7 +359,7 @@ module.exports = {
   findVideosByAwbFromCache,
   preloadAllVideos,
   getVideosForDate,
-  getCandidateFolders,
+  listDateFolders,
   formatFileSize,
   clearCache,
   S3_BUCKET,
