@@ -19,6 +19,7 @@ const {
   generatePresignedUrl,
   formatFileSize,
   listObjects,
+  listDateFolders,
   S3_BUCKET,
 } = require('../utils/s3Client');
 
@@ -125,11 +126,10 @@ router.get('/api/keyword', isAuthenticated, allowVideoFinderAccess, async (req, 
       // Search specific date folder
       allVideos = await getVideosForDate(date);
     } else {
-      // Search last 14 days
-      const today = new Date();
-      for (let i = 0; i < 14; i++) {
-        const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
-        const dateStr = d.toISOString().slice(0, 10);
+      // Search the full upload history (all date folders, newest-first)
+      const folders = await listDateFolders();
+      for (const folder of folders) {
+        const dateStr = folder.replace(/\/$/, '');
         const videos = await getVideosForDate(dateStr);
         allVideos.push(...videos);
       }
@@ -207,7 +207,7 @@ router.post('/bulk-search', isAuthenticated, allowVideoFinderAccess, upload.sing
     let hits;
     if (awbs.length > 500) {
       console.log(`Bulk search: Pre-loading videos for ${awbs.length} AWBs`);
-      const preloadedVideos = await preloadAllVideos(14);
+      const preloadedVideos = await preloadAllVideos();
       console.log(`Pre-loaded ${preloadedVideos.length} videos`);
       hits = await findVideosByAwbFromCache(awbs, preloadedVideos);
     } else {
@@ -328,10 +328,11 @@ router.post('/api/search-stream', isAuthenticated, allowVideoFinderAccess, async
     const totalChunks = Math.ceil(awbs.length / CHUNK_SIZE);
     sendEvent('start', { total, chunkSize: CHUNK_SIZE, message: 'Loading video index...' });
 
-    // Pre-load ALL videos from S3 (last 14 days) - this is the key optimization
+    // Pre-load ALL videos from S3 (full upload history) - this is the key optimization
     // Instead of re-listing folders for each chunk, we list once and reuse
-    const preloadedVideos = await preloadAllVideos(14);
-    console.log(`Pre-loaded ${preloadedVideos.length} videos for bulk search of ${total} AWBs`);
+    const folders = await listDateFolders();
+    const preloadedVideos = await preloadAllVideos();
+    console.log(`Pre-loaded ${preloadedVideos.length} videos across ${folders.length} date folders for bulk search of ${total} AWBs`);
 
     if (clientDisconnected) {
       clearInterval(keepAlive);
