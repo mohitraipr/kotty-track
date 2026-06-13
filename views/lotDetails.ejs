@@ -17,8 +17,8 @@
     <div class="page-header">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div>
-          <h1 class="page-title">Lot <%= lot.lot_no %></h1>
-          <p class="page-subtitle">Complete lot information and breakdown</p>
+          <h1 class="page-title">Lot <%= lot.manual_lot_number || lot.lot_no %></h1>
+          <p class="page-subtitle">Complete lot information and breakdown<% if (lot.manual_lot_number) { %> · System lot: <%= lot.lot_no %><% } %></p>
         </div>
         <a href="/cutting-manager/dashboard" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i>

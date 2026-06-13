@@ -151,6 +151,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const operatorRoutes = require('./routes/operatorRoutes');
 const fabricManagerRoutes = require('./routes/fabricManagerRoutes'); // Import Fabric Manager Routes
 const cuttingManagerRoutes = require('./routes/cuttingManagerRoutes');
+const manualLotRoutes = require('./routes/manualLotRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const stitchingRoutes = require('./routes/stitchingRoutes');
 const finishingRoutes = require('./routes/finishingRoutes');
@@ -211,6 +212,7 @@ app.use('/dashboard', dashboardRoutes);
 app.use('/operator', operatorRoutes);
 app.use('/fabric-manager', fabricManagerRoutes); // Use Fabric Manager Routes
 app.use('/cutting-manager', cuttingManagerRoutes);
+app.use('/manual-lot', manualLotRoutes);
 app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
 app.use('/finishingdashboard', finishingRoutes);

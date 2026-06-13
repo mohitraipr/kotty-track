@@ -84,9 +84,10 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
     // Fetch all cutting lots created by this cutting manager
     const [cuttingLots] = await pool.query(
       `
-      SELECT 
+      SELECT
         l.id,
         l.lot_no,
+        l.manual_lot_number,
         l.sku,
         l.fabric_type,
         l.remark,
@@ -209,6 +210,7 @@ router.post(
   async (req, res) => {
     const {
       lot_no,
+      manual_lot_number,
       sku,
       fabric_type,
       remark,
@@ -224,8 +226,8 @@ router.post(
     const image = req.file;
 
     // Input validation
-    if (!lot_no || !sku || !fabric_type) {
-      req.flash('error', 'Lot No., SKU and Fabric Type are required.');
+    if (!lot_no || !sku || !fabric_type || !manual_lot_number || !manual_lot_number.trim()) {
+      req.flash('error', 'Lot No., SKU, Fabric Type and Manual Lot Number are required.');
       return res.redirect('/cutting-manager/dashboard');
     }
 
@@ -260,12 +262,13 @@ router.post(
         const [result] = await conn.query(
           `
           INSERT INTO cutting_lots
-            (lot_no, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces, flow_type)
+            (lot_no, manual_lot_number, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces, flow_type)
           VALUES
-            (?, ?, ?, ?, ?, ?, ?, 0, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
         `,
           [
             lot_no,
+            manual_lot_number.trim(),
             sku,
             fabric_type,
             remark || null,
@@ -558,7 +561,7 @@ router.get('/lot-details/:lotId', isAuthenticated, isCuttingManager, async (req,
     // Fetch lot, sizes and rolls concurrently
     const [[lotRows], [sizes], [rolls]] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.table_length, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
+        `SELECT l.id, l.lot_no, l.manual_lot_number, l.sku, l.fabric_type, l.remark, l.table_length, l.image_url, l.total_pieces, l.is_confirmed, l.created_at, u.username AS created_by
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ?`,

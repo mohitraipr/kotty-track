@@ -423,10 +423,11 @@ router.get('/challan/:id', isAuthenticated, isWashingMaster, async (req, res) =>
     const userId = req.session.user.id;
     const entryId = req.params.id;
     const [[row]] = await pool.query(`
-      SELECT *
-      FROM washing_data
-      WHERE id = ?
-        AND user_id = ?
+      SELECT wd.*, cl.manual_lot_number
+      FROM washing_data wd
+      LEFT JOIN cutting_lots cl ON cl.lot_no = wd.lot_no
+      WHERE wd.id = ?
+        AND wd.user_id = ?
     `, [entryId, userId]);
     if (!row) {
       req.flash('error', 'Challan not found or no permission.');

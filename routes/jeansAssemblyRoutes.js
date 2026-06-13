@@ -545,9 +545,10 @@ router.get('/challan/:id', isAuthenticated, isJeansAssemblyMaster, async (req, r
 
     // 1) Jeans assembly record
     const [[entry]] = await pool.query(`
-      SELECT *
-      FROM jeans_assembly_data
-      WHERE id = ? AND user_id = ?
+      SELECT jad.*, cl.manual_lot_number
+      FROM jeans_assembly_data jad
+      LEFT JOIN cutting_lots cl ON cl.lot_no = jad.lot_no
+      WHERE jad.id = ? AND jad.user_id = ?
     `, [entryId, userId]);
     if (!entry) {
       req.flash('error', 'Challan not found or no permission.');

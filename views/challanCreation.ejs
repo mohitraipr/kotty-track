@@ -398,9 +398,10 @@ HARYANA, Haryana 121009
           <% challan.items.forEach((item, index) => { %>
             <%
               const typeLabel = (item.entryType || '').toUpperCase() || 'NORMAL';
+              const displayLot = item.manual_lot_number || item.lot_no || '-';
               const itemLabel = item.entryType === 'mix'
                 ? (item.customLabel || item.lot_no || 'Mix Item')
-                : `Lot: ${item.lot_no || '-'}`;
+                : `Lot: ${displayLot}`;
               const skuLabel = item.sku || item.sku_override || '';
               const qtyVal = parseFloat(item.total_pieces || 0);
               const rateVal = parseFloat(item.rate || 200);
