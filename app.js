@@ -201,6 +201,15 @@ const returnGrnRoutes = require('./routes/returnGrnRoutes');
 // Use Routes
 // Health check for Cloud Run (must be before auth middleware)
 app.use('/health', healthRoutes);
+
+// Self-healing nightly EasyEcom pull (catch-up on traffic). The first request seen
+// after the 02:30 IST cutoff claims the day's run and fires a self-call to the
+// secret-gated synchronous endpoint below. Both no-op unless PM_PULL_ENABLED=1.
+// Mounted before auth: the endpoint authenticates via the x-cron-secret header.
+const { catchupMiddleware, internalRunPullHandler } = require('./utils/catchupPull');
+app.post('/internal/run-pull', internalRunPullHandler);
+app.use(catchupMiddleware);
+
 app.use('/', authRoutes);
 app.use('/', launcherRoutes);                       // /launcher + /switch-role
 app.use('/my-lots', require('./routes/myLotsRoutes'));
