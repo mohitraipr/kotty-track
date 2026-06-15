@@ -282,6 +282,25 @@ async function recordEvent(conn, {
   // reject events MAY be parentless: that's an "upstream reject" — pieces
   // refused at handover before they entered this stage's pool.
 
+  // Guardrail: every size_label must belong to this lot's cutting breakdown.
+  // Blocks malformed submissions (e.g. array-index labels '0','1','2'… that
+  // historically produced phantom "+150" rows) and typo labels from ever
+  // entering the event ledger — the single chokepoint for all stage events.
+  const [cutRows] = await conn.query(
+    `SELECT size_label FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+    [cuttingLotId]
+  );
+  if (cutRows.length) {
+    const allowed = new Set(cutRows.map(r => normalizeSizeLabel(r.size_label)));
+    const bad = [...new Set(sizes.map(s => normalizeSizeLabel(s.size_label)))]
+      .filter(l => l && !allowed.has(l));
+    if (bad.length) {
+      throw new Error(
+        `Invalid size label(s) [${bad.join(', ')}] not in cutting breakdown for lot ${cuttingLotId}`
+      );
+    }
+  }
+
   const [result] = await conn.query(
     `
       INSERT INTO ${events}

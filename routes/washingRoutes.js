@@ -1620,21 +1620,32 @@ router.get('/available-lots', isAuthenticated, isWashingMaster, async (req, res)
     // Find jeans_assembly_data records where:
     // 1. flow_type is denim (or cutter is_denim_cutter = 1)
     // 2. Has remaining pieces not yet washed
+    // Single source of truth for "produced at assembly": SUM of the assembly
+    // size rows (not the denormalized jad.total_pieces, which duplicate jad
+    // rows would double-count). One row per lot via the representative jad.id.
     const [rows] = await pool.query(`
       SELECT
         jad.id,
         jad.lot_no,
         jad.sku,
-        jad.total_pieces,
+        prod.produced AS total_pieces,
         jad.created_at,
         cl.remark AS cutting_remark,
-        jad.total_pieces - COALESCE((
-          SELECT SUM(wd.total_pieces)
-          FROM washing_data wd
+        prod.produced - COALESCE((
+          SELECT SUM(wds.pieces)
+          FROM washing_data_sizes wds
+          JOIN washing_data wd ON wd.id = wds.washing_data_id
           WHERE wd.lot_no = jad.lot_no
         ), 0) AS remaining_pieces,
         u.username AS assembly_master
       FROM jeans_assembly_data jad
+      JOIN (
+        SELECT d.lot_no, MAX(d.id) AS rep_id,
+               SUM(s.pieces) AS produced
+        FROM jeans_assembly_data d
+        JOIN jeans_assembly_data_sizes s ON s.jeans_assembly_data_id = d.id
+        GROUP BY d.lot_no
+      ) prod ON prod.rep_id = jad.id
       LEFT JOIN users u ON jad.user_id = u.id
       LEFT JOIN cutting_lots cl ON cl.lot_no = jad.lot_no
       WHERE (jad.lot_no LIKE ? OR jad.sku LIKE ? OR cl.remark LIKE ?)

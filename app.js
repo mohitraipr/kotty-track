@@ -235,6 +235,7 @@ app.use('/accounts/payments', accountsPaymentRoutes);
 app.use('/cutting-analysis', cuttingAnalysisRoutes);
 app.use("/operator", editCuttingLotRoutes);
 app.use('/operator', editWashingAssignmentsRoutes);
+app.use('/operator', require('./routes/correctStageApproval'));
 app.use('/operator', departmentMgmtRoutes);
 app.use('/operator', operatorEmployeeRoutes);
 app.use('/', bulkUploadRoutes);

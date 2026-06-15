@@ -1,0 +1,150 @@
+<%- include('partials/header', { pageTitle: 'Correct Stage Approval' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+
+<style>
+  .page-wrapper { padding-top: var(--navbar-height); min-height: 100vh; background: var(--bg-page); }
+  .page-container { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { margin-bottom: 28px; }
+  .page-title { font-family: var(--font-display); font-size: var(--text-3xl); color: var(--text-primary); margin-bottom: 8px; }
+  .page-subtitle { font-size: var(--text-base); color: var(--text-secondary); }
+  .kotty-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+  .kotty-card-header { padding: 16px 22px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 12px; }
+  .kotty-card-header h2 { font-family: var(--font-display); font-size: var(--text-lg); color: var(--text-primary); margin: 0; flex: 1; }
+  .kotty-card-header i { color: var(--terracotta); font-size: 20px; }
+  .kotty-card-body { padding: 22px; }
+  .form-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); margin-bottom: 8px; display: block; }
+  .form-select, .form-input { width: 100%; padding: 12px 16px; font-size: var(--text-base); color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: var(--radius-md); }
+  .form-select:focus, .form-input:focus { outline: none; border-color: var(--terracotta); box-shadow: 0 0 0 3px var(--terracotta-bg); }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .btn-primary { background: var(--terracotta); color: #fff; border: none; padding: 12px 22px; border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-base); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  table.kt { width: 100%; border-collapse: collapse; }
+  table.kt th, table.kt td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); text-align: left; font-size: var(--text-sm); }
+  table.kt th { color: var(--text-secondary); font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--gray-100); }
+  .badge.paid { background: var(--danger-light); color: var(--danger); }
+  .alert { border-radius: var(--radius-md); padding: 14px 18px; margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+  .alert-danger { background: var(--danger-light); color: var(--danger); }
+  .alert-success { background: #e6f4ea; color: #1a7f37; }
+  .muted { color: var(--text-secondary); font-size: var(--text-sm); }
+  .hidden { display: none; }
+</style>
+
+<div class="page-wrapper">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Correct Stage Approval</h1>
+      <p class="page-subtitle">Reattribute a lot at a stage from the wrong operator to the right one. Moves the event ledger, the production data, and the payments (including already-paid).</p>
+    </div>
+
+    <div class="kotty-card">
+      <div class="kotty-card-header"><i class="bi bi-search"></i><h2>Find a lot</h2></div>
+      <div class="kotty-card-body">
+        <div class="row-2">
+          <div>
+            <label class="form-label" for="stageSel">Stage</label>
+            <select id="stageSel" class="form-select">
+              <% stages.forEach(function(s){ %><option value="<%= s.key %>"><%= s.label %></option><% }) %>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" for="lotInput">Lot number (lot_no or manual)</label>
+            <input id="lotInput" class="form-input" placeholder="e.g. UM416" />
+          </div>
+        </div>
+        <div style="margin-top:16px"><button id="lookupBtn" class="btn-primary"><i class="bi bi-search"></i> Look up</button></div>
+        <div id="lookupAlert"></div>
+      </div>
+    </div>
+
+    <div id="resultCard" class="kotty-card hidden">
+      <div class="kotty-card-header"><i class="bi bi-people"></i><h2 id="resultTitle">Current attribution</h2></div>
+      <div class="kotty-card-body">
+        <table class="kt">
+          <thead><tr><th>Operator</th><th>Approved</th><th>Completed</th><th>Data rows</th><th>Payments</th></tr></thead>
+          <tbody id="currentBody"></tbody>
+        </table>
+
+        <hr style="margin:20px 0; border:none; border-top:1px solid var(--border-light)">
+
+        <div class="row-2">
+          <div>
+            <label class="form-label" for="fromSel">From (wrong operator)</label>
+            <select id="fromSel" class="form-select"></select>
+          </div>
+          <div>
+            <label class="form-label" for="toSel">To (correct operator)</label>
+            <select id="toSel" class="form-select"></select>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:10px">This moves every event, data row and payment for this lot at this stage from the wrong operator to the correct one, and writes an audit record.</p>
+        <div style="margin-top:14px"><button id="applyBtn" class="btn-primary"><i class="bi bi-arrow-left-right"></i> Apply correction</button></div>
+        <div id="applyAlert"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const $ = (id) => document.getElementById(id);
+  let state = { lot: null, stage: null, current: [], targets: [] };
+
+  function alertHTML(box, type, msg) { box.innerHTML = '<div class="alert alert-' + type + '"><i class="bi bi-' + (type === 'danger' ? 'exclamation-triangle-fill' : 'check-circle-fill') + '"></i><span>' + msg + '</span></div>'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  $('lookupBtn').addEventListener('click', function () {
+    const stage = $('stageSel').value, lot = $('lotInput').value.trim();
+    $('lookupAlert').innerHTML = ''; $('resultCard').classList.add('hidden');
+    if (!lot) { alertHTML($('lookupAlert'), 'danger', 'Enter a lot number.'); return; }
+    fetch('/operator/correct-approval/lookup?stage=' + encodeURIComponent(stage) + '&lot=' + encodeURIComponent(lot))
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (!ok) { alertHTML($('lookupAlert'), 'danger', esc(j.error || 'Lookup failed')); return; }
+        state = { lot: j.lot, stage: j.stage, current: j.current || [], targets: j.targets || [] };
+        renderResult(j);
+      })
+      .catch(e => alertHTML($('lookupAlert'), 'danger', 'Network error: ' + esc(e.message)));
+  });
+
+  function renderResult(j) {
+    $('resultTitle').textContent = j.stage_label + ' — ' + j.lot.display_lot + ' (' + esc(j.lot.sku || '') + ')';
+    const body = $('currentBody');
+    if (!j.current.length) {
+      body.innerHTML = '<tr><td colspan="5" class="muted">No operator is attributed at this stage for this lot.</td></tr>';
+    } else {
+      body.innerHTML = j.current.map(c => {
+        const pay = c.payments ? (c.payments + (c.paid_payments ? ' <span class="badge paid">' + c.paid_payments + ' paid</span>' : '')) : '0';
+        return '<tr><td>' + esc(c.username) + '</td><td>' + (c.approved || 0) + '</td><td>' + (c.completed || 0) + '</td><td>' + (c.data_rows || 0) + '</td><td>' + pay + '</td></tr>';
+      }).join('');
+    }
+    // From = operators currently attributed; To = valid role holders
+    $('fromSel').innerHTML = j.current.map(c => '<option value="' + c.user_id + '">' + esc(c.username) + '</option>').join('') || '<option value="">(none)</option>';
+    $('toSel').innerHTML = j.targets.map(t => '<option value="' + t.id + '">' + esc(t.username) + '</option>').join('');
+    $('applyAlert').innerHTML = '';
+    $('resultCard').classList.remove('hidden');
+  }
+
+  $('applyBtn').addEventListener('click', function () {
+    const fromId = $('fromSel').value, toId = $('toSel').value;
+    $('applyAlert').innerHTML = '';
+    if (!fromId || !toId) { alertHTML($('applyAlert'), 'danger', 'Pick both operators.'); return; }
+    if (fromId === toId) { alertHTML($('applyAlert'), 'danger', 'From and To are the same operator.'); return; }
+    const fd = new FormData();
+    fd.append('stage', state.stage); fd.append('cutting_lot_id', state.lot.cutting_lot_id);
+    fd.append('from_user_id', fromId); fd.append('to_user_id', toId);
+    $('applyBtn').disabled = true;
+    fetch('/operator/correct-approval/update', { method: 'POST', body: fd })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        $('applyBtn').disabled = false;
+        if (!ok || !j.success) { alertHTML($('applyAlert'), 'danger', esc(j.error || 'Correction failed')); return; }
+        alertHTML($('applyAlert'), 'success', 'Done. Moved to ' + esc(j.to_username) + ' — ' + j.moved.events + ' events, ' + j.moved.data_rows + ' data rows, ' + j.moved.payments + ' payments (' + j.moved.paid_payments + ' paid). Re-running lookup…');
+        setTimeout(() => $('lookupBtn').click(), 700);
+      })
+      .catch(e => { $('applyBtn').disabled = false; alertHTML($('applyAlert'), 'danger', 'Network error: ' + esc(e.message)); });
+  });
+});
+</script>
+
+<%- include('partials/footer') %>
