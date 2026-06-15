@@ -398,6 +398,7 @@ async function fetchPendencyRows(dept, searchLike, offset, limit) {
       SELECT
         MIN(e.id) AS assignment_id,
         cl.lot_no,
+        cl.manual_lot_number,
         u.username,
         SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END) AS approved,
         SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END) AS completed,
@@ -413,7 +414,7 @@ async function fetchPendencyRows(dept, searchLike, offset, limit) {
       JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
       JOIN users u ON u.id = e.operator_id
       WHERE cl.lot_no LIKE ?
-      GROUP BY e.cutting_lot_id, e.operator_id, cl.lot_no, u.username
+      GROUP BY e.cutting_lot_id, e.operator_id, cl.lot_no, cl.manual_lot_number, u.username
       ORDER BY MAX(e.created_at) DESC
       LIMIT ?, ?
     `;
@@ -444,6 +445,7 @@ router.get("/dashboard/pendency/download", isAuthenticated, isOperator, async (r
     const sheet = workbook.addWorksheet("Pendency");
     sheet.columns = [
       { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "Manual Lot No", key: "manual_lot_number", width: 15 },
       { header: "Operator", key: "username", width: 20 },
       { header: "Assigned", key: "assigned", width: 12 },
       { header: "Completed", key: "completed", width: 12 },
@@ -3325,6 +3327,7 @@ router.get("/lot-completion", isAuthenticated, isOperator, async (req, res) => {
       SELECT
         c.id,
         c.lot_no,
+        c.manual_lot_number,
         c.sku,
         c.fabric_type,
         c.total_pieces,
@@ -3446,6 +3449,7 @@ router.get("/lot-completion/api", isAuthenticated, isOperator, async (req, res) 
       SELECT
         c.id,
         c.lot_no,
+        c.manual_lot_number,
         c.sku,
         c.fabric_type,
         c.total_pieces,
@@ -3543,6 +3547,7 @@ router.get("/lot-completion/download", isAuthenticated, isOperator, async (req, 
     const [lots] = await pool.query(`
       SELECT
         c.lot_no,
+        c.manual_lot_number,
         c.sku,
         c.fabric_type,
         c.total_pieces,
@@ -3577,6 +3582,7 @@ router.get("/lot-completion/download", isAuthenticated, isOperator, async (req, 
 
     sheet.columns = [
       { header: 'Lot No', key: 'lot_no', width: 15 },
+      { header: 'Manual Lot No', key: 'manual_lot_number', width: 15 },
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Fabric', key: 'fabric_type', width: 12 },
       { header: 'Total Pieces', key: 'total_pieces', width: 12 },

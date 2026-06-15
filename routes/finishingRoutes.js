@@ -2373,7 +2373,7 @@ router.get('/dispatch-download', isAuthenticated, isFinishingMaster, async (req,
     const userId = req.session.user.id;
 
     const [rows] = await pool.query(
-      `SELECT fd.lot_no, fd.sku,
+      `SELECT fd.lot_no, cl.manual_lot_number, fd.sku,
               d.destination,
               fd.destination_remark,
               d.size_label,
@@ -2395,6 +2395,7 @@ router.get('/dispatch-download', isAuthenticated, isFinishingMaster, async (req,
     const sheet = wb.addWorksheet('Dispatches');
     sheet.columns = [
       { header: 'Lot No',          key: 'lot_no',          width: 14 },
+      { header: 'Manual Lot No',   key: 'manual_lot_number', width: 14 },
       { header: 'SKU',             key: 'sku',             width: 22 },
       { header: 'Destination',     key: 'destination',     width: 14 },
       { header: 'Destination Note', key: 'destination_remark', width: 24 },
@@ -2409,7 +2410,7 @@ router.get('/dispatch-download', isAuthenticated, isFinishingMaster, async (req,
     const fmt = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '';
     for (const r of rows) {
       sheet.addRow({
-        lot_no: r.lot_no, sku: r.sku,
+        lot_no: r.lot_no, manual_lot_number: r.manual_lot_number || '', sku: r.sku,
         destination: r.destination || '',
         destination_remark: r.destination_remark || '',
         size_label: r.size_label || '',

@@ -438,6 +438,7 @@
           <thead>
             <tr>
               <th>Lot No</th>
+              <th>Manual Lot No</th>
               <th>SKU</th>
               <th class="num">Pieces</th>
               <th>Remark</th>
@@ -449,6 +450,7 @@
             <% cuttingData.forEach(lot => { %>
             <tr>
               <td><strong><%= lot.lot_no %></strong></td>
+              <td><%= lot.manual_lot_number || '—' %></td>
               <td><%= lot.sku %></td>
               <td class="num"><%= lot.total_pieces.toLocaleString() %></td>
               <td><%= lot.remark || '-' %></td>

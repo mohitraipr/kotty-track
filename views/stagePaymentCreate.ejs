@@ -323,7 +323,7 @@ function renderLots() {
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
 
-  const headers = ['', 'Lot No', 'SKU', 'Worker', 'Qty', 'Base Rate', 'Extra Jobwork', 'Total'];
+  const headers = ['', 'Lot No', 'Manual Lot No', 'SKU', 'Worker', 'Qty', 'Base Rate', 'Extra Jobwork', 'Total'];
   headers.forEach(function(h, i) {
     const th = document.createElement('th');
     if (i === 0) {
@@ -366,6 +366,11 @@ function renderLots() {
     strong.textContent = lot.lot_no;
     td2.appendChild(strong);
     tr.appendChild(td2);
+
+    // Manual Lot No
+    const tdManual = document.createElement('td');
+    tdManual.textContent = lot.manual_lot_number || '—';
+    tr.appendChild(tdManual);
 
     // SKU
     const td3 = document.createElement('td');

@@ -2233,6 +2233,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
       success: true,
       lot: {
         lot_no: cuttingLot.lot_no,
+        manual_lot_number: cuttingLot.manual_lot_number || null,
         sku: cuttingLot.sku,
         cutting_remark: cuttingLot.remark,
         cutting_master: cuttingLot.cutting_master_name,

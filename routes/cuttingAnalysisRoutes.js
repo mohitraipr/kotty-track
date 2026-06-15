@@ -40,6 +40,7 @@ router.get('/', isAuthenticated, isAnalyst, async (req, res) => {
       SELECT
         cl.sku,
         cl.lot_no,
+        cl.manual_lot_number,
         cl.total_pieces,
         cl.remark,
         cl.created_at,

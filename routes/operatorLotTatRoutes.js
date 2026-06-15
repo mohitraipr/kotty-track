@@ -62,7 +62,7 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
   params.push(safeLimit);
 
   const [lots] = await pool.query(
-    `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.flow_type, cl.remark,
+    `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.flow_type, cl.remark,
             cl.created_at, cl.user_id AS cutter_id, cu.username AS cutter_name
        FROM cutting_lots cl
   LEFT JOIN users cu ON cu.id = cl.user_id
@@ -78,7 +78,7 @@ async function loadLotTat({ days, search, remark, flow, overdue, limit }) {
   const lotById = {};
   for (const l of lots) {
     lotById[l.id] = {
-      lot_id: l.id, lot_no: l.lot_no, sku: l.sku,
+      lot_id: l.id, lot_no: l.lot_no, manual_lot_number: l.manual_lot_number || '', sku: l.sku,
       pieces: Number(l.total_pieces) || 0,
       flow_type: l.flow_type || 'unknown',
       remark: l.remark || '',
@@ -245,6 +245,7 @@ router.get('/download', isAuthenticated, isOperator, async (req, res) => {
     const sheet = wb.addWorksheet('Lot TAT');
     sheet.columns = [
       { header: 'Lot No',        key: 'lot_no',         width: 14 },
+      { header: 'Manual Lot No', key: 'manual_lot_number', width: 14 },
       { header: 'SKU',           key: 'sku',            width: 22 },
       { header: 'Dept',          key: 'dept',           width: 9 },
       { header: 'Pieces',        key: 'pieces',         width: 9 },
@@ -281,7 +282,7 @@ router.get('/download', isAuthenticated, isOperator, async (req, res) => {
     for (const lot of lots) {
       const byStage = Object.fromEntries(lot.timeline.map(t => [t.stage, t]));
       const row = {
-        lot_no: lot.lot_no, sku: lot.sku, dept: lot.flow_type,
+        lot_no: lot.lot_no, manual_lot_number: lot.manual_lot_number || '', sku: lot.sku, dept: lot.flow_type,
         pieces: lot.pieces, remark: lot.remark || '',
         cutter: lot.cutter.name || '', cut_date: fmt(lot.created_at),
         current_stage: lot.current_stage,
