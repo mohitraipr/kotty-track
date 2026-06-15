@@ -206,6 +206,7 @@
       <div class="lot-head">
         <div>
           <span class="lot-no">${lot.lot_no}</span>
+          ${lot.manual_lot_number ? `<span class="lot-meta">· Manual: <strong>${escapeHtml(lot.manual_lot_number)}</strong></span>` : ''}
           <span class="dept-chip ${lot.flow_type}">${lot.flow_type}</span>
           <span class="lot-meta">· ${lot.sku} · ${lot.pieces.toLocaleString()} pcs</span>
           ${lot.remark ? `<div class="lot-remark"><i class="bi bi-chat-left-text-fill"></i> <span><strong>Cutting remark:</strong> ${escapeHtml(lot.remark)}</span></div>` : ''}

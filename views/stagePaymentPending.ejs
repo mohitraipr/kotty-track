@@ -298,6 +298,7 @@
           <tr>
             <th>Worker</th>
             <th>Lot No</th>
+            <th>Manual Lot No</th>
             <th>SKU</th>
             <th>Stage</th>
             <th>Qty</th>
@@ -310,12 +311,13 @@
         </thead>
         <tbody>
           <% if (payments.length === 0) { %>
-          <tr><td colspan="10" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
+          <tr><td colspan="11" style="text-align: center; color: var(--text-secondary);">No pending payments</td></tr>
           <% } else { %>
           <% payments.forEach(p => { %>
           <tr>
             <td><strong><%= p.username %></strong></td>
             <td><%= p.lot_no %></td>
+            <td><%= p.manual_lot_number || '—' %></td>
             <td><%= p.sku %></td>
             <td><span class="badge badge-<%= p.stage %>"><%= p.stage %></span></td>
             <td><%= p.qty.toLocaleString() %></td>

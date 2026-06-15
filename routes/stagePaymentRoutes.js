@@ -335,6 +335,7 @@ router.get('/api/eligible-lots', isAuthenticated, isOperator, async (req, res) =
       SELECT
         MIN(e.id)            AS source_id,
         cl.lot_no            AS lot_no,
+        cl.manual_lot_number AS manual_lot_number,
         cl.sku               AS sku,
         SUM(e.pieces)        AS qty,
         e.operator_id        AS user_id,
@@ -353,7 +354,7 @@ router.get('/api/eligible-lots', isAuthenticated, isOperator, async (req, res) =
             AND sp.user_id = e.operator_id
             AND sp.status != 'cancelled'
         )
-      GROUP BY cl.id, e.operator_id, cl.lot_no, cl.sku, u.username
+      GROUP BY cl.id, e.operator_id, cl.lot_no, cl.manual_lot_number, cl.sku, u.username
       ORDER BY MIN(e.created_at) DESC
       LIMIT 100
     `;
@@ -437,9 +438,11 @@ router.get('/pending', isAuthenticated, isOperator, async (req, res) => {
 
     let query = `
       SELECT sp.*,
+             cl.manual_lot_number AS manual_lot_number,
              (SELECT SUM(amount) FROM stage_debits sd
               WHERE sd.user_id = sp.user_id AND sd.status = 'approved') AS total_debits
       FROM stage_payments sp
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sp.lot_no
       WHERE sp.status = 'pending'
     `;
     const params = [];
@@ -607,26 +610,29 @@ router.get('/history', isAuthenticated, isOperator, async (req, res) => {
   try {
     const { stage = 'all', user_id, startDate, endDate } = req.query;
 
-    let query = 'SELECT * FROM stage_payments WHERE status = ?';
+    let query = `SELECT sp.*, cl.manual_lot_number AS manual_lot_number
+                   FROM stage_payments sp
+              LEFT JOIN cutting_lots cl ON cl.lot_no = sp.lot_no
+                  WHERE sp.status = ?`;
     const params = ['paid'];
 
     if (stage !== 'all') {
-      query += ' AND stage = ?';
+      query += ' AND sp.stage = ?';
       params.push(stage);
     }
     if (user_id) {
-      query += ' AND user_id = ?';
+      query += ' AND sp.user_id = ?';
       params.push(user_id);
     }
     if (startDate) {
-      query += ' AND DATE(paid_on) >= ?';
+      query += ' AND DATE(sp.paid_on) >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      query += ' AND DATE(paid_on) <= ?';
+      query += ' AND DATE(sp.paid_on) <= ?';
       params.push(endDate);
     }
-    query += ' ORDER BY paid_on DESC LIMIT 500';
+    query += ' ORDER BY sp.paid_on DESC LIMIT 500';
 
     const [payments] = await pool.query(query, params);
 
@@ -655,22 +661,25 @@ router.get('/history/download', isAuthenticated, isOperator, async (req, res) =>
   try {
     const { stage = 'all', startDate, endDate } = req.query;
 
-    let query = 'SELECT * FROM stage_payments WHERE 1=1';
+    let query = `SELECT sp.*, cl.manual_lot_number AS manual_lot_number
+                   FROM stage_payments sp
+              LEFT JOIN cutting_lots cl ON cl.lot_no = sp.lot_no
+                  WHERE 1=1`;
     const params = [];
 
     if (stage !== 'all') {
-      query += ' AND stage = ?';
+      query += ' AND sp.stage = ?';
       params.push(stage);
     }
     if (startDate) {
-      query += ' AND DATE(created_at) >= ?';
+      query += ' AND DATE(sp.created_at) >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      query += ' AND DATE(created_at) <= ?';
+      query += ' AND DATE(sp.created_at) <= ?';
       params.push(endDate);
     }
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY sp.created_at DESC';
 
     const [rows] = await pool.query(query, params);
 
@@ -680,6 +689,7 @@ router.get('/history/download', isAuthenticated, isOperator, async (req, res) =>
       { header: 'ID', key: 'id', width: 8 },
       { header: 'User', key: 'username', width: 15 },
       { header: 'Lot No', key: 'lot_no', width: 12 },
+      { header: 'Manual Lot No', key: 'manual_lot_number', width: 14 },
       { header: 'SKU', key: 'sku', width: 20 },
       { header: 'Stage', key: 'stage', width: 12 },
       { header: 'Qty', key: 'qty', width: 8 },
