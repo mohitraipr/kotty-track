@@ -121,8 +121,8 @@
           <thead>
             <tr>
               <th>Lot No</th>
-              <th>Ext Lot</th>
-              <th>Sort</th>
+              <th>Manual Lot</th>
+              <th>Fabric</th>
               <th>SKU_Size</th>
               <th>Type</th>
               <th>Cut</th>
@@ -142,7 +142,7 @@
             <tr>
               <td><strong><%= row.lotNo %></strong></td>
               <td><%= row.externalLotNo || '—' %></td>
-              <td><%= row.sortNo || '—' %></td>
+              <td><%= row.fabricType || '—' %></td>
               <td><code class="text-muted"><%= row.sku_size %></code></td>
               <td><span class="badge <%= row.lotType === 'Denim' ? 'badge-primary' : 'badge-info' %>"><%= row.lotType %></span></td>
               <td><%= row.totalCut %></td>
