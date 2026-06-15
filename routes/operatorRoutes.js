@@ -1123,7 +1123,12 @@ function buildEnhancedRow({
     break;
   }
 
-  const { externalLotNo, sortNo } = parseLotRemark(lot.remark);
+  const { externalLotNo: parsedExternalLotNo, sortNo } = parseLotRemark(lot.remark);
+  // Prefer the authoritative, backfilled manual_lot_number column; fall back to
+  // the value parsed live from the remark for any lot not yet backfilled.
+  const externalLotNo = (lot.manual_lot_number && String(lot.manual_lot_number).trim())
+    ? String(lot.manual_lot_number).trim()
+    : parsedExternalLotNo;
   const opName = a => (a && a.opName) ? a.opName : '';
 
   return {
@@ -1131,6 +1136,7 @@ function buildEnhancedRow({
     lotNo: lot.lot_no,
     externalLotNo,
     sortNo,
+    fabricType: lot.fabric_type || '',
     sku: lot.sku,
     lotType: isDenim ? 'Denim' : 'Hosiery',
     createdAt: lot.created_at
@@ -1215,8 +1221,8 @@ function buildEnhancedRow({
 
 const PIC_REPORT_V2_COLUMNS = [
   { header: 'Lot No',              key: 'lotNo',             width: 14 },
-  { header: 'External Lot No',     key: 'externalLotNo',     width: 14 },
-  { header: 'Sort No',             key: 'sortNo',            width: 14 },
+  { header: 'Manual Lot No',       key: 'externalLotNo',     width: 14 },
+  { header: 'Fabric Type',         key: 'fabricType',        width: 14 },
   { header: 'SKU',                 key: 'sku',               width: 22 },
   { header: 'Lot Type',            key: 'lotType',           width: 9  },
   { header: 'Created At',          key: 'createdAt',         width: 12 },
@@ -1983,7 +1989,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
 
     // 2) Fetch all lots (ONE QUERY)
     const baseQuery = `
-      SELECT cl.lot_no, cl.sku, cl.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+      SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cl.total_pieces, cl.created_at, cl.remark, cl.flow_type,
              u.username AS created_by, u.is_denim_cutter
         FROM cutting_lots cl
         JOIN users u ON cl.user_id = u.id
@@ -2242,7 +2248,7 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 
     // 2) Fetch lot/size rows (with LIMIT for performance)
     const baseQuery = `
-      SELECT cl.lot_no, cl.sku, cls.size_label, cls.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+      SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label, cls.total_pieces, cl.created_at, cl.remark, cl.flow_type,
              u.username AS created_by, u.is_denim_cutter
         FROM cutting_lots cl
         JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
@@ -2402,7 +2408,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
 
       const lotForBuilder = {
         lot_no: lotNo,
+        manual_lot_number: row.manual_lot_number,
         sku: row.sku,
+        fabric_type: row.fabric_type,
         remark: row.remark,
         created_at: row.created_at
       };
@@ -2434,8 +2442,8 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       // Size-aware column set: same shape as PIC v2 + Size + dispatch columns
       const sizeCols = [
         { header: 'Lot No',              key: 'lotNo',             width: 14 },
-        { header: 'External Lot No',     key: 'externalLotNo',     width: 14 },
-        { header: 'Sort No',             key: 'sortNo',            width: 14 },
+        { header: 'Manual Lot No',       key: 'externalLotNo',     width: 14 },
+        { header: 'Fabric Type',         key: 'fabricType',        width: 14 },
         { header: 'SKU',                 key: 'sku',               width: 22 },
         { header: 'Size',                key: 'size',              width: 8  },
         { header: 'SKU_Size',            key: 'sku_size',          width: 24 },
