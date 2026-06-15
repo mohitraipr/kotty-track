@@ -77,3 +77,45 @@ test('getOpenApprovals: reject also consumes the approved pool', async () => {
   const result = await getOpenApprovals(conn, 'washing', 3);
   assert.strictEqual(result.length, 0);
 });
+
+// ── Part B guardrail: recordEvent rejects labels not in the cutting breakdown ──
+const { recordEvent } = require('../utils/stageEvents.js');
+
+function recordStub(cutLabels) {
+  const q = [];
+  return {
+    q,
+    async query(sql, params) {
+      q.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
+      if (/FROM cutting_lot_sizes WHERE cutting_lot_id/.test(sql)) {
+        return [cutLabels.map(l => ({ size_label: l }))];
+      }
+      if (/^INSERT INTO \w+_events/.test(sql.trim())) return [{ insertId: 123 }];
+      if (/^INSERT INTO \w+_event_sizes/.test(sql.trim())) return [{}];
+      throw new Error('unexpected query: ' + sql);
+    },
+  };
+}
+
+test('recordEvent: rejects size labels not in the cutting breakdown (blocks junk like 0,1,2)', async () => {
+  const conn = recordStub(['26', '28', '30', '32', '34']);
+  await assert.rejects(
+    () => recordEvent(conn, {
+      stage: 'washing_in', cuttingLotId: 7744, eventType: 'approve', operatorId: 9,
+      sizes: [{ size_label: '0', pieces: 26 }, { size_label: '1', pieces: 28 }],
+    }),
+    /Invalid size label/
+  );
+  // no event row should have been inserted
+  assert.ok(!conn.q.some(x => /INSERT INTO \w+_events/.test(x.sql)));
+});
+
+test('recordEvent: accepts labels that match the cutting breakdown', async () => {
+  const conn = recordStub(['26', '28', '30', '32', '34']);
+  const id = await recordEvent(conn, {
+    stage: 'stitching', cuttingLotId: 1, eventType: 'approve', operatorId: 9,
+    sizes: [{ size_label: '26', pieces: 132 }, { size_label: '28', pieces: 132 }],
+  });
+  assert.strictEqual(id, 123);
+  assert.ok(conn.q.some(x => /INSERT INTO \w+_event_sizes/.test(x.sql)));
+});
