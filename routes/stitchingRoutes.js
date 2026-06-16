@@ -162,7 +162,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
     }
 
     const [[lot]] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
@@ -810,15 +810,15 @@ router.get('/event/search', isAuthenticated, isStitchingMaster, async (req, res)
     if (!q) return res.json({ lots: [] });
     const like = `%${q}%`;
     const [lots] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
               cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
-       WHERE cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?
+       WHERE cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?
        ORDER BY cl.created_at DESC
        LIMIT 25`,
-      [like, like, like]
+      [like, like, like, like]
     );
     res.json({ lots });
   } catch (err) {
@@ -875,13 +875,15 @@ router.get('/list-entries', isAuthenticated, isStitchingMaster, async (req, res)
 
     // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(`
-      SELECT id, user_id, lot_no, sku, total_pieces, created_at
-      FROM stitching_data
-      WHERE user_id = ?
-        AND (lot_no LIKE ? OR sku LIKE ?)
-      ORDER BY created_at DESC
+      SELECT sd.id, sd.user_id, sd.lot_no, cl.manual_lot_number, sd.sku, sd.total_pieces, sd.created_at,
+             cl.remark AS cutting_remark
+      FROM stitching_data sd
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      WHERE sd.user_id = ?
+        AND (sd.lot_no LIKE ? OR sd.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
+      ORDER BY sd.created_at DESC
       LIMIT ? OFFSET ?
-    `, [userId, searchLike, searchLike, limit, offset]);
+    `, [userId, searchLike, searchLike, searchLike, searchLike, limit, offset]);
 
     if (!rows.length) {
       return res.json({ data: [], hasMore: false });
@@ -908,10 +910,11 @@ router.get('/list-entries', isAuthenticated, isStitchingMaster, async (req, res)
 
     const [[{ totalCount }]] = await pool.query(`
       SELECT COUNT(*) AS totalCount
-      FROM stitching_data
-      WHERE user_id = ?
-        AND (lot_no LIKE ? OR sku LIKE ?)
-    `, [userId, searchLike, searchLike]);
+      FROM stitching_data sd
+      LEFT JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
+      WHERE sd.user_id = ?
+        AND (sd.lot_no LIKE ? OR sd.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
+    `, [userId, searchLike, searchLike, searchLike, searchLike]);
 
     const hasMore = offset + rows.length < totalCount;
 
@@ -1906,6 +1909,7 @@ router.get('/available-lots', isAuthenticated, isStitchingMaster, async (req, re
       SELECT
         cl.id AS cutting_lot_id,
         cl.lot_no,
+        cl.manual_lot_number,
         cl.sku,
         cl.remark AS cutting_remark,
         cl.total_pieces AS cut_total,
@@ -1914,14 +1918,14 @@ router.get('/available-lots', isAuthenticated, isStitchingMaster, async (req, re
         u.is_denim_cutter
       FROM cutting_lots cl
       JOIN users u ON u.id = cl.user_id
-      WHERE (cl.lot_no LIKE ? OR cl.remark LIKE ?)
+      WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
         AND EXISTS (
           SELECT 1 FROM v_lot_available_sizes vas
           WHERE vas.cutting_lot_id = cl.id AND vas.available_qty > 0
         )
       ORDER BY cl.created_at DESC
       LIMIT 10
-    `, [searchLike, searchLike]);
+    `, [searchLike, searchLike, searchLike, searchLike]);
 
     // For each lot, get size details with who took what
     for (const lot of lots) {
