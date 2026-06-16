@@ -38,12 +38,29 @@ const WAREHOUSE_CREDENTIALS = {
   primary: { email: EASYECOM_EMAIL, password: EASYECOM_PASSWORD, c_id: 173969, location_key: EASYECOM_PRIMARY_LOCATION_KEY },
 };
 
-// Cached JWT tokens per warehouse
+// Cached JWT tokens per warehouse. Also carries circuit-breaker state
+// (failCount / failedUntil) so a blocked account isn't re-hammered.
 const cachedTokens = {
   faridabad: { token: null, expiry: null },
   delhi: { token: null, expiry: null },
   primary: { token: null, expiry: null },
 };
+
+// Auth circuit breaker: after a failed /access/token, back off before retrying so a
+// rate-limited / IP-blocked account is not hammered (which keeps the block warm).
+// Escalating cooldown by consecutive failures; a 429 floors the cooldown at 1h.
+function authBackoffMs(failCount, is429) {
+  const STEPS_MIN = [15, 60, 240]; // 15m -> 1h -> 4h (cap)
+  let mins = STEPS_MIN[Math.min(failCount - 1, STEPS_MIN.length - 1)];
+  if (is429) mins = Math.max(mins, 60);
+  return mins * 60 * 1000;
+}
+function recordAuthFailure(cache, warehouse, is429) {
+  cache.failCount = (cache.failCount || 0) + 1;
+  cache.failedUntil = Date.now() + authBackoffMs(cache.failCount, is429);
+  console.warn(`[easyecom] auth failed for ${warehouse} (#${cache.failCount}${is429 ? ' 429' : ''}); ` +
+    `backing off ${Math.round((cache.failedUntil - Date.now()) / 60000)}m`);
+}
 
 /**
  * Authenticate with EasyEcom using email/password to get JWT token
@@ -63,6 +80,14 @@ async function authenticateWithCredentials(warehouse = 'faridabad') {
   // Check if we have a valid cached token
   if (cache.token && cache.expiry && Date.now() < cache.expiry) {
     return cache.token;
+  }
+
+  // Circuit breaker: if a recent auth failed, skip the call until the cooldown elapses
+  // (prevents re-hammering a rate-limited / blocked account).
+  if (cache.failedUntil && Date.now() < cache.failedUntil) {
+    console.warn(`[easyecom] auth for ${warehouse} in cooldown ` +
+      `(${Math.round((cache.failedUntil - Date.now()) / 60000)}m left) — skipping auth call`);
+    return null;
   }
 
   try {
@@ -90,14 +115,19 @@ async function authenticateWithCredentials(warehouse = 'faridabad') {
       cache.token = token;
       // Token typically valid for 24 hours, cache for 23 hours
       cache.expiry = Date.now() + (23 * 60 * 60 * 1000);
+      cache.failCount = 0;       // reset circuit breaker on success
+      cache.failedUntil = null;
       console.log(`EasyEcom ${warehouse} authentication successful, token cached`);
       return token;
     } else {
       console.error('No token in EasyEcom auth response:', JSON.stringify(data).substring(0, 200));
+      recordAuthFailure(cache, warehouse, false);
       return null;
     }
   } catch (error) {
+    const is429 = error.response?.status === 429;
     console.error(`EasyEcom ${warehouse} authentication failed:`, error.response?.data || error.message);
+    recordAuthFailure(cache, warehouse, is429);
     return null;
   }
 }

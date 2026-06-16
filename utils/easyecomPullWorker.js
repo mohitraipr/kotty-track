@@ -645,43 +645,61 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
     console.error('[pullWorker] bootstrap check failed:', err.message);
   }
   const windowDays = bootstrapMode ? 30 : 3;
+  const isSunday = runStartedAt.getDay() === 0;
 
-  // Inventory snapshots — account-wide, from the PRIMARY location. Bootstrap pulls a
-  // deeper window so selling-days DRR has real history immediately (configurable).
-  const snapshotWindowDays = bootstrapMode
-    ? Number(process.env.EASYECOM_SNAPSHOT_BACKFILL_DAYS || global.env?.EASYECOM_SNAPSHOT_BACKFILL_DAYS || 60)
-    : Math.max(windowDays, 3);
-  try {
-    await pullSnapshotsFromPrimary(pool, runStartedAt, snapshotWindowDays);
-  } catch (err) {
-    await logStep(pool, runStartedAt, 'snapshot', 'error', err.message, 0);
+  // Auth health gate: one upfront /access/token check. If EasyEcom auth is unavailable
+  // (rate-block / outage), skip the EasyEcom pulls this run so we don't re-hammer a
+  // blocked account — the client's circuit breaker backs off, and the DB-only steps
+  // (cross-check, health recompute) still run. 'primary' shares creds with faridabad;
+  // if it can't auth, the others won't either.
+  let authOk = false;
+  try { authOk = !!(await authenticateWithCredentials('primary')); }
+  catch (_) { authOk = false; }
+  if (!authOk) {
+    await logStep(pool, runStartedAt, 'auth', 'error',
+      'easyecom auth unavailable — skipping EasyEcom pulls this run', Date.now() - overallStart);
+    console.warn('[pullWorker] EasyEcom auth unavailable — skipping pulls, DB-only steps only');
   }
 
-  // Orders (per-line detail used for DRR + drill-downs)
-  try { await pullOrders(pool, runStartedAt, bootstrapMode); }
-  catch (err) { await logStep(pool, runStartedAt, 'orders', 'error', err.message, 0); }
+  if (authOk) {
+    // Inventory snapshots — account-wide, from the PRIMARY location. Bootstrap pulls a
+    // deeper window so selling-days DRR has real history immediately (configurable).
+    const snapshotWindowDays = bootstrapMode
+      ? Number(process.env.EASYECOM_SNAPSHOT_BACKFILL_DAYS || global.env?.EASYECOM_SNAPSHOT_BACKFILL_DAYS || 60)
+      : Math.max(windowDays, 3);
+    try {
+      await pullSnapshotsFromPrimary(pool, runStartedAt, snapshotWindowDays);
+    } catch (err) {
+      await logStep(pool, runStartedAt, 'snapshot', 'error', err.message, 0);
+    }
 
-  // MINI_SALES_REPORT (cross-check source)
-  try { await pullMiniSalesReport(pool, runStartedAt, windowDays); }
-  catch (err) { await logStep(pool, runStartedAt, 'mini_sales', 'error', err.message, 0); }
+    // Orders (per-line detail used for DRR + drill-downs)
+    try { await pullOrders(pool, runStartedAt, bootstrapMode); }
+    catch (err) { await logStep(pool, runStartedAt, 'orders', 'error', err.message, 0); }
 
-  // Sales cross-check (orders vs mini sales)
+    // MINI_SALES_REPORT (cross-check source)
+    try { await pullMiniSalesReport(pool, runStartedAt, windowDays); }
+    catch (err) { await logStep(pool, runStartedAt, 'mini_sales', 'error', err.message, 0); }
+  }
+
+  // Sales cross-check (orders vs mini sales) — DB-only, safe to run regardless of auth.
   try { await crossCheckSales(pool, runStartedAt, windowDays); }
   catch (err) { await logStep(pool, runStartedAt, 'sales_cross_check', 'error', err.message, 0); }
 
-  // STATUS_WISE_STOCK_REPORT
-  try { await pullStatusWiseStock(pool, runStartedAt); }
-  catch (err) { await logStep(pool, runStartedAt, 'stock_status', 'error', err.message, 0); }
+  if (authOk) {
+    // STATUS_WISE_STOCK_REPORT
+    try { await pullStatusWiseStock(pool, runStartedAt); }
+    catch (err) { await logStep(pool, runStartedAt, 'stock_status', 'error', err.message, 0); }
 
-  // INVENTORY_AGING_REPORT
-  try { await pullInventoryAging(pool, runStartedAt); }
-  catch (err) { await logStep(pool, runStartedAt, 'aging', 'error', err.message, 0); }
+    // INVENTORY_AGING_REPORT
+    try { await pullInventoryAging(pool, runStartedAt); }
+    catch (err) { await logStep(pool, runStartedAt, 'aging', 'error', err.message, 0); }
 
-  // Product Master — Sundays or when explicitly requested or on bootstrap.
-  const isSunday = runStartedAt.getDay() === 0;
-  if (includeProducts || isSunday || bootstrapMode) {
-    try { await pullProductMaster(pool, runStartedAt); }
-    catch (err) { await logStep(pool, runStartedAt, 'product_master', 'error', err.message, 0); }
+    // Product Master — Sundays or when explicitly requested or on bootstrap.
+    if (includeProducts || isSunday || bootstrapMode) {
+      try { await pullProductMaster(pool, runStartedAt); }
+      catch (err) { await logStep(pool, runStartedAt, 'product_master', 'error', err.message, 0); }
+    }
   }
 
   // Recompute health using fresh data (selling-days DRR + lead-time + open-lots + POs).
