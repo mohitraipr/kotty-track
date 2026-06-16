@@ -1162,8 +1162,8 @@ async function runSearch() {
       row.onclick = () => selectLot(lot);
       const isDenim = (lot.flow_type || '').toLowerCase() === 'denim' || (lot.flow_type === null && lot.is_denim_cutter);
       row.innerHTML = `
-        <span class="sx-result-no">${escapeText((lot.lot_no || '').toUpperCase())}</span>
-        <span class="sx-result-meta">${escapeText(lot.sku || '—')} · ${fmt(Number(lot.total_pieces || 0))} pcs cut</span>
+        <span class="sx-result-no">${escapeText((lot.manual_lot_number || lot.lot_no || '').toUpperCase())}</span>
+        <span class="sx-result-meta">${lot.manual_lot_number ? 'Lot ' + escapeText((lot.lot_no || '').toUpperCase()) + ' · ' : ''}${escapeText(lot.sku || '—')} · ${fmt(Number(lot.total_pieces || 0))} pcs cut</span>
         <span class="sx-flow ${isDenim ? 'denim' : 'hosiery'}">${isDenim ? 'denim' : 'hosiery'}</span>
       `;
       wrap.appendChild(row);
@@ -1194,7 +1194,7 @@ function renderState() {
   if (!currentState) return;
   const { lot, stage_aggregates: agg, upstream_sizes, open_approvals: open } = currentState;
 
-  el('lotNo').textContent = (lot.lot_no || '').toUpperCase();
+  el('lotNo').textContent = (lot.manual_lot_number || lot.lot_no || '').toUpperCase();
   el('lotSku').textContent = lot.sku || '—';
   el('lotCutter').textContent = lot.cutting_master || '—';
   const isDenim = (lot.flow_type || '').toLowerCase() === 'denim' || (lot.flow_type === null && lot.is_denim_cutter);

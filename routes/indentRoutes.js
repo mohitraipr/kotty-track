@@ -727,13 +727,13 @@ router.get('/api/my-approved-lots', isAuthenticated, canCreateStageIndent, async
       // Lots this stitching master has approved (taken in) — sourced from
       // stitching_events. Distinct lots, ordered by most-recent approve.
       const [r] = await pool.query(
-        `SELECT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type,
+        `SELECT c.lot_no, c.manual_lot_number, c.sku, c.total_pieces, c.lot_type, c.fabric_type,
                 MAX(se.created_at) AS approved_on
            FROM stitching_events se
            JOIN cutting_lots c ON c.id = se.cutting_lot_id
           WHERE se.operator_id = ? AND se.event_type = 'approve'
             ${lotType ? 'AND c.lot_type = ?' : ''}
-          GROUP BY c.id, c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
+          GROUP BY c.id, c.lot_no, c.manual_lot_number, c.sku, c.total_pieces, c.lot_type, c.fabric_type
           ORDER BY approved_on DESC
           LIMIT 200`,
         lotType ? [userId, lotType] : [userId]
@@ -741,7 +741,7 @@ router.get('/api/my-approved-lots', isAuthenticated, canCreateStageIndent, async
       rows = r;
     } else if (userRole === 'cutting_master') {
       const [r] = await pool.query(
-        `SELECT lot_no, sku, total_pieces, lot_type, fabric_type
+        `SELECT lot_no, manual_lot_number, sku, total_pieces, lot_type, fabric_type
            FROM cutting_lots
           WHERE user_id = ?
             ${lotType ? 'AND lot_type = ?' : ''}
@@ -760,7 +760,7 @@ router.get('/api/my-approved-lots', isAuthenticated, canCreateStageIndent, async
       const t = stageTables[userRole];
       if (t) {
         const [r] = await pool.query(
-          `SELECT DISTINCT c.lot_no, c.sku, c.total_pieces, c.lot_type, c.fabric_type
+          `SELECT DISTINCT c.lot_no, c.manual_lot_number, c.sku, c.total_pieces, c.lot_type, c.fabric_type
              FROM ${t} s
              JOIN cutting_lots c ON c.lot_no = s.lot_no
             WHERE ${userRole === 'operator' ? '1=1' : 's.user_id = ?'}
@@ -1211,66 +1211,79 @@ router.get('/recent-lots', isAuthenticated, canCreateStageIndent, async (req, re
 
   try {
     let recentLots = [];
+    const mapLots = rows => rows.map(l => ({ lot_no: l.lot_no, manual_lot_number: l.manual_lot_number }));
 
-    // Get lots based on user's stage
+    // Get lots based on user's stage. Each query also surfaces the manual lot
+    // number (joining cutting_lots for stage-data tables) so the picker can be
+    // searched/displayed by manual lot, not just the system lot_no.
     if (userRole === 'stitching_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
-           FROM stitching_data
-          WHERE user_id = ?
-          ORDER BY created_at DESC
+        `SELECT s.lot_no, MAX(cl.manual_lot_number) AS manual_lot_number
+           FROM stitching_data s
+           LEFT JOIN cutting_lots cl ON cl.lot_no = s.lot_no
+          WHERE s.user_id = ?
+          GROUP BY s.lot_no
+          ORDER BY MAX(s.created_at) DESC
           LIMIT 20`,
         [userId]
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     } else if (userRole === 'finishing_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
-           FROM finishing_data
-          WHERE user_id = ?
-          ORDER BY created_at DESC
+        `SELECT f.lot_no, MAX(cl.manual_lot_number) AS manual_lot_number
+           FROM finishing_data f
+           LEFT JOIN cutting_lots cl ON cl.lot_no = f.lot_no
+          WHERE f.user_id = ?
+          GROUP BY f.lot_no
+          ORDER BY MAX(f.created_at) DESC
           LIMIT 20`,
         [userId]
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     } else if (userRole === 'cutting_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
+        `SELECT DISTINCT lot_no, manual_lot_number
            FROM cutting_lots
           WHERE user_id = ?
           ORDER BY created_at DESC
           LIMIT 20`,
         [userId]
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     } else if (userRole === 'jeans_assembly_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
-           FROM jeans_assembly_data
-          WHERE user_id = ?
-          ORDER BY created_at DESC
+        `SELECT j.lot_no, MAX(cl.manual_lot_number) AS manual_lot_number
+           FROM jeans_assembly_data j
+           LEFT JOIN cutting_lots cl ON cl.lot_no = j.lot_no
+          WHERE j.user_id = ?
+          GROUP BY j.lot_no
+          ORDER BY MAX(j.created_at) DESC
           LIMIT 20`,
         [userId]
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     } else if (userRole === 'operator') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
-           FROM stitching_data
-          ORDER BY created_at DESC
+        `SELECT s.lot_no, MAX(cl.manual_lot_number) AS manual_lot_number
+           FROM stitching_data s
+           LEFT JOIN cutting_lots cl ON cl.lot_no = s.lot_no
+          GROUP BY s.lot_no
+          ORDER BY MAX(s.created_at) DESC
           LIMIT 20`
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     } else if (userRole === 'washing_in_master') {
       const [lots] = await pool.query(
-        `SELECT DISTINCT lot_no
-           FROM washing_in_data
-          WHERE user_id = ?
-          ORDER BY created_at DESC
+        `SELECT w.lot_no, MAX(cl.manual_lot_number) AS manual_lot_number
+           FROM washing_in_data w
+           LEFT JOIN cutting_lots cl ON cl.lot_no = w.lot_no
+          WHERE w.user_id = ?
+          GROUP BY w.lot_no
+          ORDER BY MAX(w.created_at) DESC
           LIMIT 20`,
         [userId]
       );
-      recentLots = lots.map(l => l.lot_no);
+      recentLots = mapLots(lots);
     }
 
     res.json({ success: true, lots: recentLots });

@@ -716,7 +716,8 @@
       function refreshPicker() {
         loadLotsForPicker().then(function(lots){
           var options = lots.map(function(l){
-            return { id: l.lot_no, text: (l.lot_no || '').toUpperCase() + ' · ' + (l.sku || '') + ' · ' + (l.total_pieces || 0) + ' pcs (' + (l.lot_type || '-') + ')', _row: l };
+            var manualBit = l.manual_lot_number ? String(l.manual_lot_number).toUpperCase() + ' / ' : '';
+            return { id: l.lot_no, text: manualBit + (l.lot_no || '').toUpperCase() + ' · ' + (l.sku || '') + ' · ' + (l.total_pieces || 0) + ' pcs (' + (l.lot_type || '-') + ')', _row: l };
           });
           $picker.empty().select2({ placeholder: 'Type lot number or SKU…', width: '100%', data: options, multiple: true });
         });
@@ -735,10 +736,19 @@
         var sel = document.getElementById('iwSingleLot');
         if (!sel) return;
         (d.lots || []).forEach(function(l){
+          // recent-lots now returns { lot_no, manual_lot_number } objects;
+          // tolerate the legacy plain-string shape too.
+          var lotNo = (l && typeof l === 'object') ? l.lot_no : l;
+          var manual = (l && typeof l === 'object') ? l.manual_lot_number : null;
           var o = document.createElement('option');
-          o.value = l; o.textContent = String(l).toUpperCase();
+          o.value = lotNo;
+          o.textContent = (manual ? String(manual).toUpperCase() + ' / ' : '') + String(lotNo).toUpperCase();
           sel.appendChild(o);
         });
+        // Make the lot picker type-to-search (by manual lot or system lot).
+        if (window.jQuery && jQuery.fn.select2) {
+          jQuery(sel).select2({ width: '100%', placeholder: 'Type manual or system lot…' });
+        }
       });
       addCustomRow();
     }

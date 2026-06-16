@@ -492,17 +492,17 @@ router.get('/event/search', isAuthenticated, isWashingInMaster, async (req, res)
     if (!q) return res.json({ lots: [] });
     const like = `%${q}%`;
     const [lots] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
-       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)
+       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
          AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
               OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL
                   AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
        ORDER BY cl.created_at DESC
        LIMIT 25`,
-      [like, like, like]
+      [like, like, like, like]
     );
     res.json({ lots });
   } catch (err) {
@@ -517,7 +517,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster,
     if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
 
     const [[lot]] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl JOIN users u ON u.id = cl.user_id
        WHERE cl.id = ?`,
@@ -881,13 +881,15 @@ router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res)
 
     // Fixed: Replace SELECT * with specific columns
     const [rows] = await pool.query(`
-      SELECT id, user_id, lot_no, sku, total_pieces, created_at
-      FROM washing_in_data
-      WHERE user_id = ?
-        AND (lot_no LIKE ? OR sku LIKE ?)
-      ORDER BY created_at DESC
+      SELECT wid.id, wid.user_id, wid.lot_no, cl.manual_lot_number, wid.sku, wid.total_pieces, wid.created_at,
+             cl.remark AS cutting_remark
+      FROM washing_in_data wid
+      LEFT JOIN cutting_lots cl ON cl.lot_no = wid.lot_no
+      WHERE wid.user_id = ?
+        AND (wid.lot_no LIKE ? OR wid.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
+      ORDER BY wid.created_at DESC
       LIMIT ? OFFSET ?
-    `, [userId, searchLike, searchLike, limit, offset]);
+    `, [userId, searchLike, searchLike, searchLike, searchLike, limit, offset]);
 
     if (!rows.length) {
       return res.json({ data: [], hasMore: false });
@@ -919,10 +921,11 @@ router.get('/list-entries', isAuthenticated, isWashingInMaster, async (req, res)
     // check total for pagination
     const [[{ totalCount }]] = await pool.query(`
       SELECT COUNT(*) AS totalCount
-      FROM washing_in_data
-      WHERE user_id = ?
-        AND (lot_no LIKE ? OR sku LIKE ?)
-    `, [userId, searchLike, searchLike]);
+      FROM washing_in_data wid
+      LEFT JOIN cutting_lots cl ON cl.lot_no = wid.lot_no
+      WHERE wid.user_id = ?
+        AND (wid.lot_no LIKE ? OR wid.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
+    `, [userId, searchLike, searchLike, searchLike, searchLike]);
     const hasMore = offset + rows.length < totalCount;
 
     return res.json({ data, hasMore });
@@ -1985,6 +1988,7 @@ router.get('/available-lots', isAuthenticated, isWashingInMaster, async (req, re
       SELECT
         wd.id,
         wd.lot_no,
+        cl.manual_lot_number,
         wd.sku,
         wd.total_pieces,
         wd.created_at,
@@ -1998,7 +2002,7 @@ router.get('/available-lots', isAuthenticated, isWashingInMaster, async (req, re
       FROM washing_data wd
       JOIN users u ON wd.user_id = u.id
       LEFT JOIN cutting_lots cl ON cl.lot_no = wd.lot_no
-      WHERE (wd.lot_no LIKE ? OR wd.sku LIKE ? OR cl.remark LIKE ?)
+      WHERE (wd.lot_no LIKE ? OR wd.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
         AND (
           cl.flow_type = 'denim'
           OR EXISTS (
@@ -2010,7 +2014,7 @@ router.get('/available-lots', isAuthenticated, isWashingInMaster, async (req, re
       HAVING remaining_pieces > 0
       ORDER BY wd.created_at DESC
       LIMIT 50
-    `, [search, search, search]);
+    `, [search, search, search, search]);
 
     return res.json({ data: rows });
   } catch (err) {

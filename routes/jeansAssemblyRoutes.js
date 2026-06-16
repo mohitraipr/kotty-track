@@ -1183,18 +1183,18 @@ router.get('/event/search', isAuthenticated, isJeansAssemblyMaster, async (req, 
     const like = `%${q}%`;
     // Restrict to denim — assembly is denim-only
     const [lots] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
               cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
-       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)
+       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
          AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
               OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL
                   AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
        ORDER BY cl.created_at DESC
        LIMIT 25`,
-      [like, like, like]
+      [like, like, like, like]
     );
     res.json({ lots });
   } catch (err) {
@@ -1212,7 +1212,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isJeansAssemblyMas
     }
 
     const [[lot]] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
@@ -1529,15 +1529,18 @@ router.get('/list-entries', isAuthenticated, isJeansAssemblyMaster, async (req, 
 
     const [rows] = await pool.query(`
       SELECT ja_data.*,
+             cl.manual_lot_number,
+             cl.remark AS cutting_remark,
              (SELECT JSON_ARRAYAGG(JSON_OBJECT('size_label', jas.size_label, 'pieces', jas.pieces))
               FROM jeans_assembly_data_sizes jas
               WHERE jas.jeans_assembly_data_id = ja_data.id) AS sizes
       FROM jeans_assembly_data ja_data
+      LEFT JOIN cutting_lots cl ON cl.lot_no = ja_data.lot_no
       WHERE ja_data.user_id = ?
-        AND (ja_data.lot_no LIKE ? OR ja_data.sku LIKE ?)
+        AND (ja_data.lot_no LIKE ? OR ja_data.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
       ORDER BY ja_data.created_at DESC
       LIMIT ?, ?
-    `, [userId, search, search, offset, limit]);
+    `, [userId, search, search, search, search, offset, limit]);
 
     const hasMore = rows.length === limit;
     return res.json({ data: rows, hasMore });
@@ -1571,6 +1574,7 @@ router.get('/available-lots', isAuthenticated, isJeansAssemblyMaster, async (req
       SELECT
         sd.id AS stitching_data_id,
         sd.lot_no,
+        cl.manual_lot_number,
         sd.sku,
         sd.total_pieces AS stitched_total,
         sd.created_at AS stitch_date,
@@ -1580,7 +1584,7 @@ router.get('/available-lots', isAuthenticated, isJeansAssemblyMaster, async (req
       JOIN cutting_lots cl ON cl.lot_no = sd.lot_no
       JOIN users u ON sd.user_id = u.id
       JOIN users cu ON cl.user_id = cu.id
-      WHERE (sd.lot_no LIKE ? OR cl.remark LIKE ?)
+      WHERE (sd.lot_no LIKE ? OR sd.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
         AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND cu.is_denim_cutter = 1) OR (cl.flow_type IS NULL AND cu.is_denim_cutter IS NULL AND (sd.lot_no LIKE 'AK%' OR sd.lot_no LIKE 'UM%')))
         AND EXISTS (
           SELECT 1 FROM stitching_data_sizes sds
@@ -1593,7 +1597,7 @@ router.get('/available-lots', isAuthenticated, isJeansAssemblyMaster, async (req
         )
       ORDER BY sd.created_at DESC
       LIMIT 10
-    `, [searchLike, searchLike]);
+    `, [searchLike, searchLike, searchLike, searchLike]);
 
     // For each lot, get size details
     for (const lot of lots) {

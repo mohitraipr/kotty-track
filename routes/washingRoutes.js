@@ -1050,18 +1050,18 @@ router.get('/event/search', isAuthenticated, isWashingMaster, async (req, res) =
     if (!q) return res.json({ lots: [] });
     const like = `%${q}%`;
     const [lots] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark,
               cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
-       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ?)
+       WHERE (cl.lot_no LIKE ? OR cl.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
          AND (cl.flow_type = 'denim' OR (cl.flow_type IS NULL AND u.is_denim_cutter = 1)
               OR (cl.flow_type IS NULL AND u.is_denim_cutter IS NULL
                   AND (cl.lot_no LIKE 'AK%' OR cl.lot_no LIKE 'UM%')))
        ORDER BY cl.created_at DESC
        LIMIT 25`,
-      [like, like, like]
+      [like, like, like, like]
     );
     res.json({ lots });
   } catch (err) {
@@ -1077,7 +1077,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingMaster, a
       return res.status(400).json({ error: 'Invalid cutting_lot_id' });
     }
     const [[lot]] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.remark AS cutting_remark, cl.flow_type,
               u.username AS cutting_master, u.is_denim_cutter
        FROM cutting_lots cl
        JOIN users u ON u.id = cl.user_id
@@ -1351,8 +1351,9 @@ router.get('/list-entries', isAuthenticated, isWashingMaster, async (req, res) =
     const limit = 10;
 
     const [rows] = await pool.query(`
-      SELECT 
+      SELECT
         wd.*,
+        cl.manual_lot_number,
         cl.remark AS cutting_remark,
         (
           SELECT JSON_ARRAYAGG(
@@ -1365,10 +1366,10 @@ router.get('/list-entries', isAuthenticated, isWashingMaster, async (req, res) =
       LEFT JOIN cutting_lots cl
         ON cl.lot_no = wd.lot_no
       WHERE wd.user_id = ?
-        AND (wd.lot_no LIKE ? OR wd.sku LIKE ?)
+        AND (wd.lot_no LIKE ? OR wd.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
       ORDER BY wd.created_at DESC
       LIMIT ?, ?
-    `, [userId, search, search, offset, limit]);
+    `, [userId, search, search, search, search, offset, limit]);
 
     const hasMore = rows.length === limit;
     return res.json({ data: rows, hasMore });
@@ -1627,6 +1628,7 @@ router.get('/available-lots', isAuthenticated, isWashingMaster, async (req, res)
       SELECT
         jad.id,
         jad.lot_no,
+        cl.manual_lot_number,
         jad.sku,
         prod.produced AS total_pieces,
         jad.created_at,
@@ -1648,7 +1650,7 @@ router.get('/available-lots', isAuthenticated, isWashingMaster, async (req, res)
       ) prod ON prod.rep_id = jad.id
       LEFT JOIN users u ON jad.user_id = u.id
       LEFT JOIN cutting_lots cl ON cl.lot_no = jad.lot_no
-      WHERE (jad.lot_no LIKE ? OR jad.sku LIKE ? OR cl.remark LIKE ?)
+      WHERE (jad.lot_no LIKE ? OR jad.sku LIKE ? OR cl.remark LIKE ? OR cl.manual_lot_number LIKE ?)
         AND (
           cl.flow_type = 'denim'
           OR EXISTS (
@@ -1660,7 +1662,7 @@ router.get('/available-lots', isAuthenticated, isWashingMaster, async (req, res)
       HAVING remaining_pieces > 0
       ORDER BY jad.created_at DESC
       LIMIT 50
-    `, [search, search, search]);
+    `, [search, search, search, search]);
 
     return res.json({ data: rows });
   } catch (err) {
