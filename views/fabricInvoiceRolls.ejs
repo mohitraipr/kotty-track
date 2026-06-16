@@ -191,6 +191,22 @@
     color: var(--cream);
   }
 
+  .entry-defaults {
+    background: rgba(196, 92, 58, 0.06);
+    border: 1px dashed rgba(196, 92, 58, 0.3);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+
+  .entry-summary {
+    background: rgba(40, 167, 69, 0.08);
+    border: 1px solid rgba(40, 167, 69, 0.2);
+    border-radius: 8px;
+    padding: 0.625rem 0.875rem;
+    color: #1e7e34;
+    font-size: 0.9rem;
+  }
+
   .empty-state {
     text-align: center;
     padding: 3rem 1rem;
@@ -251,7 +267,7 @@
         <p class="mb-0 mt-2 opacity-75">Invoice #<%= invoice.invoice_no %></p>
       </div>
       <span class="invoice-badge">
-        <i class="bi bi-stack me-1"></i> <%= rolls.length %> Roll<%= rolls.length !== 1 ? 's' : '' %>
+        <i class="bi bi-stack me-1"></i> <span id="rollCount"><%= rolls.length %></span> Roll<span id="rollCountPlural"><%= rolls.length !== 1 ? 's' : '' %></span>
       </span>
     </div>
   </div>
@@ -340,9 +356,9 @@
             <th><i class="bi bi-person me-1"></i>Created By</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="rollsTableBody">
           <% if (rolls.length === 0) { %>
-            <tr>
+            <tr id="emptyRollsRow">
               <td colspan="7">
                 <div class="empty-state">
                   <i class="bi bi-inbox"></i>
@@ -353,7 +369,7 @@
             </tr>
           <% } else { %>
             <% rolls.forEach(roll => { %>
-              <tr>
+              <tr data-roll-no="<%= roll.roll_no %>">
                 <td><strong>#<%= roll.id %></strong></td>
                 <td><%= roll.roll_no %></td>
                 <td><%= roll.per_roll_weight %></td>
@@ -375,44 +391,65 @@
     <div class="col-lg-7">
       <div class="action-card h-100">
         <div class="action-card-header">
-          <i class="bi bi-plus-circle"></i>
-          Add Roll Manually
+          <i class="bi bi-lightning-charge"></i>
+          Live Roll Entry
         </div>
         <div class="action-card-body">
-          <form action="/fabric-manager/insert/roll" method="POST">
-            <input type="hidden" name="invoice_id" value="<%= invoice.id %>">
-            <div class="row g-3">
-              <div class="col-md-6">
-                <label for="roll_no" class="form-label-custom">Roll Number</label>
-                <input type="number" class="form-control form-control-custom" id="roll_no" name="roll_no" min="1" required>
+          <input type="hidden" id="invoice_id" value="<%= invoice.id %>">
+
+          <!-- Sticky defaults: set once, change anytime the color changes -->
+          <div class="entry-defaults">
+            <div class="row g-3 align-items-end">
+              <div class="col-7">
+                <label for="defaultColor" class="form-label-custom">Color</label>
+                <input type="text" class="form-control form-control-custom" id="defaultColor" placeholder="e.g. Navy">
               </div>
-              <div class="col-md-6">
-                <label for="per_roll_weight" class="form-label-custom">Per Roll Weight</label>
-                <input type="number" step="0.01" class="form-control form-control-custom" id="per_roll_weight" name="per_roll_weight" required>
-              </div>
-              <div class="col-md-6">
-                <label for="color" class="form-label-custom">Color</label>
-                <input type="text" class="form-control form-control-custom" id="color" name="color" placeholder="Optional">
-              </div>
-              <div class="col-md-6">
-                <label for="gr_no_by_vendor" class="form-label-custom">GR No by Vendor</label>
-                <input type="text" class="form-control form-control-custom" id="gr_no_by_vendor" name="gr_no_by_vendor" placeholder="Optional">
-              </div>
-              <div class="col-md-6">
-                <label for="unit" class="form-label-custom">Unit</label>
-                <select id="unit" name="unit" class="form-select form-select-custom" required>
-                  <option value="" disabled selected>Select Unit</option>
+              <div class="col-5">
+                <label for="defaultUnit" class="form-label-custom">Unit</label>
+                <select id="defaultUnit" class="form-select form-select-custom" required>
+                  <option value="" disabled selected>Select</option>
                   <option value="METER">METER</option>
                   <option value="KG">KG</option>
                 </select>
               </div>
-              <div class="col-md-6 d-flex align-items-end">
-                <button type="submit" class="btn-terracotta w-100">
-                  <i class="bi bi-plus-lg me-2"></i>Add Roll
-                </button>
-              </div>
             </div>
-          </form>
+            <small class="text-muted d-block mt-2">
+              <i class="bi bi-info-circle me-1"></i>Set once. Change Color/Unit anytime the fabric changes &mdash; new rolls inherit it.
+            </small>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- Per-roll entry: type, press Enter / Add, repeat -->
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label for="entry_roll_no" class="form-label-custom">Roll Number</label>
+              <input type="number" class="form-control form-control-custom" id="entry_roll_no" min="1">
+            </div>
+            <div class="col-md-4">
+              <label for="entry_weight" class="form-label-custom">Per Roll Weight</label>
+              <input type="number" step="0.01" class="form-control form-control-custom" id="entry_weight">
+            </div>
+            <div class="col-md-4">
+              <label for="entry_gr_no" class="form-label-custom">GR No by Vendor</label>
+              <input type="text" class="form-control form-control-custom" id="entry_gr_no" placeholder="Optional">
+            </div>
+            <div class="col-12">
+              <button type="button" id="addRollBtn" class="btn-terracotta w-100">
+                <i class="bi bi-plus-lg me-2"></i>Add Roll
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline feedback -->
+          <div id="entryError" class="alert alert-danger mt-3 mb-0 py-2 px-3" style="display:none; font-size:0.875rem;"></div>
+
+          <!-- Session summary -->
+          <div id="sessionSummary" class="entry-summary mt-3" style="display:none;">
+            <i class="bi bi-check2-circle me-1"></i>
+            This session: <strong id="sessionCount">0</strong> roll<span id="sessionPlural"></span>
+            &middot; <strong id="sessionWeight">0.00</strong> total
+          </div>
         </div>
       </div>
     </div>
@@ -438,5 +475,151 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const invoiceId   = document.getElementById('invoice_id').value;
+  const defColor    = document.getElementById('defaultColor');
+  const defUnit     = document.getElementById('defaultUnit');
+  const rollNoEl    = document.getElementById('entry_roll_no');
+  const weightEl    = document.getElementById('entry_weight');
+  const grNoEl      = document.getElementById('entry_gr_no');
+  const addBtn      = document.getElementById('addRollBtn');
+  const errBox      = document.getElementById('entryError');
+  const tableBody   = document.getElementById('rollsTableBody');
+  const rollCountEl = document.getElementById('rollCount');
+  const rollPluralEl= document.getElementById('rollCountPlural');
+  const summaryBox  = document.getElementById('sessionSummary');
+  const sessCountEl = document.getElementById('sessionCount');
+  const sessPluralEl= document.getElementById('sessionPlural');
+  const sessWeightEl= document.getElementById('sessionWeight');
+
+  let sessionCount = 0;
+  let sessionWeight = 0;
+
+  // Track roll numbers already present (existing + added this session) for a fast client-side dup guard.
+  const knownRolls = new Set();
+  tableBody.querySelectorAll('tr[data-roll-no]').forEach(tr => {
+    knownRolls.add(String(tr.getAttribute('data-roll-no')));
+  });
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function showError(msg) {
+    errBox.textContent = msg;
+    errBox.style.display = 'block';
+  }
+  function clearError() {
+    errBox.style.display = 'none';
+    errBox.textContent = '';
+  }
+
+  function prependRow(roll) {
+    const empty = document.getElementById('emptyRollsRow');
+    if (empty) empty.remove();
+
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-roll-no', roll.roll_no);
+    const colorCell = roll.color ? esc(roll.color) : '<span class="text-muted">N/A</span>';
+    const grCell    = roll.gr_no_by_vendor ? esc(roll.gr_no_by_vendor) : '<span class="text-muted">N/A</span>';
+    tr.innerHTML =
+      '<td><strong>#' + roll.id + '</strong></td>' +
+      '<td>' + esc(String(roll.roll_no)) + '</td>' +
+      '<td>' + esc(String(roll.per_roll_weight)) + '</td>' +
+      '<td>' + colorCell + '</td>' +
+      '<td>' + grCell + '</td>' +
+      '<td><span class="badge bg-secondary">' + esc(roll.unit) + '</span></td>' +
+      '<td>' + esc(roll.created_by || '') + '</td>';
+    tableBody.insertBefore(tr, tableBody.firstChild);
+  }
+
+  function updateCounts(weight) {
+    // Header total = all rows in the table (existing + new)
+    const total = tableBody.querySelectorAll('tr[data-roll-no]').length;
+    rollCountEl.textContent = total;
+    rollPluralEl.textContent = total !== 1 ? 's' : '';
+
+    // Session summary = only rolls added in this browser session
+    sessionCount += 1;
+    sessionWeight += weight;
+    sessCountEl.textContent = sessionCount;
+    sessPluralEl.textContent = sessionCount !== 1 ? 's' : '';
+    sessWeightEl.textContent = sessionWeight.toFixed(2);
+    summaryBox.style.display = 'block';
+  }
+
+  async function addRoll() {
+    clearError();
+
+    const roll_no = rollNoEl.value.trim();
+    const weight  = weightEl.value.trim();
+    const unit    = defUnit.value;
+    const color   = defColor.value.trim();
+    const gr_no   = grNoEl.value.trim();
+
+    if (!unit) { showError('Select a Unit first.'); defUnit.focus(); return; }
+    if (!roll_no) { showError('Enter a roll number.'); rollNoEl.focus(); return; }
+    if (!weight) { showError('Enter the per-roll weight.'); weightEl.focus(); return; }
+    if (knownRolls.has(String(roll_no))) {
+      showError('Roll number ' + roll_no + ' is already entered.');
+      rollNoEl.focus(); rollNoEl.select();
+      return;
+    }
+
+    addBtn.disabled = true;
+    const original = addBtn.innerHTML;
+    addBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
+
+    try {
+      const resp = await fetch('/fabric-manager/insert/roll/ajax', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_id: invoiceId,
+          roll_no: roll_no,
+          per_roll_weight: weight,
+          color: color,
+          gr_no_by_vendor: gr_no,
+          unit: unit
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        showError(data.error || 'Could not save the roll. Please try again.');
+        return;
+      }
+
+      knownRolls.add(String(data.roll.roll_no));
+      prependRow(data.roll);
+      updateCounts(parseFloat(weight) || 0);
+
+      // Clear per-roll inputs, keep sticky defaults, refocus roll no.
+      rollNoEl.value = '';
+      weightEl.value = '';
+      grNoEl.value = '';
+      rollNoEl.focus();
+    } catch (e) {
+      showError('Network error. Roll not saved — please retry.');
+    } finally {
+      addBtn.disabled = false;
+      addBtn.innerHTML = original;
+    }
+  }
+
+  addBtn.addEventListener('click', addRoll);
+
+  // Enter on any per-roll input triggers Add.
+  [rollNoEl, weightEl, grNoEl].forEach(el => {
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); addRoll(); }
+    });
+  });
+})();
+</script>
 
 <%- include('partials/footer') %>

@@ -672,6 +672,93 @@ router.post('/insert/roll',
 );
 
 /**
+ * POST /fabric-manager/insert/roll/ajax
+ * Insert a single fabric invoice roll and return JSON (for live no-reload entry).
+ * Mirrors POST /insert/roll but responds with JSON instead of flash + redirect.
+ */
+router.post('/insert/roll/ajax',
+    isAuthenticated,
+    isFabricManager,
+    [
+        body('invoice_id').isInt().withMessage('Invalid Invoice ID.'),
+        body('roll_no').isInt({ min: 1 }).withMessage('Roll number must be a positive integer.'),
+        body('per_roll_weight').isDecimal({ decimal_digits: '0,2' }).withMessage('Per Roll Weight must be a decimal number.'),
+        body('color').optional().isString().withMessage('Color must be a string.'),
+        body('gr_no_by_vendor').optional().isString().withMessage('GR No by Vendor must be a string.'),
+        body('unit').isIn(['METER','KG']).withMessage('Unit must be either METER or KG.')
+    ],
+    async (req, res) => {
+        const errors = validationResult(req);
+        const user = req.session.user;
+
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: errors.array()[0].msg });
+        }
+
+        const { invoice_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit } = req.body;
+
+        try {
+            // Fetch vendor_id from the invoice
+            const [invoiceRows] = await pool.query(
+                'SELECT vendor_id FROM fabric_invoices WHERE id = ?',
+                [invoice_id]
+            );
+
+            if (invoiceRows.length === 0) {
+                return res.status(404).json({ error: 'Associated Fabric Invoice not found.' });
+            }
+
+            const vendor_id = invoiceRows[0].vendor_id;
+
+            // Check if the roll_no already exists for the given vendor_id
+            const [existingRoll] = await pool.query(
+                'SELECT id FROM fabric_invoice_rolls WHERE vendor_id = ? AND roll_no = ?',
+                [vendor_id, roll_no]
+            );
+
+            if (existingRoll.length > 0) {
+                return res.status(409).json({ error: 'Roll number must be unique for this vendor.' });
+            }
+
+            // Insert into fabric_invoice_rolls
+            const insertQuery = `
+                INSERT INTO fabric_invoice_rolls
+                (invoice_id, vendor_id, roll_no, per_roll_weight, color, gr_no_by_vendor, unit, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            const [result] = await pool.query(insertQuery, [
+                invoice_id,
+                vendor_id,
+                roll_no,
+                per_roll_weight,
+                color || null,
+                gr_no_by_vendor || null,
+                unit,
+                user.id
+            ]);
+
+            return res.status(201).json({
+                roll: {
+                    id: result.insertId,
+                    roll_no,
+                    per_roll_weight,
+                    color: color || null,
+                    gr_no_by_vendor: gr_no_by_vendor || null,
+                    unit,
+                    created_by: user.username
+                }
+            });
+        } catch (err) {
+            console.error('Error inserting fabric invoice roll (ajax):', err);
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Roll number must be unique for this vendor.' });
+            }
+            return res.status(500).json({ error: 'Error inserting fabric invoice roll.' });
+        }
+    }
+);
+
+/**
  * GET /fabric-manager/invoice/:id/download-rolls
  * Download rolls of a specific fabric invoice as Excel.
  */
