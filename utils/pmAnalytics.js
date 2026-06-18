@@ -55,4 +55,51 @@ function wipByStage(rows) {
   return { byStage, totalInHand };
 }
 
-module.exports = { cutPrioritySummary, fabricNeededByType, wipByStage };
+const { varianceVsStandard } = require('./styleConsumption');
+
+// Master output: merge each cutting master's recent cut output (lots/pieces) with their
+// assignment counts (assigned vs cut). Masters appear if they're in either source.
+//   lotRows: [{ master_id, username, lots, pieces }]
+//   assignmentRows: [{ assigned_master_id, assigned, cut, username? }]
+function masterOutputSummary(lotRows, assignmentRows) {
+  const byId = new Map();
+  const get = (id) => {
+    if (!byId.has(id)) byId.set(id, { master_id: id, username: null, lots: 0, pieces: 0, assigned: 0, cut: 0 });
+    return byId.get(id);
+  };
+  for (const r of lotRows || []) {
+    const m = get(r.master_id);
+    m.username = r.username || m.username;
+    m.lots = Number(r.lots) || 0;
+    m.pieces = Number(r.pieces) || 0;
+  }
+  for (const r of assignmentRows || []) {
+    const m = get(r.assigned_master_id);
+    if (r.username) m.username = m.username || r.username;
+    m.assigned = Number(r.assigned) || 0;
+    m.cut = Number(r.cut) || 0;
+  }
+  return [...byId.values()].sort((a, b) => b.pieces - a.pieces);
+}
+
+// Fabric variance: real derived consumption (utils/styleConsumption) vs the CAD standard,
+// per style. Only styles present in both are returned, sorted by the biggest gap.
+//   derivedRows: [{ style, realMetersPerPiece }]
+//   cadRows: [{ style, standard }]  (standard = the style's CAD consumption to compare against)
+function fabricVarianceRows(derivedRows, cadRows) {
+  const cad = new Map((cadRows || []).map((c) => [c.style, Number(c.standard)]));
+  const rows = [];
+  for (const d of derivedRows || []) {
+    const standard = cad.get(d.style);
+    if (standard == null || !isFinite(standard)) continue;
+    const real = Number(d.realMetersPerPiece);
+    if (real == null || !isFinite(real)) continue;
+    const v = varianceVsStandard(real, standard);
+    rows.push({ style: d.style, real, standard, variancePct: v.variancePct, status: v.status });
+  }
+  return rows.sort((a, b) => Math.abs(b.variancePct) - Math.abs(a.variancePct));
+}
+
+module.exports = {
+  cutPrioritySummary, fabricNeededByType, wipByStage, masterOutputSummary, fabricVarianceRows,
+};

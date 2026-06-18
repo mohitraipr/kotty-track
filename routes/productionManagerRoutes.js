@@ -154,6 +154,93 @@ router.get('/cut-planning', (req, res) => {
 
 const WIP_STAGES = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
 
+router.get('/analytics', (req, res) => res.render('productionManagerAnalytics', { user: req.session.user }));
+
+// GET /pm/api/analytics — the four analytics sections. Each guarded independently.
+router.get('/api/analytics', async (req, res) => {
+  const out = {};
+
+  // 1. Demand vs supply — daily demand (DRR) vs stock + on-order, and the most under-supplied styles.
+  try {
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    let dailyDemand = 0; let soh = 0; let onOrder = 0; let suggested = 0;
+    for (const r of recs || []) {
+      dailyDemand += Number(r.drr) || 0; soh += Number(r.soh) || 0;
+      onOrder += Number(r.open_lot_qty) || 0; suggested += Number(r.suggested_cut_qty) || 0;
+    }
+    const top = aggregateStyles(recs)
+      .filter((s) => s.suggested_cut_qty > 0)
+      .slice(0, 15)
+      .map((s) => ({ style: s.style, suggested: s.suggested_cut_qty, soh: s.total_soh, drr: s.avg_drr, doh: s.worst_size_doh, on_order: s.open_lot_qty, trigger: s.trigger }));
+    out.demand_supply = { dailyDemand, soh, onOrder, suggested, daysCover: dailyDemand > 0 ? soh / dailyDemand : null, top };
+  } catch (_) { out.demand_supply = null; }
+
+  // 2. Throughput & TAT — lots cut/week, dispatched/week, current bottleneck stage (most WIP).
+  try {
+    const [cut] = await pool.query(
+      `SELECT YEARWEEK(created_at,3) wk, MIN(DATE(created_at)) week_start, COUNT(*) lots, COALESCE(SUM(total_pieces),0) pieces
+         FROM cutting_lots WHERE created_at >= CURDATE() - INTERVAL 84 DAY GROUP BY wk ORDER BY wk`
+    );
+    let dispatch = [];
+    try {
+      const [d] = await pool.query(
+        `SELECT YEARWEEK(created_at,3) wk, MIN(DATE(created_at)) week_start, COALESCE(SUM(quantity),0) pieces
+           FROM finishing_dispatches WHERE created_at >= CURDATE() - INTERVAL 84 DAY GROUP BY wk ORDER BY wk`
+      );
+      dispatch = d;
+    } catch (_) {}
+    let bottleneck = null;
+    try {
+      const wipRows = [];
+      for (const stage of WIP_STAGES) {
+        const [[r]] = await pool.query(
+          `SELECT COALESCE(SUM(CASE WHEN e.event_type='approve' THEN e.pieces END),0) approved,
+                  COALESCE(SUM(CASE WHEN e.event_type='complete' THEN e.pieces END),0) completed,
+                  COALESCE(SUM(CASE WHEN e.event_type='reject' AND e.parent_event_id IS NOT NULL THEN e.pieces END),0) inline_rejected
+             FROM \`${stage}_events\` e JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+            WHERE cl.created_at >= CURDATE() - INTERVAL 120 DAY`
+        );
+        wipRows.push({ stage, ...r });
+      }
+      const w = wipByStage(wipRows);
+      bottleneck = Object.entries(w.byStage).sort((a, b) => b[1] - a[1])[0] || null;
+    } catch (_) {}
+    out.throughput = {
+      cut_per_week: cut.map((r) => ({ week_start: r.week_start, lots: Number(r.lots), pieces: Number(r.pieces) })),
+      dispatch_per_week: dispatch.map((r) => ({ week_start: r.week_start, pieces: Number(r.pieces) })),
+      bottleneck: bottleneck ? { stage: bottleneck[0], wip: bottleneck[1] } : null,
+    };
+  } catch (_) { out.throughput = null; }
+
+  // 3. Fabric usage & variance — real derived consumption vs the CAD standard, per style.
+  try {
+    const derived = await loadStyleConsumption(pool, 120);
+    const [cadRows] = await pool.query('SELECT style, AVG(consumption_per_piece) standard FROM pm_style_consumption GROUP BY style');
+    out.fabric_variance = fabricVarianceRows(derived, cadRows.map((c) => ({ style: c.style, standard: Number(c.standard) }))).slice(0, 25);
+  } catch (_) { out.fabric_variance = null; }
+
+  // 4. Master / cutter output — pieces cut (30d) + assignment counts per master.
+  try {
+    const [lots] = await pool.query(
+      `SELECT cl.user_id master_id, u.username, COUNT(*) lots, COALESCE(SUM(cl.total_pieces),0) pieces
+         FROM cutting_lots cl JOIN users u ON u.id = cl.user_id
+        WHERE cl.created_at >= CURDATE() - INTERVAL 30 DAY GROUP BY cl.user_id, u.username`
+    );
+    let asg = [];
+    try {
+      const [a] = await pool.query(
+        `SELECT assigned_master_id, assigned_master_name username, COUNT(*) assigned,
+                COALESCE(SUM(status='cut'),0) cut
+           FROM pm_cut_assignment GROUP BY assigned_master_id, assigned_master_name`
+      );
+      asg = a;
+    } catch (_) {}
+    out.master_output = masterOutputSummary(lots, asg);
+  } catch (_) { out.master_output = null; }
+
+  res.json({ ok: true, ...out });
+});
+
 // GET /pm/api/summary — the numbers behind the dashboard summary cards. Each card is
 // computed independently and degrades to null on error so one missing table never blanks
 // the whole row.

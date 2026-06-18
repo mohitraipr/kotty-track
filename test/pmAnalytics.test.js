@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   cutPrioritySummary, fabricNeededByType, wipByStage,
+  masterOutputSummary, fabricVarianceRows,
 } = require('../utils/pmAnalytics.js');
 
 test('cutPrioritySummary counts red/amber styles and totals suggested pieces', () => {
@@ -61,4 +62,47 @@ test('wipByStage computes in-hand pieces per stage (approved - completed - inlin
 test('wipByStage never returns negative WIP', () => {
   const w = wipByStage([{ stage: 'washing', approved: 100, completed: 140, inline_rejected: 0 }]);
   assert.strictEqual(w.byStage.washing, 0);
+});
+
+test('masterOutputSummary merges cut output with assignment counts per master', () => {
+  const lots = [
+    { master_id: 3, username: 'akshay', lots: 12, pieces: 9000 },
+    { master_id: 9, username: 'imran', lots: 4, pieces: 3000 },
+  ];
+  const asg = [
+    { assigned_master_id: 3, assigned: 5, cut: 4 },
+    { assigned_master_id: 17, assigned: 2, cut: 0, username: 'kedar' },
+  ];
+  const out = masterOutputSummary(lots, asg);
+  const ak = out.find(m => m.master_id === 3);
+  assert.strictEqual(ak.pieces, 9000);
+  assert.strictEqual(ak.assigned, 5);
+  assert.strictEqual(ak.cut, 4);
+  // a master with assignments but no cut output this window still shows up
+  const kedar = out.find(m => m.master_id === 17);
+  assert.strictEqual(kedar.username, 'kedar');
+  assert.strictEqual(kedar.pieces, 0);
+  assert.strictEqual(kedar.assigned, 2);
+  // sorted by pieces desc
+  assert.strictEqual(out[0].master_id, 3);
+});
+
+test('fabricVarianceRows compares real derived consumption to the CAD standard', () => {
+  const derived = [
+    { style: 'A', realMetersPerPiece: 0.955 },
+    { style: 'B', realMetersPerPiece: 1.30 },
+    { style: 'C', realMetersPerPiece: 1.00 }, // no CAD -> excluded
+  ];
+  const cad = [
+    { style: 'A', standard: 1.01 },
+    { style: 'B', standard: 1.10 },
+  ];
+  const rows = fabricVarianceRows(derived, cad);
+  assert.strictEqual(rows.length, 2);
+  // B is +18% over standard -> biggest variance, sorted first
+  assert.strictEqual(rows[0].style, 'B');
+  assert.strictEqual(rows[0].status, 'over');
+  const a = rows.find(r => r.style === 'A');
+  assert.strictEqual(a.status, 'under');
+  assert.ok(Math.abs(a.variancePct - -5.45) < 0.1);
 });
