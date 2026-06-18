@@ -13,6 +13,8 @@ const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const analytics = require('../utils/easyecomAnalytics');
 const skuResolver = require('../utils/skuResolver');
 const { aggregateStyleConsumption } = require('../utils/styleConsumption');
+const { parseConsumptionSheet } = require('../utils/cadConsumption');
+const { planCut } = require('../utils/cutPlanner');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -212,6 +214,110 @@ router.get('/api/consumption', async (req, res) => {
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') {
       return res.json({ ok: false, items: [], warning: err.message });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Read a worksheet into row objects keyed by a known column set (some optional). Headers
+// are slugified (lowercase, non-alphanumeric -> _); unmatched optional columns are skipped.
+function readSheetRows(ws, columns) {
+  const headers = [];
+  ws.getRow(1).eachCell((cell, col) => {
+    headers.push({ col, k: String(cell.value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') });
+  });
+  const map = {};
+  for (const key of columns) {
+    const h = headers.find((x) => x.k === key) || headers.find((x) => x.k.startsWith(key));
+    if (h) map[key] = h.col;
+  }
+  const cellText = (v) => {
+    if (v == null) return '';
+    if (typeof v === 'object') {
+      if ('text' in v) return v.text;
+      if ('result' in v) return v.result;
+      if ('richText' in v) return v.richText.map((t) => t.text).join('');
+    }
+    return v;
+  };
+  const rows = [];
+  for (let i = 2; i <= ws.rowCount; i++) {
+    const row = ws.getRow(i);
+    const obj = {};
+    for (const key of columns) obj[key] = map[key] ? String(cellText(row.getCell(map[key]).value)).trim() : '';
+    if (Object.values(obj).some((v) => v !== '')) rows.push(obj);
+  }
+  return { rows, map };
+}
+
+// POST /pm/consumption/upload — load CAD per-size consumption (style, fabric_type, size,
+// consumption, [unit]) into pm_style_consumption. CAD is the fabric truth (owner ruling).
+router.post('/consumption/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded.' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+    const ws = wb.worksheets[0];
+    if (!ws) return res.status(400).json({ ok: false, error: 'Workbook has no sheets.' });
+    const { rows: rawRows, map } = readSheetRows(ws, ['style', 'fabric_type', 'size', 'consumption', 'unit']);
+    if (!map.style || !map.size || !map.consumption) {
+      return res.status(400).json({ ok: false, error: 'Need columns: style, size, consumption (fabric_type, unit optional).' });
+    }
+    const { rows, errors } = parseConsumptionSheet(rawRows);
+    let saved = 0;
+    for (const r of rows) {
+      await pool.query(
+        `INSERT INTO pm_style_consumption (style, size_label, fabric_type, consumption_per_piece, consumption_unit, source, loaded_by)
+         VALUES (?, ?, ?, ?, ?, 'cad', ?)
+         ON DUPLICATE KEY UPDATE fabric_type=VALUES(fabric_type), consumption_per_piece=VALUES(consumption_per_piece),
+           consumption_unit=VALUES(consumption_unit), loaded_by=VALUES(loaded_by)`,
+        [r.style, r.size_label, r.fabric_type, r.consumption_per_piece, r.consumption_unit, req.session?.user?.id || null]
+      );
+      saved += 1;
+    }
+    res.json({ ok: true, saved, skipped: errors.length, errors: errors.slice(0, 20) });
+  } catch (err) {
+    console.error('[pm] consumption upload error', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/api/cut-plan?style=... — turn a style's suggested cut into capped lots with the
+// fabric to issue per lot from CAD consumption. CAD makes the marker; we plan quantities+lots.
+router.get('/api/cut-plan', async (req, res) => {
+  try {
+    const style = String(req.query.style || '').trim();
+    if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
+
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    const demand = {};
+    for (const r of (recs || [])) {
+      if (r.style !== style) continue;
+      const qty = Number(r.suggested_cut_qty) || 0;
+      if (qty > 0 && r.size) demand[r.size] = (demand[r.size] || 0) + qty;
+    }
+
+    const [consRows] = await pool.query(
+      'SELECT size_label, consumption_per_piece, consumption_unit, fabric_type FROM pm_style_consumption WHERE style = ?',
+      [style]
+    );
+    const consumptionBySize = {};
+    let fabricType = null;
+    let unit = 'METER';
+    for (const c of consRows) {
+      consumptionBySize[c.size_label] = Number(c.consumption_per_piece);
+      fabricType = fabricType || c.fabric_type;
+      unit = c.consumption_unit || unit;
+    }
+
+    const plan = planCut(demand, { consumptionBySize });
+    res.json({
+      ok: true, style, fabric_type: fabricType, fabric_unit: unit,
+      demand, has_cad: consRows.length > 0, ...plan,
+    });
+  } catch (err) {
+    if (err.code === 'ANALYTICS_MISSING' || err.code === 'ER_NO_SUCH_TABLE') {
+      return res.json({ ok: false, warning: err.message });
     }
     res.status(500).json({ ok: false, error: err.message });
   }
