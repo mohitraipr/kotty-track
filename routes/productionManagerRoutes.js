@@ -16,6 +16,9 @@ const { aggregateStyleConsumption } = require('../utils/styleConsumption');
 const { parseConsumptionSheet } = require('../utils/cadConsumption');
 const { planCut } = require('../utils/cutPlanner');
 const { buildAssignmentPayload } = require('../utils/cutAssignment');
+const stageEvents = require('../utils/stageEvents');
+const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
+const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -148,6 +151,154 @@ router.get('/cut-planning', (req, res) => {
 });
 
 // ─── Cutting recommendations ─────────────────────────────────────────
+
+const WIP_STAGES = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
+
+router.get('/analytics', (req, res) => res.render('productionManagerAnalytics', { user: req.session.user }));
+
+// GET /pm/api/analytics — the four analytics sections. Each guarded independently.
+router.get('/api/analytics', async (req, res) => {
+  const out = {};
+
+  // 1. Demand vs supply — daily demand (DRR) vs stock + on-order, and the most under-supplied styles.
+  try {
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    let dailyDemand = 0; let soh = 0; let onOrder = 0; let suggested = 0;
+    for (const r of recs || []) {
+      dailyDemand += Number(r.drr) || 0; soh += Number(r.soh) || 0;
+      onOrder += Number(r.open_lot_qty) || 0; suggested += Number(r.suggested_cut_qty) || 0;
+    }
+    const top = aggregateStyles(recs)
+      .filter((s) => s.suggested_cut_qty > 0)
+      .slice(0, 15)
+      .map((s) => ({ style: s.style, suggested: s.suggested_cut_qty, soh: s.total_soh, drr: s.avg_drr, doh: s.worst_size_doh, on_order: s.open_lot_qty, trigger: s.trigger }));
+    out.demand_supply = { dailyDemand, soh, onOrder, suggested, daysCover: dailyDemand > 0 ? soh / dailyDemand : null, top };
+  } catch (_) { out.demand_supply = null; }
+
+  // 2. Throughput & TAT — lots cut/week, dispatched/week, current bottleneck stage (most WIP).
+  try {
+    const [cut] = await pool.query(
+      `SELECT YEARWEEK(created_at,3) wk, MIN(DATE(created_at)) week_start, COUNT(*) lots, COALESCE(SUM(total_pieces),0) pieces
+         FROM cutting_lots WHERE created_at >= CURDATE() - INTERVAL 84 DAY GROUP BY wk ORDER BY wk`
+    );
+    let dispatch = [];
+    try {
+      const [d] = await pool.query(
+        `SELECT YEARWEEK(created_at,3) wk, MIN(DATE(created_at)) week_start, COALESCE(SUM(quantity),0) pieces
+           FROM finishing_dispatches WHERE created_at >= CURDATE() - INTERVAL 84 DAY GROUP BY wk ORDER BY wk`
+      );
+      dispatch = d;
+    } catch (_) {}
+    let bottleneck = null;
+    try {
+      const wipRows = [];
+      for (const stage of WIP_STAGES) {
+        const [[r]] = await pool.query(
+          `SELECT COALESCE(SUM(CASE WHEN e.event_type='approve' THEN e.pieces END),0) approved,
+                  COALESCE(SUM(CASE WHEN e.event_type='complete' THEN e.pieces END),0) completed,
+                  COALESCE(SUM(CASE WHEN e.event_type='reject' AND e.parent_event_id IS NOT NULL THEN e.pieces END),0) inline_rejected
+             FROM \`${stage}_events\` e JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+            WHERE cl.created_at >= CURDATE() - INTERVAL 120 DAY`
+        );
+        wipRows.push({ stage, ...r });
+      }
+      const w = wipByStage(wipRows);
+      bottleneck = Object.entries(w.byStage).sort((a, b) => b[1] - a[1])[0] || null;
+    } catch (_) {}
+    out.throughput = {
+      cut_per_week: cut.map((r) => ({ week_start: r.week_start, lots: Number(r.lots), pieces: Number(r.pieces) })),
+      dispatch_per_week: dispatch.map((r) => ({ week_start: r.week_start, pieces: Number(r.pieces) })),
+      bottleneck: bottleneck ? { stage: bottleneck[0], wip: bottleneck[1] } : null,
+    };
+  } catch (_) { out.throughput = null; }
+
+  // 3. Fabric usage & variance — real derived consumption vs the CAD standard, per style.
+  try {
+    const derived = await loadStyleConsumption(pool, 120);
+    const [cadRows] = await pool.query('SELECT style, AVG(consumption_per_piece) standard FROM pm_style_consumption GROUP BY style');
+    out.fabric_variance = fabricVarianceRows(derived, cadRows.map((c) => ({ style: c.style, standard: Number(c.standard) }))).slice(0, 25);
+  } catch (_) { out.fabric_variance = null; }
+
+  // 4. Master / cutter output — pieces cut (30d) + assignment counts per master.
+  try {
+    const [lots] = await pool.query(
+      `SELECT cl.user_id master_id, u.username, COUNT(*) lots, COALESCE(SUM(cl.total_pieces),0) pieces
+         FROM cutting_lots cl JOIN users u ON u.id = cl.user_id
+        WHERE cl.created_at >= CURDATE() - INTERVAL 30 DAY GROUP BY cl.user_id, u.username`
+    );
+    let asg = [];
+    try {
+      const [a] = await pool.query(
+        `SELECT assigned_master_id, assigned_master_name username, COUNT(*) assigned,
+                COALESCE(SUM(status='cut'),0) cut
+           FROM pm_cut_assignment GROUP BY assigned_master_id, assigned_master_name`
+      );
+      asg = a;
+    } catch (_) {}
+    out.master_output = masterOutputSummary(lots, asg);
+  } catch (_) { out.master_output = null; }
+
+  res.json({ ok: true, ...out });
+});
+
+// GET /pm/api/summary — the numbers behind the dashboard summary cards. Each card is
+// computed independently and degrades to null on error so one missing table never blanks
+// the whole row.
+router.get('/api/summary', async (req, res) => {
+  const out = {};
+
+  // Cut priority + fabric needed (both off the recommendations).
+  try {
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    out.cut_priority = cutPrioritySummary(aggregateStyles(recs));
+    try {
+      const [cons] = await pool.query('SELECT style, size_label, consumption_per_piece, fabric_type FROM pm_style_consumption');
+      out.fabric_needed = fabricNeededByType(recs, cons);
+    } catch (_) { out.fabric_needed = null; }
+  } catch (_) { out.cut_priority = null; out.fabric_needed = null; }
+
+  // WIP currently in hand at each stage (lots from the last 120 days).
+  try {
+    const rows = [];
+    for (const stage of WIP_STAGES) {
+      const [[r]] = await pool.query(
+        `SELECT COALESCE(SUM(CASE WHEN e.event_type='approve' THEN e.pieces END),0) approved,
+                COALESCE(SUM(CASE WHEN e.event_type='complete' THEN e.pieces END),0) completed,
+                COALESCE(SUM(CASE WHEN e.event_type='reject' AND e.parent_event_id IS NOT NULL THEN e.pieces END),0) inline_rejected
+           FROM \`${stage}_events\` e JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          WHERE cl.created_at >= CURDATE() - INTERVAL 120 DAY`
+      );
+      rows.push({ stage, ...r });
+    }
+    out.wip = wipByStage(rows);
+  } catch (_) { out.wip = null; }
+
+  // Dead stock (count + units of slow movers).
+  try {
+    const dead = await safeCall('getDeadStock', pool, { days: 45 });
+    out.dead_stock = { count: (dead || []).length, units: (dead || []).reduce((s, d) => s + (Number(d.soh) || 0), 0) };
+  } catch (_) { out.dead_stock = null; }
+
+  // Total inventory on hand (latest snapshot).
+  try {
+    const [[r]] = await pool.query(
+      `SELECT COALESCE(SUM(qty),0) units, MAX(snapshot_date) as_of FROM ee_inventory_daily_snapshot
+        WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM ee_inventory_daily_snapshot)`
+    );
+    out.inventory = { units: Number(r.units) || 0, as_of: r.as_of };
+  } catch (_) { out.inventory = null; }
+
+  // Sales day by day (last 30 days).
+  try {
+    const [rows] = await pool.query(
+      `SELECT sale_date, SUM(qty) qty FROM ee_sales_daily
+        WHERE sale_date >= CURDATE() - INTERVAL 30 DAY GROUP BY sale_date ORDER BY sale_date`
+    );
+    out.sales_by_day = rows.map((r) => ({ date: r.sale_date, qty: Number(r.qty) || 0 }));
+  } catch (_) { out.sales_by_day = null; }
+
+  res.json({ ok: true, ...out });
+});
 
 router.get('/api/styles', async (req, res) => {
   try {
@@ -384,6 +535,88 @@ router.post('/api/cut-plan/assign', async (req, res) => {
     res.json({ ok: true, assignment_id: assignmentId, assigned_to: master.username, ...header });
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') return res.status(400).json({ ok: false, error: 'Run the cut-assignment migration first.' });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Compact stage journey for one cut lot, reusing the tested lotJourney helpers + stageEvents.
+const STAGE_EVENT_TABLE = {
+  stitching: 'stitching_events', jeans_assembly: 'jeans_assembly_events',
+  washing: 'washing_events', washing_in: 'washing_in_events', finishing: 'finishing_events',
+};
+const STAGE_LABEL = {
+  cutting: 'Cut', stitching: 'Stitch', jeans_assembly: 'Assembly',
+  washing: 'Wash', washing_in: 'Wash-In', finishing: 'Finish',
+};
+
+async function lotJourneyCompact(lot) {
+  const stages = orderedStages(lot.flow_type);
+  const now = Date.now();
+  const raw = {};
+  for (const stage of stages) {
+    if (stage === 'cutting') continue;
+    const [rows] = await pool.query(
+      `SELECT e.event_type, e.created_at, u.username FROM \`${STAGE_EVENT_TABLE[stage]}\` e
+         LEFT JOIN users u ON u.id = e.operator_id WHERE e.cutting_lot_id = ? ORDER BY e.created_at`,
+      [lot.id]
+    );
+    let entered = null; let completedAt = null; let master = null;
+    for (const r of rows) {
+      if (!entered) entered = r.created_at;
+      if (r.event_type === 'complete') completedAt = r.created_at;
+      if (r.event_type === 'approve' && !master) master = r.username;
+    }
+    raw[stage] = { entered, completedAt, master, agg: await stageEvents.getStageAggregates(pool, stage, lot.id) };
+  }
+  const timeline = [];
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i]; const next = stages[i + 1];
+    const entered = stage === 'cutting' ? lot.created_at : raw[stage].entered;
+    const exit = next ? (raw[next] && raw[next].entered) : (stage === 'cutting' ? null : raw[stage].completedAt);
+    let { status, days } = deriveStageStatus({ entered, exited: exit }, now);
+    if (stage === 'cutting') status = 'done';
+    timeline.push({
+      stage, label: STAGE_LABEL[stage] || stage, status, days,
+      completed: stage === 'cutting' ? lot.total_pieces : (raw[stage].agg.completed || 0),
+      master: stage === 'cutting' ? lot.cutter_name : (raw[stage].master || null),
+    });
+  }
+  const finished = {};
+  if (stages.includes('finishing')) {
+    const sz = await stageEvents.getStageSizeAggregates(pool, 'finishing', lot.id);
+    for (const [s, v] of Object.entries(sz)) finished[s] = v.completed || 0;
+  }
+  const [dr] = await pool.query(
+    'SELECT size_label, SUM(quantity) qty FROM finishing_dispatches WHERE lot_no = ? GROUP BY size_label', [lot.lot_no]
+  );
+  const dispatchedBySize = {};
+  for (const r of dr) dispatchedBySize[String(r.size_label || '').trim().toUpperCase()] = Number(r.qty) || 0;
+  const dispatch = dispatchSummary(finished, dispatchedBySize);
+  return {
+    lot_no: lot.lot_no, manual_lot_number: lot.manual_lot_number || '', total_pieces: lot.total_pieces,
+    created_at: lot.created_at, flow_type: lot.flow_type || 'unknown',
+    current_stage: dispatch.complete ? 'Dispatched' : currentStage(timeline),
+    timeline, dispatch: { finished: dispatch.totalFinished, dispatched: dispatch.totalDispatched, in_stock: dispatch.remaining },
+  };
+}
+
+// GET /pm/api/style-lots?style=... — the lots cut for this style and where each one is now,
+// so the PM sees the cut history on the same screen (after assign -> cut).
+router.get('/api/style-lots', async (req, res) => {
+  try {
+    const style = String(req.query.style || '').trim();
+    if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
+    const [lots] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.total_pieces, cl.flow_type, cl.created_at,
+              u.username AS cutter_name
+         FROM cutting_lots cl LEFT JOIN users u ON u.id = cl.user_id
+        WHERE cl.sku = ? ORDER BY cl.created_at DESC LIMIT 8`,
+      [style]
+    );
+    const journeys = [];
+    for (const lot of lots) journeys.push(await lotJourneyCompact(lot));
+    res.json({ ok: true, style, lots: journeys });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });

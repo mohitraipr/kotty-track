@@ -110,6 +110,26 @@
     </div>
   </div>
 
+  <div class="pm-card" style="margin-top: 1rem;">
+    <div class="pm-card-head">
+      <h2>Approve &amp; assign cut</h2>
+      <div id="planSummary"></div>
+    </div>
+    <div class="pm-card-body" id="assignBody">
+      <div class="pm-empty">Loading suggested cut…</div>
+    </div>
+  </div>
+
+  <div class="pm-card" style="margin-top: 1rem;">
+    <div class="pm-card-head">
+      <h2>Cut history &amp; lot status</h2>
+      <span style="font-size:0.78rem; color:var(--text-3);">where each lot cut for this style is now</span>
+    </div>
+    <div class="pm-card-body" id="lotHistoryBody">
+      <div class="pm-empty">Loading lot history…</div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -163,6 +183,129 @@ function escapeHtml(s) {
     tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
   }
 })();
+
+// ── Approve & assign cut ─────────────────────────────────────────────
+let MASTERS = [];
+function fmtDate(d){ return d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : ''; }
+
+async function loadAssignPanel() {
+  const body = document.getElementById('assignBody');
+  const summary = document.getElementById('planSummary');
+  try {
+    const [planRes, mastersRes, asgRes] = await Promise.all([
+      fetch('/pm/api/cut-plan?style=' + encodeURIComponent(STYLE)).then(r => r.json()),
+      fetch('/pm/api/cut-masters').then(r => r.json()),
+      fetch('/pm/api/cut-assignments').then(r => r.json()),
+    ]);
+    MASTERS = (mastersRes.ok && mastersRes.masters) ? mastersRes.masters : [];
+    const styleAsg = (asgRes.ok ? asgRes.items : []).filter(a => a.style === STYLE);
+
+    if (!planRes.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(planRes.warning || planRes.error || 'Could not load plan.')}</div>`; return; }
+    if (!planRes.totalPieces) {
+      summary.innerHTML = '';
+      body.innerHTML = `<div class="pm-empty">No suggested cut right now — stock is covered.</div>` + assignmentsHtml(styleAsg);
+      return;
+    }
+
+    summary.innerHTML = planRes.totalFabricMeters != null
+      ? `<span class="pm-pill green">${Number(planRes.totalFabricMeters).toFixed(1)} m ${escapeHtml(planRes.fabric_type || '')}</span>`
+      : `<span class="pm-pill warming">No CAD fabric</span>`;
+
+    const sizes = Object.entries(planRes.demand).sort((a,b)=>b[1]-a[1]);
+    const masterOpts = MASTERS.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('');
+    body.innerHTML = `
+      <div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:baseline; margin-bottom:0.75rem;">
+        <div><strong style="font-size:1.25rem;">${planRes.totalPieces}</strong> <span style="color:var(--text-3);">pieces</span></div>
+        <div><strong>${planRes.lotCount}</strong> <span style="color:var(--text-3);">lot(s) ≤1500</span></div>
+        <div style="color:var(--text-2);">${escapeHtml(planRes.fabric_type || 'fabric n/a')}</div>
+      </div>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+        ${sizes.map(([s,q]) => `<span style="background:#f1f5f9;border-radius:8px;padding:0.35rem 0.7rem;font-size:0.85rem;"><strong>${q}</strong> ${escapeHtml(s)}</span>`).join('')}
+      </div>
+      ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--warning);font-size:0.8rem;margin-bottom:0.5rem;">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; font-size:0.8rem; color:var(--text-2);">
+        ${planRes.lots.map((l,i)=>`<span style="background:var(--primary-s);border-radius:8px;padding:0.3rem 0.6rem;">Lot ${i+1}: ${l.total} pcs${l.fabricMeters!=null?(' · '+Number(l.fabricMeters).toFixed(0)+'m'):''}</span>`).join('')}
+      </div>
+      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; padding-top:0.5rem; border-top:1px solid var(--border-2);">
+        <label style="font-size:0.85rem; color:var(--text-2);">Assign to cutting master:</label>
+        <select id="masterSel" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:10px; font-size:0.85rem;">${masterOpts || '<option value="">no masters</option>'}</select>
+        <button class="pm-btn" style="background:var(--primary); color:#fff; border-color:var(--primary);" onclick="doAssign()">Approve &amp; Assign</button>
+        <span id="assignMsg" style="font-size:0.85rem;"></span>
+      </div>
+      ${assignmentsHtml(styleAsg)}
+    `;
+  } catch (err) {
+    body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function assignmentsHtml(items) {
+  if (!items || !items.length) return '';
+  return `<div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-2);">
+    <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-3); margin-bottom:0.4rem;">Already assigned for this style</div>
+    ${items.map(a => `<div style="font-size:0.85rem; color:var(--text-2); padding:0.2rem 0;">
+      <strong>${a.total_pieces}</strong> pcs → <strong>${escapeHtml(a.assigned_master_name||'')}</strong>
+      · ${a.status === 'cut' ? '<span style="color:var(--success);">cut</span>' : 'assigned'} · ${fmtDate(a.created_at)}</div>`).join('')}
+  </div>`;
+}
+
+async function doAssign() {
+  const sel = document.getElementById('masterSel');
+  const msg = document.getElementById('assignMsg');
+  const masterId = sel ? sel.value : '';
+  if (!masterId) { msg.innerHTML = '<span style="color:var(--danger);">pick a master</span>'; return; }
+  msg.textContent = 'Assigning…';
+  try {
+    const r = await fetch('/pm/api/cut-plan/assign', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ style: STYLE, master_id: masterId }),
+    });
+    const d = await r.json();
+    if (d.ok) { msg.innerHTML = `<span style="color:var(--success);">✓ Assigned to ${escapeHtml(d.assigned_to)}</span>`; loadAssignPanel(); }
+    else { msg.innerHTML = `<span style="color:var(--danger);">${escapeHtml(d.error || 'failed')}</span>`; }
+  } catch (err) { msg.innerHTML = `<span style="color:var(--danger);">${escapeHtml(err.message)}</span>`; }
+}
+
+loadAssignPanel();
+
+// ── Cut history & lot status ─────────────────────────────────────────
+const STATUS_COLOR = { done: 'var(--success)', in_progress: 'var(--warning)', not_started: '#cbd5e1' };
+
+async function loadLotHistory() {
+  const body = document.getElementById('lotHistoryBody');
+  try {
+    const r = await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE));
+    const j = await r.json();
+    if (!j.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(j.error || 'failed')}</div>`; return; }
+    if (!j.lots.length) { body.innerHTML = `<div class="pm-empty">No lots cut for this style yet.</div>`; return; }
+    body.innerHTML = j.lots.map(lot => {
+      const steps = lot.timeline.map(t => `
+        <div style="display:flex; flex-direction:column; align-items:center; min-width:58px;">
+          <div title="${escapeHtml(t.status)}${t.master ? ' · ' + escapeHtml(t.master) : ''}"
+               style="width:14px;height:14px;border-radius:50%;background:${STATUS_COLOR[t.status] || '#cbd5e1'};"></div>
+          <div style="font-size:0.68rem; color:var(--text-2); margin-top:3px;">${escapeHtml(t.label)}</div>
+          <div style="font-size:0.66rem; color:var(--text-3);">${t.status === 'not_started' ? '—' : (t.completed || 0)}</div>
+        </div>`).join('<div style="flex:1;height:2px;background:var(--border-2);margin:7px 2px 0;min-width:10px;"></div>');
+      const disp = lot.dispatch;
+      const dispHtml = disp.finished > 0
+        ? `<span style="color:var(--text-2);">Dispatched <strong>${disp.dispatched}</strong>/${disp.finished}${disp.in_stock > 0 ? ` · ${disp.in_stock} in stock` : ''}</span>`
+        : '';
+      return `
+        <div style="padding:0.75rem 0; border-bottom:1px solid var(--border-2);">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
+            <div><strong>${escapeHtml(lot.lot_no)}</strong>${lot.manual_lot_number ? ` <span style="color:var(--text-3);">/ ${escapeHtml(lot.manual_lot_number)}</span>` : ''}
+              <span style="color:var(--text-3); font-size:0.82rem;">· ${lot.total_pieces} pcs · ${fmtDate(lot.created_at)}</span></div>
+            <span class="pm-pill ${lot.current_stage === 'Dispatched' ? 'green' : 'amber'}">${escapeHtml(lot.current_stage)}</span>
+          </div>
+          <div style="display:flex; align-items:flex-start; margin-top:0.6rem; overflow-x:auto;">${steps}</div>
+          ${dispHtml ? `<div style="font-size:0.8rem; margin-top:0.5rem;">${dispHtml}</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+loadLotHistory();
 </script>
 
 <%- include('partials/footer') %>
