@@ -12,6 +12,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const analytics = require('../utils/easyecomAnalytics');
 const skuResolver = require('../utils/skuResolver');
+const { aggregateStyleConsumption } = require('../utils/styleConsumption');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -179,6 +180,37 @@ router.get('/api/dead-stock', async (req, res) => {
     res.json({ ok: true, items: rows || [] });
   } catch (err) {
     if (err.code === 'ANALYTICS_MISSING') {
+      return res.json({ ok: false, items: [], warning: err.message });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Real fabric consumption (meters/piece) per style, derived from cutting history.
+// A lot's blended consumption = table_length * SUM(layers) / total_pieces; dirty rows
+// are filtered and styles aggregated by median (see utils/styleConsumption.js).
+async function loadStyleConsumption(dbPool, windowDays) {
+  const days = Number.isFinite(windowDays) ? windowDays : 120;
+  const [rows] = await dbPool.query(
+    `SELECT cl.sku, cl.table_length, cl.total_pieces, COALESCE(SUM(clr.layers), 0) AS layers
+     FROM cutting_lots cl
+     LEFT JOIN cutting_lot_rolls clr ON clr.cutting_lot_id = cl.id
+     WHERE cl.created_at >= CURDATE() - INTERVAL ? DAY AND cl.sku IS NOT NULL
+     GROUP BY cl.id`,
+    [days]
+  );
+  return aggregateStyleConsumption(rows);
+}
+
+// GET /pm/api/consumption — per-style real consumption, most-measured styles first.
+router.get('/api/consumption', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 120;
+    const items = await loadStyleConsumption(pool, days);
+    items.sort((a, b) => b.cleanLots - a.cleanLots);
+    res.json({ ok: true, windowDays: days, count: items.length, items });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') {
       return res.json({ ok: false, items: [], warning: err.message });
     }
     res.status(500).json({ ok: false, error: err.message });
