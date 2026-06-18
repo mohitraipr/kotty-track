@@ -214,6 +214,7 @@ app.use('/', authRoutes);
 app.use('/', launcherRoutes);                       // /launcher + /switch-role
 app.use('/my-lots', require('./routes/myLotsRoutes'));
 app.use('/operator/lot-tat', require('./routes/operatorLotTatRoutes'));
+app.use('/operator/lot-journey', require('./routes/lotJourneyRoutes'));
 app.use('/admin/user-roles', adminUserRolesRoutes); // mohitOperator-only
 app.use('/return-challan', returnChallanRoutes);    // returnchallan role
 app.use('/admin', adminRoutes);
