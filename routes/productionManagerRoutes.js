@@ -15,6 +15,7 @@ const skuResolver = require('../utils/skuResolver');
 const { aggregateStyleConsumption } = require('../utils/styleConsumption');
 const { parseConsumptionSheet } = require('../utils/cadConsumption');
 const { planCut } = require('../utils/cutPlanner');
+const { buildAssignmentPayload } = require('../utils/cutAssignment');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -139,6 +140,11 @@ router.get('/style/:style', async (req, res) => {
     userRole: req.session.user.roleName,
     style: req.params.style,
   });
+});
+
+// PM approve-and-assign screen: review a style's suggested cut, pick a cutting master, assign.
+router.get('/cut-planning', (req, res) => {
+  res.render('cutPlanning', { user: req.session.user, prefillStyle: String(req.query.style || '').trim() });
 });
 
 // ─── Cutting recommendations ─────────────────────────────────────────
@@ -282,43 +288,117 @@ router.post('/consumption/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// A style's suggested cut -> capped lots + fabric to issue from CAD. Shared by the
+// cut-plan view and the approve-and-assign action.
+async function computeStyleCutPlan(style) {
+  const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+  const demand = {};
+  for (const r of (recs || [])) {
+    if (r.style !== style) continue;
+    const qty = Number(r.suggested_cut_qty) || 0;
+    if (qty > 0 && r.size) demand[r.size] = (demand[r.size] || 0) + qty;
+  }
+  const [consRows] = await pool.query(
+    'SELECT size_label, consumption_per_piece, consumption_unit, fabric_type FROM pm_style_consumption WHERE style = ?',
+    [style]
+  );
+  const consumptionBySize = {};
+  let fabricType = null;
+  let unit = 'METER';
+  for (const c of consRows) {
+    consumptionBySize[c.size_label] = Number(c.consumption_per_piece);
+    fabricType = fabricType || c.fabric_type;
+    unit = c.consumption_unit || unit;
+  }
+  const plan = planCut(demand, { consumptionBySize });
+  return { demand, plan, fabricType, unit, hasCad: consRows.length > 0 };
+}
+
 // GET /pm/api/cut-plan?style=... — turn a style's suggested cut into capped lots with the
 // fabric to issue per lot from CAD consumption. CAD makes the marker; we plan quantities+lots.
 router.get('/api/cut-plan', async (req, res) => {
   try {
     const style = String(req.query.style || '').trim();
     if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
-
-    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
-    const demand = {};
-    for (const r of (recs || [])) {
-      if (r.style !== style) continue;
-      const qty = Number(r.suggested_cut_qty) || 0;
-      if (qty > 0 && r.size) demand[r.size] = (demand[r.size] || 0) + qty;
-    }
-
-    const [consRows] = await pool.query(
-      'SELECT size_label, consumption_per_piece, consumption_unit, fabric_type FROM pm_style_consumption WHERE style = ?',
-      [style]
-    );
-    const consumptionBySize = {};
-    let fabricType = null;
-    let unit = 'METER';
-    for (const c of consRows) {
-      consumptionBySize[c.size_label] = Number(c.consumption_per_piece);
-      fabricType = fabricType || c.fabric_type;
-      unit = c.consumption_unit || unit;
-    }
-
-    const plan = planCut(demand, { consumptionBySize });
-    res.json({
-      ok: true, style, fabric_type: fabricType, fabric_unit: unit,
-      demand, has_cad: consRows.length > 0, ...plan,
-    });
+    const { demand, plan, fabricType, unit, hasCad } = await computeStyleCutPlan(style);
+    res.json({ ok: true, style, fabric_type: fabricType, fabric_unit: unit, demand, has_cad: hasCad, ...plan });
   } catch (err) {
     if (err.code === 'ANALYTICS_MISSING' || err.code === 'ER_NO_SUCH_TABLE') {
       return res.json({ ok: false, warning: err.message });
     }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/api/cut-masters — the cutting masters a cut can be assigned to.
+router.get('/api/cut-masters', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.id, u.username FROM users u JOIN roles r ON u.role_id = r.id
+        WHERE r.name = 'cutting_manager' AND u.is_active = TRUE ORDER BY u.username`
+    );
+    res.json({ ok: true, masters: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /pm/api/cut-plan/assign { style, master_id } — PM approves a style's suggested cut
+// and assigns it to a specific cutting master. Persists a pm_cut_assignment + size lines.
+router.post('/api/cut-plan/assign', async (req, res) => {
+  try {
+    const style = String(req.body.style || '').trim();
+    const masterId = parseInt(req.body.master_id, 10);
+    if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
+    if (!masterId) return res.status(400).json({ ok: false, error: 'master_id is required' });
+
+    const [[master]] = await pool.query(
+      `SELECT u.id, u.username FROM users u JOIN roles r ON u.role_id = r.id
+        WHERE u.id = ? AND r.name = 'cutting_manager' AND u.is_active = TRUE`,
+      [masterId]
+    );
+    if (!master) return res.status(400).json({ ok: false, error: 'Not a valid cutting master.' });
+
+    const { demand, plan, fabricType } = await computeStyleCutPlan(style);
+    const { header, sizes } = buildAssignmentPayload({
+      style, fabricType, masterId: master.id, masterName: master.username,
+      demand, plan, createdBy: req.session?.user?.id || null,
+    });
+
+    const [result] = await pool.query(
+      `INSERT INTO pm_cut_assignment
+         (style, fabric_type, total_pieces, lot_count, total_fabric_meters, fabric_complete,
+          assigned_master_id, assigned_master_name, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?)`,
+      [header.style, header.fabric_type, header.total_pieces, header.lot_count,
+       header.total_fabric_meters, header.fabric_complete ? 1 : 0,
+       header.assigned_master_id, header.assigned_master_name, header.created_by]
+    );
+    const assignmentId = result.insertId;
+    if (sizes.length) {
+      await pool.query(
+        `INSERT INTO pm_cut_assignment_sizes (assignment_id, size_label, qty) VALUES ?`,
+        [sizes.map((s) => [assignmentId, s.size_label, s.qty])]
+      );
+    }
+    res.json({ ok: true, assignment_id: assignmentId, assigned_to: master.username, ...header });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.status(400).json({ ok: false, error: 'Run the cut-assignment migration first.' });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/api/cut-assignments — recent assignments (PM visibility into what's been routed).
+router.get('/api/cut-assignments', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, style, fabric_type, total_pieces, lot_count, total_fabric_meters,
+              assigned_master_name, status, cutting_lot_id, created_at
+         FROM pm_cut_assignment ORDER BY created_at DESC LIMIT 100`
+    );
+    res.json({ ok: true, items: rows });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.json({ ok: true, items: [] });
     res.status(500).json({ ok: false, error: err.message });
   }
 });
