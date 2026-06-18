@@ -86,6 +86,17 @@
   .pm-card-head h2 { font-size: 1rem; font-weight: 700; margin: 0; }
   .pm-card-body { padding: 1rem 1.125rem; }
 
+  .pm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+  .sum-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 0.9rem 1rem; box-shadow: var(--shadow); }
+  .sum-card .label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); }
+  .sum-card .big { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin: 0.15rem 0 0.1rem; color: var(--text); }
+  .sum-card .sub { font-size: 0.78rem; color: var(--text-2); }
+  .sum-card.alert .big { color: var(--danger); }
+  .sum-card .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.35rem; }
+  .sum-card .chip { font-size: 0.7rem; background: var(--bg); border-radius: 6px; padding: 0.15rem 0.4rem; color: var(--text-2); }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 0.35rem; }
+  .spark .bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
+
   .pm-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
   .pm-toolbar input[type="text"], .pm-toolbar select, .pm-toolbar input[type="number"], .pm-toolbar input[type="date"] {
     border: 1px solid var(--border); border-radius: 10px;
@@ -173,6 +184,8 @@
   <div class="pm-banner <%= warming ? 'show' : '' %>" id="warmingBanner">
     DRR warming up: inventory snapshot history &lt; 7 days. Calendar-day DRR is being used as fallback.
   </div>
+
+  <div class="pm-summary" id="pmSummary"></div>
 
   <nav class="pm-tabs" role="tablist">
     <button class="pm-tab active" data-tab="cutting">Cutting Today</button>
@@ -414,6 +427,80 @@ function escapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// Summary cards
+function compactNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1e7) return (n / 1e7).toFixed(1) + ' Cr';
+  if (n >= 1e5) return (n / 1e5).toFixed(1) + ' L';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return String(Math.round(n));
+}
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : ''; }
+
+async function loadSummary() {
+  const box = $('pmSummary');
+  try {
+    const s = await (await fetch('/pm/api/summary')).json();
+    if (!s.ok) { box.innerHTML = ''; return; }
+    const cards = [];
+
+    if (s.cut_priority) {
+      const cp = s.cut_priority;
+      cards.push(`<div class="sum-card ${cp.red ? 'alert' : ''}">
+        <div class="label">Cut priority</div>
+        <div class="big">${compactNum(cp.totalSuggested)}</div>
+        <div class="sub">pieces suggested across ${cp.stylesNeedingCut} styles</div>
+        <div class="chips"><span class="chip" style="color:var(--danger)">${cp.red} red</span><span class="chip" style="color:var(--warning)">${cp.amber} amber</span></div>
+      </div>`);
+    }
+    if (s.fabric_needed) {
+      const f = s.fabric_needed;
+      cards.push(`<div class="sum-card">
+        <div class="label">Fabric needed</div>
+        <div class="big">${compactNum(f.totalMeters)} m</div>
+        <div class="sub">for ${compactNum(f.coveredPieces)} pcs ${f.uncoveredPieces ? `· ${compactNum(f.uncoveredPieces)} pcs no CAD` : ''}</div>
+        <div class="chips">${f.byType.slice(0, 3).map(t => `<span class="chip">${escapeHtml(t.fabric_type)}: ${compactNum(t.meters)}m</span>`).join('')}</div>
+      </div>`);
+    }
+    if (s.wip) {
+      const w = s.wip; const order = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
+      const lbl = { stitching: 'Stitch', jeans_assembly: 'Assy', washing: 'Wash', washing_in: 'W-In', finishing: 'Finish' };
+      cards.push(`<div class="sum-card">
+        <div class="label">WIP in production</div>
+        <div class="big">${compactNum(w.totalInHand)}</div>
+        <div class="sub">pieces in hand across stages</div>
+        <div class="chips">${order.filter(k => w.byStage[k]).map(k => `<span class="chip">${lbl[k]}: ${compactNum(w.byStage[k])}</span>`).join('')}</div>
+      </div>`);
+    }
+    if (s.inventory) {
+      cards.push(`<div class="sum-card">
+        <div class="label">Inventory on hand</div>
+        <div class="big">${compactNum(s.inventory.units)}</div>
+        <div class="sub">units in stock · as of ${fmtDate(s.inventory.as_of)}</div>
+      </div>`);
+    }
+    if (s.dead_stock) {
+      cards.push(`<div class="sum-card">
+        <div class="label">Dead stock</div>
+        <div class="big">${compactNum(s.dead_stock.units)}</div>
+        <div class="sub">units in ${s.dead_stock.count} slow SKUs (45d no sale)</div>
+      </div>`);
+    }
+    if (s.sales_by_day && s.sales_by_day.length) {
+      const days = s.sales_by_day; const max = Math.max(...days.map(d => d.qty), 1);
+      const last = days[days.length - 1]; const avg = Math.round(days.reduce((a, d) => a + d.qty, 0) / days.length);
+      cards.push(`<div class="sum-card">
+        <div class="label">Sales / day (30d)</div>
+        <div class="big">${compactNum(avg)}</div>
+        <div class="sub">avg/day · last ${fmtDate(last.date)}: ${compactNum(last.qty)}</div>
+        <div class="spark">${days.map(d => `<div class="bar" style="height:${Math.max(2, Math.round(d.qty / max * 34))}px" title="${fmtDate(d.date)}: ${d.qty}"></div>`).join('')}</div>
+      </div>`);
+    }
+    box.innerHTML = cards.join('');
+  } catch (_) { box.innerHTML = ''; }
+}
+loadSummary();
 
 // Tabs
 $$('.pm-tab').forEach(btn => {

@@ -18,6 +18,7 @@ const { planCut } = require('../utils/cutPlanner');
 const { buildAssignmentPayload } = require('../utils/cutAssignment');
 const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
+const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -150,6 +151,67 @@ router.get('/cut-planning', (req, res) => {
 });
 
 // ─── Cutting recommendations ─────────────────────────────────────────
+
+const WIP_STAGES = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
+
+// GET /pm/api/summary — the numbers behind the dashboard summary cards. Each card is
+// computed independently and degrades to null on error so one missing table never blanks
+// the whole row.
+router.get('/api/summary', async (req, res) => {
+  const out = {};
+
+  // Cut priority + fabric needed (both off the recommendations).
+  try {
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    out.cut_priority = cutPrioritySummary(aggregateStyles(recs));
+    try {
+      const [cons] = await pool.query('SELECT style, size_label, consumption_per_piece, fabric_type FROM pm_style_consumption');
+      out.fabric_needed = fabricNeededByType(recs, cons);
+    } catch (_) { out.fabric_needed = null; }
+  } catch (_) { out.cut_priority = null; out.fabric_needed = null; }
+
+  // WIP currently in hand at each stage (lots from the last 120 days).
+  try {
+    const rows = [];
+    for (const stage of WIP_STAGES) {
+      const [[r]] = await pool.query(
+        `SELECT COALESCE(SUM(CASE WHEN e.event_type='approve' THEN e.pieces END),0) approved,
+                COALESCE(SUM(CASE WHEN e.event_type='complete' THEN e.pieces END),0) completed,
+                COALESCE(SUM(CASE WHEN e.event_type='reject' AND e.parent_event_id IS NOT NULL THEN e.pieces END),0) inline_rejected
+           FROM \`${stage}_events\` e JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
+          WHERE cl.created_at >= CURDATE() - INTERVAL 120 DAY`
+      );
+      rows.push({ stage, ...r });
+    }
+    out.wip = wipByStage(rows);
+  } catch (_) { out.wip = null; }
+
+  // Dead stock (count + units of slow movers).
+  try {
+    const dead = await safeCall('getDeadStock', pool, { days: 45 });
+    out.dead_stock = { count: (dead || []).length, units: (dead || []).reduce((s, d) => s + (Number(d.soh) || 0), 0) };
+  } catch (_) { out.dead_stock = null; }
+
+  // Total inventory on hand (latest snapshot).
+  try {
+    const [[r]] = await pool.query(
+      `SELECT COALESCE(SUM(qty),0) units, MAX(snapshot_date) as_of FROM ee_inventory_daily_snapshot
+        WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM ee_inventory_daily_snapshot)`
+    );
+    out.inventory = { units: Number(r.units) || 0, as_of: r.as_of };
+  } catch (_) { out.inventory = null; }
+
+  // Sales day by day (last 30 days).
+  try {
+    const [rows] = await pool.query(
+      `SELECT sale_date, SUM(qty) qty FROM ee_sales_daily
+        WHERE sale_date >= CURDATE() - INTERVAL 30 DAY GROUP BY sale_date ORDER BY sale_date`
+    );
+    out.sales_by_day = rows.map((r) => ({ date: r.sale_date, qty: Number(r.qty) || 0 }));
+  } catch (_) { out.sales_by_day = null; }
+
+  res.json({ ok: true, ...out });
+});
 
 router.get('/api/styles', async (req, res) => {
   try {
