@@ -753,4 +753,44 @@ router.post('/api/sku-categories', isAuthenticated, isCuttingManager, async (req
   }
 });
 
+// GET /cutting-manager/assigned-cuts — cuts the PM has approved and assigned to THIS master.
+// Shows what to cut (per size) + suggested lots + fabric; links to the lot once cut.
+router.get('/assigned-cuts', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const masterId = req.session.user.id;
+    let assignments = [];
+    try {
+      const [rows] = await pool.query(
+        `SELECT a.id, a.style, a.fabric_type, a.total_pieces, a.lot_count, a.total_fabric_meters,
+                a.fabric_complete, a.status, a.cutting_lot_id, a.note, a.created_at,
+                cl.lot_no
+           FROM pm_cut_assignment a
+      LEFT JOIN cutting_lots cl ON cl.id = a.cutting_lot_id
+          WHERE a.assigned_master_id = ? AND a.status <> 'cancelled'
+       ORDER BY (a.status = 'assigned') DESC, a.created_at DESC
+          LIMIT 100`,
+        [masterId]
+      );
+      assignments = rows;
+      if (assignments.length) {
+        const ids = assignments.map((a) => a.id);
+        const [sizeRows] = await pool.query(
+          `SELECT assignment_id, size_label, qty FROM pm_cut_assignment_sizes
+            WHERE assignment_id IN (?) ORDER BY qty DESC`,
+          [ids]
+        );
+        const byId = {};
+        for (const s of sizeRows) (byId[s.assignment_id] = byId[s.assignment_id] || []).push(s);
+        assignments.forEach((a) => { a.sizes = byId[a.id] || []; });
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') throw e; // table not migrated yet -> empty list
+    }
+    res.render('assignedCuts', { user: req.session.user, assignments });
+  } catch (err) {
+    console.error('GET /cutting-manager/assigned-cuts error:', err);
+    res.status(500).send('Failed to load assigned cuts');
+  }
+});
+
 module.exports = router;

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cut Planning — Approve &amp; Assign</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body { background:#f6f7fb; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    .page-head { background:linear-gradient(135deg,#0f172a,#1e293b); color:#fff; padding:22px 24px; margin-bottom:18px; border-radius:0 0 14px 14px; }
+    .page-head h1 { font-size:1.35rem; font-weight:600; margin:0; }
+    .page-head .sub { color:#94a3b8; font-size:.9rem; margin-top:4px; }
+    .search-box { display:flex; gap:10px; margin-top:14px; max-width:560px; }
+    .search-box input { flex:1; border:0; padding:9px 12px; border-radius:8px; font-size:.95rem; }
+    .card-box { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+    .sizes { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .sizes .s { background:#f1f5f9; border-radius:8px; padding:6px 12px; text-align:center; min-width:62px; }
+    .sizes .s strong { display:block; font-size:1.05rem; color:#0f172a; }
+    .sizes .s span { font-size:.7rem; color:#64748b; text-transform:uppercase; }
+    .lot-row { display:flex; gap:8px; flex-wrap:wrap; font-size:.82rem; color:#334155; margin-top:6px; }
+    .lot-chip { background:#eef2ff; border-radius:8px; padding:4px 10px; }
+    .assign-bar { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+    .muted { color:#94a3b8; }
+    table.asg td, table.asg th { font-size:.84rem; padding:6px 10px; }
+  </style>
+</head>
+<body>
+  <div class="page-head">
+    <h1><i class="bi bi-clipboard2-check"></i> Cut Planning — Approve &amp; Assign</h1>
+    <div class="sub">Review a style's suggested cut, then assign it to a cutting master. CAD makes the marker; the master cuts to these quantities.</div>
+    <div class="search-box">
+      <input id="style" type="text" placeholder="Style code, e.g. KTTWOMENSPANT261" value="<%= prefillStyle %>">
+      <button class="btn btn-light" onclick="loadPlan()"><i class="bi bi-search"></i> Load plan</button>
+    </div>
+  </div>
+
+  <div class="container-fluid" style="max-width:820px;">
+    <div id="status" class="muted mb-2" style="display:none;"></div>
+    <div id="plan"></div>
+    <h6 class="mt-4 mb-2 text-muted">Recently assigned</h6>
+    <div id="assignments" class="card-box"><div class="muted">Loading…</div></div>
+  </div>
+
+<script>
+let MASTERS = [];
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
+
+async function loadMasters(){
+  const r = await fetch('/pm/api/cut-masters'); const d = await r.json();
+  MASTERS = (d.ok && d.masters) ? d.masters : [];
+}
+async function loadAssignments(){
+  const r = await fetch('/pm/api/cut-assignments'); const d = await r.json();
+  const box = document.getElementById('assignments');
+  if(!d.ok || !d.items.length){ box.innerHTML = '<div class="muted">No assignments yet.</div>'; return; }
+  box.innerHTML = '<table class="table asg table-sm mb-0"><thead><tr><th>Style</th><th>Pcs</th><th>Master</th><th>Status</th><th>When</th></tr></thead><tbody>'+
+    d.items.map(a=>'<tr><td>'+esc(a.style)+'</td><td>'+a.total_pieces+'</td><td>'+esc(a.assigned_master_name||'')+'</td><td>'+
+      (a.status==='cut'?'<span class="text-success">cut</span>':'assigned')+'</td><td>'+fmtDate(a.created_at)+'</td></tr>').join('')+
+    '</tbody></table>';
+}
+
+async function loadPlan(){
+  const style = document.getElementById('style').value.trim();
+  const status = document.getElementById('status'); const out = document.getElementById('plan');
+  out.innerHTML=''; if(!style) return;
+  status.style.display='block'; status.textContent='Loading…';
+  const r = await fetch('/pm/api/cut-plan?style='+encodeURIComponent(style));
+  const j = await r.json();
+  if(!j.ok){ status.textContent = j.warning || j.error || 'failed'; return; }
+  if(!j.totalPieces){ status.textContent = 'No suggested cut for "'+style+'" right now (stock is covered).'; return; }
+  status.style.display='none';
+  const sizes = Object.entries(j.demand).sort((a,b)=>b[1]-a[1]);
+  const opts = MASTERS.map(m=>'<option value="'+m.id+'">'+esc(m.username)+'</option>').join('');
+  out.innerHTML = '<div class="card-box">'+
+    '<div class="d-flex justify-content-between"><div><div style="font-size:1.15rem;font-weight:700">'+esc(j.style)+'</div>'+
+      '<div class="muted small">'+esc(j.fabric_type||'fabric n/a')+' · '+j.totalPieces+' pcs · '+j.lotCount+' lot(s)</div></div>'+
+      '<div class="text-end">'+(j.totalFabricMeters!=null?('<div style="font-size:1.2rem;font-weight:700">'+Number(j.totalFabricMeters).toFixed(1)+' m</div><div class="muted small">fabric to issue</div>'):'<div class="muted small">no CAD fabric</div>')+'</div></div>'+
+    '<div class="sizes">'+sizes.map(([s,q])=>'<div class="s"><strong>'+q+'</strong><span>'+esc(s)+'</span></div>').join('')+'</div>'+
+    (j.missingSizes&&j.missingSizes.length?('<div class="small text-warning mt-2">No CAD consumption yet for: '+j.missingSizes.map(esc).join(', ')+'</div>'):'')+
+    '<div class="lot-row">'+j.lots.map((l,i)=>'<span class="lot-chip">Lot '+(i+1)+': '+l.total+' pcs'+(l.fabricMeters!=null?(' · '+Number(l.fabricMeters).toFixed(0)+'m'):'')+'</span>').join('')+'</div>'+
+    '<div class="assign-bar"><label class="small text-muted">Assign to cutting master:</label>'+
+      '<select id="masterSel" class="form-select form-select-sm" style="max-width:220px">'+(opts||'<option>no masters</option>')+'</select>'+
+      '<button class="btn btn-primary btn-sm" onclick="assign(\''+esc(j.style)+'\')"><i class="bi bi-send"></i> Approve &amp; Assign</button>'+
+      '<span id="assignMsg" class="small"></span></div>'+
+    '</div>';
+}
+
+async function assign(style){
+  const masterId = document.getElementById('masterSel').value;
+  const msg = document.getElementById('assignMsg');
+  if(!masterId){ msg.textContent='pick a master'; return; }
+  msg.textContent='Assigning…';
+  const r = await fetch('/pm/api/cut-plan/assign',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({style,master_id:masterId})});
+  const d = await r.json();
+  if(d.ok){ msg.innerHTML='<span class="text-success">✓ Assigned to '+esc(d.assigned_to)+'</span>'; loadAssignments(); }
+  else { msg.innerHTML='<span class="text-danger">'+esc(d.error||'failed')+'</span>'; }
+}
+
+(async()=>{ await loadMasters(); loadAssignments(); if(document.getElementById('style').value.trim()) loadPlan(); })();
+document.getElementById('style').addEventListener('keydown',e=>{ if(e.key==='Enter') loadPlan(); });
+</script>
+</body>
+</html>
