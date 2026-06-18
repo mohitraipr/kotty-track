@@ -16,6 +16,8 @@ const { aggregateStyleConsumption } = require('../utils/styleConsumption');
 const { parseConsumptionSheet } = require('../utils/cadConsumption');
 const { planCut } = require('../utils/cutPlanner');
 const { buildAssignmentPayload } = require('../utils/cutAssignment');
+const stageEvents = require('../utils/stageEvents');
+const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -384,6 +386,88 @@ router.post('/api/cut-plan/assign', async (req, res) => {
     res.json({ ok: true, assignment_id: assignmentId, assigned_to: master.username, ...header });
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') return res.status(400).json({ ok: false, error: 'Run the cut-assignment migration first.' });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Compact stage journey for one cut lot, reusing the tested lotJourney helpers + stageEvents.
+const STAGE_EVENT_TABLE = {
+  stitching: 'stitching_events', jeans_assembly: 'jeans_assembly_events',
+  washing: 'washing_events', washing_in: 'washing_in_events', finishing: 'finishing_events',
+};
+const STAGE_LABEL = {
+  cutting: 'Cut', stitching: 'Stitch', jeans_assembly: 'Assembly',
+  washing: 'Wash', washing_in: 'Wash-In', finishing: 'Finish',
+};
+
+async function lotJourneyCompact(lot) {
+  const stages = orderedStages(lot.flow_type);
+  const now = Date.now();
+  const raw = {};
+  for (const stage of stages) {
+    if (stage === 'cutting') continue;
+    const [rows] = await pool.query(
+      `SELECT e.event_type, e.created_at, u.username FROM \`${STAGE_EVENT_TABLE[stage]}\` e
+         LEFT JOIN users u ON u.id = e.operator_id WHERE e.cutting_lot_id = ? ORDER BY e.created_at`,
+      [lot.id]
+    );
+    let entered = null; let completedAt = null; let master = null;
+    for (const r of rows) {
+      if (!entered) entered = r.created_at;
+      if (r.event_type === 'complete') completedAt = r.created_at;
+      if (r.event_type === 'approve' && !master) master = r.username;
+    }
+    raw[stage] = { entered, completedAt, master, agg: await stageEvents.getStageAggregates(pool, stage, lot.id) };
+  }
+  const timeline = [];
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i]; const next = stages[i + 1];
+    const entered = stage === 'cutting' ? lot.created_at : raw[stage].entered;
+    const exit = next ? (raw[next] && raw[next].entered) : (stage === 'cutting' ? null : raw[stage].completedAt);
+    let { status, days } = deriveStageStatus({ entered, exited: exit }, now);
+    if (stage === 'cutting') status = 'done';
+    timeline.push({
+      stage, label: STAGE_LABEL[stage] || stage, status, days,
+      completed: stage === 'cutting' ? lot.total_pieces : (raw[stage].agg.completed || 0),
+      master: stage === 'cutting' ? lot.cutter_name : (raw[stage].master || null),
+    });
+  }
+  const finished = {};
+  if (stages.includes('finishing')) {
+    const sz = await stageEvents.getStageSizeAggregates(pool, 'finishing', lot.id);
+    for (const [s, v] of Object.entries(sz)) finished[s] = v.completed || 0;
+  }
+  const [dr] = await pool.query(
+    'SELECT size_label, SUM(quantity) qty FROM finishing_dispatches WHERE lot_no = ? GROUP BY size_label', [lot.lot_no]
+  );
+  const dispatchedBySize = {};
+  for (const r of dr) dispatchedBySize[String(r.size_label || '').trim().toUpperCase()] = Number(r.qty) || 0;
+  const dispatch = dispatchSummary(finished, dispatchedBySize);
+  return {
+    lot_no: lot.lot_no, manual_lot_number: lot.manual_lot_number || '', total_pieces: lot.total_pieces,
+    created_at: lot.created_at, flow_type: lot.flow_type || 'unknown',
+    current_stage: dispatch.complete ? 'Dispatched' : currentStage(timeline),
+    timeline, dispatch: { finished: dispatch.totalFinished, dispatched: dispatch.totalDispatched, in_stock: dispatch.remaining },
+  };
+}
+
+// GET /pm/api/style-lots?style=... — the lots cut for this style and where each one is now,
+// so the PM sees the cut history on the same screen (after assign -> cut).
+router.get('/api/style-lots', async (req, res) => {
+  try {
+    const style = String(req.query.style || '').trim();
+    if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
+    const [lots] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.total_pieces, cl.flow_type, cl.created_at,
+              u.username AS cutter_name
+         FROM cutting_lots cl LEFT JOIN users u ON u.id = cl.user_id
+        WHERE cl.sku = ? ORDER BY cl.created_at DESC LIMIT 8`,
+      [style]
+    );
+    const journeys = [];
+    for (const lot of lots) journeys.push(await lotJourneyCompact(lot));
+    res.json({ ok: true, style, lots: journeys });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });

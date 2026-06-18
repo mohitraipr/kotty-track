@@ -120,6 +120,16 @@
     </div>
   </div>
 
+  <div class="pm-card" style="margin-top: 1rem;">
+    <div class="pm-card-head">
+      <h2>Cut history &amp; lot status</h2>
+      <span style="font-size:0.78rem; color:var(--text-3);">where each lot cut for this style is now</span>
+    </div>
+    <div class="pm-card-body" id="lotHistoryBody">
+      <div class="pm-empty">Loading lot history…</div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -257,6 +267,45 @@ async function doAssign() {
 }
 
 loadAssignPanel();
+
+// ── Cut history & lot status ─────────────────────────────────────────
+const STATUS_COLOR = { done: 'var(--success)', in_progress: 'var(--warning)', not_started: '#cbd5e1' };
+
+async function loadLotHistory() {
+  const body = document.getElementById('lotHistoryBody');
+  try {
+    const r = await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE));
+    const j = await r.json();
+    if (!j.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(j.error || 'failed')}</div>`; return; }
+    if (!j.lots.length) { body.innerHTML = `<div class="pm-empty">No lots cut for this style yet.</div>`; return; }
+    body.innerHTML = j.lots.map(lot => {
+      const steps = lot.timeline.map(t => `
+        <div style="display:flex; flex-direction:column; align-items:center; min-width:58px;">
+          <div title="${escapeHtml(t.status)}${t.master ? ' · ' + escapeHtml(t.master) : ''}"
+               style="width:14px;height:14px;border-radius:50%;background:${STATUS_COLOR[t.status] || '#cbd5e1'};"></div>
+          <div style="font-size:0.68rem; color:var(--text-2); margin-top:3px;">${escapeHtml(t.label)}</div>
+          <div style="font-size:0.66rem; color:var(--text-3);">${t.status === 'not_started' ? '—' : (t.completed || 0)}</div>
+        </div>`).join('<div style="flex:1;height:2px;background:var(--border-2);margin:7px 2px 0;min-width:10px;"></div>');
+      const disp = lot.dispatch;
+      const dispHtml = disp.finished > 0
+        ? `<span style="color:var(--text-2);">Dispatched <strong>${disp.dispatched}</strong>/${disp.finished}${disp.in_stock > 0 ? ` · ${disp.in_stock} in stock` : ''}</span>`
+        : '';
+      return `
+        <div style="padding:0.75rem 0; border-bottom:1px solid var(--border-2);">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
+            <div><strong>${escapeHtml(lot.lot_no)}</strong>${lot.manual_lot_number ? ` <span style="color:var(--text-3);">/ ${escapeHtml(lot.manual_lot_number)}</span>` : ''}
+              <span style="color:var(--text-3); font-size:0.82rem;">· ${lot.total_pieces} pcs · ${fmtDate(lot.created_at)}</span></div>
+            <span class="pm-pill ${lot.current_stage === 'Dispatched' ? 'green' : 'amber'}">${escapeHtml(lot.current_stage)}</span>
+          </div>
+          <div style="display:flex; align-items:flex-start; margin-top:0.6rem; overflow-x:auto;">${steps}</div>
+          ${dispHtml ? `<div style="font-size:0.8rem; margin-top:0.5rem;">${dispHtml}</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+loadLotHistory();
 </script>
 
 <%- include('partials/footer') %>
