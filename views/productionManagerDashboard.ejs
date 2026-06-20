@@ -635,6 +635,14 @@ if (pullBtn) {
   });
 }
 
+// ── AUDIT FLAG ─────────────────────────────────────────────────
+fetch('/pm/api/audit/summary').then((r) => r.json()).then((s) => {
+  if (s && s.ok && s.not_reflected > 0) {
+    const foot = document.getElementById('cuttingFoot');
+    if (foot) foot.innerHTML += ' · <a href="/pm/audit?status=not_reflected" style="color:var(--red-ink)">' + s.not_reflected + ' dispatch' + (s.not_reflected === 1 ? '' : 'es') + ' not reflecting in stock</a>';
+  }
+}).catch(() => {});
+
 // Initial load — honour the URL hash so deep links (/pm#lots) open the right panel
 showPanel(viewFromHash());
 </script>

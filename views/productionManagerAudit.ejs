@@ -1,0 +1,61 @@
+<%- include('partials/pmHead', { pageTitle: 'Cut Audit' }) %>
+<%- include('partials/pmSidebar', { active: 'audit', user: user }) %>
+<div class="main">
+  <header class="topbar">
+    <div class="page-head"><h1>Cut Audit</h1><p class="page-sub">Did dispatched goods reflect in EasyEcom stock?</p></div>
+  </header>
+  <main class="content">
+    <div class="pm-toolbar">
+      <select class="select" id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="not_reflected">Not reflected</option>
+        <option value="partial">Partial</option>
+        <option value="pending">Pending</option>
+        <option value="reflected">Reflected</option>
+      </select>
+      <span id="auditSummary" class="page-sub"></span>
+    </div>
+    <div class="tcard">
+      <table class="prio" id="auditTable">
+        <thead><tr>
+          <th>Style / Lot</th><th>Size</th><th>Dispatched</th><th>Dispatch dates</th>
+          <th>Reflected</th><th>Lag</th><th>Gap</th><th>DRR / Suggested</th><th>Status</th>
+        </tr></thead>
+        <tbody><tr><td colspan="9" class="pm-empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmtNum = (v) => v == null ? '—' : Number(v).toLocaleString('en-IN');
+  const fmtDate = (d) => d ? String(d).slice(0, 10) : '—';
+  const PILL = { reflected: ['green', 'Reflected'], partial: ['amber', 'Partial'], pending: ['', 'Pending'], not_reflected: ['red', 'Not reflected'] };
+  async function load() {
+    const status = $('statusFilter').value;
+    const j = await (await fetch('/pm/api/audit' + (status ? '?status=' + status : ''))).json();
+    const tb = $('auditTable').querySelector('tbody');
+    if (!j.ok || !j.items.length) { tb.innerHTML = '<tr><td colspan="9" class="pm-empty">Nothing to audit yet.</td></tr>'; }
+    else {
+      tb.innerHTML = j.items.map((r) => {
+        const p = PILL[r.status] || ['', r.status];
+        return '<tr>' +
+          '<td><b>' + (r.style || '—') + '</b><div class="fab">' + r.lot_no + (r.size_sku ? '' : ' · <span style="color:var(--amber-ink)">unresolved SKU</span>') + '</div></td>' +
+          '<td>' + r.size_label + '</td>' +
+          '<td><span class="num">' + fmtNum(r.dispatched_qty) + '</span> <small>(' + r.batch_count + '\xd7)</small></td>' +
+          '<td>' + fmtDate(r.first_dispatch_date) + (r.last_dispatch_date !== r.first_dispatch_date ? ' → ' + fmtDate(r.last_dispatch_date) : '') + '</td>' +
+          '<td>' + fmtNum(r.reflected_qty) + (r.reflected_date ? ' \xb7 ' + fmtDate(r.reflected_date) : '') + '</td>' +
+          '<td>' + (r.lag_days == null ? '—' : r.lag_days + 'd') + '</td>' +
+          '<td>' + (r.gap_qty ? '<span style="color:var(--red-ink)">' + fmtNum(r.gap_qty) + '</span>' : '0') + '</td>' +
+          '<td>' + (r.drr == null ? '—' : Number(r.drr).toFixed(2) + '/d') + ' \xb7 ' + fmtNum(r.suggested_cut_qty) + '</td>' +
+          '<td><span class="pill ' + p[0] + '">' + p[1] + '</span></td>' +
+          '</tr>';
+      }).join('');
+    }
+    const s = j.summary || {};
+    $('auditSummary').textContent = (s.not_reflected || 0) + ' not reflected \xb7 ' + (s.partial || 0) + ' partial \xb7 ' + (s.pending || 0) + ' pending \xb7 ' + (s.reflected || 0) + ' reflected';
+  }
+  $('statusFilter').addEventListener('change', load);
+  load();
+</script>
+</body></html>
