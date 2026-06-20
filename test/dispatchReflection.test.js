@@ -114,3 +114,47 @@ test('late branch (not_reflected): almost nothing arrived by deadline', () => {
   assert.strictEqual(v.status, 'not_reflected');
   assert.strictEqual(v.gap_qty, 95);
 });
+
+const { reconcileDispatchReflection } = require('../utils/dispatchReflection.js');
+
+function ymd(d) { return d; }
+function fakePool(data) {
+  return {
+    upserts: [],
+    async query(sql, params) {
+      if (/FROM finishing_dispatches/.test(sql) && /GROUP BY/.test(sql)) return [data.dispatchGroups || []];
+      if (/FROM pm_sku_resolution/.test(sql)) return [data.resolution || []];
+      if (/FROM ee_suborders/.test(sql)) return [data.canon || []];
+      if (/MAX\(snapshot_date\)/.test(sql)) return [[{ qty: data.sohBefore != null ? data.sohBefore : null }]];
+      if (/FROM ee_inventory_daily_snapshot/.test(sql)) return [data.snapshots || []];
+      if (/FROM ee_sales_daily/.test(sql)) return [data.sales || []];
+      if (/INSERT INTO pm_dispatch_reflection/.test(sql)) { this.upserts.push(params); return [{ affectedRows: 1 }]; }
+      throw new Error('unexpected query: ' + sql);
+    },
+  };
+}
+
+test('reconcileDispatchReflection: resolves, assesses, and upserts a reflected lot', async () => {
+  const pool = fakePool({
+    dispatchGroups: [{ lot_no: 'A1', size_label: 'L', dispatched_qty: 50, first_dispatch_date: '2026-06-01', last_dispatch_date: '2026-06-02', batch_count: 2, style: 'KTTTOP374' }],
+    resolution: [{ cl_sku: 'KTTTOP374', size_label: 'L', size_sku: 'KTTTOP374L' }],
+    canon: [{ sku: 'KTTTOP374L' }],
+    sohBefore: 0,
+    snapshots: [{ date: '2026-06-03', qty: 50 }],
+    sales: [],
+  });
+  const r = await reconcileDispatchReflection(pool, { today: '2026-06-10' });
+  assert.strictEqual(r.processed, 1);
+  assert.strictEqual(r.reflected, 1);
+  assert.strictEqual(pool.upserts.length, 1);
+});
+
+test('reconcileDispatchReflection: unresolved size_sku → pending/unresolved, still upserted', async () => {
+  const pool = fakePool({
+    dispatchGroups: [{ lot_no: 'B2', size_label: 'XL', dispatched_qty: 20, first_dispatch_date: '2026-06-01', last_dispatch_date: '2026-06-01', batch_count: 1, style: 'WEIRD' }],
+    resolution: [], canon: [],
+  });
+  const r = await reconcileDispatchReflection(pool, { today: '2026-06-10' });
+  assert.strictEqual(r.unresolved, 1);
+  assert.strictEqual(pool.upserts.length, 1);
+});
