@@ -89,3 +89,28 @@ test('late branch is sales-adjusted: heavy sales explain low SOH → reflected',
   assert.strictEqual(v.status, 'reflected');
   assert.strictEqual(v.gap_qty, 0);
 });
+
+test('late branch (partial): last snapshot precedes the final batch → not full reflection', () => {
+  const v = assessReflection({
+    sohBefore: 0,
+    dispatches: [{ date: '2026-06-01', qty: 60 }, { date: '2026-06-07', qty: 40 }],
+    sales: [],
+    snapshots: [{ date: '2026-06-04', qty: 30 }], // before the 2nd batch → main loop can't confirm full reflection
+    today: '2026-06-20', ...P, // deadline = 06-07 + 7 = 06-14, already past
+  });
+  assert.strictEqual(v.status, 'partial');
+  assert.strictEqual(v.reflected_qty, 30);
+  assert.strictEqual(v.gap_qty, 70);
+});
+
+test('late branch (not_reflected): almost nothing arrived by deadline', () => {
+  const v = assessReflection({
+    sohBefore: 0,
+    dispatches: [{ date: '2026-06-01', qty: 60 }, { date: '2026-06-07', qty: 40 }],
+    sales: [],
+    snapshots: [{ date: '2026-06-04', qty: 5 }],
+    today: '2026-06-20', ...P,
+  });
+  assert.strictEqual(v.status, 'not_reflected');
+  assert.strictEqual(v.gap_qty, 95);
+});
