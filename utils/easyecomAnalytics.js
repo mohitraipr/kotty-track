@@ -596,6 +596,14 @@ function deriveStyle(sku) {
   return s.replace(/(?:_(?:3XL|4XL|5XL|6XL)|_\d{2,3}|XXL|XL|XS|S|M|L)$/, '') || s;
 }
 
+// The size label of a size-SKU = the suffix deriveStyle() strips (underscore dropped).
+// e.g. KTTWOMENSPANT677XL -> 'XL', KTTLADIESJEANS823_34 -> '34'. null if no size suffix.
+function deriveSize(sku) {
+  const s = String(sku || '').toUpperCase();
+  const m = s.match(/(?:_(3XL|4XL|5XL|6XL)|_(\d{2,3})|(XXL|XL|XS|S|M|L))$/);
+  return m ? (m[1] || m[2] || m[3] || null) : null;
+}
+
 // Clean-day demand metrics per size-SKU, company-wide. Gap/dup-safe.
 // A day counts as a clean in-stock day only if it was in stock the WHOLE day:
 // current snapshot qty>0 AND the most-recent-PRIOR present snapshot qty>0
@@ -848,6 +856,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     results.push({
       sku,
       style: deriveStyle(sku),
+      size: deriveSize(sku),
       low_confidence: !!lowConfidence,
       soh,
       drr,
