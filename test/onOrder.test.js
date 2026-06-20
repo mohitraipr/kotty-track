@@ -89,3 +89,50 @@ test('buildOnOrderMap: unions manual rows on top of real lots', () => {
   assert.strictEqual(res.map.get('KTTTOP374L'), 15); // 10 real + 5 manual
   assert.strictEqual(res.map.get('KTTTOP374M'), 7);
 });
+
+const { computeOnOrderBySku } = require('../utils/onOrder.js');
+
+// Fake pool dispatching by SQL shape (house pattern, cf. test/approvalCorrection.test.js).
+function fakePool(data) {
+  return {
+    queries: [],
+    async query(sql) {
+      this.queries.push(sql.replace(/\s+/g, ' ').trim());
+      if (/FROM pm_open_cutting_lots/.test(sql)) return [data.manual || []];
+      if (/FROM cutting_lots/.test(sql)) return [data.inflight || []];
+      if (/FROM finishing_dispatches/.test(sql)) return [data.dispatched || []];
+      if (/FROM pm_sku_resolution/.test(sql)) return [data.resolution || []];
+      if (/FROM ee_suborders/.test(sql)) return [data.canon || []];
+      throw new Error('unexpected query: ' + sql);
+    },
+  };
+}
+
+test('computeOnOrderBySku: flag OFF uses ONLY the manual table', async () => {
+  delete process.env.PM_CLOSED_LOOP;
+  const pool = fakePool({ manual: [{ sku: 'KTTTOP374L', qty: 12 }] });
+  const res = await computeOnOrderBySku(pool);
+  assert.strictEqual(res.onOrder.get('KTTTOP374L'), 12);
+  assert.deepStrictEqual(res.unresolved, { lots: 0, pieces: 0 });
+  // Only the manual query should have run.
+  assert.strictEqual(pool.queries.some((q) => /FROM cutting_lots/.test(q)), false);
+});
+
+test('computeOnOrderBySku: flag ON nets real lots + unions manual + tallies unresolved', async () => {
+  process.env.PM_CLOSED_LOOP = '1';
+  const pool = fakePool({
+    manual: [{ sku: 'KTTTOP374M', qty: 5 }],
+    inflight: [
+      { lot_no: 'A1', style: 'KTTTOP374', size_label: 'L', cut_pieces: 80 },
+      { lot_no: 'B2', style: 'WEIRDSTYLE', size_label: 'XL', cut_pieces: 30 },
+    ],
+    dispatched: [{ lot_no: 'A1', size_label: 'L', qty: 20 }],
+    resolution: [{ cl_sku: 'KTTTOP374', size_label: 'L', size_sku: 'KTTTOP374L' }],
+    canon: [{ sku: 'KTTTOP374L' }],
+  });
+  const res = await computeOnOrderBySku(pool);
+  assert.strictEqual(res.onOrder.get('KTTTOP374L'), 60); // 80 - 20 dispatched
+  assert.strictEqual(res.onOrder.get('KTTTOP374M'), 5);  // manual
+  assert.deepStrictEqual(res.unresolved, { lots: 1, pieces: 30 }); // WEIRDSTYLE/B2
+  delete process.env.PM_CLOSED_LOOP;
+});
