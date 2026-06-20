@@ -133,3 +133,17 @@ test('computeOnOrderBySku: flag ON nets real lots + unions manual + tallies unre
   assert.strictEqual(pool.queries.length, 5); // 1 manual + 4 in-flight (cutting_lots, finishing_dispatches, pm_sku_resolution, ee_suborders)
   delete process.env.PM_CLOSED_LOOP;
 });
+
+const { loadResolutionMap, loadCanonSet } = require('../utils/onOrder.js');
+
+test('loadResolutionMap keys UPPER(cl_sku)||UPPER(size_label) -> UPPER(size_sku)', async () => {
+  const pool = { async query() { return [[{ cl_sku: 'kttTop374', size_label: 'l', size_sku: 'ktttop374l' }]]; } };
+  const m = await loadResolutionMap(pool);
+  assert.strictEqual(m.get('KTTTOP374||L'), 'KTTTOP374L');
+});
+
+test('loadCanonSet returns an uppercase Set of canon SKUs', async () => {
+  const pool = { async query() { return [[{ sku: 'KTTTOP374L' }, { sku: 'KTTTOP374M' }]]; } };
+  const s = await loadCanonSet(pool);
+  assert.ok(s.has('KTTTOP374L') && s.has('KTTTOP374M'));
+});
