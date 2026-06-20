@@ -159,13 +159,13 @@ async function loadAssignPanel() {
 
     if (!planRes.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(planRes.warning || planRes.error || 'Could not load plan.')}</div>`; return; }
     if (!planRes.totalPieces) {
-      $(‘planSummary’).textContent = IN_PROD > 0 ? fmtNum(IN_PROD) + ‘ pcs already in production’ : ‘’;
-      body.innerHTML = `<div class="pm-empty">${SUGGESTED_TOTAL > 0 ? ‘Needs ‘ + fmtNum(SUGGESTED_TOTAL) + ‘ pcs across sizes, but there’s no CAD consumption for this style yet — upload CAD to plan lots &amp; fabric.’ : ‘No suggested cut right now — stock is covered.’}</div>` + assignmentsHtml(styleAsg);
+      $('planSummary').textContent = IN_PROD > 0 ? fmtNum(IN_PROD) + ' pcs already in production' : '';
+      body.innerHTML = `<div class="pm-empty">${SUGGESTED_TOTAL > 0 ? 'Needs ' + fmtNum(SUGGESTED_TOTAL) + ' pcs across sizes, but there’s no CAD consumption for this style yet — upload CAD to plan lots &amp; fabric.' : 'No suggested cut right now — stock is covered.'}</div>` + assignmentsHtml(styleAsg);
       return;
     }
 
-    const fabricLabel = planRes.totalFabricMeters != null ? `${Number(planRes.totalFabricMeters).toFixed(0)} m ${planRes.fabric_type || ‘’}` : ‘No CAD fabric’;
-    $(‘planSummary’).textContent = IN_PROD > 0 ? fabricLabel + ‘ · ‘ + fmtNum(IN_PROD) + ‘ pcs already in production’ : fabricLabel;
+    const fabricLabel = planRes.totalFabricMeters != null ? `${Number(planRes.totalFabricMeters).toFixed(0)} m ${planRes.fabric_type || ''}` : 'No CAD fabric';
+    $('planSummary').textContent = IN_PROD > 0 ? fabricLabel + ' · ' + fmtNum(IN_PROD) + ' pcs already in production' : fabricLabel;
     const sizes = Object.entries(planRes.demand).sort((a, b) => b[1] - a[1]);
     const masterOpts = MASTERS.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('');
     body.innerHTML = `
