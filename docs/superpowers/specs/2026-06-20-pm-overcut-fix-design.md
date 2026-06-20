@@ -47,6 +47,9 @@ Returns `Map<size_sku, qty>` = the union of two sources:
   per lot-size, **in-flight qty = cut pieces − pieces already dispatched**, where dispatched
   is `SUM(finishing_dispatches.quantity)` aggregated by `lot_no` + `size_label`. A fully
   dispatched lot-size contributes 0. Negative/zero results are clamped to 0.
+  - **Staleness guard:** only consider lots cut within the last `PM_INFLIGHT_WINDOW_DAYS`
+    (default 120). A lot cut long ago that was never recorded as dispatched would otherwise
+    suppress new cuts forever; bounding by cut date assumes such lots are settled/abandoned.
   - Rationale for netting the dispatched portion (rather than treating a lot as all-or-nothing
     until fully dispatched): the already-shipped pieces are about to appear in EasyEcom SOH;
     counting them as both on-order **and** soon-to-be-SOH would double-count and over-suppress.
