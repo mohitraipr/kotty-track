@@ -23,7 +23,7 @@ const {
 router.use(isAuthenticated, isReturnChallan);
 
 const PAGE_SIZE = 100;
-const EDIT_WINDOW_HOURS = 24;
+const EDIT_WINDOW_HOURS = 7 * 24; // 7 days
 const MAX_IMAGES_PER_CHALLAN = 15;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -287,6 +287,19 @@ router.patch('/api/fields/:id', async (req, res) => {
   }
 });
 
+// ─── Departments ─────────────────────────────────────────────────────
+
+// GET /return-challan/api/departments — names from the master departments table
+// so the dashboard's Department field offers the standard, admin-managed list.
+router.get('/api/departments', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT name FROM departments ORDER BY name');
+    res.json({ ok: true, departments: rows.map(r => r.name) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ─── Image presigned upload ──────────────────────────────────────────
 
 router.post('/api/image/sign', async (req, res) => {
@@ -545,7 +558,7 @@ router.patch('/api/entries/:id', async (req, res) => {
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // Edit-window guard: lock the row and verify created_at < 24h ago.
+    // Edit-window guard: lock the row and verify created_at is within the window.
     const [[entry]] = await conn.query(
       `SELECT id, created_at FROM return_challans
         WHERE id = ?
@@ -557,7 +570,7 @@ router.patch('/api/entries/:id', async (req, res) => {
       await conn.rollback();
       return res.status(403).json({
         ok: false,
-        error: `Edit window passed (entries can only be edited within ${EDIT_WINDOW_HOURS} hours).`,
+        error: `Edit window passed (entries can only be edited within ${EDIT_WINDOW_HOURS / 24} days).`,
       });
     }
 

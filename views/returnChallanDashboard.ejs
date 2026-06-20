@@ -607,6 +607,7 @@ let currentPage = 1;
 let totalPages = 1;
 let totalCount = 0;
 let searchQuery = '';
+let masterDepartments = [];
 let searchT = null;
 
 // Form image state. Three buckets:
@@ -1027,7 +1028,7 @@ function renderTable() {
       : `<span class="rc-pill unbranded">Unbranded</span>`;
     const editBtn = e.editable
       ? `<button class="rc-mini-btn" onclick='editEntry(${e.id})'>Edit</button>`
-      : `<button class="rc-mini-btn" disabled title="Edit window passed (24h)">Edit</button>`;
+      : `<button class="rc-mini-btn" disabled title="Edit window passed (7 days)">Edit</button>`;
     const customCells = fields.map((f) => {
       const v = (e.custom_data || {})[f.field_key];
       if (v == null || v === '') return '<td>—</td>';
@@ -1086,7 +1087,7 @@ async function editEntry(id) {
 
 // Populate datalists (department, category, brand) from existing entries
 function populateDatalists() {
-  const deps = new Set(), cats = new Set(), brands = new Set();
+  const deps = new Set(masterDepartments), cats = new Set(), brands = new Set();
   for (const e of entries) {
     if (e.department) deps.add(e.department);
     if (e.category) cats.add(e.category);
@@ -1286,6 +1287,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 (async () => {
+  try {
+    const r = await api('GET', '/return-challan/api/departments');
+    masterDepartments = r.departments || [];
+  } catch (_) { /* non-fatal: datalist still fills from existing entries */ }
   await loadActiveFields();
   await loadEntries();
 })();
