@@ -161,6 +161,12 @@ td.style .row{display:flex;align-items:center;gap:12px}
 .swatch.lg{width:32px;height:32px;border-radius:8px}
 td.style .code{font-weight:700;color:var(--ink);letter-spacing:-.01em}
 td.style .fab{font-size:12px;color:var(--ink-2);margin-top:1px}
+/* marketplace (Myntra) link — small external icon, pink on hover */
+.mlink{display:inline-flex;vertical-align:middle;margin-left:7px;color:var(--ink-3);transition:.15s}
+.mlink svg{width:14px;height:14px;stroke-width:2}
+.mlink:hover{color:#ff3f6c}
+.ratioline{font-size:12.5px;color:var(--ink-2);margin-top:9px}
+.ratioline b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:700}
 /* priority table — cluster the metrics so a row scans across cleanly */
 table.prio th:not(.l),table.prio td:not(.style):not(.status){width:118px}
 table.prio th.l:nth-child(5),table.prio td.status{width:150px}
