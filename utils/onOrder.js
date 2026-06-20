@@ -19,4 +19,34 @@ function resolveSizeSku(style, sizeLabel, resolutionMap, canonSet) {
   return null;
 }
 
-module.exports = { resolveSizeSku, U };
+// Build the size_sku -> on-order qty map. In-flight = cut pieces net of pieces
+// already dispatched (finishing); unresolved sizes are tallied, never dropped
+// silently. The manual pm_open_cutting_lots rows are summed on top (transition).
+function buildOnOrderMap({ inFlightRows, dispatchedMap, manualRows, resolutionMap, canonSet }) {
+  const map = new Map();
+  const unresolvedLotSet = new Set();
+  let unresolvedPieces = 0;
+
+  for (const r of (inFlightRows || [])) {
+    const dispatched = dispatchedMap.get(U(r.lot_no) + '||' + U(r.size_label)) || 0;
+    const net = (Number(r.cut_pieces) || 0) - dispatched;
+    if (net <= 0) continue;
+    const sku = resolveSizeSku(r.style, r.size_label, resolutionMap, canonSet);
+    if (!sku) {
+      unresolvedLotSet.add(U(r.lot_no));
+      unresolvedPieces += net;
+      continue;
+    }
+    map.set(sku, (map.get(sku) || 0) + net);
+  }
+
+  for (const r of (manualRows || [])) {
+    const sku = U(r.sku);
+    if (!sku) continue;
+    map.set(sku, (map.get(sku) || 0) + (Number(r.qty) || 0));
+  }
+
+  return { map, unresolvedLots: unresolvedLotSet.size, unresolvedPieces };
+}
+
+module.exports = { resolveSizeSku, buildOnOrderMap, U };
