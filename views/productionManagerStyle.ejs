@@ -79,7 +79,8 @@ const STATUS = { red:['red','Cut now'], amber:['amber','Cut soon'], green:['gree
 
 // ── Sizes → header chip, subtitle, size grid ──────────────────────────
 let SIZES = [];
-(async function loadSizes() {
+let SUGGESTED_TOTAL = 0;
+async function loadSizes() {
   const grid = $('sizeGrid');
   try {
     const json = await (await fetch('/pm/api/sizes?style=' + encodeURIComponent(STYLE), { headers: { Accept: 'application/json' } })).json();
@@ -93,6 +94,10 @@ let SIZES = [];
     SIZES.forEach(r => { const t = r.trigger || 'green'; if (order[t] < order[worst]) worst = t; });
     const st = STATUS[worst];
     const chip = $('styleTrigger'); chip.className = 'title-chip ' + st[0]; chip.textContent = st[1];
+    // Suggested cut is the sum of per-size recommendations — the authoritative number
+    // (matches the dashboard). Fabric/lots come from the CAD planner separately.
+    SUGGESTED_TOTAL = SIZES.reduce((s, r) => s + (Number(r.suggested_cut_qty) || 0), 0);
+    $('kSuggested').innerHTML = `<span class="num">${fmtNum(SUGGESTED_TOTAL)}</span> <small>pcs</small>`;
     if (!SIZES.length) { grid.innerHTML = `<div class="pm-empty">No sizes for this style.</div>`; return; }
     grid.innerHTML = SIZES.map(r => {
       const sug = Number(r.suggested_cut_qty) || 0;
@@ -107,7 +112,7 @@ let SIZES = [];
       </div>`;
     }).join('');
   } catch (err) { grid.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`; }
-})();
+}
 
 // ── Cut plan → summary cards, fabrication, assign panel ───────────────
 let MASTERS = [];
@@ -122,24 +127,24 @@ async function loadAssignPanel() {
     MASTERS = (mastersRes.ok && mastersRes.masters) ? mastersRes.masters : [];
     const styleAsg = (asgRes.ok ? asgRes.items : []).filter(a => a.style === STYLE);
 
-    // summary cards
+    // Fabric & lots come from the CAD planner; Suggested cut already set from sizes.
     if (planRes.ok && planRes.totalPieces) {
-      $('kSuggested').innerHTML = `<span class="num">${fmtNum(planRes.totalPieces)}</span> <small>pcs</small>`;
       $('kFabric').innerHTML = planRes.totalFabricMeters != null ? `<span class="num">${fmtNum(planRes.totalFabricMeters)}</span> <small>m</small>` : '<small>no CAD</small>';
       $('kLots').innerHTML = `<span class="num">${planRes.lotCount || 0}</span>`;
       $('styleSub').textContent = (planRes.fabric_type ? planRes.fabric_type : 'Fabric n/a') + (planRes.totalFabricMeters != null && planRes.totalPieces ? ` · ${(planRes.totalFabricMeters / planRes.totalPieces).toFixed(3)} m per piece` : '');
       renderFabrication(planRes);
     } else {
-      $('kSuggested').innerHTML = '<span class="num">0</span> <small>pcs</small>';
-      $('kFabric').innerHTML = '<span class="num">0</span> <small>m</small>';
+      $('kFabric').innerHTML = '<small>no CAD</small>';
       $('kLots').innerHTML = '<span class="num">0</span>';
-      $('styleSub').textContent = 'Stock is covered — no cut suggested right now';
+      $('styleSub').textContent = SUGGESTED_TOTAL > 0
+        ? 'Needs cutting — CAD consumption pending, so lots & fabric can’t be planned yet'
+        : 'Stock is covered — no cut suggested right now';
     }
 
     if (!planRes.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(planRes.warning || planRes.error || 'Could not load plan.')}</div>`; return; }
     if (!planRes.totalPieces) {
       $('planSummary').textContent = '';
-      body.innerHTML = `<div class="pm-empty">No suggested cut right now — stock is covered.</div>` + assignmentsHtml(styleAsg);
+      body.innerHTML = `<div class="pm-empty">${SUGGESTED_TOTAL > 0 ? 'Needs ' + fmtNum(SUGGESTED_TOTAL) + ' pcs across sizes, but there’s no CAD consumption for this style yet — upload CAD to plan lots &amp; fabric.' : 'No suggested cut right now — stock is covered.'}</div>` + assignmentsHtml(styleAsg);
       return;
     }
 
@@ -204,7 +209,8 @@ async function doAssign() {
     else { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'failed')}</span>`; }
   } catch (err) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(err.message)}</span>`; }
 }
-loadAssignPanel();
+// Init: sizes first (sets Suggested cut), then the CAD plan / assign panel.
+(async () => { await loadSizes(); loadAssignPanel(); })();
 
 // ── Lot journey: picker + vertical timeline + dispatch ────────────────
 let LOTS = [];
@@ -214,7 +220,7 @@ async function loadLotHistory() {
     const j = await (await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE))).json();
     if (!j.ok || !j.lots || !j.lots.length) { $('lotEmpty').textContent = 'No lots cut for this style yet.'; return; }
     LOTS = j.lots;
-    $('lotPicker').innerHTML = LOTS.map((l, i) => `<option value="${i}">${escapeHtml(l.lot_no)} · ${fmtNum(l.total_pieces)} pcs · ${escapeHtml(l.current_stage)}</option>`).join('');
+    $('lotPicker').innerHTML = LOTS.map((l, i) => `<option value="${i}">${escapeHtml(l.lot_no)}${l.manual_lot_number ? ' (' + escapeHtml(l.manual_lot_number) + ')' : ''} · ${fmtNum(l.total_pieces)} pcs · ${escapeHtml(l.current_stage)}</option>`).join('');
     $('lotPicker').addEventListener('change', () => renderLot(Number($('lotPicker').value)));
     renderLot(0);
   } catch (err) { $('lotEmpty').textContent = 'Error: ' + err.message; }
@@ -240,7 +246,8 @@ function renderLot(idx) {
     <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start;margin-top:14px">
       <div class="chartcard">
         <div class="lotmeta" style="margin-top:0;margin-bottom:18px">
-          <div class="m"><div class="k">Lot</div><div class="v">${escapeHtml(lot.lot_no)}${lot.manual_lot_number ? ' / ' + escapeHtml(lot.manual_lot_number) : ''}</div></div>
+          <div class="m"><div class="k">Lot</div><div class="v">${escapeHtml(lot.lot_no)}</div></div>
+          ${lot.manual_lot_number ? `<div class="m"><div class="k">Manual lot #</div><div class="v">${escapeHtml(lot.manual_lot_number)}</div></div>` : ''}
           <div class="m"><div class="k">Pieces</div><div class="v"><span class="num">${fmtNum(lot.total_pieces)}</span></div></div>
           <div class="m"><div class="k">Stage</div><div class="v">${escapeHtml(lot.current_stage)}</div></div>
           <div class="m"><div class="k">Cut on</div><div class="v"><span class="num">${fmtDate(lot.created_at)}</span></div></div>

@@ -28,14 +28,6 @@
 
   <div class="pm-summary" id="pmSummary"></div>
 
-  <nav class="pm-tabs" role="tablist">
-    <button class="pm-tab active" data-tab="cutting">Priority to cut</button>
-    <button class="pm-tab" data-tab="dead">Dead Stock</button>
-    <button class="pm-tab" data-tab="lots">Open Lots</button>
-    <button class="pm-tab" data-tab="pos">Marketplace POs</button>
-    <button class="pm-tab" data-tab="config">Config</button>
-  </nav>
-
   <!-- PRIORITY TO CUT -->
   <section class="pm-panel active" data-panel="cutting">
     <h2 class="section-h" style="margin-top:6px">Priority to cut
@@ -334,19 +326,22 @@ async function loadSummary() {
 }
 loadSummary();
 
-// Tabs
-$$('.pm-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    $$('.pm-tab').forEach(b => b.classList.toggle('active', b === btn));
-    $$('.pm-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tab));
-    if (tab === 'cutting') loadCutting();
-    else if (tab === 'dead') loadDead();
-    else if (tab === 'lots') loadLots();
-    else if (tab === 'pos')  loadPos();
-    else if (tab === 'config') loadConfig();
-  });
-});
+// Panels are now driven from the sidebar Tools group via the URL hash (#dead, #lots, …).
+const TOOL_VIEWS = ['dead', 'lots', 'pos', 'config'];
+function viewFromHash() { const h = (location.hash || '').replace('#', '').toLowerCase(); return TOOL_VIEWS.includes(h) ? h : 'cutting'; }
+function showPanel(key) {
+  $$('.pm-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === key));
+  // sync sidebar highlight: Dashboard for the default view, the matching tool otherwise
+  $$('.sidebar [data-view]').forEach(a => a.classList.toggle('active', a.dataset.view === key));
+  const dash = document.querySelector('.sidebar a[href="/pm"]');
+  if (dash) dash.classList.toggle('active', key === 'cutting');
+  if (key === 'cutting') loadCutting();
+  else if (key === 'dead') loadDead();
+  else if (key === 'lots') loadLots();
+  else if (key === 'pos') loadPos();
+  else if (key === 'config') loadConfig();
+}
+window.addEventListener('hashchange', () => showPanel(viewFromHash()));
 
 // ── CUTTING TODAY ───────────────────────────────────────────────
 async function loadCutting() {
@@ -636,8 +631,8 @@ if (pullBtn) {
   });
 }
 
-// Initial load
-loadCutting();
+// Initial load — honour the URL hash so deep links (/pm#lots) open the right panel
+showPanel(viewFromHash());
 </script>
 
 </body>
