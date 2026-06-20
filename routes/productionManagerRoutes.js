@@ -334,7 +334,7 @@ router.get('/api/styles', async (req, res) => {
     const dataQuality = (rows || []).some(r => r.dataQuality === 'warming_up') ? 'warming_up' : 'real';
     const links = await myntraByStyles(styles.map((s) => s.style));
     styles.forEach((s) => { s.myntra_link = links[s.style] || null; });
-    res.json({ ok: true, items: styles, dataQuality });
+    res.json({ ok: true, items: styles, dataQuality, in_flight_unresolved: rows.onOrderUnresolved || { lots: 0, pieces: 0 } });
   } catch (err) {
     if (err.code === 'ANALYTICS_MISSING') {
       return res.json({ ok: false, items: [], warning: err.message });

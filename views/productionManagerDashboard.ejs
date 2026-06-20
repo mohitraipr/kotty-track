@@ -387,6 +387,10 @@ async function loadCutting() {
     }).join('');
     const foot = $('cuttingFoot');
     if (foot) foot.textContent = 'Showing ' + items.length + ' style' + (items.length === 1 ? '' : 's') + ' requiring attention';
+    const unres = json.in_flight_unresolved;
+    if (unres && unres.lots > 0) {
+      if (foot) foot.innerHTML += ` · <span style="color:var(--amber-ink)">${fmtNum(unres.pieces)} pcs in ${unres.lots} in-flight lot${unres.lots === 1 ? '' : 's'} not matched to a SKU — resolve to avoid overcut</span>`;
+    }
     tbody.querySelectorAll('tr.clickable').forEach(tr => {
       tr.addEventListener('click', () => {
         window.location.href = '/pm/style/' + encodeURIComponent(tr.dataset.style);
