@@ -16,6 +16,7 @@ const { aggregateStyleConsumption } = require('../utils/styleConsumption');
 const { parseConsumptionSheet } = require('../utils/cadConsumption');
 const { planCut } = require('../utils/cutPlanner');
 const { buildAssignmentPayload } = require('../utils/cutAssignment');
+const { resolveSizeSku, loadResolutionMap, loadCanonSet } = require('../utils/onOrder');
 const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
@@ -39,6 +40,46 @@ function safeCall(fnName, ...args) {
     throw err;
   }
   return fn(...args);
+}
+
+function pmCutAuditOn() {
+  const v = String(process.env.PM_CUT_AUDIT || '').toLowerCase();
+  return v === '1' || v === 'true';
+}
+
+// Persist DRR/suggested/soh/doh at the moment a cut is approved & assigned.
+// Best-effort: any failure is logged and swallowed so it never blocks an assign.
+async function recordCutDecisionSnapshot(pool, { style, assignedSizes, assignmentId, decidedBy }) {
+  if (!pmCutAuditOn() || !assignedSizes || !assignedSizes.length) return;
+  try {
+    const recs = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
+    const bySize = new Map();
+    for (const r of (recs || [])) {
+      if (r.style === style && r.size) bySize.set(String(r.size).toUpperCase(), r);
+    }
+    const resolutionMap = await loadResolutionMap(pool);
+    const canonSet = await loadCanonSet(pool);
+    const rows = assignedSizes.map((s) => {
+      const rec = bySize.get(String(s.size_label).toUpperCase());
+      return [
+        assignmentId, style, s.size_label,
+        resolveSizeSku(style, s.size_label, resolutionMap, canonSet),
+        Number(s.qty) || 0,
+        rec ? rec.drr : null, rec ? rec.suggested_cut_qty : null,
+        rec ? rec.soh : null, rec ? rec.doh : null, decidedBy,
+      ];
+    });
+    if (rows.length) {
+      await pool.query(
+        `INSERT INTO pm_cut_decision_snapshot
+           (assignment_id,style,size_label,size_sku,assigned_qty,drr,suggested_cut_qty,soh,doh,decided_by)
+         VALUES ?`,
+        [rows]
+      );
+    }
+  } catch (err) {
+    console.error('[pm] cut decision snapshot failed:', err.message);
+  }
 }
 
 function aggregateStyles(rows) {
@@ -591,6 +632,7 @@ router.post('/api/cut-plan/assign', async (req, res) => {
         demand, plan: fullPlan, createdBy,
       });
       const id = await insertAssignment(header, sizes, null);
+      await recordCutDecisionSnapshot(pool, { style, assignedSizes: sizes, assignmentId: id, decidedBy: createdBy });
       return res.json({ ok: true, assignment_id: id, count: 1, assigned_to: nameById.get(masterId) });
     }
 
@@ -607,6 +649,7 @@ router.post('/api/cut-plan/assign', async (req, res) => {
         createdBy,
       });
       const id = await insertAssignment(header, sizes, `Lot ${i + 1}/${n}`);
+      await recordCutDecisionSnapshot(pool, { style, assignedSizes: sizes, assignmentId: id, decidedBy: createdBy });
       created.push({ assignment_id: id, lot: i + 1, pieces: header.total_pieces, master: nameById.get(masterId) });
     }
     res.json({ ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') });
