@@ -120,6 +120,8 @@ async function reconcileDispatchReflection(pool, opts = {}) {
       v = { status: 'pending', reflected_date: null, lag_days: null, reflected_qty: 0,
             gap_qty: Number(g.dispatched_qty) || 0 };
     } else {
+      // ee_inventory_daily_snapshot is populated primary-warehouse-only (the nightly
+      // pull lists snapshots from 'primary'), so SUM across warehouse_id == primary SOH.
       const [[sb]] = await pool.query(
         `SELECT COALESCE(SUM(qty),0) AS qty FROM ee_inventory_daily_snapshot
           WHERE sku = ? AND snapshot_date = (
@@ -148,7 +150,7 @@ async function reconcileDispatchReflection(pool, opts = {}) {
       });
     }
 
-    summary[v.status] = (summary[v.status] || 0) + 1;
+    if (sku) summary[v.status] = (summary[v.status] || 0) + 1;
 
     await pool.query(
       `INSERT INTO pm_dispatch_reflection
