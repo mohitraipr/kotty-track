@@ -300,6 +300,29 @@ router.get('/api/summary', async (req, res) => {
   res.json({ ok: true, ...out });
 });
 
+// Marketplace links per style, from the existing product_links table. A product_links
+// sku may be the style code itself or a full size-SKU, so match either; degrade quietly
+// (returns {} if the table is absent or the query fails).
+function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+async function myntraByStyles(styleList) {
+  const map = {};
+  const styles = [...new Set((styleList || []).filter(Boolean))];
+  if (!styles.length) return map;
+  try {
+    const re = '^(' + styles.map(escapeRegExp).join('|') + ')';
+    const [links] = await pool.query(
+      `SELECT sku, myntra_link FROM product_links
+        WHERE myntra_link IS NOT NULL AND myntra_link <> '' AND sku REGEXP ?`,
+      [re]
+    );
+    for (const row of links) {
+      const st = styles.find((s) => row.sku === s || String(row.sku).startsWith(s));
+      if (st && !map[st]) map[st] = row.myntra_link;
+    }
+  } catch (_) { /* table missing or query failed — no links */ }
+  return map;
+}
+
 router.get('/api/styles', async (req, res) => {
   try {
     const rows = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
@@ -309,6 +332,8 @@ router.get('/api/styles', async (req, res) => {
     if (search) styles = styles.filter(s => (s.style || '').toLowerCase().includes(search));
     if (trigger && trigger !== 'all') styles = styles.filter(s => s.trigger === trigger);
     const dataQuality = (rows || []).some(r => r.dataQuality === 'warming_up') ? 'warming_up' : 'real';
+    const links = await myntraByStyles(styles.map((s) => s.style));
+    styles.forEach((s) => { s.myntra_link = links[s.style] || null; });
     res.json({ ok: true, items: styles, dataQuality });
   } catch (err) {
     if (err.code === 'ANALYTICS_MISSING') {
@@ -323,7 +348,8 @@ router.get('/api/sizes', async (req, res) => {
     const style = String(req.query.style || '').trim();
     const rows = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
     const filtered = style ? (rows || []).filter(r => r.style === style) : (rows || []);
-    res.json({ ok: true, items: filtered });
+    const links = style ? await myntraByStyles([style]) : {};
+    res.json({ ok: true, items: filtered, myntra_link: links[style] || null });
   } catch (err) {
     if (err.code === 'ANALYTICS_MISSING') {
       return res.json({ ok: false, items: [], warning: err.message });

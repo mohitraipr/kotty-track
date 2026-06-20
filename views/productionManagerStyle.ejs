@@ -24,10 +24,16 @@
         <h1 class="page-h"><%= style %> <span class="title-chip" id="styleTrigger"></span></h1>
         <p class="page-sub" id="styleSub">Loading…</p>
       </div>
-      <button class="btn primary" id="approveTop" onclick="document.getElementById('assignSection').scrollIntoView({behavior:'smooth'})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
-        Approve &amp; assign
-      </button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <a class="btn ghost" id="myntraBtn" target="_blank" rel="noopener" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+          View on Myntra
+        </a>
+        <button class="btn primary" id="approveTop" onclick="document.getElementById('assignSection').scrollIntoView({behavior:'smooth'})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+          Approve &amp; assign
+        </button>
+      </div>
     </div>
 
     <!-- Summary cards -->
@@ -76,6 +82,13 @@ function compactNum(n) { n = Number(n) || 0; if (n >= 1e7) return (n/1e7).toFixe
 function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function fmtDate(d){ return d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : ''; }
 const STATUS = { red:['red','Cut now'], amber:['amber','Cut soon'], green:['green','Covered'] };
+function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = b; b = a % b; a = t; } return a || 1; }
+function sizeRatio(obj) {
+  const ents = Object.entries(obj || {}).map(([s, q]) => [s, Number(q) || 0]).filter(([, q]) => q > 0);
+  if (!ents.length) return '';
+  const g = ents.reduce((acc, [, q]) => gcd(acc, q), 0) || 1;
+  return ents.map(([s, q]) => `${s}:${Math.round(q / g)}`).join('  ');
+}
 
 // ── Sizes → header chip, subtitle, size grid ──────────────────────────
 let SIZES = [];
@@ -86,6 +99,7 @@ async function loadSizes() {
     const json = await (await fetch('/pm/api/sizes?style=' + encodeURIComponent(STYLE), { headers: { Accept: 'application/json' } })).json();
     if (!json.ok && json.warning) { grid.innerHTML = `<div class="pm-empty">${escapeHtml(json.warning)}</div>`; return; }
     SIZES = json.items || [];
+    if (json.myntra_link) { const b = $('myntraBtn'); b.href = json.myntra_link; b.style.display = ''; }
     const warming = SIZES.some(r => r.dataQuality === 'warming_up');
     $('sizeQuality').textContent = warming ? 'Warming up — calendar days' : 'Real · ≥7 selling days';
     // worst trigger drives the header chip
@@ -154,6 +168,7 @@ async function loadAssignPanel() {
     body.innerHTML = `
       <span class="fieldlab">Suggested size split · ${fmtNum(planRes.totalPieces)} pcs total</span>
       <div class="chips">${sizes.map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join('')}</div>
+      <div class="ratioline">Ratio · <b>${sizeRatio(planRes.demand)}</b></div>
       ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--amber-ink);font-size:12.5px;margin-top:10px">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
       <span class="fieldlab" style="margin-top:16px">Lot split · 1,500 hard cap — assign each lot to a master</span>
       <div class="lotlist">

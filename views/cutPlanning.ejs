@@ -36,6 +36,8 @@ let MASTERS = [];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '';
 const fmtNum = v => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toLocaleString('en-IN');
+function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = b; b = a % b; a = t; } return a || 1; }
+function sizeRatio(obj) { const e = Object.entries(obj || {}).map(([s, q]) => [s, Number(q) || 0]).filter(([, q]) => q > 0); if (!e.length) return ''; const g = e.reduce((a, [, q]) => gcd(a, q), 0) || 1; return e.map(([s, q]) => s + ':' + Math.round(q / g)).join('  '); }
 
 async function loadMasters() {
   const d = await (await fetch('/pm/api/cut-masters')).json();
@@ -68,6 +70,7 @@ async function loadPlan() {
       '<div class="plan-body" style="display:block">' +
         '<span class="fieldlab">Suggested size split · ' + fmtNum(j.totalPieces) + ' pcs total</span>' +
         '<div class="chips">' + sizes.map(([s, q]) => '<div class="chip-sz"><span class="s">' + esc(s) + '</span><span class="q num">' + fmtNum(q) + '</span></div>').join('') + '</div>' +
+        '<div class="ratioline">Ratio · <b>' + sizeRatio(j.demand) + '</b></div>' +
         (j.missingSizes && j.missingSizes.length ? '<div style="color:var(--amber-ink);font-size:12.5px;margin-top:10px">No CAD consumption yet for: ' + j.missingSizes.map(esc).join(', ') + '</div>' : '') +
         '<span class="fieldlab" style="margin-top:16px">Lot split · 1,500 hard cap — assign each lot to a master</span>' +
         '<div class="lotlist">' + j.lots.map(function (l, i) { var sz = Object.entries(l.sizes || {}).sort(function (a, b) { return b[1] - a[1]; }).map(function (e) { return '<div class="chip-sz"><span class="s">' + esc(e[0]) + '</span><span class="q num">' + fmtNum(e[1]) + '</span></div>'; }).join(''); return '<div class="lotrow"><div class="lotid">Lot ' + (i + 1) + ' <small><span class="num">' + fmtNum(l.total) + '</span> pcs' + (l.fabricMeters != null ? ' · ' + Number(l.fabricMeters).toFixed(0) + ' m' : '') + '</small></div><div class="lotsizes">' + sz + '</div><select class="select lotmaster">' + (opts || '<option value="">no masters</option>') + '</select></div>'; }).join('') + '</div>' +
