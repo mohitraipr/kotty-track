@@ -781,6 +781,60 @@ router.get('/api/recommendations.csv', async (req, res) => {
   }
 });
 
+// ─── Cut audit ───────────────────────────────────────────────────────
+
+// GET /pm/api/audit/summary — counts by status (for the dashboard flag).
+router.get('/api/audit/summary', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT status, COUNT(*) AS c FROM pm_dispatch_reflection GROUP BY status`
+    );
+    const out = { ok: true, not_reflected: 0, partial: 0, pending: 0, reflected: 0 };
+    for (const r of rows) out[r.status] = Number(r.c) || 0;
+    res.json(out);
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.json({ ok: true, not_reflected: 0, partial: 0, pending: 0, reflected: 0 });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/api/audit — reflection ledger rows with the decision-snapshot context.
+router.get('/api/audit', async (req, res) => {
+  try {
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const valid = ['reflected', 'partial', 'pending', 'not_reflected'];
+    const where = valid.includes(status) ? 'WHERE r.status = ?' : '';
+    const params = valid.includes(status) ? [status] : [];
+    const [items] = await pool.query(
+      `SELECT r.lot_no, r.size_label, r.size_sku, r.style, r.dispatched_qty,
+              r.first_dispatch_date, r.last_dispatch_date, r.batch_count,
+              r.reflected_qty, r.reflected_date, r.lag_days, r.gap_qty, r.status,
+              d.drr, d.suggested_cut_qty
+         FROM pm_dispatch_reflection r
+         LEFT JOIN pm_cut_decision_snapshot d
+           ON d.style = r.style AND d.size_label = r.size_label
+          AND d.id = (SELECT MAX(d2.id) FROM pm_cut_decision_snapshot d2
+                       WHERE d2.style = r.style AND d2.size_label = r.size_label)
+         ${where}
+         ORDER BY r.last_dispatch_date DESC, r.lot_no
+         LIMIT 500`,
+      params
+    );
+    const [srows] = await pool.query(`SELECT status, COUNT(*) AS c FROM pm_dispatch_reflection GROUP BY status`);
+    const summary = { not_reflected: 0, partial: 0, pending: 0, reflected: 0 };
+    for (const r of srows) summary[r.status] = Number(r.c) || 0;
+    res.json({ ok: true, items, summary });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return res.json({ ok: true, items: [], summary: { not_reflected: 0, partial: 0, pending: 0, reflected: 0 } });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/audit — the cut-audit page.
+router.get('/audit', (req, res) => {
+  res.render('productionManagerAudit', { user: req.session.user });
+});
+
 // ─── Open cutting lots ───────────────────────────────────────────────
 
 router.get('/open-lots', async (req, res) => {
