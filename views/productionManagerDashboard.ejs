@@ -391,6 +391,12 @@ async function loadCutting() {
     if (unres && unres.lots > 0) {
       if (foot) foot.innerHTML += ` · <span style="color:var(--amber-ink)">${fmtNum(unres.pieces)} pcs in ${unres.lots} in-flight lot${unres.lots === 1 ? '' : 's'} not matched to a SKU — resolve to avoid overcut</span>`;
     }
+    // Cut-audit flag — appended AFTER the footer is (re)built so loadCutting can't erase it.
+    fetch('/pm/api/audit/summary').then((r) => r.json()).then((s) => {
+      if (s && s.ok && s.not_reflected > 0 && foot) {
+        foot.innerHTML += ' · <a href="/pm/audit?status=not_reflected" style="color:var(--red-ink)">' + s.not_reflected + ' dispatch' + (s.not_reflected === 1 ? '' : 'es') + ' not reflecting in stock</a>';
+      }
+    }).catch(() => {});
     tbody.querySelectorAll('tr.clickable').forEach(tr => {
       tr.addEventListener('click', () => {
         window.location.href = '/pm/style/' + encodeURIComponent(tr.dataset.style);
@@ -634,14 +640,6 @@ if (pullBtn) {
     }
   });
 }
-
-// ── AUDIT FLAG ─────────────────────────────────────────────────
-fetch('/pm/api/audit/summary').then((r) => r.json()).then((s) => {
-  if (s && s.ok && s.not_reflected > 0) {
-    const foot = document.getElementById('cuttingFoot');
-    if (foot) foot.innerHTML += ' · <a href="/pm/audit?status=not_reflected" style="color:var(--red-ink)">' + s.not_reflected + ' dispatch' + (s.not_reflected === 1 ? '' : 'es') + ' not reflecting in stock</a>';
-  }
-}).catch(() => {});
 
 // Initial load — honour the URL hash so deep links (/pm#lots) open the right panel
 showPanel(viewFromHash());

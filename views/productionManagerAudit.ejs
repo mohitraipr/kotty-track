@@ -32,9 +32,10 @@
   const fmtDate = (d) => d ? String(d).slice(0, 10) : '—';
   const PILL = { reflected: ['green', 'Reflected'], partial: ['amber', 'Partial'], pending: ['', 'Pending'], not_reflected: ['red', 'Not reflected'] };
   async function load() {
+    const tb = $('auditTable').querySelector('tbody');
+    try {
     const status = $('statusFilter').value;
     const j = await (await fetch('/pm/api/audit' + (status ? '?status=' + status : ''))).json();
-    const tb = $('auditTable').querySelector('tbody');
     if (!j.ok || !j.items.length) { tb.innerHTML = '<tr><td colspan="9" class="pm-empty">Nothing to audit yet.</td></tr>'; }
     else {
       tb.innerHTML = j.items.map((r) => {
@@ -54,6 +55,7 @@
     }
     const s = j.summary || {};
     $('auditSummary').textContent = (s.not_reflected || 0) + ' not reflected \xb7 ' + (s.partial || 0) + ' partial \xb7 ' + (s.pending || 0) + ' pending \xb7 ' + (s.reflected || 0) + ' reflected';
+    } catch (e) { tb.innerHTML = '<tr><td colspan="9" class="pm-empty">Couldn\'t load audit data.</td></tr>'; }
   }
   $('statusFilter').addEventListener('change', load);
   load();
