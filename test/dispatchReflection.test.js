@@ -76,3 +76,16 @@ test('no dispatches → reflected/no-op verdict', () => {
   assert.strictEqual(v.status, 'reflected');
   assert.strictEqual(v.dispatched_qty, 0);
 });
+
+test('late branch is sales-adjusted: heavy sales explain low SOH → reflected', () => {
+  const v = assessReflection({
+    sohBefore: 0,
+    dispatches: [{ date: '2026-06-01', qty: 100 }],
+    sales: [{ date: '2026-06-05', qty: 90 }],
+    // expected at 06-09 = 0 + 100 - 90 = 10; actual 10 → caught up despite low SOH
+    snapshots: [{ date: '2026-06-01', qty: 0 }, { date: '2026-06-09', qty: 10 }],
+    today: '2026-06-15', ...P,
+  });
+  assert.strictEqual(v.status, 'reflected');
+  assert.strictEqual(v.gap_qty, 0);
+});

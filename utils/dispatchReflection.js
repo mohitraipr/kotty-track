@@ -52,24 +52,30 @@ function assessReflection(input) {
     }
   }
 
-  // Not fully reflected — estimate the arrived fraction from the last snapshot.
+  // Not fully reflected in the loop. Estimate from the last snapshot, sales-adjusted,
+  // and decide status with the SAME absolute-tolerance test the primary loop uses.
   const lastSnap = snaps.length ? snaps[snaps.length - 1] : null;
+  let expectedLast = null;
   if (lastSnap) {
-    const arrived = (Number(lastSnap.qty) || 0) - (sohBefore - cumThrough(sales, lastSnap.date));
-    const f = Math.max(0, Math.min(1, totalDispatched ? arrived / totalDispatched : 0));
-    out.reflected_qty = Math.round(f * totalDispatched);
+    const cumSalesLast = cumThrough(sales, lastSnap.date);
+    expectedLast = sohBefore + cumThrough(dispatches, lastSnap.date) - cumSalesLast;
+    const arrived = (Number(lastSnap.qty) || 0) - (sohBefore - cumSalesLast);
+    out.reflected_qty = Math.max(0, Math.min(totalDispatched, Math.round(arrived)));
     out.gap_qty = totalDispatched - out.reflected_qty;
   }
 
   const deadline = addDays(lastDispatchDate, Number(input.deadlineDays) || 0);
-  const f = totalDispatched ? out.reflected_qty / totalDispatched : 1;
   if (input.today < deadline) { out.status = 'pending'; return out; }
-  if (f <= tolPct / 100) out.status = 'not_reflected';
-  else if (f >= 1 - tolPct / 100) {
+  if (lastSnap && (Number(lastSnap.qty) || 0) >= expectedLast - tol) {
     out.status = 'reflected';
     out.reflected_qty = totalDispatched; out.gap_qty = 0;
-    if (lastSnap) { out.reflected_date = lastSnap.date; out.lag_days = daysBetween(lastDispatchDate, lastSnap.date); }
-  } else out.status = 'partial';
+    out.reflected_date = lastSnap.date;
+    out.lag_days = daysBetween(lastDispatchDate, lastSnap.date);
+  } else if (out.reflected_qty <= tol) {
+    out.status = 'not_reflected';
+  } else {
+    out.status = 'partial';
+  }
   return out;
 }
 
