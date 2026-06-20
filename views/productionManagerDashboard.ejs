@@ -1,184 +1,24 @@
-<%- include('partials/header', { pageTitle: 'Production Manager' }) %>
-<%- include('partials/navbar', { user: user, dashboardUrl: '/pm' }) %>
+<%- include('partials/pmHead', { pageTitle: 'Production Manager' }) %>
+<%- include('partials/pmSidebar', { active: 'dashboard', user: user }) %>
 
-<style>
-  body { background: #f5f7fb; }
-  .pm {
-    --bg: #f5f7fb;
-    --card: #ffffff;
-    --border: #e5e8ee;
-    --border-2: #eef0f4;
-    --text: #0f172a;
-    --text-2: #475569;
-    --text-3: #94a3b8;
-    --primary: #4f46e5;
-    --primary-h: #4338ca;
-    --primary-s: #eef2ff;
-    --success: #16a34a;
-    --success-s: #dcfce7;
-    --warning: #d97706;
-    --warning-s: #fef3c7;
-    --danger: #dc2626;
-    --danger-s: #fee2e2;
-    --shadow: 0 1px 3px rgba(15,23,42,0.05);
-    --shadow-l: 0 10px 24px rgba(15,23,42,0.08);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
-  }
-  .pm-page {
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 4rem;
-  }
-  .pm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
-  .pm-head h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
-  .pm-head .who { color: var(--text-2); font-size: 0.85rem; }
-  .pm-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-  .pm-btn {
-    border: 1px solid var(--border); background: var(--card); color: var(--text);
-    padding: 0.45rem 0.85rem; border-radius: 10px;
-    font-weight: 600; font-size: 0.85rem; cursor: pointer;
-    transition: all .12s; display: inline-flex; align-items: center; gap: 0.35rem;
-  }
-  .pm-btn:hover { background: var(--bg); border-color: #cbd5e1; }
-  .pm-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-  .pm-btn.primary:hover { background: var(--primary-h); }
-  .pm-btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
-  .pm-btn.success { background: var(--success); color: #fff; border-color: var(--success); }
-  .pm-btn:disabled { opacity: .55; cursor: not-allowed; }
-
-  .pm-banner {
-    margin-bottom: 1rem; padding: 0.75rem 1rem;
-    border-radius: 12px; border: 1px solid var(--warning);
-    background: var(--warning-s); color: #7c4a03;
-    font-size: 0.875rem; display: none;
-  }
-  .pm-banner.show { display: block; }
-
-  .pm-tabs {
-    display: flex; gap: 0.4rem; flex-wrap: wrap;
-    border-bottom: 1px solid var(--border); margin-bottom: 1rem;
-  }
-  .pm-tab {
-    border: none; background: transparent; padding: 0.6rem 1rem;
-    font-weight: 600; font-size: 0.9rem; color: var(--text-2);
-    cursor: pointer; border-radius: 10px 10px 0 0;
-    border-bottom: 3px solid transparent; margin-bottom: -1px;
-  }
-  .pm-tab:hover { color: var(--text); }
-  .pm-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-s); }
-
-  .pm-panel { display: none; }
-  .pm-panel.active { display: block; }
-
-  .pm-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 16px; box-shadow: var(--shadow);
-    overflow: hidden; margin-bottom: 1rem;
-  }
-  .pm-card-head {
-    padding: 0.875rem 1.125rem; border-bottom: 1px solid var(--border-2);
-    display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-    background: linear-gradient(180deg, #fafbfd 0%, #ffffff 100%);
-  }
-  .pm-card-head h2 { font-size: 1rem; font-weight: 700; margin: 0; }
-  .pm-card-body { padding: 1rem 1.125rem; }
-
-  .pm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-  .sum-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 0.9rem 1rem; box-shadow: var(--shadow); }
-  .sum-card .label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); }
-  .sum-card .big { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin: 0.15rem 0 0.1rem; color: var(--text); }
-  .sum-card .sub { font-size: 0.78rem; color: var(--text-2); }
-  .sum-card.alert .big { color: var(--danger); }
-  .sum-card .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.35rem; }
-  .sum-card .chip { font-size: 0.7rem; background: var(--bg); border-radius: 6px; padding: 0.15rem 0.4rem; color: var(--text-2); }
-  .spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; margin-top: 0.35rem; }
-  .spark .bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
-
-  .pm-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-  .pm-toolbar input[type="text"], .pm-toolbar select, .pm-toolbar input[type="number"], .pm-toolbar input[type="date"] {
-    border: 1px solid var(--border); border-radius: 10px;
-    padding: 0.4rem 0.7rem; font-family: inherit; font-size: 0.875rem;
-  }
-  .pm-toolbar input:focus, .pm-toolbar select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-s); }
-
-  .pm-table-wrap { overflow-x: auto; }
-  table.pm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  table.pm-table thead th {
-    background: #f8fafc; color: var(--text-2);
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-    padding: 0.55rem 0.75rem; text-align: left;
-    border-bottom: 1px solid var(--border-2); white-space: nowrap;
-  }
-  table.pm-table tbody td {
-    padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-2);
-    vertical-align: middle;
-  }
-  table.pm-table tbody tr:hover { background: #fafbfd; }
-  table.pm-table tr.clickable { cursor: pointer; }
-
-  .pm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
-  .pm-dot.red    { background: var(--danger); }
-  .pm-dot.amber  { background: var(--warning); }
-  .pm-dot.green  { background: var(--success); }
-  .pm-pill {
-    display: inline-block; padding: 0.15rem 0.55rem; border-radius: 9999px;
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  }
-  .pm-pill.red   { background: var(--danger-s);  color: var(--danger); }
-  .pm-pill.amber { background: var(--warning-s); color: var(--warning); }
-  .pm-pill.green { background: var(--success-s); color: var(--success); }
-
-  .pm-empty { padding: 2rem; text-align: center; color: var(--text-3); font-size: 0.9rem; }
-
-  .pm-modal-backdrop {
-    position: fixed; inset: 0; background: rgba(15,23,42,0.4);
-    display: none; align-items: center; justify-content: center;
-    z-index: 200;
-  }
-  .pm-modal-backdrop.show { display: flex; }
-  .pm-modal {
-    background: var(--card); border-radius: 16px; box-shadow: var(--shadow-l);
-    width: min(560px, 96vw); padding: 1.25rem;
-  }
-  .pm-modal h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.75rem; }
-  .pm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
-  .pm-field { display: flex; flex-direction: column; gap: 0.25rem; }
-  .pm-field label {
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.04em; color: var(--text-2);
-  }
-  .pm-field input, .pm-field select {
-    border: 1px solid var(--border); border-radius: 10px;
-    padding: 0.45rem 0.7rem; font-family: inherit; font-size: 0.9rem;
-  }
-  .pm-field input:focus, .pm-field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-s); }
-
-  .pm-drop {
-    border: 2px dashed var(--border); border-radius: 12px;
-    padding: 1.5rem; text-align: center; color: var(--text-2);
-    background: #fafbfd; cursor: pointer; transition: all .12s;
-  }
-  .pm-drop:hover, .pm-drop.dragging { border-color: var(--primary); background: var(--primary-s); color: var(--primary); }
-  .pm-drop input { display: none; }
-</style>
-
-<div class="pm">
-<div class="pm-page">
-
-  <div class="pm-head">
-    <div>
-      <h1>Production Manager</h1>
-      <div class="who">Cutting recommendations • DRR • Open lots • Marketplace POs</div>
+<div class="main">
+  <header class="topbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input placeholder="Search style, lot, or order…" id="topSearch">
     </div>
-    <div class="pm-actions">
-      <a class="pm-btn" href="/pm/analytics">📊 Analytics</a>
+    <div class="actions">
       <a class="pm-btn" href="/pm/api/recommendations.csv">Export CSV</a>
-      <% if (userRole === 'admin') { %>
-        <button class="pm-btn primary" id="pullNowBtn">Run Pull Now</button>
-      <% } %>
+      <% if (userRole === 'admin') { %><button class="pm-btn primary" id="pullNowBtn">Run pull</button><% } %>
+    </div>
+  </header>
+  <main class="content">
+
+  <div class="page-head">
+    <div>
+      <h1 class="page-h">Overview</h1>
+      <p class="page-sub">Cutting recommendations · DRR · open lots · marketplace POs</p>
     </div>
   </div>
 
@@ -189,50 +29,43 @@
   <div class="pm-summary" id="pmSummary"></div>
 
   <nav class="pm-tabs" role="tablist">
-    <button class="pm-tab active" data-tab="cutting">Cutting Today</button>
+    <button class="pm-tab active" data-tab="cutting">Priority to cut</button>
     <button class="pm-tab" data-tab="dead">Dead Stock</button>
     <button class="pm-tab" data-tab="lots">Open Lots</button>
     <button class="pm-tab" data-tab="pos">Marketplace POs</button>
     <button class="pm-tab" data-tab="config">Config</button>
   </nav>
 
-  <!-- CUTTING TODAY -->
+  <!-- PRIORITY TO CUT -->
   <section class="pm-panel active" data-panel="cutting">
-    <div class="pm-card">
-      <div class="pm-card-head">
-        <h2>Cutting Today</h2>
-        <div class="pm-toolbar">
-          <input type="text" id="cuttingSearch" placeholder="Search style…">
-          <select id="cuttingTrigger">
-            <option value="all">All triggers</option>
-            <option value="red">Red (≤ LT)</option>
-            <option value="amber">Amber (≤ LT+safety)</option>
-            <option value="green">Green</option>
-          </select>
-          <button class="pm-btn" id="cuttingRefresh">Refresh</button>
-        </div>
+    <h2 class="section-h" style="margin-top:6px">Priority to cut
+      <div class="pm-toolbar">
+        <input type="text" id="cuttingSearch" placeholder="Search style…">
+        <select id="cuttingTrigger">
+          <option value="all">All</option>
+          <option value="red">Cut now</option>
+          <option value="amber">Cut soon</option>
+          <option value="green">Covered</option>
+        </select>
+        <button class="pm-btn" id="cuttingRefresh">Refresh</button>
       </div>
-      <div class="pm-card-body">
-        <div class="pm-table-wrap">
-          <table class="pm-table" id="cuttingTable">
-            <thead>
-              <tr>
-                <th>Style</th>
-                <th>Total SOH</th>
-                <th>Avg DRR</th>
-                <th>Worst-size DOH</th>
-                <th>Sizes below LT</th>
-                <th>Open-lot qty</th>
-                <th>Upcoming MP-PO</th>
-                <th>Suggested action</th>
-                <th>Trigger</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
+    </h2>
+    <div class="tcard">
+      <table class="prio" id="cuttingTable">
+        <thead>
+          <tr>
+            <th class="l">Style</th>
+            <th>Stock</th>
+            <th>Days left</th>
+            <th>Suggested cut</th>
+            <th class="l" style="padding-left:32px">Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
+    <div class="tfoot" id="cuttingFoot"></div>
   </section>
 
   <!-- DEAD STOCK -->
@@ -391,7 +224,7 @@
     </div>
   </section>
 
-</div>
+  </main>
 </div>
 
 <!-- Add-lot modal -->
@@ -439,6 +272,31 @@ function compactNum(n) {
 }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : ''; }
 
+const KPI_ICON = {
+  cut:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>',
+  prod: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21V8l6 4V8l6 4V5l6 3v13H3z"/></svg>',
+  inv:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 8 12 3 3 8l9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>',
+  sales:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/></svg>',
+};
+function kpiSpark(series) {
+  if (!series || series.length < 2) return '';
+  const max = Math.max(...series), min = Math.min(...series, 0), span = (max - min) || 1;
+  const pts = series.map((v, i) => {
+    const x = (i / (series.length - 1)) * 100;
+    const y = 26 - ((v - min) / span) * 22;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  const last = pts[pts.length - 1].split(',');
+  return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="${pts.join(' ')}"/><circle class="dot" cx="${last[0]}" cy="${last[1]}" r="2.4"/></svg>`;
+}
+function kpiCard(label, tile, icon, val, trendCls, trendIcon, trendText, sparkHtml) {
+  return `<div class="kpi">
+    <div class="top"><span class="label">${label}</span><span class="tile ${tile}">${icon}</span></div>
+    <div class="val num">${val}</div>
+    ${sparkHtml || ''}
+    <div class="trend ${trendCls}">${trendIcon}${trendText}</div>
+  </div>`;
+}
 async function loadSummary() {
   const box = $('pmSummary');
   try {
@@ -448,55 +306,28 @@ async function loadSummary() {
 
     if (s.cut_priority) {
       const cp = s.cut_priority;
-      cards.push(`<div class="sum-card ${cp.red ? 'alert' : ''}">
-        <div class="label">Cut priority</div>
-        <div class="big">${compactNum(cp.totalSuggested)}</div>
-        <div class="sub">pieces suggested across ${cp.stylesNeedingCut} styles</div>
-        <div class="chips"><span class="chip" style="color:var(--danger)">${cp.red} red</span><span class="chip" style="color:var(--warning)">${cp.amber} amber</span></div>
-      </div>`);
-    }
-    if (s.fabric_needed) {
-      const f = s.fabric_needed;
-      cards.push(`<div class="sum-card">
-        <div class="label">Fabric needed</div>
-        <div class="big">${compactNum(f.totalMeters)} m</div>
-        <div class="sub">for ${compactNum(f.coveredPieces)} pcs ${f.uncoveredPieces ? `· ${compactNum(f.uncoveredPieces)} pcs no CAD` : ''}</div>
-        <div class="chips">${f.byType.slice(0, 3).map(t => `<span class="chip">${escapeHtml(t.fabric_type)}: ${compactNum(t.meters)}m</span>`).join('')}</div>
-      </div>`);
+      cards.push(kpiCard('To cut today', 'red', KPI_ICON.cut, compactNum(cp.totalSuggested), 'red',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>',
+        `${cp.red || 0} styles urgent`));
     }
     if (s.wip) {
-      const w = s.wip; const order = ['stitching', 'jeans_assembly', 'washing', 'washing_in', 'finishing'];
-      const lbl = { stitching: 'Stitch', jeans_assembly: 'Assy', washing: 'Wash', washing_in: 'W-In', finishing: 'Finish' };
-      cards.push(`<div class="sum-card">
-        <div class="label">WIP in production</div>
-        <div class="big">${compactNum(w.totalInHand)}</div>
-        <div class="sub">pieces in hand across stages</div>
-        <div class="chips">${order.filter(k => w.byStage[k]).map(k => `<span class="chip">${lbl[k]}: ${compactNum(w.byStage[k])}</span>`).join('')}</div>
-      </div>`);
+      cards.push(kpiCard('In production', 'blue', KPI_ICON.prod, compactNum(s.wip.totalInHand), 'muted',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>',
+        'pieces across all stages'));
     }
     if (s.inventory) {
-      cards.push(`<div class="sum-card">
-        <div class="label">Inventory on hand</div>
-        <div class="big">${compactNum(s.inventory.units)}</div>
-        <div class="sub">units in stock · as of ${fmtDate(s.inventory.as_of)}</div>
-      </div>`);
-    }
-    if (s.dead_stock) {
-      cards.push(`<div class="sum-card">
-        <div class="label">Dead stock</div>
-        <div class="big">${compactNum(s.dead_stock.units)}</div>
-        <div class="sub">units in ${s.dead_stock.count} slow SKUs (45d no sale)</div>
-      </div>`);
+      cards.push(kpiCard('Inventory', 'green', KPI_ICON.inv, compactNum(s.inventory.units), 'green',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>',
+        `units · as of ${fmtDate(s.inventory.as_of)}`));
     }
     if (s.sales_by_day && s.sales_by_day.length) {
-      const days = s.sales_by_day; const max = Math.max(...days.map(d => d.qty), 1);
-      const last = days[days.length - 1]; const avg = Math.round(days.reduce((a, d) => a + d.qty, 0) / days.length);
-      cards.push(`<div class="sum-card">
-        <div class="label">Sales / day (30d)</div>
-        <div class="big">${compactNum(avg)}</div>
-        <div class="sub">avg/day · last ${fmtDate(last.date)}: ${compactNum(last.qty)}</div>
-        <div class="spark">${days.map(d => `<div class="bar" style="height:${Math.max(2, Math.round(d.qty / max * 34))}px" title="${fmtDate(d.date)}: ${d.qty}"></div>`).join('')}</div>
-      </div>`);
+      const days = s.sales_by_day;
+      const avg = Math.round(days.reduce((a, d) => a + d.qty, 0) / days.length);
+      const last = days[days.length - 1];
+      cards.push(kpiCard('Sales / day', 'blue', KPI_ICON.sales, compactNum(avg), 'muted',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 17 17 7M8 7h9v9"/></svg>',
+        `last ${fmtDate(last.date)}: ${compactNum(last.qty)}`,
+        kpiSpark(days.slice(-14).map(d => Number(d.qty) || 0))));
     }
     box.innerHTML = cards.join('');
   } catch (_) { box.innerHTML = ''; }
@@ -525,40 +356,49 @@ async function loadCutting() {
   if (search) params.set('search', search);
   if (trigger && trigger !== 'all') params.set('trigger', trigger);
   const tbody = $('cuttingTable').querySelector('tbody');
-  tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Loading…</td></tr>`;
+  { const _f = $('cuttingFoot'); if (_f) _f.textContent = ''; }
   try {
     const r = await fetch('/pm/api/styles?' + params.toString(), { headers: { Accept: 'application/json' } });
     const json = await r.json();
     if (!json.ok && json.warning) {
-      tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
       return;
     }
     if (json.dataQuality === 'warming_up') $('warmingBanner').classList.add('show');
     const items = json.items || [];
     if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">No styles.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">No styles.</td></tr>`;
       return;
     }
-    tbody.innerHTML = items.map(s => `
-      <tr class="clickable" data-style="${escapeHtml(s.style)}">
-        <td><strong>${escapeHtml(s.style)}</strong></td>
-        <td>${fmtNum(s.total_soh)}</td>
-        <td>${fmtNum(s.avg_drr, 2)}</td>
-        <td>${s.worst_size_doh == null ? '—' : fmtNum(s.worst_size_doh, 1)}</td>
-        <td>${fmtNum(s.sizes_below_lt)}</td>
-        <td>${fmtNum(s.open_lot_qty)}</td>
-        <td>${fmtNum(s.upcoming_po_qty)}</td>
-        <td>${escapeHtml(s.suggested_action || '')} ${s.suggested_cut_qty ? `· <strong>${fmtNum(s.suggested_cut_qty)}</strong>` : ''}</td>
-        <td><span class="pm-pill ${escapeHtml(s.trigger || 'green')}">${escapeHtml(s.trigger || 'green')}</span></td>
-      </tr>
-    `).join('');
+    const STATUS = { red: ['red', 'Cut now'], amber: ['amber', 'Cut soon'], green: ['green', 'Covered'] };
+    tbody.innerHTML = items.map(s => {
+      const tg = s.trigger || 'green';
+      const st = STATUS[tg] || STATUS.green;
+      const doh = s.worst_size_doh == null ? null : Math.round(s.worst_size_doh);
+      const daysCls = tg === 'red' ? 'red' : 'muted';
+      const sug = Number(s.suggested_cut_qty) || 0;
+      const action = sug > 0
+        ? `<a class="btn-sm assign" href="/pm/cut-planning?style=${encodeURIComponent(s.style)}">Assign</a>`
+        : `<a class="btn-sm review" href="/pm/style/${encodeURIComponent(s.style)}">Review</a>`;
+      return `<tr class="clickable" data-style="${escapeHtml(s.style)}">
+        <td class="style"><div class="row"><span class="swatch"></span><div><div class="code">${escapeHtml(s.style)}</div><div class="fab">DRR ${fmtNum(s.avg_drr, 2)}/day</div></div></div></td>
+        <td><span class="num">${fmtNum(s.total_soh)}</span></td>
+        <td class="days ${daysCls}"><span class="num">${doh == null ? '—' : doh + 'd'}</span></td>
+        <td class="cut"><span class="num">${sug ? fmtNum(sug) : '0'}</span></td>
+        <td class="status" style="padding-left:32px"><span class="pill ${st[0]}">${st[1]}</span></td>
+        <td><span class="actwrap" onclick="event.stopPropagation()">${action}</span></td>
+      </tr>`;
+    }).join('');
+    const foot = $('cuttingFoot');
+    if (foot) foot.textContent = 'Showing ' + items.length + ' style' + (items.length === 1 ? '' : 's') + ' requiring attention';
     tbody.querySelectorAll('tr.clickable').forEach(tr => {
       tr.addEventListener('click', () => {
         window.location.href = '/pm/style/' + encodeURIComponent(tr.dataset.style);
       });
     });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 $('cuttingSearch').addEventListener('input', debounce(loadCutting, 250));
@@ -800,4 +640,5 @@ if (pullBtn) {
 loadCutting();
 </script>
 
-<%- include('partials/footer') %>
+</body>
+</html>

@@ -494,45 +494,96 @@ router.get('/api/cut-masters', async (req, res) => {
   }
 });
 
-// POST /pm/api/cut-plan/assign { style, master_id } — PM approves a style's suggested cut
-// and assigns it to a specific cutting master. Persists a pm_cut_assignment + size lines.
+// POST /pm/api/cut-plan/assign — PM approves a style's suggested cut and assigns it to
+// cutting master(s). Two shapes (both supported, back-compatible):
+//   { style, master_id }                  -> whole style to ONE master (single consolidated row)
+//   { style, lots: [{ master_id }, ...] }  -> one assignment PER LOT, each to its own master
+// Per-lot uses the lot's own size split (plan.lots[i].sizes) and tags note "Lot i/N".
 router.post('/api/cut-plan/assign', async (req, res) => {
   try {
     const style = String(req.body.style || '').trim();
-    const masterId = parseInt(req.body.master_id, 10);
     if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
-    if (!masterId) return res.status(400).json({ ok: false, error: 'master_id is required' });
 
-    const [[master]] = await pool.query(
-      `SELECT u.id, u.username FROM users u JOIN roles r ON u.role_id = r.id
-        WHERE u.id = ? AND r.name = 'cutting_manager' AND u.is_active = TRUE`,
-      [masterId]
-    );
-    if (!master) return res.status(400).json({ ok: false, error: 'Not a valid cutting master.' });
+    const { plan, fabricType } = await computeStyleCutPlan(style);
+    const lots = (plan && plan.lots) || [];
+    if (!lots.length) return res.status(400).json({ ok: false, error: 'No cut plan to assign.' });
 
-    const { demand, plan, fabricType } = await computeStyleCutPlan(style);
-    const { header, sizes } = buildAssignmentPayload({
-      style, fabricType, masterId: master.id, masterName: master.username,
-      demand, plan, createdBy: req.session?.user?.id || null,
-    });
-
-    const [result] = await pool.query(
-      `INSERT INTO pm_cut_assignment
-         (style, fabric_type, total_pieces, lot_count, total_fabric_meters, fabric_complete,
-          assigned_master_id, assigned_master_name, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?)`,
-      [header.style, header.fabric_type, header.total_pieces, header.lot_count,
-       header.total_fabric_meters, header.fabric_complete ? 1 : 0,
-       header.assigned_master_id, header.assigned_master_name, header.created_by]
-    );
-    const assignmentId = result.insertId;
-    if (sizes.length) {
-      await pool.query(
-        `INSERT INTO pm_cut_assignment_sizes (assignment_id, size_label, qty) VALUES ?`,
-        [sizes.map((s) => [assignmentId, s.size_label, s.qty])]
-      );
+    // Resolve which master each lot goes to.
+    const perLot = Array.isArray(req.body.lots) && req.body.lots.length;
+    let lotMasterIds;
+    if (perLot) {
+      if (req.body.lots.length !== lots.length) {
+        return res.status(400).json({ ok: false, error: `Expected ${lots.length} lot assignment(s), got ${req.body.lots.length}.` });
+      }
+      lotMasterIds = req.body.lots.map((l) => parseInt(l.master_id, 10));
+    } else {
+      const m = parseInt(req.body.master_id, 10);
+      if (!m) return res.status(400).json({ ok: false, error: 'master_id (or per-lot lots[]) is required' });
+      lotMasterIds = lots.map(() => m);
     }
-    res.json({ ok: true, assignment_id: assignmentId, assigned_to: master.username, ...header });
+    if (lotMasterIds.some((m) => !m)) return res.status(400).json({ ok: false, error: 'Every lot needs a cutting master.' });
+
+    // Validate all chosen masters in one query.
+    const uniqueIds = [...new Set(lotMasterIds)];
+    const [mrows] = await pool.query(
+      `SELECT u.id, u.username FROM users u JOIN roles r ON u.role_id = r.id
+        WHERE u.id IN (?) AND r.name = 'cutting_manager' AND u.is_active = TRUE`,
+      [uniqueIds]
+    );
+    const nameById = new Map(mrows.map((m) => [m.id, m.username]));
+    if (uniqueIds.some((id) => !nameById.has(id))) {
+      return res.status(400).json({ ok: false, error: 'One or more selected masters are not valid cutting masters.' });
+    }
+    const createdBy = req.session?.user?.id || null;
+
+    async function insertAssignment(header, sizes, note) {
+      const [result] = await pool.query(
+        `INSERT INTO pm_cut_assignment
+           (style, fabric_type, total_pieces, lot_count, total_fabric_meters, fabric_complete,
+            assigned_master_id, assigned_master_name, status, created_by, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?)`,
+        [header.style, header.fabric_type, header.total_pieces, header.lot_count,
+         header.total_fabric_meters, header.fabric_complete ? 1 : 0,
+         header.assigned_master_id, header.assigned_master_name, header.created_by, note]
+      );
+      const assignmentId = result.insertId;
+      if (sizes.length) {
+        await pool.query(
+          `INSERT INTO pm_cut_assignment_sizes (assignment_id, size_label, qty) VALUES ?`,
+          [sizes.map((s) => [assignmentId, s.size_label, s.qty])]
+        );
+      }
+      return assignmentId;
+    }
+
+    // Single-master (all lots same OR legacy master_id): one consolidated row — unchanged behaviour.
+    if (!perLot || uniqueIds.length === 1) {
+      const masterId = lotMasterIds[0];
+      const { demand, plan: fullPlan, fabricType: ft } = await computeStyleCutPlan(style);
+      const { header, sizes } = buildAssignmentPayload({
+        style, fabricType: ft, masterId, masterName: nameById.get(masterId),
+        demand, plan: fullPlan, createdBy,
+      });
+      const id = await insertAssignment(header, sizes, null);
+      return res.json({ ok: true, assignment_id: id, count: 1, assigned_to: nameById.get(masterId) });
+    }
+
+    // Per-lot: one row per lot, each to its own master, using the lot's own size split.
+    const n = lots.length;
+    const created = [];
+    for (let i = 0; i < n; i++) {
+      const lot = lots[i];
+      const masterId = lotMasterIds[i];
+      const { header, sizes } = buildAssignmentPayload({
+        style, fabricType, masterId, masterName: nameById.get(masterId),
+        demand: lot.sizes,
+        plan: { lotCount: 1, totalFabricMeters: lot.fabricMeters, fabricComplete: lot.fabricComplete },
+        createdBy,
+      });
+      const id = await insertAssignment(header, sizes, `Lot ${i + 1}/${n}`);
+      created.push({ assignment_id: id, lot: i + 1, pieces: header.total_pieces, master: nameById.get(masterId) });
+    }
+    res.json({ ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') });
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') return res.status(400).json({ ok: false, error: 'Run the cut-assignment migration first.' });
     res.status(500).json({ ok: false, error: err.message });

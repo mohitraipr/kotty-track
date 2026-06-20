@@ -1,196 +1,118 @@
-<%- include('partials/header', { pageTitle: 'PM · ' + style }) %>
-<%- include('partials/navbar', { user: user, dashboardUrl: '/pm' }) %>
+<%- include('partials/pmHead', { pageTitle: 'PM · ' + style }) %>
+<%- include('partials/pmSidebar', { active: 'styles', user: user }) %>
 
-<style>
-  body { background: #f5f7fb; }
-  .pm {
-    --bg: #f5f7fb;
-    --card: #ffffff;
-    --border: #e5e8ee;
-    --border-2: #eef0f4;
-    --text: #0f172a;
-    --text-2: #475569;
-    --text-3: #94a3b8;
-    --primary: #4f46e5;
-    --primary-h: #4338ca;
-    --primary-s: #eef2ff;
-    --success: #16a34a;
-    --success-s: #dcfce7;
-    --warning: #d97706;
-    --warning-s: #fef3c7;
-    --danger: #dc2626;
-    --danger-s: #fee2e2;
-    --shadow: 0 1px 3px rgba(15,23,42,0.05);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: var(--text);
-  }
-  .pm-page { max-width: 1500px; margin: 0 auto; padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 4rem; }
-  .pm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
-  .pm-head h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
-  .pm-back { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.875rem; }
-  .pm-back:hover { text-decoration: underline; }
-
-  .pm-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
-  .pm-card-head { padding: 0.875rem 1.125rem; border-bottom: 1px solid var(--border-2); background: linear-gradient(180deg, #fafbfd 0%, #ffffff 100%); display:flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-  .pm-card-head h2 { font-size: 1rem; font-weight: 700; margin: 0; }
-  .pm-card-body { padding: 1rem 1.125rem; }
-
-  .pm-pill {
-    display: inline-block; padding: 0.2rem 0.65rem; border-radius: 9999px;
-    font-size: 0.75rem; font-weight: 700;
-  }
-  .pm-pill.real { background: var(--success-s); color: var(--success); }
-  .pm-pill.warming { background: var(--warning-s); color: var(--warning); }
-  .pm-pill.red   { background: var(--danger-s);  color: var(--danger); }
-  .pm-pill.amber { background: var(--warning-s); color: var(--warning); }
-  .pm-pill.green { background: var(--success-s); color: var(--success); }
-  .pm-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 0.35rem; }
-  .pm-dot.red { background: var(--danger); }
-  .pm-dot.amber { background: var(--warning); }
-  .pm-dot.green { background: var(--success); }
-
-  .pm-table-wrap { overflow-x: auto; }
-  table.pm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  table.pm-table thead th {
-    background: #f8fafc; color: var(--text-2);
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-    padding: 0.55rem 0.75rem; text-align: left;
-    border-bottom: 1px solid var(--border-2); white-space: nowrap;
-  }
-  table.pm-table tbody td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-2); }
-  table.pm-table tbody tr:hover { background: #fafbfd; }
-  .pm-empty { padding: 2rem; text-align: center; color: var(--text-3); font-size: 0.9rem; }
-  .pm-btn {
-    border: 1px solid var(--border); background: var(--card); color: var(--text);
-    padding: 0.4rem 0.8rem; border-radius: 10px; font-weight: 600; font-size: 0.85rem;
-    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;
-  }
-  .pm-btn:hover { background: var(--bg); }
-</style>
-
-<div class="pm">
-<div class="pm-page">
-
-  <div class="pm-head">
-    <div>
-      <a class="pm-back" href="/pm">← All styles</a>
-      <h1 style="margin-top: 0.5rem;">Style: <%= style %></h1>
+<div class="main">
+  <header class="topbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input placeholder="Search style, lot, or order…">
     </div>
-    <div>
+    <div class="actions">
       <a class="pm-btn" href="/pm/api/recommendations.csv?style=<%= encodeURIComponent(style) %>">Export CSV</a>
+      <% if (typeof userRole !== 'undefined' && userRole === 'admin') { %><a class="pm-btn primary" href="/pm">Run pull</a><% } %>
     </div>
-  </div>
+  </header>
 
-  <div class="pm-card">
-    <div class="pm-card-head">
-      <h2>Size-level recommendation</h2>
-      <div id="qualityPill"></div>
+  <main class="content">
+    <a href="/pm" class="crumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      All styles
+    </a>
+
+    <div class="page-head">
+      <div>
+        <h1 class="page-h"><%= style %> <span class="title-chip" id="styleTrigger"></span></h1>
+        <p class="page-sub" id="styleSub">Loading…</p>
+      </div>
+      <button class="btn primary" id="approveTop" onclick="document.getElementById('assignSection').scrollIntoView({behavior:'smooth'})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+        Approve &amp; assign
+      </button>
     </div>
-    <div class="pm-card-body">
-      <div class="pm-table-wrap">
-        <table class="pm-table" id="sizesTable">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Size</th>
-              <th>SOH</th>
-              <th>DRR</th>
-              <th>Selling-days / window</th>
-              <th>DOH</th>
-              <th>Lead time</th>
-              <th>Open-lot qty</th>
-              <th>MP-PO due in LT</th>
-              <th>Suggested cut qty</th>
-              <th>Trigger</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+
+    <!-- Summary cards -->
+    <section class="summary" id="summaryCards">
+      <div class="scard"><div class="ico" style="background:var(--neutral);color:var(--blue)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg></div><div><div class="label">Suggested cut</div><div class="big" id="kSuggested">—</div></div></div>
+      <div class="scard"><div class="ico" style="background:var(--neutral);color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg></div><div><div class="label">Fabric to issue</div><div class="big" id="kFabric">—</div></div></div>
+      <div class="scard"><div class="ico" style="background:var(--neutral);color:var(--ink-2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg></div><div><div class="label">Lots (≤1,500 each)</div><div class="big" id="kLots">—</div></div></div>
+    </section>
+
+    <!-- Size breakdown -->
+    <h2 class="section-h">Size breakdown <span class="link" id="sizeQuality"></span></h2>
+    <div class="sizegrid" id="sizeGrid"><div class="pm-empty">Loading sizes…</div></div>
+
+    <!-- Fabrication & BOM -->
+    <div class="panel" id="fabPanel" style="display:none">
+      <div class="panel-head"><h4>Fabrication &amp; BOM</h4><span class="pill flat">Standard spec</span></div>
+      <div class="panel-body">
+        <div class="fabswatch">
+          <div class="chip" style="background:linear-gradient(135deg,#1f2937,#374151)"></div>
+          <div>
+            <h5 id="fabName">Primary</h5>
+            <div class="tags" id="fabTags"></div>
+          </div>
+        </div>
+        <div class="specrows" id="fabSpecs"></div>
       </div>
     </div>
-  </div>
 
-  <div class="pm-card" style="margin-top: 1rem;">
-    <div class="pm-card-head">
-      <h2>Approve &amp; assign cut</h2>
-      <div id="planSummary"></div>
+    <!-- Approve & assign -->
+    <h2 class="section-h" id="assignSection">Approve &amp; assign cut <span class="link" id="planSummary"></span></h2>
+    <div class="tcard" style="padding:0">
+      <div id="assignBody" style="padding:20px"><div class="pm-empty">Loading suggested cut…</div></div>
     </div>
-    <div class="pm-card-body" id="assignBody">
-      <div class="pm-empty">Loading suggested cut…</div>
-    </div>
-  </div>
 
-  <div class="pm-card" style="margin-top: 1rem;">
-    <div class="pm-card-head">
-      <h2>Cut history &amp; lot status</h2>
-      <span style="font-size:0.78rem; color:var(--text-3);">where each lot cut for this style is now</span>
-    </div>
-    <div class="pm-card-body" id="lotHistoryBody">
-      <div class="pm-empty">Loading lot history…</div>
-    </div>
-  </div>
-
-</div>
+    <!-- Lot journey -->
+    <h2 class="section-h">Lot journey <select class="select" id="lotPicker" style="height:36px;min-width:220px;font-size:13px"></select></h2>
+    <div id="lotJourney"><div class="tcard" style="padding:0"><div class="pm-empty" id="lotEmpty">Loading lot history…</div></div></div>
+  </main>
 </div>
 
 <script>
 const STYLE = <%- JSON.stringify(style) %>;
-function fmtNum(v, digits = 0) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
-  return Number(v).toFixed(digits);
-}
-function escapeHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+const $ = (id) => document.getElementById(id);
+function fmtNum(v, d = 0) { if (v == null || Number.isNaN(Number(v))) return '—'; return Number(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function compactNum(n) { n = Number(n) || 0; if (n >= 1e7) return (n/1e7).toFixed(1)+' Cr'; if (n >= 1e5) return (n/1e5).toFixed(1)+' L'; if (n >= 1e3) return (n/1e3).toFixed(1)+'k'; return String(Math.round(n)); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtDate(d){ return d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : ''; }
+const STATUS = { red:['red','Cut now'], amber:['amber','Cut soon'], green:['green','Covered'] };
 
-(async function load() {
-  const tbody = document.querySelector('#sizesTable tbody');
-  tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">Loading…</td></tr>`;
+// ── Sizes → header chip, subtitle, size grid ──────────────────────────
+let SIZES = [];
+(async function loadSizes() {
+  const grid = $('sizeGrid');
   try {
-    const r = await fetch('/pm/api/sizes?style=' + encodeURIComponent(STYLE), { headers: { Accept: 'application/json' } });
-    const json = await r.json();
-    if (!json.ok && json.warning) {
-      tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">${escapeHtml(json.warning)}</td></tr>`;
-      return;
-    }
-    const items = json.items || [];
-    const warming = items.some(r => r.dataQuality === 'warming_up');
-    document.getElementById('qualityPill').innerHTML = warming
-      ? `<span class="pm-pill warming">Warming up — using calendar days</span>`
-      : `<span class="pm-pill real">Real (≥7 selling days)</span>`;
-    if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">No sizes for this style.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = items.map(r => `
-      <tr>
-        <td>${escapeHtml(r.sku)}</td>
-        <td>${escapeHtml(r.size)}</td>
-        <td>${fmtNum(r.soh)}</td>
-        <td>${fmtNum(r.drr, 3)}</td>
-        <td>${fmtNum(r.selling_days)} / ${fmtNum(r.calendar_days)}</td>
-        <td>${r.doh == null ? '—' : fmtNum(r.doh, 1)}</td>
-        <td>${fmtNum(r.lead_time)}${r.safety_days ? ' + ' + fmtNum(r.safety_days) : ''}</td>
-        <td>${fmtNum(r.open_lot_qty)}</td>
-        <td>${fmtNum(r.upcoming_po_qty)}</td>
-        <td><strong>${fmtNum(r.suggested_cut_qty)}</strong></td>
-        <td><span class="pm-dot ${escapeHtml(r.trigger || 'green')}"></span>${escapeHtml(r.trigger || 'green')}</td>
-      </tr>
-    `).join('');
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="11" class="pm-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
-  }
+    const json = await (await fetch('/pm/api/sizes?style=' + encodeURIComponent(STYLE), { headers: { Accept: 'application/json' } })).json();
+    if (!json.ok && json.warning) { grid.innerHTML = `<div class="pm-empty">${escapeHtml(json.warning)}</div>`; return; }
+    SIZES = json.items || [];
+    const warming = SIZES.some(r => r.dataQuality === 'warming_up');
+    $('sizeQuality').textContent = warming ? 'Warming up — calendar days' : 'Real · ≥7 selling days';
+    // worst trigger drives the header chip
+    const order = { red:0, amber:1, green:2 };
+    let worst = 'green';
+    SIZES.forEach(r => { const t = r.trigger || 'green'; if (order[t] < order[worst]) worst = t; });
+    const st = STATUS[worst];
+    const chip = $('styleTrigger'); chip.className = 'title-chip ' + st[0]; chip.textContent = st[1];
+    if (!SIZES.length) { grid.innerHTML = `<div class="pm-empty">No sizes for this style.</div>`; return; }
+    grid.innerHTML = SIZES.map(r => {
+      const sug = Number(r.suggested_cut_qty) || 0;
+      const dohRed = (r.trigger || 'green') === 'red';
+      return `<div class="sizecard ${sug > 0 ? '' : 'dim'}">
+        <div class="sz">${escapeHtml(r.size)}</div>
+        <div class="rows">
+          <div class="r"><span class="k">Stock</span><span class="v num">${fmtNum(r.soh)}</span></div>
+          <div class="r"><span class="k">Days left</span><span class="v num ${dohRed ? 'red' : ''}">${r.doh == null ? '—' : Math.round(r.doh) + 'd'}</span></div>
+        </div>
+        <div class="sug"><span class="k">Suggested</span><span class="v num">${sug ? fmtNum(sug) : '0'}</span></div>
+      </div>`;
+    }).join('');
+  } catch (err) { grid.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`; }
 })();
 
-// ── Approve & assign cut ─────────────────────────────────────────────
+// ── Cut plan → summary cards, fabrication, assign panel ───────────────
 let MASTERS = [];
-function fmtDate(d){ return d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : ''; }
-
 async function loadAssignPanel() {
-  const body = document.getElementById('assignBody');
-  const summary = document.getElementById('planSummary');
+  const body = $('assignBody');
   try {
     const [planRes, mastersRes, asgRes] = await Promise.all([
       fetch('/pm/api/cut-plan?style=' + encodeURIComponent(STYLE)).then(r => r.json()),
@@ -200,112 +122,136 @@ async function loadAssignPanel() {
     MASTERS = (mastersRes.ok && mastersRes.masters) ? mastersRes.masters : [];
     const styleAsg = (asgRes.ok ? asgRes.items : []).filter(a => a.style === STYLE);
 
+    // summary cards
+    if (planRes.ok && planRes.totalPieces) {
+      $('kSuggested').innerHTML = `<span class="num">${fmtNum(planRes.totalPieces)}</span> <small>pcs</small>`;
+      $('kFabric').innerHTML = planRes.totalFabricMeters != null ? `<span class="num">${fmtNum(planRes.totalFabricMeters)}</span> <small>m</small>` : '<small>no CAD</small>';
+      $('kLots').innerHTML = `<span class="num">${planRes.lotCount || 0}</span>`;
+      $('styleSub').textContent = (planRes.fabric_type ? planRes.fabric_type : 'Fabric n/a') + (planRes.totalFabricMeters != null && planRes.totalPieces ? ` · ${(planRes.totalFabricMeters / planRes.totalPieces).toFixed(3)} m per piece` : '');
+      renderFabrication(planRes);
+    } else {
+      $('kSuggested').innerHTML = '<span class="num">0</span> <small>pcs</small>';
+      $('kFabric').innerHTML = '<span class="num">0</span> <small>m</small>';
+      $('kLots').innerHTML = '<span class="num">0</span>';
+      $('styleSub').textContent = 'Stock is covered — no cut suggested right now';
+    }
+
     if (!planRes.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(planRes.warning || planRes.error || 'Could not load plan.')}</div>`; return; }
     if (!planRes.totalPieces) {
-      summary.innerHTML = '';
+      $('planSummary').textContent = '';
       body.innerHTML = `<div class="pm-empty">No suggested cut right now — stock is covered.</div>` + assignmentsHtml(styleAsg);
       return;
     }
 
-    summary.innerHTML = planRes.totalFabricMeters != null
-      ? `<span class="pm-pill green">${Number(planRes.totalFabricMeters).toFixed(1)} m ${escapeHtml(planRes.fabric_type || '')}</span>`
-      : `<span class="pm-pill warming">No CAD fabric</span>`;
-
-    const sizes = Object.entries(planRes.demand).sort((a,b)=>b[1]-a[1]);
+    $('planSummary').textContent = planRes.totalFabricMeters != null ? `${Number(planRes.totalFabricMeters).toFixed(0)} m ${planRes.fabric_type || ''}` : 'No CAD fabric';
+    const sizes = Object.entries(planRes.demand).sort((a, b) => b[1] - a[1]);
     const masterOpts = MASTERS.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('');
     body.innerHTML = `
-      <div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:baseline; margin-bottom:0.75rem;">
-        <div><strong style="font-size:1.25rem;">${planRes.totalPieces}</strong> <span style="color:var(--text-3);">pieces</span></div>
-        <div><strong>${planRes.lotCount}</strong> <span style="color:var(--text-3);">lot(s) ≤1500</span></div>
-        <div style="color:var(--text-2);">${escapeHtml(planRes.fabric_type || 'fabric n/a')}</div>
+      <span class="fieldlab">Suggested size split · ${fmtNum(planRes.totalPieces)} pcs total</span>
+      <div class="chips">${sizes.map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join('')}</div>
+      ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--amber-ink);font-size:12.5px;margin-top:10px">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
+      <span class="fieldlab" style="margin-top:16px">Lot split · 1,500 hard cap — assign each lot to a master</span>
+      <div class="lotlist">
+        ${planRes.lots.map((l, i) => { const sz = Object.entries(l.sizes || {}).sort((a, b) => b[1] - a[1]).map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join(''); return `<div class="lotrow"><div class="lotid">Lot ${i + 1} <small><span class="num">${fmtNum(l.total)}</span> pcs${l.fabricMeters != null ? ' · ' + Number(l.fabricMeters).toFixed(0) + ' m' : ''}</small></div><div class="lotsizes">${sz}</div><select class="select lotmaster">${masterOpts || '<option value="">no masters</option>'}</select></div>`; }).join('')}
       </div>
-      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-        ${sizes.map(([s,q]) => `<span style="background:#f1f5f9;border-radius:8px;padding:0.35rem 0.7rem;font-size:0.85rem;"><strong>${q}</strong> ${escapeHtml(s)}</span>`).join('')}
-      </div>
-      ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--warning);font-size:0.8rem;margin-bottom:0.5rem;">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
-      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; font-size:0.8rem; color:var(--text-2);">
-        ${planRes.lots.map((l,i)=>`<span style="background:var(--primary-s);border-radius:8px;padding:0.3rem 0.6rem;">Lot ${i+1}: ${l.total} pcs${l.fabricMeters!=null?(' · '+Number(l.fabricMeters).toFixed(0)+'m'):''}</span>`).join('')}
-      </div>
-      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; padding-top:0.5rem; border-top:1px solid var(--border-2);">
-        <label style="font-size:0.85rem; color:var(--text-2);">Assign to cutting master:</label>
-        <select id="masterSel" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:10px; font-size:0.85rem;">${masterOpts || '<option value="">no masters</option>'}</select>
-        <button class="pm-btn" style="background:var(--primary); color:#fff; border-color:var(--primary);" onclick="doAssign()">Approve &amp; Assign</button>
-        <span id="assignMsg" style="font-size:0.85rem;"></span>
+      <div class="assignbar" style="margin-top:18px;border-radius:11px;border:1px solid var(--line)">
+        <span style="font-size:12.5px;color:var(--ink-2)">One master can take several lots — same master for all is fine.</span>
+        <div style="flex:1"></div>
+        <button class="btn primary" onclick="doAssign()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+          Approve &amp; assign
+        </button>
+        <span id="assignMsg" style="font-size:13px"></span>
       </div>
       ${assignmentsHtml(styleAsg)}
     `;
-  } catch (err) {
-    body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`;
-  }
+  } catch (err) { body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`; }
+}
+
+function renderFabrication(plan) {
+  const panel = $('fabPanel'); panel.style.display = '';
+  $('fabName').textContent = 'Primary — ' + (plan.fabric_type || 'fabric');
+  $('fabTags').innerHTML = ['Washable', 'Shrink tested'].map(t => `<span class="tag">${t}</span>`).join('');
+  const cons = (plan.totalFabricMeters != null && plan.totalPieces) ? (plan.totalFabricMeters / plan.totalPieces).toFixed(3) : null;
+  const rows = [
+    ['Consumption per unit', cons != null ? `<span class="num">${cons}</span> m` : '—'],
+    ['Fabric type', escapeHtml(plan.fabric_type || '—')],
+    ['Total fabric to issue', plan.totalFabricMeters != null ? `<span class="num">${fmtNum(plan.totalFabricMeters)}</span> m` : '—'],
+    ['Source', cons != null ? 'CAD cut plan' : 'No CAD data'],
+  ];
+  $('fabSpecs').innerHTML = rows.map(r => `<div class="specrow"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
 }
 
 function assignmentsHtml(items) {
   if (!items || !items.length) return '';
-  return `<div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-2);">
-    <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-3); margin-bottom:0.4rem;">Already assigned for this style</div>
-    ${items.map(a => `<div style="font-size:0.85rem; color:var(--text-2); padding:0.2rem 0;">
-      <strong>${a.total_pieces}</strong> pcs → <strong>${escapeHtml(a.assigned_master_name||'')}</strong>
-      · ${a.status === 'cut' ? '<span style="color:var(--success);">cut</span>' : 'assigned'} · ${fmtDate(a.created_at)}</div>`).join('')}
+  return `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2)">
+    <span class="fieldlab">Already assigned for this style</span>
+    ${items.map(a => `<div style="font-size:13.5px;color:var(--ink-2);padding:4px 0"><b>${fmtNum(a.total_pieces)}</b> pcs → <b>${escapeHtml(a.assigned_master_name || '')}</b> · ${a.status === 'cut' ? '<span style="color:var(--green-ink)">cut</span>' : 'assigned'} · ${fmtDate(a.created_at)}</div>`).join('')}
   </div>`;
 }
 
 async function doAssign() {
-  const sel = document.getElementById('masterSel');
-  const msg = document.getElementById('assignMsg');
-  const masterId = sel ? sel.value : '';
-  if (!masterId) { msg.innerHTML = '<span style="color:var(--danger);">pick a master</span>'; return; }
+  const sels = Array.from(document.querySelectorAll('.lotmaster'));
+  const msg = $('assignMsg');
+  const ids = sels.map(s => s.value);
+  if (!ids.length || ids.some(v => !v)) { msg.innerHTML = '<span style="color:var(--red)">pick a master for every lot</span>'; return; }
   msg.textContent = 'Assigning…';
+  const allSame = ids.every(v => v === ids[0]);
+  const body = allSame ? { style: STYLE, master_id: ids[0] } : { style: STYLE, lots: ids.map(v => ({ master_id: v })) };
   try {
-    const r = await fetch('/pm/api/cut-plan/assign', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ style: STYLE, master_id: masterId }),
-    });
-    const d = await r.json();
-    if (d.ok) { msg.innerHTML = `<span style="color:var(--success);">✓ Assigned to ${escapeHtml(d.assigned_to)}</span>`; loadAssignPanel(); }
-    else { msg.innerHTML = `<span style="color:var(--danger);">${escapeHtml(d.error || 'failed')}</span>`; }
-  } catch (err) { msg.innerHTML = `<span style="color:var(--danger);">${escapeHtml(err.message)}</span>`; }
+    const d = await (await fetch('/pm/api/cut-plan/assign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
+    if (d.ok) { msg.innerHTML = `<span style="color:var(--green-ink)">✓ Assigned to ${escapeHtml(d.assigned_to)}</span>`; loadAssignPanel(); }
+    else { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'failed')}</span>`; }
+  } catch (err) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(err.message)}</span>`; }
 }
-
 loadAssignPanel();
 
-// ── Cut history & lot status ─────────────────────────────────────────
-const STATUS_COLOR = { done: 'var(--success)', in_progress: 'var(--warning)', not_started: '#cbd5e1' };
-
+// ── Lot journey: picker + vertical timeline + dispatch ────────────────
+let LOTS = [];
+const STAGE_STATE = { done: 'done', in_progress: 'active', not_started: 'pending' };
 async function loadLotHistory() {
-  const body = document.getElementById('lotHistoryBody');
   try {
-    const r = await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE));
-    const j = await r.json();
-    if (!j.ok) { body.innerHTML = `<div class="pm-empty">${escapeHtml(j.error || 'failed')}</div>`; return; }
-    if (!j.lots.length) { body.innerHTML = `<div class="pm-empty">No lots cut for this style yet.</div>`; return; }
-    body.innerHTML = j.lots.map(lot => {
-      const steps = lot.timeline.map(t => `
-        <div style="display:flex; flex-direction:column; align-items:center; min-width:58px;">
-          <div title="${escapeHtml(t.status)}${t.master ? ' · ' + escapeHtml(t.master) : ''}"
-               style="width:14px;height:14px;border-radius:50%;background:${STATUS_COLOR[t.status] || '#cbd5e1'};"></div>
-          <div style="font-size:0.68rem; color:var(--text-2); margin-top:3px;">${escapeHtml(t.label)}</div>
-          <div style="font-size:0.66rem; color:var(--text-3);">${t.status === 'not_started' ? '—' : (t.completed || 0)}</div>
-        </div>`).join('<div style="flex:1;height:2px;background:var(--border-2);margin:7px 2px 0;min-width:10px;"></div>');
-      const disp = lot.dispatch;
-      const dispHtml = disp.finished > 0
-        ? `<span style="color:var(--text-2);">Dispatched <strong>${disp.dispatched}</strong>/${disp.finished}${disp.in_stock > 0 ? ` · ${disp.in_stock} in stock` : ''}</span>`
-        : '';
-      return `
-        <div style="padding:0.75rem 0; border-bottom:1px solid var(--border-2);">
-          <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
-            <div><strong>${escapeHtml(lot.lot_no)}</strong>${lot.manual_lot_number ? ` <span style="color:var(--text-3);">/ ${escapeHtml(lot.manual_lot_number)}</span>` : ''}
-              <span style="color:var(--text-3); font-size:0.82rem;">· ${lot.total_pieces} pcs · ${fmtDate(lot.created_at)}</span></div>
-            <span class="pm-pill ${lot.current_stage === 'Dispatched' ? 'green' : 'amber'}">${escapeHtml(lot.current_stage)}</span>
-          </div>
-          <div style="display:flex; align-items:flex-start; margin-top:0.6rem; overflow-x:auto;">${steps}</div>
-          ${dispHtml ? `<div style="font-size:0.8rem; margin-top:0.5rem;">${dispHtml}</div>` : ''}
-        </div>`;
-    }).join('');
-  } catch (err) {
-    body.innerHTML = `<div class="pm-empty">Error: ${escapeHtml(err.message)}</div>`;
-  }
+    const j = await (await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE))).json();
+    if (!j.ok || !j.lots || !j.lots.length) { $('lotEmpty').textContent = 'No lots cut for this style yet.'; return; }
+    LOTS = j.lots;
+    $('lotPicker').innerHTML = LOTS.map((l, i) => `<option value="${i}">${escapeHtml(l.lot_no)} · ${fmtNum(l.total_pieces)} pcs · ${escapeHtml(l.current_stage)}</option>`).join('');
+    $('lotPicker').addEventListener('change', () => renderLot(Number($('lotPicker').value)));
+    renderLot(0);
+  } catch (err) { $('lotEmpty').textContent = 'Error: ' + err.message; }
+}
+function renderLot(idx) {
+  const lot = LOTS[idx]; if (!lot) return;
+  const steps = lot.timeline.map((t, i) => {
+    const state = STAGE_STATE[t.status] || 'pending';
+    const icon = state === 'done' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5"/></svg>' : (state === 'active' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/></svg>' : '');
+    const when = t.status === 'not_started' ? 'Pending' : `${escapeHtml(t.label)}${t.completed != null ? ' · ' + fmtNum(t.completed) + ' pcs' : ''}${t.master ? ' · ' + escapeHtml(t.master) : ''}`;
+    return `<div class="tstep ${state}">
+      <div class="rail"><div class="dot">${icon}</div>${i < lot.timeline.length - 1 ? '<div class="line"></div>' : ''}</div>
+      <div class="body"><div class="name">${escapeHtml(t.label)}</div><div class="when">${when}</div></div>
+    </div>`;
+  }).join('');
+  const d = lot.dispatch || {};
+  const dcells = [
+    ['Finished', d.finished || 0, ''],
+    ['Dispatched', d.dispatched || 0, 'green'],
+    ['In stock', d.in_stock || 0, ''],
+  ].map(c => `<div class="dcell"><div class="sz">${c[0]}</div><div class="qty num">${fmtNum(c[1])}</div>${c[2] ? `<div class="st">back in stock</div>` : ''}</div>`).join('');
+  $('lotJourney').innerHTML = `
+    <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start;margin-top:14px">
+      <div class="chartcard">
+        <div class="lotmeta" style="margin-top:0;margin-bottom:18px">
+          <div class="m"><div class="k">Lot</div><div class="v">${escapeHtml(lot.lot_no)}${lot.manual_lot_number ? ' / ' + escapeHtml(lot.manual_lot_number) : ''}</div></div>
+          <div class="m"><div class="k">Pieces</div><div class="v"><span class="num">${fmtNum(lot.total_pieces)}</span></div></div>
+          <div class="m"><div class="k">Stage</div><div class="v">${escapeHtml(lot.current_stage)}</div></div>
+          <div class="m"><div class="k">Cut on</div><div class="v"><span class="num">${fmtDate(lot.created_at)}</span></div></div>
+        </div>
+        <div class="timeline">${steps}</div>
+      </div>
+      <div><div class="chartcard"><h4 style="margin-bottom:4px">Dispatch breakdown</h4><div class="cap" style="margin-bottom:4px">Back as sellable stock</div><div class="dispatch">${dcells}</div></div></div>
+    </div>`;
 }
 loadLotHistory();
 </script>
 
-<%- include('partials/footer') %>
+</body>
+</html>

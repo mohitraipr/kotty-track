@@ -1,100 +1,106 @@
-<%- include('partials/header', { pageTitle: 'PM · Analytics' }) %>
-<%- include('partials/navbar', { user: user, dashboardUrl: '/pm' }) %>
+<%- include('partials/pmHead', { pageTitle: 'PM · Analytics' }) %>
+<%- include('partials/pmSidebar', { active: 'analytics', user: user }) %>
 
-<style>
-  body { background: #f5f7fb; }
-  .pm { --bg:#f5f7fb; --card:#fff; --border:#e5e8ee; --border-2:#eef0f4; --text:#0f172a; --text-2:#475569; --text-3:#94a3b8;
-        --primary:#4f46e5; --success:#16a34a; --success-s:#dcfce7; --warning:#d97706; --warning-s:#fef3c7; --danger:#dc2626; --danger-s:#fee2e2;
-        --shadow:0 1px 3px rgba(15,23,42,0.05); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:var(--text); }
-  .pm-page { max-width:1300px; margin:0 auto; padding:calc(var(--navbar-height,60px) + 1.5rem) 1rem 4rem; }
-  .pm-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; }
-  .pm-head h1 { font-size:1.5rem; font-weight:700; margin:0; }
-  .pm-back { color:var(--primary); text-decoration:none; font-weight:600; font-size:.875rem; }
-  .pm-card { background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); margin-bottom:1rem; overflow:hidden; }
-  .pm-card-head { padding:.875rem 1.125rem; border-bottom:1px solid var(--border-2); background:linear-gradient(180deg,#fafbfd,#fff); }
-  .pm-card-head h2 { font-size:1rem; font-weight:700; margin:0; }
-  .pm-card-head .hint { font-size:.78rem; color:var(--text-3); margin-top:2px; }
-  .pm-card-body { padding:1rem 1.125rem; }
-  .metrics { display:flex; gap:2rem; flex-wrap:wrap; margin-bottom:1rem; }
-  .metric .v { font-size:1.6rem; font-weight:800; letter-spacing:-.02em; }
-  .metric .k { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
-  table.t { width:100%; border-collapse:collapse; font-size:.85rem; }
-  table.t thead th { background:#f8fafc; color:var(--text-2); font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:.5rem .7rem; text-align:left; border-bottom:1px solid var(--border-2); }
-  table.t tbody td { padding:.5rem .7rem; border-bottom:1px solid var(--border-2); }
-  .pill { font-size:.7rem; font-weight:700; padding:.15rem .5rem; border-radius:999px; }
-  .pill.red,.pill.over { background:var(--danger-s); color:var(--danger); }
-  .pill.amber { background:var(--warning-s); color:var(--warning); }
-  .pill.green,.pill.under,.pill.on_target { background:var(--success-s); color:var(--success); }
-  .bars { display:flex; align-items:flex-end; gap:4px; height:90px; }
-  .bars .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; }
-  .bars .bar { width:70%; background:var(--primary); border-radius:3px 3px 0 0; min-height:2px; }
-  .bars .bar.d { background:var(--success); }
-  .bars .lbl { font-size:.62rem; color:var(--text-3); }
-  .empty { padding:1.5rem; text-align:center; color:var(--text-3); }
-</style>
+<div class="main">
+  <header class="topbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input placeholder="Search style, lot, or order…">
+    </div>
+    <div class="actions">
+      <a class="pm-btn" href="/pm/api/recommendations.csv">Export CSV</a>
+    </div>
+  </header>
 
-<div class="pm"><div class="pm-page">
-  <div class="pm-head">
-    <div><a class="pm-back" href="/pm">← Dashboard</a><h1 style="margin-top:.4rem;">Production Analytics</h1></div>
-  </div>
+  <main class="content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-h">Analytics</h1>
+        <p class="page-sub">Demand vs supply, throughput, and fabric accuracy</p>
+      </div>
+    </div>
 
-  <div class="pm-card"><div class="pm-card-head"><h2>Demand vs supply</h2><div class="hint">how fast we're selling vs what we hold + have on order</div></div><div class="pm-card-body" id="demandSupply"><div class="empty">Loading…</div></div></div>
-  <div class="pm-card"><div class="pm-card-head"><h2>Throughput &amp; TAT</h2><div class="hint">lots cut and dispatched per week · current bottleneck</div></div><div class="pm-card-body" id="throughput"><div class="empty">Loading…</div></div></div>
-  <div class="pm-card"><div class="pm-card-head"><h2>Fabric usage &amp; variance</h2><div class="hint">real consumption vs CAD standard (over = wasting fabric)</div></div><div class="pm-card-body" id="fabricVariance"><div class="empty">Loading…</div></div></div>
-  <div class="pm-card"><div class="pm-card-head"><h2>Master / cutter output</h2><div class="hint">pieces cut (30 days) and assignments per cutting master</div></div><div class="pm-card-body" id="masterOutput"><div class="empty">Loading…</div></div></div>
-</div></div>
+    <section class="statband" id="statBand">
+      <div class="stat"><div class="k">Demand / day</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">In stock</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">On order</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">Suggested cut</div><div class="v">—</div></div>
+    </section>
+
+    <div class="grid-2" style="align-items:start">
+      <div class="chartcard" id="throughput"><h4>Throughput</h4><div class="cap">Cut vs dispatched, per week</div><div class="pm-empty">Loading…</div></div>
+      <div class="chartcard" id="masterOutput"><h4>Master output</h4><div class="cap">Pieces cut &amp; assignments · 30 days</div><div class="pm-empty">Loading…</div></div>
+    </div>
+
+    <h2 class="section-h">Most under-supplied styles</h2>
+    <div class="tcard" id="demandSupply"><div class="pm-empty">Loading…</div></div>
+
+    <h2 class="section-h">Fabric variance — actual vs CAD</h2>
+    <div class="tcard" id="fabricVariance"><div class="pm-empty">Loading…</div></div>
+  </main>
+</div>
 
 <script>
-const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const cn = n => { n=Number(n)||0; if(n>=1e7)return (n/1e7).toFixed(1)+' Cr'; if(n>=1e5)return (n/1e5).toFixed(1)+' L'; if(n>=1e3)return (n/1e3).toFixed(1)+'k'; return String(Math.round(n)); };
-const fd = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cn = n => { n = Number(n) || 0; if (n >= 1e7) return (n / 1e7).toFixed(1) + ' Cr'; if (n >= 1e5) return (n / 1e5).toFixed(1) + ' L'; if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k'; return String(Math.round(n)); };
+const fd = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '';
+const STATUS = { red: 'red', amber: 'amber', green: 'green' };
 
-(async function(){
+(async function () {
   let a;
-  try { a = await (await fetch('/pm/api/analytics')).json(); } catch(e){ return; }
-  if(!a.ok) return;
+  try { a = await (await fetch('/pm/api/analytics')).json(); } catch (e) { return; }
+  if (!a.ok) return;
 
-  // Demand vs supply
-  const ds = a.demand_supply, dsEl = document.getElementById('demandSupply');
-  if(ds){
-    dsEl.innerHTML = `<div class="metrics">
-      <div class="metric"><div class="v">${cn(ds.dailyDemand)}</div><div class="k">selling / day</div></div>
-      <div class="metric"><div class="v">${cn(ds.soh)}</div><div class="k">in stock</div></div>
-      <div class="metric"><div class="v">${cn(ds.onOrder)}</div><div class="k">on order</div></div>
-      <div class="metric"><div class="v">${ds.daysCover!=null?Math.round(ds.daysCover):'—'}</div><div class="k">days of cover</div></div>
-      <div class="metric"><div class="v">${cn(ds.suggested)}</div><div class="k">suggested cut</div></div>
-    </div>
-    <table class="t"><thead><tr><th>Style (most under-supplied)</th><th>Suggested</th><th>SOH</th><th>DRR</th><th>DOH</th><th>On order</th><th></th></tr></thead><tbody>
-    ${ds.top.map(s=>`<tr><td>${esc(s.style)}</td><td><strong>${cn(s.suggested)}</strong></td><td>${cn(s.soh)}</td><td>${(s.drr||0).toFixed(1)}</td><td>${s.doh==null?'—':Math.round(s.doh)}</td><td>${cn(s.on_order)}</td><td><span class="pill ${esc(s.trigger)}">${esc(s.trigger)}</span></td></tr>`).join('')}
+  // Stat band
+  const ds = a.demand_supply;
+  if (ds) {
+    document.getElementById('statBand').innerHTML = [
+      ['Demand / day', cn(ds.dailyDemand), ''],
+      ['In stock', cn(ds.soh), ds.daysCover != null ? Math.round(ds.daysCover) + ' days of cover' : ''],
+      ['On order', cn(ds.onOrder), 'cut, not yet dispatched'],
+      ['Suggested cut', cn(ds.suggested), 'across all styles'],
+    ].map(s => `<div class="stat"><div class="k">${s[0]}</div><div class="v num">${s[1]}</div>${s[2] ? `<div class="d">${s[2]}</div>` : ''}</div>`).join('');
+  }
+
+  // Demand vs supply — under-supplied styles table
+  const dsEl = document.getElementById('demandSupply');
+  if (ds && ds.top && ds.top.length) {
+    dsEl.innerHTML = `<table class="pm-table"><thead><tr><th class="l">Style</th><th>Suggested</th><th>SOH</th><th>DRR</th><th>DOH</th><th>On order</th><th class="l" style="padding-left:20px">Status</th></tr></thead><tbody>
+      ${ds.top.map(s => `<tr><td class="l"><span class="code" style="font-weight:700">${esc(s.style)}</span></td><td style="text-align:right"><span class="num" style="font-weight:700">${cn(s.suggested)}</span></td><td style="text-align:right"><span class="num">${cn(s.soh)}</span></td><td style="text-align:right"><span class="num">${(s.drr || 0).toFixed(1)}</span></td><td style="text-align:right"><span class="num">${s.doh == null ? '—' : Math.round(s.doh)}</span></td><td style="text-align:right"><span class="num">${cn(s.on_order)}</span></td><td class="l" style="padding-left:20px"><span class="pill ${STATUS[s.trigger] || 'green'}">${esc(s.trigger)}</span></td></tr>`).join('')}
     </tbody></table>`;
-  } else dsEl.innerHTML = '<div class="empty">Unavailable.</div>';
+  } else dsEl.innerHTML = '<div class="pm-empty">Unavailable.</div>';
 
   // Throughput
   const tp = a.throughput, tpEl = document.getElementById('throughput');
-  if(tp){
-    const weeks = tp.cut_per_week; const dmap = Object.fromEntries(tp.dispatch_per_week.map(d=>[fd(d.week_start),d.pieces]));
-    const max = Math.max(1, ...weeks.map(w=>w.pieces), ...tp.dispatch_per_week.map(d=>d.pieces));
-    tpEl.innerHTML = `${tp.bottleneck?`<div class="metrics"><div class="metric"><div class="v" style="color:var(--warning)">${esc(tp.bottleneck.stage.replace('_',' '))}</div><div class="k">bottleneck · ${cn(tp.bottleneck.wip)} pcs WIP</div></div></div>`:''}
-      <div class="bars">${weeks.map(w=>{const dp=dmap[fd(w.week_start)]||0;return `<div class="col"><div style="display:flex;gap:2px;align-items:flex-end;height:70px;"><div class="bar" style="height:${Math.round(w.pieces/max*70)}px" title="cut ${w.pieces}"></div><div class="bar d" style="height:${Math.round(dp/max*70)}px" title="dispatched ${dp}"></div></div><div class="lbl">${fd(w.week_start)}</div></div>`;}).join('')}</div>
-      <div style="font-size:.75rem;color:var(--text-3);margin-top:.5rem;"><span style="color:var(--primary)">■</span> cut &nbsp; <span style="color:var(--success)">■</span> dispatched · per week</div>`;
-  } else tpEl.innerHTML = '<div class="empty">Unavailable.</div>';
-
-  // Fabric variance
-  const fv = a.fabric_variance, fvEl = document.getElementById('fabricVariance');
-  if(fv && fv.length){
-    fvEl.innerHTML = `<table class="t"><thead><tr><th>Style</th><th>Actual m/pc</th><th>CAD standard</th><th>Variance</th><th></th></tr></thead><tbody>
-    ${fv.map(r=>`<tr><td>${esc(r.style)}</td><td>${r.real.toFixed(3)}</td><td>${r.standard.toFixed(3)}</td><td>${r.variancePct>0?'+':''}${r.variancePct.toFixed(1)}%</td><td><span class="pill ${esc(r.status)}">${esc(r.status)}</span></td></tr>`).join('')}
-    </tbody></table>`;
-  } else fvEl.innerHTML = '<div class="empty">No styles with both CAD and cutting history yet. Upload more CAD sheets to populate this.</div>';
+  if (tp && tp.cut_per_week && tp.cut_per_week.length) {
+    const weeks = tp.cut_per_week.slice(-8);
+    const dmap = Object.fromEntries(tp.dispatch_per_week.map(d => [fd(d.week_start), d.pieces]));
+    const max = Math.max(1, ...weeks.map(w => w.pieces), ...tp.dispatch_per_week.map(d => d.pieces));
+    tpEl.innerHTML = `<h4>Throughput</h4><div class="cap">Cut vs dispatched, per week</div>
+      <div class="bars">${weeks.map(w => { const dp = dmap[fd(w.week_start)] || 0; return `<div class="barcol"><div class="barpair"><div class="bar cut" style="height:${Math.max(2, Math.round(w.pieces / max * 100))}%" title="cut ${w.pieces}"></div><div class="bar disp" style="height:${Math.max(2, Math.round(dp / max * 100))}%" title="dispatched ${dp}"></div></div><span class="xl">${fd(w.week_start)}</span></div>`; }).join('')}</div>
+      <div class="legend"><div class="li"><span class="sw" style="background:var(--blue)"></span>Cut</div><div class="li"><span class="sw" style="background:var(--green)"></span>Dispatched</div></div>
+      ${tp.bottleneck ? `<div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Bottleneck: ${esc(tp.bottleneck.stage.replace(/_/g, ' '))} — ${cn(tp.bottleneck.wip)} pcs WIP</div>` : ''}`;
+  } else tpEl.innerHTML = '<h4>Throughput</h4><div class="cap">Cut vs dispatched, per week</div><div class="pm-empty">Unavailable.</div>';
 
   // Master output
   const mo = a.master_output, moEl = document.getElementById('masterOutput');
-  if(mo && mo.length){
-    moEl.innerHTML = `<table class="t"><thead><tr><th>Master</th><th>Lots (30d)</th><th>Pieces (30d)</th><th>Assigned</th><th>Cut</th></tr></thead><tbody>
-    ${mo.map(m=>`<tr><td>${esc(m.username||('#'+m.master_id))}</td><td>${m.lots}</td><td><strong>${cn(m.pieces)}</strong></td><td>${m.assigned}</td><td>${m.cut}</td></tr>`).join('')}
+  if (mo && mo.length) {
+    moEl.innerHTML = `<h4>Master output</h4><div class="cap">Pieces cut &amp; assignments · 30 days</div>
+      <table class="pm-table"><thead><tr><th class="l">Master</th><th>Lots</th><th>Pieces</th><th>Assigned</th><th>Cut</th></tr></thead><tbody>
+      ${mo.map(m => `<tr><td class="l" style="font-weight:700">${esc(m.username || ('#' + m.master_id))}</td><td style="text-align:right"><span class="num">${m.lots}</span></td><td style="text-align:right"><span class="num" style="font-weight:700">${cn(m.pieces)}</span></td><td style="text-align:right"><span class="num">${m.assigned}</span></td><td style="text-align:right"><span class="num">${m.cut}</span></td></tr>`).join('')}
     </tbody></table>`;
-  } else moEl.innerHTML = '<div class="empty">Unavailable.</div>';
+  } else moEl.innerHTML = '<h4>Master output</h4><div class="cap">Pieces cut &amp; assignments · 30 days</div><div class="pm-empty">Unavailable.</div>';
+
+  // Fabric variance
+  const fv = a.fabric_variance, fvEl = document.getElementById('fabricVariance');
+  if (fv && fv.length) {
+    const vcls = { over: 'over', under: 'under', on_target: '' };
+    fvEl.innerHTML = `<table class="pm-table"><thead><tr><th class="l">Style</th><th>Actual m/pc</th><th>CAD standard</th><th>Variance</th><th class="l" style="padding-left:20px">Status</th></tr></thead><tbody>
+      ${fv.map(r => `<tr><td class="l"><span class="code" style="font-weight:700">${esc(r.style)}</span></td><td style="text-align:right"><span class="num">${r.real.toFixed(3)}</span></td><td style="text-align:right"><span class="num">${r.standard.toFixed(3)}</span></td><td style="text-align:right"><span class="num">${r.variancePct > 0 ? '+' : ''}${r.variancePct.toFixed(1)}%</span></td><td class="l" style="padding-left:20px"><span class="vpill ${vcls[r.status] || ''}">${esc((r.status || '').replace(/_/g, ' '))}</span></td></tr>`).join('')}
+    </tbody></table>`;
+  } else fvEl.innerHTML = '<div class="pm-empty">No styles with both CAD and cutting history yet. Upload more CAD sheets to populate this.</div>';
 })();
 </script>
 
-<%- include('partials/footer') %>
+</body>
+</html>
