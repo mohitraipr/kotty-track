@@ -471,3 +471,17 @@ table.pm-table strong{font-weight:700}
 .pm-drop{border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;color:var(--ink-2);background:var(--card-2);cursor:pointer;transition:.15s;display:block}
 .pm-drop:hover,.pm-drop.dragging{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink)}
 .pm-drop input{display:none}
+
+/* Style-page sales/inventory trend */
+.trend-ctrls{display:inline-flex;gap:10px;align-items:center;font-weight:500;font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg-btn{border:0;background:var(--card);color:var(--ink-2);font:inherit;font-size:12.5px;padding:7px 12px;cursor:pointer}
+.seg-btn.active{background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
+.trendgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px}
+.trendcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.trendcard .tlab{font-size:12.5px;color:var(--ink-3);font-weight:600}
+.trendcard .tval{font-size:24px;font-weight:700;margin-top:4px}
+.trendcard .spark{display:block;width:100%;height:34px;margin-top:10px;overflow:visible}
+.trendcard .spark polyline{fill:none;stroke:var(--blue);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.trendcard .spark .dot{stroke:none;fill:var(--blue-ink)}
+@media(max-width:720px){.trendgrid{grid-template-columns:1fr}}
