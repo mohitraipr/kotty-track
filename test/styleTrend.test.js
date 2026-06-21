@@ -43,3 +43,34 @@ test('buildTrendBuckets: empty inputs → empty arrays', () => {
   const r = buildTrendBuckets({ salesDaily: [], invDaily: [], granularity: 'weekly' });
   assert.deepStrictEqual(r, { sales: [], inventory: [] });
 });
+
+const { computeStyleTrend } = require('../utils/styleTrend.js');
+
+function fakePool(data) {
+  return {
+    async query(sql) {
+      if (/FROM ee_sales_daily[\s\S]*UNION/.test(sql) || /SELECT DISTINCT sku FROM \(/.test(sql)) return [data.skuRows || []];
+      if (/FROM ee_sales_daily/.test(sql)) return [data.salesRows || []];
+      if (/FROM ee_inventory_daily_snapshot/.test(sql)) return [data.invRows || []];
+      throw new Error('unexpected query: ' + sql);
+    },
+  };
+}
+
+test('computeStyleTrend: resolves SKUs exactly via deriveStyle and buckets', async () => {
+  const pool = fakePool({
+    // KTTTOP374L belongs to style KTTTOP374; KTTTOP37XL belongs to KTTTOP37 (sibling) — must be excluded
+    skuRows: [{ sku: 'KTTTOP374L' }, { sku: 'KTTTOP374M' }, { sku: 'KTTTOP37XL' }],
+    salesRows: [{ date: '2026-06-01', qty: 4 }, { date: '2026-06-02', qty: 6 }],
+    invRows: [{ date: '2026-06-01', qty: 50 }, { date: '2026-06-02', qty: 45 }],
+  });
+  const r = await computeStyleTrend(pool, { style: 'KTTTOP374', days: 30, granularity: 'daily' });
+  assert.deepStrictEqual(r.sales, [{ bucket: '2026-06-01', qty: 4 }, { bucket: '2026-06-02', qty: 6 }]);
+  assert.deepStrictEqual(r.inventory, [{ bucket: '2026-06-01', qty: 50 }, { bucket: '2026-06-02', qty: 45 }]);
+});
+
+test('computeStyleTrend: no matching SKUs → empty', async () => {
+  const pool = fakePool({ skuRows: [{ sku: 'KTTTOP37XL' }] }); // only the sibling style
+  const r = await computeStyleTrend(pool, { style: 'KTTTOP374', days: 30, granularity: 'daily' });
+  assert.deepStrictEqual(r, { sales: [], inventory: [] });
+});

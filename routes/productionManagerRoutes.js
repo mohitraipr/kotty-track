@@ -20,6 +20,7 @@ const { resolveSizeSku, loadResolutionMap, loadCanonSet } = require('../utils/on
 const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
+const { computeStyleTrend } = require('../utils/styleTrend');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -826,6 +827,18 @@ router.get('/api/audit', async (req, res) => {
     res.json({ ok: true, items, summary });
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') return res.json({ ok: true, items: [], summary: { not_reflected: 0, partial: 0, pending: 0, reflected: 0 } });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /pm/api/style-trend?style=&days=&granularity= — per-style sales + inventory trend.
+router.get('/api/style-trend', async (req, res) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 30));
+    const granularity = ['daily', 'weekly', 'monthly'].includes(req.query.granularity) ? req.query.granularity : 'daily';
+    const out = await computeStyleTrend(pool, { style: req.query.style, days, granularity });
+    res.json({ ok: true, style: String(req.query.style || ''), days, granularity, ...out });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });

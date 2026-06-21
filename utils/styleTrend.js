@@ -35,4 +35,51 @@ function buildTrendBuckets({ salesDaily, invDaily, granularity }) {
   return { sales: toSorted(salesMap), inventory: toSorted(invMap) };
 }
 
-module.exports = { trendBucketKey, buildTrendBuckets };
+const { deriveStyle } = require('./easyecomAnalytics');
+
+const toYmd = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d || '').slice(0, 10));
+
+async function computeStyleTrend(pool, { style, days, granularity } = {}) {
+  const st = String(style || '').trim().toUpperCase();
+  if (!st) return { sales: [], inventory: [] };
+  const n = Math.min(90, Math.max(1, Number(days) || 30));
+  const gran = ['daily', 'weekly', 'monthly'].includes(granularity) ? granularity : 'daily';
+  try {
+    const [skuRows] = await pool.query(
+      `SELECT DISTINCT sku FROM (
+         SELECT sku FROM ee_sales_daily
+           WHERE sku LIKE CONCAT(?, '%') AND sale_date >= CURDATE() - INTERVAL ? DAY
+         UNION
+         SELECT sku FROM ee_inventory_daily_snapshot
+           WHERE sku LIKE CONCAT(?, '%') AND snapshot_date >= CURDATE() - INTERVAL ? DAY
+       ) u`,
+      [st, n, st, n]
+    );
+    const skus = skuRows.map((r) => r.sku).filter((s) => deriveStyle(s) === st);
+    if (!skus.length) return { sales: [], inventory: [] };
+
+    const [salesRows] = await pool.query(
+      `SELECT sale_date AS date, SUM(qty) AS qty FROM ee_sales_daily
+        WHERE sku IN (?) AND source = 'mini_sales_report' AND sale_date >= CURDATE() - INTERVAL ? DAY
+        GROUP BY sale_date ORDER BY sale_date`,
+      [skus, n]
+    );
+    const [invRows] = await pool.query(
+      `SELECT snapshot_date AS date, SUM(qty) AS qty FROM ee_inventory_daily_snapshot
+        WHERE sku IN (?) AND snapshot_date >= CURDATE() - INTERVAL ? DAY
+        GROUP BY snapshot_date ORDER BY snapshot_date`,
+      [skus, n]
+    );
+
+    return buildTrendBuckets({
+      salesDaily: salesRows.map((r) => ({ date: toYmd(r.date), qty: Number(r.qty) || 0 })),
+      invDaily: invRows.map((r) => ({ date: toYmd(r.date), qty: Number(r.qty) || 0 })),
+      granularity: gran,
+    });
+  } catch (err) {
+    if (err.code === 'ER_NO_SUCH_TABLE') return { sales: [], inventory: [] };
+    throw err;
+  }
+}
+
+module.exports = { trendBucketKey, buildTrendBuckets, computeStyleTrend };
