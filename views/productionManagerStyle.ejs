@@ -79,7 +79,7 @@
     </div>
 
     <!-- Lot journey -->
-    <h2 class="section-h">Lot journey <select class="select" id="lotPicker" style="height:36px;min-width:220px;font-size:13px"></select></h2>
+    <h2 class="section-h">Lot journey <select class="select" id="lotPicker" style="height:36px;min-width:220px;font-size:13px"></select> <span class="link" id="lotCount"></span></h2>
     <div id="lotJourney"><div class="tcard" style="padding:0"><div class="pm-empty" id="lotEmpty">Loading lot history…</div></div></div>
 
     <!-- Approve & assign (collapsed) -->
@@ -146,7 +146,9 @@ async function loadSizes() {
     // worst trigger drives the header chip
     const order = { red:0, amber:1, green:2 };
     let worst = 'green';
-    SIZES.forEach(r => { const t = r.trigger || 'green'; if (order[t] < order[worst]) worst = t; });
+    // Only sizes that still need cutting (undercut) drive the urgency chip — a size
+    // covered by in-production should not show "Cut now" even if its days-left is low.
+    SIZES.forEach(r => { if ((Number(r.suggested_cut_qty) || 0) <= 0) return; const t = r.trigger || 'green'; if (order[t] < order[worst]) worst = t; });
     const st = STATUS[worst];
     const chip = $('styleTrigger'); chip.className = 'title-chip ' + st[0]; chip.textContent = st[1];
     // Suggested cut is the sum of per-size recommendations — the authoritative number
@@ -331,6 +333,10 @@ async function loadLotHistory() {
     const j = await (await fetch('/pm/api/style-lots?style=' + encodeURIComponent(STYLE))).json();
     if (!j.ok || !j.lots || !j.lots.length) { $('lotEmpty').textContent = 'No lots cut for this style yet.'; return; }
     LOTS = j.lots;
+    const total = Number(j.total_lots) || LOTS.length;
+    const shownPcs = LOTS.reduce((s, l) => s + (Number(l.total_pieces) || 0), 0);
+    const cntEl = $('lotCount');
+    if (cntEl) cntEl.textContent = (total > LOTS.length ? 'showing ' + LOTS.length + ' of ' + total + ' lots' : total + ' lot' + (total === 1 ? '' : 's')) + ' · ' + fmtNum(shownPcs) + ' pcs shown';
     $('lotPicker').innerHTML = LOTS.map((l, i) => `<option value="${i}">${escapeHtml(l.lot_no)}${l.manual_lot_number ? ' (' + escapeHtml(l.manual_lot_number) + ')' : ''} · ${fmtNum(l.total_pieces)} pcs · ${escapeHtml(l.current_stage)}</option>`).join('');
     $('lotPicker').addEventListener('change', () => renderLot(Number($('lotPicker').value)));
     renderLot(0);

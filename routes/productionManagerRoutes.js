@@ -737,12 +737,13 @@ router.get('/api/style-lots', async (req, res) => {
       `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.total_pieces, cl.flow_type, cl.created_at,
               u.username AS cutter_name
          FROM cutting_lots cl LEFT JOIN users u ON u.id = cl.user_id
-        WHERE cl.sku = ? ORDER BY cl.created_at DESC LIMIT 8`,
+        WHERE cl.sku = ? ORDER BY cl.created_at DESC LIMIT 50`,
       [style]
     );
+    const [[cnt]] = await pool.query('SELECT COUNT(*) AS n FROM cutting_lots WHERE sku = ?', [style]);
     const journeys = [];
     for (const lot of lots) journeys.push(await lotJourneyCompact(lot));
-    res.json({ ok: true, style, lots: journeys });
+    res.json({ ok: true, style, total_lots: Number(cnt.n) || journeys.length, lots: journeys });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
