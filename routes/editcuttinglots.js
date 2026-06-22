@@ -162,18 +162,18 @@ router.get('/editcuttinglots/lot-list', isAuthenticated, isOperator, async (req,
     let searchTerm = '';
     if (search && search.trim() !== '') {
       searchTerm = '%' + search.trim() + '%';
-      countQuery += ` AND (lot_no LIKE ? OR sku LIKE ? OR fabric_type LIKE ? OR remark LIKE ?)`;
-      countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      countQuery += ` AND (lot_no LIKE ? OR manual_lot_number LIKE ? OR sku LIKE ? OR fabric_type LIKE ? OR remark LIKE ?)`;
+      countParams.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     // Build main query with search and pagination.
-    let query = `SELECT id, lot_no, sku, fabric_type, remark, total_pieces, created_at
+    let query = `SELECT id, lot_no, manual_lot_number, sku, fabric_type, remark, total_pieces, created_at
                  FROM cutting_lots
                  WHERE user_id = ? `;
     let queryParams = [managerId];
     if (search && search.trim() !== '') {
-      query += ` AND (lot_no LIKE ? OR sku LIKE ? OR fabric_type LIKE ? OR remark LIKE ?) `;
-      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      query += ` AND (lot_no LIKE ? OR manual_lot_number LIKE ? OR sku LIKE ? OR fabric_type LIKE ? OR remark LIKE ?) `;
+      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
     query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     queryParams.push(limit, offset);
@@ -192,6 +192,7 @@ router.get('/editcuttinglots/lot-list', isAuthenticated, isOperator, async (req,
         <thead>
           <tr>
             <th>Lot Number</th>
+            <th>Manual Lot #</th>
             <th>SKU</th>
             <th>Fabric Type</th>
             <th>Remark</th>
@@ -202,11 +203,12 @@ router.get('/editcuttinglots/lot-list', isAuthenticated, isOperator, async (req,
         </thead>
         <tbody>`;
     if (lots.length === 0) {
-      html += '<tr><td colspan="7">No cutting lots found for this master.</td></tr>';
+      html += '<tr><td colspan="8">No cutting lots found for this master.</td></tr>';
     } else {
       lots.forEach(lot => {
         html += `<tr data-lot-id="${lot.id}">
           <td>${lot.lot_no}</td>
+          <td>${lot.manual_lot_number || ''}</td>
           <td>${lot.sku}</td>
           <td>${lot.fabric_type}</td>
           <td>${lot.remark || ''}</td>
@@ -247,7 +249,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
   try {
     const [[lotRows], [sizes], [rolls], [assignments], [stitchingUsers], [downstream]] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.lot_no, l.sku, l.fabric_type, l.remark, l.total_pieces, l.table_length, l.flow_type, l.created_at, u.username AS created_by
+        `SELECT l.id, l.lot_no, l.manual_lot_number, l.sku, l.fabric_type, l.remark, l.total_pieces, l.table_length, l.flow_type, l.created_at, u.username AS created_by
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ? AND l.user_id = ?`,
@@ -367,6 +369,10 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                   <div class="mb-3">
                     <label class="form-label">Lot Number</label>
                     <input type="text" class="form-control" name="lot_no" value="${lot.lot_no}" readonly>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Manual Lot Number</label>
+                    <input type="text" class="form-control" name="manual_lot_number" value="${String(lot.manual_lot_number || '').replace(/"/g, '&quot;')}" maxlength="64" placeholder="Manual lot number">
                   </div>
                   <div class="mb-3">
                     <label class="form-label">SKU</label>
@@ -551,6 +557,8 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   const { managerId, lotId } = req.query;
   if (!managerId || !lotId) return res.status(400).json({ success: false, error: 'Manager and Lot IDs required.' });
   const { sku, fabric_type, remark } = req.body;
+  // Manual lot number is operator-editable; store NULL when cleared.
+  const manualLotNumber = (req.body.manual_lot_number || '').trim() || null;
   let { size_id, pattern_count, size_label, orig_size_label, size_pieces } = req.body;
   if (!Array.isArray(size_id)) {
     size_id = [size_id];
@@ -575,8 +583,8 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   try {
     await conn.beginTransaction();
     await conn.query(
-      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ? WHERE id = ?`,
-      [sku, fabric_type, remark, lotId]
+      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ?, manual_lot_number = ? WHERE id = ?`,
+      [sku, fabric_type, remark, manualLotNumber, lotId]
     );
 
     // Need the lot_no to cascade size renames into the legacy data tables.
