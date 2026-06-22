@@ -29,7 +29,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
           View on Myntra
         </a>
-        <button class="btn primary" id="approveTop" onclick="document.getElementById('assignSection').scrollIntoView({behavior:'smooth'})">
+        <button class="btn primary" id="approveTop" onclick="(function(){var d=document.getElementById('assignSection');d.open=true;d.scrollIntoView({behavior:'smooth'});})()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
           Approve &amp; assign
         </button>
@@ -78,15 +78,17 @@
       </div>
     </div>
 
-    <!-- Approve & assign -->
-    <h2 class="section-h" id="assignSection">Approve &amp; assign cut <span class="link" id="planSummary"></span></h2>
-    <div class="tcard" style="padding:0">
-      <div id="assignBody" style="padding:20px"><div class="pm-empty">Loading suggested cut…</div></div>
-    </div>
-
     <!-- Lot journey -->
     <h2 class="section-h">Lot journey <select class="select" id="lotPicker" style="height:36px;min-width:220px;font-size:13px"></select></h2>
     <div id="lotJourney"><div class="tcard" style="padding:0"><div class="pm-empty" id="lotEmpty">Loading lot history…</div></div></div>
+
+    <!-- Approve & assign (collapsed) -->
+    <details class="pm-collapse" id="assignSection">
+      <summary>Approve &amp; assign cut <span class="link" id="planSummary"></span></summary>
+      <div class="tcard" style="padding:0;border:0">
+        <div id="assignBody" style="padding:20px"><div class="pm-empty">Loading suggested cut…</div></div>
+      </div>
+    </details>
   </main>
 </div>
 
