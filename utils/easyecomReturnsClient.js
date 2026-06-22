@@ -895,10 +895,47 @@ function parseCsv(text) {
 }
 
 // POST /reports/queue — async report generation. Returns reportId.
+// EasyEcom rate-limits its report endpoints (HTTP 429) when many reports are
+// queued in a burst — which is exactly what the nightly pull does (snapshot +
+// aging + stock_status + mini_sales across 3 warehouses). Two guards:
+//   1) a global minimum gap between ANY report-queue calls (stagger the burst);
+//   2) exponential backoff + retry on 429 (honouring Retry-After when present).
+const REPORT_QUEUE_MIN_GAP_MS = Number(global.env?.EASYECOM_REPORT_GAP_MS || process.env.EASYECOM_REPORT_GAP_MS || 4000);
+let _lastReportQueueAt = 0;
+async function _staggerReportQueue() {
+  const wait = _lastReportQueueAt + REPORT_QUEUE_MIN_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  _lastReportQueueAt = Date.now();
+}
+
+// Retry a report HTTP call on 429 with exponential backoff (5s,10s,20s,40s,60s cap).
+async function withReport429Retry(label, fn, maxAttempts = 5) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const is429 = err.response?.status === 429;
+      if (is429 && attempt < maxAttempts) {
+        const retryAfter = Number(err.response?.headers?.['retry-after']);
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : Math.min(60000, 5000 * Math.pow(2, attempt - 1));
+        console.warn(`[easyecom] 429 on ${label} (attempt ${attempt}/${maxAttempts}); backing off ${Math.round(backoff / 1000)}s`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 async function queueReport(reportType, params = {}, warehouse = 'faridabad') {
   const api = await ensureAxiosForWarehouse(warehouse, 60000);
   const body = Object.keys(params).length ? { reportType, params } : { reportType };
-  const resp = await api.post('/reports/queue', body);
+  const resp = await withReport429Retry(`reports/queue ${reportType}/${warehouse}`, async () => {
+    await _staggerReportQueue();
+    return api.post('/reports/queue', body);
+  });
   const reportId = resp.data?.data?.reportId || resp.data?.reportId;
   if (!reportId) throw new Error(`Queue failed for ${reportType}: ${JSON.stringify(resp.data).slice(0,200)}`);
   return String(reportId);
@@ -936,7 +973,8 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
   if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
   // Download. EasyEcom returns the report as raw CSV, a ZIP (PK magic), or a JSON
   // envelope { data: { downloadUrl } } pointing at an S3 file (usually a ZIP).
-  const dl = await api.get('/reports/download', { params: { reportId }, responseType: 'arraybuffer' });
+  const dl = await withReport429Retry(`reports/download ${reportId}/${warehouse}`,
+    () => api.get('/reports/download', { params: { reportId }, responseType: 'arraybuffer' }));
   let buf = Buffer.from(dl.data);
   if (buf.slice(0, 1).toString() === '{') {
     try {
