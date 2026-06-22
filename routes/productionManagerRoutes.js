@@ -768,10 +768,13 @@ router.get('/api/recommendations.csv', async (req, res) => {
     const style = String(req.query.style || '').trim();
     const rows = await safeCall('getCuttingRecommendations', pool, { periodKey: '30d' });
     const filtered = style ? (rows || []).filter(r => r.style === style) : (rows || []);
+    // Attach the per-style Myntra product link (same source the dashboard uses).
+    const links = await myntraByStyles([...new Set(filtered.map(r => r.style))]);
+    for (const r of filtered) r.myntra_link = links[r.style] || '';
     const cols = [
       'style', 'sku', 'size', 'soh', 'drr', 'selling_days', 'calendar_days',
       'doh', 'lead_time', 'safety_days', 'open_lot_qty', 'upcoming_po_qty',
-      'suggested_cut_qty', 'trigger', 'dataQuality',
+      'suggested_cut_qty', 'trigger', 'dataQuality', 'myntra_link',
     ];
     const lines = [cols.join(',')];
     for (const r of filtered) lines.push(cols.map(c => csvEscape(r[c])).join(','));
