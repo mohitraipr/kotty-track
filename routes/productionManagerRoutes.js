@@ -713,10 +713,16 @@ async function lotJourneyCompact(lot) {
   const dispatchedBySize = {};
   for (const r of dr) dispatchedBySize[String(r.size_label || '').trim().toUpperCase()] = Number(r.qty) || 0;
   const dispatch = dispatchSummary(finished, dispatchedBySize);
+  const [szRows] = await pool.query(
+    'SELECT size_label, COALESCE(total_pieces, 0) AS pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? ORDER BY total_pieces DESC, size_label',
+    [lot.id]
+  );
+  const sizes = szRows.map((r) => ({ size_label: String(r.size_label || ''), pieces: Number(r.pieces) || 0 }));
   return {
     lot_no: lot.lot_no, manual_lot_number: lot.manual_lot_number || '', total_pieces: lot.total_pieces,
     created_at: lot.created_at, flow_type: lot.flow_type || 'unknown',
     current_stage: dispatch.complete ? 'Dispatched' : currentStage(timeline),
+    sizes,
     timeline, dispatch: { finished: dispatch.totalFinished, dispatched: dispatch.totalDispatched, in_stock: dispatch.remaining },
   };
 }

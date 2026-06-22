@@ -353,6 +353,11 @@ function renderLot(idx) {
     ['Dispatched', d.dispatched || 0, 'green'],
     ['In stock', d.in_stock || 0, ''],
   ].map(c => `<div class="dcell"><div class="sz">${c[0]}</div><div class="qty num">${fmtNum(c[1])}</div>${c[2] ? `<div class="st">back in stock</div>` : ''}</div>`).join('');
+  const szchips = (lot.sizes && lot.sizes.length)
+    ? '<div class="lotsz"><div class="cap" style="margin:2px 0 7px">Sizes in this lot</div><div class="szrow">'
+      + lot.sizes.map(s => '<div class="szchip"><span class="s">' + escapeHtml(s.size_label) + '</span><span class="q num">' + fmtNum(s.pieces) + '</span></div>').join('')
+      + '</div></div>'
+    : '';
   $('lotJourney').innerHTML = `
     <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start;margin-top:14px">
       <div class="chartcard">
@@ -363,6 +368,7 @@ function renderLot(idx) {
           <div class="m"><div class="k">Stage</div><div class="v">${escapeHtml(lot.current_stage)}</div></div>
           <div class="m"><div class="k">Cut on</div><div class="v"><span class="num">${fmtDate(lot.created_at)}</span></div></div>
         </div>
+        ${szchips}
         <div class="timeline">${steps}</div>
       </div>
       <div><div class="chartcard"><h4 style="margin-bottom:4px">Dispatch breakdown</h4><div class="cap" style="margin-bottom:4px">Back as sellable stock</div><div class="dispatch">${dcells}</div></div></div>
