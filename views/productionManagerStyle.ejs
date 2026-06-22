@@ -29,7 +29,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
           View on Myntra
         </a>
-        <button class="btn primary" id="approveTop" onclick="document.getElementById('assignSection').scrollIntoView({behavior:'smooth'})">
+        <button class="btn primary" id="approveTop" onclick="(function(){var d=document.getElementById('assignSection');d.open=true;d.scrollIntoView({behavior:'smooth'});})()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
           Approve &amp; assign
         </button>
@@ -47,6 +47,22 @@
     <h2 class="section-h">Size breakdown <span class="link" id="sizeQuality"></span></h2>
     <div class="sizegrid" id="sizeGrid"><div class="pm-empty">Loading sizes…</div></div>
 
+    <!-- Sales & inventory trend -->
+    <h2 class="section-h">Sales &amp; inventory
+      <span class="trend-ctrls">
+        <input type="number" id="trendDays" min="1" max="90" value="30" class="select" style="width:74px;height:34px" />
+        <span class="seg" id="trendGran">
+          <button type="button" data-g="daily" class="seg-btn active">Daily</button>
+          <button type="button" data-g="weekly" class="seg-btn">Weekly</button>
+          <button type="button" data-g="monthly" class="seg-btn">Monthly</button>
+        </span>
+      </span>
+    </h2>
+    <div class="trendgrid" id="trendBody">
+      <div class="trendcard"><div class="tlab">Units sold</div><div class="tval num" id="trendSalesVal">—</div><div id="trendSalesSpark"></div></div>
+      <div class="trendcard"><div class="tlab">Inventory (SOH)</div><div class="tval num" id="trendInvVal">—</div><div id="trendInvSpark"></div></div>
+    </div>
+
     <!-- Fabrication & BOM -->
     <div class="panel" id="fabPanel" style="display:none">
       <div class="panel-head"><h4>Fabrication &amp; BOM</h4><span class="pill flat">Standard spec</span></div>
@@ -62,15 +78,17 @@
       </div>
     </div>
 
-    <!-- Approve & assign -->
-    <h2 class="section-h" id="assignSection">Approve &amp; assign cut <span class="link" id="planSummary"></span></h2>
-    <div class="tcard" style="padding:0">
-      <div id="assignBody" style="padding:20px"><div class="pm-empty">Loading suggested cut…</div></div>
-    </div>
-
     <!-- Lot journey -->
     <h2 class="section-h">Lot journey <select class="select" id="lotPicker" style="height:36px;min-width:220px;font-size:13px"></select></h2>
     <div id="lotJourney"><div class="tcard" style="padding:0"><div class="pm-empty" id="lotEmpty">Loading lot history…</div></div></div>
+
+    <!-- Approve & assign (collapsed) -->
+    <details class="pm-collapse" id="assignSection">
+      <summary>Approve &amp; assign cut <span class="link" id="planSummary"></span></summary>
+      <div class="tcard" style="padding:0;border:0">
+        <div id="assignBody" style="padding:20px"><div class="pm-empty">Loading suggested cut…</div></div>
+      </div>
+    </details>
   </main>
 </div>
 
@@ -229,6 +247,47 @@ async function doAssign() {
 }
 // Init: sizes first (sets Suggested cut), then the CAD plan / assign panel.
 (async () => { await loadSizes(); loadAssignPanel(); })();
+
+// ── Sales & inventory trend ───────────────────────────────────────────
+function trendSpark(series) {
+  const vals = (series || []).map((p) => Number(p.qty) || 0);
+  if (!vals.length) return '<div class="pm-empty" style="padding:8px 0">No data in range</div>';
+  const max = Math.max.apply(null, vals.concat([1]));
+  const min = Math.min.apply(null, vals.concat([0]));
+  const span = (max - min) || 1;
+  const pts = vals.map((v, i) => {
+    const x = vals.length === 1 ? 0 : (i / (vals.length - 1)) * 100;
+    const y = 30 - ((v - min) / span) * 28 - 1;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  const last = pts[pts.length - 1].split(',');
+  return '<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="' + pts.join(' ') + '"/><circle class="dot" cx="' + last[0] + '" cy="' + last[1] + '" r="2.4"/></svg>';
+}
+let trendGran = 'daily';
+async function loadTrend() {
+  const days = Math.min(90, Math.max(1, Number($('trendDays').value) || 30));
+  try {
+    const j = await (await fetch('/pm/api/style-trend?style=' + encodeURIComponent(STYLE) + '&days=' + days + '&granularity=' + trendGran)).json();
+    const sales = (j && j.sales) || [];
+    const inv = (j && j.inventory) || [];
+    $('trendSalesVal').textContent = sales.reduce((s, p) => s + (Number(p.qty) || 0), 0).toLocaleString('en-IN');
+    $('trendInvVal').textContent = inv.length ? Number(inv[inv.length - 1].qty).toLocaleString('en-IN') : '—';
+    $('trendSalesSpark').innerHTML = trendSpark(sales);
+    $('trendInvSpark').innerHTML = trendSpark(inv);
+  } catch (e) {
+    $('trendSalesSpark').innerHTML = '<div class="pm-empty" style="padding:8px 0">Couldn\'t load</div>';
+    $('trendInvSpark').innerHTML = '';
+  }
+}
+$('trendDays').addEventListener('input', () => { clearTimeout(window.__trendT); window.__trendT = setTimeout(loadTrend, 250); });
+$('trendGran').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-g]');
+  if (!b) return;
+  trendGran = b.dataset.g;
+  $('trendGran').querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('active', x === b));
+  loadTrend();
+});
+loadTrend();
 
 // ── Lot journey: picker + vertical timeline + dispatch ────────────────
 let LOTS = [];

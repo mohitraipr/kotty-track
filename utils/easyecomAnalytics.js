@@ -992,4 +992,6 @@ module.exports = {
   getCuttingRecommendations,
   getDeadStock,
   recomputeAllHealth,
+  deriveStyle,
+  deriveSize,
 };
