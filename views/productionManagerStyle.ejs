@@ -364,7 +364,18 @@ function renderLot(idx) {
       + lot.sizes.map(s => '<div class="szchip"><span class="s">' + escapeHtml(s.size_label) + '</span><span class="q num">' + fmtNum(s.pieces) + '</span></div>').join('')
       + '</div></div>'
     : '';
+  // Who currently holds the lot — the master on the active (in-progress) stage.
+  const activeStep = (lot.timeline || []).find(t => t.status === 'in_progress');
+  let holderHtml;
+  if (lot.current_stage === 'Dispatched') {
+    holderHtml = '<div class="lotholder done"><span class="hk">Status</span><span class="hv">Dispatched · back as sellable stock</span></div>';
+  } else if (activeStep && activeStep.master) {
+    holderHtml = '<div class="lotholder"><span class="hk">Currently with</span><span class="hv">' + escapeHtml(activeStep.master) + ' <small>· ' + escapeHtml(activeStep.label) + '</small></span></div>';
+  } else {
+    holderHtml = '<div class="lotholder wait"><span class="hk">Awaiting</span><span class="hv">' + escapeHtml(lot.current_stage || '—') + ' <small>· not started</small></span></div>';
+  }
   $('lotJourney').innerHTML = `
+    ${holderHtml}
     <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start;margin-top:14px">
       <div class="chartcard">
         <div class="lotmeta" style="margin-top:0;margin-bottom:18px">
