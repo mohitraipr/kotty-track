@@ -249,7 +249,7 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
   try {
     const [[lotRows], [sizes], [rolls], [assignments], [stitchingUsers], [downstream]] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.lot_no, l.manual_lot_number, l.sku, l.fabric_type, l.remark, l.total_pieces, l.table_length, l.flow_type, l.created_at, u.username AS created_by
+        `SELECT l.id, l.lot_no, l.manual_lot_number, l.sku, l.fabric_type, l.remark, l.total_pieces, l.table_length, l.manual_cutting_date, l.flow_type, l.created_at, u.username AS created_by
          FROM cutting_lots l
          JOIN users u ON l.user_id = u.id
          WHERE l.id = ? AND l.user_id = ?`,
@@ -373,6 +373,10 @@ router.get('/editcuttinglots/edit-form', isAuthenticated, isOperator, async (req
                   <div class="mb-3">
                     <label class="form-label">Manual Lot Number</label>
                     <input type="text" class="form-control" name="manual_lot_number" value="${String(lot.manual_lot_number || '').replace(/"/g, '&quot;')}" maxlength="64" placeholder="Manual lot number">
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Manual Cutting Date</label>
+                    <input type="date" class="form-control" name="manual_cutting_date" value="${lot.manual_cutting_date ? (lot.manual_cutting_date instanceof Date ? lot.manual_cutting_date.toISOString().slice(0, 10) : String(lot.manual_cutting_date).slice(0, 10)) : ''}">
                   </div>
                   <div class="mb-3">
                     <label class="form-label">SKU</label>
@@ -559,6 +563,8 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   const { sku, fabric_type, remark } = req.body;
   // Manual lot number is operator-editable; store NULL when cleared.
   const manualLotNumber = (req.body.manual_lot_number || '').trim() || null;
+  // Manual cutting date (actual cut day, may differ from created_at); NULL when cleared.
+  const manualCuttingDate = (req.body.manual_cutting_date || '').trim() || null;
   let { size_id, pattern_count, size_label, orig_size_label, size_pieces } = req.body;
   if (!Array.isArray(size_id)) {
     size_id = [size_id];
@@ -583,8 +589,8 @@ router.post('/editcuttinglots/update', isAuthenticated, isOperator, upload.none(
   try {
     await conn.beginTransaction();
     await conn.query(
-      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ?, manual_lot_number = ? WHERE id = ?`,
-      [sku, fabric_type, remark, manualLotNumber, lotId]
+      `UPDATE cutting_lots SET sku = ?, fabric_type = ?, remark = ?, manual_lot_number = ?, manual_cutting_date = ? WHERE id = ?`,
+      [sku, fabric_type, remark, manualLotNumber, manualCuttingDate, lotId]
     );
 
     // Need the lot_no to cascade size renames into the legacy data tables.

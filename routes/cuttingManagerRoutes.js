@@ -215,6 +215,7 @@ router.post(
       fabric_type,
       remark,
       table_length,
+      manual_cutting_date,
       size_label,
       pattern_count,
       roll_no,
@@ -262,9 +263,9 @@ router.post(
         const [result] = await conn.query(
           `
           INSERT INTO cutting_lots
-            (lot_no, manual_lot_number, sku, fabric_type, remark, table_length, image_url, user_id, total_pieces, flow_type)
+            (lot_no, manual_lot_number, sku, fabric_type, remark, table_length, manual_cutting_date, image_url, user_id, total_pieces, flow_type)
           VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
         `,
           [
             lot_no,
@@ -273,6 +274,7 @@ router.post(
             fabric_type,
             remark || null,
             table_length ? parseFloat(table_length) : null,
+            (manual_cutting_date && String(manual_cutting_date).trim()) ? String(manual_cutting_date).trim() : null,
             image ? image.path : null,
             userId,
             flowType,
