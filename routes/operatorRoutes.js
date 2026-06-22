@@ -1142,6 +1142,9 @@ function buildEnhancedRow({
     createdAt: lot.created_at
       ? new Date(lot.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')
       : '',
+    manualCuttingDate: lot.manual_cutting_date
+      ? new Date(lot.manual_cutting_date).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')
+      : '',
     daysSinceCreated: daysSince(lot.created_at),
     totalCut,
     remark: lot.remark || '',
@@ -1226,6 +1229,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'SKU',                 key: 'sku',               width: 22 },
   { header: 'Lot Type',            key: 'lotType',           width: 9  },
   { header: 'Created At',          key: 'createdAt',         width: 12 },
+  { header: 'Manual Cutting Date', key: 'manualCuttingDate', width: 14 },
   { header: 'Days Since Created',  key: 'daysSinceCreated',  width: 10 },
   { header: 'Total Cut',           key: 'totalCut',          width: 10 },
   { header: 'Current Stage',       key: 'currentStage',      width: 14 },
@@ -1989,7 +1993,7 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
 
     // 2) Fetch all lots (ONE QUERY)
     const baseQuery = `
-      SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cl.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+      SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cl.total_pieces, cl.created_at, cl.manual_cutting_date, cl.remark, cl.flow_type,
              u.username AS created_by, u.is_denim_cutter
         FROM cutting_lots cl
         JOIN users u ON cl.user_id = u.id
