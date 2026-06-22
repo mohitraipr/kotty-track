@@ -512,3 +512,13 @@ table.pm-table strong{font-weight:700}
 .szchip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:9px;padding:5px 10px;background:var(--card-2)}
 .szchip .s{font-size:12px;font-weight:700;color:var(--ink)}
 .szchip .q{font-size:13px;font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+/* Lot-journey: who currently holds the lot */
+.lotholder{display:flex;align-items:center;gap:12px;background:var(--blue-bg);border:1px solid var(--line);border-radius:11px;padding:11px 16px;margin-top:14px}
+.lotholder .hk{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--blue-ink)}
+.lotholder .hv{font-size:15px;font-weight:700;color:var(--ink)}
+.lotholder .hv small{font-weight:500;color:var(--ink-2)}
+.lotholder.wait{background:var(--amber-bg)}
+.lotholder.wait .hk{color:var(--amber-ink)}
+.lotholder.done{background:var(--green-bg)}
+.lotholder.done .hk{color:var(--green-ink)}
