@@ -505,3 +505,10 @@ table.pm-table strong{font-weight:700}
 .ouchip.over::before{background:var(--red)}
 .ouchip.covered{background:var(--green-bg);color:var(--green-ink)}
 .ouchip.covered::before{background:var(--green)}
+
+/* Lot-journey: sizes in the actual lot */
+.lotsz{margin:0 0 16px}
+.lotsz .szrow{display:flex;flex-wrap:wrap;gap:8px}
+.szchip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:9px;padding:5px 10px;background:var(--card-2)}
+.szchip .s{font-size:12px;font-weight:700;color:var(--ink)}
+.szchip .q{font-size:13px;font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
