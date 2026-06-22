@@ -21,6 +21,7 @@ const {
   getProductMaster,
 } = require('./easyecomReturnsClient');
 const { recomputeAllHealth } = require('./easyecomAnalytics');
+const { reconcileDispatchReflection } = require('./dispatchReflection');
 
 const EASYECOM_API_BASE = global.env?.EASYECOM_API_BASE || process.env.EASYECOM_API_BASE || 'https://api.easyecom.io';
 const EASYECOM_API_KEY = global.env?.EASYECOM_API_KEY || process.env.EASYECOM_API_KEY || '';
@@ -711,6 +712,20 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
   } catch (err) {
     console.error('[pullWorker] recomputeAllHealth failed:', err.message);
     await logStep(pool, runStartedAt, 'health', 'error', err.message, Date.now() - healthStart);
+  }
+
+  if (String(process.env.PM_CUT_AUDIT || '').toLowerCase() === '1' || String(process.env.PM_CUT_AUDIT || '').toLowerCase() === 'true') {
+    const reflStart = Date.now();
+    try {
+      const s = await reconcileDispatchReflection(pool);
+      await logStep(pool, runStartedAt, 'reconcile_reflection',
+        s.not_reflected > 0 ? 'partial' : 'ok',
+        `processed=${s.processed} reflected=${s.reflected} not_reflected=${s.not_reflected} partial=${s.partial} pending=${s.pending} unresolved=${s.unresolved}`,
+        Date.now() - reflStart);
+    } catch (err) {
+      console.error('[pullWorker] reconcile_reflection failed:', err.message);
+      await logStep(pool, runStartedAt, 'reconcile_reflection', 'error', err.message, Date.now() - reflStart);
+    }
   }
 
   await logStep(pool, runStartedAt, 'run', 'ok',

@@ -1,3 +1,5 @@
+const { computeOnOrderBySku } = require('./onOrder');
+
 const PERIOD_PRESETS = {
   '1h': { label: 'Last 1 hour', hours: 1 },
   '12h': { label: 'Last 12 hours', hours: 12 },
@@ -754,11 +756,8 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
      FROM pm_style_lead_times WHERE scope = 'sku'`
   );
   const ltMap = new Map(ltRows.map((r) => [r.key_value, r]));
-  const [openLotRows] = await pool.query(
-    `SELECT sku, COALESCE(SUM(qty), 0) AS qty FROM pm_open_cutting_lots
-     WHERE closed_at IS NULL GROUP BY sku`
-  );
-  const openLotMap = new Map(openLotRows.map((r) => [r.sku, Number(r.qty) || 0]));
+  const { onOrder: openLotMap, unresolved: onOrderUnresolved } =
+    await computeOnOrderBySku(pool);
   const [poRows] = await pool.query(
     `SELECT sku, DATEDIFF(required_by_date, CURDATE()) AS days_out, COALESCE(SUM(qty), 0) AS qty
      FROM pm_marketplace_po_lines WHERE required_by_date >= CURDATE() GROUP BY sku, days_out`
@@ -833,7 +832,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     if (lt.override_drr !== null) drr = lt.override_drr;
 
     const soh = sohMap.get(sku) || 0;
-    const openLotQty = openLotMap.get(sku) || 0;
+    const openLotQty = openLotMap.get(String(sku).toUpperCase()) || 0;
 
     const horizon = lt.lead_time + lt.safety_days;
     const upcomingPoQty = (poMap.get(sku) || [])
@@ -886,6 +885,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
   }
 
   results.sort((a, b) => b.suggested_cut_qty - a.suggested_cut_qty);
+  results.onOrderUnresolved = onOrderUnresolved || { lots: 0, pieces: 0 };
   return results;
 }
 

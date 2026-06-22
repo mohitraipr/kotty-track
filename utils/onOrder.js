@@ -62,16 +62,35 @@ async function loadManualRows(pool) {
   return rows.map((r) => ({ sku: r.sku, qty: Number(r.qty) || 0 }));
 }
 
+async function loadResolutionMap(pool) {
+  const [resolution] = await pool.query(
+    `SELECT cl_sku, size_label, size_sku FROM pm_sku_resolution
+     WHERE state = 'resolved' AND size_sku IS NOT NULL`
+  );
+  return new Map(resolution.map((r) => [U(r.cl_sku) + '||' + U(r.size_label), U(r.size_sku)]));
+}
+
+async function loadCanonSet(pool) {
+  const [canonRows] = await pool.query(
+    `SELECT DISTINCT UPPER(sku) AS sku FROM ee_suborders WHERE sku IS NOT NULL AND sku <> ''`
+  );
+  return new Set(canonRows.map((r) => r.sku));
+}
+
 // Returns { onOrder: Map<size_sku, qty>, unresolved: { lots, pieces } }.
 // Flag OFF -> manual table only (today's behavior). Flag ON -> union real
 // in-flight lots (cut within windowDays, net of dispatches) with the manual table.
 async function computeOnOrderBySku(pool, { windowDays } = {}) {
+  // Always runs: manual rows are unioned on top of real lots when flag is ON,
+  // or used as the sole source when flag is OFF.
   const manualRows = await loadManualRows(pool);
 
   if (!flagOn()) {
-    const map = new Map();
-    for (const r of manualRows) map.set(U(r.sku), (map.get(U(r.sku)) || 0) + r.qty);
-    return { onOrder: map, unresolved: { lots: 0, pieces: 0 } };
+    const built = buildOnOrderMap({
+      inFlightRows: [], dispatchedMap: new Map(), manualRows,
+      resolutionMap: new Map(), canonSet: new Set(),
+    });
+    return { onOrder: built.map, unresolved: { lots: 0, pieces: 0 } };
   }
 
   const days = Number(windowDays || process.env.PM_INFLIGHT_WINDOW_DAYS || 120);
@@ -87,24 +106,17 @@ async function computeOnOrderBySku(pool, { windowDays } = {}) {
 
   const [dispatched] = await pool.query(
     `SELECT lot_no, size_label, COALESCE(SUM(quantity), 0) AS qty
-     FROM finishing_dispatches GROUP BY lot_no, size_label`
+     FROM finishing_dispatches
+     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     GROUP BY lot_no, size_label`,
+    [days]
   );
   const dispatchedMap = new Map(
     dispatched.map((r) => [U(r.lot_no) + '||' + U(r.size_label), Number(r.qty) || 0])
   );
 
-  const [resolution] = await pool.query(
-    `SELECT cl_sku, size_label, size_sku FROM pm_sku_resolution
-     WHERE state = 'resolved' AND size_sku IS NOT NULL`
-  );
-  const resolutionMap = new Map(
-    resolution.map((r) => [U(r.cl_sku) + '||' + U(r.size_label), U(r.size_sku)])
-  );
-
-  const [canonRows] = await pool.query(
-    `SELECT DISTINCT UPPER(sku) AS sku FROM ee_suborders WHERE sku IS NOT NULL AND sku <> ''`
-  );
-  const canonSet = new Set(canonRows.map((r) => r.sku));
+  const resolutionMap = await loadResolutionMap(pool);
+  const canonSet = await loadCanonSet(pool);
 
   const built = buildOnOrderMap({
     inFlightRows: inflight, dispatchedMap, manualRows, resolutionMap, canonSet,
@@ -115,4 +127,4 @@ async function computeOnOrderBySku(pool, { windowDays } = {}) {
   };
 }
 
-module.exports = { resolveSizeSku, buildOnOrderMap, computeOnOrderBySku, U };
+module.exports = { resolveSizeSku, buildOnOrderMap, computeOnOrderBySku, loadResolutionMap, loadCanonSet, U };

@@ -1,7 +1,7 @@
 // test/onOrder.test.js
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { resolveSizeSku } = require('../utils/onOrder.js');
+const { resolveSizeSku, buildOnOrderMap, computeOnOrderBySku } = require('../utils/onOrder.js');
 
 test('resolveSizeSku: prefers pm_sku_resolution map', () => {
   const rmap = new Map([['KTTTOP374||L', 'KTTTOP374L']]);
@@ -26,8 +26,6 @@ test('resolveSizeSku: case-insensitive on inputs', () => {
 test('resolveSizeSku: returns null when nothing matches', () => {
   assert.strictEqual(resolveSizeSku('NOPE', 'XL', new Map(), new Set()), null);
 });
-
-const { buildOnOrderMap } = require('../utils/onOrder.js');
 
 const RMAP = new Map([
   ['KTTTOP374||M', 'KTTTOP374M'],
@@ -90,8 +88,6 @@ test('buildOnOrderMap: unions manual rows on top of real lots', () => {
   assert.strictEqual(res.map.get('KTTTOP374M'), 7);
 });
 
-const { computeOnOrderBySku } = require('../utils/onOrder.js');
-
 // Fake pool dispatching by SQL shape (house pattern, cf. test/approvalCorrection.test.js).
 function fakePool(data) {
   return {
@@ -134,5 +130,20 @@ test('computeOnOrderBySku: flag ON nets real lots + unions manual + tallies unre
   assert.strictEqual(res.onOrder.get('KTTTOP374L'), 60); // 80 - 20 dispatched
   assert.strictEqual(res.onOrder.get('KTTTOP374M'), 5);  // manual
   assert.deepStrictEqual(res.unresolved, { lots: 1, pieces: 30 }); // WEIRDSTYLE/B2
+  assert.strictEqual(pool.queries.length, 5); // 1 manual + 4 in-flight (cutting_lots, finishing_dispatches, pm_sku_resolution, ee_suborders)
   delete process.env.PM_CLOSED_LOOP;
+});
+
+const { loadResolutionMap, loadCanonSet } = require('../utils/onOrder.js');
+
+test('loadResolutionMap keys UPPER(cl_sku)||UPPER(size_label) -> UPPER(size_sku)', async () => {
+  const pool = { async query() { return [[{ cl_sku: 'kttTop374', size_label: 'l', size_sku: 'ktttop374l' }]]; } };
+  const m = await loadResolutionMap(pool);
+  assert.strictEqual(m.get('KTTTOP374||L'), 'KTTTOP374L');
+});
+
+test('loadCanonSet returns an uppercase Set of canon SKUs', async () => {
+  const pool = { async query() { return [[{ sku: 'KTTTOP374L' }, { sku: 'KTTTOP374M' }]]; } };
+  const s = await loadCanonSet(pool);
+  assert.ok(s.has('KTTTOP374L') && s.has('KTTTOP374M'));
 });
