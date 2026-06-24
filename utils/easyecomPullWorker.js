@@ -426,13 +426,17 @@ async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
       await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, 'ok',
         `window=${lookback}d rows=${upsert.length}`, Date.now() - stepStart);
     } catch (err) {
-      // "Job pending of the same type in the last 2 hours" means another run is
-      // already fetching this warehouse — not a real failure; it'll land via that
-      // run (or the next). Log it as partial so the step isn't flagged as broken.
+      // Transient/expected conditions are logged as 'partial' (not 'error') so a
+      // blip doesn't read as broken and the adaptive window backfills on the next
+      // run that has quota:
+      //  - "job pending of same type in last 2h" → another run is already fetching.
+      //  - "Limit Exceeded" / 429 / rate limit → EasyEcom account rate cap (resets).
       const msg = String(err.response?.data?.message || err.message || '');
-      const pending = /already queued|job pending|same type|2 hours/i.test(msg);
-      console.error(`[pullWorker] mini sales report ${pending ? 'in-flight' : 'failed'} for ${warehouseKey}:`, msg);
-      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, pending ? 'partial' : 'error',
+      const status = err.response?.status;
+      const transient = status === 429
+        || /already queued|job pending|same type|2 hours|limit exceeded|rate limit|too many/i.test(msg);
+      console.error(`[pullWorker] mini sales report ${transient ? 'transient' : 'failed'} for ${warehouseKey}:`, msg);
+      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, transient ? 'partial' : 'error',
         msg, Date.now() - stepStart);
     }
   }
