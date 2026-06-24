@@ -948,12 +948,39 @@ async function listReports(warehouse = 'faridabad') {
   return resp.data?.data || resp.data || [];
 }
 
+// Find the most recent report of a given type that is COMPLETED or still in
+// progress (so we can reuse an in-flight report instead of queueing a duplicate
+// — EasyEcom rejects a 2nd job of the same type while one is still pending).
+// Tolerates /reports/list 504s (the endpoint is intermittently flaky) by retrying.
+async function findRecentReport(reportType, warehouse = 'faridabad') {
+  let list = null;
+  for (let i = 0; i < 4 && !list; i++) {
+    try { const r = await listReports(warehouse); list = Array.isArray(r) ? r : []; }
+    catch (_) { await new Promise((res) => setTimeout(res, 4000)); }
+  }
+  if (!list) return null;
+  const wanted = String(reportType).toUpperCase();
+  const usable = list.filter((r) => {
+    const t = String(r.reportType || r.report_type || '').toUpperCase();
+    const s = String(r.reportStatus || r.report_status || r.status || '').toLowerCase();
+    return t === wanted && (s.includes('complete') || s.includes('ready') || s === 'done'
+      || s.includes('process') || s.includes('pending') || s.includes('queue'));
+  });
+  if (!usable.length) return null;
+  usable.sort((a, b) => Number(b.reportId || b.id || 0) - Number(a.reportId || a.id || 0));
+  return String(usable[0].reportId || usable[0].id);
+}
+
 // Polls /reports/list until the given reportId is ready, then downloads via /reports/download.
-// Returns parsed rows (array of objects).
-async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pollIntervalMs = 5000, maxWaitMs = 600000 } = {}) {
+// Returns parsed rows (array of objects). EasyEcom's report generation can take several
+// minutes and /reports/list intermittently 504s, so we poll patiently and DO NOT treat a
+// flaky list call as a failure — only an explicit FAILED/ERROR status or the overall
+// deadline ends the wait. Defaults are generous so a slow-but-valid report still lands.
+async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pollIntervalMs = 8000, maxWaitMs = 900000 } = {}) {
   const api = await ensureAxiosForWarehouse(warehouse, 120000);
   const start = Date.now();
   let ready = false;
+  let listFailures = 0;
   while (Date.now() - start < maxWaitMs) {
     let entry = null;
     try {
@@ -961,7 +988,7 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
       entry = (Array.isArray(list) ? list : []).find(r =>
         String(r.reportId || r.id || r.report_id) === String(reportId)
       );
-    } catch (_) {}
+    } catch (_) { listFailures += 1; }
     // EasyEcom returns status under `reportStatus` (e.g. "COMPLETED").
     const status = (entry?.reportStatus || entry?.report_status || entry?.status || '').toString().toLowerCase();
     if (status.includes('complete') || status.includes('ready') || status === 'done') { ready = true; break; }
@@ -970,7 +997,7 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
     }
     await new Promise(r => setTimeout(r, pollIntervalMs));
   }
-  if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms`);
+  if (!ready) throw new Error(`Report ${reportId} timed out after ${maxWaitMs}ms (list-call failures=${listFailures})`);
   // Download. EasyEcom returns the report as raw CSV, a ZIP (PK magic), or a JSON
   // envelope { data: { downloadUrl } } pointing at an S3 file (usually a ZIP).
   const dl = await withReport429Retry(`reports/download ${reportId}/${warehouse}`,
@@ -1005,7 +1032,24 @@ async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceT
   const whIds = (warehouseIds && String(warehouseIds).trim()) ? warehouseIds : creds.location_key;
   const params = { invoiceType, dateType, startDate, endDate };
   if (whIds) params.warehouseIds = whIds;
-  const reportId = await queueReport('MINI_SALES_REPORT', params, warehouse);
+  let reportId;
+  try {
+    reportId = await queueReport('MINI_SALES_REPORT', params, warehouse);
+  } catch (err) {
+    // EasyEcom allows only ONE pending MINI_SALES job per company at a time and
+    // rejects a duplicate queued within ~2h ("There is a job pending of the same
+    // type ... in the last 2 hours"). That in-flight job was queued by a
+    // concurrent/recent run of ours for (essentially) the same window — wait for
+    // IT and download, rather than failing the whole pull. This is what makes the
+    // feed self-heal when nightly + page-triggered catch-up runs overlap.
+    const msg = String(err.response?.data?.message || err.message || '').toLowerCase();
+    const pending = msg.includes('already queued') || msg.includes('job pending')
+      || msg.includes('same type') || msg.includes('2 hours');
+    if (!pending) throw err;
+    const existing = await findRecentReport('MINI_SALES_REPORT', warehouse);
+    if (!existing) throw err;
+    reportId = existing;
+  }
   return waitForAndDownloadReport(reportId, warehouse);
 }
 
@@ -1194,6 +1238,7 @@ module.exports = {
   parseCsv,
   queueReport,
   listReports,
+  findRecentReport,
   waitForAndDownloadReport,
   fetchFullInventoryReport,
   fetchMiniSalesReport,

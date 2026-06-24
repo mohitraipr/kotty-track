@@ -380,41 +380,64 @@ function aggregateMiniSales(rows, warehouseId) {
 
 async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
   const stepStart = Date.now();
-  const CHUNK_DAYS = 7; // one ~7-day report (~35k lines) in memory at a time — avoids OOM on a 30d pull
   const MS_DAY = 24 * 60 * 60 * 1000;
+  // EasyEcom allows only ONE pending MINI_SALES_REPORT per company at a time and
+  // rejects a 2nd "of the same type ... in the last 2 hours". The old 7-day chunk
+  // loop fired multiple reports per warehouse, which tripped that limit the moment
+  // the window exceeded 7 days — so it could never catch up past a 7-day gap.
+  // We now request the WHOLE window as a SINGLE report per warehouse, and size the
+  // window to the actual gap so a multi-day freeze self-heals in one run.
+  const MAX_WINDOW_DAYS = 45; // single-report cap (~225k rows; well within 1Gi)
   const now = new Date();
-  const windowStart = new Date(now.getTime() - windowDays * MS_DAY);
   let totalRows = 0;
 
   for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
     const warehouseId = Number(warehouseIdStr);
     try {
-      let cursor = new Date(windowStart);
-      while (cursor <= now) {
-        const chunkEnd = new Date(Math.min(cursor.getTime() + (CHUNK_DAYS - 1) * MS_DAY, now.getTime()));
-        const startDate = ymd(cursor);
-        const endDate = ymd(chunkEnd);
-        let rows = await fetchMiniSalesReport({ startDate, endDate }, warehouseKey);
-        const upsert = aggregateMiniSales(rows, warehouseId);
-        rows = null; // release the parsed report before the next chunk
-        for (let i = 0; i < upsert.length; i += 1000) {
-          await pool.query(
-            `INSERT INTO ee_sales_daily (sku, warehouse_id, sale_date, qty, revenue, source)
-             VALUES ?
-             ON DUPLICATE KEY UPDATE qty = VALUES(qty), revenue = VALUES(revenue), synced_at = CURRENT_TIMESTAMP`,
-            [upsert.slice(i, i + 1000)]
-          );
+      // Adaptive lookback: from the last sale we already have for THIS warehouse
+      // (minus a 2-day overlap to re-settle late invoices), bounded to a sane max.
+      let lookback = Math.max(Number(windowDays) || 3, 3);
+      try {
+        const [[row]] = await pool.query(
+          `SELECT MAX(sale_date) AS latest FROM ee_sales_daily
+           WHERE source = 'mini_sales_report' AND warehouse_id = ?`,
+          [warehouseId]
+        );
+        if (row && row.latest) {
+          const gapDays = Math.ceil((now - new Date(row.latest)) / MS_DAY) + 2;
+          lookback = Math.min(Math.max(lookback, gapDays), MAX_WINDOW_DAYS);
         }
-        totalRows += upsert.length;
-        cursor = new Date(chunkEnd.getTime() + MS_DAY); // next day after this chunk — no overlap
+      } catch (_) { /* fall back to windowDays */ }
+
+      const startDate = ymd(new Date(now.getTime() - (lookback - 1) * MS_DAY));
+      const endDate = ymd(now);
+      let rows = await fetchMiniSalesReport({ startDate, endDate }, warehouseKey);
+      const upsert = aggregateMiniSales(rows, warehouseId);
+      rows = null; // release the parsed report before the DB writes
+      for (let i = 0; i < upsert.length; i += 1000) {
+        await pool.query(
+          `INSERT INTO ee_sales_daily (sku, warehouse_id, sale_date, qty, revenue, source)
+           VALUES ?
+           ON DUPLICATE KEY UPDATE qty = VALUES(qty), revenue = VALUES(revenue), synced_at = CURRENT_TIMESTAMP`,
+          [upsert.slice(i, i + 1000)]
+        );
       }
+      totalRows += upsert.length;
+      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, 'ok',
+        `window=${lookback}d rows=${upsert.length}`, Date.now() - stepStart);
     } catch (err) {
-      console.error(`[pullWorker] mini sales report failed for ${warehouseKey}:`, err.message);
-      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, 'error', err.message, Date.now() - stepStart);
+      // "Job pending of the same type in the last 2 hours" means another run is
+      // already fetching this warehouse — not a real failure; it'll land via that
+      // run (or the next). Log it as partial so the step isn't flagged as broken.
+      const msg = String(err.response?.data?.message || err.message || '');
+      const pending = /already queued|job pending|same type|2 hours/i.test(msg);
+      console.error(`[pullWorker] mini sales report ${pending ? 'in-flight' : 'failed'} for ${warehouseKey}:`, msg);
+      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, pending ? 'partial' : 'error',
+        msg, Date.now() - stepStart);
     }
   }
   await logStep(pool, runStartedAt, 'mini_sales', 'ok',
-    `window=${windowDays}d chunk=${CHUNK_DAYS}d rows=${totalRows}`, Date.now() - stepStart);
+    `single-report rows=${totalRows}`, Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────
