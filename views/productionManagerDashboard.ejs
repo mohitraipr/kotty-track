@@ -19,6 +19,7 @@
     <div>
       <h1 class="page-h">Overview</h1>
       <p class="page-sub">Cutting recommendations · DRR · open lots · marketplace POs</p>
+      <p class="page-sub" id="dataFreshness" style="margin-top:4px"></p>
     </div>
   </div>
 
@@ -263,6 +264,20 @@ function compactNum(n) {
   return String(Math.round(n));
 }
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : ''; }
+function fmtDateTime(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function renderFreshness(f) {
+  const el = $('dataFreshness');
+  if (!el) return;
+  if (!f || !f.data_as_of) { el.textContent = 'Data freshness: unknown'; el.style.color = '#b45309'; return; }
+  const asOf = new Date(f.data_as_of);
+  const ageH = (Date.now() - asOf.getTime()) / 3.6e6;
+  const stale = ageH > 24;
+  el.textContent = `Data last refreshed: ${fmtDateTime(asOf)}${stale ? ` · ${Math.round(ageH / 24)}d old — feed may be stale` : ''}`;
+  el.style.color = stale ? '#b45309' : '';
+}
 
 const KPI_ICON = {
   cut:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>',
@@ -294,6 +309,7 @@ async function loadSummary() {
   try {
     const s = await (await fetch('/pm/api/summary')).json();
     if (!s.ok) { box.innerHTML = ''; return; }
+    renderFreshness(s.freshness);
     const cards = [];
 
     if (s.cut_priority) {

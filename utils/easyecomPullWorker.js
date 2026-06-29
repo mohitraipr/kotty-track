@@ -60,6 +60,22 @@ async function logStep(pool, runStartedAt, step, status, message, durationMs) {
   }
 }
 
+// Overall wall-clock budget for one run. Cloud Run kills the request at 1800s
+// (the catch-up self-call awaits runPullWorker synchronously), so we stop starting
+// new heavy EasyEcom steps well before that and log what we skipped — never let a
+// slow step silently truncate the rest of the pull.
+const RUN_DEADLINE_MS = Number(process.env.PM_PULL_RUN_DEADLINE_MS || 1500000); // 25 min
+
+// Bound a single step so one stuck EasyEcom call can't consume the whole run budget.
+// Rejects with a labelled timeout; the caller's try/catch logs it like any other failure.
+function withDeadline(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} exceeded ${Math.round(ms / 1000)}s deadline`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function isBootstrap(pool) {
   const [[row]] = await pool.query(
     `SELECT COUNT(*) AS c FROM pm_pull_runs WHERE status = 'ok'`
@@ -388,9 +404,29 @@ async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
   // We now request the WHOLE window as a SINGLE report per warehouse, and size the
   // window to the actual gap so a multi-day freeze self-heals in one run.
   const MAX_WINDOW_DAYS = 45; // single-report cap (~225k rows; well within 1Gi)
+  // Per-report poll cap. EasyEcom caps MINI_SALES at 1 report/company/2h, so a
+  // queued report that won't bake just blocks; keep this short (×2 warehouses) so
+  // the step fails fast instead of eating the whole run budget.
+  const MINI_SALES_MAX_WAIT_MS = Number(process.env.PM_MINI_SALES_MAX_WAIT_MS || 180000); // 3 min
   const now = new Date();
   let totalRows = 0;
 
+  // EasyEcom rejects a 2nd MINI_SALES of the same type within 2h, so attempting it
+  // more often than that just wastes the poll budget. Skip if we tried in the last 2h.
+  try {
+    const [[recent]] = await pool.query(
+      `SELECT MAX(run_started_at) AS last_try FROM pm_pull_runs
+        WHERE step LIKE 'mini_sales:%' AND run_started_at >= NOW() - INTERVAL 2 HOUR`
+    );
+    if (recent && recent.last_try) {
+      await logStep(pool, runStartedAt, 'mini_sales', 'partial',
+        'skipped: attempted within last 2h (EasyEcom 1-report/2h cap)', Date.now() - stepStart);
+      return;
+    }
+  } catch (_) { /* if the check fails, fall through and attempt the pull */ }
+
+  let okCount = 0;
+  let failCount = 0;
   for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
     const warehouseId = Number(warehouseIdStr);
     try {
@@ -411,7 +447,7 @@ async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
 
       const startDate = ymd(new Date(now.getTime() - (lookback - 1) * MS_DAY));
       const endDate = ymd(now);
-      let rows = await fetchMiniSalesReport({ startDate, endDate }, warehouseKey);
+      let rows = await fetchMiniSalesReport({ startDate, endDate, maxWaitMs: MINI_SALES_MAX_WAIT_MS }, warehouseKey);
       const upsert = aggregateMiniSales(rows, warehouseId);
       rows = null; // release the parsed report before the DB writes
       for (let i = 0; i < upsert.length; i += 1000) {
@@ -423,31 +459,43 @@ async function pullMiniSalesReport(pool, runStartedAt, windowDays) {
         );
       }
       totalRows += upsert.length;
+      okCount += 1;
       await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, 'ok',
         `window=${lookback}d rows=${upsert.length}`, Date.now() - stepStart);
     } catch (err) {
-      // "Job pending of the same type in the last 2 hours" means another run is
-      // already fetching this warehouse — not a real failure; it'll land via that
-      // run (or the next). Log it as partial so the step isn't flagged as broken.
+      failCount += 1;
+      // Transient/expected conditions are logged as 'partial' (not 'error') so a
+      // blip doesn't read as broken and the adaptive window backfills on the next
+      // run that has quota:
+      //  - "job pending of same type in last 2h" → another run is already fetching.
+      //  - "Limit Exceeded" / 429 / rate limit → EasyEcom account rate cap (resets).
       const msg = String(err.response?.data?.message || err.message || '');
-      const pending = /already queued|job pending|same type|2 hours/i.test(msg);
-      console.error(`[pullWorker] mini sales report ${pending ? 'in-flight' : 'failed'} for ${warehouseKey}:`, msg);
-      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, pending ? 'partial' : 'error',
+      const status = err.response?.status;
+      const transient = status === 429
+        || /already queued|job pending|same type|2 hours|limit exceeded|rate limit|too many/i.test(msg);
+      console.error(`[pullWorker] mini sales report ${transient ? 'transient' : 'failed'} for ${warehouseKey}:`, msg);
+      await logStep(pool, runStartedAt, `mini_sales:${warehouseKey}`, transient ? 'partial' : 'error',
         msg, Date.now() - stepStart);
     }
   }
-  await logStep(pool, runStartedAt, 'mini_sales', 'ok',
-    `single-report rows=${totalRows}`, Date.now() - stepStart);
+  // Honest parent status: 'ok' only if a warehouse actually delivered; 'partial' when
+  // some succeeded; 'error' when every warehouse failed (e.g. all rate-limited). Never
+  // log 'ok rows=0' on a total failure — that masks a frozen feed in the freshness view.
+  const parentStatus = okCount > 0 ? (failCount > 0 ? 'partial' : 'ok') : 'error';
+  await logStep(pool, runStartedAt, 'mini_sales', parentStatus,
+    `single-report rows=${totalRows} ok=${okCount} failed=${failCount}`, Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────
 // Step 4 — Sales cross-check  (orders_api vs mini_sales_report, per day)
 // ────────────────────────────────────────────────────────────────────
 
-async function crossCheckSales(pool, runStartedAt, windowDays) {
+// Aggregate orders_api into ee_sales_daily. This is the FRESH (±5%) DRR source and
+// must run right after pullOrders — independent of the rate-limited mini_sales step —
+// so a stuck mini_sales report can never starve DRR of fresh sales.
+async function aggregateOrdersIntoSales(pool, runStartedAt, windowDays) {
   const stepStart = Date.now();
   try {
-    // Aggregate orders_api into ee_sales_daily so both sources share a table.
     await pool.query(`
       INSERT INTO ee_sales_daily (sku, warehouse_id, sale_date, qty, revenue, source)
       SELECT
@@ -464,7 +512,17 @@ async function crossCheckSales(pool, runStartedAt, windowDays) {
       GROUP BY es.sku, es.warehouse_id, DATE(es.order_date)
       ON DUPLICATE KEY UPDATE qty = VALUES(qty), revenue = VALUES(revenue), synced_at = CURRENT_TIMESTAMP
     `, [windowDays]);
+    await logStep(pool, runStartedAt, 'orders_aggregate', 'ok',
+      `window=${windowDays}d`, Date.now() - stepStart);
+  } catch (err) {
+    console.error('[pullWorker] orders aggregate failed:', err.message);
+    await logStep(pool, runStartedAt, 'orders_aggregate', 'error', err.message, Date.now() - stepStart);
+  }
+}
 
+async function crossCheckSales(pool, runStartedAt, windowDays) {
+  const stepStart = Date.now();
+  try {
     // Compute per-day totals across SKUs, compare both sources, flag >2% delta.
     await pool.query(`
       INSERT INTO ee_sales_cross_check (check_date, warehouse_id, orders_api_qty, mini_sales_qty, delta_pct, flagged)
@@ -685,46 +743,51 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
     console.warn('[pullWorker] EasyEcom auth unavailable — skipping pulls, DB-only steps only');
   }
 
+  // Per-step wall-clock cap; combined with the overall RUN_DEADLINE_MS guard this
+  // guarantees no single stuck EasyEcom call can blow the 1800s Cloud Run timeout
+  // (the catch-up self-call awaits this whole function).
+  const STEP_DEADLINE_MS = Number(process.env.PM_PULL_STEP_DEADLINE_MS || 600000); // 10 min
+  const elapsed = () => Date.now() - overallStart;
+  // Run a self-logging EasyEcom step under a per-step deadline + overall budget guard.
+  // The step fns log their own 'ok'/'error' lines; here we only log a 'partial' skip
+  // when we're out of budget, or an 'error' if the step blows its deadline / throws.
+  const eeStep = async (name, fn, deadlineMs = STEP_DEADLINE_MS) => {
+    if (elapsed() > RUN_DEADLINE_MS) {
+      await logStep(pool, runStartedAt, name, 'partial',
+        `skipped: run deadline (${Math.round(elapsed() / 1000)}s elapsed)`, 0);
+      return;
+    }
+    try { await withDeadline(Promise.resolve().then(fn), deadlineMs, name); }
+    catch (err) { await logStep(pool, runStartedAt, name, 'error', err.message, 0); }
+  };
+
   if (authOk) {
     // Inventory snapshots — account-wide, from the PRIMARY location. Bootstrap pulls a
     // deeper window so selling-days DRR has real history immediately (configurable).
     const snapshotWindowDays = bootstrapMode
       ? Number(process.env.EASYECOM_SNAPSHOT_BACKFILL_DAYS || global.env?.EASYECOM_SNAPSHOT_BACKFILL_DAYS || 60)
       : Math.max(windowDays, 3);
-    try {
-      await pullSnapshotsFromPrimary(pool, runStartedAt, snapshotWindowDays);
-    } catch (err) {
-      await logStep(pool, runStartedAt, 'snapshot', 'error', err.message, 0);
+
+    // Order matters: the fast, high-value steps that do NOT depend on the rate-limited
+    // mini_sales report run FIRST, so a stuck mini_sales can never starve DRR / stock.
+    await eeStep('snapshot', () => pullSnapshotsFromPrimary(pool, runStartedAt, snapshotWindowDays));
+    await eeStep('orders', () => pullOrders(pool, runStartedAt, bootstrapMode));
+    // Aggregate orders → ee_sales_daily right away: this is the fresh (±5%) DRR source.
+    await eeStep('orders_aggregate', () => aggregateOrdersIntoSales(pool, runStartedAt, windowDays));
+    await eeStep('stock_status', () => pullStatusWiseStock(pool, runStartedAt));
+    await eeStep('aging', () => pullInventoryAging(pool, runStartedAt));
+    // Product Master — Sundays or when explicitly requested or on bootstrap.
+    if (includeProducts || isSunday || bootstrapMode) {
+      await eeStep('product_master', () => pullProductMaster(pool, runStartedAt));
     }
-
-    // Orders (per-line detail used for DRR + drill-downs)
-    try { await pullOrders(pool, runStartedAt, bootstrapMode); }
-    catch (err) { await logStep(pool, runStartedAt, 'orders', 'error', err.message, 0); }
-
-    // MINI_SALES_REPORT (cross-check source)
-    try { await pullMiniSalesReport(pool, runStartedAt, windowDays); }
-    catch (err) { await logStep(pool, runStartedAt, 'mini_sales', 'error', err.message, 0); }
+    // MINI_SALES_REPORT LAST — best-effort cross-check source, rate-limited by EasyEcom
+    // (1 report/company/2h). Self-caps its poll wait and is skipped if tried within 2h.
+    await eeStep('mini_sales', () => pullMiniSalesReport(pool, runStartedAt, windowDays));
   }
 
   // Sales cross-check (orders vs mini sales) — DB-only, safe to run regardless of auth.
   try { await crossCheckSales(pool, runStartedAt, windowDays); }
   catch (err) { await logStep(pool, runStartedAt, 'sales_cross_check', 'error', err.message, 0); }
-
-  if (authOk) {
-    // STATUS_WISE_STOCK_REPORT
-    try { await pullStatusWiseStock(pool, runStartedAt); }
-    catch (err) { await logStep(pool, runStartedAt, 'stock_status', 'error', err.message, 0); }
-
-    // INVENTORY_AGING_REPORT
-    try { await pullInventoryAging(pool, runStartedAt); }
-    catch (err) { await logStep(pool, runStartedAt, 'aging', 'error', err.message, 0); }
-
-    // Product Master — Sundays or when explicitly requested or on bootstrap.
-    if (includeProducts || isSunday || bootstrapMode) {
-      try { await pullProductMaster(pool, runStartedAt); }
-      catch (err) { await logStep(pool, runStartedAt, 'product_master', 'error', err.message, 0); }
-    }
-  }
 
   // Recompute health using fresh data (selling-days DRR + lead-time + open-lots + POs).
   const healthStart = Date.now();

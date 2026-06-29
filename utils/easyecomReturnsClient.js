@@ -1025,7 +1025,7 @@ async function waitForAndDownloadReport(reportId, warehouse = 'faridabad', { pol
 }
 
 // Convenience wrappers — queue + poll + download for the reports we care about.
-async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceType = 'ALL', dateType = 'ORDER_DATE' }, warehouse = 'faridabad') {
+async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceType = 'ALL', dateType = 'ORDER_DATE', maxWaitMs }, warehouse = 'faridabad') {
   // warehouseIds is the location_key (Seller ID) and is effectively required —
   // default to this warehouse's Seller ID when the caller didn't supply one.
   const creds = WAREHOUSE_CREDENTIALS[(warehouse || 'faridabad').toLowerCase()] || WAREHOUSE_CREDENTIALS.faridabad;
@@ -1050,7 +1050,9 @@ async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceT
     if (!existing) throw err;
     reportId = existing;
   }
-  return waitForAndDownloadReport(reportId, warehouse);
+  // Caller may cap the poll wait (the pull worker keeps this short so a stuck,
+  // rate-limited report fails fast instead of eating the whole run budget).
+  return waitForAndDownloadReport(reportId, warehouse, maxWaitMs ? { maxWaitMs } : {});
 }
 
 async function fetchInventoryAgingReport(warehouse = 'faridabad') {
