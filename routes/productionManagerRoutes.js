@@ -339,6 +339,31 @@ router.get('/api/summary', async (req, res) => {
     out.sales_by_day = rows.map((r) => ({ date: r.sale_date, qty: Number(r.qty) || 0 }));
   } catch (_) { out.sales_by_day = null; }
 
+  // Data freshness: when the numbers behind the dashboard were last refreshed. We take
+  // the OLDEST of the critical feeds (sales / stock / aging) so the homepage line
+  // reflects true staleness, not whichever table was touched most recently.
+  try {
+    const [okSteps] = await pool.query(
+      `SELECT step, MAX(run_started_at) AS last_ok FROM pm_pull_runs
+        WHERE status = 'ok' GROUP BY step`
+    );
+    const lastOk = {};
+    for (const r of okSteps) lastOk[r.step] = r.last_ok;
+    // 'orders_aggregate' is the fresh DRR sales source; fall back to legacy names.
+    const salesAsOf = lastOk['orders_aggregate'] || lastOk['sales_cross_check'] || lastOk['mini_sales'] || null;
+    const feeds = [salesAsOf, lastOk['stock_status'], lastOk['aging']].filter(Boolean);
+    const dataAsOf = feeds.length ? new Date(Math.min(...feeds.map((d) => new Date(d).getTime()))) : null;
+    out.freshness = {
+      data_as_of: dataAsOf,
+      last_run: lastOk['run'] || null,
+      feeds: {
+        sales: salesAsOf,
+        stock: lastOk['stock_status'] || null,
+        aging: lastOk['aging'] || null,
+      },
+    };
+  } catch (_) { out.freshness = null; }
+
   res.json({ ok: true, ...out });
 });
 
