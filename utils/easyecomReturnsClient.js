@@ -1055,9 +1055,11 @@ async function fetchMiniSalesReport({ startDate, endDate, warehouseIds, invoiceT
   return waitForAndDownloadReport(reportId, warehouse, maxWaitMs ? { maxWaitMs } : {});
 }
 
-async function fetchInventoryAgingReport(warehouse = 'faridabad') {
+async function fetchInventoryAgingReport(warehouse = 'faridabad', opts = {}) {
   const reportId = await queueReport('INVENTORY_AGING_REPORT', {}, warehouse);
-  return waitForAndDownloadReport(reportId, warehouse);
+  // EasyEcom is slow to generate this report for the secondary warehouses; callers
+  // may pass a longer maxWaitMs than the 900s default so the poll doesn't give up early.
+  return waitForAndDownloadReport(reportId, warehouse, opts);
 }
 
 async function fetchStatusWiseStockReport(warehouse = 'faridabad') {

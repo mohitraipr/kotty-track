@@ -631,42 +631,70 @@ async function pullStatusWiseStock(pool, runStartedAt) {
 
 async function pullInventoryAging(pool, runStartedAt) {
   const stepStart = Date.now();
+  // EasyEcom takes ~15–20 min to generate INVENTORY_AGING_REPORT for the secondary
+  // warehouses. Poll longer than the 900s client default, and fetch the warehouses in
+  // PARALLEL so two slow polls overlap instead of summing (sequential polling used to
+  // blow the run budget and leave the 'aging' feed — hence the freshness banner — frozen).
+  const reportWaitMs = Number(process.env.PM_PULL_AGING_REPORT_WAIT_MS || 1200000); // 20 min
+
+  async function pullOneWarehouse(warehouseId, warehouseKey) {
+    const rows = await fetchInventoryAgingReport(warehouseKey, { maxWaitMs: reportWaitMs });
+    const upsert = [];
+    for (const r of rows) {
+      const sku = pickField(r, ['sku', 'SKU', 'Product Code']);
+      const bucket = String(pickField(r, ['aging_bucket', 'Aging Bucket', 'bucket', 'Age Bucket', 'Days']) || 'unknown').trim();
+      const qty = Number(pickField(r, ['qty', 'Quantity', 'count', 'Available Quantity'])) || 0;
+      const avgAge = Number(pickField(r, ['avg_age_days', 'Avg Age Days', 'Average Age (Days)'])) || null;
+      const oldest = Number(pickField(r, ['oldest_age_days', 'Oldest Age Days', 'Oldest (Days)'])) || null;
+      if (!sku) continue;
+      upsert.push([String(sku).toUpperCase(), warehouseId, bucket, qty, avgAge, oldest]);
+    }
+    for (let i = 0; i < upsert.length; i += 1000) {
+      const chunk = upsert.slice(i, i + 1000);
+      await pool.query(
+        `INSERT INTO ee_inventory_aging (sku, warehouse_id, bucket, qty, avg_age_days, oldest_age_days)
+         VALUES ?
+         ON DUPLICATE KEY UPDATE qty = VALUES(qty),
+           avg_age_days = VALUES(avg_age_days),
+           oldest_age_days = VALUES(oldest_age_days),
+           captured_at = CURRENT_TIMESTAMP`,
+        [chunk]
+      );
+    }
+    return upsert.length;
+  }
+
+  const warehouses = Object.entries(WAREHOUSE_KEY_BY_ID);
+  const results = await Promise.allSettled(
+    warehouses.map(([idStr, key]) => pullOneWarehouse(Number(idStr), key))
+  );
+
   let totalRows = 0;
-  for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
-    const warehouseId = Number(warehouseIdStr);
-    try {
-      const rows = await fetchInventoryAgingReport(warehouseKey);
-      const upsert = [];
-      for (const r of rows) {
-        const sku = pickField(r, ['sku', 'SKU', 'Product Code']);
-        const bucket = String(pickField(r, ['aging_bucket', 'Aging Bucket', 'bucket', 'Age Bucket', 'Days']) || 'unknown').trim();
-        const qty = Number(pickField(r, ['qty', 'Quantity', 'count', 'Available Quantity'])) || 0;
-        const avgAge = Number(pickField(r, ['avg_age_days', 'Avg Age Days', 'Average Age (Days)'])) || null;
-        const oldest = Number(pickField(r, ['oldest_age_days', 'Oldest Age Days', 'Oldest (Days)'])) || null;
-        if (!sku) continue;
-        upsert.push([String(sku).toUpperCase(), warehouseId, bucket, qty, avgAge, oldest]);
-      }
-      if (upsert.length) {
-        for (let i = 0; i < upsert.length; i += 1000) {
-          const chunk = upsert.slice(i, i + 1000);
-          await pool.query(
-            `INSERT INTO ee_inventory_aging (sku, warehouse_id, bucket, qty, avg_age_days, oldest_age_days)
-             VALUES ?
-             ON DUPLICATE KEY UPDATE qty = VALUES(qty),
-               avg_age_days = VALUES(avg_age_days),
-               oldest_age_days = VALUES(oldest_age_days),
-               captured_at = CURRENT_TIMESTAMP`,
-            [chunk]
-          );
-        }
-      }
-      totalRows += upsert.length;
-    } catch (err) {
-      console.error(`[pullWorker] aging report failed for ${warehouseKey}:`, err.message);
-      await logStep(pool, runStartedAt, `aging:${warehouseKey}`, 'error', err.message, Date.now() - stepStart);
+  let okCount = 0;
+  const failed = [];
+  for (let i = 0; i < warehouses.length; i += 1) {
+    const [, warehouseKey] = warehouses[i];
+    const res = results[i];
+    if (res.status === 'fulfilled') {
+      okCount += 1;
+      totalRows += res.value;
+    } else {
+      const msg = (res.reason && res.reason.message) || String(res.reason);
+      failed.push(warehouseKey);
+      console.error(`[pullWorker] aging report failed for ${warehouseKey}:`, msg);
+      // Per-warehouse failure logs 'partial' for observability; the parent step below
+      // still logs 'ok' as long as at least one warehouse returned, so the freshness
+      // banner (which reads status='ok') can advance.
+      await logStep(pool, runStartedAt, `aging:${warehouseKey}`, 'partial', msg, Date.now() - stepStart);
     }
   }
-  await logStep(pool, runStartedAt, 'aging', 'ok', `rows=${totalRows}`, Date.now() - stepStart);
+
+  // Honest parent status: 'ok' if any warehouse returned data, else 'error' so the banner
+  // correctly stays frozen only when we genuinely have no fresh aging data at all.
+  const status = okCount > 0 ? 'ok' : 'error';
+  const msg = `rows=${totalRows} warehouses_ok=${okCount}/${warehouses.length}` +
+    (failed.length ? ` failed=${failed.join(',')}` : '');
+  await logStep(pool, runStartedAt, 'aging', status, msg, Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -775,14 +803,20 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
     // Aggregate orders → ee_sales_daily right away: this is the fresh (±5%) DRR source.
     await eeStep('orders_aggregate', () => aggregateOrdersIntoSales(pool, runStartedAt, windowDays));
     await eeStep('stock_status', () => pullStatusWiseStock(pool, runStartedAt));
-    await eeStep('aging', () => pullInventoryAging(pool, runStartedAt));
     // Product Master — Sundays or when explicitly requested or on bootstrap.
     if (includeProducts || isSunday || bootstrapMode) {
       await eeStep('product_master', () => pullProductMaster(pool, runStartedAt));
     }
-    // MINI_SALES_REPORT LAST — best-effort cross-check source, rate-limited by EasyEcom
+    // MINI_SALES_REPORT — best-effort cross-check source, rate-limited by EasyEcom
     // (1 report/company/2h). Self-caps its poll wait and is skipped if tried within 2h.
+    // Runs BEFORE the slow aging report so aging can no longer starve it of run budget.
     await eeStep('mini_sales', () => pullMiniSalesReport(pool, runStartedAt, windowDays));
+    // INVENTORY_AGING LAST — the slowest step (EasyEcom is slow to generate it for the
+    // secondary warehouses). Gets a longer dedicated deadline than the generic per-step
+    // cap so it can actually complete instead of being killed at 600s and freezing the
+    // aging feed. pullInventoryAging fetches the warehouses in parallel.
+    const AGING_DEADLINE_MS = Number(process.env.PM_PULL_AGING_DEADLINE_MS || 1500000); // 25 min
+    await eeStep('aging', () => pullInventoryAging(pool, runStartedAt), AGING_DEADLINE_MS);
   }
 
   // Sales cross-check (orders vs mini sales) — DB-only, safe to run regardless of auth.
