@@ -21,6 +21,7 @@ const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 const { computeStyleTrend } = require('../utils/styleTrend');
+const { buildPicSizeRows, buildPicSizeWorkbook } = require('../utils/picSizeReport');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -185,6 +186,24 @@ router.get('/style/:style', async (req, res) => {
     userRole: req.session.user.roleName,
     style: req.params.style,
   });
+});
+
+// Download the size-wise PIC report of ALL in-production lots (every style):
+// a lot cut within the last 120 days that still has undispatched pieces. Identical
+// format to the operator dashboard's /dashboard/pic-size-report (shared builder in
+// utils/picSizeReport.js). Exposed on the PM style page's "Download in-production report".
+router.get('/reports/pic-size', async (req, res) => {
+  try {
+    const rows = await buildPicSizeRows({ inProductionOnly: true });
+    const workbook = buildPicSizeWorkbook(rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="PICReport-InProduction-BySize.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[pm] /reports/pic-size failed:', err);
+    res.status(500).send('Failed to build in-production report');
+  }
 });
 
 // PM approve-and-assign screen: review a style's suggested cut, pick a cutting master, assign.

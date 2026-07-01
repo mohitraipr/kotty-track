@@ -9,6 +9,7 @@
     </div>
     <div class="actions">
       <a class="pm-btn" href="/pm/api/recommendations.csv?style=<%= encodeURIComponent(style) %>">Export CSV</a>
+      <a class="pm-btn" href="/pm/reports/pic-size" title="Download the size-wise PIC report of all lots currently in production (every style)">Download in-production report</a>
       <% if (typeof userRole !== 'undefined' && userRole === 'admin') { %><a class="pm-btn primary" href="/pm">Run pull</a><% } %>
     </div>
   </header>
