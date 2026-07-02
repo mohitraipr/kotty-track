@@ -7,6 +7,7 @@
 const { pool } = require('../config/db');
 const { cache } = require('../utils/cache');
 const ExcelJS = require('exceljs');
+const { deriveStyle } = require('./easyecomAnalytics');
 
 function isDenimLot(lotOrLotNo, isDenimCutter = null, flowType = null) {
   // If called with lot object that has flow_type or is_denim_cutter
@@ -970,11 +971,16 @@ async function buildPicSizeRows({
   endDate = '',
   inProductionOnly = false,
   inProductionWindowDays = 120,
+  style = '',
 } = {}) {
   // Row cap: the operator (date-windowed) path keeps its historical 5000 cap; the
   // "all in-production" path needs headroom so it doesn't silently drop older
   // in-production lots (the 120d window is ~6.5k lot×size rows and growing).
   const rowLimit = inProductionOnly ? 50000 : 5000;
+  // Optional style scope (e.g. the PM style page). Matches via deriveStyle() so both
+  // style-level and size-suffixed cutting_lots.sku values resolve correctly — the SQL
+  // LIKE is a prefilter; the exact match happens per-row in the assembly loop below.
+  const styleUpper = String(style || '').trim().toUpperCase();
   let dateWhere = '';
   const dateParams = [];
 
@@ -1013,6 +1019,13 @@ async function buildPicSizeRows({
         dateParams.push(sd, ed);
       }
     }
+  }
+
+  // Style scope prefilter (exact match happens per-row via deriveStyle below).
+  // Appended after the date clause so params stay in query order.
+  if (styleUpper) {
+    dateWhere += ' AND cl.sku LIKE ? ';
+    dateParams.push(`${styleUpper}%`);
   }
 
   let lotTypeClause = '';
@@ -1110,6 +1123,10 @@ async function buildPicSizeRows({
 
   const finalData = [];
   for (const row of rows) {
+    // Exact style scope: the SQL LIKE prefilter can over-match (e.g. KTT677 vs KTT6770),
+    // so confirm the derived style equals the requested one — same semantics as the
+    // dashboard's r.style === style filtering.
+    if (styleUpper && deriveStyle(row.sku) !== styleUpper) continue;
     const lotNo = row.lot_no;
     const sizeLabel = row.size_label;
     const totalCut = parseFloat(row.total_pieces) || 0;
