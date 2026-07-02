@@ -262,8 +262,8 @@ function buildEnhancedRow({
 }
 
 // Per-stage column model (as of the approved/completed rework):
-//   "In Qty"   = pieces the stage APPROVED (took in)
-//   "Out Qty"  = pieces the stage COMPLETED
+//   "Approved"  = pieces the stage took in (APPROVED)
+//   "Completed" = pieces the stage COMPLETED
 //   "In-line (WIP)" = approved − completed (on the machine right now)
 //   "Pending Qty"   = completed − the NEXT stage's approved (done, not yet picked up);
 //                     for Finishing, completed − dispatched.
@@ -285,8 +285,8 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Stitch Operator',     key: 'stitchOp',          width: 14 },
   { header: 'Stitch Assigned On',  key: 'stitchAssignedOn',  width: 19 },
   { header: 'Stitch Approved On',  key: 'stitchApprovedOn',  width: 19 },
-  { header: 'Stitch In Qty',       key: 'stitchInQty',       width: 11 },
-  { header: 'Stitch Out Qty',      key: 'stitchOutQty',      width: 11 },
+  { header: 'Stitch Approved',       key: 'stitchInQty',       width: 11 },
+  { header: 'Stitch Completed',      key: 'stitchOutQty',      width: 11 },
   { header: 'Stitch Pending Qty',  key: 'stitchPendingQty',  width: 12 },
   { header: 'Stitch Status',       key: 'stitchStatus',      width: 16 },
   { header: 'Stitch In-line (WIP)',      key: 'stitchInline',      width: 9  },
@@ -294,8 +294,8 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Assembly Operator',     key: 'assemblyOp',          width: 14 },
   { header: 'Assembly Assigned On',  key: 'assemblyAssignedOn',  width: 19 },
   { header: 'Assembly Approved On',  key: 'assemblyApprovedOn',  width: 19 },
-  { header: 'Assembly In Qty',       key: 'assemblyInQty',       width: 11 },
-  { header: 'Assembly Out Qty',      key: 'assemblyOutQty',      width: 11 },
+  { header: 'Assembly Approved',       key: 'assemblyInQty',       width: 11 },
+  { header: 'Assembly Completed',      key: 'assemblyOutQty',      width: 11 },
   { header: 'Assembly Pending Qty',  key: 'assemblyPendingQty',  width: 12 },
   { header: 'Assembly Status',       key: 'assemblyStatus',      width: 16 },
   { header: 'Assembly In-line (WIP)',      key: 'assemblyInline',      width: 9  },
@@ -303,8 +303,8 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Washing Operator',     key: 'washingOp',          width: 14 },
   { header: 'Washing Assigned On',  key: 'washingAssignedOn',  width: 19 },
   { header: 'Washing Approved On',  key: 'washingApprovedOn',  width: 19 },
-  { header: 'Washing In Qty',       key: 'washingInQty_in',    width: 11 },
-  { header: 'Washing Out Qty',      key: 'washingOutQty',      width: 11 },
+  { header: 'Washing Approved',       key: 'washingInQty_in',    width: 11 },
+  { header: 'Washing Completed',      key: 'washingOutQty',      width: 11 },
   { header: 'Washing Pending Qty',  key: 'washingPendingQty',  width: 12 },
   { header: 'Washing Status',       key: 'washingStatus',      width: 16 },
   { header: 'Washing In-line (WIP)',      key: 'washingInline',      width: 9  },
@@ -312,8 +312,8 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Wash-In Operator',     key: 'washInOp',           width: 14 },
   { header: 'Wash-In Assigned On',  key: 'washInAssignedOn',   width: 19 },
   { header: 'Wash-In Approved On',  key: 'washInApprovedOn',   width: 19 },
-  { header: 'Wash-In In Qty',       key: 'washInInQty',        width: 11 },
-  { header: 'Wash-In Out Qty',      key: 'washInOutQty',       width: 11 },
+  { header: 'Wash-In Approved',       key: 'washInInQty',        width: 11 },
+  { header: 'Wash-In Completed',      key: 'washInOutQty',       width: 11 },
   { header: 'Wash-In Pending Qty',  key: 'washInPendingQty',   width: 12 },
   { header: 'Wash-In Status',       key: 'washInStatus',       width: 16 },
   { header: 'Wash-In In-line (WIP)',      key: 'washInInline',       width: 9  },
@@ -325,8 +325,8 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Finishing Operator',     key: 'finishingOp',          width: 14 },
   { header: 'Finishing Assigned On',  key: 'finishingAssignedOn',  width: 19 },
   { header: 'Finishing Approved On',  key: 'finishingApprovedOn',  width: 19 },
-  { header: 'Finishing In Qty',       key: 'finishingInQty',       width: 11 },
-  { header: 'Finishing Out Qty',      key: 'finishingOutQty',      width: 11 },
+  { header: 'Finishing Approved',       key: 'finishingInQty',       width: 11 },
+  { header: 'Finishing Completed',      key: 'finishingOutQty',      width: 11 },
   { header: 'Finishing Pending Qty',  key: 'finishingPendingQty',  width: 12 },
   { header: 'Finishing Status',       key: 'finishingStatus',      width: 16 },
 
