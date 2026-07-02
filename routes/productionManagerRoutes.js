@@ -191,13 +191,16 @@ router.get('/style/:style', async (req, res) => {
 // Download the size-wise PIC report of ALL in-production lots (every style):
 // a lot cut within the last 120 days that still has undispatched pieces. Identical
 // format to the operator dashboard's /dashboard/pic-size-report (shared builder in
-// utils/picSizeReport.js). Exposed on the PM style page's "Download in-production report".
+// utils/picSizeReport.js). Scoped to ?style= when provided (the PM style page passes
+// its style); omit it for an all-styles report.
 router.get('/reports/pic-size', async (req, res) => {
   try {
-    const rows = await buildPicSizeRows({ inProductionOnly: true });
+    const style = String(req.query.style || '').trim();
+    const rows = await buildPicSizeRows({ inProductionOnly: true, style });
     const workbook = buildPicSizeWorkbook(rows);
+    const safeStyle = (style || 'AllStyles').replace(/[^A-Za-z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="PICReport-InProduction-BySize.xlsx"');
+    res.setHeader('Content-Disposition', `attachment; filename="PICReport-InProduction-${safeStyle}-BySize.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
