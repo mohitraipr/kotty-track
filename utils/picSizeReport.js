@@ -91,6 +91,7 @@ function classifyStage({ assign, inQty, outQty, nextAssign, isApplicable }) {
 // Build a flat, user-friendly row: per-stage In/Out/Pending/Status/Inline + a top-level rollup.
 function buildEnhancedRow({
   lot, isDenim, totalCut, sums, assigns,
+  approved = {}, dispatched = 0,
   rewash = { requested: 0, pending: 0, completed: 0 },
   rejects = {}
 }) {
@@ -101,44 +102,38 @@ function buildEnhancedRow({
   const { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty } = sums;
   const { stAssign, asmAssign, washAssign, washInAssign, finAssign } = assigns;
 
-  // Stage flows:
-  //   DENIM:    Cut → Stitch → Assembly → Washing → WashIn → Finishing
-  //   HOSIERY:  Cut → Stitch → Finishing
-  const stitch = classifyStage({
-    assign: stAssign,
-    inQty:  totalCut,
-    outQty: stitchedQty,
-    nextAssign: isDenim ? asmAssign : finAssign,
-    isApplicable: true
-  });
-  const assembly = classifyStage({
-    assign: asmAssign,
-    inQty:  stitchedQty,
-    outQty: assembledQty,
-    nextAssign: washAssign,
-    isApplicable: isDenim
-  });
-  const washing = classifyStage({
-    assign: washAssign,
-    inQty:  assembledQty,
-    outQty: washedQty,
-    nextAssign: washInAssign,
-    isApplicable: isDenim
-  });
-  const washIn = classifyStage({
-    assign: washInAssign,
-    inQty:  washedQty,
-    outQty: washingInQty,
-    nextAssign: finAssign,
-    isApplicable: isDenim
-  });
-  const finishing = classifyStage({
-    assign: finAssign,
-    inQty:  isDenim ? washingInQty : stitchedQty,
-    outQty: finishedQty,
-    nextAssign: null,
-    isApplicable: true
-  });
+  // New per-stage model (approved/completed):
+  //   In      = this stage's APPROVED pieces (what it took in)
+  //   Out     = this stage's COMPLETED pieces
+  //   In-line = approved − completed (on the machine right now)
+  //   Pending = completed − NEXT stage's approved (done, not yet picked up).
+  //             For the terminal Finishing stage, "next approved" = dispatched pieces.
+  const stitchApproved    = Number(approved.stitchApproved)    || 0;
+  const assemblyApproved  = Number(approved.assemblyApproved)  || 0;
+  const washingApproved   = Number(approved.washingApproved)   || 0;
+  const washInApproved    = Number(approved.washInApproved)    || 0;
+  const finishingApproved = Number(approved.finishingApproved) || 0;
+  const dispatchedQty     = Number(dispatched) || 0;
+
+  const stageBlock = (approvedQty, completedQty, nextApprovedQty, applicable) => {
+    if (!applicable) return { in: '—', out: '—', inline: '—', pending: '—', status: 'N/A' };
+    const inn = Number(approvedQty) || 0;
+    const out = Number(completedQty) || 0;
+    const inline = Math.max(0, inn - out);
+    const pending = Math.max(0, out - (Number(nextApprovedQty) || 0));
+    let status = 'Not Started';
+    if (inn > 0) status = out >= inn ? 'Completed' : 'In Progress';
+    else if (out > 0) status = 'Completed';
+    return { in: inn, out, inline, pending, status };
+  };
+
+  // DENIM:   Cut → Stitch → Assembly → Washing → WashIn → Finishing
+  // HOSIERY: Cut → Stitch → Finishing  (assembly/washing/wash-in N/A)
+  const stitch    = stageBlock(stitchApproved,    stitchedQty,   isDenim ? assemblyApproved : finishingApproved, true);
+  const assembly  = stageBlock(assemblyApproved,  assembledQty,  washingApproved,    isDenim);
+  const washing   = stageBlock(washingApproved,   washedQty,     washInApproved,     isDenim);
+  const washIn    = stageBlock(washInApproved,    washingInQty,  finishingApproved,  isDenim);
+  const finishing = stageBlock(finishingApproved, finishedQty,   dispatchedQty,      true);
 
   // Determine current stage: first non-Completed, non-NA in the chain.
   const chain = isDenim
@@ -201,8 +196,8 @@ function buildEnhancedRow({
     stitchOp:        opName(stAssign),
     stitchAssignedOn: fmtIST(stAssign && stAssign.assigned_on),
     stitchApprovedOn: fmtIST(stAssign && stAssign.approved_on),
-    stitchInQty:     totalCut,
-    stitchOutQty:    stitchedQty,
+    stitchInQty:     stitch.in,
+    stitchOutQty:    stitch.out,
     stitchPendingQty: stitch.pending,
     stitchStatus:    stitch.status,
     stitchInline:    stitch.inline,
@@ -211,31 +206,31 @@ function buildEnhancedRow({
     assemblyOp:        isDenim ? opName(asmAssign) : '—',
     assemblyAssignedOn: isDenim ? fmtIST(asmAssign && asmAssign.assigned_on) : '—',
     assemblyApprovedOn: isDenim ? fmtIST(asmAssign && asmAssign.approved_on) : '—',
-    assemblyInQty:     isDenim ? stitchedQty  : '—',
-    assemblyOutQty:    isDenim ? assembledQty : '—',
-    assemblyPendingQty: isDenim ? assembly.pending : '—',
+    assemblyInQty:     assembly.in,
+    assemblyOutQty:    assembly.out,
+    assemblyPendingQty: assembly.pending,
     assemblyStatus:    assembly.status,
-    assemblyInline:    isDenim ? assembly.inline : '—',
+    assemblyInline:    assembly.inline,
 
     // washing
     washingOp:        isDenim ? opName(washAssign) : '—',
     washingAssignedOn: isDenim ? fmtIST(washAssign && washAssign.assigned_on) : '—',
     washingApprovedOn: isDenim ? fmtIST(washAssign && washAssign.approved_on) : '—',
-    washingInQty_in:  isDenim ? assembledQty : '—',
-    washingOutQty:    isDenim ? washedQty    : '—',
-    washingPendingQty: isDenim ? washing.pending : '—',
+    washingInQty_in:  washing.in,
+    washingOutQty:    washing.out,
+    washingPendingQty: washing.pending,
     washingStatus:    washing.status,
-    washingInline:    isDenim ? washing.inline : '—',
+    washingInline:    washing.inline,
 
     // wash-in
     washInOp:        isDenim ? opName(washInAssign) : '—',
     washInAssignedOn: isDenim ? fmtIST(washInAssign && washInAssign.assigned_on) : '—',
     washInApprovedOn: isDenim ? fmtIST(washInAssign && washInAssign.approved_on) : '—',
-    washInInQty:     isDenim ? washedQty    : '—',
-    washInOutQty:    isDenim ? washingInQty : '—',
-    washInPendingQty: isDenim ? washIn.pending : '—',
+    washInInQty:     washIn.in,
+    washInOutQty:    washIn.out,
+    washInPendingQty: washIn.pending,
     washInStatus:    washIn.status,
-    washInInline:    isDenim ? washIn.inline : '—',
+    washInInline:    washIn.inline,
 
     // rewash (pieces sent back from wash-in to washing for re-processing)
     rewashRequestedQty: rewash.requested || 0,
@@ -258,13 +253,20 @@ function buildEnhancedRow({
     finishingOp:        opName(finAssign),
     finishingAssignedOn: fmtIST(finAssign && finAssign.assigned_on),
     finishingApprovedOn: fmtIST(finAssign && finAssign.approved_on),
-    finishingInQty:     isDenim ? washingInQty : stitchedQty,
-    finishingOutQty:    finishedQty,
+    finishingInQty:     finishing.in,
+    finishingOutQty:    finishing.out,
     finishingPendingQty: finishing.pending,
-    finishingStatus:    finishing.status
+    finishingStatus:    finishing.status,
+    finishingInline:    finishing.inline
   };
 }
 
+// Per-stage column model (as of the approved/completed rework):
+//   "In Qty"   = pieces the stage APPROVED (took in)
+//   "Out Qty"  = pieces the stage COMPLETED
+//   "In-line (WIP)" = approved − completed (on the machine right now)
+//   "Pending Qty"   = completed − the NEXT stage's approved (done, not yet picked up);
+//                     for Finishing, completed − dispatched.
 const PIC_REPORT_V2_COLUMNS = [
   { header: 'Lot No',              key: 'lotNo',             width: 14 },
   { header: 'Manual Lot No',       key: 'externalLotNo',     width: 14 },
@@ -287,7 +289,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Stitch Out Qty',      key: 'stitchOutQty',      width: 11 },
   { header: 'Stitch Pending Qty',  key: 'stitchPendingQty',  width: 12 },
   { header: 'Stitch Status',       key: 'stitchStatus',      width: 16 },
-  { header: 'Stitch Inline?',      key: 'stitchInline',      width: 9  },
+  { header: 'Stitch In-line (WIP)',      key: 'stitchInline',      width: 9  },
 
   { header: 'Assembly Operator',     key: 'assemblyOp',          width: 14 },
   { header: 'Assembly Assigned On',  key: 'assemblyAssignedOn',  width: 19 },
@@ -296,7 +298,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Assembly Out Qty',      key: 'assemblyOutQty',      width: 11 },
   { header: 'Assembly Pending Qty',  key: 'assemblyPendingQty',  width: 12 },
   { header: 'Assembly Status',       key: 'assemblyStatus',      width: 16 },
-  { header: 'Assembly Inline?',      key: 'assemblyInline',      width: 9  },
+  { header: 'Assembly In-line (WIP)',      key: 'assemblyInline',      width: 9  },
 
   { header: 'Washing Operator',     key: 'washingOp',          width: 14 },
   { header: 'Washing Assigned On',  key: 'washingAssignedOn',  width: 19 },
@@ -305,7 +307,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Washing Out Qty',      key: 'washingOutQty',      width: 11 },
   { header: 'Washing Pending Qty',  key: 'washingPendingQty',  width: 12 },
   { header: 'Washing Status',       key: 'washingStatus',      width: 16 },
-  { header: 'Washing Inline?',      key: 'washingInline',      width: 9  },
+  { header: 'Washing In-line (WIP)',      key: 'washingInline',      width: 9  },
 
   { header: 'Wash-In Operator',     key: 'washInOp',           width: 14 },
   { header: 'Wash-In Assigned On',  key: 'washInAssignedOn',   width: 19 },
@@ -314,7 +316,7 @@ const PIC_REPORT_V2_COLUMNS = [
   { header: 'Wash-In Out Qty',      key: 'washInOutQty',       width: 11 },
   { header: 'Wash-In Pending Qty',  key: 'washInPendingQty',   width: 12 },
   { header: 'Wash-In Status',       key: 'washInStatus',       width: 16 },
-  { header: 'Wash-In Inline?',      key: 'washInInline',       width: 9  },
+  { header: 'Wash-In In-line (WIP)',      key: 'washInInline',       width: 9  },
 
   { header: 'Rewash Requested',     key: 'rewashRequestedQty', width: 11 },
   { header: 'Rewash Pending',       key: 'rewashPendingQty',   width: 11 },
@@ -369,7 +371,8 @@ async function fetchLotEventAggregates(lotNos = []) {
   return cache.fetchCached(cacheKey, async () => {
     const aggSql = (table, key) => `
       SELECT '${key}' AS stage, cl.lot_no,
-             SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END) AS completed
+             SUM(CASE WHEN e.event_type='complete' THEN e.pieces ELSE 0 END) AS completed,
+             SUM(CASE WHEN e.event_type='approve'  THEN e.pieces ELSE 0 END) AS approved
         FROM ${table} e
         JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
        WHERE cl.lot_no IN (?)
@@ -401,6 +404,11 @@ async function fetchLotEventAggregates(lotNos = []) {
     const winApprovesQ = pool.query(opSql('washing_in_events'),      [lotNos]);
     const finApprovesQ = pool.query(opSql('finishing_events'),       [lotNos]);
 
+    // Dispatched pieces per lot (the "next approval" for the terminal finishing stage).
+    const dispQ = pool.query(
+      `SELECT lot_no, COALESCE(SUM(quantity),0) AS dispatched
+         FROM finishing_dispatches WHERE lot_no IN (?) GROUP BY lot_no`, [lotNos]);
+
     const [
       [aggRows],
       [stApproves],
@@ -408,23 +416,33 @@ async function fetchLotEventAggregates(lotNos = []) {
       [washApproves],
       [winApproves],
       [finApproves],
-    ] = await Promise.all([aggQ, stApprovesQ, asmApprovesQ, washApprovesQ, winApprovesQ, finApprovesQ]);
+      [dispRows],
+    ] = await Promise.all([aggQ, stApprovesQ, asmApprovesQ, washApprovesQ, winApprovesQ, finApprovesQ, dispQ]);
 
     const lotSumsMap = {};
     lotNos.forEach(ln => {
-      lotSumsMap[ln] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
+      lotSumsMap[ln] = {
+        stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0,
+        // approved (pieces the stage took in) — parallel to the completed sums above
+        stitchApproved:0, assemblyApproved:0, washingApproved:0, washInApproved:0, finishingApproved:0,
+        dispatched:0,
+      };
     });
     for (const r of aggRows) {
       const m = lotSumsMap[r.lot_no];
       if (!m) continue;
       const completed = parseFloat(r.completed) || 0;
+      const approved  = parseFloat(r.approved)  || 0;
       switch (r.stage) {
-        case 'stitched':   m.stitchedQty   = completed; break;
-        case 'assembled':  m.assembledQty  = completed; break;
-        case 'washed':     m.washedQty     = completed; break;
-        case 'washing_in': m.washingInQty  = completed; break;
-        case 'finished':   m.finishedQty   = completed; break;
+        case 'stitched':   m.stitchedQty   = completed; m.stitchApproved     = approved; break;
+        case 'assembled':  m.assembledQty  = completed; m.assemblyApproved   = approved; break;
+        case 'washed':     m.washedQty     = completed; m.washingApproved    = approved; break;
+        case 'washing_in': m.washingInQty  = completed; m.washInApproved     = approved; break;
+        case 'finished':   m.finishedQty   = completed; m.finishingApproved  = approved; break;
       }
+    }
+    for (const r of dispRows) {
+      if (lotSumsMap[r.lot_no]) lotSumsMap[r.lot_no].dispatched = parseFloat(r.dispatched) || 0;
     }
 
     const latestApproveMap = (rows) => {
@@ -461,11 +479,12 @@ async function fetchLotSizeEventSums(lotNos = []) {
   return cache.fetchCached(cacheKey, async () => {
     const sizeSql = (eventsTbl, sizesTbl, key) => `
       SELECT '${key}' AS stage, cl.lot_no, s.size_label,
-             COALESCE(SUM(s.pieces),0) AS completed
+             COALESCE(SUM(CASE WHEN e.event_type='complete' THEN s.pieces ELSE 0 END),0) AS completed,
+             COALESCE(SUM(CASE WHEN e.event_type='approve'  THEN s.pieces ELSE 0 END),0) AS approved
         FROM ${sizesTbl} s
         JOIN ${eventsTbl} e ON e.id = s.event_id
         JOIN cutting_lots cl ON cl.id = e.cutting_lot_id
-       WHERE cl.lot_no IN (?) AND e.event_type='complete'
+       WHERE cl.lot_no IN (?) AND e.event_type IN ('complete','approve')
        GROUP BY cl.lot_no, s.size_label
     `;
     const [rows] = await pool.query(
@@ -481,14 +500,18 @@ async function fetchLotSizeEventSums(lotNos = []) {
     const map = {}; // key = `${lot_no}|${size_label}`
     for (const r of rows) {
       const k = `${r.lot_no}|${r.size_label}`;
-      if (!map[k]) map[k] = { stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0 };
+      if (!map[k]) map[k] = {
+        stitchedQty:0, assembledQty:0, washedQty:0, washingInQty:0, finishedQty:0,
+        stitchApproved:0, assemblyApproved:0, washingApproved:0, washInApproved:0, finishingApproved:0,
+      };
       const completed = parseFloat(r.completed) || 0;
+      const approved  = parseFloat(r.approved)  || 0;
       switch (r.stage) {
-        case 'stitched':   map[k].stitchedQty   = completed; break;
-        case 'assembled':  map[k].assembledQty  = completed; break;
-        case 'washed':     map[k].washedQty     = completed; break;
-        case 'washing_in': map[k].washingInQty  = completed; break;
-        case 'finished':   map[k].finishedQty   = completed; break;
+        case 'stitched':   map[k].stitchedQty  = completed; map[k].stitchApproved    = approved; break;
+        case 'assembled':  map[k].assembledQty = completed; map[k].assemblyApproved  = approved; break;
+        case 'washed':     map[k].washedQty    = completed; map[k].washingApproved   = approved; break;
+        case 'washing_in': map[k].washingInQty = completed; map[k].washInApproved    = approved; break;
+        case 'finished':   map[k].finishedQty  = completed; map[k].finishingApproved = approved; break;
       }
     }
     return map;
@@ -514,7 +537,16 @@ function getDepartmentStatuses({
   asmAssign,    // jeans_assembly_assignments
   washAssign,   // washing_assignments
   washInAssign, // washing_in_assignments
-  finAssign     // finishing_assignments
+  finAssign,    // finishing_assignments
+  // Per-stage APPROVED sums + dispatched. A lot is "N Pending" at a stage when it
+  // COMPLETED more than the NEXT stage has APPROVED (taken in). Terminal finishing
+  // measures completed vs dispatched. Defaults keep old callers working.
+  stitchApproved = 0,
+  assemblyApproved = 0,
+  washingApproved = 0,
+  washInApproved = 0,
+  finishingApproved = 0,
+  dispatched = 0
 }) {
   // placeholders
   let stitchingStatus="N/A", stitchingOp="", stitchingAssignedOn="N/A", stitchingApprovedOn="N/A";
@@ -600,18 +632,18 @@ function getDepartmentStatuses({
         // Denim: compare against what assembly received
         if (!asmAssign) {
           stitchingStatus= "Completed-Inline";
-        } else if (assembledQty < stitchedQty) {
-          const pend= stitchedQty - assembledQty;
+        } else if (assemblyApproved < stitchedQty) {
+          const pend= stitchedQty - assemblyApproved;
           stitchingStatus= `${pend} Pending`;
         } else {
           stitchingStatus= !washAssign ? "Completed-Inline" : "Completed";
         }
       } else {
-        // Hosiery: compare against what finishing received
+        // Hosiery: compare against what finishing APPROVED (took in)
         if (!finAssign) {
           stitchingStatus= "Completed-Inline";
-        } else if (finishedQty < stitchedQty) {
-          const pend= stitchedQty - finishedQty;
+        } else if (finishingApproved < stitchedQty) {
+          const pend= stitchedQty - finishingApproved;
           stitchingStatus= `${pend} Pending`;
         } else {
           stitchingStatus= "Completed";
@@ -686,8 +718,8 @@ function getDepartmentStatuses({
           assemblyStatus= "In-Line";
         } else if (!washAssign) {
           assemblyStatus= "Completed-Inline";
-        } else if (washedQty < assembledQty) {
-          const pend= assembledQty - washedQty;
+        } else if (washingApproved < assembledQty) {
+          const pend= assembledQty - washingApproved;
           assemblyStatus= `${pend} Pending`;
         } else {
           assemblyStatus= !washInAssign ? "Completed-Inline" : "Completed";
@@ -748,8 +780,8 @@ function getDepartmentStatuses({
             washingStatus= "In-Line";
           } else if (!washInAssign) {
             washingStatus= "Completed-Inline";
-          } else if (washingInQty < washedQty) {
-            const pend= washedQty - washingInQty;
+          } else if (washInApproved < washedQty) {
+            const pend= washedQty - washInApproved;
             washingStatus= `${pend} Pending`;
           } else {
             washingStatus= !finAssign ? "Completed-Inline" : "Completed";
@@ -807,8 +839,8 @@ function getDepartmentStatuses({
               washingInStatus= "In-Line";
             } else if (!finAssign) {
               washingInStatus= "Completed-Inline";
-            } else if (finishedQty < washingInQty) {
-              const pend= washingInQty - finishedQty;
+            } else if (finishingApproved < washingInQty) {
+              const pend= washingInQty - finishingApproved;
               washingInStatus= `${pend} Pending`;
             } else {
               washingInStatus= "Completed";
@@ -853,28 +885,15 @@ function getDepartmentStatuses({
     } else if (is_approved==0) {
       finishingStatus= `Denied by ${finishingOp}`;
     } else {
-      // partial or complete
-      // for denim => finishing leftover vs washingIn
-      // for non-denim => finishing leftover vs stitched
-      if (isDenim) {
-        if (finishedQty===0) {
-          finishingStatus= "In-Line";
-        } else if (finishedQty>= washingInQty && washingInQty>0) {
-          finishingStatus= "Completed";
-        } else {
-          const pend= washingInQty- finishedQty;
-          finishingStatus= `${pend} Pending`;
-        }
+      // Terminal stage — "next approval" is dispatch: finished pieces stay pending
+      // until they're dispatched out. Same rule for denim and hosiery.
+      if (finishedQty===0) {
+        finishingStatus= "In-Line";
+      } else if (dispatched >= finishedQty) {
+        finishingStatus= "Completed";
       } else {
-        // non-denim => finishing leftover vs. stitched
-        if (finishedQty===0) {
-          finishingStatus= "In-Line";
-        } else if (finishedQty>= stitchedQty && stitchedQty>0) {
-          finishingStatus= "Completed";
-        } else {
-          const pend= stitchedQty- finishedQty;
-          finishingStatus= `${pend} Pending`;
-        }
+        const pend= finishedQty - dispatched;
+        finishingStatus= `${pend} Pending`;
       }
     }
   }
@@ -1138,6 +1157,16 @@ async function buildPicSizeRows({
     const washedQty = sums.washedQty || 0;
     const washingInQty = sums.washingInQty || 0;
     const finishedQty = sums.finishedQty || 0;
+    // per-size approved (In) + dispatched (finishing's "next approval")
+    const approvedSums = {
+      stitchApproved: sums.stitchApproved || 0,
+      assemblyApproved: sums.assemblyApproved || 0,
+      washingApproved: sums.washingApproved || 0,
+      washInApproved: sums.washInApproved || 0,
+      finishingApproved: sums.finishingApproved || 0,
+    };
+    const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
+    const dispatchedQty = dispatch.dispatchedQty || 0;
 
     const stAssign = stitchMap[lotNo] || null;
     const asmAssign = asmMap[lotNo] || null;
@@ -1148,6 +1177,7 @@ async function buildPicSizeRows({
     const statuses = getDepartmentStatuses({
       isDenim: denim, totalCut, stitchedQty, assembledQty, washedQty, washingInQty, finishedQty,
       stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign,
+      ...approvedSums, dispatched: dispatchedQty,
     });
 
     const deptResult = filterByDept({
@@ -1188,13 +1218,14 @@ async function buildPicSizeRows({
       totalCut,
       sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
       assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
+      approved: approvedSums,
+      dispatched: dispatchedQty,
       rewash: rewashMap[lotNo] || { requested: 0, pending: 0, completed: 0 },
       rejects: rejectSizeMap[`${lotNo}|${sizeLabel}`] || {},
     });
     enriched.size = sizeLabel;
     enriched.sku_size = `${row.sku}_${sizeLabel}`;
-    const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
-    enriched.dispatchedQty = dispatch.dispatchedQty || 0;
+    enriched.dispatchedQty = dispatchedQty;
     enriched.destinations = dispatch.destinations || '';
 
     // In-production = this lot+size still has undispatched pieces.

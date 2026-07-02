@@ -1147,6 +1147,15 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
       const washedQty    = sums.washedQty     || 0;
       const washingInQty = sums.washingInQty  || 0;
       const finishedQty  = sums.finishedQty   || 0;
+      // per-stage approved (In) + dispatched (finishing's "next approval")
+      const approvedSums = {
+        stitchApproved: sums.stitchApproved || 0,
+        assemblyApproved: sums.assemblyApproved || 0,
+        washingApproved: sums.washingApproved || 0,
+        washInApproved: sums.washInApproved || 0,
+        finishingApproved: sums.finishingApproved || 0,
+      };
+      const dispatchedQty = sums.dispatched || 0;
       const rewashInfo   = rewashMap[lotNo]   || { requested:0, pending:0, completed:0 };
       const rejectsInfo  = rejectMap[lotNo]   || {};
 
@@ -1170,7 +1179,9 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         asmAssign,
         washAssign,
         washInAssign: wInAssign,
-        finAssign
+        finAssign,
+        ...approvedSums,
+        dispatched: dispatchedQty
       });
 
       // Decide if we show row based on department filter
@@ -1207,6 +1218,8 @@ router.get("/dashboard/pic-report", isAuthenticated, isOperator, async (req, res
         totalCut,
         sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
         assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
+        approved: approvedSums,
+        dispatched: dispatchedQty,
         rewash: rewashInfo,
         rejects: rejectsInfo
       }));
@@ -1435,6 +1448,16 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
       const washedQty    = sums.washedQty    || 0;
       const washingInQty = sums.washingInQty || 0;
       const finishedQty  = sums.finishedQty  || 0;
+      // per-size approved (In) + dispatched (finishing's "next approval")
+      const approvedSums = {
+        stitchApproved: sums.stitchApproved || 0,
+        assemblyApproved: sums.assemblyApproved || 0,
+        washingApproved: sums.washingApproved || 0,
+        washInApproved: sums.washInApproved || 0,
+        finishingApproved: sums.finishingApproved || 0,
+      };
+      const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
+      const dispatchedQty = dispatch.dispatchedQty || 0;
 
       const stAssign  = stitchMap[lotNo] || null;
       const asmAssign = asmMap[lotNo]    || null;
@@ -1454,7 +1477,9 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         asmAssign,
         washAssign,
         washInAssign: wInAssign,
-        finAssign
+        finAssign,
+        ...approvedSums,
+        dispatched: dispatchedQty
       });
 
       const deptResult = filterByDept({
@@ -1495,14 +1520,15 @@ router.get("/dashboard/pic-size-report", isAuthenticated, isOperator, async (req
         totalCut, // per-size cut from cutting_lot_sizes — correct baseline
         sums: { stitchedQty, assembledQty, washedQty, washingInQty, finishedQty },
         assigns: { stAssign, asmAssign, washAssign, washInAssign: wInAssign, finAssign },
+        approved: approvedSums,
+        dispatched: dispatchedQty,
         rewash: rewashMap[lotNo] || { requested:0, pending:0, completed:0 },
         rejects: rejectSizeMap[`${lotNo}|${sizeLabel}`] || {}
       });
       // size-specific overrides
       enriched.size = sizeLabel;
       enriched.sku_size = `${row.sku}_${sizeLabel}`;
-      const dispatch = dispatchMap[`${lotNo}|${sizeLabel}`] || {};
-      enriched.dispatchedQty = dispatch.dispatchedQty || 0;
+      enriched.dispatchedQty = dispatchedQty;
       enriched.destinations  = dispatch.destinations  || '';
 
       finalData.push(enriched);
