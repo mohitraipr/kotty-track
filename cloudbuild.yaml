@@ -62,9 +62,14 @@ substitutions:
   _BUCKET_NAME: 'kotty-track-uploads'
   _DB_USER: 'kotty_user'
   _DB_NAME: 'kotty_db'
-  _MEMORY: '1Gi'
+  # 2Gi matches NODE_OPTIONS=--max-old-space-size=1536 (set via update-env-vars) so the
+  # nightly EasyEcom pull worker doesn't OOM on the orders/aging steps. Do not drop to 1Gi.
+  _MEMORY: '2Gi'
   _CPU: '1'
-  _MIN_INSTANCES: '0'
+  # Keep one warm instance so the in-memory EasyEcom JWT token (cached ~23h) survives
+  # instead of re-authing on every scale-to-zero cold start — cold-start auth churn was
+  # tripping EasyEcom's /access/token "Limit Exceeded" rate cap and freezing the PM feed.
+  _MIN_INSTANCES: '1'
   _MAX_INSTANCES: '10'
   _TAG: 'v2'
 
