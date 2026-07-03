@@ -1,48 +1,70 @@
 // utils/qcDashboard.js
 //
-// Pure (DB-free) logic for the QC dashboard passes API, extracted so it can be
+// Pure (DB-free) logic for the QC dashboard API, extracted so it can be
 // unit-tested without a live database:
 //   - buildPassesQuery(filters)  -> { sql, params }  (parameterized SELECT)
 //   - rowsToCsv(rows)            -> CSV string (RFC-4180-ish escaping)
 //   - summarizeByUser(rows)      -> [{ user, passes }]  (grouped count)
 //   - istToday()                 -> 'YYYY-MM-DD' in IST (default date range)
 //
-// A row in qc_return_passes is one QC pass by user `passed_by`. Product detail
-// (sku_code, style_id, size, product_name, tracking_number) lives in
-// qc_return_captures, joined on capture_uid.
+// CAPTURES-BASED: one row per return item SCANNED by a user (qc_return_captures),
+// which is where the full product detail lives (sku_code, style_id, size,
+// product_name, tracking_number). Whether that item was later QC-passed is
+// LEFT-joined from qc_return_passes ON item_barcode (the physical item key) —
+// NOT on capture_uid, which is derived from different inputs in each table and
+// therefore never matches. `pass_success`/`passed_at` are NULL when a scanned
+// item was never passed.
 
 // Ordered column set the API returns for each detail row. Also the CSV header order.
 const ROW_COLUMNS = [
-  'passed_at',
+  'captured_at',
   'username',
   'item_barcode',
   'tracking_number',
   'sku_code',
   'style_id',
+  'product_name',
   'size',
   'quality',
   'qc_action',
+  'return_status',
+  'logistics_status',
   'warehouse_id',
   'pass_success',
+  'passed_at',
 ];
 
 // SELECT clause that produces exactly ROW_COLUMNS (in order).
+// The passes side is pre-aggregated to ONE row per item_barcode (MAX passed_at /
+// MAX pass_success) so a rare double-pass can't fan a capture into duplicate rows.
 const SELECT_SQL = `
   SELECT
-    DATE_FORMAT(p.passed_at, '%Y-%m-%d %H:%i:%s') AS passed_at,
-    u.username        AS username,
-    p.item_barcode    AS item_barcode,
-    c.tracking_number AS tracking_number,
-    c.sku_code        AS sku_code,
-    c.style_id        AS style_id,
-    c.size            AS size,
-    p.quality         AS quality,
-    p.qc_action       AS qc_action,
-    p.warehouse_id    AS warehouse_id,
-    p.pass_success    AS pass_success
-  FROM qc_return_passes p
-  LEFT JOIN users u ON u.id = p.passed_by
-  LEFT JOIN qc_return_captures c ON c.capture_uid = p.capture_uid`.trim();
+    DATE_FORMAT(COALESCE(c.captured_at, c.ingested_at), '%Y-%m-%d %H:%i:%s') AS captured_at,
+    u.username             AS username,
+    c.item_barcode         AS item_barcode,
+    c.tracking_number      AS tracking_number,
+    c.sku_code             AS sku_code,
+    c.style_id             AS style_id,
+    c.product_name         AS product_name,
+    c.size                 AS size,
+    c.quality              AS quality,
+    c.qc_action            AS qc_action,
+    c.return_status        AS return_status,
+    c.logistics_status     AS logistics_status,
+    c.return_destination_wh AS warehouse_id,
+    p.pass_success         AS pass_success,
+    DATE_FORMAT(p.passed_at, '%Y-%m-%d %H:%i:%s') AS passed_at
+  FROM qc_return_captures c
+  LEFT JOIN users u ON u.id = c.captured_by
+  LEFT JOIN (
+    SELECT item_barcode, MAX(pass_success) AS pass_success, MAX(passed_at) AS passed_at
+    FROM qc_return_passes
+    GROUP BY item_barcode
+  ) p ON p.item_barcode = c.item_barcode`.trim();
+
+// The captured-day / captured-timestamp expressions, reused by WHERE + ORDER BY.
+const CAPTURED_DAY = 'DATE(COALESCE(c.captured_at, c.ingested_at))';
+const CAPTURED_TS = 'COALESCE(c.captured_at, c.ingested_at)';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -63,13 +85,14 @@ function nonEmpty(value) {
 }
 
 /**
- * Build the parameterized passes query from user filters. NEVER string-
+ * Build the parameterized captures query from user filters. NEVER string-
  * concatenates user input — every dynamic value goes in `params`.
  *
  * filters: { from, to, user, quality, qc_action, warehouse, q }
- *   from/to  inclusive on DATE(passed_at); default to today (IST) when absent.
- *   user     matches users.username (the passer).
- *   quality / qc_action / warehouse  exact matches on the pass row.
+ *   from/to  inclusive on DATE(captured_at); default to today (IST) when absent.
+ *   user     matches users.username (the operator who scanned).
+ *   quality / qc_action  exact matches on the captured return.
+ *   warehouse            exact match on the return destination warehouse.
  *   q        free-text, grouped OR LIKE across
  *            sku_code / style_id / item_barcode / tracking_number / product_name.
  *
@@ -80,7 +103,7 @@ function buildPassesQuery(filters = {}) {
   const from = sanitizeDate(filters.from, today);
   const to = sanitizeDate(filters.to, today);
 
-  const where = ['DATE(p.passed_at) BETWEEN ? AND ?'];
+  const where = [`${CAPTURED_DAY} BETWEEN ? AND ?`];
   const params = [from, to];
 
   if (nonEmpty(filters.user)) {
@@ -88,30 +111,31 @@ function buildPassesQuery(filters = {}) {
     params.push(String(filters.user).trim());
   }
   if (nonEmpty(filters.quality)) {
-    where.push('p.quality = ?');
+    where.push('c.quality = ?');
     params.push(String(filters.quality).trim());
   }
   if (nonEmpty(filters.qc_action)) {
-    where.push('p.qc_action = ?');
+    where.push('c.qc_action = ?');
     params.push(String(filters.qc_action).trim());
   }
   if (nonEmpty(filters.warehouse)) {
-    where.push('p.warehouse_id = ?');
+    where.push('c.return_destination_wh = ?');
     params.push(String(filters.warehouse).trim());
   }
   if (nonEmpty(filters.q)) {
     const like = `%${String(filters.q).trim()}%`;
     where.push(
-      '(c.sku_code LIKE ? OR c.style_id LIKE ? OR p.item_barcode LIKE ? OR c.tracking_number LIKE ? OR c.product_name LIKE ?)'
+      '(c.sku_code LIKE ? OR c.style_id LIKE ? OR c.item_barcode LIKE ? OR c.tracking_number LIKE ? OR c.product_name LIKE ?)'
     );
     params.push(like, like, like, like, like);
   }
 
-  const sql = `${SELECT_SQL}\n  WHERE ${where.join('\n    AND ')}\n  ORDER BY p.passed_at DESC`;
+  const sql = `${SELECT_SQL}\n  WHERE ${where.join('\n    AND ')}\n  ORDER BY ${CAPTURED_TS} DESC`;
   return { sql, params, from, to };
 }
 
-/** Group rows into a per-user pass count: [{ user, passes }], busiest first. */
+/** Group rows into a per-user scan count: [{ user, passes }], busiest first.
+ *  (`passes` = number of returns that user scanned in range.) */
 function summarizeByUser(rows = []) {
   const counts = new Map();
   for (const r of rows) {

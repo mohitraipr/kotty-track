@@ -54,7 +54,7 @@ export default function App({ username }: AppProps) {
           <ShieldCheck className="size-6 text-primary" />
           <div>
             <h1 className="text-lg font-semibold leading-tight">QC Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Returns QC passes by user</p>
+            <p className="text-sm text-muted-foreground">Returns scanned by user — with pass status</p>
           </div>
         </div>
         <span className="text-sm text-muted-foreground">

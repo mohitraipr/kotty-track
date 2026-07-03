@@ -12,7 +12,7 @@ export function SummaryBar({ summary, total }: SummaryBarProps) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
-        <span className="text-sm text-muted-foreground">Passes in range</span>
+        <span className="text-sm text-muted-foreground">Returns scanned in range</span>
         <span className="tabnum text-2xl font-semibold text-foreground">{total.toLocaleString()}</span>
         <span className="text-sm text-muted-foreground">
           across {summary.length} {summary.length === 1 ? "user" : "users"}
