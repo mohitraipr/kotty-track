@@ -101,7 +101,7 @@ async function flush() {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return;
-  if (msg.type === 'capture' || msg.type === 'pass') {
+  if (msg.type === 'capture' || msg.type === 'pass' || msg.type === 'error') {
     const rec = { ...msg.record, _type: msg.type };
     enqueue(rec).then(() => appendLog(rec)).then(() => { broadcast(); flush(); });
   } else if (msg.type === 'getStatus') {

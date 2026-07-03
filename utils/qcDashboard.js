@@ -16,42 +16,79 @@
 // item was never passed.
 
 // Ordered column set the API returns for each detail row. Also the CSV header order.
+// The FULL captured record (everything shown in the extension panel), plus the joined
+// pass outcome (pass_success/passed_at).
 const ROW_COLUMNS = [
   'captured_at',
   'username',
-  'item_barcode',
   'tracking_number',
-  'sku_code',
-  'style_id',
+  'item_barcode',
   'product_name',
+  'article_no',
+  'style_id',
   'size',
-  'quality',
-  'qc_action',
+  'price',
+  'return_type',
+  'return_mode',
   'return_status',
+  'rms_status',
+  'qc_action',
+  'quality',
+  'created_date',
+  'refund_date',
+  'return_received_on',
+  'return_restocked_on',
   'logistics_status',
-  'warehouse_id',
+  'courier_code',
+  'return_hub',
+  'dispatch_wh',
+  'return_destination_wh',
+  'delivery_center',
+  'ship_city',
+  'return_id',
+  'oms_release_id',
+  'sku_id',
+  'sku_code',
   'pass_success',
   'passed_at',
 ];
 
-// SELECT clause that produces exactly ROW_COLUMNS (in order).
+// SELECT clause that produces exactly ROW_COLUMNS (in order). DATE columns are
+// formatted to YYYY-MM-DD so they render clean (no timezone-shifted timestamps).
 // The passes side is pre-aggregated to ONE row per item_barcode (MAX passed_at /
 // MAX pass_success) so a rare double-pass can't fan a capture into duplicate rows.
 const SELECT_SQL = `
   SELECT
     DATE_FORMAT(COALESCE(c.captured_at, c.ingested_at), '%Y-%m-%d %H:%i:%s') AS captured_at,
     u.username             AS username,
-    c.item_barcode         AS item_barcode,
     c.tracking_number      AS tracking_number,
-    c.sku_code             AS sku_code,
-    c.style_id             AS style_id,
+    c.item_barcode         AS item_barcode,
     c.product_name         AS product_name,
+    c.article_no           AS article_no,
+    c.style_id             AS style_id,
     c.size                 AS size,
-    c.quality              AS quality,
-    c.qc_action            AS qc_action,
+    c.price                AS price,
+    c.return_type          AS return_type,
+    c.return_mode          AS return_mode,
     c.return_status        AS return_status,
+    c.rms_status           AS rms_status,
+    c.qc_action            AS qc_action,
+    c.quality              AS quality,
+    DATE_FORMAT(c.created_date, '%Y-%m-%d')          AS created_date,
+    DATE_FORMAT(c.refund_date, '%Y-%m-%d')           AS refund_date,
+    DATE_FORMAT(c.return_received_on, '%Y-%m-%d')    AS return_received_on,
+    DATE_FORMAT(c.return_restocked_on, '%Y-%m-%d')   AS return_restocked_on,
     c.logistics_status     AS logistics_status,
-    c.return_destination_wh AS warehouse_id,
+    c.courier_code         AS courier_code,
+    c.return_hub           AS return_hub,
+    c.dispatch_wh          AS dispatch_wh,
+    c.return_destination_wh AS return_destination_wh,
+    c.delivery_center      AS delivery_center,
+    c.ship_city            AS ship_city,
+    c.return_id            AS return_id,
+    c.oms_release_id       AS oms_release_id,
+    c.sku_id               AS sku_id,
+    c.sku_code             AS sku_code,
     p.pass_success         AS pass_success,
     DATE_FORMAT(p.passed_at, '%Y-%m-%d %H:%i:%s') AS passed_at
   FROM qc_return_captures c
@@ -134,6 +171,71 @@ function buildPassesQuery(filters = {}) {
   return { sql, params, from, to };
 }
 
+// ---------------------------------------------------------------------------
+// Errored scans (qc_search_errors) — trackings whose RMS search failed.
+// `resolved` = a successful capture for that tracking has since landed.
+// ---------------------------------------------------------------------------
+const ERROR_ROW_COLUMNS = [
+  'searched_at',
+  'username',
+  'tracking_number',
+  'search_status',
+  'error_reason',
+  'resolved',
+];
+
+const ERRORS_SELECT_SQL = `
+  SELECT
+    DATE_FORMAT(COALESCE(e.searched_at, e.ingested_at), '%Y-%m-%d %H:%i:%s') AS searched_at,
+    u.username        AS username,
+    e.tracking_number AS tracking_number,
+    e.search_status   AS search_status,
+    e.error_reason    AS error_reason,
+    CASE WHEN c.tracking_number IS NOT NULL THEN 1 ELSE 0 END AS resolved
+  FROM qc_search_errors e
+  LEFT JOIN users u ON u.id = e.searched_by
+  LEFT JOIN (SELECT DISTINCT tracking_number FROM qc_return_captures WHERE tracking_number IS NOT NULL) c
+    ON c.tracking_number = e.tracking_number`.trim();
+
+const ERR_DAY = 'DATE(COALESCE(e.searched_at, e.ingested_at))';
+const ERR_TS = 'COALESCE(e.searched_at, e.ingested_at)';
+
+/**
+ * Build the parameterized errored-scans query. Same date defaults as the main
+ * dashboard. Unresolved errors sort first (they need attention).
+ * filters: { from, to, user, q }
+ */
+function buildErrorsQuery(filters = {}) {
+  const today = istToday();
+  const from = sanitizeDate(filters.from, today);
+  const to = sanitizeDate(filters.to, today);
+
+  const where = [`${ERR_DAY} BETWEEN ? AND ?`];
+  const params = [from, to];
+
+  if (nonEmpty(filters.user)) {
+    where.push('u.username = ?');
+    params.push(String(filters.user).trim());
+  }
+  if (nonEmpty(filters.q)) {
+    const like = `%${String(filters.q).trim()}%`;
+    where.push('(e.tracking_number LIKE ? OR e.error_reason LIKE ?)');
+    params.push(like, like);
+  }
+
+  const sql = `${ERRORS_SELECT_SQL}\n  WHERE ${where.join('\n    AND ')}\n  ORDER BY resolved ASC, ${ERR_TS} DESC`;
+  return { sql, params, from, to };
+}
+
+/** Serialize errored-scan rows to CSV (ERROR_ROW_COLUMNS order). */
+function errorRowsToCsv(rows = []) {
+  const lines = [ERROR_ROW_COLUMNS.map(csvField).join(',')];
+  for (const row of rows) {
+    lines.push(ERROR_ROW_COLUMNS.map((col) => csvField(row[col])).join(','));
+  }
+  return lines.join('\r\n');
+}
+
 /** Group rows into a per-user scan count: [{ user, passes }], busiest first.
  *  (`passes` = number of returns that user scanned in range.) */
 function summarizeByUser(rows = []) {
@@ -168,9 +270,12 @@ function rowsToCsv(rows = []) {
 
 module.exports = {
   ROW_COLUMNS,
+  ERROR_ROW_COLUMNS,
   buildPassesQuery,
+  buildErrorsQuery,
   summarizeByUser,
   rowsToCsv,
+  errorRowsToCsv,
   csvField,
   istToday,
   sanitizeDate,

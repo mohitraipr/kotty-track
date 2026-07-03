@@ -3,12 +3,16 @@ import { ShieldCheck, AlertCircle } from "lucide-react"
 import { FilterBar } from "./components/FilterBar"
 import { SummaryBar } from "./components/SummaryBar"
 import { PassesTable } from "./components/PassesTable"
+import { ErrorsTable } from "./components/ErrorsTable"
 import {
   fetchPasses,
+  fetchErrors,
   passesUrl,
+  errorsUrl,
   istToday,
   type QcFilters,
   type QcPassesResponse,
+  type QcErrorsResponse,
 } from "./lib/api"
 
 interface AppProps {
@@ -26,6 +30,7 @@ export default function App({ username }: AppProps) {
   const defaults = useMemo(defaultFilters, [])
   const [applied, setApplied] = useState<QcFilters>(defaults)
   const [data, setData] = useState<QcPassesResponse | null>(null)
+  const [errorsData, setErrorsData] = useState<QcErrorsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,8 +38,13 @@ export default function App({ username }: AppProps) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetchPasses(filters)
-      setData(res)
+      // Passes drive the page; errored scans load alongside but never block the main view.
+      const [passes, errs] = await Promise.all([
+        fetchPasses(filters),
+        fetchErrors(filters).catch(() => null),
+      ])
+      setData(passes)
+      setErrorsData(errs)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load QC passes.")
     } finally {
@@ -45,6 +55,7 @@ export default function App({ username }: AppProps) {
   useEffect(() => { load(applied) }, [applied, load])
 
   const csvHref = useMemo(() => passesUrl(applied, { download: "csv" }), [applied])
+  const errorsCsvHref = useMemo(() => errorsUrl(applied, { download: "csv" }), [applied])
   const total = data?.rows.length ?? 0
 
   return (
@@ -87,6 +98,12 @@ export default function App({ username }: AppProps) {
       </div>
 
       <PassesTable rows={data?.rows ?? []} />
+
+      <ErrorsTable
+        rows={errorsData?.rows ?? []}
+        unresolved={errorsData?.unresolved ?? 0}
+        csvHref={errorsCsvHref}
+      />
     </div>
   )
 }

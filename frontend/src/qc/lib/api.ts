@@ -11,23 +11,41 @@ export interface QcFilters {
   q: string
 }
 
-// One row = one return item SCANNED by a user (qc_return_captures), with the
-// pass outcome (pass_success/passed_at) LEFT-joined from qc_return_passes.
-// pass_success/passed_at are null when a scanned item was never QC-passed.
+// One row = one return item SCANNED by a user (qc_return_captures) — the FULL
+// captured record — with the pass outcome (pass_success/passed_at) LEFT-joined
+// from qc_return_passes. pass_success/passed_at are null when a scanned item was
+// never QC-passed. Keep these keys in sync with ROW_COLUMNS in utils/qcDashboard.js.
 export interface QcPassRow {
   captured_at: string | null
   username: string | null
-  item_barcode: string | null
   tracking_number: string | null
-  sku_code: string | null
-  style_id: string | null
+  item_barcode: string | null
   product_name: string | null
+  article_no: string | null
+  style_id: string | null
   size: string | null
-  quality: string | null
-  qc_action: string | null
+  price: string | null
+  return_type: string | null
+  return_mode: string | null
   return_status: string | null
+  rms_status: string | null
+  qc_action: string | null
+  quality: string | null
+  created_date: string | null
+  refund_date: string | null
+  return_received_on: string | null
+  return_restocked_on: string | null
   logistics_status: string | null
-  warehouse_id: string | null
+  courier_code: string | null
+  return_hub: string | null
+  dispatch_wh: string | null
+  return_destination_wh: string | null
+  delivery_center: string | null
+  ship_city: string | null
+  return_id: string | null
+  oms_release_id: string | null
+  sku_id: string | null
+  sku_code: string | null
   pass_success: number | null
   passed_at: string | null
 }
@@ -43,6 +61,26 @@ export interface QcPassesResponse {
   to: string
   summary: QcSummaryEntry[]
   rows: QcPassRow[]
+}
+
+// One row = one tracking whose RMS search failed (never lost). `resolved` = a
+// successful capture for that tracking has since landed.
+export interface QcErrorRow {
+  searched_at: string | null
+  username: string | null
+  tracking_number: string | null
+  search_status: string | null
+  error_reason: string | null
+  resolved: number
+}
+
+export interface QcErrorsResponse {
+  ok: boolean
+  from: string
+  to: string
+  total: number
+  unresolved: number
+  rows: QcErrorRow[]
 }
 
 // Filter keys sent to the API (order fixed so URLs are deterministic/testable).
@@ -99,6 +137,31 @@ export async function fetchPasses(filters: Partial<QcFilters>): Promise<QcPasses
     throw new Error((data as { error?: string })?.error || `Request failed (${res.status})`)
   }
   return data as QcPassesResponse
+}
+
+/** Full URL to the errors endpoint (shares the filter querystring; extra filters are ignored server-side). */
+export function errorsUrl(
+  filters: Partial<QcFilters>,
+  extra: Record<string, string> = {}
+): string {
+  const qs = passesQueryString(filters, extra)
+  return qs ? `/qc/api/errors?${qs}` : `/qc/api/errors`
+}
+
+export async function fetchErrors(filters: Partial<QcFilters>): Promise<QcErrorsResponse> {
+  const res = await fetch(errorsUrl(filters), {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  })
+  if (res.status === 401) {
+    window.location.href = "/login"
+    throw new Error("Unauthorized")
+  }
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || (data as QcErrorsResponse).ok === false) {
+    throw new Error((data as { error?: string })?.error || `Request failed (${res.status})`)
+  }
+  return data as QcErrorsResponse
 }
 
 /** Today's date in IST as YYYY-MM-DD (matches the backend default range). */

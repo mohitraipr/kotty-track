@@ -222,14 +222,45 @@
     return rec;
   }
 
-  async function handleSearch(j) {
+  // The searched value the operator scanned lives in the GET search2 URL, e.g.
+  //   ...search2?query[q]=trackingNumber.eq:5718708979&...&receiveShipmentQuery[q][entityBarcode]=5718708979
+  // so we can recover it even when the search fails (No Data Found) and there's no response body.
+  function searchedValueFromUrl(url) {
     try {
-      if (!j || (j.status && j.status.statusType && j.status.statusType !== 'SUCCESS')) return;
-      const rec = extractSearch(j);
-      if (!rec.item_barcode && !rec.tracking_number) return;
-      await enrichLogistics(rec);
-      post('capture', rec);
-      if (AUTOPASS) doAutoPass(rec);   // auto-pass the scanned item when the toggle is ON
+      const u = new URL(url, location.origin);
+      const eb = u.searchParams.get('receiveShipmentQuery[q][entityBarcode]');
+      if (eb && eb.trim()) return eb.trim();
+      const q = u.searchParams.get('query[q]') || '';         // "trackingNumber.eq:VALUE"
+      const idx = q.indexOf('.eq:');
+      if (idx >= 0) { const v = q.slice(idx + 4).trim(); if (v) return v; }
+    } catch (e) {}
+    return '';
+  }
+
+  // `searchedValue` is what the operator scanned (from the URL). On a failed/empty search we
+  // record it as an ERROR so the tracking is never lost (later resolved by a successful capture).
+  async function handleSearch(j, searchedValue) {
+    try {
+      const failed = !j || (j.status && j.status.statusType && j.status.statusType !== 'SUCCESS');
+      if (!failed) {
+        const rec = extractSearch(j);
+        if (rec.item_barcode || rec.tracking_number) {
+          await enrichLogistics(rec);
+          post('capture', rec);
+          if (AUTOPASS) doAutoPass(rec);   // auto-pass the scanned item when the toggle is ON
+          return;
+        }
+      }
+      // failed OR nothing extracted → don't drop it; log the errored tracking
+      if (searchedValue) {
+        const reason = (j && j.status && (j.status.statusMessage || j.status.errorMessage)) || 'No Data Found';
+        post('error', {
+          tracking_number: String(searchedValue),
+          search_status: (j && j.status && j.status.statusType) || 'ERROR',
+          error_reason: String(reason),
+          searched_at: new Date().toISOString(),
+        });
+      }
     } catch (e) {}
   }
 
@@ -261,7 +292,8 @@
       const url = (typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url)) || '';
       const init = args[1] || {};
       if (url.includes('/qcSearch/searchReturnDetails/search2')) {
-        p.then((r) => r.clone().json().then(handleSearch).catch(() => {}));
+        const sv = searchedValueFromUrl(url);
+        p.then((r) => r.clone().json().then((j) => handleSearch(j, sv)).catch(() => handleSearch(null, sv)));
       } else if (url.includes('/qcSearch/updateReturnRestocked')) {
         armPrintSuppress();   // also kill the print popup when the page itself does a pass
         p.then((r) => r.clone().json().then((j) => handlePass(j, init.body)).catch(() => {}));
@@ -288,14 +320,17 @@
       return send.call(this, body);
     };
     xhr.addEventListener('load', function () {
+      const isSearch = _url.includes('/qcSearch/searchReturnDetails/search2');
+      const isPass = _url.includes('/qcSearch/updateReturnRestocked');
+      if (!isSearch && !isPass) return;
+      // Parse defensively — an errored search may be non-JSON; we still want to log it.
+      let j = null;
       try {
-        if (xhr.responseType && xhr.responseType !== 'text' && xhr.responseType !== 'json') return;
-        const txt = xhr.responseType === 'json' ? null : xhr.responseText;
-        const j = xhr.responseType === 'json' ? xhr.response : (txt ? JSON.parse(txt) : null);
-        if (!j) return;
-        if (_url.includes('/qcSearch/searchReturnDetails/search2')) handleSearch(j);
-        else if (_url.includes('/qcSearch/updateReturnRestocked')) handlePass(j, _body);
-      } catch (e) {}
+        if (!xhr.responseType || xhr.responseType === 'text') j = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        else if (xhr.responseType === 'json') j = xhr.response;
+      } catch (e) { j = null; }
+      if (isSearch) handleSearch(j, searchedValueFromUrl(_url));  // j may be null → logs the error
+      else if (j) handlePass(j, _body);
     });
     return xhr;
   }

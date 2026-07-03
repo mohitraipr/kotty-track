@@ -2,8 +2,10 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   buildPassesQuery,
+  buildErrorsQuery,
   summarizeByUser,
   rowsToCsv,
+  errorRowsToCsv,
   csvField,
   istToday,
 } = require('../utils/qcDashboard.js');
@@ -109,6 +111,43 @@ test('buildPassesQuery combines all filters in order and never inlines user inpu
 });
 
 // ---------------------------------------------------------------------------
+// buildErrorsQuery  (errored scans; qc_search_errors)
+// ---------------------------------------------------------------------------
+
+test('buildErrorsQuery defaults to today, joins captures for resolved, unresolved first', () => {
+  const today = istToday();
+  const { sql, params, from, to } = buildErrorsQuery({});
+  assert.strictEqual(from, today);
+  assert.strictEqual(to, today);
+  assert.deepStrictEqual(params, [today, today]);
+  assert.ok(/FROM qc_search_errors e/.test(sql));
+  assert.ok(/qc_return_captures[\s\S]*ON c\.tracking_number = e\.tracking_number/.test(sql),
+    'resolved is derived by joining captures on tracking_number');
+  assert.ok(/CASE WHEN c\.tracking_number IS NOT NULL THEN 1 ELSE 0 END AS resolved/.test(sql));
+  assert.ok(sql.trim().endsWith('ORDER BY resolved ASC, COALESCE(e.searched_at, e.ingested_at) DESC'));
+});
+
+test('buildErrorsQuery adds user + q filters as params (never inlined)', () => {
+  const { sql, params } = buildErrorsQuery({ from: '2026-01-01', to: '2026-01-31', user: 'bob', q: '5718' });
+  assert.deepStrictEqual(params, ['2026-01-01', '2026-01-31', 'bob', '%5718%', '%5718%']);
+  assert.ok(sql.includes('u.username = ?'));
+  assert.ok(sql.includes('(e.tracking_number LIKE ? OR e.error_reason LIKE ?)'));
+  for (const v of ['bob', '5718']) assert.ok(!sql.includes(v));
+});
+
+test('errorRowsToCsv header + escaping', () => {
+  assert.strictEqual(
+    errorRowsToCsv([]),
+    'searched_at,username,tracking_number,search_status,error_reason,resolved'
+  );
+  const line = errorRowsToCsv([
+    { searched_at: '2026-07-03 10:00:00', username: 'a', tracking_number: '5718', search_status: 'ERROR', error_reason: 'No Data, Found', resolved: 0 },
+  ]).split('\r\n')[1];
+  assert.ok(line.includes('"No Data, Found"'));
+  assert.ok(line.endsWith(',0'));
+});
+
+// ---------------------------------------------------------------------------
 // summarizeByUser  (per-user scan count)
 // ---------------------------------------------------------------------------
 
@@ -137,40 +176,37 @@ test('summarizeByUser labels missing usernames and handles empty input', () => {
 // rowsToCsv / csvField
 // ---------------------------------------------------------------------------
 
-test('rowsToCsv emits the header row in the fixed column order', () => {
+test('rowsToCsv emits the full header row in the fixed column order', () => {
   const csv = rowsToCsv([]);
   assert.strictEqual(
     csv,
-    'captured_at,username,item_barcode,tracking_number,sku_code,style_id,product_name,size,quality,qc_action,return_status,logistics_status,warehouse_id,pass_success,passed_at'
+    'captured_at,username,tracking_number,item_barcode,product_name,article_no,style_id,size,price,' +
+    'return_type,return_mode,return_status,rms_status,qc_action,quality,created_date,refund_date,' +
+    'return_received_on,return_restocked_on,logistics_status,courier_code,return_hub,dispatch_wh,' +
+    'return_destination_wh,delivery_center,ship_city,return_id,oms_release_id,sku_id,sku_code,' +
+    'pass_success,passed_at'
   );
 });
 
-test('rowsToCsv escapes commas, quotes and newlines; blanks null fields', () => {
+test('rowsToCsv escapes commas, quotes and newlines and includes article_no', () => {
   const csv = rowsToCsv([
     {
-      captured_at: '2026-07-01 10:00:00',
       username: 'alice',
       item_barcode: 'BC,1',
       tracking_number: 'TN"x"',
-      sku_code: 'line1\nline2',
-      style_id: null,
-      product_name: 'Kotty Jeans',
-      size: 'M',
-      quality: 'Q1',
-      qc_action: 'QC_PASS',
-      return_status: 'RRC',
-      logistics_status: 'DELIVERED_TO_SELLER',
-      warehouse_id: 'WH1',
+      product_name: 'line1\nline2',
+      article_no: 'KTTWOMENSPANT261L',
       pass_success: 1,
-      passed_at: '2026-07-01 10:05:00',
     },
   ]);
-  const lines = csv.split('\r\n');
-  assert.strictEqual(lines.length, 2);
-  assert.strictEqual(
-    lines[1],
-    '2026-07-01 10:00:00,alice,"BC,1","TN""x""","line1\nline2",,Kotty Jeans,M,Q1,QC_PASS,RRC,DELIVERED_TO_SELLER,WH1,1,2026-07-01 10:05:00'
-  );
+  // header + one data line (the embedded \n is inside quotes, so still 2 CRLF records)
+  const records = csv.split('\r\n');
+  assert.strictEqual(records.length, 2);
+  const line = records[1];
+  assert.ok(line.includes('"BC,1"'), 'comma value quoted');
+  assert.ok(line.includes('"TN""x"""'), 'embedded quotes doubled');
+  assert.ok(line.includes('"line1\nline2"'), 'newline value quoted');
+  assert.ok(line.includes('KTTWOMENSPANT261L'), 'article_no present in output');
 });
 
 test('csvField quotes only when needed and doubles embedded quotes', () => {
