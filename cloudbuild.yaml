@@ -20,6 +20,10 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      # Immutable, per-commit tag — this is the ONLY tag we deploy from, so the running
+      # revision always matches the exact commit that triggered the build (no mutable-tag race).
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${SHORT_SHA}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${_TAG}'
       - '-t'
@@ -40,8 +44,10 @@ steps:
       - 'run'
       - 'deploy'
       - '${_SERVICE_NAME}'
+      # Deploy the immutable SHA tag (NOT the mutable :${_TAG}/:latest) so concurrent merges
+      # can't race a stale image onto the running revision.
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${_TAG}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${SHORT_SHA}'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -89,6 +95,7 @@ substitutions:
 
 # Store images in Artifact Registry
 images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${SHORT_SHA}'
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${_TAG}'
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest'
 
