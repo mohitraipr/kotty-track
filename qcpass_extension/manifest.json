@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "QC Capture — Full Return Data",
+  "version": "0.2.0",
+  "description": "On rejoyui QC, captures the FULL return record (search details + logistics) and queues it durably, then syncs it to the kotty-track backend with authentication. Nothing is missed.",
+  "permissions": ["storage", "alarms", "downloads"],
+  "host_permissions": [
+    "https://rejoyui.myntrainfo.com/*",
+    "https://spectrum-babylon-api.myntrainfo.com/*",
+    "https://kotty-track-fwlq5ofeza-el.a.run.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "QC Capture — login & sync"
+  },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://rejoyui.myntrainfo.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://rejoyui.myntrainfo.com/*"],
+      "js": ["csv.js", "content.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ]
+}

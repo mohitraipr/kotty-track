@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { color-scheme: light dark; }
+    body { width: 300px; margin: 0; font: 13px/1.45 Segoe UI, Tahoma, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .h { background: linear-gradient(90deg, #7c3aed, #a855f7); padding: 10px 14px; font-weight: 700; font-size: 14px; }
+    .bd { padding: 12px 14px; }
+    label { display: block; font-size: 11px; color: #94a3b8; margin: 8px 0 3px; }
+    input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #334155; border-radius: 6px;
+      background: #1e293b; color: #fff; font-size: 13px; }
+    button { width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 6px; cursor: pointer;
+      font-weight: 700; font-size: 13px; background: #7c3aed; color: #fff; }
+    button.sec { background: #334155; }
+    button:disabled { opacity: .6; cursor: default; }
+    .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #1e293b; }
+    .k { color: #94a3b8; } .v { color: #fff; font-weight: 600; }
+    .msg { margin-top: 8px; font-size: 12px; min-height: 15px; }
+    .msg.err { color: #f87171; } .msg.ok { color: #22c55e; } .msg.warn { color: #f59e0b; }
+    .who { font-size: 12px; margin-bottom: 6px; }
+    .who b { color: #a855f7; }
+    .adv { margin-top: 10px; font-size: 11px; color: #64748b; }
+    .adv summary { cursor: pointer; }
+    hr { border: 0; border-top: 1px solid #1e293b; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <div class="h">QC Capture</div>
+  <div class="bd">
+    <!-- logged-out view -->
+    <div id="login-view">
+      <label for="u">Username</label>
+      <input id="u" type="text" autocomplete="username" />
+      <label for="p">Password</label>
+      <input id="p" type="password" autocomplete="current-password" />
+      <button id="login-btn">Log in</button>
+      <details class="adv">
+        <summary>Advanced</summary>
+        <label for="base">Backend URL</label>
+        <input id="base" type="text" placeholder="https://kotty-track-fwlq5ofeza-el.a.run.app" />
+      </details>
+      <div id="login-msg" class="msg"></div>
+    </div>
+
+    <!-- logged-in view -->
+    <div id="account-view" style="display:none">
+      <div class="who">Signed in as <b id="who-name">—</b></div>
+      <div class="row"><span class="k">Queued</span><span class="v" id="s-queued">0</span></div>
+      <div class="row"><span class="k">Synced</span><span class="v" id="s-synced">0</span></div>
+      <div class="row"><span class="k">Status</span><span class="v" id="s-state">—</span></div>
+      <div id="acct-msg" class="msg"></div>
+      <button id="export-btn" class="sec">Export CSV (local backup)</button>
+      <button id="logout-btn" class="sec">Log out</button>
+    </div>
+  </div>
+  <script src="csv.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
