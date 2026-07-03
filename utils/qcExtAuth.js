@@ -12,13 +12,19 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(String(raw)).digest('hex');
 }
 
-// Stable idempotency key per record. The extension should send `capture_uid`; if absent we
-// derive a deterministic one from the record's identifying fields so retries never double-insert.
+// Deterministic idempotency key derived from the RETURN ITEM ITSELF (not the search moment),
+// so re-searching the same return upserts one row instead of creating duplicates, and the same
+// record arriving via API batch or CSV re-upload always dedupes to the same key.
+//   capture -> return_id + item_barcode   (one row per return item; latest state wins)
+//   pass    -> item_barcode + oms_release  (one pass event per item)
+// NOTE: timestamps are intentionally excluded from the key (that was the pre-#486-fix bug where
+// searching a return twice made two rows). The server always derives this — client-sent
+// capture_uid is ignored for dedup so a stale/mismatched client formula can't reintroduce dupes.
 function deriveCaptureUid(rec) {
   const type = rec._type === 'pass' ? 'pass' : 'capture';
   const key = type === 'pass'
-    ? [rec.item_barcode, rec.oms_release_id, rec.passed_at].join('|')
-    : [rec.return_id, rec.item_barcode, rec.captured_at].join('|');
+    ? [rec.item_barcode, rec.oms_release_id].join('|')
+    : [rec.return_id, rec.item_barcode].join('|');
   return crypto.createHash('sha256').update(type + '|' + key).digest('hex');
 }
 
@@ -30,7 +36,7 @@ const DT = (v) => { if (!v) return null; const d = new Date(v); return Number.is
 function normalizeCapture(rec, capturedBy) {
   const r = rec || {};
   return {
-    capture_uid: r.capture_uid || deriveCaptureUid({ ...r, _type: 'capture' }),
+    capture_uid: deriveCaptureUid({ ...r, _type: 'capture' }), // server-derived (client uid ignored)
     captured_by: capturedBy,
     return_id: S(r.return_id, 40), item_barcode: S(r.item_barcode, 60),
     tracking_number: S(r.tracking_number, 80), oms_release_id: S(r.oms_release_id, 40),
@@ -53,7 +59,7 @@ function normalizeCapture(rec, capturedBy) {
 function normalizePass(rec, passedBy) {
   const r = rec || {};
   return {
-    capture_uid: r.capture_uid || deriveCaptureUid({ ...r, _type: 'pass' }),
+    capture_uid: deriveCaptureUid({ ...r, _type: 'pass' }), // server-derived (client uid ignored)
     passed_by: passedBy,
     item_barcode: S(r.item_barcode, 60), oms_release_id: S(r.oms_release_id, 40),
     qc_action: S(r.qc_action, 40), quality: S(r.quality, 20), desk_code: S(r.desk_code, 20),

@@ -18,14 +18,20 @@ test('hashToken: deterministic sha256 hex, raw != hash', () => {
   assert.notStrictEqual(hashToken('abc'), hashToken('abd'));
 });
 
-test('deriveCaptureUid: stable per record, capture and pass differ', () => {
-  const cap = { return_id: 'R1', item_barcode: 'B1', captured_at: '2026-07-03T10:00:00Z' };
-  const u1 = deriveCaptureUid({ ...cap, _type: 'capture' });
-  const u2 = deriveCaptureUid({ ...cap, _type: 'capture' });
-  assert.strictEqual(u1, u2);                        // stable → idempotent
-  const pass = deriveCaptureUid({ item_barcode: 'B1', oms_release_id: 'O1', passed_at: 'x', _type: 'pass' });
-  assert.notStrictEqual(u1, pass);                   // different namespace
-  assert.match(u1, /^[0-9a-f]{64}$/);
+test('deriveCaptureUid: keyed on the return item, NOT the timestamp (re-search dedups)', () => {
+  // Same return item searched at two different times -> SAME uid -> upserts one row.
+  const t1 = deriveCaptureUid({ return_id: 'R1', item_barcode: 'B1', captured_at: '2026-07-03T10:00:00Z', _type: 'capture' });
+  const t2 = deriveCaptureUid({ return_id: 'R1', item_barcode: 'B1', captured_at: '2026-07-03T15:30:00Z', _type: 'capture' });
+  assert.strictEqual(t1, t2);                         // timestamp excluded from the key
+  // Different item -> different uid.
+  const other = deriveCaptureUid({ return_id: 'R1', item_barcode: 'B2', _type: 'capture' });
+  assert.notStrictEqual(t1, other);
+  // Pass is a separate namespace, keyed on item_barcode + oms (not passed_at).
+  const p1 = deriveCaptureUid({ item_barcode: 'B1', oms_release_id: 'O1', passed_at: 'x', _type: 'pass' });
+  const p2 = deriveCaptureUid({ item_barcode: 'B1', oms_release_id: 'O1', passed_at: 'y', _type: 'pass' });
+  assert.strictEqual(p1, p2);
+  assert.notStrictEqual(t1, p1);
+  assert.match(t1, /^[0-9a-f]{64}$/);
 });
 
 test('normalizeCapture: maps + truncates fields, derives capture_uid, keeps raw_json', () => {
@@ -44,9 +50,11 @@ test('normalizeCapture: maps + truncates fields, derives capture_uid, keeps raw_
   assert.deepStrictEqual(JSON.parse(r.raw_json).return_id, 'R1');
 });
 
-test('normalizeCapture: uses provided capture_uid when present; null-safe on empty', () => {
-  const r = normalizeCapture({ capture_uid: 'fixed-uid', item_barcode: '' }, 1);
-  assert.strictEqual(r.capture_uid, 'fixed-uid');
+test('normalizeCapture: server derives the key (ignores client capture_uid); null-safe', () => {
+  const withClientUid = normalizeCapture({ capture_uid: 'attacker-supplied', return_id: 'R1', item_barcode: 'B1' }, 1);
+  const derived = deriveCaptureUid({ return_id: 'R1', item_barcode: 'B1', _type: 'capture' });
+  assert.strictEqual(withClientUid.capture_uid, derived); // client uid ignored -> deterministic
+  const r = normalizeCapture({ return_id: 'R', item_barcode: '' }, 1);
   assert.strictEqual(r.item_barcode, null);          // '' -> null
   assert.strictEqual(r.price, null);                 // missing -> null
   assert.strictEqual(r.captured_at, null);

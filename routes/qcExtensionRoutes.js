@@ -96,7 +96,12 @@ router.post('/capture', requireQcToken, async (req, res) => {
              (capture_uid, passed_by, item_barcode, oms_release_id, qc_action, quality, desk_code,
               warehouse_id, pass_success, new_status, pass_error, passed_at, raw_json)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE ingested_at = ingested_at`,
+           ON DUPLICATE KEY UPDATE
+             passed_by=VALUES(passed_by), qc_action=VALUES(qc_action), quality=VALUES(quality),
+             desk_code=VALUES(desk_code), warehouse_id=VALUES(warehouse_id),
+             pass_success=VALUES(pass_success), new_status=VALUES(new_status),
+             pass_error=VALUES(pass_error), passed_at=VALUES(passed_at),
+             raw_json=VALUES(raw_json), ingested_at=CURRENT_TIMESTAMP`,
           [r.capture_uid, r.passed_by, r.item_barcode, r.oms_release_id, r.qc_action, r.quality,
            r.desk_code, r.warehouse_id, r.pass_success, r.new_status, r.pass_error, r.passed_at, r.raw_json]);
       } else {
@@ -110,7 +115,19 @@ router.post('/capture', requireQcToken, async (req, res) => {
               ship_city, created_date, refund_date, return_received_on, return_restocked_on,
               raw_json, captured_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE ingested_at = ingested_at`,
+           ON DUPLICATE KEY UPDATE
+             captured_by=VALUES(captured_by), tracking_number=VALUES(tracking_number),
+             oms_release_id=VALUES(oms_release_id), sku_id=VALUES(sku_id), sku_code=VALUES(sku_code),
+             style_id=VALUES(style_id), article_no=VALUES(article_no), product_name=VALUES(product_name),
+             size=VALUES(size), price=VALUES(price), return_type=VALUES(return_type),
+             return_mode=VALUES(return_mode), return_status=VALUES(return_status),
+             rms_status=VALUES(rms_status), qc_action=VALUES(qc_action), quality=VALUES(quality),
+             logistics_status=VALUES(logistics_status), courier_code=VALUES(courier_code),
+             return_hub=VALUES(return_hub), dispatch_wh=VALUES(dispatch_wh),
+             return_destination_wh=VALUES(return_destination_wh), delivery_center=VALUES(delivery_center),
+             ship_city=VALUES(ship_city), created_date=VALUES(created_date), refund_date=VALUES(refund_date),
+             return_received_on=VALUES(return_received_on), return_restocked_on=VALUES(return_restocked_on),
+             raw_json=VALUES(raw_json), captured_at=VALUES(captured_at), ingested_at=CURRENT_TIMESTAMP`,
           [r.capture_uid, r.captured_by, r.return_id, r.item_barcode, r.tracking_number, r.oms_release_id,
            r.sku_id, r.sku_code, r.style_id, r.article_no, r.product_name, r.size, r.price, r.return_type,
            r.return_mode, r.return_status, r.rms_status, r.qc_action, r.quality, r.logistics_status,
