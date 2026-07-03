@@ -846,10 +846,13 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     const doh = drr > 0 ? soh / drr : null;
     // Thin-sample SKUs (clean_days < 7) aren't trustworthy cut targets in cleanday mode.
     const lowConfidence = DRR_MODE === 'cleanday' && cd && (cd.data_quality === 'low_sample' || cd.data_quality === 'no_clean_days');
+    // Trigger vocabulary is 'amber' (matches aggregateStyles, cutPrioritySummary, and the PM
+    // dashboard/style/analytics views/filters). Emitting 'orange' here silently dropped the
+    // entire "Cut soon" tier at the style roll-up (orange never matched 'amber').
     let trigger = 'green';
     if (doh !== null && doh <= lt.lead_time) trigger = 'red';
-    else if (doh !== null && doh <= horizon) trigger = 'orange';
-    if (lowConfidence && trigger === 'red') trigger = 'orange'; // demote noisy thin-sample reds
+    else if (doh !== null && doh <= horizon) trigger = 'amber';
+    if (lowConfidence && trigger === 'red') trigger = 'amber'; // demote noisy thin-sample reds
 
     const drrDiffPct = legacyDrr > 0 ? ((cleandayDrr - legacyDrr) / legacyDrr) * 100 : (cleandayDrr > 0 ? Infinity : 0);
     results.push({
