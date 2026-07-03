@@ -208,6 +208,12 @@ app.use('/health', healthRoutes);
 // Mounted before auth: the endpoint authenticates via the x-cron-secret header.
 const { catchupMiddleware, internalRunPullHandler } = require('./utils/catchupPull');
 app.post('/internal/run-pull', internalRunPullHandler);
+
+// QC-Capture extension ingestion — token-auth (no session). Mounted before catchupMiddleware
+// and the session-gated routes so any Cloud Run instance can serve it. See docs/plans/01.
+const qcExtensionRoutes = require('./routes/qcExtensionRoutes');
+app.use('/ext/qc', qcExtensionRoutes.router);
+
 app.use(catchupMiddleware);
 
 app.use('/', authRoutes);
