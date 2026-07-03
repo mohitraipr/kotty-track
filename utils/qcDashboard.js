@@ -16,42 +16,79 @@
 // item was never passed.
 
 // Ordered column set the API returns for each detail row. Also the CSV header order.
+// The FULL captured record (everything shown in the extension panel), plus the joined
+// pass outcome (pass_success/passed_at).
 const ROW_COLUMNS = [
   'captured_at',
   'username',
-  'item_barcode',
   'tracking_number',
-  'sku_code',
-  'style_id',
+  'item_barcode',
   'product_name',
+  'article_no',
+  'style_id',
   'size',
-  'quality',
-  'qc_action',
+  'price',
+  'return_type',
+  'return_mode',
   'return_status',
+  'rms_status',
+  'qc_action',
+  'quality',
+  'created_date',
+  'refund_date',
+  'return_received_on',
+  'return_restocked_on',
   'logistics_status',
-  'warehouse_id',
+  'courier_code',
+  'return_hub',
+  'dispatch_wh',
+  'return_destination_wh',
+  'delivery_center',
+  'ship_city',
+  'return_id',
+  'oms_release_id',
+  'sku_id',
+  'sku_code',
   'pass_success',
   'passed_at',
 ];
 
-// SELECT clause that produces exactly ROW_COLUMNS (in order).
+// SELECT clause that produces exactly ROW_COLUMNS (in order). DATE columns are
+// formatted to YYYY-MM-DD so they render clean (no timezone-shifted timestamps).
 // The passes side is pre-aggregated to ONE row per item_barcode (MAX passed_at /
 // MAX pass_success) so a rare double-pass can't fan a capture into duplicate rows.
 const SELECT_SQL = `
   SELECT
     DATE_FORMAT(COALESCE(c.captured_at, c.ingested_at), '%Y-%m-%d %H:%i:%s') AS captured_at,
     u.username             AS username,
-    c.item_barcode         AS item_barcode,
     c.tracking_number      AS tracking_number,
-    c.sku_code             AS sku_code,
-    c.style_id             AS style_id,
+    c.item_barcode         AS item_barcode,
     c.product_name         AS product_name,
+    c.article_no           AS article_no,
+    c.style_id             AS style_id,
     c.size                 AS size,
-    c.quality              AS quality,
-    c.qc_action            AS qc_action,
+    c.price                AS price,
+    c.return_type          AS return_type,
+    c.return_mode          AS return_mode,
     c.return_status        AS return_status,
+    c.rms_status           AS rms_status,
+    c.qc_action            AS qc_action,
+    c.quality              AS quality,
+    DATE_FORMAT(c.created_date, '%Y-%m-%d')          AS created_date,
+    DATE_FORMAT(c.refund_date, '%Y-%m-%d')           AS refund_date,
+    DATE_FORMAT(c.return_received_on, '%Y-%m-%d')    AS return_received_on,
+    DATE_FORMAT(c.return_restocked_on, '%Y-%m-%d')   AS return_restocked_on,
     c.logistics_status     AS logistics_status,
-    c.return_destination_wh AS warehouse_id,
+    c.courier_code         AS courier_code,
+    c.return_hub           AS return_hub,
+    c.dispatch_wh          AS dispatch_wh,
+    c.return_destination_wh AS return_destination_wh,
+    c.delivery_center      AS delivery_center,
+    c.ship_city            AS ship_city,
+    c.return_id            AS return_id,
+    c.oms_release_id       AS oms_release_id,
+    c.sku_id               AS sku_id,
+    c.sku_code             AS sku_code,
     p.pass_success         AS pass_success,
     DATE_FORMAT(p.passed_at, '%Y-%m-%d %H:%i:%s') AS passed_at
   FROM qc_return_captures c

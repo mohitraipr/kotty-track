@@ -11,23 +11,41 @@ export interface QcFilters {
   q: string
 }
 
-// One row = one return item SCANNED by a user (qc_return_captures), with the
-// pass outcome (pass_success/passed_at) LEFT-joined from qc_return_passes.
-// pass_success/passed_at are null when a scanned item was never QC-passed.
+// One row = one return item SCANNED by a user (qc_return_captures) — the FULL
+// captured record — with the pass outcome (pass_success/passed_at) LEFT-joined
+// from qc_return_passes. pass_success/passed_at are null when a scanned item was
+// never QC-passed. Keep these keys in sync with ROW_COLUMNS in utils/qcDashboard.js.
 export interface QcPassRow {
   captured_at: string | null
   username: string | null
-  item_barcode: string | null
   tracking_number: string | null
-  sku_code: string | null
-  style_id: string | null
+  item_barcode: string | null
   product_name: string | null
+  article_no: string | null
+  style_id: string | null
   size: string | null
-  quality: string | null
-  qc_action: string | null
+  price: string | null
+  return_type: string | null
+  return_mode: string | null
   return_status: string | null
+  rms_status: string | null
+  qc_action: string | null
+  quality: string | null
+  created_date: string | null
+  refund_date: string | null
+  return_received_on: string | null
+  return_restocked_on: string | null
   logistics_status: string | null
-  warehouse_id: string | null
+  courier_code: string | null
+  return_hub: string | null
+  dispatch_wh: string | null
+  return_destination_wh: string | null
+  delivery_center: string | null
+  ship_city: string | null
+  return_id: string | null
+  oms_release_id: string | null
+  sku_id: string | null
+  sku_code: string | null
   pass_success: number | null
   passed_at: string | null
 }
