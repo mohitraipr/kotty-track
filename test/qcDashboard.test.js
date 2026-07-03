@@ -2,8 +2,10 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   buildPassesQuery,
+  buildErrorsQuery,
   summarizeByUser,
   rowsToCsv,
+  errorRowsToCsv,
   csvField,
   istToday,
 } = require('../utils/qcDashboard.js');
@@ -106,6 +108,43 @@ test('buildPassesQuery combines all filters in order and never inlines user inpu
   }
   // ordered by the captured timestamp, newest first
   assert.ok(sql.trim().endsWith('ORDER BY COALESCE(c.captured_at, c.ingested_at) DESC'));
+});
+
+// ---------------------------------------------------------------------------
+// buildErrorsQuery  (errored scans; qc_search_errors)
+// ---------------------------------------------------------------------------
+
+test('buildErrorsQuery defaults to today, joins captures for resolved, unresolved first', () => {
+  const today = istToday();
+  const { sql, params, from, to } = buildErrorsQuery({});
+  assert.strictEqual(from, today);
+  assert.strictEqual(to, today);
+  assert.deepStrictEqual(params, [today, today]);
+  assert.ok(/FROM qc_search_errors e/.test(sql));
+  assert.ok(/qc_return_captures[\s\S]*ON c\.tracking_number = e\.tracking_number/.test(sql),
+    'resolved is derived by joining captures on tracking_number');
+  assert.ok(/CASE WHEN c\.tracking_number IS NOT NULL THEN 1 ELSE 0 END AS resolved/.test(sql));
+  assert.ok(sql.trim().endsWith('ORDER BY resolved ASC, COALESCE(e.searched_at, e.ingested_at) DESC'));
+});
+
+test('buildErrorsQuery adds user + q filters as params (never inlined)', () => {
+  const { sql, params } = buildErrorsQuery({ from: '2026-01-01', to: '2026-01-31', user: 'bob', q: '5718' });
+  assert.deepStrictEqual(params, ['2026-01-01', '2026-01-31', 'bob', '%5718%', '%5718%']);
+  assert.ok(sql.includes('u.username = ?'));
+  assert.ok(sql.includes('(e.tracking_number LIKE ? OR e.error_reason LIKE ?)'));
+  for (const v of ['bob', '5718']) assert.ok(!sql.includes(v));
+});
+
+test('errorRowsToCsv header + escaping', () => {
+  assert.strictEqual(
+    errorRowsToCsv([]),
+    'searched_at,username,tracking_number,search_status,error_reason,resolved'
+  );
+  const line = errorRowsToCsv([
+    { searched_at: '2026-07-03 10:00:00', username: 'a', tracking_number: '5718', search_status: 'ERROR', error_reason: 'No Data, Found', resolved: 0 },
+  ]).split('\r\n')[1];
+  assert.ok(line.includes('"No Data, Found"'));
+  assert.ok(line.endsWith(',0'));
 });
 
 // ---------------------------------------------------------------------------

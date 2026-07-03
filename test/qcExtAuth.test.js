@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const {
-  generateToken, hashToken, deriveCaptureUid, normalizeCapture, normalizePass,
+  generateToken, hashToken, deriveCaptureUid, normalizeCapture, normalizePass, normalizeSearchError,
 } = require('../utils/qcExtAuth.js');
 
 test('generateToken: 64 hex chars, unique per call', () => {
@@ -68,4 +68,21 @@ test('normalizePass: pass_success coerced to 1/0, fields mapped', () => {
   const bad = normalizePass({ item_barcode: 'B1', pass_success: false }, 7);
   assert.strictEqual(bad.pass_success, 0);
   assert.match(ok.capture_uid, /^[0-9a-f]{64}$/);
+});
+
+test('normalizeSearchError: maps errored search, server-trusts searchedBy', () => {
+  const r = normalizeSearchError(
+    { tracking_number: '5718708979', search_status: 'ERROR', error_reason: 'No Data Found', searched_at: '2026-07-03T10:00:00Z' },
+    42
+  );
+  assert.strictEqual(r.tracking_number, '5718708979');
+  assert.strictEqual(r.searched_by, 42);
+  assert.strictEqual(r.search_status, 'ERROR');
+  assert.strictEqual(r.error_reason, 'No Data Found');
+  assert.ok(r.searched_at instanceof Date);
+  assert.deepStrictEqual(JSON.parse(r.raw_json).tracking_number, '5718708979');
+  // truncates long reasons and null-safes missing tracking
+  const long = normalizeSearchError({ tracking_number: 't', error_reason: 'x'.repeat(400) }, 1);
+  assert.strictEqual(long.error_reason.length, 255);
+  assert.strictEqual(normalizeSearchError({}, 1).tracking_number, null);
 });

@@ -16,8 +16,10 @@ const { isAuthenticated, allowRoles } = require('../middlewares/auth');
 const { qcAssetTags } = require('../utils/viteManifest');
 const {
   buildPassesQuery,
+  buildErrorsQuery,
   summarizeByUser,
   rowsToCsv,
+  errorRowsToCsv,
 } = require('../utils/qcDashboard');
 
 const gate = [isAuthenticated, allowRoles(['admin', 'jitrgp'])];
@@ -76,6 +78,35 @@ router.get('/api/passes', gate, async (req, res) => {
   } catch (err) {
     console.error('Error GET /qc/api/passes:', err);
     res.status(500).json({ ok: false, error: 'Failed to load QC passes.' });
+  }
+});
+
+// GET /qc/api/errors?from=&to=&user=&q=&download=csv
+// Trackings whose RMS search failed (never lost). `resolved` = a successful capture
+// for that tracking has since landed. Unresolved sort first.
+router.get('/api/errors', gate, async (req, res) => {
+  try {
+    const { sql, params, from, to } = buildErrorsQuery({
+      from: req.query.from,
+      to: req.query.to,
+      user: req.query.user,
+      q: req.query.q,
+    });
+
+    const [rows] = await pool.query(sql, params);
+
+    if (req.query.download === 'csv') {
+      const csv = errorRowsToCsv(rows);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="qc-errors-${from}_${to}.csv"`);
+      return res.send('﻿' + csv);
+    }
+
+    const unresolved = rows.filter((r) => !r.resolved).length;
+    res.json({ ok: true, from, to, total: rows.length, unresolved, rows });
+  } catch (err) {
+    console.error('Error GET /qc/api/errors:', err);
+    res.status(500).json({ ok: false, error: 'Failed to load QC errors.' });
   }
 });
 

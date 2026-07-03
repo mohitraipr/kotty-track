@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const multer = require('multer');
 const { pool } = require('../config/db');
-const { generateToken, hashToken, normalizeCapture, normalizePass } = require('../utils/qcExtAuth');
+const { generateToken, hashToken, normalizeCapture, normalizePass, normalizeSearchError } = require('../utils/qcExtAuth');
 const { parseCsv, rowsToRecords } = require('../utils/qcCsv');
 
 const router = express.Router();
@@ -87,7 +87,19 @@ async function requireQcToken(req, res, next) {
 async function ingestRecords(conn, records, userId) {
   let accepted = 0;
   for (const rec of records) {
-    if (rec && rec._type === 'pass') {
+    if (rec && rec._type === 'error') {
+      const r = normalizeSearchError(rec, userId);
+      if (!r.tracking_number) { accepted += 1; continue; }  // nothing to key on — skip silently
+      await conn.query(
+        `INSERT INTO qc_search_errors
+           (tracking_number, searched_by, search_status, error_reason, raw_json, searched_at)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           searched_by=VALUES(searched_by), search_status=VALUES(search_status),
+           error_reason=VALUES(error_reason), raw_json=VALUES(raw_json),
+           searched_at=VALUES(searched_at), ingested_at=CURRENT_TIMESTAMP`,
+        [r.tracking_number, r.searched_by, r.search_status, r.error_reason, r.raw_json, r.searched_at]);
+    } else if (rec && rec._type === 'pass') {
       const r = normalizePass(rec, userId);
       await conn.query(
         `INSERT INTO qc_return_passes

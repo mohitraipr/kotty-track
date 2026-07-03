@@ -171,6 +171,71 @@ function buildPassesQuery(filters = {}) {
   return { sql, params, from, to };
 }
 
+// ---------------------------------------------------------------------------
+// Errored scans (qc_search_errors) — trackings whose RMS search failed.
+// `resolved` = a successful capture for that tracking has since landed.
+// ---------------------------------------------------------------------------
+const ERROR_ROW_COLUMNS = [
+  'searched_at',
+  'username',
+  'tracking_number',
+  'search_status',
+  'error_reason',
+  'resolved',
+];
+
+const ERRORS_SELECT_SQL = `
+  SELECT
+    DATE_FORMAT(COALESCE(e.searched_at, e.ingested_at), '%Y-%m-%d %H:%i:%s') AS searched_at,
+    u.username        AS username,
+    e.tracking_number AS tracking_number,
+    e.search_status   AS search_status,
+    e.error_reason    AS error_reason,
+    CASE WHEN c.tracking_number IS NOT NULL THEN 1 ELSE 0 END AS resolved
+  FROM qc_search_errors e
+  LEFT JOIN users u ON u.id = e.searched_by
+  LEFT JOIN (SELECT DISTINCT tracking_number FROM qc_return_captures WHERE tracking_number IS NOT NULL) c
+    ON c.tracking_number = e.tracking_number`.trim();
+
+const ERR_DAY = 'DATE(COALESCE(e.searched_at, e.ingested_at))';
+const ERR_TS = 'COALESCE(e.searched_at, e.ingested_at)';
+
+/**
+ * Build the parameterized errored-scans query. Same date defaults as the main
+ * dashboard. Unresolved errors sort first (they need attention).
+ * filters: { from, to, user, q }
+ */
+function buildErrorsQuery(filters = {}) {
+  const today = istToday();
+  const from = sanitizeDate(filters.from, today);
+  const to = sanitizeDate(filters.to, today);
+
+  const where = [`${ERR_DAY} BETWEEN ? AND ?`];
+  const params = [from, to];
+
+  if (nonEmpty(filters.user)) {
+    where.push('u.username = ?');
+    params.push(String(filters.user).trim());
+  }
+  if (nonEmpty(filters.q)) {
+    const like = `%${String(filters.q).trim()}%`;
+    where.push('(e.tracking_number LIKE ? OR e.error_reason LIKE ?)');
+    params.push(like, like);
+  }
+
+  const sql = `${ERRORS_SELECT_SQL}\n  WHERE ${where.join('\n    AND ')}\n  ORDER BY resolved ASC, ${ERR_TS} DESC`;
+  return { sql, params, from, to };
+}
+
+/** Serialize errored-scan rows to CSV (ERROR_ROW_COLUMNS order). */
+function errorRowsToCsv(rows = []) {
+  const lines = [ERROR_ROW_COLUMNS.map(csvField).join(',')];
+  for (const row of rows) {
+    lines.push(ERROR_ROW_COLUMNS.map((col) => csvField(row[col])).join(','));
+  }
+  return lines.join('\r\n');
+}
+
 /** Group rows into a per-user scan count: [{ user, passes }], busiest first.
  *  (`passes` = number of returns that user scanned in range.) */
 function summarizeByUser(rows = []) {
@@ -205,9 +270,12 @@ function rowsToCsv(rows = []) {
 
 module.exports = {
   ROW_COLUMNS,
+  ERROR_ROW_COLUMNS,
   buildPassesQuery,
+  buildErrorsQuery,
   summarizeByUser,
   rowsToCsv,
+  errorRowsToCsv,
   csvField,
   istToday,
   sanitizeDate,

@@ -69,4 +69,18 @@ function normalizePass(rec, passedBy) {
   };
 }
 
-module.exports = { generateToken, hashToken, deriveCaptureUid, normalizeCapture, normalizePass };
+// An errored search (RMS "No Data Found" etc.). Keyed on the tracking number the operator
+// scanned (server-trusted `searchedBy`), so re-scanning the same bad tracking upserts one row.
+function normalizeSearchError(rec, searchedBy) {
+  const r = rec || {};
+  return {
+    tracking_number: S(r.tracking_number, 120),
+    searched_by: searchedBy,
+    search_status: S(r.search_status, 60),
+    error_reason: S(r.error_reason, 255),
+    raw_json: JSON.stringify(r),
+    searched_at: DT(r.searched_at),
+  };
+}
+
+module.exports = { generateToken, hashToken, deriveCaptureUid, normalizeCapture, normalizePass, normalizeSearchError };

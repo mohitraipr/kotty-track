@@ -126,6 +126,14 @@
     tag.innerHTML = `<span class="k">QC PASS</span><span class="v ${p.pass_success ? 'pass' : 'warn'}">${p.pass_success ? 'PASSED → ' + (p.new_status || '') : 'FAILED: ' + (p.pass_error || '')}</span>`;
     body.prepend(tag);
   }
+  // Show an errored scan on the panel so the operator sees it was captured (not silently dropped).
+  function markError(e) {
+    ensurePanel();
+    body.innerHTML =
+      `<div class="row"><span class="k">SEARCH ERROR</span><span class="v warn">${String(e.error_reason || 'No Data Found')}</span></div>` +
+      `<div class="row"><span class="k">Tracking</span><span class="v">${String(e.tracking_number || '')}</span></div>` +
+      `<div class="k" style="margin-top:6px">Logged — will sync so it isn't lost. Resolve & rescan to capture.</div>`;
+  }
   function setStatus(s) {
     if (statusEl) statusEl.textContent = `queued ${s.queued || 0} · synced ${s.synced || 0}${s.offline ? ' · OFFLINE' : ''}`;
     const authEl = panel && panel.querySelector('#qc-auth');
@@ -190,6 +198,9 @@
       chrome.runtime.sendMessage({ type: 'pass', record: m.payload });
       // after a pass the page clears/re-renders (or reloads) — re-aim at the Tracking box
       setTimeout(startTrackingFocus, 400);
+    } else if (m.kind === 'error') {
+      markError(m.payload);
+      chrome.runtime.sendMessage({ type: 'error', record: m.payload });
     }
   });
 
