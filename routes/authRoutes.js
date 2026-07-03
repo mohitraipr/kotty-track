@@ -86,6 +86,7 @@ function getDashboardForRole(roleName) {
     'returns_operator': '/return-grn/dashboard',
     'returnchallan': '/return-challan',
     'production_manager': '/pm',
+    'jitrgp': '/qc/dashboard',
   };
 
   // If role not found, log it for debugging and return a safe default
