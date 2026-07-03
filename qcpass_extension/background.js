@@ -38,10 +38,18 @@ async function tx(store, mode, fn) { const db = await idb(); return new Promise(
 const enqueue = (rec) => tx(STORE, 'readwrite', (s) => s.add({ rec, ts: Date.now() }));
 function readAll() { return tx(STORE, 'readonly', (s) => { const out = []; s.openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { out.push({ k: c.key, ...c.value }); c.continue(); } }; return out; }); }
 const remove = (keys) => tx(STORE, 'readwrite', (s) => keys.forEach((k) => s.delete(k)));
-function count() { return tx(STORE, 'readonly', (s) => { let n = 0; s.openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { n++; c.continue(); } }; return n; }); }
+// O(1) row count. NOTE: tx() resolves whatever fn(s) *returns*, so we must return a by-reference
+// holder that the count request fills in — returning a primitive `n` would resolve its value at
+// call time (0), before the request completes. (That old bug made the LOG_CAP trim never fire and
+// the queue count always read 0.)
+function storeCount(store) {
+  return tx(store, 'readonly', (s) => { const req = s.count(); const h = { n: 0 }; req.onsuccess = () => { h.n = req.result; }; return h; })
+    .then((h) => h.n);
+}
+const count = () => storeCount(STORE);
 
 // Rolling log (durable copy for CSV export). Appends the record, then trims oldest rows > LOG_CAP.
-function logCount() { return tx(LOG, 'readonly', (s) => { let n = 0; s.openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { n++; c.continue(); } }; return n; }); }
+const logCount = () => storeCount(LOG);
 async function appendLog(rec) {
   await tx(LOG, 'readwrite', (s) => s.add({ rec, ts: Date.now() }));
   try {
