@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>QC Dashboard · Kotty</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    html, body { margin: 0; padding: 0; min-height: 100%; background: #08090a; }
+    #qc-root { min-height: 100vh; min-height: 100dvh; }
+  </style>
+
+  <!-- Vite-built island stylesheet(s) -->
+  <%- cssTags %>
+</head>
+<body>
+  <div id="qc-root"
+       data-user-id="<%= user.id %>"
+       data-user-role="<%= user.roleName || user.role || '' %>"
+       data-username="<%= user.username %>"></div>
+
+  <%- jsTag %>
+</body>
+</html>

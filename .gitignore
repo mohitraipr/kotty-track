@@ -8,6 +8,7 @@ uploads/
 # Tasks React island: deps + built bundle (built in CI / Docker, not committed)
 frontend/node_modules/
 public/tasks/
+public/qc/
 
 # GCP
 *.json.key
