@@ -656,8 +656,11 @@ router.post('/api/cut-plan/assign', async (req, res) => {
     }
     const createdBy = req.session?.user?.id || null;
 
+    // All inserts (header + sizes, both single and per-lot mode) go through ONE transaction
+    // so a mid-loop failure can't leave partial assignments committed (CP-4).
+    const conn = await pool.getConnection();
     async function insertAssignment(header, sizes, note) {
-      const [result] = await pool.query(
+      const [result] = await conn.query(
         `INSERT INTO pm_cut_assignment
            (style, fabric_type, total_pieces, lot_count, total_fabric_meters, fabric_complete,
             assigned_master_id, assigned_master_name, status, created_by, note)
@@ -668,7 +671,7 @@ router.post('/api/cut-plan/assign', async (req, res) => {
       );
       const assignmentId = result.insertId;
       if (sizes.length) {
-        await pool.query(
+        await conn.query(
           `INSERT INTO pm_cut_assignment_sizes (assignment_id, size_label, qty) VALUES ?`,
           [sizes.map((s) => [assignmentId, s.size_label, s.qty])]
         );
@@ -676,36 +679,54 @@ router.post('/api/cut-plan/assign', async (req, res) => {
       return assignmentId;
     }
 
-    // Single-master (all lots same OR legacy master_id): one consolidated row — unchanged behaviour.
-    if (!perLot || uniqueIds.length === 1) {
-      const masterId = lotMasterIds[0];
-      const { demand, plan: fullPlan, fabricType: ft } = await computeStyleCutPlan(style);
-      const { header, sizes } = buildAssignmentPayload({
-        style, fabricType: ft, masterId, masterName: nameById.get(masterId),
-        demand, plan: fullPlan, createdBy,
-      });
-      const id = await insertAssignment(header, sizes, null);
-      await recordCutDecisionSnapshot(pool, { style, assignedSizes: sizes, assignmentId: id, decidedBy: createdBy });
-      return res.json({ ok: true, assignment_id: id, count: 1, assigned_to: nameById.get(masterId) });
-    }
+    try {
+      await conn.beginTransaction();
+      let payload;
+      const snapshots = []; // {assignmentId, sizes} — audit records, written best-effort AFTER commit
 
-    // Per-lot: one row per lot, each to its own master, using the lot's own size split.
-    const n = lots.length;
-    const created = [];
-    for (let i = 0; i < n; i++) {
-      const lot = lots[i];
-      const masterId = lotMasterIds[i];
-      const { header, sizes } = buildAssignmentPayload({
-        style, fabricType, masterId, masterName: nameById.get(masterId),
-        demand: lot.sizes,
-        plan: { lotCount: 1, totalFabricMeters: lot.fabricMeters, fabricComplete: lot.fabricComplete },
-        createdBy,
-      });
-      const id = await insertAssignment(header, sizes, `Lot ${i + 1}/${n}`);
-      await recordCutDecisionSnapshot(pool, { style, assignedSizes: sizes, assignmentId: id, decidedBy: createdBy });
-      created.push({ assignment_id: id, lot: i + 1, pieces: header.total_pieces, master: nameById.get(masterId) });
+      if (!perLot || uniqueIds.length === 1) {
+        // Single-master (all lots same OR legacy master_id): one consolidated row.
+        const masterId = lotMasterIds[0];
+        const { demand, plan: fullPlan, fabricType: ft } = await computeStyleCutPlan(style);
+        const { header, sizes } = buildAssignmentPayload({
+          style, fabricType: ft, masterId, masterName: nameById.get(masterId),
+          demand, plan: fullPlan, createdBy,
+        });
+        const id = await insertAssignment(header, sizes, null);
+        snapshots.push({ assignmentId: id, sizes });
+        payload = { ok: true, assignment_id: id, count: 1, assigned_to: nameById.get(masterId) };
+      } else {
+        // Per-lot: one row per lot, each to its own master, using the lot's own size split.
+        const n = lots.length;
+        const created = [];
+        for (let i = 0; i < n; i++) {
+          const lot = lots[i];
+          const masterId = lotMasterIds[i];
+          const { header, sizes } = buildAssignmentPayload({
+            style, fabricType, masterId, masterName: nameById.get(masterId),
+            demand: lot.sizes,
+            plan: { lotCount: 1, totalFabricMeters: lot.fabricMeters, fabricComplete: lot.fabricComplete },
+            createdBy,
+          });
+          const id = await insertAssignment(header, sizes, `Lot ${i + 1}/${n}`);
+          snapshots.push({ assignmentId: id, sizes });
+          created.push({ assignment_id: id, lot: i + 1, pieces: header.total_pieces, master: nameById.get(masterId) });
+        }
+        payload = { ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') };
+      }
+
+      await conn.commit();
+      // Decision snapshots are audit-only + best-effort; write them after the assignment commits.
+      for (const s of snapshots) {
+        await recordCutDecisionSnapshot(pool, { style, assignedSizes: s.sizes, assignmentId: s.assignmentId, decidedBy: createdBy });
+      }
+      return res.json(payload);
+    } catch (txErr) {
+      await conn.rollback().catch(() => {});
+      throw txErr;
+    } finally {
+      conn.release();
     }
-    res.json({ ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') });
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') return res.status(400).json({ ok: false, error: 'Run the cut-assignment migration first.' });
     res.status(500).json({ ok: false, error: err.message });
@@ -1158,87 +1179,6 @@ router.post('/pull-now', async (req, res) => {
     return res.status(503).json({ ok: false, error: 'Pull worker not available.' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// ─── Temp debug: run a single EasyEcom call and return the raw response ──
-// Admin-only. Lets us see what EasyEcom actually returns without trawling
-// through Cloud Run logs. Examples:
-//   GET /pm/debug-ee?what=snapshot&warehouse=faridabad&days=30
-//   GET /pm/debug-ee?what=mini-sales&warehouse=faridabad&days=7
-//   GET /pm/debug-ee?what=orders&warehouse=faridabad&days=7
-// Remove after debugging.
-router.get('/debug-ee', async (req, res) => {
-  if (req.session.user.roleName !== 'admin') {
-    return res.status(403).json({ ok: false, error: 'admin role required.' });
-  }
-  const { what = 'snapshot', warehouse = 'faridabad', days = '7' } = req.query;
-  const client = require('../utils/easyecomReturnsClient');
-  const axios = require('axios');
-  const days_n = Math.min(Math.max(parseInt(days, 10) || 7, 1), 90);
-  const end = new Date();
-  const start = new Date(end.getTime() - days_n * 24 * 60 * 60 * 1000);
-  const fmt = (d) => {
-    const p = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  };
-  const fmtDay = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-
-  try {
-    if (what === 'snapshot') {
-      const files = await client.listInventorySnapshots(
-        { startDate: fmt(start), endDate: fmt(end) }, warehouse
-      );
-      return res.json({ ok: true, what, warehouse, params: { startDate: fmt(start), endDate: fmt(end) }, count: files.length, sample: files.slice(0, 3), files });
-    }
-    if (what === 'mini-sales') {
-      // Queue + poll inline so we see the exact error if 400.
-      const token = await client.authenticateWithCredentials(warehouse);
-      const api = axios.create({
-        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        timeout: 60000, validateStatus: () => true,
-      });
-      const body = {
-        reportType: 'MINI_SALES_REPORT',
-        params: { invoiceType: 'ALL', dateType: 'ORDER_DATE', startDate: fmtDay(start), endDate: fmtDay(end) },
-      };
-      const resp = await api.post('/reports/queue', body);
-      return res.json({ ok: resp.status < 300, what, status: resp.status, requestBody: body, response: resp.data });
-    }
-    if (what === 'orders') {
-      const token = await client.authenticateWithCredentials(warehouse);
-      const api = axios.create({
-        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        timeout: 60000, validateStatus: () => true,
-      });
-      const params = { start_date: fmt(start), end_date: fmt(end) };
-      const resp = await api.get('/orders/V2/getAllOrders', { params });
-      const data = resp.data?.data || {};
-      const ordersArr = data.orders || data.invoices || [];
-      return res.json({
-        ok: resp.status < 300, what, status: resp.status, params,
-        responseShape: { code: resp.data?.code, message: resp.data?.message, hasOrdersField: !!data.orders, hasInvoicesField: !!data.invoices, count: ordersArr.length, nextUrl: data.nextUrl || null },
-        sampleFirst: ordersArr[0] || null,
-      });
-    }
-    if (what === 'locations') {
-      const token = await client.authenticateWithCredentials(warehouse);
-      const api = axios.create({
-        baseURL: process.env.EASYECOM_API_BASE || 'https://api.easyecom.io',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        timeout: 60000, validateStatus: () => true,
-      });
-      const resp = await api.get('/getAllLocation');
-      return res.json({ ok: resp.status < 300, what, status: resp.status, response: resp.data });
-    }
-    return res.status(400).json({ ok: false, error: `unknown what=${what}. Try snapshot|mini-sales|orders|locations` });
-  } catch (err) {
-    return res.status(500).json({
-      ok: false, error: err.message,
-      eeStatus: err.response?.status, eeBody: err.response?.data,
-    });
   }
 });
 
