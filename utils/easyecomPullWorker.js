@@ -809,14 +809,13 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
     }
     // MINI_SALES_REPORT — best-effort cross-check source, rate-limited by EasyEcom
     // (1 report/company/2h). Self-caps its poll wait and is skipped if tried within 2h.
-    // Runs BEFORE the slow aging report so aging can no longer starve it of run budget.
     await eeStep('mini_sales', () => pullMiniSalesReport(pool, runStartedAt, windowDays));
-    // INVENTORY_AGING LAST — the slowest step (EasyEcom is slow to generate it for the
-    // secondary warehouses). Gets a longer dedicated deadline than the generic per-step
-    // cap so it can actually complete instead of being killed at 600s and freezing the
-    // aging feed. pullInventoryAging fetches the warehouses in parallel.
-    const AGING_DEADLINE_MS = Number(process.env.PM_PULL_AGING_DEADLINE_MS || 1500000); // 25 min
-    await eeStep('aging', () => pullInventoryAging(pool, runStartedAt), AGING_DEADLINE_MS);
+    // INVENTORY_AGING_REPORT is intentionally NOT pulled: EasyEcom has never generated it
+    // for our two secondary warehouses (every attempt 429s / times out — ee_inventory_aging
+    // has always been empty), so it only wasted ~20 min of run budget and churned the auth
+    // circuit breaker each night. getDeadStock already falls back to a sales-based
+    // "on-hand but no orders in N days" signal when the aging table is empty, so Dead Stock
+    // is unaffected. pullInventoryAging() is kept for a future PRIMARY-location retry.
   }
 
   // Sales cross-check (orders vs mini sales) — DB-only, safe to run regardless of auth.
