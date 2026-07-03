@@ -6,15 +6,18 @@ interface PassesTableProps {
 }
 
 const HEADERS: { key: keyof QcPassRow; label: string; className?: string }[] = [
-  { key: "passed_at", label: "Passed at", className: "tabnum whitespace-nowrap" },
+  { key: "captured_at", label: "Scanned at", className: "tabnum whitespace-nowrap" },
   { key: "username", label: "User" },
   { key: "item_barcode", label: "Barcode", className: "tabnum" },
   { key: "tracking_number", label: "Tracking", className: "tabnum" },
   { key: "sku_code", label: "SKU" },
   { key: "style_id", label: "Style" },
+  { key: "product_name", label: "Product" },
   { key: "size", label: "Size" },
   { key: "quality", label: "Quality" },
   { key: "qc_action", label: "QC action" },
+  { key: "return_status", label: "Return" },
+  { key: "logistics_status", label: "Logistics" },
   { key: "warehouse_id", label: "WH" },
 ]
 
@@ -27,7 +30,7 @@ export function PassesTable({ rows }: PassesTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card p-10 text-center text-sm text-muted-foreground">
-        No QC passes match these filters.
+        No scanned returns match these filters.
       </div>
     )
   }
@@ -40,7 +43,7 @@ export function PassesTable({ rows }: PassesTableProps) {
             {HEADERS.map((h) => (
               <th key={h.key} className="whitespace-nowrap px-3 py-2.5 font-medium">{h.label}</th>
             ))}
-            <th className="whitespace-nowrap px-3 py-2.5 font-medium">Result</th>
+            <th className="whitespace-nowrap px-3 py-2.5 font-medium">Passed</th>
           </tr>
         </thead>
         <tbody>
@@ -49,9 +52,9 @@ export function PassesTable({ rows }: PassesTableProps) {
               {HEADERS.map((h) => (
                 <td key={h.key} className={`px-3 py-2 ${h.className ?? ""}`}>{cell(row[h.key])}</td>
               ))}
-              <td className="px-3 py-2">
+              <td className="px-3 py-2 whitespace-nowrap">
                 {row.pass_success == null ? (
-                  <span className="text-dim">—</span>
+                  <Badge variant="outline" className="text-muted-foreground">not passed</Badge>
                 ) : row.pass_success ? (
                   <Badge variant="success">pass</Badge>
                 ) : (

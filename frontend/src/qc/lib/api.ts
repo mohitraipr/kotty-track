@@ -11,23 +11,30 @@ export interface QcFilters {
   q: string
 }
 
+// One row = one return item SCANNED by a user (qc_return_captures), with the
+// pass outcome (pass_success/passed_at) LEFT-joined from qc_return_passes.
+// pass_success/passed_at are null when a scanned item was never QC-passed.
 export interface QcPassRow {
-  passed_at: string | null
+  captured_at: string | null
   username: string | null
   item_barcode: string | null
   tracking_number: string | null
   sku_code: string | null
   style_id: string | null
+  product_name: string | null
   size: string | null
   quality: string | null
   qc_action: string | null
+  return_status: string | null
+  logistics_status: string | null
   warehouse_id: string | null
   pass_success: number | null
+  passed_at: string | null
 }
 
 export interface QcSummaryEntry {
   user: string
-  passes: number
+  passes: number // number of returns this user scanned in range
 }
 
 export interface QcPassesResponse {

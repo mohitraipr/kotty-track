@@ -10,14 +10,14 @@
   const SOURCE_ID = '2297', TENANT_ID = '4019';
 
   // Auto-Pass config, pushed from content.js. OFF = capture only; ON = auto-pass each scanned item.
-  // qcDeskCode/quality come from the operator's own real passes (persisted); default 001/Q1.
-  let AUTOPASS = false, PASS_DESK = '001', PASS_QUALITY = 'Q1';
+  // PASS_SELECTOR (optional) lets an operator pin the exact Pass button via a CSS selector when
+  // the text-based finder isn't enough — set chrome.storage.local.passSelector.
+  let AUTOPASS = false, PASS_SELECTOR = '';
   window.addEventListener('message', (ev) => {
     const m = ev.data;
     if (m && m.__qcCfg === true) {
       AUTOPASS = !!m.autopass;
-      if (m.passDesk) PASS_DESK = m.passDesk;
-      if (m.passQuality) PASS_QUALITY = m.passQuality;
+      if (typeof m.passSelector === 'string') PASS_SELECTOR = m.passSelector.trim();
     }
   });
 
@@ -41,42 +41,72 @@
     return origPrint && origPrint.apply(this, arguments);
   };
 
-  // ---- auto-pass: replay the exact updateReturnRestocked PUT for the scanned item ----
-  const PASS_URL = `${API}/qcSearch/updateReturnRestocked?isColocatedRpc=false`;
-  const passInFlight = new Set();
+  // ---- auto-pass: click the PAGE'S OWN "Pass" button (keeps Myntra's UI in sync) ----
+  // Why not call updateReturnRestocked directly? Doing so passes the item in the backend but
+  // leaves Myntra's React UI unaware — the tracking input stays disabled until a manual refresh,
+  // and a subsequent manual Pass click fails ("already QC'd"). Clicking the real button instead
+  // runs the page's own flow: it re-enables the input for the next scan, and our fetch/XHR hook
+  // below still captures the pass result to the panel/DB. No refresh, no desync.
+  const passHandled = new Set();  // barcodes we've already auto-passed this session (no double-pass)
+
+  function isClickable(el) {
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;   // visible
+  }
+
+  // Find the enabled, visible "Pass" control. Explicit selector wins; else match button text.
+  function findPassButton() {
+    if (PASS_SELECTOR) {
+      try { const el = document.querySelector(PASS_SELECTOR); if (isClickable(el)) return el; } catch (e) {}
+    }
+    const cands = document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"], a.btn');
+    // exact-label pass first
+    for (const el of cands) {
+      if (!isClickable(el)) continue;
+      const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
+      if (t === 'pass' || t === 'qc pass' || t === 'qcpass') return el;
+    }
+    // looser: a short label containing the word "pass" (excluding lookalikes)
+    for (const el of cands) {
+      if (!isClickable(el)) continue;
+      const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
+      if (t && t.length <= 16 && /\bpass\b/.test(t) && !/bypass|passbook|password/.test(t)) return el;
+    }
+    return null;
+  }
+
+  // Poll for the enabled+visible Pass button up to `timeoutMs` (the page renders it after search).
+  function waitForPassButton(timeoutMs) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const tick = () => {
+        const b = findPassButton();
+        if (b) return resolve(b);
+        if (Date.now() - start >= timeoutMs) return resolve(null);
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
+
   async function doAutoPass(rec) {
     try {
-      if (!rec || !rec.item_barcode || !rec.oms_release_id) return;
-      const wh = Number(rec.return_request_warehouse_id || rec.warehouse_id);
-      if (!wh) return;
-      if (rec.qc_action) return;               // already QC'd — never re-pass
-      if (passInFlight.has(rec.item_barcode)) return;  // de-dupe rapid duplicate searches
-      passInFlight.add(rec.item_barcode);
-      const body = {
-        omsReleaseId: String(rec.oms_release_id),
-        itemBarcode: String(rec.item_barcode),
-        qcActionCode: 'QC_PASS',
-        returnRequestWarehouseId: wh,
-        qcDeskCode: PASS_DESK,
-        quality: PASS_QUALITY,
-      };
+      if (!rec || !rec.item_barcode) return;
+      if (rec.qc_action) return;                      // already QC'd — never re-pass
+      if (passHandled.has(rec.item_barcode)) return;  // de-dupe rapid duplicate searches
+      passHandled.add(rec.item_barcode);
+      const btn = await waitForPassButton(6000);
+      if (!btn) {
+        console.log('%c[QC Capture] auto-pass: Pass button not found — click it manually, or set passSelector', 'color:#f59e0b');
+        passHandled.delete(rec.item_barcode);         // allow a retry on the next search
+        return;
+      }
       armPrintSuppress();
-      const reqId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('qc-' + Date.now());
-      // NOTE: this goes through our own fetch wrapper below, which captures the response and
-      // posts the 'pass' result to the panel/DB — so we don't call handlePass here.
-      await fetch(PASS_URL, {
-        method: 'PUT', credentials: 'include',
-        headers: {
-          'Accept': 'application/json', 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
-          'x-myntra-app-name': 'rejoy', 'x-myntra-client-id': 'rejoy', 'x-myntra-module-name': 'QcSearch',
-          'x-myntra-rejoy-service': 'worms.qcSearch.updateReturnRestocked', 'x-myntra-req-id': reqId,
-        },
-        body: JSON.stringify(body),
-      });
+      btn.click();  // page's own pass flow → updateReturnRestocked → captured by our hook below
+      console.log('%c[QC Capture] auto-pass: clicked the page Pass button', 'color:#22c55e');
     } catch (e) {
       post('pass', { item_barcode: String(rec.item_barcode || ''), pass_success: false, pass_error: 'auto-pass error: ' + (e && e.message), passed_at: new Date().toISOString() });
-    } finally {
-      passInFlight.delete(rec.item_barcode);
     }
   }
 

@@ -78,13 +78,13 @@
 
   // Auto-Pass toggle: OFF = capture/sync only (read-only). ON = also auto-pass each scanned item.
   // State is persisted and pushed to the page-context interceptor (inject.js) via window messages.
-  // Broadcast the full config (toggle + the operator's real desk/quality) to inject.js.
+  // Broadcast the config (toggle + optional Pass-button selector override) to inject.js.
   function pushCfg() {
-    chrome.storage.local.get(['autopass', 'passDesk', 'passQuality'], (r) => {
+    chrome.storage.local.get(['autopass', 'passSelector'], (r) => {
       try {
         window.postMessage({
           __qcCfg: true, autopass: !!(r && r.autopass),
-          passDesk: (r && r.passDesk) || '', passQuality: (r && r.passQuality) || '',
+          passSelector: (r && r.passSelector) || '',
         }, '*');
       } catch (e) {}
     });
@@ -150,11 +150,6 @@
     else if (m.kind === 'pass') {
       markPassed(m.payload);
       chrome.runtime.sendMessage({ type: 'pass', record: m.payload });
-      // remember the operator's real desk/quality so auto-pass uses their actual values
-      const upd = {};
-      if (m.payload.desk_code) upd.passDesk = m.payload.desk_code;
-      if (m.payload.quality) upd.passQuality = m.payload.quality;
-      if (Object.keys(upd).length) chrome.storage.local.set(upd, pushCfg);
     }
   });
 
