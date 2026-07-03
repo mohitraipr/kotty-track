@@ -139,6 +139,44 @@
     }
   }
 
+  // ---------- keep the scanner on the "Return Tracking ID" box ----------
+  // The QC page renders TWO scan inputs side by side: "Return Tracking ID" and "Return ID".
+  // After a pass/reload, focus can land in the Return ID box, so a scanned tracking barcode
+  // goes into the wrong field. Locate the Tracking box by its label and focus it — but only
+  // when nothing is actively being typed, so we never fight a deliberate click.
+  function findTrackingInput() {
+    const labels = document.querySelectorAll('label');
+    for (const lab of labels) {
+      const t = (lab.textContent || '').trim().toLowerCase();
+      if (t === 'return tracking id' || (t.includes('tracking') && t.includes('id'))) {
+        const forId = lab.getAttribute('for');
+        if (forId) { const el = document.getElementById(forId); if (el) return el; }
+        const cont = lab.closest('.u-field-container') || lab.parentElement;
+        const inp = cont && cont.querySelector('input');
+        if (inp) return inp;
+      }
+    }
+    return null;
+  }
+  function ensureTrackingFocus() {
+    const track = findTrackingInput();
+    if (!track) return false;
+    if (document.activeElement === track) return true;   // already correct
+    // Steal focus only if nothing is mid-entry elsewhere (e.g. focus wrongly landed in the
+    // Return ID box after a reload, or focus is on <body>). Never interrupt active typing.
+    const a = document.activeElement;
+    const busy = a && a.tagName === 'INPUT' && a !== track && a.value;
+    if (!busy) { try { track.focus(); } catch (e) {} }
+    return true;
+  }
+  // Poll briefly after (re)load until the input renders, then focus it once.
+  function startTrackingFocus() {
+    let tries = 0;
+    const iv = setInterval(() => {
+      if (ensureTrackingFocus() || ++tries >= 20) clearInterval(iv);  // ~6s max
+    }, 300);
+  }
+
   // ---------- bridge: page -> background ----------
   window.addEventListener('message', (ev) => {
     const m = ev.data;
@@ -150,6 +188,8 @@
     else if (m.kind === 'pass') {
       markPassed(m.payload);
       chrome.runtime.sendMessage({ type: 'pass', record: m.payload });
+      // after a pass the page clears/re-renders (or reloads) — re-aim at the Tracking box
+      setTimeout(startTrackingFocus, 400);
     }
   });
 
@@ -157,6 +197,7 @@
   chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.type === 'status') setStatus(msg.data); });
   // ask for current status on load
   try { chrome.runtime.sendMessage({ type: 'getStatus' }, (r) => { if (r) setStatus(r); }); } catch (e) {}
-  document.addEventListener('DOMContentLoaded', ensurePanel);
+  document.addEventListener('DOMContentLoaded', () => { ensurePanel(); startTrackingFocus(); });
   ensurePanel();
+  startTrackingFocus();
 })();
