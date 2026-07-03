@@ -192,8 +192,51 @@ stored with the queued record). Without it, retries double-insert.
 - Confirm 401 handling: revoke the token mid-session → panel shows "re-login", queue preserved.
 
 ## Open decisions (need the user)
-1. **Token style**: DB-backed opaque (revocable, audited — recommended) vs stateless JWT (simpler).
+1. **Token style**: DB-backed opaque — DECIDED, built in #486.
 2. **What is the captured data *for* downstream** — pure QC/return audit store, or does it feed
    an RGP reconciliation / report? (Affects whether we build reporting now.)
 3. **Auto-pass in production** — keep the toggle, or capture-only? (It writes to Myntra.)
 4. **Where the extension points in prod** — main Cloud Run host, or a dedicated ingest path.
+
+---
+
+## Addendum (2026-07-03): dashboard, CSV recovery, concurrency, dedup
+
+### Status
+Backend shipped (#486) + natural-key dedup (#487). Tables exist on prod (empty). `jitrgp`
+role exists; **no user granted yet**. Extension client still points at localhost.
+
+### Dedup / re-capture (DONE — #487)
+Idempotency key is derived from the **return item** (`return_id+item_barcode` for captures,
+`item_barcode+oms_release_id` for passes), NOT the search timestamp. Re-searching the same
+return upserts ONE row (latest state); a pass is one event per item, attributed to `passed_by`.
+Server always derives the key → same dedup via API batch or CSV re-upload. Resolves the
+"search, don't pass; later search + pass" scenario cleanly.
+
+### Concurrency guarantee (by design)
+N users passing simultaneously is safe: per-user token, stateless endpoint (any instance),
+one transaction per batch on a pooled connection (pool 50 / queue 250), idempotent single-row
+upserts serializing on the PK in InnoDB. No shared mutable state, no dupes, no deadlock.
+
+### CSV backup + recovery (TO BUILD)
+- **Extension:** an "Export CSV" button dumps the IndexedDB queue / captured records to a local
+  CSV (safety net if the browser/queue is lost).
+- **Server:** `POST /ext/qc/upload-csv` (token + jitrgp) parses the CSV and ingests via the SAME
+  idempotent path → re-uploading is safe (dupes are no-ops). Any record recoverable by re-upload.
+
+### QC dashboard (TO BUILD)
+Session-gated web page (roles: admin + jitrgp + a manager role TBD), separate from the
+token-auth ingestion.
+- **Default view:** *today's* QC passes grouped by the user who passed them (count per user +
+  detail rows), from `qc_return_passes` ⋈ `qc_return_captures` ⋈ `users`.
+- **Filters:** date (single day or range, default today) + **enhanced** — user, quality,
+  qc_action, warehouse, logistics status, free-text on sku/style/barcode/tracking.
+- **CSV download** of the filtered result.
+- **API:** `GET /qc/api/passes?from=&to=&user=&quality=&q=…[&download=csv]`.
+- **Stack decision (open):** build as the first **React island** (target stack) vs a quick EJS
+  page now. Recommendation: React island (new feature = build in target stack).
+
+### Remaining extension-client work
+Point `BACKEND` at prod `/ext/qc/capture`; add login UI (`/ext/qc/login`, store token); handle
+401 (re-login) vs 5xx (retry); add the Export-CSV button; remove the localhost debug endpoints
++ `__qcRaw` dump. `capture_uid` now optional (server derives).
