@@ -4,12 +4,17 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const multer = require('multer');
 const { pool } = require('../config/db');
 const { generateToken, hashToken, normalizeCapture, normalizePass } = require('../utils/qcExtAuth');
+const { parseCsv, rowsToRecords } = require('../utils/qcCsv');
 
 const router = express.Router();
 const REQUIRED_ROLE = 'jitrgp';
 const MAX_BATCH = 500;
+const MAX_CSV_ROWS = 5000;
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Token auth carries no cookie, so there's nothing to CSRF/steal — allow the extension origin.
 // Tighten to the fixed chrome-extension://<id> once the extension is published.
@@ -76,6 +81,63 @@ async function requireQcToken(req, res, next) {
   }
 }
 
+// Normalize + idempotently upsert each record on an open connection (inside the caller's
+// transaction). Server-derived dedupe keys make this safe to replay, so both the live /capture
+// batch and the CSV re-upload recovery path share ONE implementation. Returns the accepted count.
+async function ingestRecords(conn, records, userId) {
+  let accepted = 0;
+  for (const rec of records) {
+    if (rec && rec._type === 'pass') {
+      const r = normalizePass(rec, userId);
+      await conn.query(
+        `INSERT INTO qc_return_passes
+           (capture_uid, passed_by, item_barcode, oms_release_id, qc_action, quality, desk_code,
+            warehouse_id, pass_success, new_status, pass_error, passed_at, raw_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           passed_by=VALUES(passed_by), qc_action=VALUES(qc_action), quality=VALUES(quality),
+           desk_code=VALUES(desk_code), warehouse_id=VALUES(warehouse_id),
+           pass_success=VALUES(pass_success), new_status=VALUES(new_status),
+           pass_error=VALUES(pass_error), passed_at=VALUES(passed_at),
+           raw_json=VALUES(raw_json), ingested_at=CURRENT_TIMESTAMP`,
+        [r.capture_uid, r.passed_by, r.item_barcode, r.oms_release_id, r.qc_action, r.quality,
+         r.desk_code, r.warehouse_id, r.pass_success, r.new_status, r.pass_error, r.passed_at, r.raw_json]);
+    } else {
+      const r = normalizeCapture(rec, userId);
+      await conn.query(
+        `INSERT INTO qc_return_captures
+           (capture_uid, captured_by, return_id, item_barcode, tracking_number, oms_release_id,
+            sku_id, sku_code, style_id, article_no, product_name, size, price, return_type,
+            return_mode, return_status, rms_status, qc_action, quality, logistics_status,
+            courier_code, return_hub, dispatch_wh, return_destination_wh, delivery_center,
+            ship_city, created_date, refund_date, return_received_on, return_restocked_on,
+            raw_json, captured_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           captured_by=VALUES(captured_by), tracking_number=VALUES(tracking_number),
+           oms_release_id=VALUES(oms_release_id), sku_id=VALUES(sku_id), sku_code=VALUES(sku_code),
+           style_id=VALUES(style_id), article_no=VALUES(article_no), product_name=VALUES(product_name),
+           size=VALUES(size), price=VALUES(price), return_type=VALUES(return_type),
+           return_mode=VALUES(return_mode), return_status=VALUES(return_status),
+           rms_status=VALUES(rms_status), qc_action=VALUES(qc_action), quality=VALUES(quality),
+           logistics_status=VALUES(logistics_status), courier_code=VALUES(courier_code),
+           return_hub=VALUES(return_hub), dispatch_wh=VALUES(dispatch_wh),
+           return_destination_wh=VALUES(return_destination_wh), delivery_center=VALUES(delivery_center),
+           ship_city=VALUES(ship_city), created_date=VALUES(created_date), refund_date=VALUES(refund_date),
+           return_received_on=VALUES(return_received_on), return_restocked_on=VALUES(return_restocked_on),
+           raw_json=VALUES(raw_json), captured_at=VALUES(captured_at), ingested_at=CURRENT_TIMESTAMP`,
+        [r.capture_uid, r.captured_by, r.return_id, r.item_barcode, r.tracking_number, r.oms_release_id,
+         r.sku_id, r.sku_code, r.style_id, r.article_no, r.product_name, r.size, r.price, r.return_type,
+         r.return_mode, r.return_status, r.rms_status, r.qc_action, r.quality, r.logistics_status,
+         r.courier_code, r.return_hub, r.dispatch_wh, r.return_destination_wh, r.delivery_center,
+         r.ship_city, r.created_date, r.refund_date, r.return_received_on, r.return_restocked_on,
+         r.raw_json, r.captured_at]);
+    }
+    accepted += 1;
+  }
+  return accepted;
+}
+
 // POST /ext/qc/capture  { records:[{ _type:'capture'|'pass', capture_uid, ... }] } -> { ok, accepted }
 // Idempotent (capture_uid PK + no-op upsert) and transactional — responds 200 only after commit,
 // which satisfies the extension's "remove from queue only after the backend confirms" contract.
@@ -87,58 +149,42 @@ router.post('/capture', requireQcToken, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    let accepted = 0;
-    for (const rec of records) {
-      if (rec && rec._type === 'pass') {
-        const r = normalizePass(rec, req.qcUser.id);
-        await conn.query(
-          `INSERT INTO qc_return_passes
-             (capture_uid, passed_by, item_barcode, oms_release_id, qc_action, quality, desk_code,
-              warehouse_id, pass_success, new_status, pass_error, passed_at, raw_json)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE
-             passed_by=VALUES(passed_by), qc_action=VALUES(qc_action), quality=VALUES(quality),
-             desk_code=VALUES(desk_code), warehouse_id=VALUES(warehouse_id),
-             pass_success=VALUES(pass_success), new_status=VALUES(new_status),
-             pass_error=VALUES(pass_error), passed_at=VALUES(passed_at),
-             raw_json=VALUES(raw_json), ingested_at=CURRENT_TIMESTAMP`,
-          [r.capture_uid, r.passed_by, r.item_barcode, r.oms_release_id, r.qc_action, r.quality,
-           r.desk_code, r.warehouse_id, r.pass_success, r.new_status, r.pass_error, r.passed_at, r.raw_json]);
-      } else {
-        const r = normalizeCapture(rec, req.qcUser.id);
-        await conn.query(
-          `INSERT INTO qc_return_captures
-             (capture_uid, captured_by, return_id, item_barcode, tracking_number, oms_release_id,
-              sku_id, sku_code, style_id, article_no, product_name, size, price, return_type,
-              return_mode, return_status, rms_status, qc_action, quality, logistics_status,
-              courier_code, return_hub, dispatch_wh, return_destination_wh, delivery_center,
-              ship_city, created_date, refund_date, return_received_on, return_restocked_on,
-              raw_json, captured_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-           ON DUPLICATE KEY UPDATE
-             captured_by=VALUES(captured_by), tracking_number=VALUES(tracking_number),
-             oms_release_id=VALUES(oms_release_id), sku_id=VALUES(sku_id), sku_code=VALUES(sku_code),
-             style_id=VALUES(style_id), article_no=VALUES(article_no), product_name=VALUES(product_name),
-             size=VALUES(size), price=VALUES(price), return_type=VALUES(return_type),
-             return_mode=VALUES(return_mode), return_status=VALUES(return_status),
-             rms_status=VALUES(rms_status), qc_action=VALUES(qc_action), quality=VALUES(quality),
-             logistics_status=VALUES(logistics_status), courier_code=VALUES(courier_code),
-             return_hub=VALUES(return_hub), dispatch_wh=VALUES(dispatch_wh),
-             return_destination_wh=VALUES(return_destination_wh), delivery_center=VALUES(delivery_center),
-             ship_city=VALUES(ship_city), created_date=VALUES(created_date), refund_date=VALUES(refund_date),
-             return_received_on=VALUES(return_received_on), return_restocked_on=VALUES(return_restocked_on),
-             raw_json=VALUES(raw_json), captured_at=VALUES(captured_at), ingested_at=CURRENT_TIMESTAMP`,
-          [r.capture_uid, r.captured_by, r.return_id, r.item_barcode, r.tracking_number, r.oms_release_id,
-           r.sku_id, r.sku_code, r.style_id, r.article_no, r.product_name, r.size, r.price, r.return_type,
-           r.return_mode, r.return_status, r.rms_status, r.qc_action, r.quality, r.logistics_status,
-           r.courier_code, r.return_hub, r.dispatch_wh, r.return_destination_wh, r.delivery_center,
-           r.ship_city, r.created_date, r.refund_date, r.return_received_on, r.return_restocked_on,
-           r.raw_json, r.captured_at]);
-      }
-      accepted += 1;
-    }
+    const accepted = await ingestRecords(conn, records, req.qcUser.id);
     await conn.commit();
     return res.json({ ok: true, accepted });
+  } catch (e) {
+    await conn.rollback().catch(() => {});
+    return res.status(500).json({ ok: false, error: e.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /ext/qc/upload-csv  (multipart, field "file") -> { ok, accepted, parsed }
+// Recovery path: the extension keeps a local CSV of everything it captured; re-uploading it here
+// re-runs ingestion. Because dedupe keys are server-derived, replays are no-ops, so this can be
+// run repeatedly without creating duplicates.
+router.post('/upload-csv', requireQcToken, upload.single('file'), async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ ok: false, error: 'file required (multipart field "file")' });
+  }
+  let records;
+  try {
+    const rows = parseCsv(req.file.buffer.toString('utf8'));
+    records = rowsToRecords(rows);
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: `could not parse CSV: ${e.message}` });
+  }
+  const parsed = records.length;
+  if (parsed === 0) return res.status(400).json({ ok: false, error: 'no data rows found in CSV' });
+  if (parsed > MAX_CSV_ROWS) return res.status(413).json({ ok: false, error: `too many rows (max ${MAX_CSV_ROWS})` });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const accepted = await ingestRecords(conn, records, req.qcUser.id);
+    await conn.commit();
+    return res.json({ ok: true, accepted, parsed });
   } catch (e) {
     await conn.rollback().catch(() => {});
     return res.status(500).json({ ok: false, error: e.message });
