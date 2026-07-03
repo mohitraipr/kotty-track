@@ -275,7 +275,15 @@ function renderFreshness(f) {
   const asOf = new Date(f.data_as_of);
   const ageH = (Date.now() - asOf.getTime()) / 3.6e6;
   const stale = ageH > 24;
-  el.textContent = `Data last refreshed: ${fmtDateTime(asOf)}${stale ? ` · ${Math.round(ageH / 24)}d old — feed may be stale` : ''}`;
+  let txt = `Data last refreshed: ${fmtDateTime(asOf)}${stale ? ` · ${Math.round(ageH / 24)}d old — feed may be stale` : ''}`;
+  // Aging (dead-stock age signal) is tracked separately and does NOT gate the banner
+  // above — surface its own age only when it's noticeably behind.
+  const agingRaw = f.feeds && f.feeds.aging;
+  if (agingRaw) {
+    const agingAgeH = (Date.now() - new Date(agingRaw).getTime()) / 3.6e6;
+    if (agingAgeH > 48) txt += ` · aging report ${Math.round(agingAgeH / 24)}d old`;
+  }
+  el.textContent = txt;
   el.style.color = stale ? '#b45309' : '';
 }
 

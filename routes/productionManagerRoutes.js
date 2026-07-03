@@ -362,8 +362,13 @@ router.get('/api/summary', async (req, res) => {
   } catch (_) { out.sales_by_day = null; }
 
   // Data freshness: when the numbers behind the dashboard were last refreshed. We take
-  // the OLDEST of the critical feeds (sales / stock / aging) so the homepage line
-  // reflects true staleness, not whichever table was touched most recently.
+  // the OLDEST of the DECISION-CRITICAL feeds (sales/DRR + stock) so the homepage line
+  // reflects true staleness. Aging is deliberately EXCLUDED from this: it only powers the
+  // Dead Stock view (via getDeadStock, which has a sales-based fallback), it's slow-moving
+  // (stock age vs a 45-day threshold), and EasyEcom's INVENTORY_AGING_REPORT has been
+  // failing to generate for the secondary warehouses — so letting it gate the banner kept
+  // it permanently "stale" even when the real data was current. Aging's own as-of date is
+  // still exposed under feeds.aging below.
   try {
     const [okSteps] = await pool.query(
       `SELECT step, MAX(run_started_at) AS last_ok FROM pm_pull_runs
@@ -373,7 +378,7 @@ router.get('/api/summary', async (req, res) => {
     for (const r of okSteps) lastOk[r.step] = r.last_ok;
     // 'orders_aggregate' is the fresh DRR sales source; fall back to legacy names.
     const salesAsOf = lastOk['orders_aggregate'] || lastOk['sales_cross_check'] || lastOk['mini_sales'] || null;
-    const feeds = [salesAsOf, lastOk['stock_status'], lastOk['aging']].filter(Boolean);
+    const feeds = [salesAsOf, lastOk['stock_status']].filter(Boolean);
     const dataAsOf = feeds.length ? new Date(Math.min(...feeds.map((d) => new Date(d).getTime()))) : null;
     out.freshness = {
       data_as_of: dataAsOf,
