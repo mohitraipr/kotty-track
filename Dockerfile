@@ -13,14 +13,15 @@ COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Frontend island builder stage (React + Vite + Tailwind + shadcn)
-# Builds the Tasks UI bundle into /app/public/tasks (per frontend/vite.config.ts
-# build.outDir). Kept separate so the runtime image never ships front-end tooling.
+# Builds the Tasks UI bundle into /app/public/tasks (vite.config.ts) and the QC
+# dashboard bundle into /app/public/qc (vite.qc.config.ts). Kept separate so the
+# runtime image never ships front-end tooling.
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build && npm run build:qc
 
 # Production stage
 FROM node:20-alpine
@@ -40,10 +41,11 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy application files
 COPY --chown=nodejs:nodejs . .
 
-# Bring in the built Tasks island AFTER `COPY . .` so it isn't shadowed by the
-# (gitignored / dockerignored) local public/tasks. This is the only source of
-# the built bundle in the image.
+# Bring in the built islands AFTER `COPY . .` so they aren't shadowed by the
+# (gitignored / dockerignored) local public/*. This is the only source of the
+# built bundles in the image.
 COPY --from=frontend-builder --chown=nodejs:nodejs /app/public/tasks ./public/tasks
+COPY --from=frontend-builder --chown=nodejs:nodejs /app/public/qc ./public/qc
 
 # Remove development files (drop frontend/ source + node_modules from the runtime image)
 RUN rm -rf .git .gitignore .env* docs/*.md tests frontend

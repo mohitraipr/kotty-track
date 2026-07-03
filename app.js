@@ -268,6 +268,7 @@ app.use('/easyecom', easyecomUiRoutes);
 app.use('/', featuresRoutes);
 app.use('/indent', indentRoutes);
 app.use('/tasks', require('./routes/taskRoutes'));   // mohitteam: personal to-dos + task assignment
+app.use('/qc', require('./routes/qcDashboardRoutes')); // admin + jitrgp: QC passes dashboard (React island)
 app.use('/po-creator', poCreatorRoutes);
 app.use('/nowi-po', nowiPoRoutes);
 app.use('/vendor-files', vendorFilesRoutes);

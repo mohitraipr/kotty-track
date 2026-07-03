@@ -1,0 +1,101 @@
+/*
+ * QC dashboard island — dark-first, shares the Tasks design tokens but scoped to
+ * #qc-root so it can coexist with (and never leak into) the Tasks island.
+ */
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-elevated: var(--elevated);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-dim: var(--dim);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--border-strong);
+  --color-ring: var(--primary);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 3px);
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+:root {
+  --background: #08090a;
+  --sidebar: #0b0b0d;
+  --elevated: #0f1011;
+  --card: #121315;
+  --popover: #161719;
+  --secondary: #18191c;
+
+  --border: #1c1d20;
+  --border-strong: #26272b;
+
+  --foreground: #ededee;
+  --muted-foreground: #8a8d94;
+  --dim: #5d6068;
+
+  --muted: #161719;
+  --accent: #1a1b1e;
+
+  --primary: #7c84f2;
+  --primary-foreground: #0a0a0c;
+
+  --success: #4cb782;
+  --danger: #e5484d;
+  --warning: #e0b13c;
+
+  --radius: 0.5rem;
+
+  color-scheme: dark;
+}
+
+* { border-color: var(--border); }
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+#qc-root {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv01", "cv03", "ss01";
+}
+
+#qc-root *::-webkit-scrollbar { width: 10px; height: 10px; }
+#qc-root *::-webkit-scrollbar-thumb {
+  background: #2a2b2f; border-radius: 999px; border: 3px solid transparent; background-clip: padding-box;
+}
+#qc-root *::-webkit-scrollbar-thumb:hover { background: #38393e; background-clip: padding-box; }
+#qc-root *::-webkit-scrollbar-track { background: transparent; }
+
+#qc-root ::selection { background: color-mix(in oklab, var(--primary) 30%, transparent); }
+
+/* Numeric columns read cleaner in the mono face */
+.tabnum { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }

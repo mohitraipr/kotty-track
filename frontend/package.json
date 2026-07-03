@@ -6,7 +6,9 @@
   "description": "React + shadcn/ui island for the kotty-track Tasks feature (mounted into views/tasks.ejs)",
   "scripts": {
     "dev": "vite",
+    "dev:qc": "vite --config vite.qc.config.ts",
     "build": "vite build",
+    "build:qc": "vite build --config vite.qc.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

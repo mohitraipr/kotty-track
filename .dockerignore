@@ -8,6 +8,7 @@ frontend/node_modules
 
 # Built island assets — provided by the frontend-builder stage, never from local
 public/tasks
+public/qc
 
 # VCS / local / runtime
 .git
