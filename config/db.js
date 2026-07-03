@@ -88,6 +88,13 @@ async function testConnection() {
   }
 }
 
-testConnection();
+// Skip the connect-on-import probe in tests (NODE_ENV=test) or when explicitly disabled
+// (SKIP_DB_CONNECT). This lets pure logic in DB-coupled modules (which `require` this file
+// at the top) be unit-tested without a live database and without process.exit killing the
+// test runner. The pool is created lazily by mysql2 and is never touched by pure functions.
+const skipConnect = env.NODE_ENV === 'test' || env.SKIP_DB_CONNECT === '1' || env.SKIP_DB_CONNECT === 'true';
+if (!skipConnect) {
+  testConnection();
+}
 
 module.exports = { pool };
