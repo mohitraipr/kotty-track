@@ -1364,46 +1364,69 @@ loadSkuCategories();
 // lot number, rolls and the actual pattern counts (pieces = patterns × layers).
 (function prefillFromAssignment() {
   var P = <%- JSON.stringify(prefill) %>;
-  // 1. Jump to the Create Lot tab.
-  var tabBtn = document.getElementById('create-lot-tab');
-  if (tabBtn) tabBtn.click();
-  // 2. SKU = the plan's style (EasyEcom-derived → resolves cleanly). Bypass the builder.
-  var skuHidden = document.getElementById('sku');
-  if (skuHidden) skuHidden.value = P.style;
-  var prev = document.getElementById('skuPreviewText');
-  if (prev) prev.textContent = P.style;
-  ['skuCategory', 'skuCode'].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) { el.required = false; }
-  });
-  var builder = document.querySelector('.sku-builder');
-  if (builder) builder.style.display = 'none';
-  // 3. Fabric type — set the hidden value + search box, then fire change to wire rolls.
-  if (P.fabric_type) {
-    var fSearch = document.getElementById('fabric_type_search');
-    var fHidden = document.getElementById('fabric_type');
-    if (fHidden) fHidden.value = P.fabric_type;
-    if (fSearch) fSearch.value = P.fabric_type;
-    if (fHidden) fHidden.dispatchEvent(new Event('change'));
+  function run() {
+    // 1. Activate the Create Lot tab by class (bootstrap.js loads in the footer AFTER
+    //    this script, so a .click() on the tab button has no handler yet). Doing it by
+    //    class is bootstrap-independent and can't land on the wrong tab.
+    document.querySelectorAll('#dashboardTabs .kotty-tab').forEach(function (t) {
+      t.classList.remove('active'); t.setAttribute && t.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('#dashboardTabsContent .tab-pane').forEach(function (pane) {
+      pane.classList.remove('show', 'active');
+    });
+    var ctab = document.getElementById('create-lot-tab');
+    if (ctab) { ctab.classList.add('active'); ctab.setAttribute('aria-selected', 'true'); }
+    var cpane = document.getElementById('create-lot');
+    if (cpane) cpane.classList.add('show', 'active');
+
+    // 2. SKU = the plan's style (EasyEcom-derived → resolves cleanly). Bypass the builder.
+    var skuHidden = document.getElementById('sku');
+    if (skuHidden) skuHidden.value = P.style;
+    var prev = document.getElementById('skuPreviewText');
+    if (prev) prev.textContent = P.style;
+    ['skuCategory', 'skuCode'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.required = false; }
+    });
+    var builder = document.querySelector('.sku-builder');
+    if (builder) builder.style.display = 'none';
+
+    // 3. Fabric type — set the hidden value + search box, then fire change to wire rolls.
+    if (P.fabric_type) {
+      var fSearch = document.getElementById('fabric_type_search');
+      var fHidden = document.getElementById('fabric_type');
+      if (fHidden) fHidden.value = P.fabric_type;
+      if (fSearch) fSearch.value = P.fabric_type;
+      if (fHidden) fHidden.dispatchEvent(new Event('change'));
+    }
+
+    // 4. Clear the default empty size row the form adds on load, then add exactly one row
+    //    per planned size (skip blanks) with a target-pieces chip. Cutter sets pattern count.
+    if (typeof sizesContainer !== 'undefined' && sizesContainer) sizesContainer.innerHTML = '';
+    (P.sizes || [])
+      .filter(function (s) { return s.size_label && Number(s.qty) > 0; })
+      .forEach(function (s) {
+        if (typeof addNewSize !== 'function') return;
+        addNewSize();
+        var rows = sizesContainer.querySelectorAll('.size-section:not(.d-none)');
+        var row = rows[rows.length - 1];
+        if (!row) return;
+        var sel = row.querySelector('.sizeLabelSel');
+        if (sel) sel.value = s.size_label;
+        var chip = document.createElement('div');
+        chip.style.cssText = 'margin-top:6px;font-size:.8rem;color:#2563eb;font-weight:600;';
+        chip.textContent = '🎯 plan target: ' + s.qty + ' pcs';
+        row.appendChild(chip);
+      });
+
+    // 5. Remark links the lot back to the plan for traceability.
+    var rem = document.getElementById('remark');
+    if (rem && !rem.value) rem.value = 'From cut-plan assignment #' + P.id + ' (style ' + P.style + ')';
+    if (typeof updateTotalPieces === 'function') updateTotalPieces();
   }
-  // 4. One size row per planned size, with a target-pieces chip. Cutter sets pattern count.
-  (P.sizes || []).forEach(function (s) {
-    if (typeof addNewSize !== 'function') return;
-    addNewSize();
-    var rows = sizesContainer.querySelectorAll('.size-section:not(.d-none)');
-    var row = rows[rows.length - 1];
-    if (!row) return;
-    var sel = row.querySelector('.sizeLabelSel');
-    if (sel) sel.value = s.size_label;
-    var chip = document.createElement('div');
-    chip.style.cssText = 'margin-top:6px;font-size:.8rem;color:#2563eb;font-weight:600;';
-    chip.textContent = '🎯 plan target: ' + s.qty + ' pcs';
-    row.appendChild(chip);
-  });
-  // 5. Remark links the lot back to the plan for traceability.
-  var rem = document.getElementById('remark');
-  if (rem && !rem.value) rem.value = 'From cut-plan assignment #' + P.id + ' (style ' + P.style + ')';
-  if (typeof updateTotalPieces === 'function') updateTotalPieces();
+  // Run after the DOM + the form's own init (default size row, listeners) are ready.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
 })();
 <% } %>
 </script>
