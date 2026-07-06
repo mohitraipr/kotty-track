@@ -384,14 +384,18 @@ router.get('/api/summary', async (req, res) => {
     // (never 'ok') whenever any day is flagged, so its last 'ok' can be months old and would
     // make the banner read far staler than reality. mini_sales is the only sane secondary.
     const salesAsOf = lastOk['orders_aggregate'] || lastOk['mini_sales'] || null;
-    const feeds = [salesAsOf, lastOk['stock_status']].filter(Boolean);
+    // SOH rides the snapshot fallback (ee_inventory_health), since STATUS_WISE_STOCK_REPORT
+    // 400s for this account and is disabled — so 'snapshot' is the real stock freshness
+    // signal, not 'stock_status'. See the SOH note in utils/easyecomAnalytics.js.
+    const stockAsOf = lastOk['snapshot'] || lastOk['stock_status'] || null;
+    const feeds = [salesAsOf, stockAsOf].filter(Boolean);
     const dataAsOf = feeds.length ? new Date(Math.min(...feeds.map((d) => new Date(d).getTime()))) : null;
     out.freshness = {
       data_as_of: dataAsOf,
       last_run: lastOk['run'] || null,
       feeds: {
         sales: salesAsOf,
-        stock: lastOk['stock_status'] || null,
+        stock: stockAsOf,
         aging: lastOk['aging'] || null,
       },
     };
