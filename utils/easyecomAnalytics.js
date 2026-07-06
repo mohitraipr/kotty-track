@@ -623,7 +623,7 @@ async function computeCleanDayMetrics(pool, windowStart) {
      INNER JOIN (
        SELECT DISTINCT sku
        FROM ee_sales_daily
-       WHERE sale_date >= ? AND source = 'mini_sales_report'
+       WHERE sale_date >= ? AND source = 'orders_api'
      ) sold ON sold.sku = s.sku
      WHERE s.snapshot_date >= ?
      GROUP BY s.sku, d
@@ -634,7 +634,7 @@ async function computeCleanDayMetrics(pool, windowStart) {
   const [saleRows] = await pool.query(
     `SELECT sku, DATE_FORMAT(sale_date, '%Y-%m-%d') AS d, SUM(qty) AS qty
      FROM ee_sales_daily
-     WHERE sale_date >= ? AND source = 'mini_sales_report'
+     WHERE sale_date >= ? AND source = 'orders_api'
      GROUP BY sku, d`,
     [windowStart]
   );
@@ -715,7 +715,7 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
        WHERE snapshot_date >= ? AND qty > 0
        GROUP BY sku
      ) sd ON sd.sku = s.sku
-     WHERE s.sale_date >= ? AND s.source = 'mini_sales_report'
+     WHERE s.sale_date >= ? AND s.source = 'orders_api'
      GROUP BY s.sku`,
     [snapshotStart, snapshotStart]
   );
