@@ -720,9 +720,14 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     [snapshotStart, snapshotStart]
   );
 
-  // Sellable SOH = only "Available" status from STATUS_WISE_STOCK_REPORT.
-  // Falls back to ee_inventory_health.inventory if no stock-status data yet
-  // (i.e. before the first nightly pull populates ee_stock_status).
+  // SOH source. Intended: sellable "Available"-only qty from STATUS_WISE_STOCK_REPORT
+  // (ee_stock_status). ACTUAL (2026-07): that report 400s for this EasyEcom account and is
+  // disabled in the pull worker (PM_STOCK_STATUS_ENABLED), so ee_stock_status is always
+  // empty and SOH ALWAYS takes the fallback below — ee_inventory_health.inventory, i.e. the
+  // latest inventory snapshot. NOTE this is TOTAL on-hand (includes reserved/hold/damaged),
+  // not Available-only, so SOH runs slightly high → suggested_cut slightly conservative.
+  // If the 400 is ever fixed and the report re-enabled, the Available-only path resumes
+  // automatically (this query wins whenever ee_stock_status has rows).
   const [stockStatusRows] = await pool.query(
     `SELECT sku, COALESCE(SUM(qty), 0) AS soh
      FROM ee_stock_status

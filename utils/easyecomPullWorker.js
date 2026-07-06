@@ -815,7 +815,15 @@ async function runPullWorker(pool, { bootstrap = 'auto', includeProducts } = {})
     await eeStep('orders', () => pullOrders(pool, runStartedAt, bootstrapMode));
     // Aggregate orders → ee_sales_daily right away: this is the fresh (±5%) DRR source.
     await eeStep('orders_aggregate', () => aggregateOrdersIntoSales(pool, runStartedAt, windowDays));
-    await eeStep('stock_status', () => pullStatusWiseStock(pool, runStartedAt));
+    // STATUS_WISE_STOCK_REPORT is DISABLED by default: it has returned HTTP 400 for this
+    // account on every attempt (ee_stock_status has never held a row), so it only spammed
+    // failures and burned run budget. SOH therefore rides the snapshot fallback
+    // (ee_inventory_health, populated by the snapshot step above) — see the SOH note in
+    // utils/easyecomAnalytics.js. Re-enable with PM_STOCK_STATUS_ENABLED=1 if the 400 is
+    // ever resolved (the Available-only sellable SOH would then take over automatically).
+    if (process.env.PM_STOCK_STATUS_ENABLED === '1') {
+      await eeStep('stock_status', () => pullStatusWiseStock(pool, runStartedAt));
+    }
     // Product Master — Sundays or when explicitly requested or on bootstrap.
     if (includeProducts || isSunday || bootstrapMode) {
       await eeStep('product_master', () => pullProductMaster(pool, runStartedAt));
