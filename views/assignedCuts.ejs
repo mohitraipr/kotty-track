@@ -31,6 +31,7 @@
   <div class="page-head">
     <h1><i class="bi bi-scissors"></i> Assigned Cuts</h1>
     <div class="sub">Cuts the production manager has approved and assigned to you. Cut to these quantities — CAD makes the marker.</div>
+    <div style="margin-top:10px;"><a href="/cutting-manager/dashboard" style="color:#93c5fd; text-decoration:none; font-size:.85rem;"><i class="bi bi-arrow-left"></i> Back to dashboard</a></div>
   </div>
 
   <div class="container-fluid" style="max-width:820px;">
@@ -71,6 +72,16 @@
           <% if (a.cutting_lot_id && a.lot_no) { %>
             <div class="mt-2"><i class="bi bi-check2-circle text-success"></i> Cut as lot <strong><%= a.lot_no %></strong>
               — <a href="/cutting-manager/lot-details/<%= a.cutting_lot_id %>">view lot</a></div>
+          <% } else if (a.status === 'assigned') { %>
+            <div class="mt-3">
+              <% if (Number(a.total_pieces) > 1500) { %>
+                <span class="text-warning" style="font-size:.85rem;"><i class="bi bi-exclamation-triangle"></i>
+                  This assignment is <%= a.total_pieces %> pcs (over the 1500/lot cap). Ask the PM to assign it per-lot so each lot is ≤1500.</span>
+              <% } else { %>
+                <a href="/cutting-manager/dashboard?from_assignment=<%= a.id %>" class="btn btn-success btn-sm">
+                  <i class="bi bi-scissors"></i> Start this lot (pre-fills the cutting form)</a>
+              <% } %>
+            </div>
           <% } %>
         </div>
       <% }) %>

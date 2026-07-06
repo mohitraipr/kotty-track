@@ -180,6 +180,41 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
 
     const allowAdhoc = await allowAdhocCuttingEntry();
 
+    // Pre-fill from a PM cut-plan assignment ("Start this lot" on Assigned Cuts).
+    // Only an 'assigned' row that belongs to THIS master, and only a single ≤1500-piece
+    // lot (the planner already caps lots at 1500; a bigger consolidated assignment must be
+    // assigned per-lot from the PM screen). prefill stays null for a normal blank form.
+    let prefill = null;
+    const fromAssignment = parseInt(req.query.from_assignment, 10);
+    if (fromAssignment) {
+      try {
+        const [[a]] = await pool.query(
+          `SELECT id, style, fabric_type, total_pieces FROM pm_cut_assignment
+            WHERE id = ? AND assigned_master_id = ? AND status = 'assigned'`,
+          [fromAssignment, userId]
+        );
+        if (a) {
+          const [sz] = await pool.query(
+            `SELECT size_label, qty FROM pm_cut_assignment_sizes WHERE assignment_id = ? ORDER BY qty DESC`,
+            [fromAssignment]
+          );
+          const totalTarget = sz.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+          prefill = {
+            id: a.id,
+            style: a.style,
+            fabric_type: a.fabric_type || '',
+            sizes: sz.map((r) => ({ size_label: r.size_label, qty: Number(r.qty) || 0 })),
+            total_target: totalTarget,
+            over_cap: totalTarget > 1500, // flag: should have been assigned per-lot
+          };
+        } else {
+          req.flash('error', 'That assigned cut is not available to start (already cut, cancelled, or not yours).');
+        }
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') console.error('[cutting-manager] prefill load error:', e.message);
+      }
+    }
+
     res.render('cuttingManagerDashboard', {
       user: req.session.user,
       cuttingLots,
@@ -189,6 +224,7 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
       generatedLotNumber, // Pass the generated lot number
       isDenim,
       allowAdhoc,
+      prefill,
     });
   } catch (err) {
     if (conn) {
@@ -223,6 +259,7 @@ router.post(
       weight_used,
       roll_full_weight,
       roll_remaining_weight,
+      assignment_id, // set when this lot is started from a PM cut-plan assignment
     } = req.body;
     const image = req.file;
 
@@ -444,6 +481,20 @@ router.post(
           'UPDATE cutting_lot_rolls SET total_pieces = layers * ? WHERE cutting_lot_id = ?',
           [sumPatterns, cuttingLotId]
         );
+
+        // If this lot was started from a PM cut-plan assignment, link it back and close
+        // the loop: the assignment now points at the real lot and moves 'assigned' → 'cut',
+        // so it stops showing as "to cut" and the PM's suggestion nets it. Guarded to this
+        // master + still-'assigned' so a stale/duplicate submit can't relink a done row.
+        const assignmentIdNum = parseInt(assignment_id, 10);
+        if (assignmentIdNum) {
+          await conn.query(
+            `UPDATE pm_cut_assignment
+                SET cutting_lot_id = ?, status = 'cut', updated_at = NOW()
+              WHERE id = ? AND assigned_master_id = ? AND status = 'assigned'`,
+            [cuttingLotId, assignmentIdNum, userId]
+          );
+        }
 
         await conn.commit();
         conn.release();

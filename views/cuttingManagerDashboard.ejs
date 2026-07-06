@@ -326,6 +326,9 @@
       <button class="kotty-tab" id="indent-tab" data-bs-toggle="tab" data-bs-target="#indent-panel" type="button" role="tab" aria-controls="indent-panel" aria-selected="false">
         <i class="bi bi-box-seam"></i><span>Raise Indent</span>
       </button>
+      <a class="kotty-tab" href="/cutting-manager/assigned-cuts">
+        <i class="bi bi-scissors"></i><span>Assigned Cuts</span>
+      </a>
       <a class="kotty-tab" href="/manual-lot">
         <i class="bi bi-pencil-square"></i><span>Manual Lot Mapping</span>
       </a>
@@ -407,6 +410,14 @@
           </div>
           <div class="kotty-card-body">
             <form id="lotForm" method="POST" action="/cutting-manager/create-lot" enctype="multipart/form-data">
+              <% if (typeof prefill !== 'undefined' && prefill) { %>
+                <input type="hidden" name="assignment_id" value="<%= prefill.id %>" />
+                <div class="alert alert-info" style="margin-bottom:14px; border-left:4px solid #2563eb;">
+                  <i class="bi bi-scissors"></i> <strong>Starting planned lot for style <%= prefill.style %></strong>
+                  — style, fabric &amp; sizes are pre-filled from the PM cut plan (target <%= prefill.total_target %> pcs).
+                  Enter your physical lot number and rolls; adjust patterns to what you actually lay.
+                </div>
+              <% } %>
               <div class="row g-3">
                 <div class="col-md-4">
                   <label for="lot_no" class="kotty-form-label"><i class="bi bi-hash"></i><span data-i18n="lotNumberGenerated">Lot Number (Generated)</span></label>
@@ -1346,6 +1357,55 @@ document.getElementById('lotForm').addEventListener('submit', function(e) {
 });
 
 loadSkuCategories();
+
+<% if (typeof prefill !== 'undefined' && prefill) { %>
+// ── Pre-fill the create-lot form from a PM cut-plan assignment ("Start this lot").
+// Style, fabric and size labels come from the plan; the cutter still enters the physical
+// lot number, rolls and the actual pattern counts (pieces = patterns × layers).
+(function prefillFromAssignment() {
+  var P = <%- JSON.stringify(prefill) %>;
+  // 1. Jump to the Create Lot tab.
+  var tabBtn = document.getElementById('create-lot-tab');
+  if (tabBtn) tabBtn.click();
+  // 2. SKU = the plan's style (EasyEcom-derived → resolves cleanly). Bypass the builder.
+  var skuHidden = document.getElementById('sku');
+  if (skuHidden) skuHidden.value = P.style;
+  var prev = document.getElementById('skuPreviewText');
+  if (prev) prev.textContent = P.style;
+  ['skuCategory', 'skuCode'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) { el.required = false; }
+  });
+  var builder = document.querySelector('.sku-builder');
+  if (builder) builder.style.display = 'none';
+  // 3. Fabric type — set the hidden value + search box, then fire change to wire rolls.
+  if (P.fabric_type) {
+    var fSearch = document.getElementById('fabric_type_search');
+    var fHidden = document.getElementById('fabric_type');
+    if (fHidden) fHidden.value = P.fabric_type;
+    if (fSearch) fSearch.value = P.fabric_type;
+    if (fHidden) fHidden.dispatchEvent(new Event('change'));
+  }
+  // 4. One size row per planned size, with a target-pieces chip. Cutter sets pattern count.
+  (P.sizes || []).forEach(function (s) {
+    if (typeof addNewSize !== 'function') return;
+    addNewSize();
+    var rows = sizesContainer.querySelectorAll('.size-section:not(.d-none)');
+    var row = rows[rows.length - 1];
+    if (!row) return;
+    var sel = row.querySelector('.sizeLabelSel');
+    if (sel) sel.value = s.size_label;
+    var chip = document.createElement('div');
+    chip.style.cssText = 'margin-top:6px;font-size:.8rem;color:#2563eb;font-weight:600;';
+    chip.textContent = '🎯 plan target: ' + s.qty + ' pcs';
+    row.appendChild(chip);
+  });
+  // 5. Remark links the lot back to the plan for traceability.
+  var rem = document.getElementById('remark');
+  if (rem && !rem.value) rem.value = 'From cut-plan assignment #' + P.id + ' (style ' + P.style + ')';
+  if (typeof updateTotalPieces === 'function') updateTotalPieces();
+})();
+<% } %>
 </script>
 <script src="/public/js/lot-size-expand.js"></script>
 
