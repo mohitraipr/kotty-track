@@ -546,7 +546,10 @@ async function crossCheckSales(pool, runStartedAt, windowDays) {
               ), 2)
         END AS delta_pct,
         CASE
-          WHEN GREATEST(
+          -- Only flag a genuine discrepancy: BOTH sources must have data for this
+          -- warehouse-day. mini_sales is routinely one-warehouse-only (EasyEcom rate cap),
+          -- so requiring LEAST(...) > 0 stops a missing feed from reading as a 100% delta.
+          WHEN LEAST(
                 SUM(CASE WHEN d.source = 'orders_api' THEN d.qty ELSE 0 END),
                 SUM(CASE WHEN d.source = 'mini_sales_report' THEN d.qty ELSE 0 END)
               ) = 0 THEN 0
@@ -593,6 +596,8 @@ async function crossCheckSales(pool, runStartedAt, windowDays) {
 async function pullStatusWiseStock(pool, runStartedAt) {
   const stepStart = Date.now();
   let totalRows = 0;
+  let okCount = 0;
+  let failCount = 0;
   for (const [warehouseIdStr, warehouseKey] of Object.entries(WAREHOUSE_KEY_BY_ID)) {
     const warehouseId = Number(warehouseIdStr);
     try {
@@ -617,12 +622,20 @@ async function pullStatusWiseStock(pool, runStartedAt) {
         }
       }
       totalRows += upsert.length;
+      okCount += 1;
     } catch (err) {
+      failCount += 1;
       console.error(`[pullWorker] stock-status report failed for ${warehouseKey}:`, err.message);
       await logStep(pool, runStartedAt, `stock_status:${warehouseKey}`, 'error', err.message, Date.now() - stepStart);
     }
   }
-  await logStep(pool, runStartedAt, 'stock_status', 'ok', `rows=${totalRows}`, Date.now() - stepStart);
+  // Honest parent status (mirrors mini_sales): 'ok' only if a warehouse actually delivered,
+  // 'partial' when some failed, 'error' when every warehouse failed. A false 'ok' here would
+  // let the freshness banner advance on a total stock-pull failure while SOH silently rides
+  // the stale ee_inventory_health fallback.
+  const parentStatus = okCount > 0 ? (failCount > 0 ? 'partial' : 'ok') : 'error';
+  await logStep(pool, runStartedAt, 'stock_status', parentStatus,
+    `rows=${totalRows} ok=${okCount} failed=${failCount}`, Date.now() - stepStart);
 }
 
 // ────────────────────────────────────────────────────────────────────

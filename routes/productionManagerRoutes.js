@@ -352,11 +352,14 @@ router.get('/api/summary', async (req, res) => {
     out.inventory = { units: Number(r.units) || 0, as_of: r.as_of };
   } catch (_) { out.inventory = null; }
 
-  // Sales day by day (last 30 days).
+  // Sales day by day (last 30 days). Filter to a single source (orders_api — the DRR feed);
+  // ee_sales_daily holds both orders_api and mini_sales_report rows, so an unfiltered SUM
+  // double-counts every day that has both.
   try {
     const [rows] = await pool.query(
       `SELECT sale_date, SUM(qty) qty FROM ee_sales_daily
-        WHERE sale_date >= CURDATE() - INTERVAL 30 DAY GROUP BY sale_date ORDER BY sale_date`
+        WHERE sale_date >= CURDATE() - INTERVAL 30 DAY AND source = 'orders_api'
+        GROUP BY sale_date ORDER BY sale_date`
     );
     out.sales_by_day = rows.map((r) => ({ date: r.sale_date, qty: Number(r.qty) || 0 }));
   } catch (_) { out.sales_by_day = null; }
@@ -376,8 +379,11 @@ router.get('/api/summary', async (req, res) => {
     );
     const lastOk = {};
     for (const r of okSteps) lastOk[r.step] = r.last_ok;
-    // 'orders_aggregate' is the fresh DRR sales source; fall back to legacy names.
-    const salesAsOf = lastOk['orders_aggregate'] || lastOk['sales_cross_check'] || lastOk['mini_sales'] || null;
+    // 'orders_aggregate' (orders_api) is the feed that actually drives DRR/cuts, so the
+    // banner keys off it. Do NOT fall back to 'sales_cross_check' — that step logs 'partial'
+    // (never 'ok') whenever any day is flagged, so its last 'ok' can be months old and would
+    // make the banner read far staler than reality. mini_sales is the only sane secondary.
+    const salesAsOf = lastOk['orders_aggregate'] || lastOk['mini_sales'] || null;
     const feeds = [salesAsOf, lastOk['stock_status']].filter(Boolean);
     const dataAsOf = feeds.length ? new Date(Math.min(...feeds.map((d) => new Date(d).getTime()))) : null;
     out.freshness = {
