@@ -13,14 +13,16 @@ const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const { EVENT_TABLE } = require('../utils/lotStageUsers');
 const stageEvents = require('../utils/stageEvents');
 const { canChangeFlow } = require('../utils/lotFlowChange');
-const { reversibleStage, payStageFor } = require('../utils/stageReversal');
+const { reversibleStage, payStageFor, effectiveFlow } = require('../utils/stageReversal');
 const { writeLotAudit } = require('../utils/lotAudit');
 
 // Whether the lot's furthest stage can be reversed, and why not. Blocks on: nothing to
 // reverse, finishing already dispatched, or a hand-off payment already PAID.
 async function reversalInfo(db, lot) {
-  const flow = (lot.flow_type || '').toLowerCase() === 'denim' ? 'denim' : 'hosiery';
   const counts = await eventCounts(db, lot.id);
+  // Use the EFFECTIVE flow: a null-flow lot with denim-only stage events is denim, so the
+  // furthest stage (and the payment to void) is identified correctly.
+  const flow = effectiveFlow(lot.flow_type, counts);
   const rev = reversibleStage(flow, counts);
   if (!rev) return { reversible: false, reason: 'This lot is only cut — nothing to reverse.' };
   if (rev.stage === 'finishing') {
