@@ -816,7 +816,8 @@ router.get('/assigned-cuts', isAuthenticated, isCuttingManager, async (req, res)
       const [rows] = await pool.query(
         `SELECT a.id, a.style, a.fabric_type, a.total_pieces, a.lot_count, a.total_fabric_meters,
                 a.fabric_complete, a.status, a.cutting_lot_id, a.note, a.created_at,
-                cl.lot_no
+                cl.lot_no,
+                (SELECT c.consumption_unit FROM pm_style_consumption c WHERE c.style = a.style LIMIT 1) AS fabric_unit
            FROM pm_cut_assignment a
       LEFT JOIN cutting_lots cl ON cl.id = a.cutting_lot_id
           WHERE a.assigned_master_id = ? AND a.status <> 'cancelled'

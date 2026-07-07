@@ -62,7 +62,8 @@
           <div class="fabric">
             <i class="bi bi-rulers"></i>
             <% if (a.total_fabric_meters != null) { %>
-              Issue ~<strong><%= Number(a.total_fabric_meters).toFixed(1) %> m</strong> of <%= a.fabric_type || 'fabric' %>
+              <% var fu = a.fabric_unit === 'KG' ? 'kg' : 'm'; %>
+              Issue ~<strong><%= Number(a.total_fabric_meters).toFixed(1) %> <%= fu %></strong> of <%= a.fabric_type || 'fabric' %>
               <% if (!a.fabric_complete) { %><span class="text-warning">(some sizes have no CAD figure yet)</span><% } %>
             <% } else { %>
               <span class="text-muted">Fabric: no CAD consumption for this style yet.</span>
