@@ -105,10 +105,7 @@ function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = b; 
 function sizeRatio(obj) {
   const ents = Object.entries(obj || {}).map(([s, q]) => [s, Number(q) || 0]).filter(([, q]) => q > 0);
   if (!ents.length) return '';
-  // Normalize to the smallest size (…:1) so the ratio is readable even when quantities are
-  // coprime (e.g. 115:70:50:17:1 instead of 1151:701:496:171:10). One decimal below 10.
-  const mn = Math.min(...ents.map(([, q]) => q)) || 1;
-  return ents.map(([s, q]) => { const v = q / mn; return `${s}:${v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)}`; }).join('  ');
+  return ents.map(([s, q]) => `${s}:${fmtNum(q)}`).join('  ');
 }
 
 // In-production (inline) qty vs the cut requirement, per size.
@@ -229,7 +226,7 @@ async function loadAssignPanel() {
     body.innerHTML = `
       <span class="fieldlab">Suggested size split · ${fmtNum(planRes.totalPieces)} pcs total</span>
       <div class="chips">${sizes.map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join('')}</div>
-      <div class="ratioline">Ratio · <b>${sizeRatio(planRes.demand)}</b></div>
+      <div class="ratioline">Qty · <b>${sizeRatio(planRes.demand)}</b></div>
       ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--amber-ink);font-size:12.5px;margin-top:10px">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
       <span class="fieldlab" style="margin-top:16px">Lot split · 1,500 hard cap — assign each lot to a master</span>
       <div class="lotlist">
