@@ -274,6 +274,7 @@ router.post(
       fabric_type,
       remark,
       table_length,
+      flow_type,
       manual_cutting_date,
       size_label,
       pattern_count,
@@ -301,12 +302,17 @@ router.post(
       try {
         await conn.beginTransaction();
 
-        // Get cutter's is_denim_cutter flag to set flow_type
+        // Determine flow_type: honour the cutter's explicit selection on the form
+        // ('denim' or 'hosiery'), otherwise fall back to the is_denim_cutter default.
+        // Safe to set here because no stage events exist yet at lot creation.
         const [[cutter]] = await conn.query(
           'SELECT is_denim_cutter FROM users WHERE id = ?',
           [userId]
         );
-        const flowType = cutter && cutter.is_denim_cutter ? 'denim' : 'hosiery';
+        const defaultFlowType = cutter && cutter.is_denim_cutter ? 'denim' : 'hosiery';
+        const flowType = (flow_type === 'denim' || flow_type === 'hosiery')
+          ? flow_type
+          : defaultFlowType;
 
         // Enforce ad-hoc cutting entry switch
         const allowAdhoc = await allowAdhocCuttingEntry();
