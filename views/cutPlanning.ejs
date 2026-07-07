@@ -85,17 +85,24 @@ async function loadPlan() {
     '</div>';
 }
 
+let assignInFlight = false;
 async function assign(style) {
+  if (assignInFlight) return; // guard: a double-click can't fire a second submit
   const sels = Array.from(document.querySelectorAll('.lotmaster'));
   const msg = document.getElementById('assignMsg');
   const ids = sels.map(s => s.value);
   if (!ids.length || ids.some(v => !v)) { msg.innerHTML = '<span style="color:var(--red)">pick a master for every lot</span>'; return; }
+  assignInFlight = true;
+  const btn = document.querySelector('.assignbar .btn.primary'); if (btn) btn.disabled = true;
   msg.textContent = 'Assigning…';
-  const allSame = ids.every(v => v === ids[0]);
-  const body = allSame ? { style, master_id: ids[0] } : { style, lots: ids.map(v => ({ master_id: v })) };
-  const d = await (await fetch('/pm/api/cut-plan/assign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
-  if (d.ok) { msg.innerHTML = '<span style="color:var(--green-ink)">✓ Assigned to ' + esc(d.assigned_to) + '</span>'; loadAssignments(); }
-  else { msg.innerHTML = '<span style="color:var(--red)">' + esc(d.error || 'failed') + '</span>'; }
+  try {
+    const allSame = ids.every(v => v === ids[0]);
+    const body = allSame ? { style, master_id: ids[0] } : { style, lots: ids.map(v => ({ master_id: v })) };
+    const d = await (await fetch('/pm/api/cut-plan/assign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
+    if (d.ok) { msg.innerHTML = '<span style="color:var(--green-ink)">✓ Assigned to ' + esc(d.assigned_to) + '</span>'; loadAssignments(); } // leave the button disabled: this plan is now assigned
+    else { msg.innerHTML = '<span style="color:var(--red)">' + esc(d.error || 'failed') + '</span>'; if (btn) btn.disabled = false; }
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; if (btn) btn.disabled = false; }
+  finally { assignInFlight = false; }
 }
 
 (async () => { await loadMasters(); loadAssignments(); if (document.getElementById('style').value.trim()) loadPlan(); })();
