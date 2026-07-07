@@ -23,10 +23,24 @@ test('parseConsumptionSheet normalizes valid CAD rows', () => {
   assert.strictEqual(errors.length, 0);
   assert.deepStrictEqual(out[0], {
     style: 'KTTWOMENSPANT261', fabric_type: 'Valentino', size_label: 'S',
-    consumption_per_piece: 0.9, consumption_unit: 'METER',
+    consumption_per_piece: 0.9, consumption_unit: 'METER', width: null, gsm: null,
   });
   assert.strictEqual(out[1].size_label, 'M');
   assert.strictEqual(out[1].consumption_per_piece, 1.02);
+});
+
+test('parseConsumptionSheet reads optional width + gsm (KG unit)', () => {
+  const { rows: out, errors } = parseConsumptionSheet([
+    { style: 'KTTWOMENSPANT990', fabric_type: 'Valentino', size: 'XXL / 34', consumption: '0.411', unit: 'kg', width: '57', gsm: '230' },
+    { style: 'KTTWOMENSPANT990', size: '6XL', consumption: '0.499', unit: 'KG', width: '', gsm: '' },
+  ]);
+  assert.strictEqual(errors.length, 0);
+  assert.deepStrictEqual(out[0], {
+    style: 'KTTWOMENSPANT990', fabric_type: 'Valentino', size_label: 'XXL',
+    consumption_per_piece: 0.411, consumption_unit: 'KG', width: 57, gsm: 230,
+  });
+  assert.strictEqual(out[1].width, null); // blank -> null
+  assert.strictEqual(out[1].gsm, null);
 });
 
 test('parseConsumptionSheet rejects rows missing style/size or with bad consumption', () => {
