@@ -197,12 +197,13 @@ async function loadAssignPanel() {
     ]);
     MASTERS = (mastersRes.ok && mastersRes.masters) ? mastersRes.masters : [];
     const styleAsg = (asgRes.ok ? asgRes.items : []).filter(a => a.style === STYLE);
+    const fu = planRes.fabric_unit === 'KG' ? 'kg' : 'm'; // fabric unit — weight (kg) vs length (m)
 
     // Fabric & lots come from the CAD planner; Suggested cut already set from sizes.
     if (planRes.ok && planRes.totalPieces) {
-      $('kFabric').innerHTML = planRes.totalFabricMeters != null ? `<span class="num">${fmtNum(planRes.totalFabricMeters)}</span> <small>m</small>` : '<small>no CAD</small>';
+      $('kFabric').innerHTML = planRes.totalFabricMeters != null ? `<span class="num">${fmtNum(planRes.totalFabricMeters)}</span> <small>${fu}</small>` : '<small>no CAD</small>';
       $('kLots').innerHTML = `<span class="num">${planRes.lotCount || 0}</span>`;
-      $('styleSub').textContent = (planRes.fabric_type ? planRes.fabric_type : 'Fabric n/a') + (planRes.totalFabricMeters != null && planRes.totalPieces ? ` · ${(planRes.totalFabricMeters / planRes.totalPieces).toFixed(3)} m per piece` : '');
+      $('styleSub').textContent = (planRes.fabric_type ? planRes.fabric_type : 'Fabric n/a') + (planRes.totalFabricMeters != null && planRes.totalPieces ? ` · ${(planRes.totalFabricMeters / planRes.totalPieces).toFixed(3)} ${fu} per piece` : '');
       renderFabrication(planRes);
     } else {
       $('kFabric').innerHTML = '<small>no CAD</small>';
@@ -219,7 +220,7 @@ async function loadAssignPanel() {
       return;
     }
 
-    const fabricLabel = planRes.totalFabricMeters != null ? `${Number(planRes.totalFabricMeters).toFixed(0)} m ${planRes.fabric_type || ''}` : 'No CAD fabric';
+    const fabricLabel = planRes.totalFabricMeters != null ? `${Number(planRes.totalFabricMeters).toFixed(0)} ${fu} ${planRes.fabric_type || ''}` : 'No CAD fabric';
     $('planSummary').textContent = IN_PROD > 0 ? fabricLabel + ' · ' + fmtNum(IN_PROD) + ' pcs already in production' : fabricLabel;
     const sizes = Object.entries(planRes.demand).sort((a, b) => b[1] - a[1]);
     const masterOpts = MASTERS.map(m => `<option value="${m.id}">${escapeHtml(m.username)}</option>`).join('');
@@ -230,7 +231,7 @@ async function loadAssignPanel() {
       ${(planRes.missingSizes && planRes.missingSizes.length) ? `<div style="color:var(--amber-ink);font-size:12.5px;margin-top:10px">No CAD consumption yet for: ${planRes.missingSizes.map(escapeHtml).join(', ')}</div>` : ''}
       <span class="fieldlab" style="margin-top:16px">Lot split · 1,500 hard cap — assign each lot to a master</span>
       <div class="lotlist">
-        ${planRes.lots.map((l, i) => { const sz = Object.entries(l.sizes || {}).sort((a, b) => b[1] - a[1]).map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join(''); return `<div class="lotrow"><div class="lotid">Lot ${i + 1} <small><span class="num">${fmtNum(l.total)}</span> pcs${l.fabricMeters != null ? ' · ' + Number(l.fabricMeters).toFixed(0) + ' m' : ''}</small></div><div class="lotsizes">${sz}</div><select class="select lotmaster">${masterOpts || '<option value="">no masters</option>'}</select></div>`; }).join('')}
+        ${planRes.lots.map((l, i) => { const sz = Object.entries(l.sizes || {}).sort((a, b) => b[1] - a[1]).map(([s, q]) => `<div class="chip-sz"><span class="s">${escapeHtml(s)}</span><span class="q num">${fmtNum(q)}</span></div>`).join(''); return `<div class="lotrow"><div class="lotid">Lot ${i + 1} <small><span class="num">${fmtNum(l.total)}</span> pcs${l.fabricMeters != null ? ' · ' + Number(l.fabricMeters).toFixed(0) + ' ' + fu : ''}</small></div><div class="lotsizes">${sz}</div><select class="select lotmaster"><option value="" selected>${masterOpts ? '— select master —' : 'no masters'}</option>${masterOpts}</select></div>`; }).join('')}
       </div>
       <div class="assignbar" style="margin-top:18px;border-radius:11px;border:1px solid var(--line)">
         <span style="font-size:12.5px;color:var(--ink-2)">One master can take several lots — same master for all is fine.</span>
@@ -250,11 +251,12 @@ function renderFabrication(plan) {
   const panel = $('fabPanel'); panel.style.display = '';
   $('fabName').textContent = 'Primary — ' + (plan.fabric_type || 'fabric');
   $('fabTags').innerHTML = ['Washable', 'Shrink tested'].map(t => `<span class="tag">${t}</span>`).join('');
+  const fu = plan.fabric_unit === 'KG' ? 'kg' : 'm';
   const cons = (plan.totalFabricMeters != null && plan.totalPieces) ? (plan.totalFabricMeters / plan.totalPieces).toFixed(3) : null;
   const rows = [
-    ['Consumption per unit', cons != null ? `<span class="num">${cons}</span> m` : '—'],
+    ['Consumption per unit', cons != null ? `<span class="num">${cons}</span> ${fu}` : '—'],
     ['Fabric type', escapeHtml(plan.fabric_type || '—')],
-    ['Total fabric to issue', plan.totalFabricMeters != null ? `<span class="num">${fmtNum(plan.totalFabricMeters)}</span> m` : '—'],
+    ['Total fabric to issue', plan.totalFabricMeters != null ? `<span class="num">${fmtNum(plan.totalFabricMeters)}</span> ${fu}` : '—'],
     ['Source', cons != null ? 'CAD cut plan' : 'No CAD data'],
   ];
   $('fabSpecs').innerHTML = rows.map(r => `<div class="specrow"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
