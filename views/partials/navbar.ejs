@@ -17,22 +17,6 @@
 
     <!-- Right Section: User Menu -->
     <div class="navbar-menu">
-      <!-- Notifications (if any) -->
-      <% if (typeof user !== 'undefined' && user.role === 'operator') { %>
-        <button class="navbar-btn position-relative" data-bs-toggle="dropdown">
-          <i class="bi bi-bell"></i>
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
-            3
-          </span>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="#"><i class="bi bi-info-circle me-2"></i>New assignment</a></li>
-          <li><a class="dropdown-item" href="#"><i class="bi bi-check-circle me-2"></i>Task completed</a></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item text-center" href="#">View all</a></li>
-        </ul>
-      <% } %>
-
       <!-- User Profile -->
       <% if (typeof user !== 'undefined') { %>
         <div class="navbar-user dropdown">
@@ -47,8 +31,6 @@
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="/my-lots"><i class="bi bi-bag-check me-2"></i>My Lots</a></li>
-            <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Profile</a></li>
-            <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-2"></i>Settings</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
           </ul>
