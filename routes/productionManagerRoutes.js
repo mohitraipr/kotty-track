@@ -546,19 +546,19 @@ router.post('/consumption/upload', upload.single('file'), async (req, res) => {
     await wb.xlsx.load(req.file.buffer);
     const ws = wb.worksheets[0];
     if (!ws) return res.status(400).json({ ok: false, error: 'Workbook has no sheets.' });
-    const { rows: rawRows, map } = readSheetRows(ws, ['style', 'fabric_type', 'size', 'consumption', 'unit']);
+    const { rows: rawRows, map } = readSheetRows(ws, ['style', 'fabric_type', 'size', 'consumption', 'unit', 'width', 'gsm']);
     if (!map.style || !map.size || !map.consumption) {
-      return res.status(400).json({ ok: false, error: 'Need columns: style, size, consumption (fabric_type, unit optional).' });
+      return res.status(400).json({ ok: false, error: 'Need columns: style, size, consumption (fabric_type, unit, width, gsm optional).' });
     }
     const { rows, errors } = parseConsumptionSheet(rawRows);
     let saved = 0;
     for (const r of rows) {
       await pool.query(
-        `INSERT INTO pm_style_consumption (style, size_label, fabric_type, consumption_per_piece, consumption_unit, source, loaded_by)
-         VALUES (?, ?, ?, ?, ?, 'cad', ?)
-         ON DUPLICATE KEY UPDATE fabric_type=VALUES(fabric_type), consumption_per_piece=VALUES(consumption_per_piece),
-           consumption_unit=VALUES(consumption_unit), loaded_by=VALUES(loaded_by)`,
-        [r.style, r.size_label, r.fabric_type, r.consumption_per_piece, r.consumption_unit, req.session?.user?.id || null]
+        `INSERT INTO pm_style_consumption (style, size_label, fabric_type, width, gsm, consumption_per_piece, consumption_unit, source, loaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'cad', ?)
+         ON DUPLICATE KEY UPDATE fabric_type=VALUES(fabric_type), width=VALUES(width), gsm=VALUES(gsm),
+           consumption_per_piece=VALUES(consumption_per_piece), consumption_unit=VALUES(consumption_unit), loaded_by=VALUES(loaded_by)`,
+        [r.style, r.size_label, r.fabric_type, r.width, r.gsm, r.consumption_per_piece, r.consumption_unit, req.session?.user?.id || null]
       );
       saved += 1;
     }

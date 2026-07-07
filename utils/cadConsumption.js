@@ -36,12 +36,17 @@ function parseConsumptionSheet(rawRows) {
       errors.push({ row: i + 1, error: 'invalid consumption' });
       return;
     }
+    // width (inches) + gsm (g/m²) are optional reference metadata; blank/invalid -> null.
+    const widthN = Number(String(r.width == null ? '' : r.width).trim());
+    const gsmN = Number(String(r.gsm == null ? '' : r.gsm).trim());
     rows.push({
       style,
       fabric_type: String(r.fabric_type == null ? '' : r.fabric_type).trim() || null,
       size_label,
       consumption_per_piece,
       consumption_unit,
+      width: isFinite(widthN) && widthN > 0 ? widthN : null,
+      gsm: isFinite(gsmN) && gsmN > 0 ? gsmN : null,
     });
   });
   return { rows, errors };
