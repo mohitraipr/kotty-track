@@ -269,19 +269,24 @@ function assignmentsHtml(items) {
   </div>`;
 }
 
+let assignInFlight = false;
 async function doAssign() {
+  if (assignInFlight) return; // guard: a double-click can't fire a second submit
   const sels = Array.from(document.querySelectorAll('.lotmaster'));
   const msg = $('assignMsg');
   const ids = sels.map(s => s.value);
   if (!ids.length || ids.some(v => !v)) { msg.innerHTML = '<span style="color:var(--red)">pick a master for every lot</span>'; return; }
+  assignInFlight = true;
+  const btn = document.querySelector('.assignbar .btn.primary'); if (btn) btn.disabled = true;
   msg.textContent = 'Assigning…';
   const allSame = ids.every(v => v === ids[0]);
   const body = allSame ? { style: STYLE, master_id: ids[0] } : { style: STYLE, lots: ids.map(v => ({ master_id: v })) };
   try {
     const d = await (await fetch('/pm/api/cut-plan/assign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
-    if (d.ok) { msg.innerHTML = `<span style="color:var(--green-ink)">✓ Assigned to ${escapeHtml(d.assigned_to)}</span>`; loadAssignPanel(); }
-    else { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'failed')}</span>`; }
-  } catch (err) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(err.message)}</span>`; }
+    if (d.ok) { msg.innerHTML = `<span style="color:var(--green-ink)">✓ Assigned to ${escapeHtml(d.assigned_to)}</span>`; loadAssignPanel(); } // leave disabled: assigned
+    else { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'failed')}</span>`; if (btn) btn.disabled = false; }
+  } catch (err) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(err.message)}</span>`; if (btn) btn.disabled = false; }
+  finally { assignInFlight = false; }
 }
 // Init: sizes first (sets Suggested cut), then the CAD plan / assign panel.
 (async () => { await loadSizes(); loadAssignPanel(); })();
