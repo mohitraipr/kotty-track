@@ -316,6 +316,12 @@ router.get(
 /**************************************************
  * 3) /operator/dashboard – must define lotCount etc.
  **************************************************/
+// Redesigned mobile-first operator hub ("Kotty Floor"). Standalone page on the new
+// floor.css token system — opt-in alongside the classic /dashboard while it's reviewed.
+router.get("/hub", isAuthenticated, isOperator, (req, res) => {
+  res.render("floorHub", { user: req.session.user });
+});
+
 router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
   try {
   const { search, startDate, endDate,

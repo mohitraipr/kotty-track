@@ -1,0 +1,142 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Kotty Floor — the ONE design system for the mobile factory-floor screens.
+   Replaces the 3 colliding token sets (kotty-theme.css + professional.css collide;
+   pm-suite.css is the separate PM one). Load this on rebuilt floor screens.
+   Direction: "The Lot's Journey" — calm industrial-editorial, one indigo accent,
+   status colours only, Space Grotesk numbers + Inter UI, mobile-first.
+   Spec: docs/FLOOR_REDESIGN_HANDOFF.md
+   ───────────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  --fl-ground: #f7f8fa;
+  --fl-card: #ffffff;
+  --fl-ink: #0f172a;
+  --fl-muted: #64748b;
+  --fl-line: #e5e7eb;
+  --fl-accent: #2563eb;      /* the ONE action colour */
+  --fl-accent-soft: #eff6ff;
+  --fl-ok: #16a34a;          /* completed / healthy */
+  --fl-ok-soft: #dcfce7;
+  --fl-warn: #b45309;        /* in-progress / inline */
+  --fl-warn-soft: #fef3c7;
+  --fl-bad: #dc2626;         /* reject / urgent */
+  --fl-bad-soft: #fee2e2;
+  --fl-r: 12px;              /* card radius */
+  --fl-shadow: 0 1px 2px rgba(15,23,42,.06);
+  --fl-num: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --fl-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+.fl { margin: 0; background: var(--fl-ground); color: var(--fl-ink); font-family: var(--fl-ui);
+      -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.45; }
+.fl-num { font-family: var(--fl-num); font-feature-settings: 'tnum' 1; letter-spacing: -0.01em; }
+
+/* Layout ------------------------------------------------------------------- */
+.fl-wrap { max-width: 720px; margin: 0 auto; padding: 14px 14px 96px; }
+
+/* Sticky top --------------------------------------------------------------- */
+.fl-top { position: sticky; top: 0; z-index: 20; background: var(--fl-ground);
+          padding: 12px 14px 10px; border-bottom: 1px solid var(--fl-line); }
+.fl-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fl-muted); }
+.fl-title { font-family: var(--fl-num); font-size: 20px; font-weight: 700; margin: 2px 0 0; }
+.fl-search { width: 100%; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--fl-line);
+             border-radius: 10px; font-size: 16px; background: var(--fl-card); color: var(--fl-ink); }
+.fl-search:focus { outline: none; border-color: var(--fl-accent); box-shadow: 0 0 0 3px var(--fl-accent-soft); }
+
+/* Card --------------------------------------------------------------------- */
+.fl-card { background: var(--fl-card); border: 1px solid var(--fl-line); border-radius: var(--fl-r);
+           box-shadow: var(--fl-shadow); padding: 16px; margin-bottom: 14px; }
+.fl-sec { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+          color: var(--fl-muted); margin: 2px 0 10px; }
+
+/* Pills / status ----------------------------------------------------------- */
+.fl-pill { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+           letter-spacing: .03em; padding: 3px 10px; border-radius: 999px; }
+.fl-pill.denim   { background: var(--fl-accent-soft); color: var(--fl-accent); }
+.fl-pill.hosiery { background: var(--fl-ok-soft);     color: var(--fl-ok); }
+.fl-pill.ok   { background: var(--fl-ok-soft);   color: var(--fl-ok); }
+.fl-pill.warn { background: var(--fl-warn-soft); color: var(--fl-warn); }
+.fl-pill.bad  { background: var(--fl-bad-soft);  color: var(--fl-bad); }
+
+/* The signature — Stage Rail ---------------------------------------------- */
+.fl-rail { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px 4px; margin: 12px 0; }
+.fl-rail-step { display: flex; flex-direction: column; align-items: center; min-width: 58px; }
+.fl-rail-node { width: 30px; height: 30px; border-radius: 999px; border: 2px solid var(--fl-line);
+                background: var(--fl-card); display: grid; place-items: center; font-size: 12px;
+                font-weight: 700; color: var(--fl-muted); }
+.fl-rail-step.done .fl-rail-node { border-color: var(--fl-ok); color: var(--fl-ok); }
+.fl-rail-step.current .fl-rail-node { background: var(--fl-accent); border-color: var(--fl-accent);
+                color: #fff; width: 36px; height: 36px; box-shadow: 0 0 0 4px var(--fl-accent-soft); }
+.fl-rail-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                color: var(--fl-muted); margin-top: 4px; }
+.fl-rail-who { font-size: 11px; color: var(--fl-ink); font-weight: 600; }
+.fl-rail-sep { align-self: center; width: 14px; height: 2px; background: var(--fl-line); margin-top: -18px; }
+.fl-rail-sep.on { background: var(--fl-accent); }
+
+/* Stat strip --------------------------------------------------------------- */
+.fl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.fl-stat .l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--fl-muted); }
+.fl-stat .v { font-family: var(--fl-num); font-size: 22px; font-weight: 700; }
+.fl-stat.ok   .v { color: var(--fl-ok); }
+.fl-stat.warn .v { color: var(--fl-warn); }
+.fl-stat.bad  .v { color: var(--fl-bad); }
+
+/* Size chips --------------------------------------------------------------- */
+.fl-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fl-chip { background: var(--fl-ground); border: 1px solid var(--fl-line); border-radius: 10px;
+           padding: 8px 12px; text-align: center; min-width: 58px; }
+.fl-chip .n { font-family: var(--fl-num); font-size: 20px; font-weight: 700; display: block; }
+.fl-chip .s { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--fl-muted); }
+
+/* Buttons ------------------------------------------------------------------ */
+.fl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          font-family: var(--fl-ui); font-size: 15px; font-weight: 600; padding: 13px 16px;
+          border-radius: 10px; border: 1px solid transparent; cursor: pointer; min-height: 48px; }
+.fl-btn-block { width: 100%; }
+.fl-btn-primary { background: var(--fl-accent); color: #fff; }
+.fl-btn-primary:active { transform: translateY(1px); }
+.fl-btn-ghost { background: var(--fl-card); color: var(--fl-ink); border-color: var(--fl-line); }
+.fl-btn-danger { background: var(--fl-card); color: var(--fl-bad); border-color: #fecaca; }
+.fl-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Stepper (the critical per-size entry) ------------------------------------ */
+.fl-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--fl-line);
+              border-radius: 10px; overflow: hidden; background: var(--fl-card); }
+.fl-stepper button { width: 44px; height: 44px; border: 0; background: var(--fl-card);
+              font-size: 20px; color: var(--fl-accent); cursor: pointer; }
+.fl-stepper button:active { background: var(--fl-accent-soft); }
+.fl-stepper input { width: 64px; height: 44px; border: 0; border-left: 1px solid var(--fl-line);
+              border-right: 1px solid var(--fl-line); text-align: center; font-family: var(--fl-num);
+              font-size: 17px; font-weight: 700; color: var(--fl-ink); }
+.fl-stepper input:focus { outline: none; }
+.fl-stepper.reject input { color: var(--fl-bad); }
+.fl-stepper.reject button { color: var(--fl-bad); }
+
+/* Action tiles (operator hub) ---------------------------------------------- */
+.fl-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.fl-tile { background: var(--fl-card); border: 1px solid var(--fl-line); border-radius: var(--fl-r);
+           box-shadow: var(--fl-shadow); padding: 14px; text-decoration: none; color: var(--fl-ink);
+           display: flex; flex-direction: column; gap: 6px; min-height: 84px; }
+.fl-tile:active { border-color: var(--fl-accent); }
+.fl-tile .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--fl-accent-soft);
+               color: var(--fl-accent); display: grid; place-items: center; font-size: 18px; }
+.fl-tile .t { font-weight: 600; font-size: 14px; }
+.fl-tile .d { font-size: 11px; color: var(--fl-muted); }
+
+/* Notes / empty ------------------------------------------------------------ */
+.fl-note { font-size: 13px; padding: 10px 12px; border-radius: 9px; margin-top: 10px; }
+.fl-note.warn { background: var(--fl-warn-soft); color: var(--fl-warn); }
+.fl-note.ok   { background: var(--fl-ok-soft);   color: var(--fl-ok); }
+.fl-note.bad  { background: var(--fl-bad-soft);  color: var(--fl-bad); }
+.fl-note.info { background: #f1f5f9; color: var(--fl-muted); }
+.fl-empty { text-align: center; color: var(--fl-muted); padding: 30px 10px; }
+
+/* Bottom nav --------------------------------------------------------------- */
+.fl-nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--fl-card);
+          border-top: 1px solid var(--fl-line); display: flex; z-index: 20; }
+.fl-nav a { flex: 1; text-align: center; padding: 9px 0 max(9px, env(safe-area-inset-bottom));
+            color: var(--fl-muted); text-decoration: none; font-size: 11px; font-weight: 600; }
+.fl-nav a.active { color: var(--fl-accent); }
+.fl-nav a .ic { display: block; font-size: 19px; margin-bottom: 2px; }

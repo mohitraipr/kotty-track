@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kotty Floor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/public/css/floor.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
+</head>
+<body class="fl">
+  <div class="fl-top">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="fl-eyebrow">Kotty Floor</div>
+        <div class="fl-title">Hi, <%= (user && user.username) ? user.username : 'Operator' %></div>
+      </div>
+      <a href="/logout" class="fl-pill info" style="text-decoration:none;color:var(--fl-muted);background:#f1f5f9;">Log out</a>
+    </div>
+    <input class="fl-search" id="hubSearch" placeholder="Lot no, manual lot, or SKU" onkeydown="if(event.key==='Enter'&&this.value.trim()){location.href='/operator/lot-journey?q='+encodeURIComponent(this.value.trim());}" />
+  </div>
+
+  <div class="fl-wrap">
+    <%
+      const groups = [
+        ['Lots', [
+          ['/operator/lot-admin','sliders','Lot Admin','Flow · reverse · qty'],
+          ['/operator/lot-journey','signpost-split','Lot Journey','Track a lot end-to-end'],
+          ['/operator/lot-tat','stopwatch','Lot TAT','Turnaround time'],
+          ['/operator/editcuttinglots','scissors','Edit Lots','Fix cutting records'],
+          ['/operator/lot-completion','check2-circle','Lot Completion','Close finished lots'],
+          ['/operator/day-activity','calendar3','Day Activity','What moved today'],
+          ['/search-dashboard','search','Search','Find anything'],
+          ['/operator/dashboard','grid','Classic Dashboard','The old view'],
+        ]],
+        ['Washing', [
+          ['/assign-to-washing','box-arrow-in-right','Assign Washing','Send lots to wash'],
+          ['/operator/editwashingassignments','pencil-square','Edit Wash','Adjust assignments'],
+          ['/operator/correct-approval','person-check','Fix Approval','Re-attribute a stage'],
+          ['/operator/rewash-download','arrow-repeat','Rewash Excel','Rewash report'],
+          ['/operator/dashboard/washing-summary/download','file-earmark-spreadsheet','Wash Monthly','Monthly summary'],
+        ]],
+        ['Reports & exports', [
+          ['/operator/dashboard/pic-report','clipboard-data','PIC Report','In-production report'],
+          ['/operator/dashboard/pic-size-report','clipboard2-data','Size PIC Report','By size'],
+          ['/operator/dashboard/consumption/download','hexagon','Consumption','Fabric consumption'],
+          ['/operator/dashboard/lot-departments/download','diagram-3','Lot Dept Counts','Per department'],
+          ['/operator/dashboard/employees/download','people','Employee Excel','Employee export'],
+          ['/operator/dashboard/download-all-lots','download','Export All','All lots'],
+        ]],
+        ['Pay & people', [
+          ['/operator/departments','cash-stack','Salaries','Department salaries'],
+          ['/operator/supervisors','person-badge','Attendance','Supervisor attendance'],
+          ['/stitchingdashboard/payments/rates','currency-rupee','Stitch Rates','Stitching rates'],
+          ['/operator/payments/rates','tags','Stage Rates','All stage rates'],
+        ]],
+        ['Other', [
+          ['/easyecom/stock-market','graph-down','Out-of-stock','EasyEcom stock'],
+          ['/inventory-ops/logs','hdd-network','Inventory Hooks','Webhook logs'],
+          ['/mail-manager','envelope','Mail Manager','Auto-reply'],
+          ['/video-finder','camera-video','Video Finder','Packing video'],
+          ['/vms','record-circle','VMS Recorder','Record'],
+          ['/vms-operator','upload','AWB Uploads','Upload AWBs'],
+          ['/return-grn/dashboard','arrow-return-left','Returns','Return GRN'],
+          ['/return-challan','receipt','Return Challans','Challans'],
+          ['/admin/user-roles','shield-lock','User Roles','Manage roles'],
+        ]],
+      ];
+    %>
+    <% groups.forEach(function(g){ %>
+      <div class="fl-sec" style="margin-top:14px;"><%= g[0] %></div>
+      <div class="fl-tiles">
+        <% g[1].forEach(function(t){ %>
+          <a class="fl-tile" href="<%= t[0] %>">
+            <span class="ic"><i class="bi bi-<%= t[1] %>"></i></span>
+            <span class="t"><%= t[2] %></span>
+            <span class="d"><%= t[3] %></span>
+          </a>
+        <% }) %>
+      </div>
+    <% }) %>
+  </div>
+
+  <div class="fl-nav">
+    <a class="active" href="/operator/hub"><span class="ic"><i class="bi bi-house"></i></span>Home</a>
+    <a href="/search-dashboard"><span class="ic"><i class="bi bi-search"></i></span>Search</a>
+    <a href="/operator/lot-journey"><span class="ic"><i class="bi bi-signpost-split"></i></span>Journey</a>
+  </div>
+</body>
+</html>
