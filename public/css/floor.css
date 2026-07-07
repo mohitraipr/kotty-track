@@ -34,14 +34,20 @@
 .fl-num { font-family: var(--fl-num); font-feature-settings: 'tnum' 1; letter-spacing: -0.01em; }
 
 /* Layout ------------------------------------------------------------------- */
-.fl-wrap { max-width: 720px; margin: 0 auto; padding: 14px 14px 96px; }
+/* Mobile-first single column that grows into the desktop width instead of
+   stranding a narrow strip in a sea of grey. Content screens read at ~820px;
+   dense tile grids opt into .wide. */
+.fl-wrap { max-width: 820px; margin: 0 auto; padding: 14px 14px 96px; }
+.fl-wrap.wide { max-width: 1160px; }
 
 /* Sticky top --------------------------------------------------------------- */
 .fl-top { position: sticky; top: 0; z-index: 20; background: var(--fl-ground);
           padding: 12px 14px 10px; border-bottom: 1px solid var(--fl-line); }
+.fl-top-inner { max-width: 820px; margin: 0 auto; }
+.fl-top-inner.wide { max-width: 1160px; }
 .fl-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fl-muted); }
 .fl-title { font-family: var(--fl-num); font-size: 20px; font-weight: 700; margin: 2px 0 0; }
-.fl-search { width: 100%; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--fl-line);
+.fl-search { width: 100%; max-width: 520px; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--fl-line);
              border-radius: 10px; font-size: 16px; background: var(--fl-card); color: var(--fl-ink); }
 .fl-search:focus { outline: none; border-color: var(--fl-accent); box-shadow: 0 0 0 3px var(--fl-accent-soft); }
 
@@ -114,8 +120,11 @@
 .fl-stepper.reject input { color: var(--fl-bad); }
 .fl-stepper.reject button { color: var(--fl-bad); }
 
-/* Action tiles (operator hub) ---------------------------------------------- */
+/* Action tiles (operator hub) — 2-up on phones, filling the width on desktop */
 .fl-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 640px) { .fl-tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 980px) { .fl-tiles { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
+.fl-group { margin-bottom: 4px; }
 .fl-tile { background: var(--fl-card); border: 1px solid var(--fl-line); border-radius: var(--fl-r);
            box-shadow: var(--fl-shadow); padding: 14px; text-decoration: none; color: var(--fl-ink);
            display: flex; flex-direction: column; gap: 6px; min-height: 84px; }

@@ -9,81 +9,111 @@
 </head>
 <body class="fl">
   <div class="fl-top">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div class="fl-eyebrow">Kotty Floor</div>
-        <div class="fl-title">Hi, <%= (user && user.username) ? user.username : 'Operator' %></div>
+    <div class="fl-top-inner wide">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="fl-eyebrow">Kotty Floor</div>
+          <div class="fl-title">Hi, <%= (user && user.username) ? user.username : 'Operator' %></div>
+        </div>
+        <a href="/logout" class="fl-pill info" style="text-decoration:none;color:var(--fl-muted);background:#f1f5f9;">Log out</a>
       </div>
-      <a href="/logout" class="fl-pill info" style="text-decoration:none;color:var(--fl-muted);background:#f1f5f9;">Log out</a>
+      <input class="fl-search" id="featureSearch" autocomplete="off"
+             placeholder="Search for a tool — “wash”, “rates”, “reverse”…"
+             oninput="filterFeatures(this.value)" />
     </div>
-    <input class="fl-search" id="hubSearch" placeholder="Lot no, manual lot, or SKU" onkeydown="if(event.key==='Enter'&&this.value.trim()){location.href='/operator/lot-journey?q='+encodeURIComponent(this.value.trim());}" />
   </div>
 
-  <div class="fl-wrap">
+  <div class="fl-wrap wide">
     <%
+      // [href, icon, title, desc, extra search keywords]
       const groups = [
         ['Lots', [
-          ['/operator/lot-admin','sliders','Lot Admin','Flow · reverse · qty'],
-          ['/operator/lot-journey','signpost-split','Lot Journey','Track a lot end-to-end'],
-          ['/operator/lot-tat','stopwatch','Lot TAT','Turnaround time'],
-          ['/operator/editcuttinglots','scissors','Edit Lots','Fix cutting records'],
-          ['/operator/lot-completion','check2-circle','Lot Completion','Close finished lots'],
-          ['/operator/day-activity','calendar3','Day Activity','What moved today'],
-          ['/search-dashboard','search','Search','Find anything'],
-          ['/operator/dashboard','grid','Classic Dashboard','The old view'],
+          ['/operator/lot-admin','sliders','Lot Admin','Flow · reverse · qty','denim hosiery correct fix change quantity mistake'],
+          ['/operator/lot-journey','signpost-split','Lot Journey','Track a lot end-to-end','trace timeline stage where'],
+          ['/operator/lot-tat','stopwatch','Lot TAT','Turnaround time','speed delay slow aging'],
+          ['/operator/editcuttinglots','scissors','Edit Lots','Fix cutting records','cutting correct amend'],
+          ['/operator/lot-completion','check2-circle','Lot Completion','Close finished lots','finish close done complete'],
+          ['/operator/day-activity','calendar3','Day Activity','What moved today','today log movement'],
+          ['/search-dashboard','search','Search Lots','Find any lot / SKU','lookup find sku barcode'],
+          ['/operator/dashboard','grid','Classic Dashboard','The old view','home overview legacy'],
         ]],
         ['Washing', [
-          ['/assign-to-washing','box-arrow-in-right','Assign Washing','Send lots to wash'],
-          ['/operator/editwashingassignments','pencil-square','Edit Wash','Adjust assignments'],
-          ['/operator/correct-approval','person-check','Fix Approval','Re-attribute a stage'],
-          ['/operator/rewash-download','arrow-repeat','Rewash Excel','Rewash report'],
-          ['/operator/dashboard/washing-summary/download','file-earmark-spreadsheet','Wash Monthly','Monthly summary'],
+          ['/assign-to-washing','box-arrow-in-right','Assign Washing','Send lots to wash','laundry dispatch send'],
+          ['/operator/editwashingassignments','pencil-square','Edit Wash','Adjust assignments','washing change reassign'],
+          ['/operator/correct-approval','person-check','Fix Approval','Re-attribute a stage','approve wrong operator reassign'],
+          ['/operator/rewash-download','arrow-repeat','Rewash Excel','Rewash report','rewash redo report download'],
+          ['/operator/dashboard/washing-summary/download','file-earmark-spreadsheet','Wash Monthly','Monthly summary','washing month report'],
         ]],
         ['Reports & exports', [
-          ['/operator/dashboard/pic-report','clipboard-data','PIC Report','In-production report'],
-          ['/operator/dashboard/pic-size-report','clipboard2-data','Size PIC Report','By size'],
-          ['/operator/dashboard/consumption/download','hexagon','Consumption','Fabric consumption'],
-          ['/operator/dashboard/lot-departments/download','diagram-3','Lot Dept Counts','Per department'],
-          ['/operator/dashboard/employees/download','people','Employee Excel','Employee export'],
-          ['/operator/dashboard/download-all-lots','download','Export All','All lots'],
+          ['/operator/dashboard/pic-report','clipboard-data','PIC Report','In-production report','pieces in production wip'],
+          ['/operator/dashboard/pic-size-report','clipboard2-data','Size PIC Report','By size','size breakdown wip'],
+          ['/operator/dashboard/consumption/download','hexagon','Consumption','Fabric consumption','fabric usage cad'],
+          ['/operator/dashboard/lot-departments/download','diagram-3','Lot Dept Counts','Per department','department counts'],
+          ['/operator/dashboard/employees/download','people','Employee Excel','Employee export','staff workers export'],
+          ['/operator/dashboard/download-all-lots','download','Export All','All lots','download everything'],
         ]],
         ['Pay & people', [
-          ['/operator/departments','cash-stack','Salaries','Department salaries'],
-          ['/operator/supervisors','person-badge','Attendance','Supervisor attendance'],
-          ['/stitchingdashboard/payments/rates','currency-rupee','Stitch Rates','Stitching rates'],
-          ['/operator/payments/rates','tags','Stage Rates','All stage rates'],
+          ['/operator/departments','cash-stack','Salaries','Department salaries','pay wages salary money'],
+          ['/operator/supervisors','person-badge','Attendance','Supervisor attendance','present absent supervisor'],
+          ['/stitchingdashboard/payments/rates','currency-rupee','Stitch Rates','Stitching rates','pay rate stitching price'],
+          ['/operator/payments/rates','tags','Stage Rates','All stage rates','pay rate price all stages'],
         ]],
         ['Other', [
-          ['/easyecom/stock-market','graph-down','Out-of-stock','EasyEcom stock'],
-          ['/inventory-ops/logs','hdd-network','Inventory Hooks','Webhook logs'],
-          ['/mail-manager','envelope','Mail Manager','Auto-reply'],
-          ['/video-finder','camera-video','Video Finder','Packing video'],
-          ['/vms','record-circle','VMS Recorder','Record'],
-          ['/vms-operator','upload','AWB Uploads','Upload AWBs'],
-          ['/return-grn/dashboard','arrow-return-left','Returns','Return GRN'],
-          ['/return-challan','receipt','Return Challans','Challans'],
-          ['/admin/user-roles','shield-lock','User Roles','Manage roles'],
+          ['/easyecom/stock-market','graph-down','Out-of-stock','EasyEcom stock','oos stock inventory easyecom'],
+          ['/inventory-ops/logs','hdd-network','Inventory Hooks','Webhook logs','webhook integration logs'],
+          ['/mail-manager','envelope','Mail Manager','Auto-reply','email mail reply'],
+          ['/video-finder','camera-video','Video Finder','Packing video','video packing find'],
+          ['/vms','record-circle','VMS Recorder','Record','video record'],
+          ['/vms-operator','upload','AWB Uploads','Upload AWBs','awb courier upload'],
+          ['/return-grn/dashboard','arrow-return-left','Returns','Return GRN','return grn inward'],
+          ['/return-challan','receipt','Return Challans','Challans','challan return document'],
+          ['/admin/user-roles','shield-lock','User Roles','Manage roles','admin permissions users manage'],
         ]],
       ];
+      function kw(t){ return (t[2] + ' ' + t[3] + ' ' + (t[4]||'')).toLowerCase(); }
     %>
     <% groups.forEach(function(g){ %>
-      <div class="fl-sec" style="margin-top:14px;"><%= g[0] %></div>
-      <div class="fl-tiles">
-        <% g[1].forEach(function(t){ %>
-          <a class="fl-tile" href="<%= t[0] %>">
-            <span class="ic"><i class="bi bi-<%= t[1] %>"></i></span>
-            <span class="t"><%= t[2] %></span>
-            <span class="d"><%= t[3] %></span>
-          </a>
-        <% }) %>
+      <div class="fl-group">
+        <div class="fl-sec" style="margin-top:14px;"><%= g[0] %></div>
+        <div class="fl-tiles">
+          <% g[1].forEach(function(t){ %>
+            <a class="fl-tile" href="<%= t[0] %>" data-kw="<%= kw(t) %>">
+              <span class="ic"><i class="bi bi-<%= t[1] %>"></i></span>
+              <span class="t"><%= t[2] %></span>
+              <span class="d"><%= t[3] %></span>
+            </a>
+          <% }) %>
+        </div>
       </div>
     <% }) %>
+
+    <div id="featureEmpty" class="fl-empty" style="display:none;">
+      No tool matches “<span id="fq"></span>”. Try a shorter word.
+    </div>
   </div>
 
   <div class="fl-nav">
     <a class="active" href="/operator/hub"><span class="ic"><i class="bi bi-house"></i></span>Home</a>
-    <a href="/search-dashboard"><span class="ic"><i class="bi bi-search"></i></span>Search</a>
+    <a href="/search-dashboard"><span class="ic"><i class="bi bi-search"></i></span>Lots</a>
     <a href="/operator/lot-journey"><span class="ic"><i class="bi bi-signpost-split"></i></span>Journey</a>
   </div>
+
+  <script>
+    function filterFeatures(q) {
+      q = (q || '').trim().toLowerCase();
+      var any = false;
+      document.querySelectorAll('.fl-group').forEach(function (group) {
+        var visible = 0;
+        group.querySelectorAll('.fl-tile').forEach(function (tile) {
+          var show = !q || (tile.dataset.kw || '').indexOf(q) >= 0;
+          tile.style.display = show ? '' : 'none';
+          if (show) { visible++; any = true; }
+        });
+        group.style.display = visible ? '' : 'none';
+      });
+      document.getElementById('featureEmpty').style.display = any ? 'none' : '';
+      document.getElementById('fq').textContent = q;
+    }
+  </script>
 </body>
 </html>
