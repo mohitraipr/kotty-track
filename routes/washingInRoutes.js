@@ -12,6 +12,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isWashingInMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
+const { getLotStageUsers } = require('../utils/lotStageUsers');
 
 // ----------------------------------------------
 // MULTER SETUP (for optional image uploads)
@@ -533,6 +534,8 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster,
     const upstreamSizes  = await wiUpstreamSizes(pool, lotId, lot.lot_no);
     const upstreamTotal  = upstreamSizes.reduce((a, s) => a + s.available, 0);
 
+    const stageUsers = await getLotStageUsers(pool, { id: lot.id, flow_type: lot.flow_type, cutter_name: lot.cutting_master });
+
     res.json({
       lot,
       stage_aggregates: aggregates,
@@ -540,6 +543,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isWashingInMaster,
       upstream_sizes: upstreamSizes,
       upstream_total_available: upstreamTotal,
       open_approvals: openApprovals,
+      stage_users: stageUsers,
     });
   } catch (err) {
     console.error('[ERROR] GET /washingin/event/lot-state =>', err);
