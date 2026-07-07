@@ -95,6 +95,20 @@ function renderLot(r){
       + '<span id="revMsg" style="font-size:.9rem;"></span></div>'
     : '<div class="note warn">' + esc(rev.reason || 'Nothing to reverse.') + '</div>';
   var revCard = '<div class="card"><div class="sec-h">Reverse a mistaken take-in</div>' + revBody + '</div>';
+
+  var sizes = r.sizes || [];
+  var sizeRows = sizes.map(function(s){
+    return '<div style="display:flex;gap:10px;align-items:center;margin-bottom:7px;">'
+      + '<span style="width:56px;font-weight:700;">' + esc(s.size_label) + '</span>'
+      + '<input type="number" min="' + (s.floor||0) + '" value="' + (s.total_pieces||0) + '" data-size="' + esc(s.size_label) + '" class="qtyInput" style="width:110px;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:1rem;">'
+      + (s.floor>0 ? '<span style="font-size:.72rem;color:var(--ink2);">min ' + s.floor + ' (already stitched)</span>' : '<span style="font-size:.72rem;color:var(--ink2);">not yet stitched</span>')
+      + '</div>';
+  }).join('');
+  var qtyCard = sizes.length ? ('<div class="card"><div class="sec-h">Edit cut quantity (size-wise)</div>'
+    + sizeRows
+    + '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;"><button class="btn primary" id="saveQty">Save quantities</button><span id="qtyMsg" style="font-size:.9rem;"></span></div>'
+    + '</div>') : '';
+
   return '<div class="card">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
     +   '<div><div class="lot-no">' + esc((lot.manual_lot_number||lot.lot_no||'').toUpperCase()) + '</div>'
@@ -109,7 +123,7 @@ function renderLot(r){
     +   '<button class="btn primary" id="applyFlow"' + (g.ok?'':' disabled') + '>Change flow</button>'
     +   '<span id="flowMsg" style="font-size:.9rem;"></span>'
     + '</div>'
-    + '</div>' + revCard;
+    + '</div>' + qtyCard + revCard;
 }
 
 var pendingFlow = null;
@@ -122,7 +136,22 @@ document.addEventListener('click', function(e){
   }
   if(e.target.id==='applyFlow'){ applyFlow(); }
   if(e.target.id==='reverseBtn'){ reverseStage(); }
+  if(e.target.id==='saveQty'){ saveQty(); }
 });
+
+async function saveQty(){
+  if(!lotState) return;
+  var inputs = Array.from(document.querySelectorAll('.qtyInput'));
+  var sizes = inputs.map(function(i){ return { size_label: i.getAttribute('data-size'), total_pieces: i.value }; });
+  var btn=document.getElementById('saveQty'); if(btn) btn.disabled=true;
+  var msg=document.getElementById('qtyMsg'); if(msg) msg.textContent='Saving…';
+  try{
+    var r=await (await fetch('/operator/lot-admin/qty-edit',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({cutting_lot_id:lotState.lot.id, sizes:sizes})})).json();
+    if(r.ok){ if(msg) msg.innerHTML='<span style="color:#16a34a;font-weight:600;">✓ Saved '+(r.changes||0)+' change(s) — new total '+(r.new_total!=null?r.new_total:'')+'</span>'; search(); }
+    else { if(msg) msg.innerHTML='<span style="color:#b91c1c;">'+esc(r.error||'failed')+'</span>'; if(btn) btn.disabled=false; }
+  }catch(e){ if(msg) msg.innerHTML='<span style="color:#b91c1c;">'+esc(e.message)+'</span>'; if(btn) btn.disabled=false; }
+}
 
 async function reverseStage(){
   if(!lotState || !lotState.reversal || !lotState.reversal.reversible) return;

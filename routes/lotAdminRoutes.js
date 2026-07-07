@@ -11,6 +11,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const { EVENT_TABLE } = require('../utils/lotStageUsers');
+const stageEvents = require('../utils/stageEvents');
 const { canChangeFlow } = require('../utils/lotFlowChange');
 const { reversibleStage, payStageFor } = require('../utils/stageReversal');
 const { writeLotAudit } = require('../utils/lotAudit');
@@ -50,6 +51,26 @@ async function resolveLot(q) {
   return rows;
 }
 
+// Per-size cut quantities + the floor each can't be reduced below (what stitching already
+// approved from that size — reducing below it would corrupt the downstream pool).
+async function cutSizesWithFloor(db, lotId) {
+  const [cutSizes] = await db.query(
+    'SELECT id, size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? ORDER BY id',
+    [lotId]
+  );
+  let stitch = {};
+  try { stitch = await stageEvents.getStageSizeAggregates(db, 'stitching', lotId); } catch (_) { stitch = {}; }
+  return cutSizes.map((s) => {
+    const key = stageEvents.normalizeSizeLabel(s.size_label);
+    return {
+      id: s.id,
+      size_label: s.size_label,
+      total_pieces: Number(s.total_pieces) || 0,
+      floor: (stitch[key] && stitch[key].approved) || 0,
+    };
+  });
+}
+
 async function eventCounts(db, lotId) {
   const counts = {};
   for (const [stage, table] of Object.entries(EVENT_TABLE)) {
@@ -82,6 +103,7 @@ router.get('/lot', isAuthenticated, isOperator, async (req, res) => {
       event_counts: counts,
       flow_change: canChangeFlow(counts),
       reversal: await reversalInfo(pool, lot),
+      sizes: await cutSizesWithFloor(pool, lot.id),
       matches: rows.length,
     });
   } catch (err) {
@@ -181,6 +203,55 @@ router.post('/reverse-stage', isAuthenticated, isOperator, async (req, res) => {
     });
     await conn.commit();
     res.json({ ok: true, reversed_stage: stage, deleted_events: events.length, voided_payments: voided });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /operator/lot-admin/qty-edit  { cutting_lot_id, sizes: [{ size_label, total_pieces }] }
+// Edit the lot's per-size CUT quantities. Guarded so a size can't drop below what stitching
+// already approved (which would corrupt the downstream pool). Recomputes the lot total and
+// writes a before/after audit row.
+router.post('/qty-edit', isAuthenticated, isOperator, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const lotId = parseInt(req.body.cutting_lot_id, 10);
+    const edits = Array.isArray(req.body.sizes) ? req.body.sizes : [];
+    if (!lotId || !edits.length) return res.status(400).json({ ok: false, error: 'A lot and sizes are required.' });
+    const [[lot]] = await conn.query('SELECT id, lot_no FROM cutting_lots WHERE id = ?', [lotId]);
+    if (!lot) return res.status(404).json({ ok: false, error: 'Lot not found.' });
+
+    const rows = await cutSizesWithFloor(conn, lotId);
+    const byLabel = new Map(rows.map((r) => [String(r.size_label).toUpperCase(), r]));
+    const applied = [];
+    for (const e of edits) {
+      const row = byLabel.get(String(e.size_label || '').toUpperCase());
+      if (!row) return res.status(400).json({ ok: false, error: `Unknown size ${e.size_label}.` });
+      const to = Math.round(Number(e.total_pieces));
+      if (!Number.isFinite(to) || to < 0) return res.status(400).json({ ok: false, error: `Invalid quantity for ${row.size_label}.` });
+      if (to < row.floor) return res.status(409).json({ ok: false, error: `${row.size_label}: can't go below ${row.floor} — stitching already took that many pieces.` });
+      applied.push({ id: row.id, size_label: row.size_label, from: row.total_pieces, to });
+    }
+    const changed = applied.filter((a) => a.from !== a.to);
+    if (!changed.length) return res.json({ ok: true, changes: 0, message: 'No changes.' });
+
+    await conn.beginTransaction();
+    for (const a of changed) {
+      await conn.query('UPDATE cutting_lot_sizes SET total_pieces = ? WHERE id = ? AND cutting_lot_id = ?', [a.to, a.id, lotId]);
+    }
+    const [[sum]] = await conn.query('SELECT COALESCE(SUM(total_pieces),0) AS t FROM cutting_lot_sizes WHERE cutting_lot_id = ?', [lotId]);
+    await conn.query('UPDATE cutting_lots SET total_pieces = ? WHERE id = ?', [sum.t, lotId]);
+    await writeLotAudit(conn, {
+      cutting_lot_id: lotId, lot_no: lot.lot_no, action: 'qty_edit',
+      detail: { scope: 'cutting_lot_sizes', changes: changed, new_total: Number(sum.t) },
+      performed_by: req.session?.user?.id || null,
+      performed_by_name: req.session?.user?.username || null,
+    });
+    await conn.commit();
+    res.json({ ok: true, changes: changed.length, new_total: Number(sum.t) });
   } catch (err) {
     await conn.rollback().catch(() => {});
     res.status(500).json({ ok: false, error: err.message });
