@@ -497,6 +497,17 @@
               <hr class="section-divider"/>
               <div class="mb-3">
                 <h4 class="section-title"><i class="bi bi-list"></i><span data-i18n="sizesAndPatterns">Sizes and Patterns</span></h4>
+                <% if (typeof prefill !== 'undefined' && prefill && prefill.gsm && prefill.width) { %>
+                <div id="cutPlanHelper" style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+                  <div style="font-weight:700;color:#1e40af;font-size:.95rem;margin-bottom:8px;"><i class="bi bi-magic"></i> Cut planner — predict patterns &amp; fabric</div>
+                  <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+                    <div><label style="font-size:.75rem;color:#475569;display:block;">Layers you plan to lay</label>
+                      <input type="number" id="planLayers" min="1" step="1" class="kotty-input" style="width:140px;" placeholder="e.g. 40"></div>
+                    <div style="font-size:.78rem;color:#475569;">Style <b><%= prefill.style %></b> · width <%= prefill.width %>&Prime; · <%= prefill.gsm %> gsm — patterns auto-fill below</div>
+                  </div>
+                  <div id="planOutput" style="margin-top:10px;font-size:.85rem;color:#64748b;">Enter layers to predict pattern, marker length &amp; fabric.</div>
+                </div>
+                <% } %>
                 <div class="bulk-size-row mb-2" style="display:flex; gap:8px; align-items:center;">
                   <input type="text" class="kotty-input" id="bulkSizeInput"
                          placeholder="Quick entry: 26-1,28-2,30-2,32-1,34-1"
@@ -1423,7 +1434,86 @@ loadSkuCategories();
     var rem = document.getElementById('remark');
     if (rem && !rem.value) rem.value = 'From cut-plan assignment #' + P.id + ' (style ' + P.style + ')';
     if (typeof updateTotalPieces === 'function') updateTotalPieces();
+
+    // 6. Cut planner: from the layers the cutter plans to lay, predict pattern_count per size
+    //    (ratio = demand ratio → minimal ratio waste), auto-fill it, and show marker length +
+    //    expected fabric + warnings. Uses CAD per-piece kg (already includes nesting waste),
+    //    width and GSM. pieces = pattern × layers; marker length = marker_kg / (width_m × gsm).
+    wireCutPlanner();
   }
+
+  function setPatternForSize(label, val) {
+    var rows = sizesContainer.querySelectorAll('.size-section:not(.d-none)');
+    for (var i = 0; i < rows.length; i++) {
+      var sel = rows[i].querySelector('.sizeLabelSel');
+      if (sel && String(sel.value).toUpperCase() === String(label).toUpperCase()) {
+        var pc = rows[i].querySelector('.patternCountInput');
+        if (pc) pc.value = val;
+        return;
+      }
+    }
+  }
+  function currentRollKg() {
+    var t = 0;
+    document.querySelectorAll('#rollsContainer .fullWeightInput').forEach(function (el) {
+      t += parseFloat(el.value) || 0;
+    });
+    return t;
+  }
+  function recomputeCutPlan() {
+    var out = document.getElementById('planOutput');
+    var layEl = document.getElementById('planLayers');
+    if (!out || !layEl) return;
+    var L = parseFloat(layEl.value) || 0;
+    if (!(L > 0)) { out.innerHTML = 'Enter layers to predict pattern, marker length &amp; fabric.'; return; }
+    var widthM = (P.width || 0) * 0.0254, gsm = P.gsm || 0;
+    var totalDemand = (P.sizes || []).reduce(function (s, x) { return s + (Number(x.qty) || 0); }, 0);
+    var markerKg = 0, produced = 0, over = 0, maxShare = 0, dom = null, anyKg = false, body = '';
+    (P.sizes || []).forEach(function (sz) {
+      var target = Number(sz.qty) || 0; if (target <= 0) return;
+      var pat = Math.max(1, Math.round(target / L));
+      var prod = pat * L; produced += prod; over += Math.max(0, prod - target);
+      var c = (P.consumption || {})[String(sz.size_label).toUpperCase()] || {};
+      var kg = Number(c.kg) || 0; if (kg > 0) anyKg = true;
+      markerKg += pat * kg;
+      var share = totalDemand > 0 ? target / totalDemand : 0;
+      if (share > maxShare) { maxShare = share; dom = sz.size_label; }
+      setPatternForSize(sz.size_label, pat);
+      var delta = prod - target;
+      body += '<tr><td>' + sz.size_label + '</td><td style="text-align:right">' + target + '</td>'
+        + '<td style="text-align:right"><b>' + pat + '</b></td><td style="text-align:right">' + prod + '</td>'
+        + '<td style="text-align:right;color:' + (delta > 0 ? '#b45309' : '#16a34a') + '">' + (delta > 0 ? '+' + delta : delta) + '</td></tr>';
+    });
+    if (typeof updateTotalPieces === 'function') updateTotalPieces();
+    var markerLenM = (anyKg && widthM > 0 && gsm > 0) ? (markerKg * 1000) / (widthM * gsm) : null;
+    var fabricKg = L * markerKg;
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead>'
+      + '<tr style="color:#475569;text-align:right"><th style="text-align:left">Size</th><th>Target</th><th>Pattern</th><th>Cut (' + L + 'L)</th><th>&Delta;</th></tr>'
+      + '</thead><tbody>' + body + '</tbody></table>';
+    html += '<div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;color:#0f172a;">';
+    if (markerLenM != null) html += '<div>Marker: <b>' + markerLenM.toFixed(2) + ' m</b>/layer</div>';
+    if (anyKg) html += '<div>Expected fabric: <b>' + fabricKg.toFixed(1) + ' kg</b></div>';
+    html += '<div>Producing <b>' + produced + '</b> vs target ' + totalDemand + ' (over ' + over + ')</div></div>';
+    var warn = '';
+    var tableLen = parseFloat((document.getElementById('table_length') || {}).value) || 0;
+    if (markerLenM != null && tableLen > 0 && markerLenM > tableLen)
+      warn += '<div style="color:#b91c1c;margin-top:6px">&#9888; Marker ' + markerLenM.toFixed(2) + ' m is longer than your table (' + tableLen + ') — lay more layers or use a longer table.</div>';
+    var rollKg = currentRollKg();
+    if (anyKg && rollKg > 0 && fabricKg > rollKg)
+      warn += '<div style="color:#b91c1c;margin-top:6px">&#9888; This lay needs ~' + fabricKg.toFixed(1) + ' kg but the rolls entered have ' + rollKg.toFixed(1) + ' kg — short by ' + (fabricKg - rollKg).toFixed(1) + ' kg.</div>';
+    if (maxShare > 0.55 && dom)
+      warn += '<div style="color:#b45309;margin-top:6px">&#9888; ' + dom + ' is ' + Math.round(maxShare * 100) + '% of demand — consider a separate single-size lot for it so the small sizes don\'t round up.</div>';
+    out.innerHTML = html + warn;
+  }
+  function wireCutPlanner() {
+    var layEl = document.getElementById('planLayers');
+    if (!layEl) return; // predictor only renders when the style has GSM+width
+    layEl.addEventListener('input', recomputeCutPlan);
+    var tl = document.getElementById('table_length');
+    if (tl) tl.addEventListener('input', recomputeCutPlan);
+    recomputeCutPlan();
+  }
+
   // Run after the DOM + the form's own init (default size row, listeners) are ready.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();

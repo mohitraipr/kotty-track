@@ -199,6 +199,26 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
             [fromAssignment]
           );
           const totalTarget = sz.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+          // CAD consumption (per-piece kg — already includes nesting), plus width + GSM.
+          // Lets the form predict pattern_count, marker length and fabric before cutting.
+          const consumption = {};
+          let width = null;
+          let gsm = null;
+          try {
+            const [cons] = await pool.query(
+              `SELECT size_label, consumption_per_piece, consumption_unit, width, gsm
+                 FROM pm_style_consumption WHERE style = ?`,
+              [a.style]
+            );
+            for (const c of cons) {
+              consumption[String(c.size_label).toUpperCase()] = {
+                kg: c.consumption_unit === 'KG' ? Number(c.consumption_per_piece) : null,
+                unit: c.consumption_unit,
+              };
+              if (c.width != null) width = Number(c.width);
+              if (c.gsm != null) gsm = Number(c.gsm);
+            }
+          } catch (_) { /* consumption optional; predictor just stays hidden */ }
           prefill = {
             id: a.id,
             style: a.style,
@@ -206,6 +226,9 @@ router.get('/dashboard', isAuthenticated, isCuttingManager, async (req, res) => 
             sizes: sz.map((r) => ({ size_label: r.size_label, qty: Number(r.qty) || 0 })),
             total_target: totalTarget,
             over_cap: totalTarget > 1500, // flag: should have been assigned per-lot
+            consumption, // { SIZE: {kg, unit} }
+            width,       // inches
+            gsm,         // g/m²
           };
         } else {
           req.flash('error', 'That assigned cut is not available to start (already cut, cancelled, or not yours).');
