@@ -638,23 +638,27 @@ router.post('/api/cut-plan/assign', async (req, res) => {
     const lots = (plan && plan.lots) || [];
     if (!lots.length) return res.status(400).json({ ok: false, error: 'No cut plan to assign.' });
 
-    // Resolve which master each lot goes to.
-    const perLot = Array.isArray(req.body.lots) && req.body.lots.length;
-    let lotMasterIds;
-    if (perLot) {
-      if (req.body.lots.length !== lots.length) {
-        return res.status(400).json({ ok: false, error: `Expected ${lots.length} lot assignment(s), got ${req.body.lots.length}.` });
-      }
-      lotMasterIds = req.body.lots.map((l) => parseInt(l.master_id, 10));
-    } else {
+    // Build the set of lots to assign as {index, masterId}. Two payload shapes:
+    //   { lots: [{ index, master_id }, ...] } -> assign ONLY those lots — a SUBSET is fine, so
+    //       you can assign one lot at a time and leave the rest for later.
+    //   { master_id }                          -> assign every lot to that one master.
+    // Either way EACH lot becomes its OWN per-lot assignment (<=1500 pcs, startable) — the plan
+    // is never collapsed into a single whole-style row.
+    let picks;
+    if (Array.isArray(req.body.lots) && req.body.lots.length) {
+      picks = req.body.lots.map((l) => ({ index: parseInt(l.index, 10), masterId: parseInt(l.master_id, 10) }));
+    } else if (req.body.master_id) {
       const m = parseInt(req.body.master_id, 10);
-      if (!m) return res.status(400).json({ ok: false, error: 'master_id (or per-lot lots[]) is required' });
-      lotMasterIds = lots.map(() => m);
+      picks = lots.map((_, i) => ({ index: i, masterId: m }));
+    } else {
+      return res.status(400).json({ ok: false, error: 'Pick a master for at least one lot.' });
     }
-    if (lotMasterIds.some((m) => !m)) return res.status(400).json({ ok: false, error: 'Every lot needs a cutting master.' });
+    picks = picks.filter((p) => Number.isInteger(p.index) && p.index >= 0 && p.index < lots.length);
+    if (!picks.length) return res.status(400).json({ ok: false, error: 'Pick a master for at least one lot.' });
+    if (picks.some((p) => !p.masterId)) return res.status(400).json({ ok: false, error: 'Each selected lot needs a cutting master.' });
 
     // Validate all chosen masters in one query.
-    const uniqueIds = [...new Set(lotMasterIds)];
+    const uniqueIds = [...new Set(picks.map((p) => p.masterId))];
     const [mrows] = await pool.query(
       `SELECT u.id, u.username FROM users u JOIN roles r ON u.role_id = r.id
         WHERE u.id IN (?) AND r.name = 'cutting_manager' AND u.is_active = TRUE`,
@@ -691,39 +695,23 @@ router.post('/api/cut-plan/assign', async (req, res) => {
 
     try {
       await conn.beginTransaction();
-      let payload;
       const snapshots = []; // {assignmentId, sizes} — audit records, written best-effort AFTER commit
-
-      if (!perLot || uniqueIds.length === 1) {
-        // Single-master (all lots same OR legacy master_id): one consolidated row.
-        const masterId = lotMasterIds[0];
-        const { demand, plan: fullPlan, fabricType: ft } = await computeStyleCutPlan(style);
+      const created = [];
+      const n = lots.length;
+      // One per-lot assignment per pick — each lot's own size split, each <=1500 and startable.
+      for (const p of picks) {
+        const lot = lots[p.index];
         const { header, sizes } = buildAssignmentPayload({
-          style, fabricType: ft, masterId, masterName: nameById.get(masterId),
-          demand, plan: fullPlan, createdBy,
+          style, fabricType, masterId: p.masterId, masterName: nameById.get(p.masterId),
+          demand: lot.sizes,
+          plan: { lotCount: 1, totalFabricMeters: lot.fabricMeters, fabricComplete: lot.fabricComplete },
+          createdBy,
         });
-        const id = await insertAssignment(header, sizes, null);
+        const id = await insertAssignment(header, sizes, `Lot ${p.index + 1}/${n}`);
         snapshots.push({ assignmentId: id, sizes });
-        payload = { ok: true, assignment_id: id, count: 1, assigned_to: nameById.get(masterId) };
-      } else {
-        // Per-lot: one row per lot, each to its own master, using the lot's own size split.
-        const n = lots.length;
-        const created = [];
-        for (let i = 0; i < n; i++) {
-          const lot = lots[i];
-          const masterId = lotMasterIds[i];
-          const { header, sizes } = buildAssignmentPayload({
-            style, fabricType, masterId, masterName: nameById.get(masterId),
-            demand: lot.sizes,
-            plan: { lotCount: 1, totalFabricMeters: lot.fabricMeters, fabricComplete: lot.fabricComplete },
-            createdBy,
-          });
-          const id = await insertAssignment(header, sizes, `Lot ${i + 1}/${n}`);
-          snapshots.push({ assignmentId: id, sizes });
-          created.push({ assignment_id: id, lot: i + 1, pieces: header.total_pieces, master: nameById.get(masterId) });
-        }
-        payload = { ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') };
+        created.push({ assignment_id: id, lot: p.index + 1, pieces: header.total_pieces, master: nameById.get(p.masterId) });
       }
+      const payload = { ok: true, count: created.length, assignments: created, assigned_to: [...new Set(created.map((c) => c.master))].join(', ') };
 
       await conn.commit();
       // Decision snapshots are audit-only + best-effort; write them after the assignment commits.
