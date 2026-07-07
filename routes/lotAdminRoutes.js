@@ -12,7 +12,27 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const { EVENT_TABLE } = require('../utils/lotStageUsers');
 const { canChangeFlow } = require('../utils/lotFlowChange');
+const { reversibleStage, payStageFor } = require('../utils/stageReversal');
 const { writeLotAudit } = require('../utils/lotAudit');
+
+// Whether the lot's furthest stage can be reversed, and why not. Blocks on: nothing to
+// reverse, finishing already dispatched, or a hand-off payment already PAID.
+async function reversalInfo(db, lot) {
+  const flow = (lot.flow_type || '').toLowerCase() === 'denim' ? 'denim' : 'hosiery';
+  const counts = await eventCounts(db, lot.id);
+  const rev = reversibleStage(flow, counts);
+  if (!rev) return { reversible: false, reason: 'This lot is only cut — nothing to reverse.' };
+  if (rev.stage === 'finishing') {
+    const [[d]] = await db.query('SELECT COUNT(*) AS c FROM finishing_dispatches WHERE lot_no = ?', [lot.lot_no]);
+    if (Number(d.c) > 0) return { reversible: false, stage: rev.stage, label: rev.label, reason: 'Finishing has already been dispatched — the goods have shipped, so it can\'t be reversed.' };
+  }
+  const payStage = payStageFor(rev.stage, flow);
+  if (payStage) {
+    const [[p]] = await db.query(`SELECT COUNT(*) AS c FROM stage_payments WHERE lot_no = ? AND stage = ? AND status = 'paid'`, [lot.lot_no, payStage]);
+    if (Number(p.c) > 0) return { reversible: false, stage: rev.stage, label: rev.label, reason: `A ${payStage} worker was already PAID for this hand-off — get that payment un-paid before reversing.` };
+  }
+  return { reversible: true, stage: rev.stage, label: rev.label, pay_stage: payStage };
+}
 
 async function resolveLot(q) {
   const exact = q.trim();
@@ -61,6 +81,7 @@ router.get('/lot', isAuthenticated, isOperator, async (req, res) => {
       },
       event_counts: counts,
       flow_change: canChangeFlow(counts),
+      reversal: await reversalInfo(pool, lot),
       matches: rows.length,
     });
   } catch (err) {
@@ -97,6 +118,69 @@ router.post('/flow-change', isAuthenticated, isOperator, async (req, res) => {
     });
     await conn.commit();
     res.json({ ok: true, from: lot.flow_type || null, to: target });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// POST /operator/lot-admin/reverse-stage  { cutting_lot_id }
+// Reverses the lot's furthest-along stage: deletes that stage's events (children first, due to
+// the parent_event_id FK), voids the pending hand-off payment, and snapshots everything to the
+// audit log. The upstream "available" pool re-opens automatically (it's derived). Blocks if the
+// stage is dispatched or its hand-off payment was already paid.
+router.post('/reverse-stage', isAuthenticated, isOperator, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const lotId = parseInt(req.body.cutting_lot_id, 10);
+    if (!lotId) return res.status(400).json({ ok: false, error: 'A lot is required.' });
+    const [[lot]] = await conn.query('SELECT id, lot_no, flow_type FROM cutting_lots WHERE id = ?', [lotId]);
+    if (!lot) return res.status(404).json({ ok: false, error: 'Lot not found.' });
+
+    const info = await reversalInfo(conn, lot);
+    if (!info.reversible) return res.status(409).json({ ok: false, error: info.reason });
+    const stage = info.stage;
+    const table = EVENT_TABLE[stage];
+    const payStage = info.pay_stage;
+
+    // Snapshot BEFORE deleting, for the audit trail.
+    const [events] = await conn.query(
+      `SELECT id, event_type, pieces, operator_id, parent_event_id, created_at FROM \`${table}\` WHERE cutting_lot_id = ? ORDER BY id`,
+      [lotId]
+    );
+    let pendingPayments = [];
+    if (payStage) {
+      const [pp] = await conn.query(
+        `SELECT id, username, stage, qty, total_amount FROM stage_payments WHERE lot_no = ? AND stage = ? AND status = 'pending'`,
+        [lot.lot_no, payStage]
+      );
+      pendingPayments = pp;
+    }
+
+    await conn.beginTransaction();
+    // Children (complete/inline-reject, parent_event_id NOT NULL) first — the FK forbids
+    // deleting a parent approve while a child references it. *_event_sizes cascade on delete.
+    await conn.query(`DELETE FROM \`${table}\` WHERE cutting_lot_id = ? AND parent_event_id IS NOT NULL`, [lotId]);
+    await conn.query(`DELETE FROM \`${table}\` WHERE cutting_lot_id = ? AND parent_event_id IS NULL`, [lotId]);
+    let voided = 0;
+    if (payStage) {
+      const [r] = await conn.query(
+        `UPDATE stage_payments SET status = 'cancelled', updated_at = NOW() WHERE lot_no = ? AND stage = ? AND status = 'pending'`,
+        [lot.lot_no, payStage]
+      );
+      voided = r.affectedRows || 0;
+    }
+    await writeLotAudit(conn, {
+      cutting_lot_id: lotId, lot_no: lot.lot_no, action: 'stage_reversal',
+      detail: { reversed_stage: stage, flow: lot.flow_type || null, pay_stage: payStage,
+        deleted_events: events, voided_payments: pendingPayments },
+      performed_by: req.session?.user?.id || null,
+      performed_by_name: req.session?.user?.username || null,
+    });
+    await conn.commit();
+    res.json({ ok: true, reversed_stage: stage, deleted_events: events.length, voided_payments: voided });
   } catch (err) {
     await conn.rollback().catch(() => {});
     res.status(500).json({ ok: false, error: err.message });

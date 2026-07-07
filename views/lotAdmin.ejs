@@ -87,6 +87,14 @@ function renderLot(r){
   var guardNote = g.ok
     ? '<div class="note warn" style="background:#f1f5f9;color:#475569">Changing flow is allowed — this lot has not moved past stitching.</div>'
     : '<div class="note warn">' + esc(g.reason) + '</div>';
+  var rev = r.reversal || {};
+  var revBody = rev.reversible
+    ? '<div class="note warn">This lot is at <b>' + esc(rev.label) + '</b>. Reversing undoes that stage for this lot and voids the pending hand-off payment — the lot returns to the previous stage. Logged.</div>'
+      + '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">'
+      + '<button class="btn" style="background:#b91c1c;color:#fff;" id="reverseBtn">Reverse ' + esc(rev.label) + '</button>'
+      + '<span id="revMsg" style="font-size:.9rem;"></span></div>'
+    : '<div class="note warn">' + esc(rev.reason || 'Nothing to reverse.') + '</div>';
+  var revCard = '<div class="card"><div class="sec-h">Reverse a mistaken take-in</div>' + revBody + '</div>';
   return '<div class="card">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">'
     +   '<div><div class="lot-no">' + esc((lot.manual_lot_number||lot.lot_no||'').toUpperCase()) + '</div>'
@@ -101,7 +109,7 @@ function renderLot(r){
     +   '<button class="btn primary" id="applyFlow"' + (g.ok?'':' disabled') + '>Change flow</button>'
     +   '<span id="flowMsg" style="font-size:.9rem;"></span>'
     + '</div>'
-    + '</div>';
+    + '</div>' + revCard;
 }
 
 var pendingFlow = null;
@@ -113,7 +121,21 @@ document.addEventListener('click', function(e){
     opt.classList.add('active'); pendingFlow = opt.getAttribute('data-flow');
   }
   if(e.target.id==='applyFlow'){ applyFlow(); }
+  if(e.target.id==='reverseBtn'){ reverseStage(); }
 });
+
+async function reverseStage(){
+  if(!lotState || !lotState.reversal || !lotState.reversal.reversible) return;
+  if(!confirm('Reverse ' + lotState.reversal.label + '? This undoes that stage for the lot and voids its pending hand-off payment.')) return;
+  var btn=document.getElementById('reverseBtn'); if(btn) btn.disabled=true;
+  var msg=document.getElementById('revMsg'); if(msg) msg.textContent='Reversing…';
+  try{
+    var r=await (await fetch('/operator/lot-admin/reverse-stage',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({cutting_lot_id:lotState.lot.id})})).json();
+    if(r.ok){ if(msg) msg.innerHTML='<span style="color:#16a34a;font-weight:600;">✓ Reversed '+esc(r.reversed_stage)+' — '+r.deleted_events+' events removed, '+r.voided_payments+' payment(s) voided</span>'; search(); }
+    else { if(msg) msg.innerHTML='<span style="color:#b91c1c;">'+esc(r.error||'failed')+'</span>'; if(btn) btn.disabled=false; }
+  }catch(e){ if(msg) msg.innerHTML='<span style="color:#b91c1c;">'+esc(e.message)+'</span>'; if(btn) btn.disabled=false; }
+}
 
 async function applyFlow(){
   if(!lotState) return;
