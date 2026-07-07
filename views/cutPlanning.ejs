@@ -55,7 +55,7 @@ async function loadAssignments() {
 async function loadPlan() {
   const style = document.getElementById('style').value.trim();
   const status = document.getElementById('status'); const out = document.getElementById('plan');
-  out.innerHTML = ''; if (!style) return;
+  out.innerHTML = ''; assignedLots.clear(); if (!style) return;
   status.style.display = 'block'; status.textContent = 'Loading…';
   const j = await (await fetch('/pm/api/cut-plan?style=' + encodeURIComponent(style))).json();
   if (!j.ok) { status.textContent = j.warning || j.error || 'failed'; return; }
@@ -86,23 +86,29 @@ async function loadPlan() {
 }
 
 let assignInFlight = false;
+const assignedLots = new Set(); // lot indices already assigned in this render (avoids re-assign)
 async function assign(style) {
   if (assignInFlight) return; // guard: a double-click can't fire a second submit
-  const sels = Array.from(document.querySelectorAll('.lotmaster'));
   const msg = document.getElementById('assignMsg');
-  const ids = sels.map(s => s.value);
-  if (!ids.length || ids.some(v => !v)) { msg.innerHTML = '<span style="color:var(--red)">pick a master for every lot</span>'; return; }
+  const sels = Array.from(document.querySelectorAll('.lotmaster'));
+  // Assign only the lots that HAVE a master picked and aren't already assigned. A subset is
+  // fine — you can do one lot at a time and leave the rest on "— select —" for later.
+  const chosen = sels.map((s, i) => ({ index: i, master_id: s.value, el: s }))
+    .filter(x => x.master_id && !assignedLots.has(x.index));
+  if (!chosen.length) { msg.innerHTML = '<span style="color:var(--red)">pick a master for a lot to assign</span>'; return; }
   assignInFlight = true;
   const btn = document.querySelector('.assignbar .btn.primary'); if (btn) btn.disabled = true;
   msg.textContent = 'Assigning…';
   try {
-    const allSame = ids.every(v => v === ids[0]);
-    const body = allSame ? { style, master_id: ids[0] } : { style, lots: ids.map(v => ({ master_id: v })) };
+    const body = { style, lots: chosen.map(c => ({ index: c.index, master_id: c.master_id })) };
     const d = await (await fetch('/pm/api/cut-plan/assign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
-    if (d.ok) { msg.innerHTML = '<span style="color:var(--green-ink)">✓ Assigned to ' + esc(d.assigned_to) + '</span>'; loadAssignments(); } // leave the button disabled: this plan is now assigned
-    else { msg.innerHTML = '<span style="color:var(--red)">' + esc(d.error || 'failed') + '</span>'; if (btn) btn.disabled = false; }
-  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; if (btn) btn.disabled = false; }
-  finally { assignInFlight = false; }
+    if (d.ok) {
+      chosen.forEach(c => { assignedLots.add(c.index); c.el.disabled = true; const row = c.el.closest('.lotrow'); if (row) row.style.opacity = '0.55'; });
+      msg.innerHTML = '<span style="color:var(--green-ink)">✓ Assigned ' + d.count + ' lot(s) to ' + esc(d.assigned_to) + '</span>';
+      loadAssignments();
+    } else { msg.innerHTML = '<span style="color:var(--red)">' + esc(d.error || 'failed') + '</span>'; }
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; }
+  finally { assignInFlight = false; if (btn) btn.disabled = false; } // re-enable for the remaining lots
 }
 
 (async () => { await loadMasters(); loadAssignments(); if (document.getElementById('style').value.trim()) loadPlan(); })();
