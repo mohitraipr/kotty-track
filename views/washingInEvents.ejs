@@ -8,29 +8,29 @@
      Inter throughout, indigo accent, strict color coding.
      ─────────────────────────────────────────────────────────────── */
 
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
   /* Scope all rules under .sx so we don't fight global kotty-theme styles */
   .sx {
-    --c-bg:        #f5f7fb;
+    --c-bg:        #f7f8fa;
     --c-card:      #ffffff;
-    --c-border:    #e5e8ee;
+    --c-border:    #e5e7eb;
     --c-border-2:  #eef0f4;
 
     --c-text:      #0f172a;   /* slate-900 */
     --c-text-2:    #475569;   /* slate-600 */
     --c-text-3:    #94a3b8;   /* slate-400 */
 
-    --c-primary:        #4f46e5;   /* indigo-600 */
-    --c-primary-hover:  #4338ca;   /* indigo-700 */
-    --c-primary-soft:   #eef2ff;   /* indigo-50 */
-    --c-primary-strip:  #6366f1;   /* indigo-500 */
+    --c-primary:        #2563eb;   /* indigo-600 */
+    --c-primary-hover:  #1d4ed8;   /* indigo-700 */
+    --c-primary-soft:   #eff6ff;   /* indigo-50 */
+    --c-primary-strip:  #3b82f6;   /* indigo-500 */
 
     --c-success:        #16a34a;   /* emerald-600 */
     --c-success-hover:  #15803d;
     --c-success-soft:   #dcfce7;
 
-    --c-warning:        #d97706;   /* amber-600 */
+    --c-warning:        #b45309;   /* amber-600 */
     --c-warning-soft:   #fef3c7;
 
     --c-danger:         #dc2626;   /* red-600 */
@@ -53,7 +53,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  body { background: #f5f7fb; }
+  body { background: #f7f8fa; }
 
   .sx-page {
     max-width: 960px;
@@ -954,6 +954,10 @@
       from { transform: translateY(100%); }
       to { transform: translateY(0); }
     }
+  }
+  /* Numbers are the hero (floor design system) */
+  .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
+    font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
   }
 </style>
 
