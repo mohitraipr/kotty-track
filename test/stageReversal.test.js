@@ -1,6 +1,16 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { reversibleStage, payStageFor } = require('../utils/stageReversal');
+const { reversibleStage, payStageFor, effectiveFlow } = require('../utils/stageReversal');
+
+test('effectiveFlow infers denim from denim-only stage events even when flow_type is null', () => {
+  // The bug: a null-flow lot at washing was treated as hosiery → wrong reversible stage.
+  assert.strictEqual(effectiveFlow(null, { stitching: 2, jeans_assembly: 2, washing: 2 }), 'denim');
+  assert.strictEqual(effectiveFlow(null, { stitching: 2 }), 'hosiery');
+  assert.strictEqual(effectiveFlow('denim', {}), 'denim');
+  assert.strictEqual(effectiveFlow('hosiery', { stitching: 1, finishing: 1 }), 'hosiery');
+  // and the furthest stage is now correct for that null-flow denim lot:
+  assert.strictEqual(reversibleStage(effectiveFlow(null, { stitching: 2, jeans_assembly: 2, washing: 2 }), { stitching: 2, jeans_assembly: 2, washing: 2 }).stage, 'washing');
+});
 
 test('reversibleStage = furthest-along stage that has events', () => {
   assert.strictEqual(reversibleStage('denim', { stitching: 2, jeans_assembly: 1 }).stage, 'jeans_assembly');

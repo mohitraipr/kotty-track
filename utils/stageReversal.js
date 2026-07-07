@@ -8,6 +8,17 @@ const STAGE_LABEL = {
   washing: 'Washing', washing_in: 'Washing-In', finishing: 'Finishing',
 };
 
+// The lot's effective flow. A lot whose flow_type is null/unknown but which has events in a
+// denim-only stage (jeans_assembly / washing / washing_in) IS denim — otherwise the hosiery
+// fallback would skip those stages and mis-identify the furthest stage (e.g. a lot at washing
+// wrongly reported as reversible at stitching). Declared 'denim' also wins.
+const DENIM_ONLY_STAGES = ['jeans_assembly', 'washing', 'washing_in'];
+function effectiveFlow(flowType, eventCounts) {
+  const counts = eventCounts || {};
+  if (DENIM_ONLY_STAGES.some((s) => (Number(counts[s]) || 0) > 0)) return 'denim';
+  return String(flowType || '').toLowerCase() === 'denim' ? 'denim' : 'hosiery';
+}
+
 // The ONLY reversible stage is the furthest-along stage that has events: you can't reverse a
 // stage while a later stage has already pulled pieces from it (that guarantees no downstream
 // event references what we're about to delete). Returns { stage, label } or null.
@@ -34,4 +45,4 @@ function payStageFor(stage, flowType) {
   })[stage] || null;
 }
 
-module.exports = { reversibleStage, payStageFor, STAGE_LABEL };
+module.exports = { reversibleStage, payStageFor, effectiveFlow, STAGE_LABEL };
