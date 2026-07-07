@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { fabricForCut, splitIntoLots, planCut } = require('../utils/cutPlanner.js');
+const { fabricForCut, splitIntoLots, groupSizesByRatio, planCut } = require('../utils/cutPlanner.js');
 
 // Owner ruling 2026-06-18: CAD per-size consumption is the fabric truth.
 // fabric = sum(size_qty * CAD consumption). CAD owns the marker; we only do quantities+lots.
@@ -45,6 +45,40 @@ test('splitIntoLots may dip below 1200 but never exceeds 1500', () => {
 test('splitIntoLots: empty/zero demand -> no lots', () => {
   assert.deepStrictEqual(splitIntoLots({}), []);
   assert.deepStrictEqual(splitIntoLots({ M: 0 }), []);
+});
+
+test('groupSizesByRatio keeps volume-similar sizes together, peels off trivial ones', () => {
+  const g = groupSizesByRatio({ '6XL': 1151, '5XL': 701, '4XL': 496, '3XL': 171, XXL: 10 }, 8);
+  // 6XL..3XL are within 8x of the group max (1151/171 = 6.7); XXL (115x) splits off.
+  assert.strictEqual(g.length, 2);
+  assert.deepStrictEqual(g[0], { '6XL': 1151, '5XL': 701, '4XL': 496, '3XL': 171 });
+  assert.deepStrictEqual(g[1], { XXL: 10 });
+});
+
+test('splitIntoLots: extreme skew isolates the trivial size, never smears it across lots', () => {
+  const lots = splitIntoLots({ '6XL': 1151, '5XL': 701, '4XL': 496, '3XL': 171, XXL: 10 });
+  // big sizes -> proportional lots (group 2519 -> 2 lots); XXL -> its own single-size lot.
+  const xxlLots = lots.filter((l) => Object.keys(l.sizes).length === 1 && l.sizes.XXL);
+  assert.strictEqual(xxlLots.length, 1);
+  assert.strictEqual(xxlLots[0].sizes.XXL, 10);
+  assert.ok(lots.filter((l) => l.sizes['6XL']).every((l) => !('XXL' in l.sizes)));
+  for (const l of lots) assert.ok(l.total <= 1500);
+  // per-size totals exactly conserved across all lots
+  const tot = {};
+  for (const l of lots) for (const [s, q] of Object.entries(l.sizes)) tot[s] = (tot[s] || 0) + q;
+  assert.deepStrictEqual(tot, { '6XL': 1151, '5XL': 701, '4XL': 496, '3XL': 171, XXL: 10 });
+});
+
+test('splitIntoLots: modest skew (<=8x) stays one proportional group (unchanged behaviour)', () => {
+  const lots = splitIntoLots({ M: 1300, L: 900, XL: 400, XXL: 200 }); // 6.5x -> one group, 2 lots
+  assert.strictEqual(lots.length, 2);
+  assert.deepStrictEqual(lots[0].sizes, { M: 650, L: 450, XL: 200, XXL: 100 });
+});
+
+test('splitIntoLots skewAware:false forces a single proportional split', () => {
+  const lots = splitIntoLots({ '6XL': 1151, XXL: 10 }, { skewAware: false }); // 1161 -> 1 lot, both sizes
+  assert.strictEqual(lots.length, 1);
+  assert.deepStrictEqual(lots[0].sizes, { '6XL': 1151, XXL: 10 });
 });
 
 test('planCut: lots + per-lot fabric from CAD consumption', () => {

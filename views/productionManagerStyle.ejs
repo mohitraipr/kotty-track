@@ -105,8 +105,10 @@ function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = b; 
 function sizeRatio(obj) {
   const ents = Object.entries(obj || {}).map(([s, q]) => [s, Number(q) || 0]).filter(([, q]) => q > 0);
   if (!ents.length) return '';
-  const g = ents.reduce((acc, [, q]) => gcd(acc, q), 0) || 1;
-  return ents.map(([s, q]) => `${s}:${Math.round(q / g)}`).join('  ');
+  // Normalize to the smallest size (…:1) so the ratio is readable even when quantities are
+  // coprime (e.g. 115:70:50:17:1 instead of 1151:701:496:171:10). One decimal below 10.
+  const mn = Math.min(...ents.map(([, q]) => q)) || 1;
+  return ents.map(([s, q]) => { const v = q / mn; return `${s}:${v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)}`; }).join('  ');
 }
 
 // In-production (inline) qty vs the cut requirement, per size.

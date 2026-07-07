@@ -28,16 +28,39 @@ function fabricForCut(sizesQty, consumptionBySize) {
 }
 
 const MAX_LOT = 1500;
+// Within one marker/lot, the largest size qty should be at most this many times the
+// smallest. Beyond it the marker's size ratio is impractical to cut (e.g. 115:1 when a hot
+// size sits next to a trivial one), so those sizes are split into separate lots instead of
+// smeared proportionally across every lot. Volume-similar sizes stay together (good nesting);
+// a trivial size peels off on its own. Env-overridable via PM_MARKER_MAX_RATIO.
+const MAX_MARKER_RATIO = Number(process.env.PM_MARKER_MAX_RATIO) || 8;
 
 function sumSizes(sizes) {
   return Object.values(sizes || {}).reduce((s, q) => s + (Number(q) || 0), 0);
 }
 
-// Split per-size demand into lots, each total <= maxLot, sizes PROPORTIONAL in every lot.
-// n = ceil(total / maxLot); 1,500 is a hard cap (never above), a lot may dip below 1,200.
-// Rounding remainders go to the earliest lots so per-size totals are exactly conserved.
-function splitIntoLots(demandBySize, opts = {}) {
-  const maxLot = opts.maxLot || MAX_LOT;
+// Group sizes by volume similarity. Walking largest -> smallest, keep adding to the current
+// group while (groupMax / size) <= maxRatio; otherwise start a new group. So a dominant size
+// stays with its near-volume neighbours (nesting stays good) while a trivial size (far below
+// the group's max) peels into its own group instead of distorting the marker ratio.
+function groupSizesByRatio(demandBySize, maxRatio) {
+  const entries = Object.entries(demandBySize)
+    .map(([s, q]) => [s, Number(q) || 0])
+    .filter(([, q]) => q > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const groups = []; // [{ sizes: {size:qty}, max }]
+  for (const [s, q] of entries) {
+    const last = groups[groups.length - 1];
+    if (last && last.max / q <= maxRatio) last.sizes[s] = q;
+    else groups.push({ sizes: { [s]: q }, max: q });
+  }
+  return groups.map((g) => g.sizes);
+}
+
+// Proportional split of ONE size-map into <= maxLot lots (sizes proportional in every lot).
+// n = ceil(total / maxLot); 1,500 is a hard cap (never above). Rounding remainders go to the
+// earliest lots so per-size totals are exactly conserved.
+function proportionalSplit(demandBySize, maxLot) {
   const total = sumSizes(demandBySize);
   if (total <= 0) return [];
   const n = Math.ceil(total / maxLot);
@@ -53,6 +76,19 @@ function splitIntoLots(demandBySize, opts = {}) {
       if (give > 0) { lots[i].sizes[size] = (lots[i].sizes[size] || 0) + give; lots[i].total += give; }
     }
   }
+  return lots;
+}
+
+// Split per-size demand into cutting lots. SKEW-AWARE: sizes of wildly different volume don't
+// share a marker — they're grouped by volume similarity first, then each group is split
+// proportionally, every lot <= maxLot. Pass skewAware:false for a single proportional split
+// across all sizes (legacy behaviour). Per-size totals are always exactly conserved.
+function splitIntoLots(demandBySize, opts = {}) {
+  const maxLot = opts.maxLot || MAX_LOT;
+  const maxRatio = opts.maxRatio || MAX_MARKER_RATIO;
+  const groups = opts.skewAware === false ? [demandBySize] : groupSizesByRatio(demandBySize, maxRatio);
+  const lots = [];
+  for (const group of groups) lots.push(...proportionalSplit(group, maxLot));
   return lots;
 }
 
@@ -82,4 +118,4 @@ function planCut(demandBySize, opts = {}) {
   };
 }
 
-module.exports = { fabricForCut, splitIntoLots, planCut, sumSizes, MAX_LOT };
+module.exports = { fabricForCut, splitIntoLots, groupSizesByRatio, proportionalSplit, planCut, sumSizes, MAX_LOT, MAX_MARKER_RATIO };
