@@ -988,6 +988,7 @@
       <span class="label">From cutting</span>
       <span class="text" id="cuttingRemarkText"></span>
     </div>
+    <div class="sx-journey" id="lotJourneyUsers" style="display:none;"></div>
 
     <div class="sx-stats">
       <div class="sx-stat"><div class="l">Approved</div><div class="v" id="aggApproved">0</div></div>
@@ -1190,6 +1191,22 @@ async function refreshState() {
   } catch (err) { toast('Could not load lot: ' + err.message, 'error'); }
 }
 
+function renderStageUsers(su) {
+  const ju = document.getElementById('lotJourneyUsers');
+  if (!ju) return;
+  su = su || [];
+  if (!su.length) { ju.style.display = 'none'; return; }
+  const esc = (v) => String(v == null ? '' : v).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  ju.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 2px;';
+  ju.innerHTML = su.map((s) => {
+    const who = s.master ? esc(s.master) : '—';
+    const col = s.master ? '#0f172a' : '#94a3b8';
+    return '<span style="display:inline-flex;flex-direction:column;line-height:1.15;padding:3px 9px;border-radius:8px;background:#f1f5f9;">'
+      + '<span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.3px;color:#64748b;">' + esc(s.label) + '</span>'
+      + '<span style="font-size:.82rem;font-weight:600;color:' + col + ';">' + who + '</span></span>';
+  }).join('<span style="color:#cbd5e1;font-weight:700;">›</span>');
+}
+
 function renderState() {
   if (!currentState) return;
   const { lot, stage_aggregates: agg, upstream_sizes, open_approvals: open } = currentState;
@@ -1201,6 +1218,8 @@ function renderState() {
   const flowEl = el('lotFlow');
   flowEl.className = 'sx-flow ' + (isDenim ? 'denim' : 'hosiery');
   flowEl.textContent = isDenim ? 'denim' : 'hosiery';
+
+  renderStageUsers(currentState.stage_users);
 
   const remarkNote = el('cuttingRemarkNote');
   if (lot.cutting_remark) {

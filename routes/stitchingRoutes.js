@@ -7,6 +7,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isStitchingMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
+const { getLotStageUsers } = require('../utils/lotStageUsers');
 
 // ----------------------------
 // MULTER SETUP (for image uploads)
@@ -206,6 +207,11 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
     });
     const upstreamTotalAvailable = upstreamSizes.reduce((acc, s) => acc + s.available, 0);
 
+    // Cross-stage "who handled this lot" for the card (cut / stitch / wash / finish …).
+    const stageUsers = await getLotStageUsers(pool, {
+      id: lot.id, flow_type: lot.flow_type, cutter_name: lot.cutting_master,
+    });
+
     res.json({
       lot,
       stage_aggregates: aggregates,
@@ -213,6 +219,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
       upstream_sizes: upstreamSizes,
       upstream_total_available: upstreamTotalAvailable,
       open_approvals: openApprovals,
+      stage_users: stageUsers,
     });
   } catch (err) {
     console.error('[ERROR] GET /event/lot-state =>', err);

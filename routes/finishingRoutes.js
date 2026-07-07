@@ -7,6 +7,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
+const { getLotStageUsers } = require('../utils/lotStageUsers');
 
 /* ---------------------------------------------------
    MULTER FOR IMAGE UPLOAD & BULK EXCEL UPLOAD
@@ -703,6 +704,8 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isFinishingMaster,
     const upstreamSizes  = await fUpstreamSizes(pool, lot);
     const upstreamTotal  = upstreamSizes.reduce((a, s) => a + s.available, 0);
 
+    const stageUsers = await getLotStageUsers(pool, { id: lot.id, flow_type: lot.flow_type, cutter_name: lot.cutting_master });
+
     res.json({
       lot,
       flow_kind: isHosieryLot(lot) ? 'hosiery' : 'denim',
@@ -711,6 +714,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isFinishingMaster,
       upstream_sizes: upstreamSizes,
       upstream_total_available: upstreamTotal,
       open_approvals: openApprovals,
+      stage_users: stageUsers,
     });
   } catch (err) {
     console.error('[ERROR] GET /finishing/event/lot-state =>', err);
