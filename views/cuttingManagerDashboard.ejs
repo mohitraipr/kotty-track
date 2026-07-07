@@ -481,6 +481,13 @@
                   </div>
                 </div>
                 <div class="col-md-4">
+                  <label for="flow_type" class="kotty-form-label"><i class="bi bi-diagram-3"></i><span data-i18n="flowTypeLabel">Flow Type</span></label>
+                  <select id="flow_type" name="flow_type" class="kotty-select">
+                    <option value="denim" <%= isDenim ? 'selected' : '' %>>Denim</option>
+                    <option value="hosiery" <%= isDenim ? '' : 'selected' %>>Hosiery</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
                   <label for="table_length" class="kotty-form-label"><i class="bi bi-rulers"></i><span data-i18n="tableLengthLabel">Table Length</span></label>
                   <input type="number" class="kotty-input" id="table_length" name="table_length" <%= isDenim ? 'required' : '' %> placeholder="<%= isDenim ? 'Table length (required for denim)' : 'Table length (optional)' %>" min="0" step="0.01" />
                 </div>
@@ -611,13 +618,14 @@
 
 <script src="/public/js/cuttingWeight.js"></script>
 <script>
-const IS_DENIM = <%= isDenim ? 'true' : 'false' %>;
-const FLOW_MODE = IS_DENIM ? 'denim' : 'hosiery';
+// Mutable so the Flow Type selector can switch denim/hosiery mode live at lot creation.
+let IS_DENIM = <%= isDenim ? 'true' : 'false' %>;
+let FLOW_MODE = IS_DENIM ? 'denim' : 'hosiery';
 const ALLOW_ADHOC = <%= allowAdhoc ? 'true' : 'false' %>;
 
 const langData = {
-  en: { cuttingManagerDashboardTitle: "Cutting Manager Dashboard", welcomeUser: "Welcome", existingCuttingLots: "Existing Cutting Lots", createNewCuttingLot: "Create New Cutting Lot", idLabel: "ID", lotNumberLabel: "Lot Number", skuLabel: "SKU", fabricTypeLabel: "Fabric Type", tableLengthLabel: "Table Length", remarkLabel: "Remark", imageLabel: "Image", createdByLabel: "Created By", creationTimeLabel: "Creation Time", totalPiecesLabel: "Total Pieces", sizesLabel: "Sizes", actionsLabel: "Actions", noCuttingLotsAvailable: "No cutting lots available.", sizeLabel: "Size", patternCountLabel: "Pattern Count", lotNumberGenerated: "Lot Number (Generated)", createLotBtn: "Create Lot", remove: "Remove", rollNumber: "Roll Number", layersLabel: "Layers", weightUsedLabel: "Weight Used (Calculated)", weightUsageProgress: "Weight Usage Progress", availableLabel: "Available", sizesAndPatterns: "Sizes and Patterns", rollsUsed: "Rolls Used", addNewSize: "Add New Size", addAnotherRoll: "Add Another Roll", totalPiecesCalc: "Total Pieces (Calculated)", fullWeightLabel: "Full Roll Weight", remainingWeightLabel: "Remaining Weight" },
-  hi: { cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड", welcomeUser: "स्वागत हे", existingCuttingLots: "मौजूदा काटिंग लॉट्स", createNewCuttingLot: "नया काटिंग लॉट बनाएं", idLabel: "आईडी", lotNumberLabel: "लॉट नंबर", skuLabel: "एसकेयू", fabricTypeLabel: "फैब्रिक प्रकार", tableLengthLabel: "टेबल लंबाई", remarkLabel: "टिप्पणी", imageLabel: "छवि", createdByLabel: "बनाने वाले", creationTimeLabel: "बनाने का समय", totalPiecesLabel: "कुल पीस", sizesLabel: "साइज़", actionsLabel: "कार्रवाई", noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।", sizeLabel: "साइज़", patternCountLabel: "पैटर्न की संख्या", lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)", createLotBtn: "लॉट तैयार करें", remove: "हटाएं", rollNumber: "रोल नंबर", layersLabel: "लेयर्स", weightUsedLabel: "उपयोग किया गया वज़न (गणना)", weightUsageProgress: "वज़न उपयोग की प्रगति", availableLabel: "उपलब्ध", sizesAndPatterns: "साइज़ और पैटर्न", rollsUsed: "उपयोग किए गए रोल्स", addNewSize: "नया साइज़ जोड़ें", addAnotherRoll: "एक और रोल जोड़ें", totalPiecesCalc: "कुल पीस (हिसाब से)", fullWeightLabel: "रोल का कुल वज़न", remainingWeightLabel: "बचा हुआ वज़न" }
+  en: { cuttingManagerDashboardTitle: "Cutting Manager Dashboard", welcomeUser: "Welcome", existingCuttingLots: "Existing Cutting Lots", createNewCuttingLot: "Create New Cutting Lot", idLabel: "ID", lotNumberLabel: "Lot Number", skuLabel: "SKU", fabricTypeLabel: "Fabric Type", flowTypeLabel: "Flow Type", tableLengthLabel: "Table Length", remarkLabel: "Remark", imageLabel: "Image", createdByLabel: "Created By", creationTimeLabel: "Creation Time", totalPiecesLabel: "Total Pieces", sizesLabel: "Sizes", actionsLabel: "Actions", noCuttingLotsAvailable: "No cutting lots available.", sizeLabel: "Size", patternCountLabel: "Pattern Count", lotNumberGenerated: "Lot Number (Generated)", createLotBtn: "Create Lot", remove: "Remove", rollNumber: "Roll Number", layersLabel: "Layers", weightUsedLabel: "Weight Used (Calculated)", weightUsageProgress: "Weight Usage Progress", availableLabel: "Available", sizesAndPatterns: "Sizes and Patterns", rollsUsed: "Rolls Used", addNewSize: "Add New Size", addAnotherRoll: "Add Another Roll", totalPiecesCalc: "Total Pieces (Calculated)", fullWeightLabel: "Full Roll Weight", remainingWeightLabel: "Remaining Weight" },
+  hi: { cuttingManagerDashboardTitle: "काटिंग मैनेजर डैशबोर्ड", welcomeUser: "स्वागत हे", existingCuttingLots: "मौजूदा काटिंग लॉट्स", createNewCuttingLot: "नया काटिंग लॉट बनाएं", idLabel: "आईडी", lotNumberLabel: "लॉट नंबर", skuLabel: "एसकेयू", fabricTypeLabel: "फैब्रिक प्रकार", flowTypeLabel: "फ्लो प्रकार", tableLengthLabel: "टेबल लंबाई", remarkLabel: "टिप्पणी", imageLabel: "छवि", createdByLabel: "बनाने वाले", creationTimeLabel: "बनाने का समय", totalPiecesLabel: "कुल पीस", sizesLabel: "साइज़", actionsLabel: "कार्रवाई", noCuttingLotsAvailable: "कोई काटिंग लॉट उपलब्ध नहीं है।", sizeLabel: "साइज़", patternCountLabel: "पैटर्न की संख्या", lotNumberGenerated: "लॉट नंबर (सिस्टम द्वारा तैयार)", createLotBtn: "लॉट तैयार करें", remove: "हटाएं", rollNumber: "रोल नंबर", layersLabel: "लेयर्स", weightUsedLabel: "उपयोग किया गया वज़न (गणना)", weightUsageProgress: "वज़न उपयोग की प्रगति", availableLabel: "उपलब्ध", sizesAndPatterns: "साइज़ और पैटर्न", rollsUsed: "उपयोग किए गए रोल्स", addNewSize: "नया साइज़ जोड़ें", addAnotherRoll: "एक और रोल जोड़ें", totalPiecesCalc: "कुल पीस (हिसाब से)", fullWeightLabel: "रोल का कुल वज़न", remainingWeightLabel: "बचा हुआ वज़न" }
 };
 let currentLanguage = "en";
 function setLanguage(lang) {
@@ -851,11 +859,29 @@ function addNewSize() {
   newSize.querySelector('.patternCountInput').addEventListener('input', updateTotalPieces);
 }
 
+// Make a roll's Remaining Weight field match the current flow mode. The template bakes in
+// readonly/value at render time (from the cutter's default), so re-apply on every add and
+// whenever the Flow Type selector switches modes.
+function applyFlowToRoll(rollSection) {
+  const rem = rollSection.querySelector('.remainingWeightInput');
+  if (!rem) return;
+  if (FLOW_MODE === 'denim') {
+    rem.readOnly = true;
+    rem.value = '';
+    rem.placeholder = 'Auto (full − used)';
+  } else {
+    rem.readOnly = false;
+    if (!rem.value) rem.value = '0';
+    rem.placeholder = 'Remaining (default 0)';
+  }
+}
+
 function addNewRoll() {
   const newRoll = rollTemplate.cloneNode(true);
   newRoll.classList.remove('d-none');
   newRoll.removeAttribute('id');
   rollsContainer.appendChild(newRoll);
+  applyFlowToRoll(newRoll);
   newRoll.querySelector('.remove-roll-btn').addEventListener('click', () => { newRoll.remove(); updateTotalPieces(); checkRollsCompletion(); });
   newRoll.querySelector('.layersInput').addEventListener('input', () => {
     updateTotalPieces();
@@ -955,6 +981,30 @@ fabricTypeSel.addEventListener('change', () => {
   checkRollsCompletion();
 });
 
+// Flow Type selector — cutter can override denim/hosiery per lot. Safe: chosen at lot
+// creation, before any stage events exist. Switching modes changes the roll weight rules
+// (denim = auto remaining from table_length+layers; hosiery = manual remaining) and whether
+// table_length is required, so re-drive those and clear any rolls entered under the old mode.
+const flowTypeSel = document.getElementById('flow_type');
+if (flowTypeSel) {
+  flowTypeSel.addEventListener('change', () => {
+    FLOW_MODE = flowTypeSel.value === 'denim' ? 'denim' : 'hosiery';
+    IS_DENIM = FLOW_MODE === 'denim';
+    const tl = document.getElementById('table_length');
+    if (tl) {
+      tl.required = (FLOW_MODE === 'denim');
+      tl.placeholder = (FLOW_MODE === 'denim')
+        ? 'Table length (required for denim)'
+        : 'Table length (optional)';
+    }
+    // Rolls entered under the previous mode used different weight rules — reset them so
+    // freshly added rolls follow the newly selected flow (same reset as changing fabric).
+    rollsContainer.innerHTML = '';
+    updateTotalPieces();
+    checkRollsCompletion();
+  });
+}
+
 addSizeBtn.addEventListener('click', addNewSize);
 addRollBtn.addEventListener('click', addNewRoll);
 
@@ -999,10 +1049,13 @@ function checkRollsCompletion() {
   createLotBtn.disabled = !allFilled;
 }
 
-// Re-run weight computation across every roll when table length changes (denim only)
+// Re-run weight computation across every roll when table length changes (denim only).
+// Attached unconditionally and guarded inside so it still works if the cutter switches
+// the Flow Type selector to denim after page load.
 const tableLengthInput = document.getElementById('table_length');
-if (tableLengthInput && FLOW_MODE === 'denim') {
+if (tableLengthInput) {
   tableLengthInput.addEventListener('input', () => {
+    if (FLOW_MODE !== 'denim') return;
     rollsContainer.querySelectorAll('.roll-section:not(.d-none)').forEach(rs => {
       updateWeightUsed(rs);
       updateWeightProgress(rs);
