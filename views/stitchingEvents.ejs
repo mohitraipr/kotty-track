@@ -1064,6 +1064,95 @@
   .sx-info .iw-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
   .sx-info .iw-pill { border-radius: 999px; }
 
+  /* ═══ PROPER STITCH — quiet surfaces, colour only on numbers & pills ═══ */
+  /* Actions section */
+  .sx-actions-h { font-size: 0.6875rem; letter-spacing: 0.1em; color: var(--c-text-2); font-weight: 700; }
+  .sx-action-card { border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .sx-action-card::before { display: none; }
+  .sx-action-card-body { padding: 1rem 1rem 1.125rem; }
+  .sx-action-icon { display: none; }
+  .sx-action-row { margin-bottom: 0.75rem; }
+  .sx-action-title { font-size: 0.95rem; font-weight: 600; }
+  .sx-action-title .qty { font-family: 'Space Grotesk','Inter',sans-serif; font-size: 1.2rem; font-weight: 700; }
+  .sx-action-sub { font-size: 0.8125rem; color: var(--c-text-3); }
+  .sx-action-cta { border-radius: 10px; padding: 0.875rem 1rem; font-weight: 700;
+    box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .sx-action-cta:hover { transform: none; box-shadow: 0 1px 2px rgba(15,23,42,.08); background: var(--c-primary-hover); }
+  .sx-action-cta-check { display: none; }
+  .sx-action-card.is-done .sx-action-cta { background: var(--c-card); color: var(--c-text);
+    border: 1px solid var(--c-border); box-shadow: none; }
+  .sx-action-card.is-done .sx-action-cta:hover { background: var(--c-bg); }
+  .sx-action-form { background: transparent; padding: 0.875rem 1rem 1.125rem; }
+  .sx-form-helper { color: var(--c-text-3); font-size: 0.78rem; }
+  .sx-mini-total, .sx-mini-total.is-take, .sx-mini-total.is-rewash, .sx-mini-total.is-reject { background: var(--c-bg); }
+  .sx-grand { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    margin-top: 1rem; padding-top: 0.875rem; border-top: 1px solid var(--c-border-2); flex-wrap: wrap; }
+  .sx-grand .gl { font-size: 0.875rem; font-weight: 500; color: var(--c-text); }
+  .sx-grand .gv { font-family: 'Space Grotesk','Inter',sans-serif; font-size: 1.125rem; font-weight: 700; color: var(--c-primary); }
+  .sx-grand .gx { color: var(--c-danger); font-size: 0.85rem; font-family: 'Inter',sans-serif; }
+  .sx-stepper.is-take-readonly input { background: var(--c-card); border: 1px solid var(--c-border);
+    color: var(--c-text); border-radius: 10px; height: 44px; width: 5rem;
+    font-family: 'Space Grotesk','Inter',sans-serif; font-weight: 700; }
+
+  /* Lot card: quiet stat strip, rail band, white size chips */
+  .sx-lot { border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .sx-lot .sx-rail { margin: 0.875rem -1.25rem 0.75rem; padding: 1rem 1rem 0.75rem;
+    background: rgba(247,248,250,.7); border-top: 1px solid var(--c-border-2); border-bottom: 1px solid var(--c-border-2); }
+  .sx-stats { gap: 0.5rem; margin: 1rem 0 1.125rem; }
+  .sx-stat, .sx-stat.is-completed, .sx-stat.is-rejected, .sx-stat.is-inline { background: transparent; padding: 0; text-align: left; border-radius: 0; }
+  .sx-stat .l, .sx-stat.is-completed .l, .sx-stat.is-rejected .l, .sx-stat.is-inline .l {
+    font-size: 0.6rem; letter-spacing: 0.06em; color: var(--c-text-2); }
+  .sx-stat .v { font-family: 'Space Grotesk','Inter',sans-serif; font-size: 1.25rem; }
+  .sx-cutting-remark { background: var(--c-card); border: 1px solid var(--c-border); border-left: 3px solid var(--c-warning); }
+  .sx-chip-row { gap: 0.5rem; }
+  .sx-chip, .sx-chip.s-done, .sx-chip.s-progress { position: relative; display: inline-flex; flex-direction: column;
+    align-items: center; gap: 2px; padding: 0.5rem 0.75rem; min-width: 58px;
+    background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; }
+  .sx-chip-num { order: 1; font-family: 'Space Grotesk','Inter',sans-serif; font-size: 0.95rem; font-weight: 700; color: var(--c-text); }
+  .sx-chip-label, .sx-chip.s-done .sx-chip-label, .sx-chip.s-progress .sx-chip-label { order: 2; font-size: 0.62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-text-2); }
+  .sx-chip.s-done .sx-chip-num { color: var(--c-success); }
+  .sx-chip.s-progress .sx-chip-num { color: var(--c-warning); }
+  .sx-chip-status { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px;
+    border-radius: 999px; font-size: 0; padding: 0; display: block; }
+
+  /* Search results as Stitch cards */
+  .sx-search-results { background: transparent; border: 0; box-shadow: none; padding: 0; }
+  .sx-search-row-result, .sx-search-row-result + .sx-search-row-result { display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.875rem 1rem; margin-bottom: 0.5rem; border-radius: 12px;
+    border: 1px solid var(--c-border); background: var(--c-card); box-shadow: var(--shadow-sm); }
+  .sx-result-no { font-family: 'Space Grotesk','Inter',sans-serif; font-weight: 700; font-size: 1rem; }
+
+  /* My Payments: white summary cards, coloured values only */
+  .sx-pay-summary-card, .sx-pay-summary-card.is-pending, .sx-pay-summary-card.is-paid {
+    background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .sx-pay-summary-card .l, .sx-pay-summary-card.is-pending .l, .sx-pay-summary-card.is-paid .l { color: var(--c-text-2); }
+  .sx-pay-summary-card .v { font-family: 'Space Grotesk','Inter',sans-serif; }
+  .sx-controls select { border-radius: 10px; }
+
+  /* Material Indent: strip the editorial serif/mono structure to Stitch */
+  .sx-info .iw-h { font-family: 'Space Grotesk','Inter',sans-serif; font-size: 1.125rem; font-weight: 700; letter-spacing: -0.01em; }
+  .sx-info .iw-h__num { display: none; }
+  .sx-info .iw-eyebrow { font-family: 'Inter',sans-serif; font-size: 0.625rem; letter-spacing: 0.08em; }
+  .sx-info .iw-eyebrow::before { display: none; }
+  .sx-info .iw-head { padding: 0.875rem 1rem 0.75rem; }
+  .sx-info .iw-body { padding: 0.875rem 1rem 1rem; }
+  .sx-info .iw-card { border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
+  .sx-info .iw-stat-num { font-family: 'Space Grotesk','Inter',sans-serif; font-size: 1.375rem; font-weight: 700; }
+  .sx-info .iw-stat::before { display: none; }
+  .sx-info .iw-summary, .sx-info .iw-rows-frame, .sx-info .iw-picker-frame { border-radius: 10px; }
+  .sx-info .iw-label { font-family: 'Inter',sans-serif; letter-spacing: 0.06em; }
+  .sx-info .iw-row__title { font-family: 'Inter',sans-serif; font-size: 0.9375rem; font-weight: 600; }
+  .sx-info .iw-req-desc { font-family: 'Inter',sans-serif; font-size: 0.9375rem; font-weight: 600; }
+  .sx-info .iw-req-time { font-family: 'Inter',sans-serif; }
+  .sx-info .iw-req-meta { font-family: 'Inter',sans-serif; }
+  .sx-info .iw-pill { border-radius: 999px; font-family: 'Inter',sans-serif; letter-spacing: 0.06em; }
+  .sx-info .iw-status { border-radius: 999px; font-family: 'Inter',sans-serif; }
+  .sx-info .iw-btn { border-radius: 8px; font-weight: 600; }
+  .sx-info .iw-empty-h { font-family: 'Space Grotesk','Inter',sans-serif; font-style: normal; font-size: 1rem; font-weight: 700; }
+  .sx-info .iw-tabfilter { border-radius: 8px; }
+  .sx-info .iw-tabfilter select { font-family: 'Inter',sans-serif; }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -1124,7 +1213,7 @@
 
   <!-- ─── Auto-action panel ─────────────────── -->
   <section id="actionsSection" class="sx-actions">
-    <p class="sx-actions-h" id="actionsHeading">What you can do</p>
+    <p class="sx-actions-h" id="actionsHeading">Actions</p>
     <div id="actionsContainer"></div>
   </section>
 
@@ -1459,7 +1548,7 @@ async function renderActions() {
     wrap.appendChild(card);
     el('actionsHeading').textContent = '— this lot —';
   } else {
-    el('actionsHeading').textContent = cards === 1 ? 'What you can do' : 'What you can do · ' + cards + ' actions';
+    el('actionsHeading').textContent = cards === 1 ? 'Actions' : 'Actions · ' + cards;
   }
 }
 
@@ -1613,8 +1702,7 @@ function buildTakeCard() {
         </div>
       </div>
       <button class="sx-action-cta" data-action="take-confirm">
-        <span class="sx-action-cta-check">✓</span>
-        Yes, take all ${fmt(totalAvailable)} pieces
+        Take ${fmt(totalAvailable)} pieces
       </button>
     </div>
     <button class="sx-action-toggle" data-action="take-toggle">
@@ -1628,10 +1716,9 @@ function buildTakeCard() {
       ${hasRewash ? '<div class="sx-form-row"><input type="text" data-input="rewash-reason" placeholder="Reason for rewash (e.g. still wet, improper wash)" /></div>' : ''}
       <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reason for reject (e.g. fabric defect)" /></div>
 
-      <div class="sx-totals-grid cols-${totalCols}">
-        <div class="sx-mini-total is-take"><div class="l">Take</div><div class="v" data-display="take-total">0</div></div>
-        ${hasRewash ? '<div class="sx-mini-total is-rewash"><div class="l">Rewash</div><div class="v" data-display="rewash-total">0</div></div>' : ''}
-        <div class="sx-mini-total is-reject"><div class="l">Reject</div><div class="v" data-display="reject-total">0</div></div>
+      <div class="sx-grand">
+        <span class="gl">Grand Total</span>
+        <span class="gv">Taking <strong data-display="take-total">0</strong> pcs${hasRewash ? '<span class="gx" data-x="rewash" style="display:none;"> · <strong data-display="rewash-total">0</strong> rewash</span>' : ''}<span class="gx" data-x="reject" style="display:none;"> · <strong data-display="reject-total">0</strong> reject</span></span>
       </div>
       <button class="sx-form-submit" data-action="take-submit">Save</button>
     </div>
@@ -1784,6 +1871,8 @@ function recalcTakeTotal(card) {
   if (rjIn && rjIn.parentElement) rjIn.parentElement.style.display = totalReject > 0 ? '' : 'none';
   const rwIn = card.querySelector('[data-input="rewash-reason"]');
   if (rwIn && rwIn.parentElement) rwIn.parentElement.style.display = totalRewash > 0 ? '' : 'none';
+  const gxR = card.querySelector('.gx[data-x="reject"]'); if (gxR) gxR.style.display = totalReject > 0 ? '' : 'none';
+  const gxW = card.querySelector('.gx[data-x="rewash"]'); if (gxW) gxW.style.display = totalRewash > 0 ? '' : 'none';
 
   // Live hero CTA: defaults to "Yes, take all X"; morphs to "Submit X take · Y rewash · Z reject"
   // once any exception is set. Same button submits the right payload (see take-confirm handler).
@@ -1791,12 +1880,12 @@ function recalcTakeTotal(card) {
   if (cta) {
     const hasEx = totalRewash > 0 || totalReject > 0;
     if (!hasEx) {
-      cta.innerHTML = '<span class="sx-action-cta-check">✓</span>Yes, take all ' + fmt(totalTake) + ' pieces';
+      cta.textContent = 'Take ' + fmt(totalTake) + ' pieces';
     } else {
       const parts = ['<strong>' + fmt(totalTake) + '</strong> take'];
       if (totalRewash > 0) parts.push('<strong>' + fmt(totalRewash) + '</strong> rewash');
       if (totalReject > 0) parts.push('<strong>' + fmt(totalReject) + '</strong> reject');
-      cta.innerHTML = '<span class="sx-action-cta-check">✓</span>Submit ' + parts.join(' · ');
+      cta.innerHTML = 'Submit ' + parts.join(' · ');
     }
   }
 }
@@ -1877,8 +1966,7 @@ function buildDoneCard(approve) {
         </div>
       </div>
       <button class="sx-action-cta" data-action="done-confirm">
-        <span class="sx-action-cta-check">✓</span>
-        Yes, all ${fmt(approve.inline)} pieces are done
+        Mark ${fmt(approve.inline)} pieces done
       </button>
     </div>
     <button class="sx-action-toggle" data-action="done-toggle">
