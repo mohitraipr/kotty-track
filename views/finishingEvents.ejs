@@ -99,6 +99,27 @@
   .flx-nav a.active { color: #2563eb; }
   .flx-nav a .material-symbols-outlined { font-size: 24px; }
   .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400; vertical-align: middle; }
+  .flx-top .flx-actions { display: flex; align-items: center; gap: 12px; }
+  .flx-top .flx-home { color: #64748b; display: flex; }
+  .flx-top .flx-user { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .flx-top .flx-logout { display: inline-flex; align-items: center; gap: 6px; color: #dc2626;
+    text-decoration: none; font-size: 13px; font-weight: 600; padding: 6px 10px;
+    border: 1px solid #fecaca; border-radius: 8px; }
+  .flx-top .flx-logout .material-symbols-outlined { font-size: 18px; }
+  @media (max-width: 420px) { .flx-top .flx-user, .flx-top .flx-logout-t { display: none; } }
+
+  /* Stage rail — the lot's journey (cut → stitch → … → finish) */
+  .sx-rail { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 0; margin: 16px 0 4px; }
+  .sx-rail-step { display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 56px; position: relative; }
+  .sx-rail-step::before { content: ''; position: absolute; top: 14px; left: -50%; width: 100%; height: 2px; background: #e5e7eb; z-index: 0; }
+  .sx-rail-step:first-child::before { display: none; }
+  .sx-rail-step.done::before, .sx-rail-step.current::before { background: #16a34a; }
+  .sx-rail-node { width: 30px; height: 30px; border-radius: 999px; border: 2px solid #e5e7eb; background: #fff;
+    display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 15px; font-weight: 700; z-index: 1; }
+  .sx-rail-step.done .sx-rail-node { border-color: #16a34a; color: #16a34a; }
+  .sx-rail-step.current .sx-rail-node { background: #2563eb; border-color: #2563eb; color: #fff; box-shadow: 0 0 0 4px #eff6ff; }
+  .sx-rail-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 700; margin-top: 5px; text-align: center; }
+  .sx-rail-who { font-size: 10px; color: #0f172a; font-weight: 600; margin-top: 1px; text-align: center; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ─── Page header ──────────────────────────────────────── */
   .sx-head {
@@ -1004,7 +1025,11 @@
     <span class="material-symbols-outlined">done_all</span>
     <h1>Finishing</h1>
   </div>
-  <a class="u" href="/operator/hub" title="Home"><%= (user && user.username) ? user.username.charAt(0).toUpperCase() : 'U' %></a>
+  <div class="flx-actions">
+    <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
+    <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
+    <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+  </div>
 </header>
 
 <main class="sx sx-page">
@@ -1247,14 +1272,22 @@ function renderStageUsers(su) {
   su = su || [];
   if (!su.length) { ju.style.display = 'none'; return; }
   const esc = (v) => String(v == null ? '' : v).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-  ju.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 2px;';
-  ju.innerHTML = su.map((s) => {
-    const who = s.master ? esc(s.master) : '—';
-    const col = s.master ? '#0f172a' : '#94a3b8';
-    return '<span style="display:inline-flex;flex-direction:column;line-height:1.15;padding:3px 9px;border-radius:8px;background:#f1f5f9;">'
-      + '<span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.3px;color:#64748b;">' + esc(s.label) + '</span>'
-      + '<span style="font-size:.82rem;font-weight:600;color:' + col + ';">' + who + '</span></span>';
-  }).join('<span style="color:#cbd5e1;font-weight:700;">›</span>');
+  let lastDone = -1;
+  su.forEach((s, i) => { if (s.master) lastDone = i; });
+  ju.className = 'sx-rail';
+  ju.style.display = '';
+  ju.innerHTML = su.map((s, i) => {
+    const has = !!s.master;
+    let cls = 'sx-rail-step';
+    if (i === lastDone) cls += ' current';
+    else if (has) cls += ' done';
+    const node = (i === lastDone) ? '●' : (has ? '✓' : '');
+    return '<div class="' + cls + '">'
+      + '<div class="sx-rail-node">' + node + '</div>'
+      + '<div class="sx-rail-lbl">' + esc(s.label) + '</div>'
+      + (has ? '<div class="sx-rail-who" title="' + esc(s.master) + '">' + esc(s.master) + '</div>' : '')
+      + '</div>';
+  }).join('');
 }
 
 function renderState() {
