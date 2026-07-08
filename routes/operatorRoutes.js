@@ -858,6 +858,7 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
         r.total_pieces AS pieces_in_roll,
         r.weight_used,
         COALESCE(r.remaining_weight, 0) AS remaining_weight,
+        ROUND(COALESCE(r.weight_used, 0) + COALESCE(r.remaining_weight, 0), 2) AS total_weight,
         CASE
           WHEN r.weight_used > 0 THEN ROUND(r.total_pieces / r.weight_used, 2)
           ELSE 0
@@ -884,6 +885,7 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
       { header: "Pieces in Roll", key: "pieces_in_roll", width: 15 },
       { header: "Weight Used (kg)", key: "weight_used", width: 16 },
       { header: "Remaining Weight (kg)", key: "remaining_weight", width: 20 },
+      { header: "Total Weight (kg)", key: "total_weight", width: 17 },
       { header: "Consumption (pcs/kg)", key: "consumption", width: 18 }
     ];
 
