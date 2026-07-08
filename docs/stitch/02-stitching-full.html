@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Kotty Floor — Stitching Operator</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        'surface': '#f7f8fa',
+                        'surface-container-lowest': '#ffffff',
+                        'on-surface': '#0f172a',
+                        'on-surface-variant': '#64748b',
+                        'outline-variant': '#e5e7eb',
+                        'primary': '#2563eb',
+                        'on-primary': '#ffffff',
+                        'primary-container': '#eff6ff',
+                        'secondary': '#16a34a',
+                        'secondary-container': '#dcfce7',
+                        'tertiary': '#b45309',
+                        'tertiary-container': '#fef3c7',
+                        'error': '#dc2626',
+                        'error-container': '#fee2e2'
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk", "sans-serif"],
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #f7f8fa;
+        }
+        .font-headline { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .stage-rail-connector {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            z-index: 0;
+        }
+        /* Custom scroll behavior for small focus areas if needed, though prompt bans horizontal scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="text-on-surface antialiased pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-outline-variant">
+<div class="flex items-center justify-between px-4 h-16 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="precision_manufacturing">precision_manufacturing</span>
+<h1 class="font-headline font-bold text-primary text-lg uppercase tracking-wider">STITCHING</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-primary-container active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="search">search</span>
+</button>
+</div>
+<!-- Sticky Search Bar -->
+<div class="px-4 pb-4 bg-surface">
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="search">search</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-on-surface-variant/60 font-body" placeholder="Lot number or SKU" type="text"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="mt-36 px-4 space-y-4">
+<!-- Welcome / State Message (Subtle) -->
+<p class="text-[11px] font-label uppercase tracking-widest text-on-surface-variant px-1">Active Assignment</p>
+<!-- Lot Card -->
+<section class="bg-surface-container-lowest rounded-[12px] border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)] overflow-hidden">
+<!-- Card Header -->
+<div class="p-4 flex items-center justify-between">
+<h2 class="font-headline text-2xl font-bold tracking-tight">AK1423</h2>
+<span class="px-2.5 py-1 rounded-full bg-primary-container text-primary text-[10px] font-bold uppercase tracking-wider">DENIM</span>
+</div>
+<!-- Card Subheader -->
+<div class="px-4 pb-4">
+<p class="text-sm text-on-surface-variant font-body">
+                    KTTMENSJEANS381 <span class="mx-1 opacity-40">·</span> cut by <span class="font-medium text-on-surface">Ramesh</span>
+</p>
+</div>
+<!-- The Stage Rail -->
+<div class="px-4 py-6 bg-surface/30 border-t border-outline-variant/50 border-b border-outline-variant/50">
+<div class="grid grid-cols-3 gap-y-8 relative">
+<!-- Stage: Cut (Completed) -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-surface-container-lowest border-2 border-secondary text-secondary flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="check" data-weight="bold">check</span>
+</div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant">Cut</span>
+<span class="text-[9px] font-medium text-on-surface uppercase mt-0.5">RAMESH</span>
+<div class="stage-rail-connector bg-primary top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Stitch (Current) -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center mb-1.5 ring-4 ring-primary-container shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="precision_manufacturing">precision_manufacturing</span>
+</div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-primary font-bold">Stitch</span>
+<span class="text-[9px] font-medium text-primary uppercase mt-0.5">SURESH</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Assembly -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Assembly</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] hidden -z-10"></div>
+</div>
+<!-- Second Row (Wrap) -->
+<!-- Stage: Wash -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Wash</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Wash-in -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Wash-in</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Finish -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Finish</span>
+</div>
+</div>
+</div>
+<!-- Stat Row -->
+<div class="px-4 py-5 grid grid-cols-4 gap-2 border-b border-outline-variant/50">
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Approved</span>
+<span class="font-headline text-xl leading-none text-on-surface font-bold">1500</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Completed</span>
+<span class="font-headline text-xl leading-none text-secondary font-bold">1200</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Rejected</span>
+<span class="font-headline text-xl leading-none text-error font-bold">40</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Inline</span>
+<span class="font-headline text-xl leading-none text-tertiary font-bold">260</span>
+</div>
+</div>
+<!-- The Critical Work Panel -->
+<div class="p-4 border-b border-outline-variant/50 bg-surface-container-lowest">
+<h3 class="font-label text-sm font-semibold mb-4 text-on-surface">Take into stitching</h3>
+<div class="space-y-6">
+<!-- Size 30 -->
+<div class="pb-4 border-b border-outline-variant/30">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-headline font-bold text-lg">30</span>
+<span class="text-xs text-on-surface-variant bg-surface px-2 py-0.5 rounded-full border border-outline-variant">Avail 420</span>
+</div>
+<div class="flex items-center border border-outline-variant rounded-lg overflow-hidden h-12 shadow-sm">
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-r border-outline-variant text-xl active:bg-outline-variant">-</button>
+<input class="w-16 h-full text-center font-headline font-bold border-none p-0 focus:ring-0" type="text" value="420"/>
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-l border-outline-variant text-xl active:bg-outline-variant">+</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<button class="text-xs text-error font-medium flex items-center gap-1 hover:bg-error-container/50 px-2 py-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[14px]">warning</span> Reject / rewash
+                </button>
+<span class="text-xs font-headline font-semibold text-on-surface-variant">Total: 420</span>
+</div>
+</div>
+<!-- Size 32 (With Reject Open) -->
+<div class="pb-4 border-b border-outline-variant/30">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-headline font-bold text-lg">32</span>
+<span class="text-xs text-on-surface-variant bg-surface px-2 py-0.5 rounded-full border border-outline-variant">Avail 500</span>
+</div>
+<div class="flex items-center border border-outline-variant rounded-lg overflow-hidden h-12 shadow-sm">
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-r border-outline-variant text-xl active:bg-outline-variant">-</button>
+<input class="w-16 h-full text-center font-headline font-bold border-none p-0 focus:ring-0" type="text" value="480"/>
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-l border-outline-variant text-xl active:bg-outline-variant">+</button>
+</div>
+</div>
+<!-- Reject Open State -->
+<div class="bg-error-container/30 rounded-lg p-3 mt-3 border border-error/20">
+<div class="flex items-center justify-between mb-3">
+<span class="text-sm font-medium text-error flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">warning</span> Rejections
+                    </span>
+<div class="flex items-center border border-error/30 rounded-lg overflow-hidden h-10 bg-surface-container-lowest shadow-sm">
+<button class="w-10 h-full flex items-center justify-center bg-error-container/50 hover:bg-error-container border-r border-error/30 text-error text-lg active:bg-error/20">-</button>
+<input class="w-12 h-full text-center font-headline font-bold text-error border-none p-0 focus:ring-0 bg-transparent" type="text" value="20"/>
+<button class="w-10 h-full flex items-center justify-center bg-error-container/50 hover:bg-error-container border-l border-error/30 text-error text-lg active:bg-error/20">+</button>
+</div>
+</div>
+<input class="w-full text-sm p-2 bg-surface-container-lowest border border-error/30 rounded focus:ring-1 focus:ring-error focus:border-error outline-none placeholder:text-error/50" placeholder="Reason for rejection (optional)" type="text"/>
+</div>
+<div class="flex items-center justify-between mt-2">
+<button class="text-xs text-error font-medium flex items-center gap-1 bg-error-container px-2 py-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[14px]">close</span> Close reject
+                </button>
+<span class="text-xs font-headline font-semibold text-on-surface-variant">Total: 480</span>
+</div>
+</div>
+<!-- Size 34 -->
+<div class="pb-4 border-b border-outline-variant/30">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-headline font-bold text-lg">34</span>
+<span class="text-xs text-on-surface-variant bg-surface px-2 py-0.5 rounded-full border border-outline-variant">Avail 380</span>
+</div>
+<div class="flex items-center border border-outline-variant rounded-lg overflow-hidden h-12 shadow-sm">
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-r border-outline-variant text-xl active:bg-outline-variant">-</button>
+<input class="w-16 h-full text-center font-headline font-bold border-none p-0 focus:ring-0" type="text" value="380"/>
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-l border-outline-variant text-xl active:bg-outline-variant">+</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<button class="text-xs text-error font-medium flex items-center gap-1 hover:bg-error-container/50 px-2 py-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[14px]">warning</span> Reject / rewash
+                </button>
+<span class="text-xs font-headline font-semibold text-on-surface-variant">Total: 380</span>
+</div>
+</div>
+<!-- Size 36 -->
+<div class="pb-2">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-headline font-bold text-lg">36</span>
+<span class="text-xs text-on-surface-variant bg-surface px-2 py-0.5 rounded-full border border-outline-variant">Avail 220</span>
+</div>
+<div class="flex items-center border border-outline-variant rounded-lg overflow-hidden h-12 shadow-sm">
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-r border-outline-variant text-xl active:bg-outline-variant">-</button>
+<input class="w-16 h-full text-center font-headline font-bold border-none p-0 focus:ring-0" type="text" value="220"/>
+<button class="w-12 h-full flex items-center justify-center bg-surface hover:bg-surface-container-lowest border-l border-outline-variant text-xl active:bg-outline-variant">+</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<button class="text-xs text-error font-medium flex items-center gap-1 hover:bg-error-container/50 px-2 py-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[14px]">warning</span> Reject / rewash
+                </button>
+<span class="text-xs font-headline font-semibold text-on-surface-variant">Total: 220</span>
+</div>
+</div>
+</div>
+<!-- Grand Total & Remark -->
+<div class="mt-6 pt-4 border-t border-outline-variant/50">
+<div class="flex justify-between items-center mb-4">
+<span class="font-label font-medium text-on-surface">Grand Total</span>
+<span class="font-headline text-xl font-bold text-primary">Taking 1500 pcs</span>
+</div>
+<input class="w-full text-sm p-3 bg-surface border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none placeholder:text-on-surface-variant/60 font-body mb-6" placeholder="Add remarks (optional)" type="text"/>
+<!-- Actions -->
+<div class="space-y-3">
+<button class="w-full bg-primary text-on-primary font-bold py-3.5 rounded-lg shadow-sm hover:bg-primary/90 active:scale-[0.98] transition-all">Take into stitching</button>
+<button class="w-full bg-surface border border-outline-variant text-on-surface font-semibold py-3.5 rounded-lg hover:bg-surface-container-lowest active:scale-[0.98] transition-all">Mark complete</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Segmented Tabs -->
+<div class="flex bg-surface-container-lowest p-1 rounded-lg border border-outline-variant shadow-sm mt-6">
+<button class="flex-1 py-2 text-sm font-semibold rounded-md bg-surface border border-outline-variant/50 text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.05)]">My Work</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-on-surface-variant hover:text-on-surface">My Payments</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-on-surface-variant hover:text-on-surface">Material Indent</button>
+</div>
+<!-- History List -->
+<section class="mt-4 pb-8">
+<div class="flex items-center justify-between px-1 mb-4">
+<h3 class="font-headline font-bold text-lg">History</h3>
+<button class="flex items-center gap-1 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-full px-3 py-1 bg-surface-container-lowest">
+            Today <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</div>
+<div class="space-y-2">
+<!-- History Item 1 -->
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<div>
+<p class="font-headline font-bold text-sm">AK1423 <span class="font-body font-normal text-on-surface-variant text-xs ml-1">Stitching</span></p>
+<p class="text-xs text-on-surface-variant">Taken in · 10:45 AM</p>
+</div>
+</div>
+<span class="font-headline font-bold">1500 pcs</span>
+</div>
+<!-- History Item 2 -->
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<div>
+<p class="font-headline font-bold text-sm">AK1410 <span class="font-body font-normal text-on-surface-variant text-xs ml-1">Stitching</span></p>
+<p class="text-xs text-on-surface-variant">Completed · Yesterday</p>
+</div>
+</div>
+<span class="font-headline font-bold">800 pcs</span>
+</div>
+<!-- History Item 3 -->
+<div class="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-2 h-2 rounded-full bg-error"></div>
+<div>
+<p class="font-headline font-bold text-sm">AK1399 <span class="font-body font-normal text-on-surface-variant text-xs ml-1">Stitching</span></p>
+<p class="text-xs text-on-surface-variant">Rejected · Yesterday</p>
+</div>
+</div>
+<span class="font-headline font-bold">12 pcs</span>
+</div>
+</div>
+</section>
+</main>
+</body></html>

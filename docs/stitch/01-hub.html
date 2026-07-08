@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Kotty Floor | Operator Hub</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Space Grotesk & Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700;900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              'surface': '#f7f8fa',
+              'surface-container-lowest': '#ffffff',
+              'on-surface': '#0f172a',
+              'on-surface-variant': '#64748b',
+              'outline-variant': '#e5e7eb',
+              'primary': '#2563eb',
+              'on-primary': '#ffffff',
+              'primary-container': '#eff6ff',
+              'secondary': '#16a34a',
+              'secondary-container': '#dcfce7',
+              'tertiary': '#b45309',
+              'tertiary-container': '#fef3c7',
+              'error': '#dc2626',
+              'error-container': '#fee2e2',
+            },
+            borderRadius: {
+              "DEFAULT": "0.5rem",
+              "lg": "1rem",
+              "xl": "1.5rem",
+              "full": "9999px"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk", "sans-serif"],
+              "display": ["Space Grotesk", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "label": ["Inter", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f7f8fa;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .font-headline { font-family: 'Space Grotesk', sans-serif; }
+      .font-label { font-family: 'Inter', sans-serif; }
+      
+      /* Subtle lift animation for cards */
+      .action-card:active {
+        transform: scale(0.96);
+        transition: transform 0.1s ease-out;
+      }
+      
+      /* Smooth scroll for mobile */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-outline-variant flex items-center justify-between px-4 py-3 h-16">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="factory">factory</span>
+<h1 class="font-headline font-black text-xl tracking-tighter text-on-surface">KOTTY FLOOR</h1>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-medium">Shift Operator</p>
+<p class="text-sm font-semibold">Hi, Admin</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center border border-primary/10">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-20 px-4 max-w-lg mx-auto">
+<!-- Search Sticky (Visual Anchor) -->
+<div class="mb-6">
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant text-xl" data-icon="search">search</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3.5 bg-surface-container-lowest border border-outline-variant rounded-xl text-sm focus:ring-primary focus:border-primary placeholder:text-on-surface-variant/50 font-label" placeholder="Lot no, manual lot, or SKU" type="text"/>
+</div>
+</div>
+<!-- Compact Stats Strip -->
+<section class="grid grid-cols-3 gap-2 mb-8 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant shadow-sm">
+<div class="text-center border-r border-outline-variant/60">
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">In Prod</p>
+<p class="font-headline text-lg font-bold leading-none">4,820</p>
+<p class="text-[9px] text-on-surface-variant">PCS</p>
+</div>
+<div class="text-center border-r border-outline-variant/60">
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Today</p>
+<p class="font-headline text-lg font-bold leading-none text-primary">37</p>
+<p class="text-[9px] text-on-surface-variant">LOTS</p>
+</div>
+<div class="text-center">
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Overdue</p>
+<p class="font-headline text-lg font-bold leading-none text-error">5</p>
+<p class="text-[9px] text-on-surface-variant">CRITICAL</p>
+</div>
+</section>
+<!-- Action Grid (2-Column) -->
+<div class="grid grid-cols-2 gap-3">
+<!-- My Lots -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="list_alt">list_alt</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">My Lots</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">View your active assignments</p>
+</div>
+</button>
+<!-- Lot TAT -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary" data-icon="timer">timer</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Lot TAT</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Turnaround time tracking</p>
+</div>
+</button>
+<!-- Lot Journey -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="route">route</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Lot Journey</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Track lot progress</p>
+</div>
+</button>
+<!-- Lot Admin -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="settings_suggest">settings_suggest</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Lot Admin</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Administrative tasks</p>
+</div>
+</button>
+<!-- Edit Cutting Lots -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="content_cut">content_cut</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Edit Cutting</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Modify records</p>
+</div>
+</button>
+<!-- Rewash Excel -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="table_view">table_view</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Rewash</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">QC reports</p>
+</div>
+</button>
+<!-- Payments -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary" data-icon="payments">payments</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Payments</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Earnings &amp; history</p>
+</div>
+</button>
+<!-- Material Indent -->
+<button class="action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between h-36 transition-all hover:border-primary/30">
+<div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="inventory_2">inventory_2</span>
+</div>
+<div>
+<h3 class="font-bold text-on-surface text-[15px] leading-tight">Materials</h3>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-snug">Request supply</p>
+</div>
+</button>
+</div>
+<!-- Featured Visual Element (Bento-lite) -->
+<div class="mt-8 relative overflow-hidden rounded-2xl h-40 border border-outline-variant">
+<div class="absolute inset-0 z-0 overflow-hidden">
+<div class="w-full h-full bg-cover bg-center opacity-60" data-alt="A clean, high-resolution architectural interior of a modern textile garment factory floor. Soft natural morning light filters through large industrial windows, highlighting organized workstations and precision sewing machines. The color palette is composed of muted grays, whites, and subtle indigo accents. The atmosphere is calm, professional, and efficiently industrial." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD7XT_mAfoEil22fACzCR4JUxKFsDKI2fCge2cUNvAxDQFTXXuK_M2CLXnwWi6lkFkoXmRzWJeL0BVHhkESzW1_opBmjtVk-wd8j12i4KesmmpmJyrY0NniNCyBY5zEak2WzZCB8bMDSo5ig5-JyfqLrlPegHR1tihABD7rLFJjv2LAHviYfd6uEHUFrOEwQYKuPXHzrpcO5bq_l0uW-wFutXmddtQkUu_H0jWjZqoU_sDcda3Ma5rJU_1vUZzXo9yJq-7RIfCfMA')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent"></div>
+</div>
+<div class="relative z-10 p-6 flex flex-col justify-end h-full">
+<span class="text-[10px] uppercase font-bold tracking-[0.2em] text-primary mb-1">Production Goal</span>
+<h4 class="font-headline text-2xl font-black">94% EFFICIENCY</h4>
+<div class="w-full bg-outline-variant h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary h-full w-[94%]"></div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 h-16 bg-surface border-t border-outline-variant flex justify-around items-center px-4 pb-safe">
+<button class="flex flex-col items-center justify-center text-primary bg-primary-container rounded-xl px-4 py-1.5 transition-opacity active:opacity-80">
+<span class="material-symbols-outlined text-2xl" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label text-[10px] uppercase tracking-wider font-bold mt-0.5">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-opacity active:opacity-80">
+<span class="material-symbols-outlined text-2xl" data-icon="search">search</span>
+<span class="font-label text-[10px] uppercase tracking-wider font-medium mt-0.5">Search</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-opacity active:opacity-80">
+<span class="material-symbols-outlined text-2xl" data-icon="history">history</span>
+<span class="font-label text-[10px] uppercase tracking-wider font-medium mt-0.5">History</span>
+</button>
+</nav>
+<!-- Micro-interaction Script -->
+<script>
+        document.querySelectorAll('.action-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Subtle feedback handled by CSS active state
+                console.log('Action triggered:', card.querySelector('h3').innerText);
+            });
+        });
+    </script>
+</body></html>

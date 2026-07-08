@@ -1,119 +1,358 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Kotty Floor</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/public/css/floor.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
-</head>
-<body class="fl">
-  <div class="fl-top">
-    <div class="fl-top-inner wide">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+<%
+  var _username = (user && user.username) ? user.username : 'Operator';
+  var isMohit = (_username || '').toLowerCase() === 'mohitoperator';
+  var aa = (typeof advancedAnalytics !== 'undefined' && advancedAnalytics) ? advancedAnalytics : { top10SKUs: [], bottom10SKUs: [], totalCut: 0 };
+  var q  = (typeof query !== 'undefined' && query) ? query : {};
+  function num(n){ return Number(n || 0).toLocaleString('en-IN'); }
+%>
+<%- include('partials/floorHead', {
+  pageTitle: 'Kotty Floor | Operator Hub',
+  topTitle: 'KOTTY FLOOR', topIcon: 'factory',
+  topEyebrow: 'Shift Operator', topSub: 'Hi, ' + _username,
+  user: user
+}) %>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet"/>
+<link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet"/>
+<style>
+  /* legacy support scoped for the restored data panels (keeps them working on Tailwind) */
+  .d-none { display: none !important; }
+  .badge-kotty { display:inline-block; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; padding:2px 9px; border-radius:999px; }
+  .badge-kotty.badge-success { background:#dcfce7; color:#16a34a; }
+  .badge-kotty.badge-warning { background:#fef3c7; color:#b45309; }
+  .badge-kotty.badge-danger  { background:#fee2e2; color:#dc2626; }
+  .badge-kotty.badge-info    { background:#eff6ff; color:#2563eb; }
+  .tabulator { border:1px solid #e5e7eb; border-radius:12px; background:#fff; font-family:'Inter',sans-serif; font-size:13px; }
+  .tabulator .tabulator-header { background:#f7f8fa; border-bottom:1px solid #e5e7eb; }
+  .tabulator .tabulator-header .tabulator-col { background:#f7f8fa; }
+  .fhub-modal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:80px 16px 16px; background:rgba(15,23,42,.5); }
+  .fhub-modal.open { display:flex; }
+</style>
+
+<main class="pt-20 px-4 max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto">
+
+  <!-- Feature search (live-filters the tools below) -->
+  <div class="mb-5">
+    <div class="relative max-w-xl">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <span class="material-symbols-outlined text-on-surface-variant text-xl">search</span>
+      </div>
+      <input id="featureSearch" autocomplete="off" oninput="filterFeatures(this.value)"
+             class="block w-full pl-10 pr-3 py-3.5 bg-surface-container-lowest border border-outline-variant rounded-xl text-sm focus:ring-primary focus:border-primary placeholder:text-on-surface-variant/50 font-label"
+             placeholder="Search for a tool — “wash”, “rates”, “reverse”…" type="text"/>
+    </div>
+  </div>
+
+  <!-- KPI stats strip -->
+  <section class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-8 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant shadow-sm">
+    <div class="text-center sm:border-r border-outline-variant/60">
+      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Total Kits</p>
+      <p class="font-headline text-xl font-bold leading-none"><%= num(lotCount) %></p>
+    </div>
+    <div class="text-center sm:border-r border-outline-variant/60">
+      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Cut Pieces</p>
+      <p class="font-headline text-xl font-bold leading-none text-primary"><%= num(totalPiecesCut) %></p>
+    </div>
+    <div class="text-center sm:border-r border-outline-variant/60">
+      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Finished</p>
+      <p class="font-headline text-xl font-bold leading-none text-secondary"><%= num(totalFinished) %></p>
+    </div>
+    <div class="text-center">
+      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Users</p>
+      <p class="font-headline text-xl font-bold leading-none"><%= num(userCount) %></p>
+    </div>
+  </section>
+
+  <%
+    // [href, material-icon, title, subtitle, keywords, mohitOnly]
+    var groups = [
+      ['Production', 'primary', [
+        ['/operator/dashboard','dashboard','Dashboard','Classic overview','home overview classic',false],
+        ['/operator/day-activity','event_available','Day Activity','What moved today','today log movement',false],
+        ['/operator/lot-tat','timer','Lot TAT','Turnaround time','speed delay aging',false],
+        ['/operator/lot-admin','settings_suggest','Lot Admin','Flow · reverse · qty','denim hosiery correct reverse quantity',false],
+        ['/operator/rewash-download','table_view','Rewash Excel','Rewash report','rewash redo download',false],
+        ['/operator/editcuttinglots','content_cut','Edit Lots','Fix cutting records','cutting correct amend',false],
+        ['/operator/dashboard/download-all-lots','download','Export All','All lots','download everything',false],
+        ['/search-dashboard','search','Search','Find any lot / SKU','lookup find barcode',false],
+        ['/dashboard/rejected-lots','cancel','Rejected Lots','Rejects across stages','reject damaged',false],
+      ]],
+      ['Inventory & Stock', 'tertiary', [
+        ['/easyecom/stock-market','production_quantity_limits','Out-of-stock','EasyEcom stock','oos inventory easyecom',false],
+        ['/inventory-ops/logs','lan','Inventory Hooks','Webhook logs','webhook integration',false],
+      ]],
+      ['Washing', 'secondary', [
+        ['/assign-to-washing','water_drop','Assign Washing','Send lots to wash','laundry dispatch',false],
+        ['/operator/editwashingassignments','edit_note','Edit Wash','Adjust assignments','washing reassign',false],
+        ['/operator/correct-approval','published_with_changes','Fix Approval','Re-attribute a stage','approve wrong reassign',false],
+        ['/operator/dashboard/washing-summary/download','calendar_month','Wash Monthly','Monthly summary','washing month',false],
+      ]],
+      ['Customer Support & Media', 'gray', [
+        ['/mail-manager','mail','Mail Manager','Auto-reply','email reply',true],
+        ['/video-finder','smart_display','Video Finder','Packing video','video packing',false],
+        ['/vms','radio_button_checked','VMS Recorder','Record','video record',false],
+        ['/vms-operator','upload_file','AWB Uploads','Upload AWBs','awb courier',false],
+        ['/return-grn/dashboard','assignment_return','Returns','Return GRN','return grn inward',false],
+        ['/return-challan','receipt_long','Return Challans','Challans','challan document',false],
+        ['/admin/user-roles','admin_panel_settings','Manage User Roles','Roles & permissions','admin permissions',true],
+      ]],
+      ['Reports', 'primary', [
+        ['/operator/dashboard/pic-report','fact_check','PIC Report','In-production report','pieces wip',false],
+        ['/operator/dashboard/pic-size-report','table_chart','Size PIC Report','By size','size breakdown',false],
+        ['/operator/dashboard/employees/download','badge','Employee Excel','Staff export','workers export',false],
+        ['/operator/dashboard/lot-departments/download','account_tree','Lot Dept Counts','Per department','department counts',false],
+        ['/operator/dashboard/consumption/download','calculate','Consumption','Fabric consumption','fabric usage cad',false],
+        ['/operator/lot-completion','percent','Lot Completion','Close finished lots','finish close complete',false],
+      ]],
+      ['HR & Finance', 'tertiary', [
+        ['/operator/departments','account_balance_wallet','Salaries','Department salaries','pay wages',false],
+        ['/operator/supervisors','schedule','Attendance','Supervisor attendance','present absent',false],
+        ['/stitchingdashboard/payments/rates','currency_rupee','Stitch Rates','Stitching rates','pay rate price',false],
+        ['/operator/payments/rates','sell','Stage Rates','All stage rates','pay rate all',false],
+        ['/operator/payments/pending','payments','Payments','Pending payouts','pay earnings',false],
+        ['/operator/payments/debits','remove_circle','Debits','Deductions','debit deduction',false],
+      ]],
+      ['Management', 'gray', [
+        ['/operator/stitching-tat','hourglass_top','Stitching TAT','Stitching turnaround','tat time stitch',false],
+        ['/po-creator/operator/dashboard','inventory_2','PO Management','Purchase orders','po purchase',false],
+        ['/returns/dashboard','keyboard_return','Returns','Returns dashboard','return',false],
+        ['/operator/sku-categories','sell','SKU Categories','Manage categories','sku category',false],
+        ['#session-usage','query_stats','Account Usage','Session usage','usage sessions time',true],
+      ]],
+    ];
+    var chip = { primary:['bg-primary-container','text-primary'], tertiary:['bg-tertiary-container','text-tertiary'], secondary:['bg-secondary-container','text-secondary'], gray:['bg-gray-100','text-on-surface-variant'] };
+  %>
+
+  <% groups.forEach(function(g){ var c = chip[g[1]] || chip.primary; %>
+    <section class="fhub-group mb-6">
+      <h2 class="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mb-2.5"><%= g[0] %></h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <% g[2].forEach(function(t){ if (t[5] && !isMohit) return; var kw = (t[2]+' '+t[3]+' '+t[4]).toLowerCase(); %>
+          <a href="<%= t[0] %>" data-kw="<%= kw %>"
+             class="fhub-tile action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between min-h-[94px] transition-all hover:border-primary/30">
+            <div class="w-10 h-10 rounded-lg <%= c[0] %> flex items-center justify-center">
+              <span class="material-symbols-outlined <%= c[1] %>"><%= t[1] %></span>
+            </div>
+            <div class="mt-3">
+              <h3 class="font-bold text-on-surface text-[14px] leading-tight"><%= t[2] %></h3>
+              <p class="text-[11px] text-on-surface-variant mt-0.5 leading-snug"><%= t[3] %></p>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    </section>
+  <% }) %>
+
+  <div id="featureEmpty" class="hidden text-center text-on-surface-variant py-8 text-sm">
+    No tool matches “<span id="fq"></span>”. Try a shorter word.
+  </div>
+
+  <% if (isMohit) { %>
+  <!-- Account Usage (Mohit only) -->
+  <section id="session-usage" class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
+    <div class="flex items-end justify-between gap-3 flex-wrap mb-3">
+      <div>
+        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Overview</p>
+        <h2 class="font-headline text-lg font-bold">Account Usage</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="sessionRange" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface">
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+        <button id="refreshSessionUsage" type="button" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Refresh</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table id="sessionUsageTable" class="w-full text-sm text-left">
+        <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
+          <tr><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">User</th><th class="py-2 pr-3">Sessions</th><th class="py-2 pr-3">Time Used</th><th class="py-2">Last Active</th></tr>
+        </thead>
+        <tbody class="divide-y divide-outline-variant/60"></tbody>
+      </table>
+      <div id="sessionUsageEmpty" class="d-none text-on-surface-variant text-sm py-3 text-center">No account usage logged for the selected range.</div>
+    </div>
+    <p class="text-on-surface-variant text-xs mt-3">Time used counts activity from login until logout or the most recent page view.</p>
+  </section>
+  <% } %>
+
+  <!-- SKU Insights -->
+  <section class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
+    <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
+      <div>
+        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Analytics</p>
+        <h2 class="font-headline text-lg font-bold">SKU Insights</h2>
+      </div>
+      <form method="GET" action="/operator/hub" class="flex gap-2 flex-wrap items-center">
+        <input type="date" name="startDate" value="<%= q.startDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
+        <input type="date" name="endDate" value="<%= q.endDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
+        <button type="submit" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Apply</button>
+      </form>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <% [['Top 10 SKUs','arrow_upward','secondary',aa.top10SKUs||[],'badge-success'],['Bottom 10 SKUs','arrow_downward','tertiary',aa.bottom10SKUs||[],'badge-warning']].forEach(function(col){ %>
         <div>
-          <div class="fl-eyebrow">Kotty Floor</div>
-          <div class="fl-title">Hi, <%= (user && user.username) ? user.username : 'Operator' %></div>
+          <h3 class="flex items-center gap-1.5 text-sm font-bold mb-2"><span class="material-symbols-outlined text-<%= col[2] %> text-base"><%= col[1] %></span><%= col[0] %></h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
+                <tr><th class="py-2 pr-3">SKU</th><th class="py-2 pr-3">Pieces</th><th class="py-2">% Share</th></tr>
+              </thead>
+              <tbody class="divide-y divide-outline-variant/60">
+                <% col[3].forEach(function(item){ var pct = (aa.totalCut>0)?((item.total/aa.totalCut)*100).toFixed(2):'0.00'; %>
+                  <tr><td class="py-2 pr-3 font-semibold"><%= item.sku %></td><td class="py-2 pr-3 font-headline"><%= Number(item.total).toLocaleString() %></td><td class="py-2"><span class="badge-kotty <%= col[4] %>"><%= pct %>%</span></td></tr>
+                <% }) %>
+                <% if (!col[3].length) { %><tr><td colspan="3" class="py-4 text-center text-on-surface-variant text-xs">No data for this range.</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <a href="/logout" class="fl-pill info" style="text-decoration:none;color:var(--fl-muted);background:#f1f5f9;">Log out</a>
-      </div>
-      <input class="fl-search" id="featureSearch" autocomplete="off"
-             placeholder="Search for a tool — “wash”, “rates”, “reverse”…"
-             oninput="filterFeatures(this.value)" />
+      <% }) %>
     </div>
-  </div>
+  </section>
 
-  <div class="fl-wrap wide">
-    <%
-      // [href, icon, title, desc, extra search keywords]
-      const groups = [
-        ['Lots', [
-          ['/operator/lot-admin','sliders','Lot Admin','Flow · reverse · qty','denim hosiery correct fix change quantity mistake'],
-          ['/operator/lot-journey','signpost-split','Lot Journey','Track a lot end-to-end','trace timeline stage where'],
-          ['/operator/lot-tat','stopwatch','Lot TAT','Turnaround time','speed delay slow aging'],
-          ['/operator/editcuttinglots','scissors','Edit Lots','Fix cutting records','cutting correct amend'],
-          ['/operator/lot-completion','check2-circle','Lot Completion','Close finished lots','finish close done complete'],
-          ['/operator/day-activity','calendar3','Day Activity','What moved today','today log movement'],
-          ['/search-dashboard','search','Search Lots','Find any lot / SKU','lookup find sku barcode'],
-          ['/operator/dashboard','grid','Classic Dashboard','The old view','home overview legacy'],
-        ]],
-        ['Washing', [
-          ['/assign-to-washing','box-arrow-in-right','Assign Washing','Send lots to wash','laundry dispatch send'],
-          ['/operator/editwashingassignments','pencil-square','Edit Wash','Adjust assignments','washing change reassign'],
-          ['/operator/correct-approval','person-check','Fix Approval','Re-attribute a stage','approve wrong operator reassign'],
-          ['/operator/rewash-download','arrow-repeat','Rewash Excel','Rewash report','rewash redo report download'],
-          ['/operator/dashboard/washing-summary/download','file-earmark-spreadsheet','Wash Monthly','Monthly summary','washing month report'],
-        ]],
-        ['Reports & exports', [
-          ['/operator/dashboard/pic-report','clipboard-data','PIC Report','In-production report','pieces in production wip'],
-          ['/operator/dashboard/pic-size-report','clipboard2-data','Size PIC Report','By size','size breakdown wip'],
-          ['/operator/dashboard/consumption/download','hexagon','Consumption','Fabric consumption','fabric usage cad'],
-          ['/operator/dashboard/lot-departments/download','diagram-3','Lot Dept Counts','Per department','department counts'],
-          ['/operator/dashboard/employees/download','people','Employee Excel','Employee export','staff workers export'],
-          ['/operator/dashboard/download-all-lots','download','Export All','All lots','download everything'],
-        ]],
-        ['Pay & people', [
-          ['/operator/departments','cash-stack','Salaries','Department salaries','pay wages salary money'],
-          ['/operator/supervisors','person-badge','Attendance','Supervisor attendance','present absent supervisor'],
-          ['/stitchingdashboard/payments/rates','currency-rupee','Stitch Rates','Stitching rates','pay rate stitching price'],
-          ['/operator/payments/rates','tags','Stage Rates','All stage rates','pay rate price all stages'],
-        ]],
-        ['Other', [
-          ['/easyecom/stock-market','graph-down','Out-of-stock','EasyEcom stock','oos stock inventory easyecom'],
-          ['/inventory-ops/logs','hdd-network','Inventory Hooks','Webhook logs','webhook integration logs'],
-          ['/mail-manager','envelope','Mail Manager','Auto-reply','email mail reply'],
-          ['/video-finder','camera-video','Video Finder','Packing video','video packing find'],
-          ['/vms','record-circle','VMS Recorder','Record','video record'],
-          ['/vms-operator','upload','AWB Uploads','Upload AWBs','awb courier upload'],
-          ['/return-grn/dashboard','arrow-return-left','Returns','Return GRN','return grn inward'],
-          ['/return-challan','receipt','Return Challans','Challans','challan return document'],
-          ['/admin/user-roles','shield-lock','User Roles','Manage roles','admin permissions users manage'],
-        ]],
-      ];
-      function kw(t){ return (t[2] + ' ' + t[3] + ' ' + (t[4]||'')).toLowerCase(); }
-    %>
-    <% groups.forEach(function(g){ %>
-      <div class="fl-group">
-        <div class="fl-sec" style="margin-top:14px;"><%= g[0] %></div>
-        <div class="fl-tiles">
-          <% g[1].forEach(function(t){ %>
-            <a class="fl-tile" href="<%= t[0] %>" data-kw="<%= kw(t) %>">
-              <span class="ic"><i class="bi bi-<%= t[1] %>"></i></span>
-              <span class="t"><%= t[2] %></span>
-              <span class="d"><%= t[3] %></span>
-            </a>
-          <% }) %>
-        </div>
+  <!-- Pendency -->
+  <section class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
+    <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
+      <div>
+        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Work in progress</p>
+        <h2 class="font-headline text-lg font-bold">Pendency</h2>
       </div>
-    <% }) %>
-
-    <div id="featureEmpty" class="fl-empty" style="display:none;">
-      No tool matches “<span id="fq"></span>”. Try a shorter word.
+      <select id="deptFilter" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface">
+        <option value="all">All Departments</option>
+        <option value="stitching">Stitching</option>
+        <option value="assembly">Assembly</option>
+        <option value="washing">Washing</option>
+        <option value="washing_in">Washing In</option>
+        <option value="finishing">Finishing</option>
+      </select>
     </div>
-  </div>
+    <div id="pendencyTable"></div>
+  </section>
 
-  <div class="fl-nav">
-    <a class="active" href="/operator/hub"><span class="ic"><i class="bi bi-house"></i></span>Home</a>
-    <a href="/search-dashboard"><span class="ic"><i class="bi bi-search"></i></span>Lots</a>
-    <a href="/operator/lot-journey"><span class="ic"><i class="bi bi-signpost-split"></i></span>Journey</a>
-  </div>
+  <!-- Material Indent (self-contained partial) -->
+  <section class="mt-8">
+    <h2 class="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mb-2.5">Material Indent</h2>
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
+      <%- include('partials/indentWrapper', { user: user, stage: 'Operator' }) %>
+    </div>
+  </section>
+</main>
 
-  <script>
-    function filterFeatures(q) {
-      q = (q || '').trim().toLowerCase();
-      var any = false;
-      document.querySelectorAll('.fl-group').forEach(function (group) {
-        var visible = 0;
-        group.querySelectorAll('.fl-tile').forEach(function (tile) {
-          var show = !q || (tile.dataset.kw || '').indexOf(q) >= 0;
-          tile.style.display = show ? '' : 'none';
-          if (show) { visible++; any = true; }
-        });
-        group.style.display = visible ? '' : 'none';
+<!-- Lot Details modal (Tailwind overlay, no Bootstrap) -->
+<div id="lotModal" class="fhub-modal">
+  <div class="bg-surface-container-lowest w-full max-w-lg rounded-xl border border-outline-variant shadow-xl">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-outline-variant">
+      <h3 class="font-headline text-lg font-bold">Lot Details</h3>
+      <button type="button" onclick="closeLotModal()" class="material-symbols-outlined text-on-surface-variant">close</button>
+    </div>
+    <div id="lotModalBody" class="p-5 text-sm"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+<script>
+  // ---- Feature search filter over the action tiles ----
+  function filterFeatures(qv) {
+    qv = (qv || '').trim().toLowerCase();
+    var any = false;
+    document.querySelectorAll('.fhub-group').forEach(function (group) {
+      var visible = 0;
+      group.querySelectorAll('.fhub-tile').forEach(function (tile) {
+        var show = !qv || (tile.dataset.kw || '').indexOf(qv) >= 0;
+        tile.style.display = show ? '' : 'none';
+        if (show) { visible++; any = true; }
       });
-      document.getElementById('featureEmpty').style.display = any ? 'none' : '';
-      document.getElementById('fq').textContent = q;
+      group.style.display = visible ? '' : 'none';
+    });
+    document.getElementById('featureEmpty').classList.toggle('hidden', any);
+    document.getElementById('fq').textContent = qv;
+  }
+
+  // ---- Account usage (Mohit) ----
+  (function(){
+    var sessionRange = document.getElementById('sessionRange');
+    var tbody = document.querySelector('#sessionUsageTable tbody');
+    var empty = document.getElementById('sessionUsageEmpty');
+    var refreshBtn = document.getElementById('refreshSessionUsage');
+    if (!sessionRange || !tbody) return;
+    function fmtDur(s){ if(s==null) return '—'; s=Math.max(0,Math.round(s)); var h=Math.floor(s/3600),m=Math.floor((s%3600)/60); if(h===0&&m===0) return Math.max(1,Math.ceil(s/60))+'m'; if(h===0) return m+'m'; return h+'h '+String(m).padStart(2,'0')+'m'; }
+    function fmtDate(v){ return v? new Date(v).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : '—'; }
+    function fmtDT(v){ return v? new Date(v).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour12:true}) : '—'; }
+    function td(text){ var c=document.createElement('td'); c.className='py-2 pr-3'; c.textContent=text; return c; }
+    async function load(){
+      empty.classList.add('d-none'); tbody.innerHTML='<tr><td colspan="5" class="py-4 text-center text-on-surface-variant">Loading usage…</td></tr>';
+      try {
+        var r = await fetch('/operator/dashboard/api/session-usage?days=' + sessionRange.value);
+        var payload = await r.json();
+        var rows = Array.isArray(payload && payload.data) ? payload.data : [];
+        tbody.innerHTML='';
+        if (!rows.length) { empty.classList.remove('d-none'); return; }
+        rows.forEach(function(row){
+          var tr=document.createElement('tr');
+          tr.appendChild(td(fmtDate(row.loginDate)));
+          var u=document.createElement('td'); u.className='py-2 pr-3 font-semibold'; u.textContent=row.username; tr.appendChild(u);
+          tr.appendChild(td(row.sessionCount));
+          tr.appendChild(td(fmtDur(row.totalSeconds)));
+          tr.appendChild(td(fmtDT(row.lastActivityAt)));
+          tbody.appendChild(tr);
+        });
+      } catch(e){ tbody.innerHTML='<tr><td colspan="5" class="py-4 text-center text-error">Unable to load account usage right now.</td></tr>'; }
     }
-  </script>
-</body>
-</html>
+    load();
+    sessionRange.addEventListener('change', load);
+    if (refreshBtn) refreshBtn.addEventListener('click', load);
+  })();
+
+  // ---- Pendency Tabulator ----
+  (function(){
+    var el = document.getElementById('pendencyTable');
+    if (!el || typeof Tabulator === 'undefined') return;
+    var table = new Tabulator("#pendencyTable", {
+      layout: "fitColumns", pagination: "local", paginationSize: 50,
+      ajaxURL: "/operator/dashboard/api/pendency?dept=all",
+      placeholder: "No pendency data available",
+      columns: [
+        { title: "Lot No", field: "lot_no", width: 150, formatter: function(cell){
+            var lotNo = cell.getValue(); var a=document.createElement('a');
+            a.href='#'; a.style.cssText='color:#2563eb;font-weight:600;text-decoration:none;'; a.textContent=lotNo;
+            a.onclick=function(e){ e.preventDefault(); showLotDetails(lotNo); }; return a; } },
+        { title: "Manual Lot No", field: "manual_lot_number", width: 150, formatter: function(c){ return c.getValue() || '—'; } },
+        { title: "Username", field: "username", width: 150 },
+        { title: "Assigned", field: "assigned", width: 120 },
+        { title: "Completed", field: "completed", width: 120 },
+        { title: "Pending", field: "pending", width: 120, formatter: function(cell){
+            var val=cell.getValue(); var s=document.createElement('span'); s.className='badge-kotty';
+            s.classList.add(val>100?'badge-danger':(val>50?'badge-warning':'badge-success')); s.textContent=val; return s; } }
+      ]
+    });
+    var deptFilter = document.getElementById('deptFilter');
+    if (deptFilter) deptFilter.addEventListener('change', function(e){ table.setData('/operator/dashboard/api/pendency?dept=' + e.target.value); });
+  })();
+
+  // ---- Lot details modal (Tailwind overlay) ----
+  var lotModal = document.getElementById('lotModal');
+  function closeLotModal(){ lotModal.classList.remove('open'); }
+  window.closeLotModal = closeLotModal;
+  lotModal.addEventListener('click', function(e){ if (e.target === lotModal) closeLotModal(); });
+  function showLotDetails(lotNo){
+    var body = document.getElementById('lotModalBody');
+    body.innerHTML = '<div class="py-6 text-center text-on-surface-variant">Loading…</div>';
+    lotModal.classList.add('open');
+    fetch('/operator/dashboard/api/lot?lotNo=' + encodeURIComponent(lotNo))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.error){ body.innerHTML = '<div class="text-error">'+data.error+'</div>'; return; }
+        function row(k,v){ return '<div class="flex justify-between gap-4 py-1.5 border-b border-outline-variant/60"><span class="text-on-surface-variant">'+k+'</span><span class="font-semibold text-right">'+(v||'N/A')+'</span></div>'; }
+        body.innerHTML =
+          row('Lot No', data.lot_no) + row('SKU', data.sku) +
+          row('Total Pieces', data.total_pieces) + row('Type', data.lot_type) +
+          row('Status', '<span class="badge-kotty badge-info">'+(data.status||'N/A')+'</span>') +
+          row('Created', data.created_at ? new Date(data.created_at).toLocaleDateString() : 'N/A') +
+          row('Department', data.current_department);
+      })
+      .catch(function(){ body.innerHTML = '<div class="text-error">Error loading lot details</div>'; });
+  }
+  window.showLotDetails = showLotDetails;
+</script>
+<%- include('partials/floorNav', { navActive: 'home' }) %>

@@ -1,0 +1,97 @@
+<%
+  /* Shared Stitch shell — opens the document + renders the TopAppBar.
+     Design system lifted verbatim from docs/stitch/*.html (Kotty Floor — Operator).
+     Params (all optional):
+       pageTitle  — <title> text
+       topTitle   — app-bar wordmark/title (default "KOTTY FLOOR")
+       topIcon    — leading Material Symbol (default "factory")
+       back       — url; if set, shows a back arrow instead of topIcon
+       topTag     — small chip after the title (e.g. "Lot Admin")
+       topEyebrow / topSub — right-side stacked labels (e.g. "Shift Operator" / "Hi, Admin")
+       user       — session user (for the avatar initial)
+     Pages render their own <main>… then include partials/floorNav to close. */
+  var _title   = (typeof pageTitle !== 'undefined' && pageTitle) ? pageTitle : 'Kotty Floor';
+  var _topT    = (typeof topTitle  !== 'undefined' && topTitle)  ? topTitle  : 'KOTTY FLOOR';
+  var _topIcon = (typeof topIcon   !== 'undefined' && topIcon)   ? topIcon   : 'factory';
+  var _back    = (typeof back      !== 'undefined') ? back : '';
+  var _tag     = (typeof topTag    !== 'undefined') ? topTag : '';
+  var _eyebrow = (typeof topEyebrow!== 'undefined') ? topEyebrow : '';
+  var _sub     = (typeof topSub    !== 'undefined') ? topSub : '';
+  var _initial = (typeof user !== 'undefined' && user && user.username) ? user.username.charAt(0).toUpperCase() : 'U';
+%><!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title><%= _title %></title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          'surface': '#f7f8fa',
+          'surface-container-lowest': '#ffffff',
+          'on-surface': '#0f172a',
+          'on-surface-variant': '#64748b',
+          'outline-variant': '#e5e7eb',
+          'primary': '#2563eb',
+          'on-primary': '#ffffff',
+          'primary-container': '#eff6ff',
+          'secondary': '#16a34a',
+          'secondary-container': '#dcfce7',
+          'tertiary': '#b45309',
+          'tertiary-container': '#fef3c7',
+          'error': '#dc2626',
+          'error-container': '#fee2e2',
+        },
+        borderRadius: { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" },
+        fontFamily: {
+          "headline": ["Space Grotesk", "sans-serif"],
+          "display": ["Space Grotesk", "sans-serif"],
+          "body": ["Inter", "sans-serif"],
+          "label": ["Inter", "sans-serif"]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background-color: #f7f8fa; -webkit-tap-highlight-color: transparent; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .font-headline { font-family: 'Space Grotesk', sans-serif; }
+  .font-label { font-family: 'Inter', sans-serif; }
+  .action-card:active { transform: scale(0.96); transition: transform 0.1s ease-out; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+</style>
+</head>
+<body class="bg-surface text-on-surface antialiased pb-24">
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-outline-variant flex items-center justify-between px-4 py-3 h-16">
+  <div class="flex items-center gap-2 min-w-0">
+    <% if (_back) { %>
+      <a href="<%= _back %>" class="material-symbols-outlined text-on-surface-variant -ml-1" data-icon="arrow_back">arrow_back</a>
+    <% } else { %>
+      <span class="material-symbols-outlined text-primary" data-icon="<%= _topIcon %>"><%= _topIcon %></span>
+    <% } %>
+    <h1 class="font-headline font-black text-xl tracking-tighter text-on-surface truncate"><%= _topT %></h1>
+    <% if (_tag) { %>
+      <span class="ml-1 shrink-0 text-[10px] uppercase font-bold tracking-wider bg-primary-container text-primary px-2 py-0.5 rounded-full"><%= _tag %></span>
+    <% } %>
+  </div>
+  <div class="flex items-center gap-3 shrink-0">
+    <% if (_eyebrow || _sub) { %>
+      <div class="text-right hidden sm:block">
+        <% if (_eyebrow) { %><p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-medium"><%= _eyebrow %></p><% } %>
+        <% if (_sub) { %><p class="text-sm font-semibold"><%= _sub %></p><% } %>
+      </div>
+    <% } %>
+    <div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center border border-primary/10 font-headline font-bold text-primary"><%= _initial %></div>
+  </div>
+</header>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Kotty Floor — Stitching Operator</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        'surface': '#f7f8fa',
+                        'surface-container-lowest': '#ffffff',
+                        'on-surface': '#0f172a',
+                        'on-surface-variant': '#64748b',
+                        'outline-variant': '#e5e7eb',
+                        'primary': '#2563eb',
+                        'on-primary': '#ffffff',
+                        'primary-container': '#eff6ff',
+                        'secondary': '#16a34a',
+                        'secondary-container': '#dcfce7',
+                        'tertiary': '#b45309',
+                        'tertiary-container': '#fef3c7',
+                        'error': '#dc2626',
+                        'error-container': '#fee2e2'
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk", "sans-serif"],
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #f7f8fa;
+        }
+        .font-headline { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .stage-rail-connector {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            z-index: 0;
+        }
+        /* Custom scroll behavior for small focus areas if needed, though prompt bans horizontal scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="text-on-surface antialiased pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-outline-variant">
+<div class="flex items-center justify-between px-4 h-16 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="precision_manufacturing">precision_manufacturing</span>
+<h1 class="font-headline font-bold text-primary text-lg uppercase tracking-wider">STITCHING</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-primary-container active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="search">search</span>
+</button>
+</div>
+<!-- Sticky Search Bar -->
+<div class="px-4 pb-4 bg-surface">
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="search">search</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all placeholder:text-on-surface-variant/60 font-body" placeholder="Lot no, manual lot, or SKU" type="text"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="mt-36 px-4 space-y-4">
+<!-- Welcome / State Message (Subtle) -->
+<p class="text-[11px] font-label uppercase tracking-widest text-on-surface-variant px-1">Active Assignment</p>
+<!-- Lot Card -->
+<section class="bg-surface-container-lowest rounded-[12px] border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)] overflow-hidden">
+<!-- Card Header -->
+<div class="p-4 flex items-center justify-between">
+<h2 class="font-headline text-2xl font-bold tracking-tight">AK1423</h2>
+<span class="px-2.5 py-1 rounded-full bg-primary-container text-primary text-[10px] font-bold uppercase tracking-wider">DENIM</span>
+</div>
+<!-- Card Subheader -->
+<div class="px-4 pb-4">
+<p class="text-sm text-on-surface-variant font-body">
+                    KTTMENSJEANS381 <span class="mx-1 opacity-40">·</span> 1,500 pcs <span class="mx-1 opacity-40">·</span> cut by <span class="font-medium text-on-surface">Ramesh</span>
+</p>
+</div>
+<!-- The Stage Rail -->
+<div class="px-4 py-6 bg-surface/30 border-t border-outline-variant/50 border-b border-outline-variant/50">
+<div class="grid grid-cols-3 gap-y-8 relative">
+<!-- Stage: Cut (Completed) -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-surface-container-lowest border-2 border-secondary text-secondary flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="check" data-weight="bold">check</span>
+</div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant">Cut</span>
+<span class="text-[9px] font-medium text-on-surface uppercase mt-0.5">RAMESH</span>
+<div class="stage-rail-connector bg-primary top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Stitch (Current) -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center mb-1.5 ring-4 ring-primary-container shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="precision_manufacturing">precision_manufacturing</span>
+</div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-primary font-bold">Stitch</span>
+<span class="text-[9px] font-medium text-primary uppercase mt-0.5">SURESH</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Assembly -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Assembly</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] hidden -z-10"></div>
+</div>
+<!-- Second Row (Wrap) -->
+<!-- Stage: Wash -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Wash</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Wash-in -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Wash-in</span>
+<div class="stage-rail-connector bg-outline-variant top-[13px] -z-10"></div>
+</div>
+<!-- Stage: Finish -->
+<div class="flex flex-col items-center relative z-10">
+<div class="w-7 h-7 rounded-full bg-outline-variant flex items-center justify-center mb-2"></div>
+<span class="text-[11px] font-label uppercase tracking-[0.06em] text-on-surface-variant/50">Finish</span>
+</div>
+</div>
+</div>
+<!-- Size Piece Chips -->
+<div class="p-4 pb-2 border-b border-outline-variant/50">
+<div class="flex flex-wrap gap-3">
+<div class="flex flex-col items-center bg-surface px-4 py-2.5 rounded-lg border border-outline-variant min-w-[64px]">
+<span class="font-headline text-xl leading-none font-bold text-on-surface">420</span>
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1.5 font-label">30</span>
+</div>
+<div class="flex flex-col items-center bg-surface px-4 py-2.5 rounded-lg border border-outline-variant min-w-[64px]">
+<span class="font-headline text-xl leading-none font-bold text-on-surface">510</span>
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1.5 font-label">32</span>
+</div>
+<div class="flex flex-col items-center bg-surface px-4 py-2.5 rounded-lg border border-outline-variant min-w-[64px]">
+<span class="font-headline text-xl leading-none font-bold text-on-surface">340</span>
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1.5 font-label">34</span>
+</div>
+<div class="flex flex-col items-center bg-surface px-4 py-2.5 rounded-lg border border-outline-variant min-w-[64px]">
+<span class="font-headline text-xl leading-none font-bold text-on-surface">230</span>
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant mt-1.5 font-label">36</span>
+</div>
+</div>
+</div>
+<!-- Stat Row -->
+<div class="px-4 py-5 grid grid-cols-4 gap-2 border-b border-outline-variant/50">
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Approved</span>
+<span class="font-headline text-xl leading-none text-on-surface font-bold">1500</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Completed</span>
+<span class="font-headline text-xl leading-none text-secondary font-bold">1200</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Rejected</span>
+<span class="font-headline text-xl leading-none text-error font-bold">40</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[9px] font-label uppercase tracking-wider text-on-surface-variant mb-1">Inline</span>
+<span class="font-headline text-xl leading-none text-tertiary font-bold">260</span>
+</div>
+</div>
+<!-- Footer Action -->
+<div class="p-4">
+<button class="w-full py-3.5 bg-primary text-on-primary rounded-lg font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="check_circle">check_circle</span>
+                    Approve pieces
+                </button>
+</div>
+</section>
+<!-- Empty State Invitation (As per Guidelines) -->
+<div class="py-12 flex flex-col items-center justify-center text-center">
+<span class="material-symbols-outlined text-on-surface-variant/20 text-4xl mb-2" data-icon="barcode_scanner">barcode_scanner</span>
+<p class="text-on-surface-variant/60 font-body text-sm">Search a lot to begin</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface border-t border-outline-variant">
+<div class="flex justify-around items-center h-20 px-2 pb-safe w-full">
+<!-- Lots Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-lowest px-4 py-1 rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="factory">factory</span>
+<span class="font-label text-[11px] uppercase tracking-[0.04em] mt-1">Lots</span>
+</a>
+<!-- Tasks Tab (Active) -->
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container rounded-xl px-4 py-1 active:opacity-80 transition-opacity" href="#">
+<span class="material-symbols-outlined" data-icon="assignment_turned_in" data-weight="fill" style="font-variation-settings: 'FILL' 1;">assignment_turned_in</span>
+<span class="font-label text-[11px] uppercase tracking-[0.04em] mt-1">Tasks</span>
+</a>
+<!-- History Tab -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-lowest px-4 py-1 rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label text-[11px] uppercase tracking-[0.04em] mt-1">History</span>
+</a>
+</div>
+</nav>
+<!-- Interaction Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ripple effect or micro-interactions for the primary button
+            const primaryBtn = document.querySelector('button.bg-primary');
+            if(primaryBtn) {
+                primaryBtn.addEventListener('click', function() {
+                    this.classList.add('ring-4', 'ring-primary-container');
+                    setTimeout(() => {
+                        this.classList.remove('ring-4', 'ring-primary-container');
+                    }, 200);
+                });
+            }
+
+            // Simulate search focus
+            const searchInput = document.querySelector('input[type="text"]');
+            if(searchInput) {
+                searchInput.addEventListener('focus', () => {
+                    document.querySelector('header').classList.add('shadow-md');
+                });
+                searchInput.addEventListener('blur', () => {
+                    document.querySelector('header').classList.remove('shadow-md');
+                });
+            }
+        });
+    </script>
+</body></html>

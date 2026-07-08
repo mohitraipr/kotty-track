@@ -316,10 +316,37 @@ router.get(
 /**************************************************
  * 3) /operator/dashboard – must define lotCount etc.
  **************************************************/
-// Redesigned mobile-first operator hub ("Kotty Floor"). Standalone page on the new
-// floor.css token system — opt-in alongside the classic /dashboard while it's reviewed.
-router.get("/hub", isAuthenticated, isOperator, (req, res) => {
-  res.render("floorHub", { user: req.session.user });
+// Redesigned mobile-first operator hub ("Kotty Floor") on the actual Stitch design.
+// Full rebuild of the operator dashboard — same data/panels, opt-in alongside /dashboard.
+router.get("/hub", isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const { search, startDate, endDate,
+      sortField = "lot_no", sortOrder = "asc", category = "all" } = req.query;
+
+    const [[totals]] = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM cutting_lots)                      AS lotCount,
+        (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots) AS totalPieces,
+        (SELECT COALESCE(SUM(pieces),0) FROM finishing_events
+           WHERE event_type='complete')                         AS totalFinished,
+        (SELECT COUNT(*) FROM users)                             AS userCount
+    `);
+
+    const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
+
+    return res.render("floorHub", {
+      user: req.session.user,
+      lotCount: totals.lotCount,
+      totalPiecesCut: parseFloat(totals.totalPieces) || 0,
+      totalFinished: totals.totalFinished,
+      userCount: totals.userCount,
+      advancedAnalytics,
+      query: { search, startDate, endDate, sortField, sortOrder, category },
+    });
+  } catch (err) {
+    console.error("Error loading operator hub:", err);
+    return res.status(500).send("Server error");
+  }
 });
 
 router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
