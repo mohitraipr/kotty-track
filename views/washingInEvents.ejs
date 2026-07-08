@@ -65,16 +65,23 @@
   .sx-page {
     max-width: 960px;
     margin: 0 auto;
-    padding: calc(64px + 1.25rem) 1rem 6rem;
+    padding: calc(112px + 1rem) 1rem 6rem;
     min-height: 100vh;
   }
 
   /* ── Stitch shell chrome (matches the Kotty Floor hub) ───────────── */
   .flx-top {
-    position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 50;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
     background: #f7f8fa; border-bottom: 1px solid #e5e7eb;
-    display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
   }
+  .flx-top-main { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .flx-top-search { display: flex; align-items: center; gap: 8px; padding: 0 16px 12px; }
+  .flx-top-search > .material-symbols-outlined { color: #64748b; font-size: 20px; }
+  .flx-top-search input { flex: 1; height: 44px; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 0 12px; font-size: 15px; background: #fff; color: #0f172a; outline: none; }
+  .flx-top-search input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px #eff6ff; }
+  .flx-search-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #2563eb;
+    color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; }
   .flx-top .brand { display: flex; align-items: center; gap: 10px; }
   .flx-top .brand .material-symbols-outlined { color: #2563eb; }
   .flx-top .brand h1 {
@@ -1014,6 +1021,49 @@
       to { transform: translateY(0); }
     }
   }
+  /* ═══ Stitch fidelity — take rows, segmented tabs, history/payments, indent ═══ */
+  .sx-info-tabs { display: flex; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 4px; gap: 4px; box-shadow: 0 1px 2px rgba(15,23,42,.06); }
+  .sx-info-tab { flex: 1; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 9px 4px; font-size: .875rem; font-weight: 500; color: #64748b; cursor: pointer; }
+  .sx-info-tab.active { background: #f7f8fa; border-color: #e5e7eb; color: #0f172a; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+
+  .sx-take-row { padding: 14px 0; border-bottom: 1px solid rgba(229,231,235,.6); }
+  .sx-take-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+  .sx-take-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sx-take-size { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .sx-take-size .sz { font-family: 'Space Grotesk','Inter',sans-serif; font-weight: 700; font-size: 1.125rem; color: var(--c-text); }
+  .sx-take-size .avail { font-size: .72rem; color: var(--c-text-2); background: var(--c-bg); border: 1px solid var(--c-border); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .sx-stepper.sx-take-main { height: 48px; border-radius: 10px; box-shadow: var(--shadow-sm); }
+  .sx-stepper.sx-take-main input { width: 76px; height: 100%; font-size: 1.05rem; }
+  .sx-take-exc { background: rgba(254,226,226,.32); border: 1px solid rgba(220,38,38,.2); border-radius: 10px; padding: 12px; margin-top: 12px; }
+  .sx-take-exc-head .t { font-size: .84rem; font-weight: 600; color: var(--c-danger); }
+  .sx-take-exc-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+  .sx-take-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .sx-exc-toggle { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--c-danger); font-size: .75rem; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+  .sx-exc-toggle:active, .sx-exc-toggle.open { background: var(--c-danger-soft); }
+  .sx-row-total { font-size: .8rem; font-weight: 500; color: var(--c-text-2); }
+  .sx-row-total strong { font-family: 'Space Grotesk','Inter',sans-serif; color: var(--c-text); }
+  .sx-take-row.has-exc .sx-row-total strong { color: var(--c-primary); }
+
+  .sx-event { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 12px; box-shadow: var(--shadow-sm); margin-bottom: 8px; }
+  .sx-event-pieces { font-family: 'Space Grotesk','Inter',sans-serif; font-weight: 700; }
+  .sx-pay-row { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; padding: 12px; box-shadow: var(--shadow-sm); margin-bottom: 8px; }
+  .sx-pay-amt { font-family: 'Space Grotesk','Inter',sans-serif; font-weight: 700; }
+  .sx-pay-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .sx-pay-summary-card { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 12px; padding: 12px; box-shadow: var(--shadow-sm); }
+  .sx-search-row-result { background: var(--c-card); border: 1px solid var(--c-border); border-radius: 10px; box-shadow: var(--shadow-sm); }
+
+  /* Material Indent retokened to the Stitch system (was terracotta/serif) */
+  .sx-info .iw-wrap { --ink: #0f172a; --ink-2: #334155; --dim: #64748b; --faint: #94a3b8; --rule: #e5e7eb; --rule-hard: #e5e7eb;
+    --bg: #f7f8fa; --card: #ffffff; --tint: #eff6ff; --accent: #2563eb; --accent-deep: #1d4ed8; --accent-soft: #bfdbfe;
+    --ok: #16a34a; --ok-soft: #dcfce7; --warn: #b45309; --warn-soft: #fef3c7;
+    --serif: 'Space Grotesk', 'Inter', sans-serif; --mono: 'Inter', sans-serif;
+    background: transparent; padding: 0; }
+  .sx-info .iw-card { border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .sx-info .iw-input, .sx-info .iw-select, .sx-info .iw-btn { border-radius: 8px; }
+  .sx-info .iw-btn-primary { background: #2563eb; border-color: #2563eb; }
+  .sx-info .iw-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+  .sx-info .iw-pill { border-radius: 999px; }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -1021,34 +1071,29 @@
 </style>
 
 <header class="flx-top">
-  <div class="brand">
-    <span class="material-symbols-outlined">water_drop</span>
-    <h1>Washing In</h1>
+  <div class="flx-top-main">
+    <div class="brand">
+      <span class="material-symbols-outlined">water_drop</span>
+      <h1>Washing In</h1>
+    </div>
+    <div class="flx-actions">
+      <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
+      <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
+      <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+    </div>
   </div>
-  <div class="flx-actions">
-    <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
-    <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
-    <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+  <div class="flx-top-search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="text" id="searchInput" placeholder="Lot number or SKU" autocomplete="off" autofocus />
+    <button id="searchBtn" class="flx-search-btn">Search</button>
   </div>
 </header>
 
 <main class="sx sx-page">
 
   <!-- ─── Header ──────────────────────────── -->
-  <header class="sx-head">
-    <h1>Washing In</h1>
-    <span class="pill" id="pageUserPill">—</span>
-  </header>
-
-  <!-- ─── Search ──────────────────────────── -->
-  <section class="sx-search">
-    <div class="sx-search-row">
-      <span class="sx-search-icon">⌕</span>
-      <input type="text" id="searchInput" placeholder="Type lot number or SKU and press Enter" autofocus />
-      <button id="searchBtn" class="sx-btn sx-btn-primary">Search</button>
-    </div>
-    <div id="searchResults" class="sx-search-results"></div>
-  </section>
+  <!-- Search results (search input lives in the top bar) -->
+  <div id="searchResults" class="sx-search-results"></div>
 
   <!-- ─── Lot context ──────────────────────── -->
   <section id="lotCard" class="sx-lot">
@@ -1567,7 +1612,7 @@ function buildTakeCard() {
       <span class="arrow">⌄</span> Or split each size: take${hasRewash ? ' / rewash' : ''} / reject
     </button>
     <div class="sx-action-form">
-      <p class="sx-form-helper">Pre-filled with the full available qty under <strong>Take</strong>. Move pieces into <strong style="color:${hasRewash ? 'var(--c-warning)' : 'var(--c-danger)'};">${hasRewash ? 'Rewash' : 'Reject'}</strong>${hasRewash ? ' or <strong style="color:var(--c-danger);">Reject</strong>' : ''} for sizes that need attention.</p>
+      <p class="sx-form-helper">Every size is pre-filled to take the full available quantity. Tap <strong style="color:var(--c-danger);">Reject${hasRewash ? ' / rewash' : ''}</strong> under a size if some pieces need attention — Take refills automatically.</p>
       <div class="sx-input-list" data-list="take-sizes"></div>
 
       <div class="sx-form-row"><input type="text" data-input="take-remark" placeholder="Note for taken pieces (optional)" /></div>
@@ -1588,42 +1633,46 @@ function buildTakeCard() {
     const avail = s.available || 0;
     if (avail === 0) return;
     const row = document.createElement('div');
-    row.className = 'sx-input-card';
+    row.className = 'sx-take-row';
     row.innerHTML = `
-      <div class="sx-input-card-head">
-        <span class="label">${escapeText(s.size_label)}</span>
-        <span class="avail"><span class="n">${fmt(avail)}</span> available</span>
-      </div>
-      <div class="sx-bucket-row">
-        <div class="sx-bucket">
-          <span class="sx-bucket-tag take">Take</span>
-          <div class="sx-stepper is-take-readonly">
-            <input type="number" min="0" max="${avail}" value="${avail}" readonly
-                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="take" />
-          </div>
+      <div class="sx-take-head">
+        <div class="sx-take-size">
+          <span class="sz">${escapeText(s.size_label)}</span>
+          <span class="avail">Avail ${fmt(avail)}</span>
+        </div>
+        <div class="sx-stepper is-take-readonly sx-take-main">
+          <input type="number" min="0" max="${avail}" value="${avail}" readonly
+                 data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="take" />
         </div>
       </div>
-      <div class="sx-bucket-row">
-        ${hasRewash ? `
-        <div class="sx-bucket">
-          <span class="sx-bucket-tag rewash">Rewash</span>
-          <div class="sx-stepper is-mini is-rewash">
-            <button type="button" data-step="-1">−</button>
-            <input type="number" min="0" max="${avail}" value="0"
-                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="rewash" />
-            <button type="button" data-step="1">+</button>
+      <div class="sx-take-exc" style="display:none;">
+        <div class="sx-take-exc-head"><span class="t">${hasRewash ? 'Rewash / reject' : 'Rejections'}</span></div>
+        <div class="sx-take-exc-row">
+          ${hasRewash ? `
+          <div class="sx-bucket">
+            <span class="sx-bucket-tag rewash">Rewash</span>
+            <div class="sx-stepper is-mini is-rewash">
+              <button type="button" data-step="-1">−</button>
+              <input type="number" min="0" max="${avail}" value="0"
+                     data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="rewash" />
+              <button type="button" data-step="1">+</button>
+            </div>
+          </div>
+          ` : ''}
+          <div class="sx-bucket">
+            <span class="sx-bucket-tag reject">Reject</span>
+            <div class="sx-stepper is-mini is-reject">
+              <button type="button" data-step="-1">−</button>
+              <input type="number" min="0" max="${avail}" value="0"
+                     data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="reject" />
+              <button type="button" data-step="1">+</button>
+            </div>
           </div>
         </div>
-        ` : ''}
-        <div class="sx-bucket">
-          <span class="sx-bucket-tag reject">Reject</span>
-          <div class="sx-stepper is-mini is-reject">
-            <button type="button" data-step="-1">−</button>
-            <input type="number" min="0" max="${avail}" value="0"
-                   data-size="${escapeText(s.size_label)}" data-avail="${avail}" data-kind="reject" />
-            <button type="button" data-step="1">+</button>
-          </div>
-        </div>
+      </div>
+      <div class="sx-take-foot">
+        <button type="button" class="sx-exc-toggle" data-exc-toggle>⚠ Reject${hasRewash ? ' / rewash' : ''}</button>
+        <span class="sx-row-total">Take <strong data-row-total>${fmt(avail)}</strong></span>
       </div>
     `;
     // Re-bind every stepper in this row independently so each input
@@ -1642,6 +1691,14 @@ function buildTakeCard() {
         });
       });
       input.addEventListener('input', () => recalcTakeTotal(card));
+    });
+    // Per-row expandable for the exception buckets (Stitch pattern).
+    const excPanel = row.querySelector('.sx-take-exc');
+    const excBtn = row.querySelector('[data-exc-toggle]');
+    if (excPanel && excBtn) excBtn.addEventListener('click', () => {
+      const open = excPanel.style.display !== 'none';
+      excPanel.style.display = open ? 'none' : '';
+      excBtn.classList.toggle('open', !open);
     });
     list.appendChild(row);
   });
@@ -1700,10 +1757,24 @@ function recalcTakeTotal(card) {
     totalTake   += take;
     totalRewash += rewash;
     totalReject += reject;
+    // Per-row live total + highlight when the row has exceptions.
+    const anyInput = g.take || g.rewash || g.reject;
+    const rowEl = anyInput ? anyInput.closest('.sx-take-row') : null;
+    if (rowEl) {
+      const rt = rowEl.querySelector('[data-row-total]');
+      if (rt) rt.textContent = fmt(take);
+      rowEl.classList.toggle('has-exc', (rewash + reject) > 0);
+    }
   }
   const t1 = card.querySelector('[data-display="take-total"]');   if (t1) t1.textContent = fmt(totalTake);
   const t2 = card.querySelector('[data-display="rewash-total"]'); if (t2) t2.textContent = fmt(totalRewash);
   const t3 = card.querySelector('[data-display="reject-total"]'); if (t3) t3.textContent = fmt(totalReject);
+
+  // Reason fields appear only when their bucket is in use (Stitch declutter).
+  const rjIn = card.querySelector('[data-input="reject-reason"]');
+  if (rjIn && rjIn.parentElement) rjIn.parentElement.style.display = totalReject > 0 ? '' : 'none';
+  const rwIn = card.querySelector('[data-input="rewash-reason"]');
+  if (rwIn && rwIn.parentElement) rwIn.parentElement.style.display = totalRewash > 0 ? '' : 'none';
 
   // Live hero CTA: defaults to "Yes, take all X"; morphs to "Submit X take · Y rewash · Z reject"
   // once any exception is set. Same button submits the right payload (see take-confirm handler).
