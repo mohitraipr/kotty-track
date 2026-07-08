@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Kotty Floor — Lot Admin</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              surface: '#f7f8fa',
+              'surface-container-lowest': '#ffffff',
+              'on-surface': '#0f172a',
+              'on-surface-variant': '#64748b',
+              'outline-variant': '#e5e7eb',
+              primary: '#2563eb',
+              'on-primary': '#ffffff',
+              'primary-container': '#eff6ff',
+              secondary: '#16a34a',
+              'secondary-container': '#dcfce7',
+              tertiary: '#b45309',
+              'tertiary-container': '#fef3c7',
+              error: '#dc2626',
+              'error-container': '#fee2e2'
+            },
+            borderRadius: {
+              "DEFAULT": "0.5rem",
+              "lg": "1rem",
+              "xl": "1.5rem",
+              "full": "9999px"
+            },
+            fontFamily: {
+              headline: ["Space Grotesk"],
+              display: ["Space Grotesk"],
+              body: ["Inter"],
+              label: ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+      .font-headline { font-family: 'Space Grotesk', sans-serif; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        line-height: 1;
+        text-transform: none;
+        letter-spacing: normal;
+        word-wrap: normal;
+        white-space: nowrap;
+        direction: ltr;
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .stage-rail-active { box-shadow: 0 0 0 4px #eff6ff; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 border-b border-outline-variant bg-surface px-4 pt-3 pb-4">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="factory">factory</span>
+<span class="font-headline font-black text-xl tracking-tighter text-on-surface">KOTTY FLOOR</span>
+</div>
+<span class="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant bg-outline-variant/30 px-2 py-0.5 rounded">Lot Admin</span>
+</div>
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant text-xl">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" placeholder="Lot no, manual lot, or SKU" type="text" value="KTTWOMENSPANT990"/>
+</div>
+</header>
+<main class="mt-32 px-4 space-y-4 max-w-lg mx-auto">
+<!-- Lot Header Card -->
+<section class="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
+<div class="flex justify-between items-start mb-1">
+<h1 class="font-headline text-2xl font-bold tracking-tight">KTTWOMENSPANT990</h1>
+<span class="bg-primary-container text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Denim</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-6 flex items-center gap-1.5">
+                Valentino <span class="opacity-30">•</span> 2,529 pcs <span class="opacity-30">•</span> <span class="text-[11px] uppercase tracking-wide">cut by akshay</span>
+</p>
+<!-- Stage Rail -->
+<div class="grid grid-cols-5 gap-2 relative">
+<!-- Connectors -->
+<div class="absolute top-4 left-[10%] right-[10%] h-[2px] bg-outline-variant -z-0"></div>
+<!-- Node: Stitch -->
+<div class="flex flex-col items-center gap-1.5 relative z-10">
+<div class="w-8 h-8 rounded-full bg-secondary-container text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold uppercase tracking-tighter text-on-surface">Stitch</p>
+<p class="text-[9px] text-on-surface-variant leading-none">Done (2)</p>
+</div>
+</div>
+<!-- Node: Assembly -->
+<div class="flex flex-col items-center gap-1.5 relative z-10">
+<div class="w-8 h-8 rounded-full bg-secondary-container text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold uppercase tracking-tighter text-on-surface">Assembly</p>
+<p class="text-[9px] text-on-surface-variant leading-none">Done (2)</p>
+</div>
+</div>
+<!-- Node: Wash (Current) -->
+<div class="flex flex-col items-center gap-1.5 relative z-10">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center stage-rail-active">
+<span class="material-symbols-outlined text-lg">water_drop</span>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold uppercase tracking-tighter text-primary">Wash</p>
+<p class="text-[9px] text-primary font-medium leading-none">WIP (2)</p>
+</div>
+</div>
+<!-- Node: Wash-in -->
+<div class="flex flex-col items-center gap-1.5 relative z-10 opacity-40">
+<div class="w-8 h-8 rounded-full bg-surface border border-outline-variant flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></div>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold uppercase tracking-tighter">Wash-in</p>
+<p class="text-[9px] leading-none">Next</p>
+</div>
+</div>
+<!-- Node: Finish -->
+<div class="flex flex-col items-center gap-1.5 relative z-10 opacity-40">
+<div class="w-8 h-8 rounded-full bg-surface border border-outline-variant flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></div>
+</div>
+<div class="text-center">
+<p class="text-[10px] font-bold uppercase tracking-tighter">Finish</p>
+<p class="text-[9px] leading-none">Queue</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Flow Control Card -->
+<section class="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">Flow Control</h3>
+<div class="grid grid-cols-2 p-1 bg-surface border border-outline-variant rounded-lg mb-4">
+<button class="bg-surface-container-lowest shadow-sm rounded-md py-2 text-sm font-semibold text-primary">Denim</button>
+<button class="py-2 text-sm font-medium text-on-surface-variant">Hosiery</button>
+</div>
+<div class="bg-tertiary-container/30 border border-tertiary/10 rounded-lg p-3 flex gap-3 mb-4">
+<span class="material-symbols-outlined text-tertiary text-xl mt-0.5">warning</span>
+<p class="text-sm text-tertiary leading-snug">
+                    This lot has moved into assembly + washing — changing flow now would orphan that work. Reverse it back to stitching first.
+                </p>
+</div>
+<button class="w-full bg-outline-variant text-on-surface-variant font-semibold py-3.5 rounded-lg opacity-50 cursor-not-allowed" disabled="">
+                Change flow
+            </button>
+</section>
+<!-- Size Edit Card -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)] overflow-hidden">
+<div class="p-5 border-b border-outline-variant">
+<h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Edit cut quantity (size-wise)</h3>
+</div>
+<div class="divide-y divide-outline-variant">
+<!-- Size Row 1 -->
+<div class="p-4 flex items-center justify-between">
+<div>
+<span class="font-headline text-lg font-bold">30</span>
+<p class="text-[11px] text-on-surface-variant font-medium">MIN 141 (ALREADY STITCHED)</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<input class="w-16 text-center font-headline text-xl font-bold bg-transparent border-none focus:ring-0 p-0" type="number" value="141"/>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+<!-- Size Row 2 -->
+<div class="p-4 flex items-center justify-between">
+<div>
+<span class="font-headline text-lg font-bold">32</span>
+<p class="text-[11px] text-on-surface-variant font-medium">MIN 205 (ALREADY STITCHED)</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<input class="w-16 text-center font-headline text-xl font-bold bg-transparent border-none focus:ring-0 p-0" type="number" value="205"/>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+<!-- Size Row 3 -->
+<div class="p-4 flex items-center justify-between">
+<div>
+<span class="font-headline text-lg font-bold">34</span>
+<p class="text-[11px] text-on-surface-variant font-medium">MIN 198 (ALREADY STITCHED)</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<input class="w-16 text-center font-headline text-xl font-bold bg-transparent border-none focus:ring-0 p-0" type="number" value="198"/>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+</div>
+<div class="p-5 bg-surface/50">
+<button class="w-full bg-primary text-on-primary font-semibold py-4 rounded-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
+                    Save quantities
+                </button>
+</div>
+</section>
+<!-- Reverse Intervention Card -->
+<section class="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
+<h3 class="text-xs font-bold uppercase tracking-widest text-error mb-4">Reverse Intervention</h3>
+<div class="mb-5">
+<h4 class="font-semibold text-on-surface mb-1">Reverse a mistaken take-in</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                    This lot is at <span class="font-bold text-on-surface">Washing</span>. Reversing undoes that stage and voids the pending hand-off payment — the lot returns to the previous stage. Logged.
+                </p>
+</div>
+<button class="w-full border-2 border-error text-error font-bold py-3.5 rounded-lg active:bg-error active:text-white transition-all uppercase tracking-widest text-xs">
+                Reverse Washing
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe bg-surface border-t border-outline-variant h-16">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[11px] uppercase tracking-wider font-medium mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">search</span>
+<span class="text-[11px] uppercase tracking-wider font-medium mt-1">Search</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container rounded-xl p-2 px-4" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+<span class="text-[11px] uppercase tracking-wider font-bold mt-1">History</span>
+</a>
+</nav>
+<!-- Visual Polish: Soft shadow for sticky top on scroll -->
+<script>
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 10) {
+                header.classList.add('shadow-lg', 'shadow-on-surface/5');
+            } else {
+                header.classList.remove('shadow-lg', 'shadow-on-surface/5');
+            }
+        });
+    </script>
+</body></html>
