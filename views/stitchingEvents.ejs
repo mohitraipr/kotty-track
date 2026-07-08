@@ -65,16 +65,23 @@
   .sx-page {
     max-width: 960px;
     margin: 0 auto;
-    padding: calc(64px + 1.25rem) 1rem 6rem;
+    padding: calc(112px + 1rem) 1rem 6rem;
     min-height: 100vh;
   }
 
   /* ── Stitch shell chrome (matches the Kotty Floor hub) ───────────── */
   .flx-top {
-    position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 50;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
     background: #f7f8fa; border-bottom: 1px solid #e5e7eb;
-    display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
   }
+  .flx-top-main { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .flx-top-search { display: flex; align-items: center; gap: 8px; padding: 0 16px 12px; }
+  .flx-top-search > .material-symbols-outlined { color: #64748b; font-size: 20px; }
+  .flx-top-search input { flex: 1; height: 44px; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 0 12px; font-size: 15px; background: #fff; color: #0f172a; outline: none; }
+  .flx-top-search input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px #eff6ff; }
+  .flx-search-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #2563eb;
+    color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; }
   .flx-top .brand { display: flex; align-items: center; gap: 10px; }
   .flx-top .brand .material-symbols-outlined { color: #2563eb; }
   .flx-top .brand h1 {
@@ -1021,34 +1028,28 @@
 </style>
 
 <header class="flx-top">
-  <div class="brand">
-    <span class="material-symbols-outlined">precision_manufacturing</span>
-    <h1>Stitching</h1>
+  <div class="flx-top-main">
+    <div class="brand">
+      <span class="material-symbols-outlined">precision_manufacturing</span>
+      <h1>Stitching</h1>
+    </div>
+    <div class="flx-actions">
+      <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
+      <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
+      <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+    </div>
   </div>
-  <div class="flx-actions">
-    <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
-    <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
-    <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+  <div class="flx-top-search">
+    <span class="material-symbols-outlined">search</span>
+    <input type="text" id="searchInput" placeholder="Lot number or SKU" autocomplete="off" autofocus />
+    <button id="searchBtn" class="flx-search-btn">Search</button>
   </div>
 </header>
 
 <main class="sx sx-page">
 
-  <!-- ─── Header ──────────────────────────── -->
-  <header class="sx-head">
-    <h1>Stitching</h1>
-    <span class="pill" id="pageUserPill">—</span>
-  </header>
-
-  <!-- ─── Search ──────────────────────────── -->
-  <section class="sx-search">
-    <div class="sx-search-row">
-      <span class="sx-search-icon">⌕</span>
-      <input type="text" id="searchInput" placeholder="Type lot number or SKU and press Enter" autofocus />
-      <button id="searchBtn" class="sx-btn sx-btn-primary">Search</button>
-    </div>
-    <div id="searchResults" class="sx-search-results"></div>
-  </section>
+  <!-- ─── Search results (search input lives in the top bar) ─────── -->
+  <div id="searchResults" class="sx-search-results"></div>
 
   <!-- ─── Lot context ──────────────────────── -->
   <section id="lotCard" class="sx-lot">
