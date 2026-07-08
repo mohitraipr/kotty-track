@@ -11,27 +11,20 @@
   topEyebrow: 'Shift Operator', topSub: 'Hi, ' + _username,
   user: user
 }) %>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet"/>
-<link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet"/>
 <style>
-  /* legacy support scoped for the restored data panels (keeps them working on Tailwind) */
+  /* small scoped support for the restored data panels */
   .d-none { display: none !important; }
   .badge-kotty { display:inline-block; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; padding:2px 9px; border-radius:999px; }
   .badge-kotty.badge-success { background:#dcfce7; color:#16a34a; }
   .badge-kotty.badge-warning { background:#fef3c7; color:#b45309; }
-  .badge-kotty.badge-danger  { background:#fee2e2; color:#dc2626; }
   .badge-kotty.badge-info    { background:#eff6ff; color:#2563eb; }
-  .tabulator { border:1px solid #e5e7eb; border-radius:12px; background:#fff; font-family:'Inter',sans-serif; font-size:13px; }
-  .tabulator .tabulator-header { background:#f7f8fa; border-bottom:1px solid #e5e7eb; }
-  .tabulator .tabulator-header .tabulator-col { background:#f7f8fa; }
-  .fhub-modal { position:fixed; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center; padding:80px 16px 16px; background:rgba(15,23,42,.5); }
-  .fhub-modal.open { display:flex; }
 </style>
 
-<main class="pt-20 px-4 max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto">
+<!-- Operator hub is a PC-first dashboard: fills the desktop, still stacks on phones. -->
+<main class="pt-20 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
 
-  <!-- Feature search (live-filters the tools below) -->
-  <div class="mb-5">
+  <!-- Feature search (live-filters the tools) -->
+  <div class="mb-6">
     <div class="relative max-w-xl">
       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
         <span class="material-symbols-outlined text-on-surface-variant text-xl">search</span>
@@ -42,24 +35,20 @@
     </div>
   </div>
 
-  <!-- KPI stats strip -->
-  <section class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-8 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant shadow-sm">
-    <div class="text-center sm:border-r border-outline-variant/60">
-      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Total Kits</p>
-      <p class="font-headline text-xl font-bold leading-none"><%= num(lotCount) %></p>
-    </div>
-    <div class="text-center sm:border-r border-outline-variant/60">
-      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Cut Pieces</p>
-      <p class="font-headline text-xl font-bold leading-none text-primary"><%= num(totalPiecesCut) %></p>
-    </div>
-    <div class="text-center sm:border-r border-outline-variant/60">
-      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Finished</p>
-      <p class="font-headline text-xl font-bold leading-none text-secondary"><%= num(totalFinished) %></p>
-    </div>
-    <div class="text-center">
-      <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">Users</p>
-      <p class="font-headline text-xl font-bold leading-none"><%= num(userCount) %></p>
-    </div>
+  <!-- KPI stats -->
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+    <% [['Total Kits', num(lotCount), '', 'inventory_2'],
+        ['Cut Pieces', num(totalPiecesCut), 'text-primary', 'content_cut'],
+        ['Finished', num(totalFinished), 'text-secondary', 'check_circle'],
+        ['Users', num(userCount), '', 'group']].forEach(function(k){ %>
+      <div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1"><%= k[0] %></p>
+          <p class="font-headline text-3xl font-bold leading-none <%= k[2] %>"><%= k[1] %></p>
+        </div>
+        <span class="material-symbols-outlined text-on-surface-variant/40 text-3xl"><%= k[3] %></span>
+      </div>
+    <% }) %>
   </section>
 
   <%
@@ -116,6 +105,7 @@
         ['/po-creator/operator/dashboard','inventory_2','PO Management','Purchase orders','po purchase',false],
         ['/returns/dashboard','keyboard_return','Returns','Returns dashboard','return',false],
         ['/operator/sku-categories','sell','SKU Categories','Manage categories','sku category',false],
+        ['/operator/security-logs','shield','Security Logs','Access & audit trail','security audit access log',false],
         ['#session-usage','query_stats','Account Usage','Session usage','usage sessions time',true],
       ]],
     ];
@@ -123,12 +113,12 @@
   %>
 
   <% groups.forEach(function(g){ var c = chip[g[1]] || chip.primary; %>
-    <section class="fhub-group mb-6">
+    <section class="fhub-group mb-7">
       <h2 class="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mb-2.5"><%= g[0] %></h2>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
         <% g[2].forEach(function(t){ if (t[5] && !isMohit) return; var kw = (t[2]+' '+t[3]+' '+t[4]).toLowerCase(); %>
           <a href="<%= t[0] %>" data-kw="<%= kw %>"
-             class="fhub-tile action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between min-h-[94px] transition-all hover:border-primary/30">
+             class="fhub-tile action-card text-left bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col justify-between min-h-[96px] transition-all hover:border-primary/40 hover:shadow-sm">
             <div class="w-10 h-10 rounded-lg <%= c[0] %> flex items-center justify-center">
               <span class="material-symbols-outlined <%= c[1] %>"><%= t[1] %></span>
             </div>
@@ -146,111 +136,77 @@
     No tool matches “<span id="fq"></span>”. Try a shorter word.
   </div>
 
-  <% if (isMohit) { %>
-  <!-- Account Usage (Mohit only) -->
-  <section id="session-usage" class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
-    <div class="flex items-end justify-between gap-3 flex-wrap mb-3">
-      <div>
-        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Overview</p>
-        <h2 class="font-headline text-lg font-bold">Account Usage</h2>
-      </div>
-      <div class="flex items-center gap-2">
-        <select id="sessionRange" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface">
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-        </select>
-        <button id="refreshSessionUsage" type="button" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Refresh</button>
-      </div>
-    </div>
-    <div class="overflow-x-auto">
-      <table id="sessionUsageTable" class="w-full text-sm text-left">
-        <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
-          <tr><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">User</th><th class="py-2 pr-3">Sessions</th><th class="py-2 pr-3">Time Used</th><th class="py-2">Last Active</th></tr>
-        </thead>
-        <tbody class="divide-y divide-outline-variant/60"></tbody>
-      </table>
-      <div id="sessionUsageEmpty" class="d-none text-on-surface-variant text-sm py-3 text-center">No account usage logged for the selected range.</div>
-    </div>
-    <p class="text-on-surface-variant text-xs mt-3">Time used counts activity from login until logout or the most recent page view.</p>
-  </section>
-  <% } %>
+  <!-- Data panels: 2-up on desktop to fill the screen -->
+  <div class="grid lg:grid-cols-2 gap-6 mt-4">
 
-  <!-- SKU Insights -->
-  <section class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
-    <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
-      <div>
-        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Analytics</p>
-        <h2 class="font-headline text-lg font-bold">SKU Insights</h2>
-      </div>
-      <form method="GET" action="/operator/hub" class="flex gap-2 flex-wrap items-center">
-        <input type="date" name="startDate" value="<%= q.startDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
-        <input type="date" name="endDate" value="<%= q.endDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
-        <button type="submit" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Apply</button>
-      </form>
-    </div>
-    <div class="grid md:grid-cols-2 gap-6">
-      <% [['Top 10 SKUs','arrow_upward','secondary',aa.top10SKUs||[],'badge-success'],['Bottom 10 SKUs','arrow_downward','tertiary',aa.bottom10SKUs||[],'badge-warning']].forEach(function(col){ %>
+    <!-- SKU Insights -->
+    <section class="bg-surface-container-lowest rounded-xl border border-outline-variant p-5 shadow-sm">
+      <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
         <div>
-          <h3 class="flex items-center gap-1.5 text-sm font-bold mb-2"><span class="material-symbols-outlined text-<%= col[2] %> text-base"><%= col[1] %></span><%= col[0] %></h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
-                <tr><th class="py-2 pr-3">SKU</th><th class="py-2 pr-3">Pieces</th><th class="py-2">% Share</th></tr>
-              </thead>
-              <tbody class="divide-y divide-outline-variant/60">
-                <% col[3].forEach(function(item){ var pct = (aa.totalCut>0)?((item.total/aa.totalCut)*100).toFixed(2):'0.00'; %>
-                  <tr><td class="py-2 pr-3 font-semibold"><%= item.sku %></td><td class="py-2 pr-3 font-headline"><%= Number(item.total).toLocaleString() %></td><td class="py-2"><span class="badge-kotty <%= col[4] %>"><%= pct %>%</span></td></tr>
-                <% }) %>
-                <% if (!col[3].length) { %><tr><td colspan="3" class="py-4 text-center text-on-surface-variant text-xs">No data for this range.</td></tr><% } %>
-              </tbody>
-            </table>
-          </div>
+          <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Analytics</p>
+          <h2 class="font-headline text-lg font-bold">SKU Insights</h2>
         </div>
-      <% }) %>
-    </div>
-  </section>
-
-  <!-- Pendency -->
-  <section class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant p-4 shadow-sm">
-    <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
-      <div>
-        <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Work in progress</p>
-        <h2 class="font-headline text-lg font-bold">Pendency</h2>
+        <form method="GET" action="/operator/hub" class="flex gap-2 flex-wrap items-center">
+          <input type="date" name="startDate" value="<%= q.startDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
+          <input type="date" name="endDate" value="<%= q.endDate || '' %>" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface"/>
+          <button type="submit" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Apply</button>
+        </form>
       </div>
-      <select id="deptFilter" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface">
-        <option value="all">All Departments</option>
-        <option value="stitching">Stitching</option>
-        <option value="assembly">Assembly</option>
-        <option value="washing">Washing</option>
-        <option value="washing_in">Washing In</option>
-        <option value="finishing">Finishing</option>
-      </select>
-    </div>
-    <div id="pendencyTable"></div>
-  </section>
+      <div class="grid sm:grid-cols-2 gap-6">
+        <% [['Top 10 SKUs','arrow_upward','secondary',aa.top10SKUs||[],'badge-success'],['Bottom 10 SKUs','arrow_downward','tertiary',aa.bottom10SKUs||[],'badge-warning']].forEach(function(col){ %>
+          <div>
+            <h3 class="flex items-center gap-1.5 text-sm font-bold mb-2"><span class="material-symbols-outlined text-<%= col[2] %> text-base"><%= col[1] %></span><%= col[0] %></h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
+                  <tr><th class="py-2 pr-3">SKU</th><th class="py-2 pr-3">Pieces</th><th class="py-2">% Share</th></tr>
+                </thead>
+                <tbody class="divide-y divide-outline-variant/60">
+                  <% col[3].forEach(function(item){ var pct = (aa.totalCut>0)?((item.total/aa.totalCut)*100).toFixed(2):'0.00'; %>
+                    <tr><td class="py-2 pr-3 font-semibold"><%= item.sku %></td><td class="py-2 pr-3 font-headline"><%= Number(item.total).toLocaleString() %></td><td class="py-2"><span class="badge-kotty <%= col[4] %>"><%= pct %>%</span></td></tr>
+                  <% }) %>
+                  <% if (!col[3].length) { %><tr><td colspan="3" class="py-4 text-center text-on-surface-variant text-xs">No data for this range.</td></tr><% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </section>
 
-  <!-- Material Indent (self-contained partial) -->
-  <section class="mt-8">
-    <h2 class="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mb-2.5">Material Indent</h2>
-    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
-      <%- include('partials/indentWrapper', { user: user, stage: 'Operator' }) %>
-    </div>
-  </section>
+    <% if (isMohit) { %>
+    <!-- Account Usage (Mohit only) -->
+    <section id="session-usage" class="bg-surface-container-lowest rounded-xl border border-outline-variant p-5 shadow-sm">
+      <div class="flex items-end justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Overview</p>
+          <h2 class="font-headline text-lg font-bold">Account Usage</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="sessionRange" class="text-sm border border-outline-variant rounded-lg py-2 px-3 bg-surface">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <button id="refreshSessionUsage" type="button" class="text-sm font-semibold bg-primary text-on-primary rounded-lg py-2 px-3 active:scale-[0.98]">Refresh</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto max-h-96 overflow-y-auto">
+        <table id="sessionUsageTable" class="w-full text-sm text-left">
+          <thead class="text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant sticky top-0 bg-surface-container-lowest">
+            <tr><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">User</th><th class="py-2 pr-3">Sessions</th><th class="py-2 pr-3">Time Used</th><th class="py-2">Last Active</th></tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant/60"></tbody>
+        </table>
+        <div id="sessionUsageEmpty" class="d-none text-on-surface-variant text-sm py-3 text-center">No account usage logged for the selected range.</div>
+      </div>
+      <p class="text-on-surface-variant text-xs mt-3">Time used counts activity from login until logout or the most recent page view.</p>
+    </section>
+    <% } %>
+
+  </div>
 </main>
 
-<!-- Lot Details modal (Tailwind overlay, no Bootstrap) -->
-<div id="lotModal" class="fhub-modal">
-  <div class="bg-surface-container-lowest w-full max-w-lg rounded-xl border border-outline-variant shadow-xl">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-outline-variant">
-      <h3 class="font-headline text-lg font-bold">Lot Details</h3>
-      <button type="button" onclick="closeLotModal()" class="material-symbols-outlined text-on-surface-variant">close</button>
-    </div>
-    <div id="lotModalBody" class="p-5 text-sm"></div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
 <script>
   // ---- Feature search filter over the action tiles ----
   function filterFeatures(qv) {
@@ -303,56 +259,5 @@
     sessionRange.addEventListener('change', load);
     if (refreshBtn) refreshBtn.addEventListener('click', load);
   })();
-
-  // ---- Pendency Tabulator ----
-  (function(){
-    var el = document.getElementById('pendencyTable');
-    if (!el || typeof Tabulator === 'undefined') return;
-    var table = new Tabulator("#pendencyTable", {
-      layout: "fitColumns", pagination: "local", paginationSize: 50,
-      ajaxURL: "/operator/dashboard/api/pendency?dept=all",
-      placeholder: "No pendency data available",
-      columns: [
-        { title: "Lot No", field: "lot_no", width: 150, formatter: function(cell){
-            var lotNo = cell.getValue(); var a=document.createElement('a');
-            a.href='#'; a.style.cssText='color:#2563eb;font-weight:600;text-decoration:none;'; a.textContent=lotNo;
-            a.onclick=function(e){ e.preventDefault(); showLotDetails(lotNo); }; return a; } },
-        { title: "Manual Lot No", field: "manual_lot_number", width: 150, formatter: function(c){ return c.getValue() || '—'; } },
-        { title: "Username", field: "username", width: 150 },
-        { title: "Assigned", field: "assigned", width: 120 },
-        { title: "Completed", field: "completed", width: 120 },
-        { title: "Pending", field: "pending", width: 120, formatter: function(cell){
-            var val=cell.getValue(); var s=document.createElement('span'); s.className='badge-kotty';
-            s.classList.add(val>100?'badge-danger':(val>50?'badge-warning':'badge-success')); s.textContent=val; return s; } }
-      ]
-    });
-    var deptFilter = document.getElementById('deptFilter');
-    if (deptFilter) deptFilter.addEventListener('change', function(e){ table.setData('/operator/dashboard/api/pendency?dept=' + e.target.value); });
-  })();
-
-  // ---- Lot details modal (Tailwind overlay) ----
-  var lotModal = document.getElementById('lotModal');
-  function closeLotModal(){ lotModal.classList.remove('open'); }
-  window.closeLotModal = closeLotModal;
-  lotModal.addEventListener('click', function(e){ if (e.target === lotModal) closeLotModal(); });
-  function showLotDetails(lotNo){
-    var body = document.getElementById('lotModalBody');
-    body.innerHTML = '<div class="py-6 text-center text-on-surface-variant">Loading…</div>';
-    lotModal.classList.add('open');
-    fetch('/operator/dashboard/api/lot?lotNo=' + encodeURIComponent(lotNo))
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        if (data.error){ body.innerHTML = '<div class="text-error">'+data.error+'</div>'; return; }
-        function row(k,v){ return '<div class="flex justify-between gap-4 py-1.5 border-b border-outline-variant/60"><span class="text-on-surface-variant">'+k+'</span><span class="font-semibold text-right">'+(v||'N/A')+'</span></div>'; }
-        body.innerHTML =
-          row('Lot No', data.lot_no) + row('SKU', data.sku) +
-          row('Total Pieces', data.total_pieces) + row('Type', data.lot_type) +
-          row('Status', '<span class="badge-kotty badge-info">'+(data.status||'N/A')+'</span>') +
-          row('Created', data.created_at ? new Date(data.created_at).toLocaleDateString() : 'N/A') +
-          row('Department', data.current_department);
-      })
-      .catch(function(){ body.innerHTML = '<div class="text-error">Error loading lot details</div>'; });
-  }
-  window.showLotDetails = showLotDetails;
 </script>
-<%- include('partials/floorNav', { navActive: 'home' }) %>
+<%- include('partials/floorNav', { navActive: 'home', navHideDesktop: true }) %>
