@@ -846,6 +846,11 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
         l.lot_no,
         l.manual_lot_number,
         DATE_FORMAT(COALESCE(l.manual_cutting_date, l.created_at), '%d-%m-%Y') AS cutting_date,
+        CASE
+          WHEN LOWER(l.flow_type) = 'denim'   THEN 'Denim'
+          WHEN LOWER(l.flow_type) = 'hosiery' THEN 'Hosiery'
+          ELSE COALESCE(l.flow_type, '')
+        END AS flow_type,
         l.sku,
         l.remark AS cutting_remark,
         r.roll_no,
@@ -871,6 +876,7 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
       { header: "Lot No", key: "lot_no", width: 15 },
       { header: "Manual Lot No", key: "manual_lot_number", width: 16 },
       { header: "Cutting Date", key: "cutting_date", width: 14 },
+      { header: "Type", key: "flow_type", width: 12 },
       { header: "SKU", key: "sku", width: 25 },
       { header: "Cutting Remark", key: "cutting_remark", width: 30 },
       { header: "Roll No", key: "roll_no", width: 12 },
