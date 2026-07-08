@@ -844,6 +844,8 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
       SELECT
         l.fabric_type,
         l.lot_no,
+        l.manual_lot_number,
+        DATE_FORMAT(COALESCE(l.manual_cutting_date, l.created_at), '%d-%m-%Y') AS cutting_date,
         l.sku,
         l.remark AS cutting_remark,
         r.roll_no,
@@ -867,6 +869,8 @@ router.get("/dashboard/consumption/download", isAuthenticated, isOperator, async
     sheet.columns = [
       { header: "Fabric Type", key: "fabric_type", width: 18 },
       { header: "Lot No", key: "lot_no", width: 15 },
+      { header: "Manual Lot No", key: "manual_lot_number", width: 16 },
+      { header: "Cutting Date", key: "cutting_date", width: 14 },
       { header: "SKU", key: "sku", width: 25 },
       { header: "Cutting Remark", key: "cutting_remark", width: 30 },
       { header: "Roll No", key: "roll_no", width: 12 },
