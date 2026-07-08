@@ -3,13 +3,15 @@
      AFTER the page's own <main> and <script> blocks.
      Param: navActive — one of 'home' | 'search' | 'journey' (highlights the tab). */
   var _active = (typeof navActive !== 'undefined') ? navActive : '';
+  // navHideDesktop: hide the bottom bar on large screens (for PC-first screens like the hub).
+  var _hideDesktop = (typeof navHideDesktop !== 'undefined' && navHideDesktop) ? ' lg:hidden' : '';
   var _items = [
     ['home',    'Home',    '/operator/hub',          'home'],
     ['search',  'Search',  '/search-dashboard',      'search'],
     ['journey', 'Journey', '/operator/lot-journey',  'route'],
   ];
 %>
-<nav class="fixed bottom-0 left-0 w-full z-50 h-16 bg-surface border-t border-outline-variant flex justify-around items-center px-4 pb-safe">
+<nav class="fixed bottom-0 left-0 w-full z-50 h-16 bg-surface border-t border-outline-variant flex justify-around items-center px-4 pb-safe<%= _hideDesktop %>">
   <% _items.forEach(function(it){ var on = (_active === it[0]); %>
     <a href="<%= it[2] %>" class="flex flex-col items-center justify-center transition-opacity active:opacity-80 <%= on ? 'text-primary bg-primary-container rounded-xl px-4 py-1.5' : 'text-on-surface-variant hover:text-primary' %>">
       <span class="material-symbols-outlined text-2xl" data-icon="<%= it[3] %>"<% if (on) { %> style="font-variation-settings: 'FILL' 1;"<% } %>><%= it[3] %></span>
