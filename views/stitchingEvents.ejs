@@ -1,5 +1,12 @@
-<%- include('partials/header', { pageTitle: 'Stitching' }) %>
-<%- include('partials/navbar', { user: user, dashboardUrl: '/stitchingdashboard' }) %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Stitching</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+</head>
+<body>
 
 <style>
   /* ───────────────────────────────────────────────────────────────
@@ -58,9 +65,40 @@
   .sx-page {
     max-width: 960px;
     margin: 0 auto;
-    padding: calc(var(--navbar-height, 60px) + 1.5rem) 1rem 5rem;
+    padding: calc(64px + 1.25rem) 1rem 6rem;
     min-height: 100vh;
   }
+
+  /* ── Stitch shell chrome (matches the Kotty Floor hub) ───────────── */
+  .flx-top {
+    position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 50;
+    background: #f7f8fa; border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+  }
+  .flx-top .brand { display: flex; align-items: center; gap: 10px; }
+  .flx-top .brand .material-symbols-outlined { color: #2563eb; }
+  .flx-top .brand h1 {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: #2563eb; margin: 0;
+  }
+  .flx-top .u {
+    width: 40px; height: 40px; border-radius: 999px; background: #eff6ff; color: #2563eb;
+    display: grid; place-items: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700;
+    text-decoration: none; border: 1px solid rgba(37,99,235,0.1);
+  }
+  .flx-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 64px; z-index: 50;
+    background: #ffffff; border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: space-around; align-items: center;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .flx-nav a {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none;
+    color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .flx-nav a.active { color: #2563eb; }
+  .flx-nav a .material-symbols-outlined { font-size: 24px; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400; vertical-align: middle; }
 
   /* ─── Page header ──────────────────────────────────────── */
   .sx-head {
@@ -960,6 +998,14 @@
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
   }
 </style>
+
+<header class="flx-top">
+  <div class="brand">
+    <span class="material-symbols-outlined">precision_manufacturing</span>
+    <h1>Stitching</h1>
+  </div>
+  <a class="u" href="/operator/hub" title="Home"><%= (user && user.username) ? user.username.charAt(0).toUpperCase() : 'U' %></a>
+</header>
 
 <main class="sx sx-page">
 
@@ -2092,4 +2138,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && el('modalO
 loadHistory();
 </script>
 
-<%- include('partials/footer') %>
+<nav class="flx-nav">
+  <a href="/operator/hub"><span class="material-symbols-outlined">home</span>Home</a>
+  <a href="/search-dashboard"><span class="material-symbols-outlined">search</span>Search</a>
+  <a href="/operator/lot-journey"><span class="material-symbols-outlined">route</span>Journey</a>
+</nav>
+</body>
+</html>
