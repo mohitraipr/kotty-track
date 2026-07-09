@@ -70,6 +70,8 @@ async function go(){
   const picker = document.getElementById('picker');
   out.innerHTML=''; picker.innerHTML='';
   if(!q){ return; }
+  // Keep the URL in sync so the search survives refresh / can be shared.
+  try{ history.replaceState(null,'','/operator/lot-journey?q='+encodeURIComponent(q)); }catch(_e){}
   status.style.display='block'; status.textContent='Searching…';
   try{
     const r = await fetch('/operator/lot-journey/data?q='+encodeURIComponent(q));
@@ -78,14 +80,21 @@ async function go(){
     if(!data.journey){ status.textContent='No lot found for "'+q+'".'; return; }
     status.style.display='none';
     if(data.matches.length>1){
+      lastMatches = data.matches;
       picker.innerHTML = '<div class="muted small mb-1">'+data.matches.length+' lots matched — showing the first. Pick another:</div>'+
-        data.matches.map(m=>'<button class="btn btn-sm btn-outline-secondary me-1 mb-1" onclick="pick(\''+esc(m.lot_no)+'\')">'+
+        data.matches.map((m,idx)=>'<button class="btn btn-sm btn-outline-secondary me-1 mb-1" onclick="pick('+idx+')">'+
           esc(m.lot_no)+(m.manual_lot_number?(' / '+esc(m.manual_lot_number)):'')+' · '+esc(m.sku)+'</button>').join('');
     }
     out.innerHTML = render(data.journey);
   }catch(e){ status.textContent='Error: '+e.message; }
 }
-function pick(lotNo){ document.getElementById('q').value=lotNo; go(); }
+let lastMatches = [];
+function pick(idx){
+  const m = lastMatches[idx];
+  if(!m) return;
+  document.getElementById('q').value = m.lot_no;
+  go();
+}
 
 function render(j){
   const L=j.lot;
@@ -133,6 +142,15 @@ function render(j){
 }
 
 document.getElementById('q').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+
+// Arriving with ?q=... (e.g. from another screen's nav): prefill the box and run the search.
+(function(){
+  const initialQ = new URLSearchParams(location.search).get('q');
+  if(initialQ && initialQ.trim()){
+    document.getElementById('q').value = initialQ.trim();
+    go();
+  }
+})();
 </script>
 </body>
 </html>
