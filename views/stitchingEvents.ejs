@@ -1153,6 +1153,17 @@
   .sx-info .iw-tabfilter { border-radius: 8px; }
   .sx-info .iw-tabfilter select { font-family: 'Inter',sans-serif; }
 
+  /* ═══ Card anatomy (Stitch): heading → rows → grand → remark → CTA ═══ */
+  .sx-take-panel { padding: 1rem 1rem 1.125rem; }
+  .sx-panel-h { font-size: 0.9375rem; font-weight: 600; color: var(--c-text); margin: 0 0 0.5rem;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+  .sx-panel-h .sub { font-size: 0.75rem; font-weight: 500; color: var(--c-text-3); }
+  .sx-take-panel .sx-action-cta { margin-top: 0.875rem; }
+  .sx-take-panel .sx-reject-toggle { margin-top: 0.75rem; }
+  .sx-take-panel .sx-grand { margin-top: 0.875rem; }
+  .sx-grand .gv.is-done-gv { color: var(--c-success); }
+  .sx-lot .sx-stats { margin: 1rem 0 0.25rem; padding-top: 0.875rem; border-top: 1px solid var(--c-border-2); }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -1198,17 +1209,17 @@
     </div>
     <div class="sx-journey" id="lotJourneyUsers" style="display:none;"></div>
 
+    <div class="sx-sizes-label">
+      Pieces by size <span class="total"><span id="totalLabel">total cut</span> <span id="totalCut">0</span></span>
+    </div>
+    <div class="sx-chip-row" id="sizeChips"></div>
+
     <div class="sx-stats">
       <div class="sx-stat"><div class="l">Approved</div><div class="v" id="aggApproved">0</div></div>
       <div class="sx-stat is-completed"><div class="l">Completed</div><div class="v" id="aggCompleted">0</div></div>
       <div class="sx-stat is-rejected"><div class="l">Rejected</div><div class="v" id="aggRejected">0</div></div>
       <div class="sx-stat is-inline"><div class="l">Inline</div><div class="v" id="aggInline">0</div></div>
     </div>
-
-    <div class="sx-sizes-label">
-      Pieces by size <span class="total"><span id="totalLabel">total cut</span> <span id="totalCut">0</span></span>
-    </div>
-    <div class="sx-chip-row" id="sizeChips"></div>
   </section>
 
   <!-- ─── Auto-action panel ─────────────────── -->
@@ -1689,38 +1700,21 @@ function buildTakeCard() {
   const totalCols = 1 + (hasRewash ? 1 : 0) + 1; // take, [rewash,] reject
 
   const card = document.createElement('div');
-  card.className = 'sx-action-card';
+  card.className = 'sx-action-card always-open';
   card.innerHTML = `
-    <div class="sx-action-card-body">
-      <div class="sx-action-row">
-        <div class="sx-action-icon">↘</div>
-        <div class="sx-action-text">
-          <p class="sx-action-title">Take <span class="qty">${fmt(totalAvailable)}</span> pieces into ${STAGE_LABEL.toLowerCase()}</p>
-          <p class="sx-action-sub">${hasRewash
-            ? 'Inspect what came in: take the good ones, send wet/improper back for rewash, reject anything torn or unusable.'
-            : 'Inspect what came in: take the good ones, reject anything torn or damaged.'}</p>
-        </div>
-      </div>
-      <button class="sx-action-cta" data-action="take-confirm">
-        Take ${fmt(totalAvailable)} pieces
-      </button>
-    </div>
-    <button class="sx-action-toggle" data-action="take-toggle">
-      <span class="arrow">⌄</span> Or split each size: take${hasRewash ? ' / rewash' : ''} / reject
-    </button>
-    <div class="sx-action-form">
-      <p class="sx-form-helper">Every size is pre-filled to take the full available quantity. Tap <strong style="color:var(--c-danger);">Reject${hasRewash ? ' / rewash' : ''}</strong> under a size if some pieces need attention — Take refills automatically.</p>
+    <div class="sx-take-panel">
+      <h3 class="sx-panel-h">Take into ${STAGE_LABEL.toLowerCase()} <span class="sub">${fmt(totalAvailable)} available</span></h3>
       <div class="sx-input-list" data-list="take-sizes"></div>
-
-      <div class="sx-form-row"><input type="text" data-input="take-remark" placeholder="Note for taken pieces (optional)" /></div>
-      ${hasRewash ? '<div class="sx-form-row"><input type="text" data-input="rewash-reason" placeholder="Reason for rewash (e.g. still wet, improper wash)" /></div>' : ''}
-      <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reason for reject (e.g. fabric defect)" /></div>
-
       <div class="sx-grand">
         <span class="gl">Grand Total</span>
         <span class="gv">Taking <strong data-display="take-total">0</strong> pcs${hasRewash ? '<span class="gx" data-x="rewash" style="display:none;"> · <strong data-display="rewash-total">0</strong> rewash</span>' : ''}<span class="gx" data-x="reject" style="display:none;"> · <strong data-display="reject-total">0</strong> reject</span></span>
       </div>
-      <button class="sx-form-submit" data-action="take-submit">Save</button>
+      ${hasRewash ? '<div class="sx-form-row"><input type="text" data-input="rewash-reason" placeholder="Reason for rewash (e.g. still wet, improper wash)" /></div>' : ''}
+      <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reason for reject (e.g. fabric defect)" /></div>
+      <div class="sx-form-row"><input type="text" data-input="take-remark" placeholder="Add remarks (optional)" /></div>
+      <button class="sx-action-cta" data-action="take-confirm">
+        Take ${fmt(totalAvailable)} pieces
+      </button>
     </div>
   `;
 
@@ -1799,15 +1793,11 @@ function buildTakeCard() {
     list.appendChild(row);
   });
 
-  // Splits are ALWAYS visible — no toggle to fish for. Hero CTA is the single submit.
-  card.classList.add('always-open');
-  card.querySelector('[data-action="take-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
   card.querySelector('[data-action="take-confirm"]').addEventListener('click', () => {
     // Route based on current state: pure all-take → fast path; any exception → submit splits.
     if (cardHasException(card)) doTakeFromForm(card);
     else                        doTakeAll();
   });
-  card.querySelector('[data-action="take-submit"]').addEventListener('click', () => doTakeFromForm(card));
 
   recalcTakeTotal(card);
   return card;
@@ -1951,48 +1941,29 @@ async function doTakeRequest(payload) {
 
 function buildDoneCard(approve) {
   const card = document.createElement('div');
-  card.className = 'sx-action-card is-done';
+  card.className = 'sx-action-card is-done always-open';
   card.dataset.approveId = String(approve.event_id);
   const sizesText = Object.entries(approve.remaining_sizes).map(([k,v]) => '<strong>' + escapeText(k) + '</strong> ' + fmt(v)).join(' · ');
   const when = new Date(approve.approved_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
   card.innerHTML = `
-    <div class="sx-action-card-body">
-      <div class="sx-action-row">
-        <div class="sx-action-icon">✓</div>
-        <div class="sx-action-text">
-          <p class="sx-action-title">Mark <span class="qty">${fmt(approve.inline)}</span> pieces as done</p>
-          <p class="sx-action-sub">From your batch of ${fmt(approve.approved)} taken on ${when}.</p>
-        </div>
-      </div>
-      <button class="sx-action-cta" data-action="done-confirm">
-        Mark ${fmt(approve.inline)} pieces done
-      </button>
-    </div>
-    <button class="sx-action-toggle" data-action="done-toggle">
-      <span class="arrow">⌄</span> Or some pieces are still being worked / spoiled
-    </button>
-    <div class="sx-action-form">
-      <p class="sx-form-helper">Pre-filled with the remaining pieces per size. Reduce if some aren't done yet.</p>
+    <div class="sx-take-panel">
+      <h3 class="sx-panel-h">Mark done <span class="sub">batch of ${fmt(approve.approved)} · taken ${when}</span></h3>
       <div class="sx-input-list" data-list="done-sizes"></div>
-      <div class="sx-form-row"><input type="text" data-input="done-remark" placeholder="Completion note (optional)" /></div>
-      <div class="sx-totals">
-        <span class="l">Marking as done</span>
-        <span class="v" data-display="done-total">0</span>
-      </div>
-
-      <button type="button" class="sx-reject-toggle" data-action="reject-toggle">+ Some pieces are spoiled / damaged</button>
+      <button type="button" class="sx-reject-toggle" data-action="reject-toggle">⚠ Some pieces are spoiled / damaged</button>
       <div class="sx-reject-section" data-section="reject">
         <p class="sx-form-helper" style="margin-top: 0.5rem; color: var(--c-danger);">Pieces that cannot be sent forward — these will be permanently rejected.</p>
         <div class="sx-input-list" data-list="reject-sizes"></div>
         <div class="sx-form-row"><input type="text" data-input="reject-reason" placeholder="Reject reason (e.g. fabric defect)" /></div>
-        <div class="sx-totals" style="background: var(--c-danger-soft);">
-          <span class="l" style="color: var(--c-danger);">Rejecting</span>
-          <span class="v" data-display="reject-total" style="color: var(--c-danger);">0</span>
-        </div>
       </div>
-
-      <button class="sx-form-submit" data-action="done-submit">Save</button>
+      <div class="sx-grand">
+        <span class="gl">Grand Total</span>
+        <span class="gv is-done-gv">Done <strong data-display="done-total">0</strong> pcs<span class="gx" data-x="reject" style="display:none;"> · <strong data-display="reject-total">0</strong> reject</span></span>
+      </div>
+      <div class="sx-form-row"><input type="text" data-input="done-remark" placeholder="Completion note (optional)" /></div>
+      <button class="sx-action-cta" data-action="done-confirm">
+        Mark ${fmt(approve.inline)} pieces done
+      </button>
     </div>
   `;
 
@@ -2034,12 +2005,14 @@ function buildDoneCard(approve) {
     rList.appendChild(row);
   });
 
-  card.querySelector('[data-action="done-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
   card.querySelector('[data-action="reject-toggle"]').addEventListener('click', () => {
     card.querySelector('[data-section="reject"]').classList.toggle('show');
   });
-  card.querySelector('[data-action="done-confirm"]').addEventListener('click', () => doMarkDoneAll(approve));
-  card.querySelector('[data-action="done-submit"]').addEventListener('click', () => doMarkDoneFromForm(card, approve));
+  card.querySelector('[data-action="done-confirm"]').addEventListener('click', () => {
+    // Reduced any size or added any reject → submit the form; otherwise fast all-done path.
+    if (doneCardDirty(card)) doMarkDoneFromForm(card, approve);
+    else doMarkDoneAll(approve);
+  });
 
   recalcDoneTotals(card, approve);
   return card;
@@ -2059,6 +2032,17 @@ function bindStepper(row, onChange) {
     });
   });
   input.addEventListener('input', onChange);
+}
+
+function doneCardDirty(card) {
+  let dirty = false;
+  card.querySelectorAll('input[data-kind="done"]').forEach(i => {
+    if ((parseInt(i.value, 10) || 0) !== (Number(i.dataset.max) || 0)) dirty = true;
+  });
+  card.querySelectorAll('[data-list="reject-sizes"] input[data-kind="reject"]').forEach(i => {
+    if ((parseInt(i.value, 10) || 0) > 0) dirty = true;
+  });
+  return dirty;
 }
 
 function recalcDoneTotals(card, approve) {
@@ -2085,7 +2069,14 @@ function recalcDoneTotals(card, approve) {
     rej += v;
   });
   card.querySelector('[data-display="done-total"]').textContent = fmt(done);
-  card.querySelector('[data-display="reject-total"]').textContent = fmt(rej);
+  const rejEl = card.querySelector('[data-display="reject-total"]');
+  if (rejEl) rejEl.textContent = fmt(rej);
+  const gx = card.querySelector('.gx[data-x="reject"]');
+  if (gx) gx.style.display = rej > 0 ? '' : 'none';
+  const cta = card.querySelector('[data-action="done-confirm"]');
+  if (cta) cta.textContent = rej > 0
+    ? ('Submit ' + fmt(done) + ' done · ' + fmt(rej) + ' reject')
+    : ('Mark ' + fmt(done) + ' pieces done');
 }
 
 async function doMarkDoneAll(approve) {
