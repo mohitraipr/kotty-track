@@ -1,30 +1,31 @@
 <%- include('partials/header', { pageTitle: 'Lot Completion Dashboard' }) %>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+<%- include('partials/floorTokens') %>
 
 <style>
   :root {
-    --charcoal: #1a1a1a;
-    --charcoal-light: #2d2d2d;
-    --cream: #faf8f5;
-    --cream-dark: #f0ebe3;
-    --terracotta: #c45c3a;
-    --terracotta-light: #d4826a;
-    --terracotta-dark: #a84a2d;
-    --success: #2d8a5f;
-    --success-light: #e8f5ef;
-    --warning: #c4873a;
-    --warning-light: #fef3e2;
-    --danger: #c23b22;
-    --danger-light: #fdeaea;
-    --info: #3a7bc4;
-    --info-light: #e8f1fb;
-    --text-primary: #1a1a1a;
-    --text-secondary: #5a5a5a;
-    --text-muted: #8a8a8a;
-    --border: #e5e0d8;
-    --border-light: #f0ebe3;
-    --shadow-sm: 0 1px 3px rgba(26, 26, 26, 0.06);
-    --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+    --charcoal: #0f172a;
+    --charcoal-light: #1e293b;
+    --cream: #f7f8fa;
+    --cream-dark: #eef0f4;
+    --terracotta: #2563eb;
+    --terracotta-light: #3b82f6;
+    --terracotta-dark: #1d4ed8;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --warning: #b45309;
+    --warning-light: #fef3c7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --info: #2563eb;
+    --info-light: #eff6ff;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --border: #e5e7eb;
+    --border-light: #eef0f4;
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 16px;
@@ -52,7 +53,7 @@
   }
 
   .page-title {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
     font-size: 2rem;
     font-weight: 400;
     color: var(--charcoal);
@@ -60,7 +61,7 @@
   }
 
   .page-subtitle {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.9rem;
     color: var(--text-secondary);
   }
@@ -98,7 +99,7 @@
   .avg-card.finish::before { background: var(--success); }
 
   .avg-label {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -108,7 +109,7 @@
   }
 
   .avg-value {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
     font-size: 2.25rem;
     font-weight: 400;
   }
@@ -132,7 +133,7 @@
   }
 
   .filter-bar input {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 8px 14px;
@@ -143,11 +144,11 @@
   .filter-bar input:focus {
     outline: none;
     border-color: var(--terracotta);
-    box-shadow: 0 0 0 3px rgba(196, 92, 58, 0.1);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   }
 
   .btn-kotty {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 500;
     padding: 8px 18px;
     border-radius: var(--radius-sm);
@@ -196,11 +197,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    background: #ffffff;
   }
 
   .panel-title {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
     font-size: 1.1rem;
     color: var(--charcoal);
     display: flex;
@@ -216,7 +217,7 @@
   }
 
   .kotty-table {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.85rem;
     width: 100%;
     border-collapse: collapse;
@@ -309,7 +310,7 @@
   }
 
   .pagination-info {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.85rem;
     color: var(--text-secondary);
   }
@@ -320,7 +321,7 @@
   }
 
   .pagination-controls a {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     padding: 6px 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);

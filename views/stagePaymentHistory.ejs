@@ -1,17 +1,18 @@
 <%- include('partials/header', { pageTitle: 'Payment History' }) %>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+<%- include('partials/floorTokens') %>
 
 <style>
   :root {
-    --charcoal: #1a1a1a;
-    --cream: #faf8f5;
-    --cream-dark: #f0ebe3;
-    --terracotta: #c45c3a;
-    --success: #2d8a5f;
-    --warning: #c4873a;
-    --info: #3a7bc4;
-    --border: #e5e0d8;
-    --text-secondary: #5a5a5a;
+    --charcoal: #0f172a;
+    --cream: #f7f8fa;
+    --cream-dark: #eef0f4;
+    --terracotta: #2563eb;
+    --success: #16a34a;
+    --warning: #b45309;
+    --info: #2563eb;
+    --border: #e5e7eb;
+    --text-secondary: #475569;
     --radius-sm: 6px;
     --radius-md: 10px;
   }
@@ -35,7 +36,7 @@
   }
 
   .page-title {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
     font-size: 1.75rem;
     color: var(--charcoal);
   }
@@ -43,7 +44,7 @@
   .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .btn-kotty {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 500;
     padding: 8px 16px;
     border-radius: var(--radius-sm);
@@ -70,14 +71,14 @@
   .card-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, var(--cream) 0%, white 100%);
+    background: #ffffff;
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 
   .card-title {
-    font-family: 'DM Serif Display', Georgia, serif;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
     font-size: 1.1rem;
     color: var(--charcoal);
     margin: 0;
@@ -95,7 +96,7 @@
   .form-group { margin-bottom: 0; }
 
   .form-label {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
@@ -104,7 +105,7 @@
   }
 
   .form-control, .form-select {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 8px 12px;
@@ -114,7 +115,7 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.85rem;
   }
 
@@ -143,11 +144,11 @@
     font-weight: 600;
   }
 
-  .badge-stitching { background: #e8f1fb; color: var(--info); }
+  .badge-stitching { background: #eff6ff; color: var(--info); }
   .badge-washing { background: #ede9fe; color: #7c3aed; }
-  .badge-finishing { background: #e8f5ef; color: var(--success); }
+  .badge-finishing { background: #dcfce7; color: var(--success); }
   .badge-assembly { background: #fce7f3; color: #be185d; }
-  .badge-cutting { background: #fef3e2; color: var(--warning); }
+  .badge-cutting { background: #fef3c7; color: var(--warning); }
 </style>
 
 <div class="page-container">

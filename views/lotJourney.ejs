@@ -4,15 +4,20 @@
   <meta charset="UTF-8" />
   <title>Lot Journey</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
-    body { background:#f6f7fb; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-    .page-head { background:linear-gradient(135deg,#0f172a,#1e293b); color:#fff; padding:22px 24px; margin-bottom:18px; border-radius:0 0 14px 14px; }
-    .page-head h1 { font-size:1.35rem; font-weight:600; margin:0; }
-    .page-head .sub { color:#94a3b8; font-size:.9rem; margin-top:4px; }
+    body { background:#f7f8fa; color:#0f172a; font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; padding-top:56px; padding-bottom:84px; }
+    .page-head { background:#f7f8fa; color:#0f172a; padding:18px 24px 14px; margin-bottom:14px; border-bottom:1px solid #e5e7eb; }
+    .page-head h1 { font-size:1.35rem; font-weight:700; margin:0; font-family:'Space Grotesk','Inter',sans-serif; letter-spacing:-0.01em; }
+    .page-head .sub { color:#64748b; font-size:.9rem; margin-top:4px; }
     .search-box { display:flex; gap:10px; margin-top:14px; max-width:520px; }
-    .search-box input { flex:1; border:0; padding:9px 12px; border-radius:8px; font-size:.95rem; }
+    .search-box input { flex:1; border:1px solid #e5e7eb; padding:9px 12px; border-radius:8px; font-size:.95rem; background:#fff; color:#0f172a; }
+    .search-box input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px #eff6ff; }
+    .search-box .btn { background:#2563eb; color:#fff; border:0; font-weight:600; }
+    .search-box .btn:hover { background:#1d4ed8; color:#fff; }
     .lot-head { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin-bottom:16px; }
     .lot-head .lot-no { font-size:1.3rem; font-weight:700; color:#0f172a; }
     .lot-head .meta { color:#64748b; font-size:.85rem; margin-top:4px; }
@@ -21,7 +26,7 @@
     .stage .rail { display:flex; flex-direction:column; align-items:center; }
     .stage .dot { width:18px; height:18px; border-radius:50%; border:3px solid #cbd5e1; background:#fff; margin-top:4px; }
     .stage .dot.done { border-color:#16a34a; background:#16a34a; }
-    .stage .dot.in_progress { border-color:#f59e0b; background:#fde68a; }
+    .stage .dot.in_progress { border-color:#b45309; background:#fef3c7; }
     .stage .dot.not_started { border-color:#cbd5e1; background:#fff; }
     .stage .line { flex:1; width:3px; background:#e5e7eb; margin:4px 0; min-height:18px; }
     .stage .body { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 16px; margin-bottom:12px; }
@@ -33,17 +38,50 @@
     .pieces .p span { color:#64748b; display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.3px; }
     .st-pill { font-size:.7rem; padding:2px 9px; border-radius:999px; font-weight:600; }
     .st-pill.done { background:#dcfce7; color:#166534; }
-    .st-pill.in_progress { background:#fef3c7; color:#92400e; }
+    .st-pill.in_progress { background:#fef3c7; color:#b45309; }
     .st-pill.not_started { background:#f1f5f9; color:#64748b; }
-    .dispatch-card { background:#0f172a; color:#fff; border-radius:12px; padding:16px 18px; margin-top:6px; }
+    .dispatch-card { background:#fff; color:#0f172a; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin-top:6px; box-shadow:0 1px 2px rgba(15,23,42,.06); }
+    .dispatch-card .num { font-family:'Space Grotesk','Inter',sans-serif; }
+    .dispatch-card .table-dark { --bs-table-bg:#ffffff; --bs-table-color:#0f172a; --bs-table-border-color:#e5e7eb; --bs-table-striped-bg:#f7f8fa; --bs-table-hover-bg:#f7f8fa; color:#0f172a; border-color:#e5e7eb; }
     .dispatch-card h5 { margin:0 0 10px; font-size:1rem; }
     .dispatch-card .num { font-size:1.5rem; font-weight:700; }
-    .dispatch-card .lbl { font-size:.72rem; color:#94a3b8; text-transform:uppercase; }
+    .dispatch-card .lbl { font-size:.72rem; color:#64748b; text-transform:uppercase; }
     .size-table td, .size-table th { padding:4px 10px; font-size:.82rem; }
     .muted { color:#94a3b8; }
+
+    /* ── Kotty Floor chrome (matches stitchingEvents.ejs / operator hub) ── */
+    .flx-top { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: #f7f8fa; border-bottom: 1px solid #e5e7eb; }
+    .flx-top-main { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+    .flx-top .brand { display: flex; align-items: center; gap: 10px; }
+    .flx-top .brand .material-symbols-outlined { color: #2563eb; }
+    .flx-top .brand h1 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; text-transform: uppercase; letter-spacing: 0.08em; color: #2563eb; margin: 0; }
+    .flx-top .flx-actions { display: flex; align-items: center; gap: 12px; }
+    .flx-top .flx-home { color: #64748b; display: flex; }
+    .flx-top .flx-user { font-size: 13px; font-weight: 600; color: #0f172a; }
+    .flx-top .flx-logout { display: inline-flex; align-items: center; gap: 6px; color: #dc2626; text-decoration: none; font-size: 13px; font-weight: 600; padding: 6px 10px; border: 1px solid #fecaca; border-radius: 8px; }
+    .flx-top .flx-logout .material-symbols-outlined { font-size: 18px; }
+    @media (max-width: 420px) { .flx-top .flx-user, .flx-top .flx-logout-t { display: none; } }
+    .flx-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 64px; z-index: 50; background: #ffffff; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-around; align-items: center; padding-bottom: env(safe-area-inset-bottom); }
+    .flx-nav a { display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .flx-nav a.active { color: #2563eb; }
+    .flx-nav a .material-symbols-outlined { font-size: 24px; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400; vertical-align: middle; }
   </style>
 </head>
 <body>
+  <header class="flx-top">
+    <div class="flx-top-main">
+      <div class="brand">
+        <span class="material-symbols-outlined">route</span>
+        <h1>Lot Journey</h1>
+      </div>
+      <div class="flx-actions">
+        <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
+        <span class="flx-user"><%= (typeof user !== 'undefined' && user && user.username) ? user.username : 'Operator' %></span>
+        <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
+      </div>
+    </div>
+  </header>
   <div class="page-head">
     <h1><i class="bi bi-signpost-split"></i> Lot Journey</h1>
     <div class="sub">Track one lot through every stage — cutting to finishing dispatch.</div>
@@ -152,5 +190,10 @@ document.getElementById('q').addEventListener('keydown',e=>{ if(e.key==='Enter')
   }
 })();
 </script>
+<nav class="flx-nav">
+  <a href="/operator/hub"><span class="material-symbols-outlined">home</span>Home</a>
+  <a href="/search-dashboard"><span class="material-symbols-outlined">search</span>Search</a>
+  <a href="/operator/lot-journey" class="active"><span class="material-symbols-outlined">route</span>Journey</a>
+</nav>
 </body>
 </html>

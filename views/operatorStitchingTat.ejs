@@ -1,5 +1,6 @@
 <%- include('partials/header', { pageTitle: 'Stitching TAT' }) %>
 <%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+<%- include('partials/floorTokens') %>
 
 <!-- Main Content -->
 <main class="main-content" style="margin-left: 0;">
@@ -80,14 +81,14 @@
 
   .master-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(26, 26, 26, 0.1);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
   }
 
   .master-avatar {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--terracotta), #d4826a);
+    background: var(--terracotta);
     color: white;
     display: flex;
     align-items: center;
@@ -147,24 +148,24 @@
   }
 
   .btn-outline-success {
-    border-color: #2e7d32;
-    color: #2e7d32;
+    border-color: #16a34a;
+    color: #16a34a;
   }
 
   .btn-outline-success:hover {
-    background: #2e7d32;
-    border-color: #2e7d32;
+    background: #16a34a;
+    border-color: #16a34a;
     color: white;
   }
 
   /* Badge variants */
   .badge-warning {
-    background: #fff3e0;
-    color: #e65100;
+    background: #fef3c7;
+    color: #b45309;
   }
 
   .badge-primary {
-    background: rgba(196, 92, 58, 0.1);
+    background: rgba(37, 99, 235, 0.1);
     color: var(--terracotta);
   }
 
