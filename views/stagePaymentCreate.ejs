@@ -1,21 +1,22 @@
 <%- include('partials/header', { pageTitle: 'Create Payments' }) %>
-<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/dashboard' }) %>
+<%- include('partials/navbar', { user: user, dashboardUrl: '/operator/hub' }) %>
+<%- include('partials/floorTokens') %>
 
 <style>
   :root {
-    --charcoal: #1a1a1a;
-    --cream: #faf8f5;
-    --cream-dark: #f0ebe3;
-    --terracotta: #c45c3a;
-    --terracotta-dark: #a84a2d;
-    --success: #2d8a5f;
-    --warning: #c4873a;
-    --danger: #c23b22;
-    --info: #3a7bc4;
-    --border: #e5e0d8;
-    --text-secondary: #5a5a5a;
+    --charcoal: #0f172a;
+    --cream: #f7f8fa;
+    --cream-dark: #f1f5f9;
+    --terracotta: #2563eb;
+    --terracotta-dark: #1d4ed8;
+    --success: #16a34a;
+    --warning: #b45309;
+    --danger: #dc2626;
+    --info: #2563eb;
+    --border: #e5e7eb;
+    --text-secondary: #64748b;
     --radius-sm: 6px;
-    --radius-md: 10px;
+    --radius-md: 12px;
   }
 
   body { background: var(--cream); }
