@@ -41,10 +41,10 @@
         ['Cut Pieces', num(totalPiecesCut), 'text-primary', 'content_cut'],
         ['Finished', num(totalFinished), 'text-secondary', 'check_circle'],
         ['Users', num(userCount), '', 'group']].forEach(function(k){ %>
-      <div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center justify-between">
-        <div>
+      <div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant shadow-sm flex items-center justify-between gap-2 min-w-0">
+        <div class="min-w-0">
           <p class="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold mb-1"><%= k[0] %></p>
-          <p class="font-headline text-3xl font-bold leading-none <%= k[2] %>"><%= k[1] %></p>
+          <p class="font-headline text-[clamp(1.25rem,5.5vw,1.875rem)] font-bold leading-none tracking-tight <%= k[2] %>"><%= k[1] %></p>
         </div>
         <span class="material-symbols-outlined text-on-surface-variant/40 text-3xl"><%= k[3] %></span>
       </div>
