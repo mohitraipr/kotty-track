@@ -219,6 +219,7 @@ router.route('/search-dashboard')
 
       // Render with empty results
       res.render('searchDashboard', {
+        user: req.session.user,
         allTables,
         selectedTable,
         columnList,
@@ -246,6 +247,7 @@ router.route('/search-dashboard')
       // Validate table
       if (!selectedTable || !allTables.includes(selectedTable)) {
         return res.render('searchDashboard', {
+          user: req.session.user,
           allTables,
           selectedTable: '',
           columnList: [],
@@ -268,6 +270,7 @@ router.route('/search-dashboard')
           DEFAULT_LIMIT
         );
         return res.render('searchDashboard', {
+          user: req.session.user,
           allTables,
           selectedTable,
           columnList,
