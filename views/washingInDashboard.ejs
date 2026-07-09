@@ -58,7 +58,6 @@
       <h1>Washing In</h1>
     </div>
     <div class="flx-actions">
-      <a class="flx-home" href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
       <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
       <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
     </div>
@@ -1185,10 +1184,5 @@ loadToday();
 loadHistory(true);
 </script>
 
-<nav class="flx-nav">
-  <a href="/operator/hub"><span class="material-symbols-outlined">home</span>Home</a>
-  <a href="/search-dashboard"><span class="material-symbols-outlined">search</span>Search</a>
-  <a href="/operator/lot-journey"><span class="material-symbols-outlined">route</span>Journey</a>
-</nav>
 </body>
 </html>
