@@ -24,7 +24,7 @@ router.get("/supervisors", isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error("Error loading supervisors:", err);
     req.flash("error", "Failed to load supervisors");
-    res.redirect("/operator/dashboard");
+    res.redirect("/operator/hub");
   }
 });
 

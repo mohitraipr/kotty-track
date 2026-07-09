@@ -772,7 +772,7 @@ router.get('/operator/view-all', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading all inward data:', error);
     req.flash('error', 'Error loading data');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -825,7 +825,7 @@ router.get('/operator/lot-entries', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading lot entries:', error);
     req.flash('error', 'Error loading lot entries');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -902,7 +902,7 @@ router.get('/operator/download-all-excel', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error generating Excel:', error);
     req.flash('error', 'Error generating Excel file');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -981,7 +981,7 @@ router.get('/operator/dashboard', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading PO Operator dashboard:', error);
     req.flash('error', 'Error loading dashboard');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -1016,7 +1016,7 @@ router.get('/operator/manage-brands', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading brands:', error);
     req.flash('error', 'Error loading brands');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -1053,7 +1053,7 @@ router.get('/operator/manage-categories', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading categories:', error);
     req.flash('error', 'Error loading categories');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -1105,7 +1105,7 @@ router.get('/operator/view-sku-wise', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading SKU-wise view:', error);
     req.flash('error', 'Error loading SKU-wise view');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -1135,7 +1135,7 @@ router.get('/operator/view-panel-wise', isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading panel-wise view:', error);
     req.flash('error', 'Error loading panel-wise view');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
