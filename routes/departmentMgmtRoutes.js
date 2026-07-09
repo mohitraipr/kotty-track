@@ -109,7 +109,7 @@ router.get('/departments', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading departments:', err);
     req.flash('error', 'Failed to load departments');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 

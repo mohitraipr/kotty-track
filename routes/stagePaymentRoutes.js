@@ -91,7 +91,7 @@ router.get('/rates', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading rates:', err);
     req.flash('error', 'Failed to load rates');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -292,7 +292,7 @@ router.get('/create', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading payment create:', err);
     req.flash('error', 'Failed to load page');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -482,7 +482,7 @@ router.get('/pending', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading pending payments:', err);
     req.flash('error', 'Failed to load payments');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -652,7 +652,7 @@ router.get('/history', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading history:', err);
     req.flash('error', 'Failed to load history');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -754,7 +754,7 @@ router.get('/debits', isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error loading debits:', err);
     req.flash('error', 'Failed to load debits');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 

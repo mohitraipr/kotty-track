@@ -52,7 +52,7 @@ function getDashboardForRole(roleName) {
     'cutting_manager': '/cutting-manager/dashboard',
     'fabric_manager': '/fabric-manager/dashboard',
     'stitching_master': '/stitchingdashboard',
-    'operator': '/operator/dashboard',
+    'operator': '/operator/hub',
     'inventory_operator': '/easyecom/stock-market',
     'outofstock': '/easyecom/stock-market',
     'supervisor': '/supervisor/employees',
@@ -91,8 +91,8 @@ function getDashboardForRole(roleName) {
 
   // If role not found, log it for debugging and return a safe default
   if (!dashboards[roleName]) {
-    console.warn(`Unknown role "${roleName}" - redirecting to /operator/dashboard as fallback`);
-    return '/operator/dashboard';
+    console.warn(`Unknown role "${roleName}" - redirecting to /operator/hub as fallback`);
+    return '/operator/hub';
   }
 
   return dashboards[roleName];

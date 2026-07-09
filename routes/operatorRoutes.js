@@ -349,52 +349,12 @@ router.get("/hub", isAuthenticated, isOperator, async (req, res) => {
   }
 });
 
-router.get("/dashboard", isAuthenticated, isOperator, async (req, res) => {
-  try {
-  const { search, startDate, endDate,
-      sortField="lot_no", sortOrder="asc", category="all", view } = req.query;
-
-    // 1) operatorPerformance
-    const operatorPerformance = await computeOperatorPerformance();
-
-    const [[totals]] = await pool.query(`
-      SELECT
-        (SELECT COUNT(*) FROM cutting_lots)                          AS lotCount,
-        (SELECT COALESCE(SUM(total_pieces),0) FROM cutting_lots)     AS totalPieces,
-        (SELECT COALESCE(SUM(pieces),0) FROM stitching_events
-           WHERE event_type='complete')                              AS totalStitched,
-        (SELECT COALESCE(SUM(pieces),0) FROM washing_events
-           WHERE event_type='complete')                              AS totalWashed,
-        (SELECT COALESCE(SUM(pieces),0) FROM finishing_events
-           WHERE event_type='complete')                              AS totalFinished,
-        (SELECT COUNT(*) FROM users)                                 AS userCount
-    `);
-
-    const lotCount = totals.lotCount;
-    const totalPiecesCut = parseFloat(totals.totalPieces) || 0;
-
-    // 6) advanced analytics
-    const advancedAnalytics = await computeAdvancedAnalytics(startDate, endDate);
-
-
-    // 7) render
-    return res.render("operatorDashboard", {
-      lotCount,
-      totalPiecesCut,
-      totalStitched: totals.totalStitched,
-      totalWashed: totals.totalWashed,
-      totalFinished: totals.totalFinished,
-      userCount: totals.userCount,
-      advancedAnalytics,
-      operatorPerformance,
-      user: req.session.user,
-      query: { search, startDate, endDate, sortField, sortOrder, category },
-      lotDetails: {}
-    });
-  } catch (err) {
-    console.error("Error loading operator dashboard:", err);
-    return res.status(500).send("Server error");
-  }
+// The classic operator dashboard is retired — the Kotty Floor hub IS the operator
+// dashboard now. Every legacy link/bookmark to /operator/dashboard lands on the hub.
+// (All /dashboard/* sub-routes — APIs, downloads, reports — remain live below.)
+router.get("/dashboard", isAuthenticated, isOperator, (req, res) => {
+  const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  return res.redirect("/operator/hub" + qs);
 });
 
 
@@ -2353,7 +2313,7 @@ router.get("/system-health", isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('System health error:', err);
     req.flash('error', 'Failed to load system health');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -2447,7 +2407,7 @@ router.get("/usage-analytics", isAuthenticated, isOperator, async (req, res) => 
   } catch (err) {
     console.error('Usage analytics error:', err);
     req.flash('error', 'Failed to load usage analytics');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -2584,7 +2544,7 @@ router.get("/lot-completion", isAuthenticated, isOperator, async (req, res) => {
   } catch (err) {
     console.error('Error in lot-completion:', err);
     req.flash('error', 'Failed to load lot completion data');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
@@ -2788,7 +2748,7 @@ router.get('/sku-categories', isAuthenticated, isOperator, async (req, res) => {
   } catch (error) {
     console.error('Error loading SKU categories:', error);
     req.flash('error', 'Failed to load categories');
-    res.redirect('/operator/dashboard');
+    res.redirect('/operator/hub');
   }
 });
 
