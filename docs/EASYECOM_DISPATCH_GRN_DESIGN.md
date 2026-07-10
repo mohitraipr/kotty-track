@@ -133,10 +133,48 @@ Once dispatches flow as GRNs:
 | 3 | PM closed-loop hookup (confirmed batch → in-flight closure) | low |
 | 4 | Optional: auto-push, second warehouse, QC-hold bin flow | later |
 
-## 6. Open decisions (need the business call)
+## 6. Decisions (locked 2026-07-10)
 
-1. **Which warehouse first** — Faridabad (173983) or Delhi (176318)? (Creds per warehouse.)
-2. **Transfer price** on the PO/GRN (finance visibility) — nominal ₹1, actual cost, or style cost?
-3. **Sellable immediately?** GRN'd stock becomes Available → marketplaces. If warehouse QC
-   should happen first, we GRN into a hold bin and putaway manually.
-4. **Who approves pushes** — which operator role sees the review screen.
+1. **Warehouse:** Faridabad (warehouse_id 173983). Needs its API credentials (email/password/
+   location_key + X-API-Key) stored as Cloud Run secrets.
+2. **Unit price:** fetched from EasyEcom itself — `Get Master Product` exposes `cost` and
+   `mrp` per SKU; we cache them (daily refresh via the pull worker) and echo them back on the
+   PO/GRN lines. No local price table. Lines whose SKU has no cost in the master are flagged
+   on the review screen (pushed with cost 0 only on explicit operator confirm).
+3. **Sellable-immediately vs QC hold:** resolved empirically by the Phase-0 test (below) —
+   EasyEcom accounts differ on whether GRN'd stock lands as Available instantly or sits in
+   putaway/Hold until warehouse staff putaway. We observe, then decide the bin strategy.
+4. **Approver:** the **finishing role** — the review/approve screen lives on the finishing
+   dashboard, gated `isFinishingMaster`. (Per the audience rule: the screen's users must be
+   able to reach everything on it.)
+
+### Investigated and set aside: EasyEcom "Production Order"
+`POST /webhook/v2/createOrder` with `orderType: "productionorder"` exists, but its payload is
+outbound-order-shaped (customer, payment, discounts) and its inventory semantics are
+undocumented. The PO+GRN path is the documented inbound with a full trail — we stay on it.
+Worth one question to EasyEcom support later, nothing more.
+
+## 7. Phase-0 protocol — "how would we know?"
+
+The GRN→sellable behaviour is account-configuration-dependent, so we measure it with one test
+SKU before any real lot:
+
+1. Pick/create a **test SKU** in EasyEcom that is listed on at most one low-risk marketplace
+   (or none).
+2. Record its baseline: `STATUS_WISE_STOCK_REPORT` (Available/Hold/Reserved) + the marketplace
+   listing quantity.
+3. Push the flow end-to-end: CreatePurchaseOrder (qty 5) → QueueGrnApi → CheckGrnStatus.
+4. Observe, in order:
+   - `getGrnDetails` — GRN created, status, invoice number (the document trail exists).
+   - `STATUS_WISE_STOCK_REPORT` — did +5 land in **Available** immediately, or in **Hold**
+     until a putaway? This answers decision 3.
+   - The warehouse team's EasyEcom WMS screen — does a putaway task appear for shelf
+     PRODUCTION-INWARD?
+   - The marketplace seller panel after EasyEcom's next sync — did the listing quantity rise?
+5. Reverse the test (adjust the 5 units back out in EE UI) and write the observed behaviour
+   into this doc before Phase 2.
+
+**Prerequisites from the business (one-time):**
+- Create vendor **"Kotty Production"** in the EasyEcom UI → note its `vendor_id`.
+- Faridabad API credentials + X-API-Key → Cloud Run secrets (`--update-secrets` only).
+- Name the test SKU.
