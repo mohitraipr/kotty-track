@@ -42,11 +42,13 @@ therefore gated, idempotent, and blocks on anything unresolved.
 Note `batch_code = lot_no` — the production lot travels into the OMS as the batch, giving
 full lot-level traceability inside EasyEcom.
 
-**Auth:** V2.1 — `POST /access/token {email, password, location_key}` → JWT; every call sends
-`Authorization: Bearer <jwt>` **and** `X-API-Key`. The `location_key` must be the **receiving
-warehouse's** (Faridabad wh 173983 / Delhi wh 176318 — each has its own credentials; the
-PRIMARY key `ne30265212961` is the account-level one used by the pull worker). Rate limits are
-tier-based (429); reuse the 5-retry exponential backoff from `utils/easyecomReturnsClient.js`.
+**Auth (corrected 2026-07-10):** the `X-API-Key` is **account-level (primary only)** — the
+same `EASYECOM_API_KEY` already in our secrets goes on every call. Location scoping happens in
+the JWT: `POST /access/token {email, password, location_key}` minted with the **Faridabad
+location_key** puts the GRN in the Faridabad context. This is exactly the model
+`utils/easyecomPullWorker.js` already uses for per-warehouse mini-sales pulls (secondary
+location_keys as "Company Token"), so **no new credentials or keys are needed**. Rate limits
+are tier-based (429); reuse the 5-retry exponential backoff from `utils/easyecomReturnsClient.js`.
 
 ---
 
@@ -127,7 +129,7 @@ Once dispatches flow as GRNs:
 
 | Phase | Scope | Risk |
 |---|---|---|
-| 0 | One-time: create "Kotty Production" vendor in EasyEcom UI; get warehouse API creds; sandbox-test one PO+GRN with a test SKU; confirm marketplace sync behaviour | none (test SKU) |
+| 0 | One-time: pick/create vendor via API (`getVendors`/`CreateVendor`); sandbox-test one PO+GRN with a test SKU; observe sellable-vs-hold + marketplace sync behaviour | none (test SKU) |
 | 1 | `ee_dispatch_grn` table + resolver join + **review screen** (list batches, blocked lines) — no pushing yet | none |
 | 2 | Push pipeline (steps 3–6) behind `EE_GRN_PUSH`, operator-approved, Warehouse-destination dispatches only | low (gated) |
 | 3 | PM closed-loop hookup (confirmed batch → in-flight closure) | low |
@@ -174,7 +176,11 @@ SKU before any real lot:
 5. Reverse the test (adjust the 5 units back out in EE UI) and write the observed behaviour
    into this doc before Phase 2.
 
-**Prerequisites from the business (one-time):**
-- Create vendor **"Kotty Production"** in the EasyEcom UI → note its `vendor_id`.
-- Faridabad API credentials + X-API-Key → Cloud Run secrets (`--update-secrets` only).
-- Name the test SKU.
+**Prerequisites (mostly automated now):**
+- Vendor: resolved via API — `GET /wms/V2/getVendors` to reuse a suitable existing vendor, or
+  `POST /wms/CreateVendor` to create "Kotty Production" in one call (recommended: dedicated
+  vendor keeps production inbounds out of fabric-vendor purchase reports). No UI work.
+- Credentials: none needed — account `EASYECOM_API_KEY` + JWT minted with the Faridabad
+  location_key (already the pull-worker model).
+- From the business: just **name the test SKU** (ideally listed on at most one low-risk
+  marketplace).
