@@ -1065,7 +1065,8 @@ async function buildPicSizeRows({
   }
 
   const baseQuery = `
-    SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label, cls.total_pieces, cl.created_at, cl.remark, cl.flow_type,
+    SELECT cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label,
+           SUM(cls.total_pieces) AS total_pieces, cl.created_at, cl.remark, cl.flow_type,
            u.username AS created_by, u.is_denim_cutter
       FROM cutting_lots cl
       JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
@@ -1073,6 +1074,8 @@ async function buildPicSizeRows({
      WHERE 1=1
        ${lotTypeClause}
        ${dateWhere}
+     GROUP BY cl.lot_no, cl.manual_lot_number, cl.sku, cl.fabric_type, cls.size_label,
+              cl.created_at, cl.remark, cl.flow_type, u.username, u.is_denim_cutter
      ORDER BY cl.created_at DESC
      LIMIT ${rowLimit}`;
   const [rows] = await pool.query(baseQuery, dateParams);

@@ -97,10 +97,11 @@ async function computeOnOrderBySku(pool, { windowDays } = {}) {
 
   const [inflight] = await pool.query(
     `SELECT cl.lot_no, cl.sku AS style, cls.size_label,
-            COALESCE(cls.total_pieces, 0) AS cut_pieces
+            COALESCE(SUM(cls.total_pieces), 0) AS cut_pieces
      FROM cutting_lots cl
      JOIN cutting_lot_sizes cls ON cls.cutting_lot_id = cl.id
-     WHERE cl.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
+     WHERE cl.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     GROUP BY cl.lot_no, cl.sku, cls.size_label`,
     [days]
   );
 

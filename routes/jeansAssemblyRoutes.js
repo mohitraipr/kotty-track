@@ -1295,8 +1295,10 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
     ]);
     for (const k of labels) {
       const avail = upstreamMap[k] || 0;
-      const taken = (cleanSizes.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
-      const rej   = (cleanRejected.find(s => stageEvents.normalizeSizeLabel(s.size_label) === k) || {}).pieces || 0;
+      // Sum ALL entries for this label — .find() counted only the first, so a payload
+      // with duplicate labels validated one slice but inserted all of them.
+      const taken = cleanSizes.filter(s => stageEvents.normalizeSizeLabel(s.size_label) === k).reduce((a, s) => a + s.pieces, 0);
+      const rej   = cleanRejected.filter(s => stageEvents.normalizeSizeLabel(s.size_label) === k).reduce((a, s) => a + s.pieces, 0);
       if (taken + rej > avail) {
         await conn.rollback();
         return res.status(400).json({
@@ -1448,8 +1450,8 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
     for (const label of allLabels) {
       const approved = parentSizeMap[label] || 0;
       const prev = childSizeMap[label] || { complete: 0, reject: 0 };
-      const newComplete = (cleanCompleted.find(s => s.size_label === label) || {}).pieces || 0;
-      const newReject = (cleanRejected.find(s => s.size_label === label) || {}).pieces || 0;
+      const newComplete = cleanCompleted.filter(s => s.size_label === label).reduce((a, s) => a + s.pieces, 0);
+      const newReject = cleanRejected.filter(s => s.size_label === label).reduce((a, s) => a + s.pieces, 0);
       const totalAfter = prev.complete + prev.reject + newComplete + newReject;
       if (totalAfter > approved) {
         await conn.rollback();
