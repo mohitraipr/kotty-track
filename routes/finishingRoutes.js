@@ -706,6 +706,16 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isFinishingMaster,
 
     const stageUsers = await getLotStageUsers(pool, { id: lot.id, flow_type: lot.flow_type, cutter_name: lot.cutting_master });
 
+    // Dispatch visibility: where this lot's finished pieces have gone. Dispatches live in
+    // finishing_dispatches (not the events ledger), so without this the UI showed nothing
+    // after a dispatch.
+    const [dispatchSummary] = await pool.query(
+      `SELECT destination, SUM(quantity) AS qty, MAX(created_at) AS last_at
+         FROM finishing_dispatches WHERE lot_no = ? GROUP BY destination ORDER BY qty DESC`,
+      [lot.lot_no]
+    );
+    const dispatchedTotal = dispatchSummary.reduce((a, d) => a + (Number(d.qty) || 0), 0);
+
     res.json({
       lot,
       flow_kind: isHosieryLot(lot) ? 'hosiery' : 'denim',
@@ -715,6 +725,8 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isFinishingMaster,
       upstream_total_available: upstreamTotal,
       open_approvals: openApprovals,
       stage_users: stageUsers,
+      dispatch_summary: dispatchSummary,
+      dispatched_total: dispatchedTotal,
     });
   } catch (err) {
     console.error('[ERROR] GET /finishing/event/lot-state =>', err);
