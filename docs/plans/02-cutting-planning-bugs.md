@@ -1,6 +1,6 @@
 # Plan 02 — Cutting-Planning Correctness Backlog
 
-_Status: Not started. Source: end-to-end audit (2026-07-03) of `/pm` cutting planning,
+_Status: **CP-1/2/3/4/8 DONE** (see 00-PROGRESS table, updated 2026-07-10); CP-5/6/7/9 open (code), CP-10 open (upload the PREFILLED resolver sheets). Source: end-to-end audit (2026-07-03) of `/pm` cutting planning,
 verified live against prod. Fix these **one by one**, each on its own branch/PR, each with a
 before/after check. Ordered by value/effort._
 

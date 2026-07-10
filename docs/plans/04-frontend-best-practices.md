@@ -1,6 +1,6 @@
 # Plan 04 — Frontend Issues vs Best Practice (one by one)
 
-_Status: Not started. Each item: **Issue → Best practice → Fix**. Prioritized. These apply to
+_Status: **FE-5 + FE-6 DONE** (#539: MySQL session store, CI island build), **FE-3 + FE-2 DONE** (#540: XSS audit/fixes, `public/js/api.js` client — 3 screens migrated, ~80 call sites remain). FE-1 open (unlocks FE-4/CSP); FE-7–10 best absorbed by Plan 03 islands. Each item: **Issue → Best practice → Fix**. These apply to
 the current EJS frontend and are largely independent of the React question (Plan 03); doing
 them makes an eventual React migration easier, not harder._
 
