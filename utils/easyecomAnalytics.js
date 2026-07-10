@@ -843,6 +843,9 @@ async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = fal
     const upcomingPoQty = (poMap.get(sku) || [])
       .reduce((s, p) => s + (p.daysOut <= horizon ? p.qty : 0), 0);
 
+    // CP-3 (confirmed with the business 2026-07-10): marketplace PO lines are OUTBOUND
+    // DEMAND — pieces we must produce and ship (e.g. Myntra JIT POs) — NOT inbound supply.
+    // They therefore ADD to the suggested cut. Do not flip this sign.
     const suggested = Math.max(
       0,
       horizon * drr - soh - openLotQty + upcomingPoQty
