@@ -211,7 +211,7 @@ router.get('/event/history', isAuthenticated, isFinishingMaster, async (req, res
       params
     );
 
-    if (!events.length) return res.json({ events: [] });
+    // NOTE: don't early-return on empty events — the lot may still have dispatches.
 
     const eventIds = events.map(e => e.id);
     const [sizes] = await pool.query(
@@ -247,19 +247,46 @@ router.get('/event/lot-journey/:cuttingLotId', isAuthenticated, isFinishingMaste
        ORDER BY e.created_at ASC, e.id ASC`,
       [lotId]
     );
-    if (!events.length) return res.json({ events: [] });
+    // NOTE: don't early-return on empty events — the lot may still have dispatches.
     const ids = events.map(e => e.id);
-    const [sizes] = await pool.query(
-      `SELECT event_id, size_label, pieces FROM finishing_event_sizes WHERE event_id IN (?)`,
-      [ids]
-    );
+    const [sizes] = ids.length
+      ? await pool.query(
+          `SELECT event_id, size_label, pieces FROM finishing_event_sizes WHERE event_id IN (?)`,
+          [ids]
+        )
+      : [[]];
     const sizeMap = {};
     for (const s of sizes) {
       if (!sizeMap[s.event_id]) sizeMap[s.event_id] = {};
       sizeMap[s.event_id][s.size_label] = Number(s.pieces) || 0;
     }
     events.forEach(e => { e.sizes = sizeMap[e.id] || {}; });
-    res.json({ events });
+
+    // Dispatches are part of the lot's journey too (they live outside the events
+    // ledger). One journey entry per dispatch action (same batch+destination+moment).
+    const [dispRows] = await pool.query(
+      `SELECT fd.finishing_data_id, fd.destination, fd.size_label, fd.quantity, fd.created_at
+         FROM finishing_dispatches fd
+         JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
+        WHERE cl.id = ?
+        ORDER BY fd.created_at ASC, fd.id ASC`,
+      [lotId]
+    );
+    const dGroups = new Map();
+    for (const d of dispRows) {
+      const key = `${d.finishing_data_id}|${d.destination}|${new Date(d.created_at).getTime()}`;
+      if (!dGroups.has(key)) {
+        dGroups.set(key, { id: null, event_type: 'dispatch', pieces: 0, remark: null,
+          created_at: d.created_at, parent_event_id: null, operator: null,
+          destination: d.destination, sizes: {} });
+      }
+      const g = dGroups.get(key);
+      g.pieces += Number(d.quantity) || 0;
+      g.sizes[d.size_label] = (g.sizes[d.size_label] || 0) + (Number(d.quantity) || 0);
+    }
+    const journey = [...events, ...dGroups.values()]
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    res.json({ events: journey });
   } catch (err) {
     console.error('[ERROR] GET /finishingdashboard/event/lot-journey =>', err);
     res.status(500).json({ error: err.message });
