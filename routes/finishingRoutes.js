@@ -2226,7 +2226,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isFinishingMaster, async (req
     }
 
     const [cuttingSizes] = await pool.query(`
-      SELECT size_label, total_pieces as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+      SELECT size_label, SUM(total_pieces) as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? GROUP BY size_label
     `, [cuttingLot.id]);
 
     const [[finishingData]] = await pool.query(`

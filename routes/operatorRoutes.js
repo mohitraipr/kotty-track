@@ -466,7 +466,7 @@ router.get("/dashboard/api/lot", isAuthenticated, isOperator, async (req, res) =
       );
       if (!lot) return null;
       const [sizes] = await pool.query(
-        `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?`,
+        `SELECT size_label, SUM(total_pieces) AS total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? GROUP BY size_label`,
         [lot.id]
       );
       return { lot, sizes };
