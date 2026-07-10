@@ -156,6 +156,42 @@ outbound-order-shaped (customer, payment, discounts) and its inventory semantics
 undocumented. The PO+GRN path is the documented inbound with a full trail — we stay on it.
 Worth one question to EasyEcom support later, nothing more.
 
+## 8. MODEL REVISION (2026-07-10, after live Phase-0): PO-only — warehouse approves by GRN
+
+The first live test created both the PO **and** the GRN via API. Decision: **too automatic** —
+inventory entered the OMS with no human at the warehouse confirming physical receipt.
+
+**Final model:** kotty-track creates **only the Purchase Order** (the challan). The Faridabad
+team receives the physical dispatch and makes the **GRN manually in the EasyEcom UI against
+that PO** — their normal receiving screen. Stock enters EasyEcom (→ marketplaces) only when
+the warehouse confirms the goods. This also collapses Phase 2: no GRN client, no queue
+polling — the pipeline is CreatePurchaseOrder + a confirmation job that polls
+`Grn/V2/getGrnDetails?created_after=…` and matches `po_id` to mark our dispatch batches
+**confirmed** when the warehouse GRNs them (and flags batches unreceived after N days).
+
+### Live Phase-0 artifacts & findings
+- Vendor **Kotty Production** — vendor_c_id **289541**, code **V002** (created via API;
+  GSTIN/PAN mirrored from KOTTY LIFESTYLE; email kotty4133@gmail.com).
+- Test 1 (superseded): PO **2061826** `KT-DISP-TEST-001` + API GRN **2221812** (In Progress,
+  1 × KTTBLUETOP768M @ ₹200, MRP 1299, batch TEST-PHASE0, bin `default`). To clean up:
+  warehouse cancels GRN 2221812 in the UI, then the PO can be cancelled.
+- Test 2 (the real model): PO **2061975** `KT-DISP-TEST-002`, 1 × KTTBLUETOP768M — awaiting
+  manual warehouse GRN.
+- API quirks (bake into the client): `CreatePurchaseOrder.vendorId` = the vendor **code**
+  ("V002") while `QueueGrnApi.vendor_id` = the **numeric** vendor_c_id; `expDeliveryDate`
+  must be strictly after today; receiving bin is lowercase **`default`**; GRN-queue success
+  returns `queueId` at the TOP level of the response; EE rejects inwarding beyond PO quantity
+  ("can't inward more than PO quantity") — a built-in second layer of double-push protection;
+  a PO with any GRN against it cannot be cancelled.
+- Vendors are visible across location contexts, but ALL PO/GRN calls should use the
+  **Faridabad-context JWT** (`EASYECOM_LOCATION_KEY` = ee30270084289 = Faridabad, per
+  `utils/easyecomReturnsClient.js` WAREHOUSES map).
+- Test SKU: **KTTBLUETOP768M** (product_id 34048953, active, plain product, 0 stock @Faridabad,
+  0 sales 90d; Myntra listing myntra.com/36828826, Amazon B0FQ2VB5LL; control listing
+  myntra.com/38188898 = SCK-prefixed sibling SKU).
+- Product master (98,072 SKUs) has NO per-SKU filter — cost/mrp at scale come from extending
+  the nightly `ee_product_master` sync with cost+mrp columns.
+
 ## 7. Phase-0 protocol — "how would we know?"
 
 The GRN→sellable behaviour is account-configuration-dependent, so we measure it with one test
