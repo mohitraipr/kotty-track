@@ -369,7 +369,7 @@
 <script>
   // Restore existing tags if searchTerm was previously used
   let tags = [];
-  const existing = (<%- JSON.stringify(searchTerm || '') %>).trim();
+  const existing = (<%- JSON.stringify(searchTerm || '').replace(/</g, '\\u003c') %>).trim();
   if (existing) {
     // For a true multi-tag scenario, you might split on spaces:
     tags = existing.split(/\s+/).filter(Boolean);

@@ -100,6 +100,9 @@
         <span class="badge badge-neutral"><%= rows.length %> records with size breakdown</span>
       </div>
       <%
+        function escHtml(x) {
+          return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
         function statusBadge(s) {
           if (!s || s === 'N/A' || s === '—') return '<span class="text-muted">—</span>';
           const m = String(s).toLowerCase();
@@ -109,11 +112,11 @@
           if (m === 'pending approval') return '<span class="badge badge-warning">Pending Approval</span>';
           if (m === 'denied')    return '<span class="badge badge-danger">Denied</span>';
           if (m === 'not started') return '<span class="badge badge-neutral">Not Started</span>';
-          return '<span class="badge badge-neutral">' + s + '</span>';
+          return '<span class="badge badge-neutral">' + escHtml(s) + '</span>';
         }
         function qtyOrDash(v) {
           if (v === '' || v === null || v === undefined || v === '—') return '<span class="text-muted">—</span>';
-          return v;
+          return escHtml(v);
         }
       %>
       <div class="table-responsive">

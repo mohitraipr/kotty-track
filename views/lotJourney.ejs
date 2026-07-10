@@ -97,6 +97,7 @@
     <div id="out"></div>
   </div>
 
+<script src="/public/js/api.js"></script>
 <script>
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'}) : '—';
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -112,8 +113,7 @@ async function go(){
   try{ history.replaceState(null,'','/operator/lot-journey?q='+encodeURIComponent(q)); }catch(_e){}
   status.style.display='block'; status.textContent='Searching…';
   try{
-    const r = await fetch('/operator/lot-journey/data?q='+encodeURIComponent(q));
-    const data = await r.json();
+    const data = await KottyApi.apiGet('/operator/lot-journey/data?q='+encodeURIComponent(q));
     if(!data.ok){ status.textContent='Error: '+(data.error||'failed'); return; }
     if(!data.journey){ status.textContent='No lot found for "'+q+'".'; return; }
     status.style.display='none';

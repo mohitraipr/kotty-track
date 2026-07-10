@@ -356,8 +356,15 @@
 </div>
 
 <script>
-  // Server-rendered rate options for dynamic row creation
-  const rateOptions = `<option value="">Select description</option><% rates.forEach(function(r){ %><option value="<%- r.description.replace(/'/g, "\\'") %>" data-rate="<%= r.rate %>"><%- r.description.replace(/'/g, "\\'") %> (Rs. <%= r.rate %>)</option><% }); %>`;
+  // Server-provided rate data; options built client-side with HTML escaping
+  const RATE_LIST = <%- JSON.stringify(rates.map(function(r){ return { description: r.description, rate: r.rate }; })).replace(/</g, '\\u003c') %>;
+  function escHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  const rateOptions = '<option value="">Select description</option>' + RATE_LIST.map(function(r){
+    return '<option value="' + escHtml(r.description) + '" data-rate="' + escHtml(r.rate) + '">' +
+      escHtml(r.description) + ' (Rs. ' + escHtml(r.rate) + ')</option>';
+  }).join('');
 
   function updateTotals(lotId){
     const container = document.getElementById('desc-container-' + lotId);
