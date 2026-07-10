@@ -173,7 +173,7 @@ router.get('/event/lot-state/:cuttingLotId', isAuthenticated, isStitchingMaster,
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
     const [cutSizes] = await pool.query(
-      `SELECT size_label, total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? ORDER BY id`,
+      `SELECT size_label, SUM(total_pieces) AS total_pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? GROUP BY size_label ORDER BY MIN(id)`,
       [lotId]
     );
 
@@ -2200,7 +2200,7 @@ router.get('/lot-details/:lotNo', isAuthenticated, isStitchingMaster, async (req
 
     // Get cutting sizes
     const [cuttingSizes] = await pool.query(`
-      SELECT size_label, total_pieces as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ?
+      SELECT size_label, SUM(total_pieces) as pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? GROUP BY size_label
     `, [cuttingLot.id]);
 
     // Get stitching data for this user
