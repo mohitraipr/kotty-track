@@ -92,6 +92,29 @@ app.use('/returns/api', cors({
 }));
 
 // Session Configuration
+// FE-5: sessions live in MySQL (shared across Cloud Run instances / restarts) instead of
+// the default in-process MemoryStore, which caused intermittent logouts whenever a request
+// hit a different instance or an instance recycled.
+const { pool } = require('./config/db');
+const MySQLStore = require('express-mysql-session')(session);
+
+// Must match cookie.maxAge below so the store row and the cookie expire together.
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
+
+const sessionStore = new MySQLStore({
+    createDatabaseTable: true, // auto-create the `sessions` table on first boot
+    schema: { tableName: 'sessions' },
+    clearExpired: true,
+    checkExpirationInterval: 15 * 60 * 1000, // sweep expired rows every 15 minutes
+    expiration: SESSION_TTL_MS
+}, pool); // reuse the existing mysql2/promise pool (same Cloud SQL socket/env config)
+
+// The store connects lazily via the shared pool; if table creation fails at boot the app
+// must still start (reads/writes will retry per-request), so log instead of crashing.
+sessionStore.onReady()
+    .then(() => console.log('Session store ready (MySQL `sessions` table)'))
+    .catch((err) => console.error('Session store init error (app continues, sessions handled lazily):', err.message));
+
 const sessionSecret = global.env.SESSION_SECRET;
 if (!sessionSecret && process.env.NODE_ENV === 'production') {
     console.error('CRITICAL: SESSION_SECRET must be set in production!');
@@ -103,6 +126,7 @@ const isProduction = !!(process.env.K_SERVICE || process.env.NODE_ENV === 'produ
 
 app.use(session({
     secret: sessionSecret || 'dev-only-secret-not-for-production',
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     rolling: true, // refresh expiry on each request so active users are not logged out unexpectedly
@@ -281,7 +305,7 @@ app.use('/api/po-admin', poAdminApiRoutes);
 app.use('/returns', returnRoutes);
 app.use('/return-grn', returnGrnRoutes);
 
-const { pool } = require('./config/db');
+// (config/db pool is already required near the session setup at the top of this file)
 
 // Start scheduled jobs (Ajio recon, mail auto-reply, EasyEcom pull worker, etc.)
 const { startCronJobs } = require('./utils/scheduler');
