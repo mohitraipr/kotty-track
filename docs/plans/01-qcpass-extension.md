@@ -1,6 +1,6 @@
 # Plan 01 — QC-Capture Extension → Authenticated DB Ingestion (`jitrgp`)
 
-_Status: Not started. Owner: TBD. Related: `qcpass_extension/`, `routes/`, `middlewares/auth.js`._
+_Status: **SHIPPED 2026-07-03** (PRs #483–#494: token auth, dedup ingestion, QC dashboard rebuilt on captures + item_barcode join, login flow, CSV recovery; 161+ tests; rev 00411). REMAINING: one live test of the Myntra auto-pass click on the real portal. This plan is kept for the design rationale._
 
 ## Context — what prompted this
 `qcpass_extension/` is a Manifest-V3 Chrome extension ("QC Capture — Full Return Data")
