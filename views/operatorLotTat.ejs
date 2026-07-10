@@ -181,6 +181,7 @@
     <div id="list"></div>
   </div>
 
+<script src="/public/js/api.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
 
@@ -290,12 +291,13 @@
     $('list').innerHTML = '<div class="empty-state">Loading…</div>';
     const qs = buildQS();
     $('dlBtn').href = '/operator/lot-tat/download' + (qs ? '?' + qs : '');
-    const r = await fetch('/operator/lot-tat/data' + (qs ? '?' + qs : ''));
-    if (!r.ok) {
-      $('list').innerHTML = '<div class="empty-state">Failed to load. ' + r.status + '</div>';
+    let data;
+    try {
+      data = await KottyApi.apiGet('/operator/lot-tat/data' + (qs ? '?' + qs : ''));
+    } catch (e) {
+      $('list').innerHTML = '<div class="empty-state">Failed to load. ' + (e.status || e.message) + '</div>';
       return;
     }
-    const data = await r.json();
     const lots = data.lots || [];
     renderCounts(lots);
     $('list').innerHTML = lots.length

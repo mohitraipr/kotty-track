@@ -89,7 +89,7 @@
     </div>
 
     <form action="/accounts-challan/create" method="POST">
-      <input type="hidden" name="selectedRows" value='<%- JSON.stringify(selectedRows) %>'>
+      <input type="hidden" name="selectedRows" value="<%= JSON.stringify(selectedRows) %>">
 
       <div class="row g-4">
         <!-- Challan Details Form -->

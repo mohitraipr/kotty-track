@@ -365,13 +365,13 @@
     <% if (error && error.length) { %>
       <div class="alert alert-danger">
         <i class="bi bi-exclamation-circle me-2"></i>
-        <%- error.join('<br>') %>
+        <% error.forEach(function(msg, i){ %><% if (i > 0) { %><br><% } %><%= msg %><% }); %>
       </div>
     <% } %>
     <% if (success && success.length) { %>
       <div class="alert alert-success">
         <i class="bi bi-check-circle me-2"></i>
-        <%- success.join('<br>') %>
+        <% success.forEach(function(msg, i){ %><% if (i > 0) { %><br><% } %><%= msg %><% }); %>
       </div>
     <% } %>
 

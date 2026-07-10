@@ -88,6 +88,7 @@
   </div>
 </div>
 
+<script src="/public/js/api.js"></script>
 <script>
 function showToast(msg, type) {
   var toast = document.getElementById('toast');
@@ -104,20 +105,15 @@ document.getElementById('addForm').addEventListener('submit', async function(e) 
   if (!name) return;
 
   try {
-    var res = await fetch('/operator/api/sku-categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name })
-    });
-    var data = await res.json();
-    if (data.success) {
+    var data = await KottyApi.apiPost('/operator/api/sku-categories', { name: name });
+    if (data && data.success) {
       showToast('Category "' + name.toUpperCase() + '" added!', 'success');
       input.value = '';
       setTimeout(function() { location.reload(); }, 1000);
     } else {
-      showToast(data.error || 'Failed to add', 'error');
+      showToast((data && data.error) || 'Failed to add', 'error');
     }
-  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) { showToast(e.message || 'Failed to add', 'error'); }
 });
 
 document.querySelectorAll('.btn-delete').forEach(function(btn) {
@@ -127,17 +123,16 @@ document.querySelectorAll('.btn-delete').forEach(function(btn) {
     if (!confirm('Delete category "' + name + '"?')) return;
 
     try {
-      var res = await fetch('/operator/api/sku-categories/' + id, { method: 'DELETE' });
-      var data = await res.json();
-      if (data.success) {
+      var data = await KottyApi.apiDelete('/operator/api/sku-categories/' + id);
+      if (data && data.success) {
         showToast('Category deleted', 'success');
         document.querySelector('tr[data-id="' + id + '"]').remove();
         var count = document.querySelectorAll('#categoriesTable tbody tr').length;
         document.getElementById('categoryCount').textContent = count;
       } else {
-        showToast(data.error || 'Failed to delete', 'error');
+        showToast((data && data.error) || 'Failed to delete', 'error');
       }
-    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    } catch (e) { showToast(e.message || 'Failed to delete', 'error'); }
   });
 });
 </script>
