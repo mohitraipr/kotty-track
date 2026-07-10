@@ -59,18 +59,19 @@ All merged to `main` unless noted. These fixed the production-manager (PM) data 
 ---
 
 ## C. Cutting-planning bug backlog — quick status (details in `02`)
-| ID | Bug / gap | Severity | Status |
+| ID | Bug / gap | Severity | Status (updated 2026-07-10) |
 |----|-----------|----------|--------|
-| CP-1 | `orange` vs `amber` trigger mismatch → 107 "cut-soon" styles shown as Covered | **High** | **DONE — PR #483** (107 amber styles now surface) |
-| CP-2 | Closed loop not wired (assign never becomes "cut") | **High (design)** | Open |
-| CP-3 | Marketplace-PO sign (`+ upcomingPoQty`) — verify demand vs supply | High | Open (needs decision) |
-| CP-4 | No transaction in `POST /api/cut-plan/assign` (per-lot mode) | Medium | Open |
+| CP-1 | `orange` vs `amber` trigger mismatch → 107 "cut-soon" styles shown as Covered | **High** | **DONE — PR #483** |
+| CP-2 | Closed loop not wired (assign never becomes "cut") | **High (design)** | **DONE** — Start-this-lot (#498) links assignment→cutting_lot + status 'cut'; GRN pipeline (#538) closes the dispatch end |
+| CP-3 | Marketplace-PO sign (`+ upcomingPoQty`) | High | **DONE** — business confirmed POs are OUTBOUND DEMAND; `+` is correct; semantics locked in a code comment (easyecomAnalytics) |
+| CP-4 | No transaction in `POST /api/cut-plan/assign` (per-lot mode) | Medium | **DONE** — per-lot assign refactor (#507) wrapped all inserts in one transaction |
 | CP-5 | Style-scope lead-times ignored (only `scope='sku'` loaded) | Medium | Open |
 | CP-6 | CAD size vocabulary not unified (no 5XL/6XL/numeric) | Medium | Open |
 | CP-7 | `deriveStyle` over-strip (base ending in S/M/L/XL) | Medium | Open |
-| CP-8 | Leftover `GET /pm/debug-ee` endpoint | Low | Open |
+| CP-8 | Leftover `GET /pm/debug-ee` endpoint | Low | **DONE** — endpoint no longer exists |
 | CP-9 | Redundant heavy recompute in assign path | Low | Open |
-| CP-10 | Resolver gap: unresolved in-flight counted, not netted → over-cut | Medium | Open (monitor) |
+| CP-10 | Resolver gap: unresolved in-flight counted, not netted → over-cut | Medium | Open — `pm_sku_resolution` still EMPTY; upload the two PREFILLED sheets via /pm/resolver/upload-*; note the GRN pipeline (#538) has its own concat-verified fallback |
+| *(new)* | Duplicate size-label rows: netting double-subtracted dispatches; displays/validations under-counted | High | **DONE — PRs #541/#542** (2026-07-10) |
 
 ## D. Known environment facts (so nobody re-discovers them)
 - Prod = GCP `kotty-track-prod`, Cloud Run, deploys from `main` via `cloudbuild.yaml` (2Gi, min-instances=1, timeout 3600).
