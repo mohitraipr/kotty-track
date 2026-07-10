@@ -1190,6 +1190,18 @@
   .sx-chip.s-empty .sx-chip-bar { visibility: hidden; }
   .sx-chip.s-done .sx-chip-num, .sx-chip.s-progress .sx-chip-num { color: var(--c-text); }
 
+  /* Dispatch card (finishing): same anatomy as take/done */
+  .sx-action-card.is-dispatch .sx-take-panel #dispatchForm { display: block; }
+  .sx-dispatch-batch { padding: 0.875rem 0 1rem; border-bottom: 1px solid var(--c-border-2); }
+  .sx-dispatch-batch:last-child { border-bottom: 0; padding-bottom: 0.25rem; }
+  .sx-dispatch-batch-head { font-size: 0.8125rem; font-weight: 600; color: var(--c-text-2); margin-bottom: 0.5rem; }
+  .sx-dispatch-batch-head .b { font-family: 'Space Grotesk','Inter',sans-serif; color: var(--c-text); }
+  .sx-dest-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .sx-dest-row select, .sx-dest-row input { flex: 1; min-width: 150px; height: 44px; border: 1px solid var(--c-border);
+    border-radius: 10px; padding: 0 12px; font-family: inherit; font-size: 0.9rem; background: var(--c-card); color: var(--c-text); }
+  .sx-dest-row select:focus, .sx-dest-row input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px var(--c-primary-soft); }
+  .sx-action-card.is-dispatch .sx-action-cta { margin-top: 0.75rem; }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -1595,24 +1607,14 @@ function buildDispatchCard(state) {
   card.className = 'sx-action-card is-dispatch';
   const summary = state.lot_summary || { available: 0 };
 
+  card.classList.add('always-open');
   card.innerHTML = `
-    <div class="sx-action-card-body">
-      <div class="sx-action-row">
-        <div class="sx-action-icon">→</div>
-        <div class="sx-action-text">
-          <p class="sx-action-title">Dispatch <span class="qty">${fmt(summary.available)}</span> finished pieces</p>
-          <p class="sx-action-sub">Pieces you've completed and not yet shipped. Pick a destination and the pieces to send.</p>
-        </div>
-      </div>
-      <button class="sx-action-cta" data-action="dispatch-toggle-form">
-        <span class="sx-action-cta-check">→</span>
-        Open dispatch form
-      </button>
+    <div class="sx-take-panel">
+      <h3 class="sx-panel-h">Dispatch finished pieces
+        <span class="sub">${fmt(summary.available)} ready · ${state.batches.length} batch${state.batches.length === 1 ? '' : 'es'}</span>
+      </h3>
+      <div id="dispatchForm"></div>
     </div>
-    <button class="sx-action-toggle" data-action="dispatch-toggle">
-      <span class="arrow">⌄</span> ${state.batches.length} batch${state.batches.length === 1 ? '' : 'es'} ready
-    </button>
-    <div class="sx-action-form" id="dispatchForm"></div>
   `;
 
   const form = card.querySelector('#dispatchForm');
@@ -1640,28 +1642,24 @@ function buildDispatchCard(state) {
         </select>
         <input type="text" placeholder="Custom destination" data-input="custom-dest-${idx}" />
       </div>
-      <div class="sx-totals" style="margin-top: 0.625rem;">
-        <span class="l">Dispatching from this batch</span>
-        <span class="v" data-display="dispatch-total-${idx}">0</span>
+      <div class="sx-grand">
+        <span class="gl">Dispatching from this batch</span>
+        <span class="gv"><strong data-display="dispatch-total-${idx}">0</strong> pcs</span>
       </div>
-      <button class="sx-form-submit" data-action="dispatch-submit" data-idx="${idx}">Dispatch from batch #${b.finishing_data_id}</button>
+      <button class="sx-action-cta" data-action="dispatch-submit" data-idx="${idx}">Dispatch from batch #${b.finishing_data_id}</button>
     `;
 
     const sizeList = block.querySelector(`[data-list="dispatch-sizes-${idx}"]`);
     b.sizes.forEach(s => {
       if ((s.available || 0) === 0) return;
       const sRow = document.createElement('div');
-      sRow.className = 'sx-input-row';
+      sRow.className = 'sx-input-row sx-dng';
       sRow.innerHTML = `
         <span class="sx-input-label">${escapeText(s.size_label)}</span>
         <span class="sx-input-avail"><span class="n">${fmt(s.available)}</span> ready</span>
-        <div class="sx-stepper">
-          <button type="button" data-step="-10">−10</button>
-          <button type="button" data-step="-1">−</button>
-          <input type="number" min="0" max="${s.available}" value="${s.available}"
+        <div class="sx-stepper sx-dng-cell">
+          <input type="number" inputmode="numeric" min="0" max="${s.available}" value="${s.available}"
                  data-size="${escapeText(s.size_label)}" data-avail="${s.available}" data-batch="${idx}" />
-          <button type="button" data-step="1">+</button>
-          <button type="button" data-step="10">+10</button>
         </div>
       `;
       bindStepper(sRow, () => recalcDispatchTotal(card, idx));
@@ -1673,9 +1671,6 @@ function buildDispatchCard(state) {
       () => doDispatch(card, idx, b.finishing_data_id));
     recalcDispatchTotal(card, idx);
   });
-
-  card.querySelector('[data-action="dispatch-toggle"]').addEventListener('click', () => card.classList.toggle('expanded'));
-  card.querySelector('[data-action="dispatch-toggle-form"]').addEventListener('click', () => card.classList.add('expanded'));
 
   return card;
 }
