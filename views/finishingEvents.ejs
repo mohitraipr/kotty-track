@@ -1202,6 +1202,17 @@
   .sx-dest-row select:focus, .sx-dest-row input:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 3px var(--c-primary-soft); }
   .sx-action-card.is-dispatch .sx-action-cta { margin-top: 0.75rem; }
 
+  /* Dispatch visibility strip on the lot card */
+  .sx-dispatched { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+    margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--c-border-2); }
+  .sx-dispatched-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--c-text-2); }
+  .sx-dispatched-label strong { font-family: 'Space Grotesk','Inter',sans-serif; color: var(--c-primary); font-size: 0.9rem; }
+  .sx-dispatched-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8125rem;
+    background: var(--c-primary-soft); color: var(--c-primary); border-radius: 999px; padding: 3px 10px; font-weight: 600; }
+  .sx-dispatched-chip strong { font-family: 'Space Grotesk','Inter',sans-serif; }
+  .sx-dispatched-chip em { font-style: normal; font-size: 0.7rem; opacity: 0.75; }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -1488,6 +1499,21 @@ function renderState() {
   flowEl.textContent = isDenim ? 'denim' : 'hosiery';
 
   renderStageUsers(currentState.stage_users);
+
+  // Dispatch visibility: show where finished pieces have gone (per destination).
+  (function renderDispatched() {
+    const el2 = document.getElementById('dispatchedStrip');
+    if (!el2) return;
+    const ds = currentState.dispatch_summary || [];
+    const total = currentState.dispatched_total || 0;
+    if (!total) { el2.style.display = 'none'; el2.innerHTML = ''; return; }
+    const chips = ds.map(d => {
+      const when = d.last_at ? new Date(d.last_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+      return '<span class="sx-dispatched-chip"><strong>' + fmt(d.qty) + '</strong> → ' + escapeText(d.destination) + (when ? ' <em>' + when + '</em>' : '') + '</span>';
+    }).join('');
+    el2.innerHTML = '<span class="sx-dispatched-label">Dispatched <strong>' + fmt(total) + '</strong> pcs</span>' + chips;
+    el2.style.display = '';
+  })();
 
   const remarkNote = el('cuttingRemarkNote');
   if (lot.cutting_remark) {
