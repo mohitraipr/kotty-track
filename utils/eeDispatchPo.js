@@ -86,12 +86,16 @@ async function resolveLine(db, lotSku, sizeLabel) {
   let source = eeSku ? 'map' : null;
 
   if (!eeSku) {
-    const candidate = sku + size; // EE convention observed across the live catalog
-    const [hit] = await db.query(
-      `SELECT sku, cost, mrp FROM ee_product_master WHERE sku=? AND active=1 LIMIT 1`,
-      [candidate]
-    );
-    if (hit.length) return { ee_sku: hit[0].sku, source: 'concat-verified', cost: hit[0].cost, mrp: hit[0].mrp };
+    // Two live EE conventions: plain concat (KTTBLUETOP768M) and underscore
+    // (KTTWOMENSPANT981_3XL). Both are EXISTENCE-VERIFIED against the master
+    // mirror — still never guessed.
+    for (const candidate of [sku + size, sku + '_' + size]) {
+      const [hit] = await db.query(
+        `SELECT sku, cost, mrp FROM ee_product_master WHERE sku=? AND active=1 LIMIT 1`,
+        [candidate]
+      );
+      if (hit.length) return { ee_sku: hit[0].sku, source: 'concat-verified', cost: hit[0].cost, mrp: hit[0].mrp };
+    }
     return { ee_sku: null, source: null, cost: null, mrp: null };
   }
 
