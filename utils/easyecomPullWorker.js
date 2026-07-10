@@ -724,11 +724,12 @@ async function pullProductMaster(pool, runStartedAt) {
       if (!sku) continue;
       await pool.query(
         `INSERT INTO ee_product_master
-          (sku, product_id, cp_id, product_name, style, description, active, custom_fields, ee_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (sku, product_id, cp_id, product_name, style, description, cost, mrp, active, custom_fields, ee_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
           product_id = VALUES(product_id), cp_id = VALUES(cp_id), product_name = VALUES(product_name),
           style = VALUES(style), description = VALUES(description), active = VALUES(active),
+          cost = VALUES(cost), mrp = VALUES(mrp),
           custom_fields = VALUES(custom_fields), ee_updated_at = VALUES(ee_updated_at),
           synced_at = CURRENT_TIMESTAMP`,
         [
@@ -738,6 +739,8 @@ async function pullProductMaster(pool, runStartedAt) {
           p.product_name || null,
           p.style || p.style_code || null,
           p.description || null,
+          p.cost != null ? Number(p.cost) : null,   // unit price source for the dispatch→PO pipeline
+          p.mrp != null ? Number(p.mrp) : null,
           p.active != null ? Number(p.active) : 1,
           p.custom_fields ? JSON.stringify(p.custom_fields) : null,
           p.updated_at || null,
