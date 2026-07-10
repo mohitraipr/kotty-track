@@ -232,6 +232,7 @@ app.use('/cutting-manager', cuttingManagerRoutes);
 app.use('/manual-lot', manualLotRoutes);
 app.use('/department', departmentRoutes);
 app.use('/stitchingdashboard', stitchingRoutes);
+app.use('/finishingdashboard/ee-po', require('./routes/eeDispatchRoutes'));
 app.use('/finishingdashboard', finishingRoutes);
 app.use('/washingdashboard', washingRoutes);
 app.use('/', searchRoutes);

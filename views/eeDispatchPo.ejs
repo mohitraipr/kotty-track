@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EasyEcom PO — Dispatch to Warehouse</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  :root{ --ink:#0f172a; --muted:#64748b; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff;
+         --blue:#2563eb; --blue-bg:#eff6ff; --green:#16a34a; --green-bg:#dcfce7;
+         --amber:#b45309; --amber-bg:#fef3c7; --red:#dc2626; --red-bg:#fee2e2; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:15px;}
+  .num{font-family:'Space Grotesk','Inter',sans-serif;}
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;vertical-align:middle;}
+  .top{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 16px;}
+  .top .brand{display:flex;align-items:center;gap:10px;} .top .brand .material-symbols-outlined{color:var(--blue);}
+  .top h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin:0;}
+  .top .acts{display:flex;align-items:center;gap:12px;}
+  .top .home{color:var(--muted);display:flex;text-decoration:none;}
+  .top .who{font-size:13px;font-weight:600;}
+  .top .out{display:inline-flex;align-items:center;gap:6px;color:var(--red);text-decoration:none;font-size:13px;font-weight:600;padding:6px 10px;border:1px solid #fecaca;border-radius:8px;}
+  .wrap{max-width:860px;margin:0 auto;padding:72px 16px 40px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.06);padding:16px;margin-bottom:14px;}
+  .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:999px;}
+  .pill.draft{background:var(--blue-bg);color:var(--blue);} .pill.blocked{background:var(--amber-bg);color:var(--amber);}
+  .pill.pushed{background:var(--blue-bg);color:var(--blue);} .pill.confirmed{background:var(--green-bg);color:var(--green);}
+  .pill.failed,.pill.cancelled{background:var(--red-bg);color:var(--red);}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:700;padding:11px 16px;border-radius:10px;border:0;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:var(--blue);color:#fff;} .btn-ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .note{font-size:13px;padding:10px 12px;border-radius:9px;margin-top:10px;}
+  .note.warn{background:var(--amber-bg);color:var(--amber);} .note.info{background:#f1f5f9;color:var(--muted);}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);}
+  td{padding:7px 8px;border-bottom:1px solid #f1f5f9;}
+  td.q{font-family:'Space Grotesk',sans-serif;font-weight:700;}
+  tr.blocked td{background:#fffbeb;}
+  .head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .meta{font-size:12px;color:var(--muted);margin-top:2px;}
+  .stat{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;}
+  .twoline .l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;}
+  .tblwrap{overflow-x:auto;}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="material-symbols-outlined">local_shipping</span><h1>EasyEcom PO</h1></div>
+  <div class="acts">
+    <a class="home" href="/finishingdashboard" title="Finishing"><span class="material-symbols-outlined">home</span></a>
+    <span class="who"><%= user && user.username %></span>
+    <a class="out" href="/logout"><span class="material-symbols-outlined" style="font-size:18px;">logout</span>Log out</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- Sweep card -->
+  <section class="card">
+    <div class="head-row">
+      <div class="twoline">
+        <div class="l">Warehouse dispatches not yet on a PO</div>
+        <div><span class="stat" id="pendQty"><%= pendingQty.toLocaleString('en-IN') %></span>
+             <span class="meta"><%= pendingRows %> dispatch rows</span></div>
+      </div>
+      <button class="btn btn-primary" id="buildBtn" <%= pendingRows ? '' : 'disabled' %> onclick="buildBatch()">
+        <span class="material-symbols-outlined" style="font-size:18px;">post_add</span> Create PO batch
+      </button>
+    </div>
+    <div class="note info">Flow: dispatches are swept into a batch → you review and <strong>Push</strong> it →
+      EasyEcom gets the Purchase Order (challan) → the <strong>warehouse team makes the GRN in EasyEcom</strong>
+      when the goods physically arrive → this screen marks the batch <strong>confirmed</strong>.
+      Stock only enters the OMS through the warehouse's own GRN.</div>
+    <% if (!pushEnabled) { %>
+      <div class="note warn">Pushing is disabled on this environment (<code>EE_GRN_PUSH</code> is off).
+        Batches can be built and reviewed, but not sent.</div>
+    <% } %>
+  </section>
+
+  <div class="head-row" style="margin:4px 2px 10px;">
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Batches</span>
+    <button class="btn btn-ghost" onclick="refreshConfirmations()" style="padding:8px 12px;font-size:13px;">
+      <span class="material-symbols-outlined" style="font-size:17px;">sync</span> Check for warehouse GRNs
+    </button>
+  </div>
+
+  <% if (!batches.length) { %>
+    <section class="card" style="text-align:center;color:var(--muted);padding:34px;">No batches yet.</section>
+  <% } %>
+
+  <% batches.forEach(function(b){ var lines = linesByBatch[b.id] || []; %>
+    <section class="card">
+      <div class="head-row">
+        <div>
+          <strong class="num" style="font-size:17px;"><%= b.batch_ref %></strong>
+          <span class="pill <%= b.status %>"><%= b.status %></span>
+          <div class="meta">
+            <%= b.line_count %> lines · <span class="num"><%= Number(b.total_qty).toLocaleString('en-IN') %></span> pcs
+            <% if (b.po_id) { %> · PO <strong><%= b.po_id %></strong><% } %>
+            <% if (b.grn_id) { %> · GRN <strong><%= b.grn_id %></strong> (<%= b.grn_status %>)<% } %>
+            · by <%= b.created_by_name || '—' %> · <%= new Date(b.created_at).toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}) %>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <% if (b.status === 'blocked') { %>
+            <button class="btn btn-ghost" onclick="reResolve(<%= b.id %>)">Re-resolve SKUs</button>
+          <% } %>
+          <% if (b.status === 'draft') { %>
+            <button class="btn btn-primary" <%= pushEnabled ? '' : 'disabled' %> onclick="pushBatch(<%= b.id %>, '<%= b.batch_ref %>')">
+              Push to EasyEcom
+            </button>
+          <% } %>
+        </div>
+      </div>
+      <% if (b.error) { %><div class="note warn">Last error: <%= b.error %></div><% } %>
+      <% if (b.blocked_count > 0) { %>
+        <div class="note warn"><strong><%= b.blocked_count %></strong> line(s) could not be matched to an
+          EasyEcom SKU — the batch is blocked until they resolve. Nothing is ever pushed on a guess.</div>
+      <% } %>
+      <div class="tblwrap">
+        <table>
+          <thead><tr><th>Lot</th><th>Size</th><th>Qty</th><th>EasyEcom SKU</th><th>Via</th><th>Cost</th><th>MRP</th></tr></thead>
+          <tbody>
+            <% lines.forEach(function(l){ %>
+              <tr class="<%= l.ee_sku ? '' : 'blocked' %>">
+                <td><%= (l.lot_no || '').toUpperCase() %></td>
+                <td><%= l.size_label %></td>
+                <td class="q"><%= l.quantity %></td>
+                <td><%= l.ee_sku || '— unresolved —' %></td>
+                <td style="color:var(--muted);"><%= l.resolve_source || '' %></td>
+                <td><%= l.unit_cost != null ? l.unit_cost : '—' %></td>
+                <td><%= l.mrp != null ? l.mrp : '—' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  <% }) %>
+</main>
+
+<script>
+  async function post(url) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  async function buildBatch() {
+    const btn = document.getElementById('buildBtn'); btn.disabled = true;
+    try { const j = await post('/finishingdashboard/ee-po/build');
+      alert(j.created ? ('Batch ' + j.batchRef + ' created: ' + j.lines + ' lines' + (j.blocked ? (', ' + j.blocked + ' blocked') : '')) : j.reason);
+      location.reload();
+    } catch (e) { alert('Could not build batch: ' + e.message); btn.disabled = false; }
+  }
+  async function pushBatch(id, ref) {
+    if (!confirm('Create Purchase Order ' + ref + ' in EasyEcom? The warehouse will then GRN it on receipt.')) return;
+    try { const j = await post('/finishingdashboard/ee-po/push/' + id);
+      alert('PO created in EasyEcom: ' + j.poId); location.reload();
+    } catch (e) { alert('Push failed: ' + e.message); }
+  }
+  async function reResolve(id) {
+    try { const j = await post('/finishingdashboard/ee-po/reresolve/' + id);
+      alert('Resolved ' + j.fixed + ' line(s); still blocked: ' + j.stillBlocked); location.reload();
+    } catch (e) { alert('Re-resolve failed: ' + e.message); }
+  }
+  async function refreshConfirmations() {
+    try { const j = await post('/finishingdashboard/ee-po/refresh');
+      alert('Checked ' + j.checked + ' pushed PO(s); newly confirmed: ' + j.confirmed); location.reload();
+    } catch (e) { alert('Refresh failed: ' + e.message); }
+  }
+</script>
+</body>
+</html>
