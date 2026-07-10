@@ -1213,6 +1213,10 @@
   .sx-dispatched-chip strong { font-family: 'Space Grotesk','Inter',sans-serif; }
   .sx-dispatched-chip em { font-style: normal; font-size: 0.7rem; opacity: 0.75; }
 
+  /* Dispatch entries in the journey modal */
+  .sx-journey-pill.t-dispatch { background: var(--c-primary-soft); color: var(--c-primary); }
+  .sx-journey-step.t-dispatch { border-left-color: var(--c-primary); }
+
   /* Numbers are the hero (floor design system) */
   .sx-lot-no, .sx-stat .v, .sx-chip-label, .sx-chip-num, .sx-mini-total .v, .sx-input-avail .n {
     font-family: 'Space Grotesk','Inter',sans-serif; letter-spacing: -0.01em;
@@ -2306,7 +2310,7 @@ function renderJourney(events, currentEventId) {
     wrap.innerHTML = '<div class="sx-placeholder"><p style="color: var(--c-text-3);">No events recorded.</p></div>';
     return;
   }
-  const labelMap = { approve: 'Took in', complete: 'Marked done', reject: 'Rejected' };
+  const labelMap = { approve: 'Took in', complete: 'Marked done', reject: 'Rejected', dispatch: 'Dispatched' };
   let html = '<div class="sx-journey">';
   events.forEach(e => {
     const sizes = e.sizes && Object.keys(e.sizes).length
@@ -2319,6 +2323,7 @@ function renderJourney(events, currentEventId) {
           <span class="sx-journey-when">${fmtDate(e.created_at)}</span>
         </div>
         <div class="sx-journey-pieces">${fmt(e.pieces)} pcs</div>
+        ${e.destination ? `<div class="sx-journey-by">→ ${escapeText(e.destination)}</div>` : ''}
         ${e.operator ? `<div class="sx-journey-by">by ${escapeText(e.operator)}${e.remark ? ' — ' + escapeText(String(e.remark).slice(0, 80)) : ''}</div>` : ''}
         ${sizes}
       </div>
