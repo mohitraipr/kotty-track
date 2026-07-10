@@ -2735,10 +2735,11 @@ router.get("/lot-completion/download", isAuthenticated, isOperator, async (req, 
 // GET /operator/sku-categories - Render management page
 router.get('/sku-categories', isAuthenticated, isOperator, async (req, res) => {
   try {
+    // NOTE: sku_categories has no created_by column in prod — the old join on
+    // sc.created_by made this whole page 500 → silent redirect to the hub.
     const [categories] = await pool.query(`
-      SELECT sc.*, u.username AS created_by_name
+      SELECT sc.*, NULL AS created_by_name
       FROM sku_categories sc
-      LEFT JOIN users u ON sc.created_by = u.id
       ORDER BY sc.name
     `);
     res.render('operator-sku-categories', {
