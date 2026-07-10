@@ -785,7 +785,7 @@ async function lotJourneyCompact(lot) {
   for (const r of dr) dispatchedBySize[String(r.size_label || '').trim().toUpperCase()] = Number(r.qty) || 0;
   const dispatch = dispatchSummary(finished, dispatchedBySize);
   const [szRows] = await pool.query(
-    'SELECT size_label, COALESCE(total_pieces, 0) AS pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? ORDER BY total_pieces DESC, size_label',
+    'SELECT size_label, COALESCE(SUM(total_pieces), 0) AS pieces FROM cutting_lot_sizes WHERE cutting_lot_id = ? GROUP BY size_label ORDER BY pieces DESC, size_label',
     [lot.id]
   );
   const sizes = szRows.map((r) => ({ size_label: String(r.size_label || ''), pieces: Number(r.pieces) || 0 }));
