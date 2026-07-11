@@ -88,6 +88,21 @@ created in EasyEcom** (vendor "Kotty Production", code V002, vendor_c_id 289541)
 - The repo owner merges PRs within minutes — **never push follow-up commits to an open PR's
   branch; open a new PR per change.**
 
+### 6. Post-refresh additions (2026-07-11)
+- **Dispatch visibility** (#546/#548): the finishing lot card shows a "Dispatched N pcs →
+  destination" strip and the lot-journey modal includes dispatch entries.
+- **Inline SKU resolution** (#549/#550): blocked PO lines are resolved on the review screen
+  from a dropdown of the style's verified EasyEcom SKUs; mappings persist to
+  `pm_sku_resolution` (source='manual', mapper in loaded_by) and feed PM planning — CP-10
+  now shrinks through daily use. `pm_sku_resolution_TO_FILL.xlsx` (repo root) remains for
+  optional bulk backfill; 519 styles have no EE presence under their cutting name (catalog
+  decisions).
+- **First real PO through the pipeline**: KT-DISP-1 → EasyEcom PO 2063861 (KE396, size 34
+  mapped to 981XXL by the finishing team). Underscore SKU convention auto-resolves (#547).
+- Operator hub gained System Health / Documentation / Usage Analytics cards (Security Logs
+  was already there).
+- README rewritten to match reality.
+
 ## B. Earlier context (still true, condensed)
 PM data feed is healthy (orders_api-driven DRR, snapshot SOH, freshness banner). Historical
 prod data repairs (stage-qty corruption, orphan-approve dedup) are documented in the git
