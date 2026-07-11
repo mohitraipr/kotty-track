@@ -160,6 +160,44 @@ async function buildBatch(user) {
   }
 }
 
+// Inline manual resolution from the finishing review screen. The chosen SKU must
+// EXIST in the ee_product_master mirror AND belong to the same style (prefix guard) —
+// no free text, nothing is ever created in EasyEcom. The mapping is persisted to
+// pm_sku_resolution (source: finishing-ui), so PM planning learns it too.
+async function resolveLineManually(lineId, sizeSku, user) {
+  const chosen = String(sizeSku || '').trim().toUpperCase();
+  if (!chosen) throw new Error('Pick a SKU.');
+  const [[line]] = await pool.query(
+    `SELECT id, batch_id, lot_sku, size_label, ee_sku FROM ee_dispatch_po_lines WHERE id=?`, [lineId]);
+  if (!line) throw new Error('Line not found');
+  if (line.ee_sku) throw new Error('Line is already resolved.');
+  const style = String(line.lot_sku || '').trim().toUpperCase();
+  if (!style) throw new Error('Line has no lot style SKU.');
+  if (!chosen.startsWith(style)) throw new Error('That SKU belongs to a different style.');
+  const [[hit]] = await pool.query(
+    `SELECT sku, cost, mrp FROM ee_product_master WHERE sku=? AND active=1`, [chosen]);
+  if (!hit) throw new Error('That SKU does not exist (active) in the EasyEcom master.');
+
+  // Persist the mapping for everything (pipeline + PM planning). UNIQUE(cl_sku, size_label).
+  await pool.query(
+    `INSERT INTO pm_sku_resolution (cl_sku, size_label, size_sku, state, source, loaded_by)
+     VALUES (?, ?, ?, 'resolved', 'finishing-ui', ?)
+     ON DUPLICATE KEY UPDATE size_sku=VALUES(size_sku), state='resolved',
+       source='finishing-ui', loaded_by=VALUES(loaded_by), updated_at=CURRENT_TIMESTAMP`,
+    [style, String(line.size_label).trim().toUpperCase(), hit.sku, user?.id || null]);
+
+  await pool.query(
+    `UPDATE ee_dispatch_po_lines SET ee_sku=?, resolve_source='map', unit_cost=?, mrp=? WHERE id=?`,
+    [hit.sku, hit.cost, hit.mrp, lineId]);
+
+  const [[b]] = await pool.query(
+    `SELECT COUNT(*) AS blocked FROM ee_dispatch_po_lines WHERE batch_id=? AND ee_sku IS NULL`, [line.batch_id]);
+  await pool.query(
+    `UPDATE ee_dispatch_po SET blocked_count=?, status=IF(?=0 AND status='blocked','draft',status) WHERE id=?`,
+    [b.blocked, b.blocked, line.batch_id]);
+  return { ee_sku: hit.sku, stillBlocked: b.blocked, batchId: line.batch_id };
+}
+
 // Re-resolve a blocked batch's lines (after the resolver map / master sync improves).
 async function reResolveBatch(batchId) {
   const [lines] = await pool.query(
@@ -250,4 +288,4 @@ async function confirmGrns() {
   return { checked: pushed.length, confirmed };
 }
 
-module.exports = { buildBatch, reResolveBatch, pushBatch, confirmGrns, pushEnabled, FARIDABAD_WAREHOUSE_ID, EE_PO_SINCE };
+module.exports = { buildBatch, reResolveBatch, resolveLineManually, pushBatch, confirmGrns, pushEnabled, FARIDABAD_WAREHOUSE_ID, EE_PO_SINCE };
