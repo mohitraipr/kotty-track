@@ -119,12 +119,24 @@
         <table>
           <thead><tr><th>Lot</th><th>Size</th><th>Qty</th><th>EasyEcom SKU</th><th>Via</th><th>Cost</th><th>MRP</th></tr></thead>
           <tbody>
-            <% lines.forEach(function(l){ %>
+            <% lines.forEach(function(l){ var vars = (!l.ee_sku && l.lot_sku) ? (variantsByStyle[String(l.lot_sku).toUpperCase()] || []) : []; %>
               <tr class="<%= l.ee_sku ? '' : 'blocked' %>">
                 <td><%= (l.lot_no || '').toUpperCase() %></td>
                 <td><%= l.size_label %></td>
                 <td class="q"><%= l.quantity %></td>
-                <td><%= l.ee_sku || '— unresolved —' %></td>
+                <td>
+                  <% if (l.ee_sku) { %><%= l.ee_sku %><% } else if (vars.length) { %>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                      <select id="resSel<%= l.id %>" style="max-width:260px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;background:#fff;">
+                        <option value="">— pick the EasyEcom SKU for size <%= l.size_label %> —</option>
+                        <% vars.forEach(function(v){ %><option value="<%= v %>"><%= v %></option><% }) %>
+                      </select>
+                      <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px;" onclick="resolveLine(<%= l.id %>)">Save mapping</button>
+                    </div>
+                  <% } else { %>
+                    — unresolved — <span style="color:var(--muted);font-size:11px;">(style not in EasyEcom under <%= l.lot_sku || 'this name' %> — needs cataloguing in EE first)</span>
+                  <% } %>
+                </td>
                 <td style="color:var(--muted);"><%= l.resolve_source || '' %></td>
                 <td><%= l.unit_cost != null ? l.unit_cost : '—' %></td>
                 <td><%= l.mrp != null ? l.mrp : '—' %></td>
@@ -161,6 +173,20 @@
     try { const j = await post('/finishingdashboard/ee-po/reresolve/' + id);
       alert('Resolved ' + j.fixed + ' line(s); still blocked: ' + j.stillBlocked); location.reload();
     } catch (e) { alert('Re-resolve failed: ' + e.message); }
+  }
+  async function resolveLine(lineId) {
+    const sel = document.getElementById('resSel' + lineId);
+    if (!sel || !sel.value) { alert('Pick the EasyEcom SKU first.'); return; }
+    if (!confirm('Map this size to ' + sel.value + '? The mapping is saved permanently and reused everywhere.')) return;
+    try {
+      const r = await fetch('/finishingdashboard/ee-po/resolve-line', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_id: lineId, size_sku: sel.value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+      alert('Mapped to ' + j.ee_sku + (j.stillBlocked ? (' — ' + j.stillBlocked + ' line(s) still blocked') : ' — batch is now ready to push'));
+      location.reload();
+    } catch (e) { alert('Could not save mapping: ' + e.message); }
   }
   async function refreshConfirmations() {
     try { const j = await post('/finishingdashboard/ee-po/refresh');

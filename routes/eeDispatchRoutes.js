@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
-const { buildBatch, reResolveBatch, pushBatch, confirmGrns, pushEnabled, EE_PO_SINCE } = require('../utils/eeDispatchPo');
+const { buildBatch, reResolveBatch, resolveLineManually, pushBatch, confirmGrns, pushEnabled, EE_PO_SINCE } = require('../utils/eeDispatchPo');
 
 // GET / — review screen: batches + how many dispatch rows await sweeping.
 router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
@@ -25,9 +25,21 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
          LEFT JOIN ee_dispatch_po_lines l ON l.dispatch_id = fd.id
         WHERE l.id IS NULL AND LOWER(fd.destination)='warehouse'
           AND fd.created_at >= ?`, [EE_PO_SINCE]);
+    // For blocked lines: that style's REAL EasyEcom variants, so the finishing user
+    // can resolve inline from a dropdown (never free text).
+    const blockedStyles = [...new Set(
+      Object.values(linesByBatch).flat().filter(l => !l.ee_sku && l.lot_sku).map(l => String(l.lot_sku).toUpperCase())
+    )];
+    const variantsByStyle = {};
+    for (const st of blockedStyles) {
+      const [v] = await pool.query(
+        `SELECT sku FROM ee_product_master WHERE active=1 AND sku LIKE CONCAT(?, '%') ORDER BY sku LIMIT 40`, [st]);
+      variantsByStyle[st] = v.map(r => r.sku);
+    }
+
     res.render('eeDispatchPo', {
       user: req.session.user,
-      batches, linesByBatch,
+      batches, linesByBatch, variantsByStyle,
       pendingRows: pending.c, pendingQty: Number(pending.qty),
       pushEnabled: pushEnabled(),
     });
@@ -55,6 +67,17 @@ router.post('/reresolve/:id', isAuthenticated, isFinishingMaster, async (req, re
     res.json({ success: true, ...out });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /resolve-line — map ONE blocked line to an existing EasyEcom SKU (dropdown-picked).
+// Writes only our own tables; nothing is created in EasyEcom.
+router.post('/resolve-line', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const out = await resolveLineManually(Number(req.body.line_id), req.body.size_sku, req.session.user);
+    res.json({ success: true, ...out });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
