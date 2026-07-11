@@ -163,7 +163,8 @@ async function buildBatch(user) {
 // Inline manual resolution from the finishing review screen. The chosen SKU must
 // EXIST in the ee_product_master mirror AND belong to the same style (prefix guard) —
 // no free text, nothing is ever created in EasyEcom. The mapping is persisted to
-// pm_sku_resolution (source: finishing-ui), so PM planning learns it too.
+// pm_sku_resolution (source: 'manual' — the enum's value for hand-mapping; the
+// mapper is recorded in loaded_by), so PM planning learns it too.
 async function resolveLineManually(lineId, sizeSku, user) {
   const chosen = String(sizeSku || '').trim().toUpperCase();
   if (!chosen) throw new Error('Pick a SKU.');
@@ -181,9 +182,9 @@ async function resolveLineManually(lineId, sizeSku, user) {
   // Persist the mapping for everything (pipeline + PM planning). UNIQUE(cl_sku, size_label).
   await pool.query(
     `INSERT INTO pm_sku_resolution (cl_sku, size_label, size_sku, state, source, loaded_by)
-     VALUES (?, ?, ?, 'resolved', 'finishing-ui', ?)
+     VALUES (?, ?, ?, 'resolved', 'manual', ?)
      ON DUPLICATE KEY UPDATE size_sku=VALUES(size_sku), state='resolved',
-       source='finishing-ui', loaded_by=VALUES(loaded_by), updated_at=CURRENT_TIMESTAMP`,
+       source='manual', loaded_by=VALUES(loaded_by), updated_at=CURRENT_TIMESTAMP`,
     [style, String(line.size_label).trim().toUpperCase(), hit.sku, user?.id || null]);
 
   await pool.query(
