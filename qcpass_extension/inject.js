@@ -12,12 +12,15 @@
   // Auto-Pass config, pushed from content.js. OFF = capture only; ON = auto-pass each scanned item.
   // PASS_SELECTOR (optional) lets an operator pin the exact Pass button via a CSS selector when
   // the text-based finder isn't enough — set chrome.storage.local.passSelector.
-  let AUTOPASS = false, PASS_SELECTOR = '';
+  // SORT_HUB: the L1 sortation hub the operator set once (e.g. "BPF_RH"). When set, an RTO
+  // item is sorted (lane looked up) on THIS screen before it's passed — no screen switch.
+  let AUTOPASS = false, PASS_SELECTOR = '', SORT_HUB = '';
   window.addEventListener('message', (ev) => {
     const m = ev.data;
     if (m && m.__qcCfg === true) {
       AUTOPASS = !!m.autopass;
       if (typeof m.passSelector === 'string') PASS_SELECTOR = m.passSelector.trim();
+      if (typeof m.sortHub === 'string') SORT_HUB = m.sortHub.trim();
     }
   });
 
@@ -240,6 +243,35 @@
 
   // `searchedValue` is what the operator scanned (from the URL). On a failed/empty search we
   // record it as an ERROR so the tracking is never lost (later resolved by a successful capture).
+  const isRTO = (rec) => /rto/i.test(String((rec && rec.return_type) || ''));
+
+  // L1 sortation, run from the QC screen: look up the lane for this RTO tracking number at the
+  // operator's hub (SORT_HUB). This is the SAME single GET the L1Sortation screen fires, so it
+  // performs the sort/lane assignment without the operator leaving QC. Idempotent (safe to retry).
+  // Fills rec.sort_* and returns true only on a SUCCESS lane lookup.
+  async function doSortation(rec) {
+    if (!SORT_HUB || !rec || !rec.tracking_number) return false;
+    rec.sort_hub = SORT_HUB;
+    try {
+      const url = `${API}/l1Sortation/fetchLaneDetailsForRtoTrackId/${encodeURIComponent(rec.tracking_number)}?hubCode=${encodeURIComponent(SORT_HUB)}`;
+      const res = await fetch(url, {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'x-myntra-app-name': 'rejoy', 'x-myntra-client-id': 'rejoy', 'x-myntra-module-name': 'L1Sortation', 'x-myntra-rejoy-service': 'rms.l1sortation.findRtoSearchByTrackNo' },
+      });
+      const j = await res.json();
+      const ok = !!(j && j.status && j.status.statusType === 'SUCCESS');
+      const ld = (j && j.data && j.data.laneDetails) || {};
+      rec.sort_lane = String(ld.code || '');
+      rec.sort_lane_desc = String(ld.description || '');
+      rec.sort_warehouse = String(ld.sellerWarehouseName || '');
+      rec.sort_status = ok ? 'SUCCESS' : String((j && j.status && j.status.statusMessage) || 'ERROR');
+      return ok;
+    } catch (e) {
+      rec.sort_status = 'ERROR: ' + (e && e.message);
+      return false;
+    }
+  }
+
   async function handleSearch(j, searchedValue) {
     try {
       const failed = !j || (j.status && j.status.statusType && j.status.statusType !== 'SUCCESS');
@@ -247,8 +279,12 @@
         const rec = extractSearch(j);
         if (rec.item_barcode || rec.tracking_number) {
           await enrichLogistics(rec);
+          // RTO items must be sorted before passing — do it here so the operator never leaves QC.
+          const needsSort = isRTO(rec) && !!SORT_HUB;
+          const sortOk = needsSort ? await doSortation(rec) : true;
           post('capture', rec);
-          if (AUTOPASS) doAutoPass(rec);   // auto-pass the scanned item when the toggle is ON
+          // Auto-pass only when the sort succeeded (or wasn't required) — never pass an unsorted RTO.
+          if (AUTOPASS && sortOk) doAutoPass(rec);
           return;
         }
       }

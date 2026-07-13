@@ -35,11 +35,13 @@
     panel.innerHTML = `<div class="h"><b>QC Capture</b><span class="st" id="qc-st">queued 0 · synced 0</span></div>` +
       `<div class="auth" id="qc-auth"><span id="qc-who">not signed in</span><span class="relogin" id="qc-relogin" style="display:none">login needed</span></div>` +
       `<div class="cfg"><label><input type="checkbox" id="qc-autopass"> Auto-Pass on scan</label><span class="mode" id="qc-mode">capture only</span></div>` +
+      `<div class="cfg"><label style="flex:1;gap:6px">Sort hub <input type="text" id="qc-sorthub" placeholder="e.g. BPF_RH" style="flex:1;min-width:0;background:#0f172a;border:1px solid #334155;border-radius:5px;color:#e2e8f0;padding:3px 6px;font:11px Segoe UI,sans-serif"></label></div>` +
       `<div class="bd" id="qc-bd"><div class="k">Scan/search a return…</div></div>` +
       `<div class="bar"><button id="qc-export">Export CSV</button></div>`;
     document.documentElement.appendChild(panel);
     body = panel.querySelector('#qc-bd'); statusEl = panel.querySelector('#qc-st');
     wireAutoPass(panel.querySelector('#qc-autopass'), panel.querySelector('#qc-mode'));
+    wireSortHub(panel.querySelector('#qc-sorthub'));
     wireExport(panel.querySelector('#qc-export'));
     renderAuth();
     chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && (ch.token || ch.user)) renderAuth(); });
@@ -78,13 +80,14 @@
 
   // Auto-Pass toggle: OFF = capture/sync only (read-only). ON = also auto-pass each scanned item.
   // State is persisted and pushed to the page-context interceptor (inject.js) via window messages.
-  // Broadcast the config (toggle + optional Pass-button selector override) to inject.js.
+  // Broadcast the config (toggle + optional Pass-button selector override + sort hub) to inject.js.
   function pushCfg() {
-    chrome.storage.local.get(['autopass', 'passSelector'], (r) => {
+    chrome.storage.local.get(['autopass', 'passSelector', 'sortHub'], (r) => {
       try {
         window.postMessage({
           __qcCfg: true, autopass: !!(r && r.autopass),
           passSelector: (r && r.passSelector) || '',
+          sortHub: (r && r.sortHub) || '',
         }, '*');
       } catch (e) {}
     });
@@ -100,6 +103,15 @@
     chrome.storage.local.get('autopass', (r) => apply(!!(r && r.autopass)));
     cb.addEventListener('change', () => { chrome.storage.local.set({ autopass: cb.checked }); apply(cb.checked); });
   }
+  // Sort hub: entered once, persisted, and reused for every RTO scan (auto-fill). When set,
+  // inject.js sorts each RTO item on this screen before passing it.
+  function wireSortHub(inp) {
+    if (!inp) return;
+    chrome.storage.local.get('sortHub', (r) => { inp.value = (r && r.sortHub) || ''; });
+    const save = () => { chrome.storage.local.set({ sortHub: inp.value.trim() }); pushCfg(); };
+    inp.addEventListener('change', save);
+    inp.addEventListener('blur', save);
+  }
   const FIELDS = [
     ['Tracking', 'tracking_number'], ['Item Barcode', 'item_barcode'], ['Product', 'product_name'],
     ['Article No', 'article_no'], ['Style Id', 'style_id'], ['Size', 'size'], ['Price', 'price'],
@@ -110,12 +122,21 @@
     ['Return Hub', 'return_hub'], ['Dispatch WH', 'dispatch_wh'], ['Destination WH', 'return_destination_wh'],
     ['DC', 'delivery_center'], ['Ship City', 'ship_city'], ['Return Id', 'return_id'],
     ['OMS Release', 'oms_release_id'], ['SKU Id', 'sku_id'], ['SKU Code', 'sku_code'],
+    ['Sort Hub', 'sort_hub'], ['Sort Lane', 'sort_lane'], ['Sort Lane Desc', 'sort_lane_desc'],
   ];
   function renderRecord(rec) {
     ensurePanel();
-    body.innerHTML = FIELDS.map(([label, key]) => {
+    // Prominent sort banner: the lane the operator must physically place this RTO item in.
+    let banner = '';
+    if (rec.sort_status) {
+      const ok = rec.sort_status === 'SUCCESS';
+      banner = ok
+        ? `<div class="row"><span class="k">SORT → LANE</span><span class="v pass" style="font-size:15px">${String(rec.sort_lane || '?')}${rec.sort_lane_desc ? ' · ' + String(rec.sort_lane_desc) : ''}</span></div>`
+        : `<div class="row"><span class="k">SORT FAILED</span><span class="v warn">${String(rec.sort_status)}</span></div>`;
+    }
+    body.innerHTML = banner + FIELDS.map(([label, key]) => {
       const v = rec[key] || '—';
-      const cls = key === 'logistics_status' && v === 'DELIVERED_TO_SELLER' ? 'pass' : '';
+      const cls = (key === 'logistics_status' && v === 'DELIVERED_TO_SELLER') || (key === 'sort_lane' && rec.sort_status === 'SUCCESS') ? 'pass' : '';
       return `<div class="row"><span class="k">${label}</span><span class="v ${cls}">${String(v)}</span></div>`;
     }).join('');
   }
