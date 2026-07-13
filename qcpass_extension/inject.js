@@ -288,6 +288,17 @@
     } catch (e) {}
   }
 
+  // All the QC-portal search masks that resolve to the SAME worms orderReleaseItem search
+  // backend (per the portal's boot config), so one extractor handles every screen:
+  //   searchReturnDetails/search[2]        -> customer-return screen
+  //   search2 / search / returnSearch      -> RTO screen (tracking scan)
+  //   findSearchDetailOrderReleaseItem/... -> RTO screen (item-barcode scan)
+  const SEARCH_RE = /\/qcSearch\/(searchReturnDetails\/search2?|search2?(\?|$)|returnSearch|findSearchDetailOrderReleaseItem\/search)/;
+  const isSearchUrl = (url) => SEARCH_RE.test(url);
+  // Pass endpoints: updateReturnRestocked (customer return + RTO RpcQcFlow) and
+  // updateQCStatus (rms returnLine update, the older QC flow's pass).
+  const isPassUrl = (url) => url.includes('/qcSearch/updateReturnRestocked') || url.includes('/qcSearch/updateQCStatus');
+
   // ---- hook fetch ----
   const origFetch = window.fetch;
   window.fetch = function (...args) {
@@ -295,10 +306,10 @@
     try {
       const url = (typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url)) || '';
       const init = args[1] || {};
-      if (url.includes('/qcSearch/searchReturnDetails/search2')) {
+      if (isSearchUrl(url)) {
         const sv = searchedValueFromUrl(url);
         p.then((r) => r.clone().json().then((j) => handleSearch(j, sv)).catch(() => handleSearch(null, sv)));
-      } else if (url.includes('/qcSearch/updateReturnRestocked')) {
+      } else if (isPassUrl(url)) {
         armPrintSuppress();   // also kill the print popup when the page itself does a pass
         p.then((r) => r.clone().json().then((j) => handlePass(j, init.body)).catch(() => {}));
       }
@@ -317,15 +328,15 @@
     xhr.send = function (body) {
       _body = body;
       try {
-        if (_url.includes('/qcSearch/updateReturnRestocked')) {
+        if (isPassUrl(_url)) {
           armPrintSuppress();   // also kill the print popup when the page itself does a pass
         }
       } catch (e) {}
       return send.call(this, body);
     };
     xhr.addEventListener('load', function () {
-      const isSearch = _url.includes('/qcSearch/searchReturnDetails/search2');
-      const isPass = _url.includes('/qcSearch/updateReturnRestocked');
+      const isSearch = isSearchUrl(_url);
+      const isPass = isPassUrl(_url);
       if (!isSearch && !isPass) return;
       // Parse defensively — an errored search may be non-JSON; we still want to log it.
       let j = null;

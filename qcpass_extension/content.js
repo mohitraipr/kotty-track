@@ -172,6 +172,22 @@
   function findReturnIdInput() {
     return findInputByLabel((t) => t === 'return id');
   }
+  // RTO screen only: after a tracking scan the portal opens an "Item Barcode" input.
+  function findItemBarcodeInput() {
+    return findInputByLabel((t) => t.includes('barcode'));
+  }
+  function isUsableInput(inp) {
+    if (!inp || inp.disabled || inp.readOnly) return false;
+    const r = inp.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;   // rendered & visible
+  }
+  // Where the NEXT scan belongs. On the RTO screen an open, empty Item Barcode input takes
+  // priority (tracking was already scanned); everywhere else it's the Tracking box.
+  function findScanTarget() {
+    const bar = findItemBarcodeInput();
+    if (isUsableInput(bar) && !bar.value) return bar;
+    return findTrackingInput();
+  }
 
   // Clear a scan input the React way: the portal is a React app, so a plain `.value = ''`
   // only changes the DOM — React's state still holds the old text and re-renders it back.
@@ -185,36 +201,44 @@
       inp.dispatchEvent(new Event('change', { bubbles: true }));
     } catch (e) {}
   }
-  // Wipe both scan boxes so a failed value never blocks the next scan (or refocus).
-  function clearScanInputs() { clearInput(findTrackingInput()); clearInput(findReturnIdInput()); }
+  // Wipe every scan box so a failed value never blocks the next scan (or refocus).
+  function clearScanInputs() {
+    clearInput(findTrackingInput());
+    clearInput(findReturnIdInput());
+    const bar = findItemBarcodeInput();
+    if (isUsableInput(bar)) clearInput(bar);
+  }
 
-  // Put the cursor in the Tracking box. `force` = a scan event just fired, so nobody is
+  // Put the cursor on the scan target. `force` = a scan event just fired, so nobody is
   // mid-typing — steal focus even from an input that holds a (stale) value. Without `force`,
   // never interrupt an input that has text in it (a deliberate manual entry).
-  // Returns true only when focus actually ended up on the Tracking box.
-  function focusTracking(force) {
-    const track = findTrackingInput();
-    if (!track) return false;
-    if (document.activeElement === track) return true;   // already correct
+  // Returns true only when focus actually ended up on the target.
+  function focusScanTarget(force) {
+    const target = findScanTarget();
+    if (!target) return false;
+    if (document.activeElement === target) return true;   // already correct
     const a = document.activeElement;
-    const busy = a && a.tagName === 'INPUT' && a !== track && a.value;
+    const busy = a && a.tagName === 'INPUT' && a !== target && a.value;
     if (busy && !force) return false;
-    try { track.focus(); } catch (e) {}
-    return document.activeElement === track;
+    try { target.focus(); } catch (e) {}
+    return document.activeElement === target;
   }
-  // Poll until focus truly lands on the Tracking box (the portal renders/re-enables it async).
+  // Poll until focus truly lands on the scan target and STAYS there (~1s stable). The portal
+  // renders async — on the RTO screen the Item Barcode input can appear a beat after the
+  // search response, changing the target mid-poll, so a single success isn't enough.
   function startTrackingFocus(force) {
-    let tries = 0;
+    let tries = 0, stable = 0;
     const iv = setInterval(() => {
-      if (focusTracking(force) || ++tries >= 20) clearInterval(iv);  // ~6s max
+      stable = focusScanTarget(force) ? stable + 1 : 0;
+      if (stable >= 3 || ++tries >= 20) clearInterval(iv);  // ~6s max
     }, 300);
   }
   // Permanent watchdog: whenever focus is dropped entirely (portal re-render leaves it on
-  // <body>), re-aim at the Tracking box. Never fires while any input is focused, so it can't
+  // <body>), re-aim at the scan target. Never fires while any input is focused, so it can't
   // fight a deliberate click into Return ID.
   setInterval(() => {
     const a = document.activeElement;
-    if (!a || a === document.body || a === document.documentElement) focusTracking(false);
+    if (!a || a === document.body || a === document.documentElement) focusScanTarget(false);
   }, 1000);
 
   // ---------- bridge: page -> background ----------
