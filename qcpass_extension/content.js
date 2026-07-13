@@ -36,12 +36,15 @@
       `<div class="auth" id="qc-auth"><span id="qc-who">not signed in</span><span class="relogin" id="qc-relogin" style="display:none">login needed</span></div>` +
       `<div class="cfg"><label><input type="checkbox" id="qc-autopass"> Auto-Pass on scan</label><span class="mode" id="qc-mode">capture only</span></div>` +
       `<div class="cfg"><label style="flex:1;gap:6px">Sort hub <input type="text" id="qc-sorthub" placeholder="e.g. BPF_RH" style="flex:1;min-width:0;background:#0f172a;border:1px solid #334155;border-radius:5px;color:#e2e8f0;padding:3px 6px;font:11px Segoe UI,sans-serif"></label></div>` +
+      `<div class="cfg"><label style="gap:6px">Driver <select id="qc-drivemode" style="background:#0f172a;border:1px solid #334155;border-radius:5px;color:#e2e8f0;padding:3px 6px;font:11px Segoe UI,sans-serif"><option value="off">Off (passive)</option><option value="return">Customer Return</option><option value="rto">RTO</option></select></label><span class="mode" id="qc-drivest"></span></div>` +
+      `<div class="cfg" id="qc-driverow" style="display:none"><input type="text" id="qc-drivescan" placeholder="Scan tracking → Enter" style="flex:1;min-width:0;background:#0f172a;border:1px solid #a855f7;border-radius:5px;color:#e2e8f0;padding:5px 8px;font:12px Segoe UI,sans-serif"></div>` +
       `<div class="bd" id="qc-bd"><div class="k">Scan/search a return…</div></div>` +
       `<div class="bar"><button id="qc-export">Export CSV</button></div>`;
     document.documentElement.appendChild(panel);
     body = panel.querySelector('#qc-bd'); statusEl = panel.querySelector('#qc-st');
     wireAutoPass(panel.querySelector('#qc-autopass'), panel.querySelector('#qc-mode'));
     wireSortHub(panel.querySelector('#qc-sorthub'));
+    wireDriver(panel.querySelector('#qc-drivemode'), panel.querySelector('#qc-driverow'), panel.querySelector('#qc-drivescan'));
     wireExport(panel.querySelector('#qc-export'));
     renderAuth();
     chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && (ch.token || ch.user)) renderAuth(); });
@@ -82,12 +85,13 @@
   // State is persisted and pushed to the page-context interceptor (inject.js) via window messages.
   // Broadcast the config (toggle + optional Pass-button selector override + sort hub) to inject.js.
   function pushCfg() {
-    chrome.storage.local.get(['autopass', 'passSelector', 'sortHub'], (r) => {
+    chrome.storage.local.get(['autopass', 'passSelector', 'sortHub', 'driveMode'], (r) => {
       try {
         window.postMessage({
           __qcCfg: true, autopass: !!(r && r.autopass),
           passSelector: (r && r.passSelector) || '',
           sortHub: (r && r.sortHub) || '',
+          driveMode: (r && r.driveMode) || 'off',
         }, '*');
       } catch (e) {}
     });
@@ -111,6 +115,143 @@
     const save = () => { chrome.storage.local.set({ sortHub: inp.value.trim() }); pushCfg(); };
     inp.addEventListener('change', save);
     inp.addEventListener('blur', save);
+  }
+
+  // ---------- driver mode ----------
+  // Instead of scanning into the portal, the operator scans into OUR box; the extension drives
+  // the portal's own scan path end to end: (RTO) sort → fill+enter tracking → fill+enter item
+  // barcode → click Pass. It emulates the hardware scanner exactly: the portal reads a hidden
+  // #scanner-input on an Enter keyup on document.body, so we set that value and dispatch Enter.
+  let DRIVE_MODE = 'off';
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function wireDriver(sel, row, box) {
+    if (!sel || !box) return;
+    const apply = (mode) => {
+      DRIVE_MODE = mode || 'off';
+      sel.value = DRIVE_MODE;
+      row.style.display = DRIVE_MODE === 'off' ? 'none' : '';
+      const st = panel && panel.querySelector('#qc-drivest');
+      if (st) { st.textContent = DRIVE_MODE === 'off' ? '' : ('DRIVING: ' + DRIVE_MODE.toUpperCase()); st.classList.toggle('on', DRIVE_MODE !== 'off'); }
+      pushCfg();
+      if (DRIVE_MODE !== 'off') setTimeout(() => { try { box.focus(); } catch (e) {} }, 50);
+    };
+    chrome.storage.local.get('driveMode', (r) => apply((r && r.driveMode) || 'off'));
+    sel.addEventListener('change', () => { chrome.storage.local.set({ driveMode: sel.value }); apply(sel.value); });
+    // scan → Enter drives the whole flow
+    box.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const v = box.value.trim();
+      box.value = '';
+      if (v) driveScan(v, DRIVE_MODE);
+    });
+  }
+
+  // Emulate a hardware scan into the portal: set the hidden scanner buffer and fire Enter.
+  function emitToPortalScanner(v) {
+    const si = document.getElementById('scanner-input');
+    if (!si) return false;
+    try {
+      si.focus();
+      nativeValueSetter.call(si, String(v));
+      si.dispatchEvent(new Event('input', { bubbles: true }));
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    } catch (e) { return false; }
+    return true;
+  }
+
+  // Resolve on the next capture forwarded from inject.js (the portal's search response).
+  let _captureWaiter = null;
+  function waitForCapture(ms) {
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { _captureWaiter = null; resolve(null); }, ms);
+      _captureWaiter = (rec) => { clearTimeout(t); _captureWaiter = null; resolve(rec); };
+    });
+  }
+  // Ask inject.js (page context) to run L1 sortation; resolve with its sort_* result.
+  let _sortSeq = 0; const _sortWaiters = {};
+  function requestSort(tracking) {
+    return new Promise((resolve) => {
+      const id = ++_sortSeq;
+      const t = setTimeout(() => { delete _sortWaiters[id]; resolve(null); }, 8000);
+      _sortWaiters[id] = (res) => { clearTimeout(t); delete _sortWaiters[id]; resolve(res); };
+      try { window.postMessage({ __qcSortReq: true, id, tracking }, '*'); } catch (e) { resolve(null); }
+    });
+  }
+  // Poll the DOM for the enabled+visible Pass button (same matching as inject's finder).
+  function findPassButton() {
+    const cands = document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"], a.btn');
+    for (const el of cands) {
+      if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
+      if (t === 'pass' || t === 'qc pass' || t === 'qcpass' || (t.length <= 16 && /\bpass\b/.test(t) && !/bypass|passbook|password/.test(t))) return el;
+    }
+    return null;
+  }
+  function waitForPassButton(ms) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const tick = () => {
+        const b = findPassButton();
+        if (b) return resolve(b);
+        if (Date.now() - start >= ms) return resolve(null);
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
+
+  function driveStatus(msg, warn) {
+    const st = panel && panel.querySelector('#qc-drivest');
+    if (st) { st.textContent = msg; st.classList.toggle('on', !warn); }
+  }
+
+  // The full driven flow: one operator scan → sorted, searched, item-filled, passed.
+  async function driveScan(value, mode) {
+    ensurePanel();
+    try {
+      // 1. RTO must be sorted before it can be passed — do it via the page context (inject.js).
+      if (mode === 'rto') {
+        driveStatus('sorting ' + value + '…');
+        const sort = await requestSort(value);
+        if (!sort || sort.sort_status !== 'SUCCESS') { driveStatus('SORT FAILED: ' + ((sort && sort.sort_status) || 'no response'), true); return; }
+        driveStatus('sorted → LANE ' + (sort.sort_lane || '?'));
+      }
+      // 2. Drive the tracking scan into the portal and wait for its search response.
+      driveStatus('searching ' + value + '…');
+      const cap = waitForCapture(9000);
+      if (!emitToPortalScanner(value)) { driveStatus('scanner-input not found — is the QC screen open?', true); return; }
+      const rec = await cap;
+      if (!rec) { driveStatus('no data for ' + value + ' (check the screen)', true); return; }
+      // 3. Reveal Pass. RTO always needs the item-barcode step, so emit it right away; a customer
+      //    return shows Pass straight after the tracking scan (fall back to the item step if not).
+      let btn = null;
+      if (rec.return_flow === 'rto' && rec.item_barcode) {
+        driveStatus('item ' + rec.item_barcode + '…');
+        await delay(300);
+        emitToPortalScanner(rec.item_barcode);
+        btn = await waitForPassButton(6000);
+      } else {
+        btn = await waitForPassButton(1500);
+        if (!btn && rec.item_barcode) {
+          driveStatus('item ' + rec.item_barcode + '…');
+          emitToPortalScanner(rec.item_barcode);
+          btn = await waitForPassButton(6000);
+        }
+      }
+      if (!btn) { driveStatus('Pass button never appeared', true); return; }
+      btn.click();
+      driveStatus('PASSED ' + (rec.item_barcode || value));
+    } catch (e) {
+      driveStatus('driver error: ' + (e && e.message), true);
+    } finally {
+      const box = panel && panel.querySelector('#qc-drivescan');
+      if (box && DRIVE_MODE !== 'off') setTimeout(() => { try { box.focus(); } catch (e) {} }, 50);
+    }
   }
   const FIELDS = [
     ['Tracking', 'tracking_number'], ['Item Barcode', 'item_barcode'], ['Product', 'product_name'],
@@ -256,9 +397,15 @@
   }
   // Permanent watchdog: whenever focus is dropped entirely (portal re-render leaves it on
   // <body>), re-aim at the scan target. Never fires while any input is focused, so it can't
-  // fight a deliberate click into Return ID.
+  // fight a deliberate click into Return ID. In driver mode the operator scans into OUR box,
+  // so keep focus there instead of the portal's input.
   setInterval(() => {
     const a = document.activeElement;
+    if (a && a.tagName === 'INPUT') return;   // don't fight active typing anywhere
+    if (DRIVE_MODE !== 'off') {
+      const box = panel && panel.querySelector('#qc-drivescan');
+      if (box) { try { box.focus(); } catch (e) {} return; }
+    }
     if (!a || a === document.body || a === document.documentElement) focusScanTarget(false);
   }, 1000);
 
@@ -268,22 +415,28 @@
     if (!m) return;
     // inject.js just loaded and asked for the current config → push it.
     if (m.__qcReady === true) { pushCfg(); return; }
+    // inject.js answered a driver sortation request.
+    if (m.__qcSortRes === true) { const w = _sortWaiters[m.id]; if (w) w(m.result); return; }
     if (m.__qcCapture !== true) return;
     if (m.kind === 'capture') {
       renderRecord(m.payload); chrome.runtime.sendMessage({ type: 'capture', record: m.payload });
-      // a scan just landed — make sure the cursor is back on Tracking for the next barcode
-      setTimeout(() => startTrackingFocus(true), 400);
+      // driver mode is awaiting this search result → hand it over; else re-aim portal focus.
+      if (_captureWaiter) { _captureWaiter(m.payload); }
+      else if (DRIVE_MODE === 'off') setTimeout(() => startTrackingFocus(true), 400);
     } else if (m.kind === 'pass') {
       markPassed(m.payload);
       chrome.runtime.sendMessage({ type: 'pass', record: m.payload });
       // after a pass the page clears/re-renders (or reloads) — wipe leftovers, re-aim at Tracking
-      setTimeout(() => { clearScanInputs(); startTrackingFocus(true); }, 400);
+      // (driver mode manages its own focus/box, so leave it alone there)
+      setTimeout(() => { clearScanInputs(); if (DRIVE_MODE === 'off') startTrackingFocus(true); }, 400);
     } else if (m.kind === 'error') {
       markError(m.payload);
       chrome.runtime.sendMessage({ type: 'error', record: m.payload });
+      // driver mode is awaiting this search → hand over null so it reports "no data" and recovers
+      if (_captureWaiter) { _captureWaiter(null); }
       // failed scan: the portal leaves the bad value in the box and never clears it — wipe it
       // and refocus so the next scan works without a page refresh
-      setTimeout(() => { clearScanInputs(); startTrackingFocus(true); }, 300);
+      setTimeout(() => { clearScanInputs(); if (DRIVE_MODE === 'off') startTrackingFocus(true); }, 300);
     }
   });
 
