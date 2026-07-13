@@ -148,16 +148,46 @@
     });
   }
 
-  // Emulate a hardware scan into the portal: set the hidden scanner buffer and fire Enter.
-  function emitToPortalScanner(v) {
-    const si = document.getElementById('scanner-input');
-    if (!si) return false;
+  // The visible "Scan/Type Item Barcode" box on the RTO item step (id="scan-Input").
+  function findItemInput() {
+    return document.getElementById('scan-Input')
+      || document.querySelector('input[placeholder*="Item Barcode" i]')
+      || (function () { const bar = findItemBarcodeInput(); return isUsableInput(bar) ? bar : null; })();
+  }
+  function fireEnter(el) {
+    for (const type of ['keydown', 'keypress', 'keyup']) {
+      try { el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); } catch (e) {}
+    }
+  }
+  // Put a scanned value into the portal and trigger its search — the way the operator would.
+  // The portal has no single hidden scan buffer we can rely on across screens, so we drive the
+  // real, visible field for this step (tracking field, or the item box), React-safely, then fire
+  // Enter on both the field and document.body (the portal may listen at either) + submit the form.
+  function driveInput(kind, v) {
+    // If a hidden scanner buffer happens to exist, prefer it (some screens use it).
+    const buf = document.getElementById('scanner-input');
+    if (buf) {
+      try {
+        buf.focus(); nativeValueSetter.call(buf, String(v));
+        buf.dispatchEvent(new Event('input', { bubbles: true }));
+        fireEnter(buf); fireEnter(document.body);
+        return true;
+      } catch (e) {}
+    }
+    const inp = kind === 'item' ? findItemInput() : findTrackingInput();
+    if (!inp) return false;
     try {
-      si.focus();
-      nativeValueSetter.call(si, String(v));
-      si.dispatchEvent(new Event('input', { bubbles: true }));
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+      const wasRO = inp.readOnly;
+      if (wasRO) inp.readOnly = false;
+      inp.focus();
+      nativeValueSetter.call(inp, String(v));
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      fireEnter(inp);
+      const form = inp.closest('form');
+      if (form) { try { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); } catch (e) {} }
+      fireEnter(document.body);
+      if (wasRO) inp.readOnly = wasRO;
     } catch (e) { return false; }
     return true;
   }
@@ -224,22 +254,22 @@
       // 2. Drive the tracking scan into the portal and wait for its search response.
       driveStatus('searching ' + value + '…');
       const cap = waitForCapture(9000);
-      if (!emitToPortalScanner(value)) { driveStatus('scanner-input not found — is the QC screen open?', true); return; }
+      if (!driveInput('tracking', value)) { driveStatus('Tracking field not found — is the QC screen open?', true); return; }
       const rec = await cap;
       if (!rec) { driveStatus('no data for ' + value + ' (check the screen)', true); return; }
-      // 3. Reveal Pass. RTO always needs the item-barcode step, so emit it right away; a customer
+      // 3. Reveal Pass. RTO always needs the item-barcode step, so fill it right away; a customer
       //    return shows Pass straight after the tracking scan (fall back to the item step if not).
       let btn = null;
       if (rec.return_flow === 'rto' && rec.item_barcode) {
         driveStatus('item ' + rec.item_barcode + '…');
-        await delay(300);
-        emitToPortalScanner(rec.item_barcode);
+        await delay(400);
+        driveInput('item', rec.item_barcode);
         btn = await waitForPassButton(6000);
       } else {
         btn = await waitForPassButton(1500);
         if (!btn && rec.item_barcode) {
           driveStatus('item ' + rec.item_barcode + '…');
-          emitToPortalScanner(rec.item_barcode);
+          driveInput('item', rec.item_barcode);
           btn = await waitForPassButton(6000);
         }
       }
@@ -397,15 +427,14 @@
   }
   // Permanent watchdog: whenever focus is dropped entirely (portal re-render leaves it on
   // <body>), re-aim at the scan target. Never fires while any input is focused, so it can't
-  // fight a deliberate click into Return ID. In driver mode the operator scans into OUR box,
-  // so keep focus there instead of the portal's input.
+  // fight a deliberate click into Return ID.
+  // In DRIVER mode we do NOT continuously steal focus — that made the whole page unclickable
+  // and text unselectable. The driver box is focused only when the mode is set and after each
+  // driven scan; the operator can click/select freely in between, and click the box to scan.
   setInterval(() => {
+    if (DRIVE_MODE !== 'off') return;
     const a = document.activeElement;
     if (a && a.tagName === 'INPUT') return;   // don't fight active typing anywhere
-    if (DRIVE_MODE !== 'off') {
-      const box = panel && panel.querySelector('#qc-drivescan');
-      if (box) { try { box.focus(); } catch (e) {} return; }
-    }
     if (!a || a === document.body || a === document.documentElement) focusScanTarget(false);
   }, 1000);
 
