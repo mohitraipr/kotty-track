@@ -226,6 +226,80 @@
     return rec;
   }
 
+  // RTO / courier-return QC responses have a DIFFERENT shape than customer returns:
+  // no rmsRetunDetails; the item lives in orderReleaseItemData, logistics in shipmentDetails,
+  // the lane in laneDetails, and style/size in productResponse.productOptions[].listings[].
+  // (returnType comes back as "COURIER_RETURN", so we detect RTO by shape, not by that value.)
+  function isRtoResponse(d) {
+    return !!(d && !(d.rmsRetunDetails && d.rmsRetunDetails.length) &&
+      (d.orderReleaseItemData && d.orderReleaseItemData.length) &&
+      (d.shipmentDetails || d.laneDetails));
+  }
+  // laneDetails is an array of { "<omsReleaseId>": { code, description } } — pull this item's.
+  function laneForOms(d, oms) {
+    const ld = d && d.laneDetails;
+    if (Array.isArray(ld)) {
+      for (const e of ld) { if (e && e[oms]) return e[oms]; }
+      if (ld[0] && typeof ld[0] === 'object') { const v = Object.values(ld[0])[0]; if (v && v.code) return v; }
+    } else if (ld && ld.code) return ld;
+    return {};
+  }
+  function extractRTO(j) {
+    const d = (j && j.data) || {};
+    const it = (d.orderReleaseItemData || [])[0] || {};
+    const pr = (d.productResponse && ((d.productResponse[0]) || d.productResponse['0'])) || {};
+    const sd = Array.isArray(d.shipmentDetails) ? (d.shipmentDetails[0] || {}) : (d.shipmentDetails || {});
+    const skuId = String(pick(it, 'skuId'));
+    // pick the productOption for THIS item's sku (not the first size) — same fix as customer returns
+    const opts = pr.productOptions || [];
+    const opt = opts.find((o) => o && String(o.skuId) === skuId) || {};
+    const listing = (opt.listings && (Array.isArray(opt.listings) ? opt.listings[0] : opt.listings)) || {};
+    const lane = laneForOms(d, it.omsReleaseId);
+    return {
+      return_flow: 'rto',
+      tracking_number: pick(it, 'trackingNumber') || pick(sd, 'trackingNumber'),
+      item_barcode: String(pick(it, 'itemBarcode')),
+      return_id: String(pick(it, 'returnId')),
+      oms_release_id: String(pick(it, 'omsReleaseId')),
+      sku_id: skuId,
+      sku_code: opt.skuCode || '',
+      style_id: String(listing.styleId || pr.productId || ''),
+      rms_status: pick(it, 'status'),
+      return_status: pick(it, 'status'),
+      status_code: pick(it, 'status'),
+      qc_action: pick(it, 'qcActionCode'),
+      return_type: pick(it, 'returnType'),
+      supply_type: pick(it, 'supplyType'),
+      article_no: opt.vendorArticleNo || pick(pr, 'articleNumber'),
+      style_article_no: pick(pr, 'articleNumber'),
+      product_name: pick(pr, 'productDisplayName', 'title'),
+      price: String(pick(pr, 'price') || opt.price || ''),
+      size: String(opt.value || opt.unifiedSize || ''),
+      created_date: toDay(it.createdOn),
+      shipped_on: toDay(it.shippedOn),
+      return_received_on: toDay(it.returnReceivedOn),
+      return_restocked_on: toDay(it.lastModifiedOn),
+      warehouse_id: String(pick(it, 'warehouseId')),
+      return_request_warehouse_id: String(pick(it, 'returnRequestWarehouseId')),
+      // logistics straight from shipmentDetails — no separate getReturnLMSDetails call needed
+      logistics_status: pick(sd, 'shipmentStatus'),
+      courier_code: pick(sd, 'courierCode'),
+      shipment_type: pick(sd, 'shipmentType'),
+      active_leg: pick(sd, 'activeLegType'),
+      ship_city: pick(sd, 'city'),
+      ship_state: pick(sd, 'stateCode'),
+      ship_pincode: pick(sd, 'pincode'),
+      delivery_center: String(pick(sd, 'deliveryCenterId')),
+      dispatch_wh: pick(sd, 'dispatchHubCode'),
+      return_hub: pick(sd, 'rtoHubCode'),
+      return_destination_wh: pick(sd, 'rtoHubCode', 'destinationHubCode'),
+      // lane is already in the QC response (the item was L1-sorted) — surface it
+      sort_lane: String(lane.code || ''),
+      sort_lane_desc: String(lane.description || ''),
+      captured_at: new Date().toISOString(),
+    };
+  }
+
   // The searched value the operator scanned lives in the GET search2 URL, e.g.
   //   ...search2?query[q]=trackingNumber.eq:5718708979&...&receiveShipmentQuery[q][entityBarcode]=5718708979
   // so we can recover it even when the search fails (No Data Found) and there's no response body.
@@ -243,7 +317,7 @@
 
   // `searchedValue` is what the operator scanned (from the URL). On a failed/empty search we
   // record it as an ERROR so the tracking is never lost (later resolved by a successful capture).
-  const isRTO = (rec) => /rto/i.test(String((rec && rec.return_type) || ''));
+  const isRTO = (rec) => !!(rec && rec.return_flow === 'rto');
 
   // L1 sortation, run from the QC screen: look up the lane for this RTO tracking number at the
   // operator's hub (SORT_HUB). This is the SAME single GET the L1Sortation screen fires, so it
@@ -276,15 +350,22 @@
     try {
       const failed = !j || (j.status && j.status.statusType && j.status.statusType !== 'SUCCESS');
       if (!failed) {
-        const rec = extractSearch(j);
+        const d = (j && j.data) || {};
+        // RTO/courier-return responses have their own shape & extractor; everything else is a
+        // customer return. This is what fixes blank style_id/return_type on RTO items.
+        const rec = isRtoResponse(d) ? extractRTO(j) : extractSearch(j);
         if (rec.item_barcode || rec.tracking_number) {
-          await enrichLogistics(rec);
-          // RTO items must be sorted before passing — do it here so the operator never leaves QC.
-          const needsSort = isRTO(rec) && !!SORT_HUB;
-          const sortOk = needsSort ? await doSortation(rec) : true;
-          post('capture', rec);
-          // Auto-pass only when the sort succeeded (or wasn't required) — never pass an unsorted RTO.
-          if (AUTOPASS && sortOk) doAutoPass(rec);
+          if (isRTO(rec)) {
+            // logistics already came in shipmentDetails; sort here so the operator never leaves QC.
+            const sortOk = SORT_HUB ? await doSortation(rec) : true;
+            post('capture', rec);
+            // pass only when the sort succeeded (or no hub configured) — never pass an unsorted RTO
+            if (AUTOPASS && sortOk) doAutoPass(rec);
+          } else {
+            await enrichLogistics(rec);
+            post('capture', rec);
+            if (AUTOPASS) doAutoPass(rec);
+          }
           return;
         }
       }
