@@ -240,6 +240,22 @@
     if (st) { st.textContent = msg; st.classList.toggle('on', !warn); }
   }
 
+  // Return focus to the operator's scan box after a driven scan. The portal re-renders after a
+  // pass and steals focus, so retry briefly (~2s) to win that race, then STOP — a permanent
+  // steal is what made the page unclickable, so this is deliberately bounded.
+  let _refocusIv = null;
+  function focusDriverBoxSoon() {
+    const box = panel && panel.querySelector('#qc-drivescan');
+    if (!box || DRIVE_MODE === 'off') return;
+    if (_refocusIv) clearInterval(_refocusIv);
+    let n = 0;
+    _refocusIv = setInterval(() => {
+      if (DRIVE_MODE === 'off') { clearInterval(_refocusIv); _refocusIv = null; return; }
+      if (document.activeElement !== box) { try { box.focus(); } catch (e) {} }
+      if (++n >= 10) { clearInterval(_refocusIv); _refocusIv = null; }   // ~2s then stop
+    }, 200);
+  }
+
   // The full driven flow: one operator scan → sorted, searched, item-filled, passed.
   async function driveScan(value, mode) {
     ensurePanel();
@@ -279,8 +295,8 @@
     } catch (e) {
       driveStatus('driver error: ' + (e && e.message), true);
     } finally {
-      const box = panel && panel.querySelector('#qc-drivescan');
-      if (box && DRIVE_MODE !== 'off') setTimeout(() => { try { box.focus(); } catch (e) {} }, 50);
+      // hand focus back to the scan box for the next item (bounded — see focusDriverBoxSoon)
+      focusDriverBoxSoon();
     }
   }
   const FIELDS = [
