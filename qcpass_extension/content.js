@@ -152,11 +152,11 @@
   // After a pass/reload, focus can land in the Return ID box, so a scanned tracking barcode
   // goes into the wrong field. Locate the Tracking box by its label and focus it — but only
   // when nothing is actively being typed, so we never fight a deliberate click.
-  function findTrackingInput() {
+  function findInputByLabel(match) {
     const labels = document.querySelectorAll('label');
     for (const lab of labels) {
       const t = (lab.textContent || '').trim().toLowerCase();
-      if (t === 'return tracking id' || (t.includes('tracking') && t.includes('id'))) {
+      if (match(t)) {
         const forId = lab.getAttribute('for');
         if (forId) { const el = document.getElementById(forId); if (el) return el; }
         const cont = lab.closest('.u-field-container') || lab.parentElement;
@@ -166,24 +166,56 @@
     }
     return null;
   }
-  function ensureTrackingFocus() {
+  function findTrackingInput() {
+    return findInputByLabel((t) => t === 'return tracking id' || (t.includes('tracking') && t.includes('id')));
+  }
+  function findReturnIdInput() {
+    return findInputByLabel((t) => t === 'return id');
+  }
+
+  // Clear a scan input the React way: the portal is a React app, so a plain `.value = ''`
+  // only changes the DOM — React's state still holds the old text and re-renders it back.
+  // Setting via the native value setter + firing an `input` event updates React's state too.
+  const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  function clearInput(inp) {
+    if (!inp || !inp.value) return;
+    try {
+      nativeValueSetter.call(inp, '');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {}
+  }
+  // Wipe both scan boxes so a failed value never blocks the next scan (or refocus).
+  function clearScanInputs() { clearInput(findTrackingInput()); clearInput(findReturnIdInput()); }
+
+  // Put the cursor in the Tracking box. `force` = a scan event just fired, so nobody is
+  // mid-typing — steal focus even from an input that holds a (stale) value. Without `force`,
+  // never interrupt an input that has text in it (a deliberate manual entry).
+  // Returns true only when focus actually ended up on the Tracking box.
+  function focusTracking(force) {
     const track = findTrackingInput();
     if (!track) return false;
     if (document.activeElement === track) return true;   // already correct
-    // Steal focus only if nothing is mid-entry elsewhere (e.g. focus wrongly landed in the
-    // Return ID box after a reload, or focus is on <body>). Never interrupt active typing.
     const a = document.activeElement;
     const busy = a && a.tagName === 'INPUT' && a !== track && a.value;
-    if (!busy) { try { track.focus(); } catch (e) {} }
-    return true;
+    if (busy && !force) return false;
+    try { track.focus(); } catch (e) {}
+    return document.activeElement === track;
   }
-  // Poll briefly after (re)load until the input renders, then focus it once.
-  function startTrackingFocus() {
+  // Poll until focus truly lands on the Tracking box (the portal renders/re-enables it async).
+  function startTrackingFocus(force) {
     let tries = 0;
     const iv = setInterval(() => {
-      if (ensureTrackingFocus() || ++tries >= 20) clearInterval(iv);  // ~6s max
+      if (focusTracking(force) || ++tries >= 20) clearInterval(iv);  // ~6s max
     }, 300);
   }
+  // Permanent watchdog: whenever focus is dropped entirely (portal re-render leaves it on
+  // <body>), re-aim at the Tracking box. Never fires while any input is focused, so it can't
+  // fight a deliberate click into Return ID.
+  setInterval(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body || a === document.documentElement) focusTracking(false);
+  }, 1000);
 
   // ---------- bridge: page -> background ----------
   window.addEventListener('message', (ev) => {
@@ -192,15 +224,21 @@
     // inject.js just loaded and asked for the current config → push it.
     if (m.__qcReady === true) { pushCfg(); return; }
     if (m.__qcCapture !== true) return;
-    if (m.kind === 'capture') { renderRecord(m.payload); chrome.runtime.sendMessage({ type: 'capture', record: m.payload }); }
-    else if (m.kind === 'pass') {
+    if (m.kind === 'capture') {
+      renderRecord(m.payload); chrome.runtime.sendMessage({ type: 'capture', record: m.payload });
+      // a scan just landed — make sure the cursor is back on Tracking for the next barcode
+      setTimeout(() => startTrackingFocus(true), 400);
+    } else if (m.kind === 'pass') {
       markPassed(m.payload);
       chrome.runtime.sendMessage({ type: 'pass', record: m.payload });
-      // after a pass the page clears/re-renders (or reloads) — re-aim at the Tracking box
-      setTimeout(startTrackingFocus, 400);
+      // after a pass the page clears/re-renders (or reloads) — wipe leftovers, re-aim at Tracking
+      setTimeout(() => { clearScanInputs(); startTrackingFocus(true); }, 400);
     } else if (m.kind === 'error') {
       markError(m.payload);
       chrome.runtime.sendMessage({ type: 'error', record: m.payload });
+      // failed scan: the portal leaves the bad value in the box and never clears it — wipe it
+      // and refocus so the next scan works without a page refresh
+      setTimeout(() => { clearScanInputs(); startTrackingFocus(true); }, 300);
     }
   });
 

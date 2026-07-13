@@ -106,6 +106,7 @@
       btn.click();  // page's own pass flow → updateReturnRestocked → captured by our hook below
       console.log('%c[QC Capture] auto-pass: clicked the page Pass button', 'color:#22c55e');
     } catch (e) {
+      passHandled.delete(rec.item_barcode);           // don't leave the barcode stuck — allow a retry
       post('pass', { item_barcode: String(rec.item_barcode || ''), pass_success: false, pass_error: 'auto-pass error: ' + (e && e.message), passed_at: new Date().toISOString() });
     }
   }
@@ -269,6 +270,9 @@
       const ok = j && j.status && j.status.statusType === 'SUCCESS';
       let body = {}; try { body = reqBody ? JSON.parse(reqBody) : {}; } catch (e) {}
       const newStatus = ok && j.data && j.data[0] ? (j.data[0].status || '') : '';
+      // pass failed server-side → un-mark the barcode so a re-scan can auto-pass again
+      // (previously it stayed in passHandled forever, and only a page refresh recovered)
+      if (!ok && body.itemBarcode) passHandled.delete(String(body.itemBarcode));
       post('pass', {
         item_barcode: String(body.itemBarcode || ''),
         oms_release_id: String(body.omsReleaseId || ''),
