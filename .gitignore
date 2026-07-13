@@ -33,3 +33,4 @@ nul
 
 # one-off data-repair pre-image backups (local audit only)
 scripts/repair-backups/
+qcpass_extension/Archive.zip
