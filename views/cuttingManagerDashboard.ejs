@@ -809,7 +809,11 @@ function initializeRollNoAutocomplete(rollSection, fabricType) {
       rollSection.querySelector('.availableWeightTxt').textContent = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
       fullWeightInput.value = parseFloat(selectedRoll.per_roll_weight).toFixed(2);
       fullWeightInput.readOnly = true;
+      // Server compares remaining vs the INVENTORY weight for known rolls (not the typed
+      // full weight) — keep it on the row so updateWeightUsed can mirror that rule.
+      rollSection.dataset.availableWeight = String(selectedRoll.per_roll_weight);
     } else {
+      delete rollSection.dataset.availableWeight;
       if (!ALLOW_ADHOC) {
         // Unknown roll not permitted — reset the selection
         rollNoSel.value = '';
@@ -942,7 +946,27 @@ function updateWeightUsed(rollSection) {
     if (res.used === null) { usedInput.value = ''; usedInput.classList.remove('over-weight'); return; }
     usedInput.value = res.used.toFixed(2);
   }
-  usedInput.classList.toggle('over-weight', res.over);
+  // Mirror the server's real rule (create-lot route): for inventory-known rolls,
+  // REMAINING must not exceed the roll's inventory weight. Catches it before submit.
+  let over = res.over;
+  const invAvail = parseFloat(rollSection.dataset.availableWeight);
+  const remVal = parseFloat(remInput.value);
+  if (Number.isFinite(invAvail) && Number.isFinite(remVal) && remVal > invAvail + 1e-9) over = true;
+  usedInput.classList.toggle('over-weight', over);
+  let hint = rollSection.querySelector('.over-weight-hint');
+  if (over) {
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'over-weight-hint';
+      hint.style.cssText = 'color:#b91c1c;font-size:0.75rem;margin-top:4px;font-weight:600;';
+      (remInput.closest('div') || rollSection).appendChild(hint);
+    }
+    hint.textContent = Number.isFinite(invAvail)
+      ? ('Remaining cannot exceed this roll\'s available weight (' + invAvail.toFixed(2) + ')')
+      : 'Remaining cannot exceed the full weight';
+  } else if (hint) {
+    hint.remove();
+  }
 }
 
 function updateTotalPieces() {
@@ -1418,6 +1442,57 @@ document.getElementById('lotForm').addEventListener('submit', function(e) {
     alert('Please complete the SKU builder (Brand + Category + Code required)');
     return false;
   }
+});
+
+// FINAL submit listener: submit via fetch so a server-side validation error can NEVER
+// navigate away and wipe the typed form (the old flash+redirect flow lost everything —
+// e.g. "Remaining weight cannot exceed full weight for roll 1721"). Registered last so
+// every earlier listener (hosiery normalizer, button-disable, SKU check) runs first.
+document.getElementById('lotForm').addEventListener('submit', function(e) {
+  if (e.defaultPrevented) return;           // an earlier validation already blocked it
+  if (!window.fetch || !window.FormData) return; // ancient browser → normal POST fallback
+  e.preventDefault();
+
+  var form = e.target;
+  var btn = document.getElementById('createLotBtn');
+  var banner = document.getElementById('createLotAjaxError');
+  if (banner) banner.remove();
+
+  fetch(form.action, {
+    method: 'POST',
+    body: new FormData(form),               // multipart — keeps the image upload
+    credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Unexpected server response (HTTP ' + r.status + ')' }; }); })
+  .then(function (j) {
+    if (j.ok) { window.location = j.redirect || '/cutting-manager/dashboard'; return; }
+    // Error: show it inline, keep EVERY typed field exactly as it is.
+    var div = document.createElement('div');
+    div.id = 'createLotAjaxError';
+    div.className = 'kotty-alert kotty-alert-danger';
+    div.style.marginTop = '10px';
+    div.textContent = j.error || 'Could not create the lot.';
+    btn.parentNode.insertBefore(div, btn);
+    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Highlight the offending roll row if the message names one.
+    var m = /roll\s+(\S+)/i.exec(j.error || '');
+    if (m) {
+      document.querySelectorAll('#rollsContainer .rollNoSel, .rollNoSel').forEach(function (sel) {
+        if (String(sel.value).trim() === m[1]) {
+          var row = sel.closest('.roll-section') || sel.closest('[class*="roll"]');
+          var used = row && row.querySelector('.weightUsedInput');
+          if (used) used.classList.add('over-weight');
+          if (row && row.scrollIntoView) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    }
+    btn.disabled = false;                   // the double-submit guard disabled it
+  })
+  .catch(function (err) {
+    alert('Could not reach the server: ' + err.message + '\nYour form data is still here — try again.');
+    btn.disabled = false;
+  });
 });
 
 loadSkuCategories();
