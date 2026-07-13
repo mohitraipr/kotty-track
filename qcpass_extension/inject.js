@@ -14,13 +14,23 @@
   // the text-based finder isn't enough — set chrome.storage.local.passSelector.
   // SORT_HUB: the L1 sortation hub the operator set once (e.g. "BPF_RH"). When set, an RTO
   // item is sorted (lane looked up) on THIS screen before it's passed — no screen switch.
-  let AUTOPASS = false, PASS_SELECTOR = '', SORT_HUB = '';
+  // DRIVE_MODE: when the extension drives the flow ('rto'|'return'), content.js handles the
+  // sort + pass itself, so inject.js must NOT also auto-pass (that would double-fire).
+  let AUTOPASS = false, PASS_SELECTOR = '', SORT_HUB = '', DRIVE_MODE = 'off';
   window.addEventListener('message', (ev) => {
     const m = ev.data;
     if (m && m.__qcCfg === true) {
       AUTOPASS = !!m.autopass;
       if (typeof m.passSelector === 'string') PASS_SELECTOR = m.passSelector.trim();
       if (typeof m.sortHub === 'string') SORT_HUB = m.sortHub.trim();
+      if (typeof m.driveMode === 'string') DRIVE_MODE = m.driveMode;
+    }
+    // Driver mode asked us (page context) to run L1 sortation for a tracking number.
+    if (m && m.__qcSortReq === true) {
+      const rec = { tracking_number: String(m.tracking || '') };
+      doSortation(rec).then(() => {
+        try { window.postMessage({ __qcSortRes: true, id: m.id, result: rec }, '*'); } catch (e) {}
+      });
     }
   });
 
@@ -324,7 +334,8 @@
   // performs the sort/lane assignment without the operator leaving QC. Idempotent (safe to retry).
   // Fills rec.sort_* and returns true only on a SUCCESS lane lookup.
   async function doSortation(rec) {
-    if (!SORT_HUB || !rec || !rec.tracking_number) return false;
+    if (!rec || !rec.tracking_number) return false;
+    if (!SORT_HUB) { rec.sort_status = 'no sort hub set'; return false; }
     rec.sort_hub = SORT_HUB;
     try {
       const url = `${API}/l1Sortation/fetchLaneDetailsForRtoTrackId/${encodeURIComponent(rec.tracking_number)}?hubCode=${encodeURIComponent(SORT_HUB)}`;
@@ -357,14 +368,15 @@
         if (rec.item_barcode || rec.tracking_number) {
           if (isRTO(rec)) {
             // logistics already came in shipmentDetails; sort here so the operator never leaves QC.
-            const sortOk = SORT_HUB ? await doSortation(rec) : true;
+            // In driver mode content.js orchestrates sort+pass, so skip the inline sort/auto-pass.
+            const sortOk = (DRIVE_MODE === 'off' && SORT_HUB) ? await doSortation(rec) : true;
             post('capture', rec);
             // pass only when the sort succeeded (or no hub configured) — never pass an unsorted RTO
-            if (AUTOPASS && sortOk) doAutoPass(rec);
+            if (AUTOPASS && sortOk && DRIVE_MODE === 'off') doAutoPass(rec);
           } else {
             await enrichLogistics(rec);
             post('capture', rec);
-            if (AUTOPASS) doAutoPass(rec);
+            if (AUTOPASS && DRIVE_MODE === 'off') doAutoPass(rec);
           }
           return;
         }
