@@ -287,10 +287,18 @@ router.post(
     } = req.body;
     const image = req.file;
 
+    // AJAX submits (the form's fetch handler) get JSON so a validation error never
+    // navigates away and wipes the user's typed data. Plain POSTs keep flash+redirect.
+    const isAjax = req.get('X-Requested-With') === 'XMLHttpRequest';
+    const fail = (msg) => {
+      if (isAjax) return res.json({ ok: false, error: msg });
+      req.flash('error', msg);
+      return res.redirect('/cutting-manager/dashboard');
+    };
+
     // Input validation
     if (!lot_no || !sku || !fabric_type || !manual_lot_number || !manual_lot_number.trim()) {
-      req.flash('error', 'Lot No., SKU, Fabric Type and Manual Lot Number are required.');
-      return res.redirect('/cutting-manager/dashboard');
+      return fail('Lot No., SKU, Fabric Type and Manual Lot Number are required.');
     }
 
     try {
@@ -532,18 +540,17 @@ router.post(
           'success',
           `Cutting Lot ${lot_no} created successfully with Total Pieces: ${totalPieces}.`
         );
+        if (isAjax) return res.json({ ok: true, redirect: '/cutting-manager/dashboard' });
         res.redirect('/cutting-manager/dashboard');
       } catch (err2) {
         await conn.rollback();
         conn.release();
         console.error('Error creating Cutting Lot:', err2);
-        req.flash('error', err2.message || 'Failed to create Cutting Lot.');
-        res.redirect('/cutting-manager/dashboard');
+        return fail(err2.message || 'Failed to create Cutting Lot.');
       }
     } catch (err) {
       console.error('Database Connection Error:', err);
-      req.flash('error', 'Database connection failed.');
-      res.redirect('/cutting-manager/dashboard');
+      return fail('Database connection failed.');
     }
   }
 );
