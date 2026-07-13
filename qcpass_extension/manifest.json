@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QC Capture — Full Return + RTO Data",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "On rejoyui QC, captures the FULL return record (search details + logistics) and queues it durably, then syncs it to the kotty-track backend with authentication. Nothing is missed.",
   "permissions": ["storage", "alarms", "downloads"],
   "host_permissions": [
