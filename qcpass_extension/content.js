@@ -441,18 +441,25 @@
       if (stable >= 3 || ++tries >= 20) clearInterval(iv);  // ~6s max
     }, 300);
   }
-  // Permanent watchdog: whenever focus is dropped entirely (portal re-render leaves it on
-  // <body>), re-aim at the scan target. Never fires while any input is focused, so it can't
-  // fight a deliberate click into Return ID.
-  // In DRIVER mode we do NOT continuously steal focus — that made the whole page unclickable
-  // and text unselectable. The driver box is focused only when the mode is set and after each
-  // driven scan; the operator can click/select freely in between, and click the box to scan.
+  // Permanent watchdog.
+  // DRIVER mode: keep the operator's scan box focused at all times so every scan — including
+  // the one right after a pass — lands in it. Per the operator's call, this takes priority over
+  // page clickability (the page is harder to click/select while driving; switch Driver to Off to
+  // interact with the portal). We still never fight the panel's own controls (hub field, mode
+  // select) so those stay usable.
+  // PASSIVE mode: only re-aim when focus was dropped to <body>; never interrupt active typing.
   setInterval(() => {
-    if (DRIVE_MODE !== 'off') return;
     const a = document.activeElement;
-    if (a && a.tagName === 'INPUT') return;   // don't fight active typing anywhere
+    if (DRIVE_MODE !== 'off') {
+      const box = panel && panel.querySelector('#qc-drivescan');
+      if (!box || a === box) return;
+      if (a && panel && panel.contains(a)) return;   // let the operator use the panel controls
+      try { box.focus(); } catch (e) {}
+      return;
+    }
+    if (a && a.tagName === 'INPUT') return;
     if (!a || a === document.body || a === document.documentElement) focusScanTarget(false);
-  }, 1000);
+  }, 500);
 
   // ---------- bridge: page -> background ----------
   window.addEventListener('message', (ev) => {
