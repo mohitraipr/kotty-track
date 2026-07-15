@@ -58,6 +58,80 @@ function dispatchSummary(finishedBySize, dispatchedBySize) {
   };
 }
 
+// ── Activity feed ──────────────────────────────────────────────────────────
+// Every individual update to a lot, across every flow, as one chronological list.
+// Sources: lot creation (cutting_lots), every *_events row, every finishing
+// dispatch, and every Lot Admin correction (pm_lot_audit_log).
+
+const ACTIVITY_LABEL = {
+  created: 'Lot created', approve: 'Taken (approved)', complete: 'Completed', reject: 'Rejected',
+};
+const ADMIN_ACTION_LABEL = {
+  flow_change: 'Flow change', stage_reversal: 'Stage reversal', qty_edit: 'Qty edit',
+};
+
+// Human-readable one-liner from a pm_lot_audit_log detail JSON (object or string).
+function auditNote(detail) {
+  let d = detail;
+  if (typeof d === 'string') {
+    try { d = JSON.parse(d); } catch (_e) { return d; }
+  }
+  if (!d || typeof d !== 'object') return '';
+  return Object.entries(d)
+    .map(([k, v]) => `${k}: ${v !== null && typeof v === 'object' ? JSON.stringify(v) : v}`)
+    .join(', ');
+}
+
+// Merge all update sources into one chronological feed. Pure — the route supplies
+// the rows. Stable: equal timestamps keep their source/insert order.
+//   cutting:     { created_at, by, total_pieces, note }
+//   stageEvents: { [stage]: [{ event_type, pieces, remark, created_at, username }] }
+//   dispatches:  [{ destination, quantity, size_label, created_at }]
+//   audits:      [{ action, detail, performed_by_name, created_at }]
+// Returns [{ when, stage, kind, label, pieces, by, note }] sorted ascending.
+function mergeActivity({ cutting, stageEvents, dispatches, audits } = {}) {
+  const rows = [];
+  if (cutting && cutting.created_at) {
+    rows.push({
+      when: cutting.created_at, stage: 'cutting', kind: 'created', label: ACTIVITY_LABEL.created,
+      pieces: cutting.total_pieces != null ? Number(cutting.total_pieces) : null,
+      by: cutting.by || null, note: cutting.note || '',
+    });
+  }
+  for (const [stage, events] of Object.entries(stageEvents || {})) {
+    for (const e of events || []) {
+      if (!e || !e.created_at) continue;
+      rows.push({
+        when: e.created_at, stage, kind: e.event_type,
+        label: ACTIVITY_LABEL[e.event_type] || e.event_type,
+        pieces: e.pieces != null ? Number(e.pieces) : null,
+        by: e.username || null, note: e.remark || '',
+      });
+    }
+  }
+  for (const d of dispatches || []) {
+    if (!d || !d.created_at) continue;
+    const dest = d.destination || '';
+    rows.push({
+      when: d.created_at, stage: 'dispatch', kind: 'dispatch', label: 'Dispatched',
+      pieces: d.quantity != null ? Number(d.quantity) : null, by: d.by || null,
+      note: [dest && `→ ${dest}`, d.size_label && `size ${d.size_label}`].filter(Boolean).join(' · '),
+    });
+  }
+  for (const a of audits || []) {
+    if (!a || !a.created_at) continue;
+    rows.push({
+      when: a.created_at, stage: 'admin', kind: 'admin',
+      label: ADMIN_ACTION_LABEL[a.action] || a.action,
+      pieces: null, by: a.performed_by_name || null, note: auditNote(a.detail),
+    });
+  }
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((x, y) => (new Date(x.r.when).getTime() - new Date(y.r.when).getTime()) || (x.i - y.i))
+    .map((x) => x.r);
+}
+
 // The stage the lot is sitting at: the first one in progress or not yet started.
 // 'Done' when every stage is finished.
 function currentStage(timeline) {
@@ -73,5 +147,6 @@ module.exports = {
   deriveStageStatus,
   dispatchSummary,
   currentStage,
+  mergeActivity,
   DAY_MS,
 };

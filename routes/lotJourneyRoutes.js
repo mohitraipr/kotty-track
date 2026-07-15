@@ -13,7 +13,7 @@ const { pool } = require('../config/db');
 const { isAuthenticated, isOperator } = require('../middlewares/auth');
 const stageEvents = require('../utils/stageEvents');
 const {
-  orderedStages, deriveStageStatus, dispatchSummary, currentStage,
+  orderedStages, deriveStageStatus, dispatchSummary, currentStage, mergeActivity,
 } = require('../utils/lotJourney');
 
 const TAT_DAYS = { cutting: 3, stitching: 7, jeans_assembly: 7, washing: 15, washing_in: 7, finishing: 7 };
@@ -67,6 +67,52 @@ const EVENT_TABLE = {
   washing: 'washing_events', washing_in: 'washing_in_events', finishing: 'finishing_events',
 };
 
+// Every individual update to the lot, across ALL stage tables (not just the lot's
+// current flow — a flow-changed lot keeps its history in the old chain's tables),
+// plus dispatches and Lot Admin corrections. Merged/sorted by utils/lotJourney.
+async function buildActivity(lot) {
+  const stageEventRows = {};
+  for (const stage of stageEvents.STAGES) {
+    const [rows] = await pool.query(
+      `SELECT e.event_type, e.pieces, e.remark, e.created_at, u.username
+         FROM \`${EVENT_TABLE[stage]}\` e LEFT JOIN users u ON u.id = e.operator_id
+        WHERE e.cutting_lot_id = ? ORDER BY e.created_at, e.id`,
+      [lot.id]
+    );
+    if (rows.length) stageEventRows[stage] = rows;
+  }
+  // Note: custom destinations are folded into `destination` at insert time
+  // (routes/finishingRoutes.js dispatch handler) — there is no custom_destination column.
+  const [dispatches] = await pool.query(
+    `SELECT destination, size_label, quantity, created_at
+       FROM finishing_dispatches WHERE lot_no = ? ORDER BY created_at, id`,
+    [lot.lot_no]
+  );
+  // Lot Admin corrections. Guarded: this table is newer than some environments.
+  let audits = [];
+  try {
+    const [rows] = await pool.query(
+      `SELECT action, detail, performed_by_name, created_at
+         FROM pm_lot_audit_log
+        WHERE cutting_lot_id = ? OR (lot_no IS NOT NULL AND lot_no = ?)
+     ORDER BY created_at, id`,
+      [lot.id, lot.lot_no]
+    );
+    audits = rows;
+  } catch (err) {
+    console.error('lot-journey: pm_lot_audit_log unavailable:', err.message);
+  }
+  return mergeActivity({
+    cutting: {
+      created_at: lot.created_at, by: lot.cutter_name,
+      total_pieces: lot.total_pieces, note: lot.remark || '',
+    },
+    stageEvents: stageEventRows,
+    dispatches,
+    audits,
+  });
+}
+
 async function buildJourney(lot) {
   const stages = orderedStages(lot.flow_type);
   const now = Date.now();
@@ -115,7 +161,7 @@ async function buildJourney(lot) {
     for (const [s, v] of Object.entries(sz)) finishedBySize[s] = v.completed || 0;
   }
   const [dispRows] = await pool.query(
-    `SELECT size_label, SUM(quantity) AS qty, GROUP_CONCAT(DISTINCT COALESCE(NULLIF(custom_destination,''), destination)) AS dests
+    `SELECT size_label, SUM(quantity) AS qty, GROUP_CONCAT(DISTINCT destination) AS dests
        FROM finishing_dispatches WHERE lot_no = ? GROUP BY size_label`,
     [lot.lot_no]
   );
@@ -137,6 +183,7 @@ async function buildJourney(lot) {
     timeline,
     current_stage: dispatch.complete ? 'Dispatched' : currentStage(timeline),
     dispatch,
+    activity: await buildActivity(lot),
   };
 }
 
