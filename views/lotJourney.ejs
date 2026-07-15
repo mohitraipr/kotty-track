@@ -196,16 +196,20 @@ function render(j){
       '</tbody></table>':'<div class="muted small">No finishing/dispatch records yet.</div>')+
     '</div>';
 
-  h += renderActivity(j.activity||[]);
+  h += renderActivity(j.activity||[], L.lot_no);
   return h;
 }
 
 // Every individual update — one row per event/dispatch/admin correction, oldest first.
 const ACT_STAGE_LABEL = { cutting:'Cutting', stitching:'Stitching', jeans_assembly:'Jeans Assembly',
   washing:'Washing', washing_in:'Washing-In', finishing:'Finishing', dispatch:'Dispatch', admin:'Lot Admin' };
-function renderActivity(activity){
-  let h = '<div class="act-card"><h5><i class="bi bi-clock-history"></i> Activity log'+
-    ' <span class="muted small fw-normal">· '+activity.length+' update'+(activity.length===1?'':'s')+'</span></h5>';
+function renderActivity(activity, lotNo){
+  let h = '<div class="act-card"><div class="d-flex justify-content-between align-items-center mb-2">'+
+    '<h5 class="mb-0"><i class="bi bi-clock-history"></i> Activity log'+
+    ' <span class="muted small fw-normal">· '+activity.length+' update'+(activity.length===1?'':'s')+'</span></h5>'+
+    (activity.length?('<a class="btn btn-sm btn-outline-primary" href="/operator/lot-journey/export?q='+encodeURIComponent(lotNo)+'">'+
+      '<i class="bi bi-file-earmark-excel"></i> Excel</a>'):'')+
+    '</div>';
   if(!activity.length){
     return h+'<div class="muted small">No updates recorded for this lot.</div></div>';
   }
