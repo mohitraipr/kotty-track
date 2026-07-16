@@ -112,6 +112,26 @@ created in EasyEcom** (vendor "Kotty Production", code V002, vendor_c_id 289541)
   was already there).
 - README rewritten to match reality.
 
+### 8. Kotty Analyst — AI chat over live production data (2026-07-16)
+`/operator/ai` (hub card + PM "Ask AI" button; operator/production_manager/admin).
+Plain-language questions → the model writes **guarded read-only SQL** against
+kotty_db, shows the data + SQL behind every answer, keeps conversation context.
+- Engine `utils/aiAnalyst.js`: **Claude Sonnet on Vertex (global) primary,
+  Gemini 2.5 Flash on Vertex automatic fallback** — both KEYLESS via the
+  project's service account (no API keys anywhere). Models/regions via
+  `AI_CLAUDE_MODEL`/`AI_GEMINI_MODEL`/… env vars.
+- Safety: dedicated pool with `SESSION transaction_read_only=1` (NEVER the
+  shared pool), `utils/aiSql.guardSql` allowlist (single SELECT/SHOW/DESCRIBE/
+  EXPLAIN, LIMIT≤500, forbidden-construct list), 10s query cap, ≤6 queries and
+  45s per question. Injection-probed live.
+- Domain knowledge lives in `utils/aiSchemaDoc.js` — the hand-written schema +
+  business brief (event ledger semantics, duplicate-size gotcha, EE SKU spaces,
+  IST session tz). Keep it updated when schema changes.
+- Audit trail: `ai_chats`/`ai_chat_messages` (migration `sql/2026_07_ai_analyst.sql`).
+- **Claude quota**: Vertex base-model quota for `anthropic-claude-sonnet` is 0
+  by default → Console → Quotas → request increase; until granted the analyst
+  answers via Gemini automatically (verified working).
+
 ## B. Earlier context (still true, condensed)
 PM data feed is healthy (orders_api-driven DRR, snapshot SOH, freshness banner). Historical
 prod data repairs (stage-qty corruption, orphan-approve dedup) are documented in the git

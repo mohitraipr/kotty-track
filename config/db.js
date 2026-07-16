@@ -97,4 +97,6 @@ if (!skipConnect) {
   testConnection();
 }
 
-module.exports = { pool };
+// connectionConfig is exported for modules that need their OWN pool with different
+// session settings (e.g. the AI analyst's read-only pool). Never mutate it.
+module.exports = { pool, connectionConfig };
