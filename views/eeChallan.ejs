@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Challan <%= batch.batch_ref %></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, sans-serif; color: #0f172a; background: #f7f8fa; margin: 0; padding: 24px; }
+    .sheet { background: #fff; max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px 32px; }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 14px; }
+    .head h1 { font-family: 'Space Grotesk', sans-serif; font-size: 20px; margin: 0; letter-spacing: 0.02em; }
+    .head .co { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .ref { text-align: right; }
+    .ref .rn { font-family: 'Space Grotesk', monospace; font-weight: 700; font-size: 18px; }
+    .ref .rd { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin: 16px 0; font-size: 13.5px; }
+    .meta .k { color: #64748b; }
+    .meta .v { font-weight: 600; }
+    .route { display: flex; gap: 10px; align-items: center; margin: 4px 0 16px; font-size: 13.5px; font-weight: 600; }
+    .route .arrow { color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 13.5px; }
+    th { text-align: left; border-bottom: 2px solid #0f172a; padding: 7px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { border-bottom: 1px solid #e5e7eb; padding: 7px 8px; }
+    td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+    tfoot td { border-bottom: 0; border-top: 2px solid #0f172a; font-weight: 700; }
+    .po-note { margin-top: 14px; font-size: 12.5px; color: #64748b; }
+    .po-note strong { color: #0f172a; }
+    .pending { display: inline-block; background: #fef3c7; color: #b45309; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+    .sign { display: flex; justify-content: space-between; margin-top: 48px; font-size: 12.5px; color: #64748b; }
+    .sign div { border-top: 1px solid #94a3b8; padding-top: 6px; width: 180px; text-align: center; }
+    .toolbar { max-width: 720px; margin: 0 auto 14px; display: flex; justify-content: flex-end; gap: 8px; }
+    .toolbar button, .toolbar a { border: 0; background: #2563eb; color: #fff; font-weight: 600; font-size: 13.5px; padding: 8px 16px; border-radius: 8px; cursor: pointer; text-decoration: none; font-family: inherit; }
+    .toolbar a.quiet { background: #fff; color: #0f172a; border: 1px solid #e5e7eb; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .sheet { border: 0; border-radius: 0; max-width: none; padding: 8px 4px; }
+      .toolbar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a class="quiet" href="/finishingdashboard/ee-po">← Transfers</a>
+    <button onclick="window.print()">Print</button>
+  </div>
+  <div class="sheet">
+    <div class="head">
+      <div>
+        <h1>DELIVERY CHALLAN</h1>
+        <div class="co">KOTTY LIFESTYLE — Finishing → Warehouse transfer</div>
+      </div>
+      <div class="ref">
+        <div class="rn"><%= batch.batch_ref %></div>
+        <div class="rd"><%= new Date(batch.created_at).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true, timeZone:'Asia/Kolkata' }) %></div>
+      </div>
+    </div>
+
+    <div class="route">
+      <span>Finishing floor</span><span class="arrow">→</span><span>Faridabad warehouse</span>
+    </div>
+
+    <div class="meta">
+      <div><span class="k">Lot no:</span> <span class="v"><%= lot.lot_no %></span></div>
+      <div><span class="k">Manual lot no:</span> <span class="v"><%= lot.manual_lot_number || '—' %></span></div>
+      <div><span class="k">Style:</span> <span class="v"><%= lot.sku || '—' %></span></div>
+      <div><span class="k">Dispatched by:</span> <span class="v"><%= batch.created_by_name || '—' %></span></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Size</th><th>EasyEcom SKU</th><th class="n">Pieces</th></tr>
+      </thead>
+      <tbody>
+        <% let total = 0; lines.forEach((l, i) => { total += Number(l.quantity) || 0; %>
+          <tr>
+            <td><%= i + 1 %></td>
+            <td><%= l.size_label %></td>
+            <td><%= l.ee_sku || '' %><% if (!l.ee_sku) { %><span class="pending">SKU pending</span><% } %></td>
+            <td class="n"><%= l.quantity %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="3">Total pieces</td><td class="n"><%= total %></td></tr>
+      </tfoot>
+    </table>
+
+    <div class="po-note">
+      EasyEcom PO reference: <strong><%= batch.batch_ref %></strong>
+      <% if (batch.po_id) { %> · PO ID <strong><%= batch.po_id %></strong><% } else { %> · <span class="pending">PO pending — will appear in EasyEcom shortly</span><% } %>
+      <br>Warehouse: match this challan to the PO above and GRN the received quantities in EasyEcom.
+    </div>
+
+    <div class="sign">
+      <div>Dispatched by (Finishing)</div>
+      <div>Driver / Vehicle</div>
+      <div>Received by (Warehouse)</div>
+    </div>
+  </div>
+  <% if (autoPrint) { %><script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script><% } %>
+</body>
+</html>

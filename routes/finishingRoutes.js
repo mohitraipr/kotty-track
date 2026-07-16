@@ -8,6 +8,8 @@ const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
 const { createStagePayment } = require('../utils/stagePaymentHelper');
 const stageEvents = require('../utils/stageEvents');
 const { getLotStageUsers } = require('../utils/lotStageUsers');
+const eePo = require('../utils/eeDispatchPo');
+const { aggregateLotSizes, allocateAcrossBatches } = require('../utils/dispatchAllocation');
 
 /* ---------------------------------------------------
    MULTER FOR IMAGE UPLOAD & BULK EXCEL UPLOAD
@@ -683,6 +685,198 @@ router.post('/event/dispatch', isAuthenticated, isFinishingMaster, async (req, r
   } catch (err) {
     if (conn) try { await conn.rollback(); } catch (_) {}
     console.error('[ERROR] POST /finishingdashboard/event/dispatch =>', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// ==================================================================
+//   LOT-WISE DISPATCH (2026-07-16 redesign): one card per lot, one tap,
+//   one challan/PO per lot. The old per-finishing-batch endpoint above
+//   stays for compatibility; the UI now uses these.
+// ==================================================================
+
+// Internal: this operator's finishing batches for a lot, FIFO, with per-size
+// produced/dispatched/available. Shared by preview + dispatch (same shape the
+// pure allocator consumes).
+async function ownerBatchesForLot(conn, userId, lotNo, forUpdate) {
+  const [batches] = await conn.query(
+    `SELECT id, lot_no, sku, created_at FROM finishing_data
+      WHERE user_id = ? AND lot_no = ? ORDER BY created_at ASC, id ASC${forUpdate ? ' FOR UPDATE' : ''}`,
+    [userId, lotNo]
+  );
+  if (!batches.length) return [];
+  const ids = batches.map(b => b.id);
+  const [sizeRows] = await conn.query(
+    `SELECT fds.finishing_data_id, fds.size_label, fds.pieces,
+            COALESCE(d.qty, 0) AS dispatched
+       FROM finishing_data_sizes fds
+       LEFT JOIN (
+         SELECT finishing_data_id, size_label, SUM(quantity) AS qty
+           FROM finishing_dispatches WHERE finishing_data_id IN (?)
+          GROUP BY finishing_data_id, size_label
+       ) d ON d.finishing_data_id = fds.finishing_data_id AND d.size_label = fds.size_label
+      WHERE fds.finishing_data_id IN (?)
+      ORDER BY fds.finishing_data_id, fds.id`,
+    [ids, ids]
+  );
+  const byBatch = new Map(batches.map(b => [b.id, { finishing_data_id: b.id, created_at: b.created_at, sizes: [] }]));
+  for (const r of sizeRows) {
+    const produced = Number(r.pieces) || 0;
+    const dispatched = Number(r.dispatched) || 0;
+    byBatch.get(r.finishing_data_id).sizes.push({
+      size_label: r.size_label, produced, dispatched,
+      available: Math.max(0, produced - dispatched),
+    });
+  }
+  return [...byBatch.values()];
+}
+
+// GET /finishingdashboard/event/dispatch-preview/:cuttingLotId
+// Everything the one-card-per-lot dispatch UI needs: lot-level size availability
+// (pre-fill), per-size EasyEcom SKU resolution status, and the style's verified
+// variants for inline mapping of any unresolved size.
+router.get('/event/dispatch-preview/:cuttingLotId', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.cuttingLotId, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+    const [[lot]] = await pool.query(`SELECT id, lot_no, sku FROM cutting_lots WHERE id = ?`, [lotId]);
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    const batches = await ownerBatchesForLot(pool, req.session.user.id, lot.lot_no, false);
+    const sizes = aggregateLotSizes(batches);
+    const style = String(lot.sku || '').trim().toUpperCase();
+
+    let anyUnresolved = false;
+    for (const s of sizes) {
+      const r = await eePo.resolveLine(pool, style, s.size_label);
+      s.ee_sku = r.ee_sku;
+      if (!r.ee_sku && s.available > 0) anyUnresolved = true;
+    }
+    let variants = [];
+    if (anyUnresolved && style) {
+      const [v] = await pool.query(
+        `SELECT sku FROM ee_product_master WHERE active=1 AND sku LIKE CONCAT(?, '%') ORDER BY sku LIMIT 40`,
+        [style]);
+      variants = v.map(r => r.sku);
+    }
+    res.json({
+      lot, style, sizes, variants,
+      available: sizes.reduce((a, s) => a + s.available, 0),
+      po_enabled: eePo.pushEnabled(),
+    });
+  } catch (err) {
+    console.error('[ERROR] GET /finishingdashboard/event/dispatch-preview =>', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /finishingdashboard/event/resolve-sku
+// Body: { style, size_label, size_sku } — persist a picked mapping (verified,
+// prefix-guarded, dropdown-only) BEFORE dispatch, so the lot's PO is born resolved.
+router.post('/event/resolve-sku', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const hit = await eePo.saveSkuMapping(req.body.style, req.body.size_label, req.body.size_sku, req.session.user);
+    res.json({ success: true, ee_sku: hit.sku });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /finishingdashboard/event/dispatch-lot
+// Body: { cutting_lot_id, destination, custom_destination?, sizes: [{size_label, pieces}] }
+// One tap: allocates the lot-level quantities across this operator's finishing
+// batches (FIFO), inserts finishing_dispatches rows, and — for Warehouse — creates
+// that LOT's PO batch in the same transaction, then tries the EasyEcom push
+// (dispatch never fails because EasyEcom is down; the PO retries in background).
+router.post('/event/dispatch-lot', isAuthenticated, isFinishingMaster, async (req, res) => {
+  let conn;
+  try {
+    const userId = req.session.user.id;
+    const lotId = parseInt(req.body.cutting_lot_id, 10);
+    if (!Number.isFinite(lotId) || lotId <= 0) return res.status(400).json({ error: 'Invalid cutting_lot_id' });
+
+    let dest = String(req.body.destination || '').trim();
+    if (dest === 'other' || !dest) dest = String(req.body.custom_destination || '').trim();
+    if (!dest) return res.status(400).json({ error: 'Destination is required' });
+    const isWarehouse = dest.toLowerCase() === 'warehouse';
+
+    const [[lot]] = await pool.query(`SELECT id, lot_no, sku FROM cutting_lots WHERE id = ?`, [lotId]);
+    if (!lot) return res.status(404).json({ error: 'Lot not found' });
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const batches = await ownerBatchesForLot(conn, userId, lot.lot_no, true);
+    if (!batches.length) {
+      await conn.rollback();
+      return res.status(403).json({ error: 'You have no finishing batches for this lot' });
+    }
+    const alloc = allocateAcrossBatches(req.body.sizes, batches);
+    if (alloc.error) {
+      await conn.rollback();
+      return res.status(400).json({ error: alloc.error });
+    }
+
+    // total_sent bookkeeping mirrors the legacy endpoint: running per
+    // (finishing_data_id, destination, size) total.
+    const fdIds = [...new Set(alloc.rows.map(r => r.finishing_data_id))];
+    const [destRows] = await conn.query(
+      `SELECT finishing_data_id, size_label, SUM(quantity) AS qty
+         FROM finishing_dispatches
+        WHERE finishing_data_id IN (?) AND destination = ?
+        GROUP BY finishing_data_id, size_label`,
+      [fdIds, dest]
+    );
+    const destSent = new Map(destRows.map(r =>
+      [`${r.finishing_data_id}|${stageEvents.normalizeSizeLabel(r.size_label)}`, Number(r.qty) || 0]));
+
+    const dispatchRows = [];
+    let totalDispatch = 0;
+    for (const r of alloc.rows) {
+      const key = `${r.finishing_data_id}|${stageEvents.normalizeSizeLabel(r.size_label)}`;
+      const newTotalSent = (destSent.get(key) || 0) + r.pieces;
+      destSent.set(key, newTotalSent);
+      const [ins] = await conn.query(
+        `INSERT INTO finishing_dispatches
+           (finishing_data_id, lot_no, destination, size_label, quantity, total_sent, sent_at, created_at)
+         VALUES (?,?,?,?,?,?,NOW(),NOW())`,
+        [r.finishing_data_id, lot.lot_no, dest, r.size_label, r.pieces, newTotalSent]
+      );
+      dispatchRows.push({
+        dispatch_id: ins.insertId, lot_no: lot.lot_no,
+        size_label: r.size_label, quantity: r.pieces, lot_sku: lot.sku,
+      });
+      totalDispatch += r.pieces;
+    }
+
+    // Warehouse → this lot's PO batch is born in the same transaction.
+    let challan = null;
+    if (isWarehouse) {
+      const b = await eePo.createLotBatch(conn, lot.lot_no, dispatchRows, req.session.user);
+      challan = { batch_id: b.batchId, batch_ref: b.batchRef, blocked: b.blocked, status: b.blocked > 0 ? 'blocked' : 'draft' };
+    }
+    await conn.commit();
+
+    // Push AFTER commit — EasyEcom being down must never roll back a dispatch.
+    if (challan && challan.status === 'draft' && eePo.pushEnabled()) {
+      try {
+        const p = await eePo.pushBatch(challan.batch_id);
+        challan.po_id = p.poId;
+        challan.status = 'pushed';
+      } catch (err) {
+        console.error('[ee-po] inline push failed (background job will retry):', err.message);
+        challan.status = 'po_pending';
+      }
+    } else if (challan && challan.status === 'draft') {
+      challan.status = 'po_pending';
+    }
+
+    res.json({ success: true, dispatched_total: totalDispatch, destination: dest, challan });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('[ERROR] POST /finishingdashboard/event/dispatch-lot =>', err);
     res.status(500).json({ error: err.message });
   } finally {
     if (conn) conn.release();
