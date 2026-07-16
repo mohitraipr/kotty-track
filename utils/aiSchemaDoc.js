@@ -57,15 +57,32 @@ Stage order: cutting → stitching → [jeans_assembly → washing → washing_i
   DESCRIBE the table first if you need exact column names.
 
 ## Sales & inventory (EasyEcom mirror — size-SKU space)
-- ee_orders / ee_suborders: marketplace orders; suborders carry sku (size-SKU),
-  quantity, order_date/created_at, marketplace, status.
-- ee_sales_daily: per size-SKU per day sales qty (the DRR source).
+⚠ THE #1 MISTAKE: sales tables use SIZE-SKUs. A question about a STYLE
+(e.g. 'KTTWOMENSPANT261') finds NOTHING with sku = 'KTTWOMENSPANT261'.
+ALWAYS match styles with sku LIKE 'KTTWOMENSPANT261%'. If any SKU lookup
+returns 0 rows, retry with LIKE before concluding "no sales".
+
+- ee_sales_daily — USE THIS FOR ALL SALES QUESTIONS (small + indexed on
+  sale_date). Columns: sku, warehouse_id, sale_date (DATE), qty, revenue,
+  source. ⚠ source has TWO values ('orders_api', 'mini_sales_report') that
+  are two feeds of the SAME sales — summing both DOUBLE-COUNTS. Always
+  filter source = 'orders_api' (the source of record).
+  Top sellers: SELECT sku, SUM(qty) FROM ee_sales_daily WHERE source='orders_api'
+  AND sale_date >= CURDATE() - INTERVAL 7 DAY GROUP BY sku ORDER BY 2 DESC LIMIT 10.
+- ee_suborders: order LINES (sku size-SKU, quantity, selling_price, status,
+  order_date, marketplace_sku, size, order_id → ee_orders). ⚠ order_date here
+  is NOT indexed — a date-range scan TIMES OUT (10s cap). For date-bounded
+  order questions JOIN ee_orders o ON o.order_id = s.order_id and filter
+  o.order_date (indexed); or filter by sku first (indexed). Exclude
+  status = 'Cancelled' when counting real sales; 'Returned' exists too.
+- ee_orders: order headers (order_id, marketplace, order_status, order_date
+  [indexed], total_amount, order_quantity, warehouse_id).
 - ee_inventory_daily_snapshot: per size-SKU per day stock-on-hand snapshots.
 - ee_stock_status / ee_inventory_health / ee_inventory_aging: current SOH,
   day cover, aging.
 - ee_product_master: all ~90k EasyEcom SKUs (sku, active, cost, mrp).
-Metrics: DRR = average daily sales (e.g. 30-day AVG of ee_sales_daily.qty);
-DOH/day-cover = SOH ÷ DRR.
+Metrics: DRR = average daily sales (30-day AVG of ee_sales_daily.qty with
+source='orders_api'); DOH/day-cover = SOH ÷ DRR.
 
 ## Users & roles
 - users: id, username, is_active, role via roles table (users.role_id →
@@ -81,5 +98,10 @@ DOH/day-cover = SOH ÷ DRR.
   "taken/accepted" → approve events; "completed/done" → complete events;
   "in hand / inline / WIP" → approved − completed − inline rejects.
 - Prefer answering with small aggregated tables, not row dumps.
+- Queries are killed at 10 seconds. On big tables (ee_suborders ~560k,
+  ee_orders ~490k, ee_inventory_daily_snapshot ~3M rows) always filter on an
+  indexed column (sku, order_id, sale_date, order_date on ee_orders) BEFORE
+  aggregating. If a query times out, rewrite it against a smaller/indexed
+  table (usually ee_sales_daily) instead of retrying the same query.
 - If unsure a table/column exists: SHOW TABLES LIKE '%…%' or DESCRIBE <table>.
 `;
