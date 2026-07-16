@@ -1896,6 +1896,7 @@ router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
     // If no sku specified, just render the page with empty results
     if (!sku) {
       return res.render("skuManagement", {
+        user: req.session.user,
         sku: "",
         results: [],
         message: "",
@@ -1920,6 +1921,7 @@ router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
 
     // Render the EJS template with the found results
     return res.render("skuManagement", {
+      user: req.session.user,
       sku,
       results,
       message: "",
