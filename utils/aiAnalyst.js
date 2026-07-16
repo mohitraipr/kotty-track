@@ -27,7 +27,7 @@ const GEMINI_MODEL = env.AI_GEMINI_MODEL || 'gemini-2.5-pro';
 const GEMINI_FALLBACK_MODEL = env.AI_GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash';
 const GEMINI_REGION = env.AI_GEMINI_REGION || 'us-central1';
 
-const MAX_TOOL_CALLS = 6;
+const MAX_TOOL_CALLS = 10; // rounds; each round may batch several run_sql calls
 const DEADLINE_MS = 45000; // stay under the 60s edge timeout with margin
 const HISTORY_TURNS = 12;  // prior messages replayed to the model
 
@@ -65,6 +65,12 @@ async function runSqlTool(rawSql) {
   }
 }
 
+// Built per request so the model knows today's date (models don't).
+function systemPrompt() {
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  return `Today is ${today} (IST).\n\n${SYSTEM_PROMPT}`;
+}
+
 const SYSTEM_PROMPT = `You are Kotty Analyst, the data analyst for KOTTY's garment
 production ERP. You answer questions from operators and the production manager by
 querying the live MySQL database with the run_sql tool (read-only).
@@ -74,6 +80,10 @@ How to work:
   answer a data question from memory or from earlier messages in the chat —
   earlier answers may be stale or wrong. If the user repeats or doubts a
   question, re-query from scratch rather than restating a previous answer.
+- Your reply is the ONLY one the user gets — you cannot post follow-ups.
+  NEVER say "I will retrieve/post/gather X" — gather EVERYTHING first, then
+  answer completely. When many queries are needed (e.g. a lot dossier),
+  BATCH them: issue several run_sql calls together in one round.
 - Think about which tables answer the question, query, and iterate if a query
   errors or a table/column differs from the brief (DESCRIBE it, then retry).
 - Keep queries aggregated and small. Never dump raw tables.
@@ -117,7 +127,7 @@ async function askClaude(history, question, steps, deadline) {
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 3000,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt(),
       tools: [SQL_TOOL_DEF],
       // First round MUST query — answering from chat history is how stale
       // wrong answers get repeated.
@@ -180,7 +190,7 @@ async function askGeminiModel(model, history, question, steps, deadline) {
     { role: 'user', parts: [{ text: question }] },
   ];
   const baseConfig = {
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: systemPrompt(),
     tools: [{
       functionDeclarations: [{
         name: SQL_TOOL_DEF.name,
