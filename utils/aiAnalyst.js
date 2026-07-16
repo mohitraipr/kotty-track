@@ -70,6 +70,10 @@ production ERP. You answer questions from operators and the production manager b
 querying the live MySQL database with the run_sql tool (read-only).
 
 How to work:
+- EVERY number you state must come from a run_sql result in THIS turn. Never
+  answer a data question from memory or from earlier messages in the chat —
+  earlier answers may be stale or wrong. If the user repeats or doubts a
+  question, re-query from scratch rather than restating a previous answer.
 - Think about which tables answer the question, query, and iterate if a query
   errors or a table/column differs from the brief (DESCRIBE it, then retry).
 - Keep queries aggregated and small. Never dump raw tables.
@@ -115,6 +119,9 @@ async function askClaude(history, question, steps, deadline) {
       max_tokens: 3000,
       system: SYSTEM_PROMPT,
       tools: [SQL_TOOL_DEF],
+      // First round MUST query — answering from chat history is how stale
+      // wrong answers get repeated.
+      tool_choice: i === 0 ? { type: 'any' } : { type: 'auto' },
       messages,
     });
     const toolUses = response.content.filter((b) => b.type === 'tool_use');
@@ -172,7 +179,7 @@ async function askGeminiModel(model, history, question, steps, deadline) {
     ...history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
     { role: 'user', parts: [{ text: question }] },
   ];
-  const config = {
+  const baseConfig = {
     systemInstruction: SYSTEM_PROMPT,
     tools: [{
       functionDeclarations: [{
@@ -183,6 +190,11 @@ async function askGeminiModel(model, history, question, steps, deadline) {
     }],
   };
   for (let i = 0; i <= MAX_TOOL_CALLS; i++) {
+    // First round MUST query (mode ANY) — answering from chat history is how
+    // stale wrong answers get repeated. Later rounds are free to conclude.
+    const config = i === 0
+      ? { ...baseConfig, toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['run_sql'] } } }
+      : baseConfig;
     const response = await ai.models.generateContent({ model, contents, config });
     const calls = response.functionCalls || [];
     if (!calls.length) {
