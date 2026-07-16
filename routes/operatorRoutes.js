@@ -1887,6 +1887,71 @@ const SKU_RENAME_TABLES = [
   { tableName: "pm_sku_resolution",  label: "EasyEcom SKU Mappings",   col: "cl_sku", hasLot: false, guarded: true },
 ];
 
+// ==================================================================
+//   CUTTING USERS — denim/hosiery flag management (operator)
+//   users.is_denim_cutter decides the DEFAULT flow for lots that cutter
+//   creates, and (legacy) classifies old lots whose flow_type is NULL.
+//   To keep history stable, flipping a user FIRST freezes every NULL
+//   flow_type lot of theirs to its currently-effective value, THEN flips
+//   the flag — so the change only affects lots created from now on.
+// ==================================================================
+
+router.get('/cutting-users', isAuthenticated, isOperator, async (req, res) => {
+  try {
+    const [users] = await pool.query(
+      `SELECT u.id, u.username, u.is_denim_cutter, u.is_active,
+              COUNT(cl.id) AS lot_count, MAX(cl.created_at) AS last_lot_at
+         FROM users u
+         JOIN roles r ON r.id = u.role_id AND r.name = 'cutting_manager'
+    LEFT JOIN cutting_lots cl ON cl.user_id = u.id
+        GROUP BY u.id
+        ORDER BY lot_count DESC, u.username`);
+    res.render('cuttingUsers', { user: req.session.user, users });
+  } catch (err) {
+    console.error('GET /operator/cutting-users error:', err);
+    res.status(500).send('Could not load cutting users: ' + err.message);
+  }
+});
+
+router.post('/cutting-users/flow', isAuthenticated, isOperator, async (req, res) => {
+  let conn;
+  try {
+    const userId = Number(req.body.user_id);
+    const denim = req.body.denim ? 1 : 0;
+    if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user' });
+
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    const [[target]] = await conn.query(
+      `SELECT u.id, u.username, u.is_denim_cutter FROM users u
+         JOIN roles r ON r.id = u.role_id AND r.name = 'cutting_manager'
+        WHERE u.id = ? FOR UPDATE`, [userId]);
+    if (!target) { await conn.rollback(); return res.status(404).json({ error: 'Cutting user not found' }); }
+
+    // Freeze history: stamp each NULL-flow lot with what the system currently
+    // treats it as (flag → prefix fallback), so the flip can't re-classify it.
+    const [frozen] = await conn.query(
+      `UPDATE cutting_lots
+          SET flow_type = CASE
+            WHEN ? = 1 THEN 'denim'
+            WHEN ? IS NULL AND (lot_no LIKE 'AK%' OR lot_no LIKE 'UM%') THEN 'denim'
+            ELSE 'hosiery' END
+        WHERE user_id = ? AND flow_type IS NULL`,
+      [target.is_denim_cutter, target.is_denim_cutter, userId]);
+
+    await conn.query(`UPDATE users SET is_denim_cutter = ? WHERE id = ?`, [denim, userId]);
+    await conn.commit();
+    console.log(`[cutting-users] ${req.session.user.username} set ${target.username} → ${denim ? 'denim' : 'hosiery'} (froze ${frozen.affectedRows} legacy lots)`);
+    res.json({ success: true, denim, frozen_lots: frozen.affectedRows });
+  } catch (err) {
+    if (conn) try { await conn.rollback(); } catch (_) {}
+    console.error('POST /operator/cutting-users/flow error:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 // GET /operator/sku-management
 // Renders an EJS page with optional ?sku= query param
 router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cutting Users — Denim / Hosiery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <style>
+    :root{ --ink:#0f172a; --muted:#64748b; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff; --blue:#2563eb; --blue-bg:#eff6ff; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:15px;}
+    .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400;vertical-align:middle;}
+    .top{position:fixed;top:0;left:0;right:0;height:56px;z-index:50;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 16px;}
+    .top .brand{display:flex;align-items:center;gap:10px;} .top .brand .material-symbols-outlined{color:var(--blue);}
+    .top h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin:0;}
+    .top a{color:var(--muted);display:flex;text-decoration:none;}
+    .wrap{max-width:760px;margin:0 auto;padding:76px 16px 40px;}
+    .note{font-size:13px;background:var(--blue-bg);color:#1e40af;border-radius:10px;padding:10px 14px;margin-bottom:14px;line-height:1.5;}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 0;}
+    .row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f5f9;}
+    .row:last-child{border-bottom:0;}
+    .row .who{flex:1;min-width:0;}
+    .row .who .name{font-weight:600;} .row .who .name .inactive{color:var(--muted);font-weight:400;font-size:12px;}
+    .row .who .meta{color:var(--muted);font-size:12px;margin-top:2px;}
+    .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;}
+    .seg button{border:0;background:var(--card);padding:7px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);}
+    .seg button.on-denim{background:#1e3a8a;color:#fff;}
+    .seg button.on-hosiery{background:#0d9488;color:#fff;}
+    .seg button:disabled{cursor:wait;opacity:.6;}
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;display:none;z-index:60;}
+  </style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="material-symbols-outlined">content_cut</span><h1>Cutting Users</h1></div>
+  <a href="/operator/hub" title="Home"><span class="material-symbols-outlined">home</span></a>
+</header>
+<main class="wrap">
+  <div class="note">
+    <strong>Denim</strong> lots travel cutting → stitching → assembly → washing → washing-in → finishing;
+    <strong>hosiery</strong> lots skip the middle. This flag sets the <strong>default</strong> for lots the
+    user creates from now on (the cutting screen can still override per lot). Old lots are frozen to their
+    current flow automatically when you flip — history never changes.
+  </div>
+  <div class="card">
+    <% users.forEach(function(u){ %>
+      <div class="row" data-user="<%= u.id %>">
+        <div class="who">
+          <div class="name"><%= u.username %><% if (!u.is_active) { %> <span class="inactive">(inactive)</span><% } %></div>
+          <div class="meta"><%= u.lot_count %> lots<% if (u.last_lot_at) { %> · last <%= new Date(u.last_lot_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',timeZone:'Asia/Kolkata'}) %><% } %></div>
+        </div>
+        <div class="seg">
+          <button class="b-denim <%= u.is_denim_cutter == 1 ? 'on-denim' : '' %>" onclick="setFlow(<%= u.id %>, 1, this)">Denim</button>
+          <button class="b-hosiery <%= u.is_denim_cutter == 1 ? '' : 'on-hosiery' %>" onclick="setFlow(<%= u.id %>, 0, this)">Hosiery</button>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', 3500); }
+async function setFlow(userId, denim, btn){
+  const row = btn.closest('.row');
+  row.querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{
+    const r = await fetch('/operator/cutting-users/flow', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id:userId, denim }) });
+    const j = await r.json();
+    if(!r.ok || j.error) throw new Error(j.error || ('HTTP '+r.status));
+    row.querySelector('.b-denim').classList.toggle('on-denim', !!denim);
+    row.querySelector('.b-hosiery').classList.toggle('on-hosiery', !denim);
+    toast('Saved — new lots default to '+(denim?'denim':'hosiery')+(j.frozen_lots?(' ('+j.frozen_lots+' old lots frozen to their current flow)'):''));
+  }catch(e){ toast('Could not save: '+e.message); }
+  row.querySelectorAll('button').forEach(b=>b.disabled=false);
+}
+</script>
+</body>
+</html>
