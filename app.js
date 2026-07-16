@@ -125,6 +125,10 @@ if (!sessionSecret && process.env.NODE_ENV === 'production') {
 const isProduction = !!(process.env.K_SERVICE || process.env.NODE_ENV === 'production');
 
 app.use(session({
+    // '__session' is the ONLY cookie Firebase Hosting's CDN forwards to a rewritten
+    // Cloud Run backend — erpkotty.in is served through it (LB retired 2026-07).
+    // Renaming logs every user out exactly once at deploy. Do not change it back.
+    name: '__session',
     secret: sessionSecret || 'dev-only-secret-not-for-production',
     store: sessionStore,
     resave: false,
