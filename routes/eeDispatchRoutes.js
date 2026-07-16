@@ -1,11 +1,13 @@
-// Finishing → EasyEcom PO review screen (the approval gate).
-// Audience: the FINISHING role (user decision 2026-07-10) — they dispatch, they push.
+// Warehouse transfers — status screen for the lot-wise challan pipeline
+// (2026-07-16 redesign: one lot = one batch = one PO/challan, created at dispatch).
+// Audience: the FINISHING role. This screen is for status, reprints, and fixing
+// blocked SKUs — the routine path never needs a button here.
 // The pipeline never writes inventory: it creates a PO; the warehouse GRNs manually.
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { isAuthenticated, isFinishingMaster } = require('../middlewares/auth');
-const { buildBatch, reResolveBatch, resolveLineManually, pushBatch, confirmGrns, pushEnabled, EE_PO_SINCE } = require('../utils/eeDispatchPo');
+const { sweepLotBatches, reResolveBatch, resolveLineManually, pushBatch, confirmGrns, pushEnabled, EE_PO_SINCE } = require('../utils/eeDispatchPo');
 
 // GET / — review screen: batches + how many dispatch rows await sweeping.
 router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
@@ -49,14 +51,39 @@ router.get('/', isAuthenticated, isFinishingMaster, async (req, res) => {
   }
 });
 
-// POST /build — sweep unswept Warehouse dispatches into a new batch.
+// POST /build — sweep any unswept Warehouse dispatches into per-lot batches.
+// Fallback only: the dispatch action creates its lot's batch inline, and the
+// background job sweeps strays; this button just forces it now.
 router.post('/build', isAuthenticated, isFinishingMaster, async (req, res) => {
   try {
-    const out = await buildBatch(req.session.user);
+    const out = await sweepLotBatches(req.session.user);
     res.json({ success: true, ...out });
   } catch (err) {
-    console.error('ee-po build error:', err);
+    console.error('ee-po sweep error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /challan/:id — the printable lot challan that travels with the goods.
+router.get('/challan/:id', isAuthenticated, isFinishingMaster, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [[batch]] = await pool.query(`SELECT * FROM ee_dispatch_po WHERE id=?`, [id]);
+    if (!batch) return res.status(404).send('Challan not found');
+    const [lines] = await pool.query(
+      `SELECT lot_no, size_label, quantity, lot_sku, ee_sku FROM ee_dispatch_po_lines
+        WHERE batch_id=? ORDER BY id`, [id]);
+    const lotNo = batch.lot_no || (lines[0] && lines[0].lot_no) || '';
+    const [[lot]] = await pool.query(
+      `SELECT lot_no, manual_lot_number, sku FROM cutting_lots WHERE lot_no=? LIMIT 1`, [lotNo]);
+    res.render('eeChallan', {
+      user: req.session.user,
+      batch, lines, lot: lot || { lot_no: lotNo, manual_lot_number: '', sku: '' },
+      autoPrint: String(req.query.print || '') === '1',
+    });
+  } catch (err) {
+    console.error('ee-po challan error:', err);
+    res.status(500).send('Could not load the challan: ' + err.message);
   }
 });
 

@@ -602,6 +602,22 @@
     .sx-dest-row { grid-template-columns: 1fr; }
   }
 
+  /* Inline SKU mapping row under an unmapped size (Warehouse dispatch) */
+  .sx-resolve-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: 0.25rem 0 0.5rem; padding: 0.5rem 0.625rem;
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--r-sm);
+    font-size: 0.8125rem; color: #b45309;
+  }
+  .sx-resolve-row .material-symbols-outlined { font-size: 18px; }
+  .sx-resolve-row .rl { font-weight: 600; white-space: nowrap; }
+  .sx-resolve-row select {
+    flex: 1; min-width: 0; padding: 0.375rem 0.5rem;
+    border: 1px solid #fde68a; border-radius: var(--r-sm);
+    background: #fff; font-family: inherit; font-size: 0.8125rem; color: var(--c-text);
+  }
+  .sx-resolve-row.done { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+
   .sx-form-row { margin-top: 0.625rem; }
   .sx-form-row input[type="text"] {
     width: 100%; padding: 0.625rem 0.75rem; box-sizing: border-box;
@@ -1231,6 +1247,7 @@
     </div>
     <div class="flx-actions">
       <a class="flx-home" href="/finishingdashboard" title="Home"><span class="material-symbols-outlined">home</span></a>
+      <a class="flx-home" href="/finishingdashboard/ee-po" title="Warehouse transfers"><span class="material-symbols-outlined">local_shipping</span></a>
       <span class="flx-user"><%= (user && user.username) ? user.username : 'Operator' %></span>
       <a class="flx-logout" href="/logout"><span class="material-symbols-outlined">logout</span><span class="flx-logout-t">Log out</span></a>
     </div>
@@ -1578,17 +1595,16 @@ async function renderActions() {
     cards++;
     wrap.appendChild(buildDoneCard(a));
   });
-  // Dispatch (finishing only) — show card if there's anything ready to ship
+  // Dispatch (finishing only) — one lot-level card, pre-filled, one tap.
   if (STAGE_FEATURES.dispatch) {
     try {
-      const ds = await api('GET', BASE + '/event/dispatch-state/' + currentLot.id);
-      const summary = ds.lot_summary || { available: 0 };
-      if ((summary.available || 0) > 0) {
+      const dp = await api('GET', BASE + '/event/dispatch-preview/' + currentLot.id);
+      if ((dp.available || 0) > 0) {
         cards++;
-        wrap.appendChild(buildDispatchCard(ds));
+        wrap.appendChild(buildDispatchCard(dp));
       }
     } catch (err) {
-      console.warn('dispatch-state failed', err.message);
+      console.warn('dispatch-preview failed', err.message);
     }
   }
   if (cards === 0) {
@@ -1632,37 +1648,22 @@ async function renderActions() {
 }
 
 // ─── Dispatch card (finishing only) ───────────────────────────
-function buildDispatchCard(state) {
+// One card per LOT: pre-filled with everything finished & undispatched, destination
+// defaults to Warehouse, unmapped sizes are fixed inline (once per style-size,
+// permanent), single tap, no popup. Warehouse dispatch returns a challan whose
+// print view opens immediately.
+function buildDispatchCard(preview) {
   const card = document.createElement('div');
-  card.className = 'sx-action-card is-dispatch';
-  const summary = state.lot_summary || { available: 0 };
-
-  card.classList.add('always-open');
+  card.className = 'sx-action-card is-dispatch always-open';
   card.innerHTML = `
     <div class="sx-take-panel">
       <h3 class="sx-panel-h">Dispatch finished pieces
-        <span class="sub">${fmt(summary.available)} ready · ${state.batches.length} batch${state.batches.length === 1 ? '' : 'es'}</span>
+        <span class="sub">${fmt(preview.available)} ready</span>
       </h3>
-      <div id="dispatchForm"></div>
-    </div>
-  `;
-
-  const form = card.querySelector('#dispatchForm');
-  state.batches.forEach((b, idx) => {
-    if ((b.available || 0) === 0) return;
-    const block = document.createElement('div');
-    block.className = 'sx-dispatch-batch';
-    block.dataset.fdId = String(b.finishing_data_id);
-    const created = b.created_at ? new Date(b.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
-    block.innerHTML = `
-      <div class="sx-dispatch-batch-head">
-        Batch <span class="b">#${b.finishing_data_id}</span> · ${fmt(b.available)} available${created ? ' · completed ' + escapeText(created) : ''}
-      </div>
-      <div class="sx-input-list" data-list="dispatch-sizes-${idx}"></div>
+      <div class="sx-input-list" data-list="dispatch-sizes"></div>
       <div class="sx-dest-row">
-        <select data-input="destination-${idx}">
-          <option value="">— Select destination —</option>
-          <option value="Warehouse">Warehouse</option>
+        <select data-input="destination">
+          <option value="Warehouse" selected>Warehouse</option>
           <option value="Ajio">Ajio</option>
           <option value="Myntra">Myntra</option>
           <option value="Amazon">Amazon</option>
@@ -1670,78 +1671,147 @@ function buildDispatchCard(state) {
           <option value="Shopify">Shopify (own store)</option>
           <option value="other">Other…</option>
         </select>
-        <input type="text" placeholder="Custom destination" data-input="custom-dest-${idx}" />
+        <input type="text" placeholder="Custom destination" data-input="custom-dest" style="display:none;" />
       </div>
       <div class="sx-grand">
-        <span class="gl">Dispatching from this batch</span>
-        <span class="gv"><strong data-display="dispatch-total-${idx}">0</strong> pcs</span>
+        <span class="gl">Dispatching</span>
+        <span class="gv"><strong data-display="dispatch-total">0</strong> pcs</span>
       </div>
-      <button class="sx-action-cta" data-action="dispatch-submit" data-idx="${idx}">Dispatch from batch #${b.finishing_data_id}</button>
+      <button class="sx-action-cta" data-action="dispatch-submit"></button>
+    </div>
+  `;
+
+  const sizeList = card.querySelector('[data-list="dispatch-sizes"]');
+  (preview.sizes || []).forEach(s => {
+    if ((s.available || 0) === 0) return;
+    const sRow = document.createElement('div');
+    sRow.className = 'sx-input-row sx-dng';
+    sRow.innerHTML = `
+      <span class="sx-input-label">${escapeText(s.size_label)}</span>
+      <span class="sx-input-avail"><span class="n">${fmt(s.available)}</span> ready</span>
+      <div class="sx-stepper sx-dng-cell">
+        <input type="number" inputmode="numeric" min="0" max="${s.available}" value="${s.available}"
+               data-size="${escapeText(s.size_label)}" data-avail="${s.available}" />
+      </div>
     `;
-
-    const sizeList = block.querySelector(`[data-list="dispatch-sizes-${idx}"]`);
-    b.sizes.forEach(s => {
-      if ((s.available || 0) === 0) return;
-      const sRow = document.createElement('div');
-      sRow.className = 'sx-input-row sx-dng';
-      sRow.innerHTML = `
-        <span class="sx-input-label">${escapeText(s.size_label)}</span>
-        <span class="sx-input-avail"><span class="n">${fmt(s.available)}</span> ready</span>
-        <div class="sx-stepper sx-dng-cell">
-          <input type="number" inputmode="numeric" min="0" max="${s.available}" value="${s.available}"
-                 data-size="${escapeText(s.size_label)}" data-avail="${s.available}" data-batch="${idx}" />
-        </div>
+    bindStepper(sRow, () => recalcDispatchTotal(card));
+    sizeList.appendChild(sRow);
+    // Unmapped size → the fix lives right here in the card. Dropdown of the style's
+    // REAL EasyEcom SKUs only (verified server-side too); saved on pick, forever.
+    if (!s.ee_sku) {
+      const rRow = document.createElement('div');
+      rRow.className = 'sx-resolve-row';
+      rRow.dataset.resolveSize = s.size_label;
+      const opts = (preview.variants || [])
+        .map(v => `<option value="${escapeText(v)}">${escapeText(v)}</option>`).join('');
+      rRow.innerHTML = `
+        <span class="material-symbols-outlined">link</span>
+        <span class="rl">Size ${escapeText(s.size_label)} → EasyEcom SKU</span>
+        <select data-resolve-for="${escapeText(s.size_label)}">
+          <option value="">Pick SKU…</option>${opts}
+        </select>
       `;
-      bindStepper(sRow, () => recalcDispatchTotal(card, idx));
-      sizeList.appendChild(sRow);
-    });
-    form.appendChild(block);
-
-    block.querySelector(`[data-action="dispatch-submit"]`).addEventListener('click',
-      () => doDispatch(card, idx, b.finishing_data_id));
-    recalcDispatchTotal(card, idx);
+      rRow.querySelector('select').addEventListener('change', async (e) => {
+        const sku = e.target.value;
+        if (!sku) return;
+        e.target.disabled = true;
+        try {
+          await api('POST', BASE + '/event/resolve-sku', {
+            style: preview.style, size_label: s.size_label, size_sku: sku,
+          });
+          rRow.classList.add('done');
+          rRow.innerHTML = `<span class="material-symbols-outlined">check_circle</span>
+            <span class="rl">Size ${escapeText(s.size_label)} → ${escapeText(sku)} saved</span>`;
+          delete rRow.dataset.resolveSize;
+          recalcDispatchTotal(card);
+        } catch (err) {
+          e.target.disabled = false;
+          e.target.value = '';
+          toast('Could not save mapping: ' + err.message, 'error');
+        }
+      });
+      sizeList.appendChild(rRow);
+    }
   });
 
+  const destSel = card.querySelector('[data-input="destination"]');
+  const customInput = card.querySelector('[data-input="custom-dest"]');
+  destSel.addEventListener('change', () => {
+    customInput.style.display = destSel.value === 'other' ? '' : 'none';
+    recalcDispatchTotal(card);
+  });
+  card.querySelector('[data-action="dispatch-submit"]').addEventListener('click',
+    () => doDispatchLot(card, preview));
+  recalcDispatchTotal(card);
   return card;
 }
 
-function recalcDispatchTotal(card, idx) {
-  const inputs = card.querySelectorAll(`[data-list="dispatch-sizes-${idx}"] input[data-size]`);
+// Keeps the total AND the CTA honest: the button says exactly what one tap does,
+// and stays off while a Warehouse dispatch still has an unmapped size in play.
+function recalcDispatchTotal(card) {
+  const inputs = card.querySelectorAll('[data-list="dispatch-sizes"] input[data-size]');
   let total = 0;
+  const active = new Set();
   inputs.forEach(i => {
     let v = parseInt(i.value, 10);
     if (!Number.isFinite(v) || v < 0) v = 0;
     const max = Number(i.dataset.avail) || 0;
     if (v > max) { v = max; i.value = v; }
     total += v;
+    if (v > 0) active.add(i.dataset.size);
   });
-  const t = card.querySelector(`[data-display="dispatch-total-${idx}"]`);
+  const t = card.querySelector('[data-display="dispatch-total"]');
   if (t) t.textContent = fmt(total);
+
+  const destSel = card.querySelector('[data-input="destination"]');
+  const dest = destSel ? destSel.value : 'Warehouse';
+  const unresolved = [...card.querySelectorAll('[data-resolve-size]')]
+    .map(r => r.dataset.resolveSize).filter(sz => active.has(sz));
+  const btn = card.querySelector('[data-action="dispatch-submit"]');
+  if (!btn) return;
+  if (dest === 'Warehouse' && unresolved.length) {
+    btn.disabled = true;
+    btn.textContent = `Pick EasyEcom SKU for ${unresolved.join(', ')} first`;
+  } else {
+    btn.disabled = total === 0;
+    const destLabel = dest === 'other' ? 'destination' : dest;
+    btn.textContent = `Dispatch ${fmt(total)} pcs → ${destLabel}`;
+  }
 }
 
-async function doDispatch(card, idx, finishing_data_id) {
-  const inputs = card.querySelectorAll(`[data-list="dispatch-sizes-${idx}"] input[data-size]`);
+async function doDispatchLot(card, preview) {
+  const inputs = card.querySelectorAll('[data-list="dispatch-sizes"] input[data-size]');
   const sizes = [];
   inputs.forEach(i => {
     const p = parseInt(i.value, 10) || 0;
     if (p > 0) sizes.push({ size_label: i.dataset.size, pieces: p });
   });
   if (!sizes.length) { toast('No pieces selected', 'error'); return; }
-  const destSel = card.querySelector(`[data-input="destination-${idx}"]`);
-  const customInput = card.querySelector(`[data-input="custom-dest-${idx}"]`);
+  const destSel = card.querySelector('[data-input="destination"]');
+  const customInput = card.querySelector('[data-input="custom-dest"]');
   let dest = (destSel && destSel.value) || '';
   if (dest === 'other') dest = (customInput && customInput.value || '').trim();
   if (!dest) { toast('Pick a destination', 'error'); return; }
-  const total = sizes.reduce((a, s) => a + s.pieces, 0);
-  if (!confirm('Dispatch ' + fmt(total) + ' pieces from batch #' + finishing_data_id + ' to ' + dest + '?')) return;
+  const btn = card.querySelector('[data-action="dispatch-submit"]');
+  btn.disabled = true;
   try {
-    await api('POST', BASE + '/event/dispatch', {
-      finishing_data_id, destination: dest === 'other' ? 'other' : dest,
+    const out = await api('POST', BASE + '/event/dispatch-lot', {
+      cutting_lot_id: currentLot.id,
+      destination: destSel.value === 'other' ? 'other' : dest,
       custom_destination: dest, sizes,
     });
-    toast('Dispatched ' + fmt(total) + ' pieces ✓', 'success');
+    toast('Dispatched ' + fmt(out.dispatched_total) + ' pieces → ' + dest + ' ✓', 'success');
+    if (out.challan && out.challan.batch_id) {
+      window.open(BASE + '/ee-po/challan/' + out.challan.batch_id + '?print=1', '_blank');
+      if (out.challan.status === 'po_pending') {
+        toast('Challan ' + out.challan.batch_ref + ' saved — PO will reach EasyEcom shortly', 'success');
+      }
+    }
     await refreshState();
-  } catch (err) { toast('Could not dispatch: ' + err.message, 'error'); }
+  } catch (err) {
+    btn.disabled = false;
+    toast('Could not dispatch: ' + err.message, 'error');
+  }
 }
 
 function buildTakeCard() {

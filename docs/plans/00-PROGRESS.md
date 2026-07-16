@@ -99,6 +99,15 @@ created in EasyEcom** (vendor "Kotty Production", code V002, vendor_c_id 289541)
   decisions).
 - **First real PO through the pipeline**: KT-DISP-1 → EasyEcom PO 2063861 (KE396, size 34
   mapped to 981XXL by the finishing team). Underscore SKU convention auto-resolves (#547).
+- **2026-07-16 — LOT-WISE "challan at dispatch"** (design doc §9): the all-lots sweep is
+  gone. Dispatching a lot to Warehouse is ONE pre-filled tap on the finishing screen that
+  writes the dispatch, creates that lot's own `KT-DISP-<id>-<lot_no>` batch + EasyEcom PO
+  (EE-down safe: stays draft, background retry), and opens a printable challan. Unmapped
+  SKUs are fixed inline in the dispatch card. The ee-po screen is now the linked
+  "Warehouse Transfers" status tab; a 30-min cron (armed by EE_GRN_PUSH) sweeps strays,
+  pushes drafts, and confirms GRNs. Requires `sql/2026_07_ee_dispatch_po_lotwise.sql`
+  before deploy; KT-DISP-2 (12 lots frozen by 9 lots' blocked SKUs) to be remediated by
+  cancel + line-delete + lot-wise re-sweep.
 - Operator hub gained System Health / Documentation / Usage Analytics cards (Security Logs
   was already there).
 - README rewritten to match reality.

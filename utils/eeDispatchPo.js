@@ -103,89 +103,139 @@ async function resolveLine(db, lotSku, sizeLabel) {
   return { ee_sku: eeSku, source, cost: pm.length ? pm[0].cost : null, mrp: pm.length ? pm[0].mrp : null };
 }
 
-// ── Batch building ────────────────────────────────────────────────────────
-// Sweep every Warehouse-destination finishing_dispatches row not yet in any batch
-// into ONE new batch (draft if fully resolved, blocked otherwise).
-async function buildBatch(user) {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [rows] = await conn.query(
-      `SELECT fd.id AS dispatch_id, fd.lot_no, fd.size_label, fd.quantity, cl.sku AS lot_sku
-         FROM finishing_dispatches fd
-         LEFT JOIN ee_dispatch_po_lines l ON l.dispatch_id = fd.id
-         LEFT JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
-        WHERE l.id IS NULL AND LOWER(fd.destination) = 'warehouse'
-          AND fd.created_at >= ?
-        ORDER BY fd.id
-        LIMIT 500`,
-      [EE_PO_SINCE]
-    );
-    if (!rows.length) { await conn.rollback(); return { created: false, reason: 'No new Warehouse dispatches to sweep.' }; }
+// ── Batch building — LOT-WISE (2026-07-16 redesign) ──────────────────────
+// One batch = one lot = one PO/challan. batch_ref 'KT-DISP-<id>-<lot_no>'.
+// A blocked SKU in one lot can never hold another lot's pieces hostage.
 
-    const [ins] = await conn.query(
-      `INSERT INTO ee_dispatch_po (batch_ref, status, warehouse_id, created_by, created_by_name)
-       VALUES ('PENDING', 'draft', ?, ?, ?)`,
-      [FARIDABAD_WAREHOUSE_ID, user?.id || null, user?.username || null]
-    );
-    const batchId = ins.insertId;
-    const batchRef = `KT-DISP-${batchId}`;
+// Create ONE batch for ONE lot from the given unswept dispatch rows.
+// Runs on the caller's connection/transaction. rows: [{dispatch_id, lot_no,
+// size_label, quantity, lot_sku}].
+async function createLotBatch(conn, lotNo, rows, user) {
+  const [ins] = await conn.query(
+    `INSERT INTO ee_dispatch_po (batch_ref, lot_no, status, warehouse_id, created_by, created_by_name)
+     VALUES ('PENDING', ?, 'draft', ?, ?, ?)`,
+    [lotNo, FARIDABAD_WAREHOUSE_ID, user?.id || null, user?.username || null]
+  );
+  const batchId = ins.insertId;
+  // batch_ref is VARCHAR(40) UNIQUE; the id keeps it unique even if the lot part clips.
+  const batchRef = `KT-DISP-${batchId}-${String(lotNo)}`.slice(0, 40);
 
-    let blocked = 0, totalQty = 0;
-    for (const r of rows) {
-      const res = await resolveLine(conn, r.lot_sku, r.size_label);
-      if (!res.ee_sku) blocked++;
-      totalQty += Number(r.quantity) || 0;
-      await conn.query(
-        `INSERT INTO ee_dispatch_po_lines
-           (batch_id, dispatch_id, lot_no, size_label, quantity, lot_sku, ee_sku, resolve_source, unit_cost, mrp)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [batchId, r.dispatch_id, r.lot_no, r.size_label, r.quantity, r.lot_sku || null,
-         res.ee_sku, res.source, res.cost, res.mrp]
-      );
-    }
+  let blocked = 0, totalQty = 0;
+  for (const r of rows) {
+    const res = await resolveLine(conn, r.lot_sku, r.size_label);
+    if (!res.ee_sku) blocked++;
+    totalQty += Number(r.quantity) || 0;
     await conn.query(
-      `UPDATE ee_dispatch_po
-          SET batch_ref=?, status=?, total_qty=?, line_count=?, blocked_count=?
-        WHERE id=?`,
-      [batchRef, blocked > 0 ? 'blocked' : 'draft', totalQty, rows.length, blocked, batchId]
+      `INSERT INTO ee_dispatch_po_lines
+         (batch_id, dispatch_id, lot_no, size_label, quantity, lot_sku, ee_sku, resolve_source, unit_cost, mrp)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [batchId, r.dispatch_id, r.lot_no, r.size_label, r.quantity, r.lot_sku || null,
+       res.ee_sku, res.source, res.cost, res.mrp]
     );
-    await conn.commit();
-    return { created: true, batchId, batchRef, lines: rows.length, blocked };
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
   }
+  await conn.query(
+    `UPDATE ee_dispatch_po
+        SET batch_ref=?, status=?, total_qty=?, line_count=?, blocked_count=?
+      WHERE id=?`,
+    [batchRef, blocked > 0 ? 'blocked' : 'draft', totalQty, rows.length, blocked, batchId]
+  );
+  return { batchId, batchRef, lines: rows.length, blocked };
 }
 
-// Inline manual resolution from the finishing review screen. The chosen SKU must
-// EXIST in the ee_product_master mirror AND belong to the same style (prefix guard) —
-// no free text, nothing is ever created in EasyEcom. The mapping is persisted to
-// pm_sku_resolution (source: 'manual' — the enum's value for hand-mapping; the
-// mapper is recorded in loaded_by), so PM planning learns it too.
-async function resolveLineManually(lineId, sizeSku, user) {
+// Sweep every unswept Warehouse dispatch row into per-lot batches (one batch per
+// lot). Used by the background job and as a manual fallback; the dispatch action
+// itself creates its lot's batch inline. Each lot commits independently.
+async function sweepLotBatches(user) {
+  const [rows] = await pool.query(
+    `SELECT fd.id AS dispatch_id, fd.lot_no, fd.size_label, fd.quantity, cl.sku AS lot_sku
+       FROM finishing_dispatches fd
+       LEFT JOIN ee_dispatch_po_lines l ON l.dispatch_id = fd.id
+       LEFT JOIN cutting_lots cl ON cl.lot_no = fd.lot_no
+      WHERE l.id IS NULL AND LOWER(fd.destination) = 'warehouse'
+        AND fd.created_at >= ?
+      ORDER BY fd.lot_no, fd.id
+      LIMIT 500`,
+    [EE_PO_SINCE]
+  );
+  if (!rows.length) return { created: 0, batches: [], reason: 'No new Warehouse dispatches to sweep.' };
+
+  const byLot = new Map();
+  for (const r of rows) {
+    if (!byLot.has(r.lot_no)) byLot.set(r.lot_no, []);
+    byLot.get(r.lot_no).push(r);
+  }
+  const batches = [];
+  for (const [lotNo, lotRows] of byLot) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const b = await createLotBatch(conn, lotNo, lotRows, user);
+      await conn.commit();
+      batches.push({ lot_no: lotNo, ...b });
+    } catch (err) {
+      await conn.rollback();
+      console.error(`[ee-po] sweep failed for lot ${lotNo}:`, err.message);
+    } finally {
+      conn.release();
+    }
+  }
+  return { created: batches.length, batches };
+}
+
+// Push every fully-resolved draft batch. One batch's failure never stops the next;
+// EasyEcom being down just leaves drafts for the next run. No-op unless EE_GRN_PUSH=1.
+async function autoPushDrafts() {
+  if (!pushEnabled()) return { pushed: 0, failed: 0, skipped: 'push disabled' };
+  const [drafts] = await pool.query(
+    `SELECT id FROM ee_dispatch_po WHERE status='draft' ORDER BY id`);
+  let pushed = 0, failed = 0;
+  for (const d of drafts) {
+    try {
+      await pushBatch(d.id);
+      pushed++;
+    } catch (err) {
+      failed++;
+      console.error(`[ee-po] auto-push failed for batch ${d.id}:`, err.message);
+    }
+  }
+  return { pushed, failed, drafts: drafts.length };
+}
+
+// Persist a style+size → EasyEcom-SKU mapping picked by a human. The chosen SKU
+// must EXIST (active) in the ee_product_master mirror AND belong to the same style
+// (prefix guard) — no free text, nothing is ever created in EasyEcom. Written to
+// pm_sku_resolution (source: 'manual', mapper in loaded_by) so the pipeline AND
+// PM planning learn it permanently. Shared by the pre-dispatch inline resolver
+// (finishing card) and the transfers-screen line resolver.
+async function saveSkuMapping(styleSku, sizeLabel, sizeSku, user) {
   const chosen = String(sizeSku || '').trim().toUpperCase();
   if (!chosen) throw new Error('Pick a SKU.');
-  const [[line]] = await pool.query(
-    `SELECT id, batch_id, lot_sku, size_label, ee_sku FROM ee_dispatch_po_lines WHERE id=?`, [lineId]);
-  if (!line) throw new Error('Line not found');
-  if (line.ee_sku) throw new Error('Line is already resolved.');
-  const style = String(line.lot_sku || '').trim().toUpperCase();
-  if (!style) throw new Error('Line has no lot style SKU.');
+  const style = String(styleSku || '').trim().toUpperCase();
+  const size = String(sizeLabel || '').trim().toUpperCase();
+  if (!style || !size) throw new Error('Style and size are required.');
   if (!chosen.startsWith(style)) throw new Error('That SKU belongs to a different style.');
   const [[hit]] = await pool.query(
     `SELECT sku, cost, mrp FROM ee_product_master WHERE sku=? AND active=1`, [chosen]);
   if (!hit) throw new Error('That SKU does not exist (active) in the EasyEcom master.');
 
-  // Persist the mapping for everything (pipeline + PM planning). UNIQUE(cl_sku, size_label).
+  // UNIQUE(cl_sku, size_label).
   await pool.query(
     `INSERT INTO pm_sku_resolution (cl_sku, size_label, size_sku, state, source, loaded_by)
      VALUES (?, ?, ?, 'resolved', 'manual', ?)
      ON DUPLICATE KEY UPDATE size_sku=VALUES(size_sku), state='resolved',
        source='manual', loaded_by=VALUES(loaded_by), updated_at=CURRENT_TIMESTAMP`,
-    [style, String(line.size_label).trim().toUpperCase(), hit.sku, user?.id || null]);
+    [style, size, hit.sku, user?.id || null]);
+  return hit;
+}
+
+// Inline manual resolution of one blocked batch line (transfers screen).
+async function resolveLineManually(lineId, sizeSku, user) {
+  const [[line]] = await pool.query(
+    `SELECT id, batch_id, lot_sku, size_label, ee_sku FROM ee_dispatch_po_lines WHERE id=?`, [lineId]);
+  if (!line) throw new Error('Line not found');
+  if (line.ee_sku) throw new Error('Line is already resolved.');
+  if (!String(line.lot_sku || '').trim()) throw new Error('Line has no lot style SKU.');
+  const hit = await saveSkuMapping(line.lot_sku, line.size_label, sizeSku, user);
 
   await pool.query(
     `UPDATE ee_dispatch_po_lines SET ee_sku=?, resolve_source='map', unit_cost=?, mrp=? WHERE id=?`,
@@ -226,7 +276,11 @@ async function pushBatch(batchId) {
   if (!pushEnabled()) throw new Error('EE_GRN_PUSH is not enabled on this environment.');
   const [[batch]] = await pool.query(`SELECT * FROM ee_dispatch_po WHERE id=?`, [batchId]);
   if (!batch) throw new Error('Batch not found');
-  if (batch.status !== 'draft') throw new Error(`Batch is ${batch.status}, only draft batches can be pushed.`);
+  // 'failed' is human-retryable from the transfers screen (the error stays visible
+  // on the card); everything else must never push twice.
+  if (batch.status !== 'draft' && batch.status !== 'failed') {
+    throw new Error(`Batch is ${batch.status}, only draft/failed batches can be pushed.`);
+  }
 
   const [lines] = await pool.query(
     `SELECT ee_sku, SUM(quantity) AS qty, MAX(unit_cost) AS cost
@@ -289,4 +343,8 @@ async function confirmGrns() {
   return { checked: pushed.length, confirmed };
 }
 
-module.exports = { buildBatch, reResolveBatch, resolveLineManually, pushBatch, confirmGrns, pushEnabled, FARIDABAD_WAREHOUSE_ID, EE_PO_SINCE };
+module.exports = {
+  createLotBatch, sweepLotBatches, autoPushDrafts, reResolveBatch,
+  resolveLineManually, saveSkuMapping, resolveLine, pushBatch, confirmGrns,
+  pushEnabled, FARIDABAD_WAREHOUSE_ID, EE_PO_SINCE,
+};

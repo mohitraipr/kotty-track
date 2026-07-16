@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const { syncAjioShipments } = require('./ajioShipmentSync');
 const { runMailAutoReply } = require('./mailAutoReplyJob');
 const { runPullWorker } = require('./easyecomPullWorker');
+const { sweepLotBatches, autoPushDrafts, confirmGrns, pushEnabled } = require('./eeDispatchPo');
 const { pool } = require('../config/db');
 
 const TZ = process.env.CRON_TIMEZONE || 'Asia/Kolkata';
@@ -57,6 +58,35 @@ function startCronJobs() {
   );
 
   console.log(`[cron] scheduled mail auto-reply (9 AM, 9 PM ${TZ})`);
+
+  // Warehouse-transfer housekeeping (lot-wise challan pipeline): sweep any stray
+  // unswept dispatches into per-lot batches, retry pending POs, and detect the
+  // warehouse's GRNs. The dispatch action does all of this inline on the happy
+  // path — this job only heals EasyEcom-outage leftovers and updates statuses.
+  // Rides EE_GRN_PUSH (same flag that arms the pipeline); no separate switch.
+  // Cloud Run caveat: runs only while an instance is alive, which is all working
+  // hours — exactly when dispatches and GRNs happen.
+  if (pushEnabled()) {
+    cron.schedule(
+      process.env.EE_TRANSFER_CRON || '*/30 * * * *',
+      async () => {
+        try {
+          const swept = await sweepLotBatches(null);
+          const pushed = await autoPushDrafts();
+          const grns = await confirmGrns();
+          if (swept.created || pushed.pushed || grns.confirmed) {
+            console.log(`[cron] ee transfers: swept ${swept.created || 0} lot(s), pushed ${pushed.pushed || 0} PO(s), confirmed ${grns.confirmed || 0} GRN(s)`);
+          }
+        } catch (err) {
+          console.error('[cron] ee transfer housekeeping failed:', err);
+        }
+      },
+      { timezone: TZ }
+    );
+    console.log(`[cron] scheduled ee transfer housekeeping (every 30 min, TZ=${TZ})`);
+  } else {
+    console.log('[cron] ee transfer housekeeping DISABLED (EE_GRN_PUSH is off)');
+  }
 
   // EasyEcom pull worker: nightly 02:30 IST. Opt-in via PM_PULL_ENABLED=1.
   // Replaces the retired EasyEcom webhook ingestion.

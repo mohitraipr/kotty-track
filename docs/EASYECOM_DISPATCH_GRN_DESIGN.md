@@ -220,3 +220,41 @@ SKU before any real lot:
   location_key (already the pull-worker model).
 - From the business: just **name the test SKU** (ideally listed on at most one low-risk
   marketplace).
+
+## 9. MODEL REVISION 2 (2026-07-16): lot-wise "challan at dispatch"
+
+The all-lots-in-one-batch sweep (§3/§8) failed operationally on its first real use:
+KT-DISP-2 mixed 12 lots (83 lines, 10,449 pcs) and sat **blocked** because 9 lots had
+unresolved SKUs — the 3 fully-resolved lots (2,271 pcs) were held hostage. The flow also
+required visiting a second, unlinked screen and re-typing quantities.
+
+**The revised model — one lot = one batch = one PO = one printable challan:**
+
+1. The finishing screen's dispatch card is **one card per lot**, pre-filled with every
+   finished undispatched piece; destination defaults to Warehouse. Unmapped sizes are
+   resolved **inline in the card** (dropdown of verified `ee_product_master` SKUs for the
+   style; persisted to `pm_sku_resolution` via the shared `saveSkuMapping`) — once per
+   style-size, forever. No confirm popup; the CTA itself states the exact action.
+2. One tap (`POST /finishingdashboard/event/dispatch-lot`) allocates the lot-level
+   quantities across the operator's finishing batches FIFO (pure
+   `utils/dispatchAllocation.js`), inserts `finishing_dispatches` rows, and — for
+   Warehouse — creates that lot's batch (`KT-DISP-<id>-<lot_no>`, `ee_dispatch_po.lot_no`)
+   in the same transaction, then attempts the EasyEcom push AFTER commit. EasyEcom being
+   down never fails a dispatch; the batch stays `draft` and retries in background.
+3. The **printable challan** (`GET /finishingdashboard/ee-po/challan/:id`) opens
+   immediately and travels with the goods; its reference IS the PO referenceCode. The
+   warehouse GRNs challan-by-challan.
+4. The old review screen is now the **Warehouse Transfers** status tab (linked from the
+   finishing top bar): per-challan status chips (PO pending / At EasyEcom / Received),
+   reprint, inline resolution for legacy blocked lines, retry for failed pushes.
+5. Housekeeping cron (every 30 min, armed by `EE_GRN_PUSH`): sweep stray dispatches into
+   per-lot batches (`sweepLotBatches`), push drafts (`autoPushDrafts`), detect GRNs
+   (`confirmGrns`). The happy path never needs it.
+
+Unchanged invariants: PO-only (nothing ever writes EE inventory), warehouse approves by
+manual GRN, `EE_PO_SINCE` cutoff, `dispatch_id` UNIQUE idempotency, EE PO-quantity cap as
+the second double-push layer.
+
+**Migration:** `sql/2026_07_ee_dispatch_po_lotwise.sql` (adds `ee_dispatch_po.lot_no`) must
+run before deploying this code. **KT-DISP-2 remediation:** cancel batch 2, delete its 83
+lines (releases the dispatch_id idempotency locks), let the sweep rebuild them lot-wise.

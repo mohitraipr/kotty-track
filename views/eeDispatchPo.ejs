@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>EasyEcom PO — Dispatch to Warehouse</title>
+<title>Warehouse Transfers</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
   :root{ --ink:#0f172a; --muted:#64748b; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff;
@@ -44,7 +44,7 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><span class="material-symbols-outlined">local_shipping</span><h1>EasyEcom PO</h1></div>
+  <div class="brand"><span class="material-symbols-outlined">local_shipping</span><h1>Warehouse Transfers</h1></div>
   <div class="acts">
     <a class="home" href="/finishingdashboard" title="Finishing"><span class="material-symbols-outlined">home</span></a>
     <span class="who"><%= user && user.username %></span>
@@ -53,59 +53,71 @@
 </header>
 
 <main class="wrap">
-  <!-- Sweep card -->
   <section class="card">
-    <div class="head-row">
-      <div class="twoline">
-        <div class="l">Warehouse dispatches not yet on a PO</div>
-        <div><span class="stat" id="pendQty"><%= pendingQty.toLocaleString('en-IN') %></span>
-             <span class="meta"><%= pendingRows %> dispatch rows</span></div>
+    <div class="note info" style="margin-top:0;">Every Warehouse dispatch creates its own
+      <strong>lot challan + Purchase Order</strong> the moment you dispatch on the finishing screen —
+      nothing to operate here. The <strong>warehouse team GRNs each challan in EasyEcom</strong> when the
+      goods physically arrive; statuses below update automatically. Stock only enters the OMS through
+      the warehouse's own GRN.</div>
+    <% if (pendingRows) { %>
+      <div class="head-row" style="margin-top:10px;">
+        <div class="twoline">
+          <div class="l">Older dispatches not yet on a challan</div>
+          <div><span class="stat" id="pendQty"><%= pendingQty.toLocaleString('en-IN') %></span>
+               <span class="meta"><%= pendingRows %> dispatch rows — swept automatically within 30 min</span></div>
+        </div>
+        <button class="btn btn-ghost" id="buildBtn" onclick="buildBatch()">
+          <span class="material-symbols-outlined" style="font-size:18px;">post_add</span> Sweep now
+        </button>
       </div>
-      <button class="btn btn-primary" id="buildBtn" <%= pendingRows ? '' : 'disabled' %> onclick="buildBatch()">
-        <span class="material-symbols-outlined" style="font-size:18px;">post_add</span> Create PO batch
-      </button>
-    </div>
-    <div class="note info">Flow: dispatches are swept into a batch → you review and <strong>Push</strong> it →
-      EasyEcom gets the Purchase Order (challan) → the <strong>warehouse team makes the GRN in EasyEcom</strong>
-      when the goods physically arrive → this screen marks the batch <strong>confirmed</strong>.
-      Stock only enters the OMS through the warehouse's own GRN.</div>
+    <% } %>
     <% if (!pushEnabled) { %>
       <div class="note warn">Pushing is disabled on this environment (<code>EE_GRN_PUSH</code> is off).
-        Batches can be built and reviewed, but not sent.</div>
+        Challans can be created and reviewed, but POs won't reach EasyEcom.</div>
     <% } %>
   </section>
 
   <div class="head-row" style="margin:4px 2px 10px;">
-    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Batches</span>
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Challans</span>
     <button class="btn btn-ghost" onclick="refreshConfirmations()" style="padding:8px 12px;font-size:13px;">
-      <span class="material-symbols-outlined" style="font-size:17px;">sync</span> Check for warehouse GRNs
+      <span class="material-symbols-outlined" style="font-size:17px;">sync</span> Check GRNs now
     </button>
   </div>
 
   <% if (!batches.length) { %>
-    <section class="card" style="text-align:center;color:var(--muted);padding:34px;">No batches yet.</section>
+    <section class="card" style="text-align:center;color:var(--muted);padding:34px;">No challans yet — dispatch a lot to Warehouse on the finishing screen and it will appear here.</section>
   <% } %>
+  <%
+    // Floor vocabulary for the pipeline statuses.
+    const STATUS_LABEL = { draft: 'PO pending', blocked: 'Needs SKU', pushed: 'At EasyEcom',
+                           confirmed: 'Received (GRN)', failed: 'Failed', cancelled: 'Cancelled' };
+  %>
 
   <% batches.forEach(function(b){ var lines = linesByBatch[b.id] || []; %>
     <section class="card">
       <div class="head-row">
         <div>
-          <strong class="num" style="font-size:17px;"><%= b.batch_ref %></strong>
-          <span class="pill <%= b.status %>"><%= b.status %></span>
+          <strong class="num" style="font-size:17px;"><%= (b.lot_no || '').toUpperCase() || b.batch_ref %></strong>
+          <span class="pill <%= b.status %>"><%= STATUS_LABEL[b.status] || b.status %></span>
           <div class="meta">
-            <%= b.line_count %> lines · <span class="num"><%= Number(b.total_qty).toLocaleString('en-IN') %></span> pcs
+            <%= b.batch_ref %> · <%= b.line_count %> lines · <span class="num"><%= Number(b.total_qty).toLocaleString('en-IN') %></span> pcs
             <% if (b.po_id) { %> · PO <strong><%= b.po_id %></strong><% } %>
             <% if (b.grn_id) { %> · GRN <strong><%= b.grn_id %></strong> (<%= b.grn_status %>)<% } %>
             · by <%= b.created_by_name || '—' %> · <%= new Date(b.created_at).toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}) %>
           </div>
         </div>
         <div style="display:flex;gap:8px;">
+          <% if (!['cancelled','failed'].includes(b.status)) { %>
+            <a class="btn btn-ghost" href="/finishingdashboard/ee-po/challan/<%= b.id %>" target="_blank" style="text-decoration:none;">
+              <span class="material-symbols-outlined" style="font-size:17px;">print</span> Challan
+            </a>
+          <% } %>
           <% if (b.status === 'blocked') { %>
             <button class="btn btn-ghost" onclick="reResolve(<%= b.id %>)">Re-resolve SKUs</button>
           <% } %>
-          <% if (b.status === 'draft') { %>
+          <% if (b.status === 'draft' || b.status === 'failed') { %>
             <button class="btn btn-primary" <%= pushEnabled ? '' : 'disabled' %> onclick="pushBatch(<%= b.id %>, '<%= b.batch_ref %>')">
-              Push to EasyEcom
+              Retry PO now
             </button>
           <% } %>
         </div>
@@ -159,12 +171,11 @@
   async function buildBatch() {
     const btn = document.getElementById('buildBtn'); btn.disabled = true;
     try { const j = await post('/finishingdashboard/ee-po/build');
-      alert(j.created ? ('Batch ' + j.batchRef + ' created: ' + j.lines + ' lines' + (j.blocked ? (', ' + j.blocked + ' blocked') : '')) : j.reason);
+      alert(j.created ? ('Created ' + j.created + ' lot challan(s)') : (j.reason || 'Nothing to sweep'));
       location.reload();
-    } catch (e) { alert('Could not build batch: ' + e.message); btn.disabled = false; }
+    } catch (e) { alert('Could not sweep: ' + e.message); btn.disabled = false; }
   }
   async function pushBatch(id, ref) {
-    if (!confirm('Create Purchase Order ' + ref + ' in EasyEcom? The warehouse will then GRN it on receipt.')) return;
     try { const j = await post('/finishingdashboard/ee-po/push/' + id);
       alert('PO created in EasyEcom: ' + j.poId); location.reload();
     } catch (e) { alert('Push failed: ' + e.message); }
@@ -177,7 +188,6 @@
   async function resolveLine(lineId) {
     const sel = document.getElementById('resSel' + lineId);
     if (!sel || !sel.value) { alert('Pick the EasyEcom SKU first.'); return; }
-    if (!confirm('Map this size to ' + sel.value + '? The mapping is saved permanently and reused everywhere.')) return;
     try {
       const r = await fetch('/finishingdashboard/ee-po/resolve-line', { method: 'POST',
         headers: { 'Content-Type': 'application/json' },
