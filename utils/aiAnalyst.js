@@ -23,7 +23,8 @@ const env = global.env || process.env;
 const GCP_PROJECT = env.AI_GCP_PROJECT || 'kotty-track-prod';
 const CLAUDE_MODEL = env.AI_CLAUDE_MODEL || 'claude-sonnet-5';
 const CLAUDE_REGION = env.AI_CLAUDE_REGION || 'global';
-const GEMINI_MODEL = env.AI_GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = env.AI_GEMINI_MODEL || 'gemini-2.5-pro';
+const GEMINI_FALLBACK_MODEL = env.AI_GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash';
 const GEMINI_REGION = env.AI_GEMINI_REGION || 'us-central1';
 
 const MAX_TOOL_CALLS = 6;
@@ -151,6 +152,21 @@ function getGemini() {
 }
 
 async function askGemini(history, question, steps, deadline) {
+  try {
+    const answer = await askGeminiModel(GEMINI_MODEL, history, question, steps, deadline);
+    return { answer, model: GEMINI_MODEL };
+  } catch (err) {
+    if (GEMINI_FALLBACK_MODEL && GEMINI_FALLBACK_MODEL !== GEMINI_MODEL) {
+      console.error(`[ai] ${GEMINI_MODEL} unavailable, falling back to ${GEMINI_FALLBACK_MODEL}:`, err.message && err.message.slice(0, 160));
+      steps.length = 0;
+      const answer = await askGeminiModel(GEMINI_FALLBACK_MODEL, history, question, steps, deadline);
+      return { answer, model: GEMINI_FALLBACK_MODEL };
+    }
+    throw err;
+  }
+}
+
+async function askGeminiModel(model, history, question, steps, deadline) {
   const ai = getGemini();
   const contents = [
     ...history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
@@ -167,7 +183,7 @@ async function askGemini(history, question, steps, deadline) {
     }],
   };
   for (let i = 0; i <= MAX_TOOL_CALLS; i++) {
-    const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents, config });
+    const response = await ai.models.generateContent({ model, contents, config });
     const calls = response.functionCalls || [];
     if (!calls.length) {
       const text = (response.text || '').trim();
@@ -201,8 +217,8 @@ async function ask(history, question) {
     console.error('[ai] Claude unavailable, falling back to Gemini:', err.message && err.message.slice(0, 200));
   }
   steps.length = 0;
-  const answer = await askGemini(history, question, steps, deadline);
-  return { answer, steps, model: GEMINI_MODEL };
+  const { answer, model } = await askGemini(history, question, steps, deadline);
+  return { answer, steps, model };
 }
 
 module.exports = { ask, runSqlTool, SYSTEM_PROMPT };
