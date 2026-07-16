@@ -112,6 +112,45 @@ created in EasyEcom** (vendor "Kotty Production", code V002, vendor_c_id 289541)
   was already there).
 - README rewritten to match reality.
 
+### 7. GCP cost audit + reductions (2026-07-16)
+Real billing (BigQuery export, May 8–Jun 8): **kotty-track-prod ≈ ₹3,557/mo** —
+Cloud SQL ₹2,137 (instance+storage+backups) · **LB forwarding rules ₹1,154** ·
+Cloud Run ₹143 · Artifact Registry ₹63 · egress/LB data ₹49 · GCS ₹6 · secrets ₹4.
+
+Done (zero user impact):
+- **Artifact Registry cleanup policies** on all 3 repos (`kotty-track`,
+  `cloud-run-source-deploy`, `gcr.io`): keep 10 most-recent versions, delete >30 d.
+  484 deploys' images (~15 GB) age out automatically now (−~₹55/mo, stops growth).
+- **GCS lifecycle**: `run-sources-…` delete >60 d, `…_cloudbuild` delete >30 d.
+  `kotty-track-uploads` untouched (live lot images).
+- **Deleted stray `catalog-api` service** from this project (zero traffic 30 d, single
+  Mar-30 revision, connected to marketplace-catalog-prod's DB — its real home).
+
+In flight — **retire the load balancer (−₹1,154/mo, 32% of the bill)**:
+erpkotty.in moves to a Firebase Hosting rewrite → same Cloud Run service.
+Verified before starting: asia-south1 supported; Hosting timeout (60 s) beats the LB's
+30 s; self-calls use `SERVICE_BASE_URL` (run.app) so long internal runs are unaffected;
+traffic (37–55 k req/day, ~0.3–0.6 GB/day out) fits Hosting's tier (~₹30/mo overage max).
+Sequence: session cookie renamed to `__session` (Hosting forwards ONLY that cookie —
+logs everyone out once) → Firebase added to the project (console click, needs ToS) →
+hosting site + rewrite → full test on the web.app URL → GoDaddy A-record cutover →
+**keep the LB 72 h as instant rollback** → delete forwarding rules ×2, proxies, urlmap,
+cert, backend, NEG, static IP `kotty-track-ip`.
+
+Facts a successor should know:
+- **Cloud SQL is flat-rate — query optimization saves ₹0.** DB uses 1.5 GB of the
+  provisioned 15 GB; slow-query log ON, general_log OFF. Cheapest real saving:
+  **1-yr committed-use discount ≈ −₹500/mo** (business decision, not taken).
+- **minScale=1 on Cloud Run is deliberate** — in-process crons (EE transfer
+  housekeeping, mail auto-reply) and floor-hours latency need a live instance.
+- **The billing export died 2026-06-08** (old billing account). Re-enable on the new
+  account: Console → Billing → Billing export → BigQuery → dataset
+  `gcp_billing_export` in kotty-track-prod — it's the only way to see current costs.
+- Big tables to prune only if disk ever nears 15 GB: `ee_inventory_daily_snapshot`
+  (2.9 M rows), `feature_usage` (1.1 M rows).
+- Other projects on the account (marketplace-catalog-prod ₹1,977/mo, kotty-returns-app
+  ₹170, ecom-hub-prod ₹119) were explicitly left untouched (owner reviewing).
+
 ## B. Earlier context (still true, condensed)
 PM data feed is healthy (orders_api-driven DRR, snapshot SOH, freshness banner). Historical
 prod data repairs (stage-qty corruption, orphan-approve dedup) are documented in the git
