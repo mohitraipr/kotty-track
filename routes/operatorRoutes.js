@@ -1865,6 +1865,28 @@ router.get("/stitching-tat/:masterId", isAuthenticated, isOperator, async (req, 
   }
 });
 
+// Every table a STYLE-level SKU rename must touch. Production pipeline + rewash/reject
+// + the payment tables keyed by sku (rates would silently detach from a renamed style)
+// + the pm_sku_resolution style key. Deliberately EXCLUDED: all ee_* tables (EasyEcom
+// size-SKUs — a different identifier space), po/nowi/returns domains.
+// guarded = the table has a UNIQUE key on sku → renamed with UPDATE IGNORE so an
+// existing row for the new SKU never explodes the rename; leftovers are reported.
+const SKU_RENAME_TABLES = [
+  { tableName: "cutting_lots",       label: "Cutting Lots",            col: "sku",    hasLot: true },
+  { tableName: "stitching_data",     label: "Stitching Data",          col: "sku",    hasLot: true },
+  { tableName: "jeans_assembly_data",label: "Jeans Assembly Data",     col: "sku",    hasLot: true },
+  { tableName: "washing_data",       label: "Washing Data",            col: "sku",    hasLot: true },
+  { tableName: "washing_in_data",    label: "Washing In Data",         col: "sku",    hasLot: true },
+  { tableName: "finishing_data",     label: "Finishing Data",          col: "sku",    hasLot: true },
+  { tableName: "rewash_requests",    label: "Rewash Requests",         col: "sku",    hasLot: true },
+  { tableName: "reject_data",        label: "Reject Data",             col: "sku",    hasLot: true },
+  { tableName: "stage_payments",     label: "Payment Ledger",          col: "sku",    hasLot: true },
+  { tableName: "stage_debits",       label: "Payment Debits",          col: "sku",    hasLot: true },
+  { tableName: "stage_rates",        label: "Payment Rates",           col: "sku",    hasLot: false, guarded: true },
+  { tableName: "stage_extra_rates",  label: "Extra Payment Rates",     col: "sku",    hasLot: false, guarded: true },
+  { tableName: "pm_sku_resolution",  label: "EasyEcom SKU Mappings",   col: "cl_sku", hasLot: false, guarded: true },
+];
+
 // GET /operator/sku-management
 // Renders an EJS page with optional ?sku= query param
 router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
@@ -1882,20 +1904,11 @@ router.get("/sku-management", isAuthenticated, isOperator, async (req, res) => {
     }
 
     const results = await cache.fetchCached(`sku-${sku}`, async () => {
-      const tables = [
-        { tableName: "cutting_lots", label: "Cutting Lots" },
-        { tableName: "stitching_data", label: "Stitching Data" },
-        { tableName: "jeans_assembly_data", label: "Jeans Assembly Data" },
-        { tableName: "washing_data", label: "Washing Data" },
-        { tableName: "washing_in_data", label: "Washing In Data" },
-        { tableName: "finishing_data", label: "Finishing Data" },
-        { tableName: "rewash_requests", label: "Rewash Requests" }
-      ];
-
       const out = [];
-      for (const t of tables) {
+      for (const t of SKU_RENAME_TABLES) {
+        const lotCol = t.hasLot ? "lot_no" : "''";
         const [rows] = await pool.query(
-          `SELECT lot_no, sku FROM ${t.tableName} WHERE sku = ?`,
+          `SELECT ${lotCol} AS lot_no, \`${t.col}\` AS sku FROM \`${t.tableName}\` WHERE \`${t.col}\` = ? LIMIT 200`,
           [sku.trim()]
         );
         if (rows.length > 0) {
@@ -1931,30 +1944,38 @@ router.post("/sku-management/update", isAuthenticated, isOperator, async (req, r
       return res.status(400).json({ error: "Old and New SKU cannot be the same." });
     }
 
-    // List all tables that have `sku` columns
-    const tablesWithSku = [
-      "cutting_lots",
-      "stitching_data",
-      "jeans_assembly_data",
-      "washing_data",
-      "washing_in_data",
-      "finishing_data",
-      "rewash_requests"
-    ];
-
+    const from = oldSku.trim();
+    const to = newSku.trim();
     let totalUpdated = 0;
-    for (const table of tablesWithSku) {
+    const parts = [];
+    const leftovers = [];
+    for (const t of SKU_RENAME_TABLES) {
+      // Guarded tables have a UNIQUE key on the sku — IGNORE skips rows that would
+      // collide with an existing row for the new SKU instead of failing the rename.
+      const ignore = t.guarded ? "IGNORE " : "";
       const [result] = await pool.query(
-        `UPDATE ${table} SET sku = ? WHERE sku = ?`,
-        [newSku.trim(), oldSku.trim()]
+        `UPDATE ${ignore}\`${t.tableName}\` SET \`${t.col}\` = ? WHERE \`${t.col}\` = ?`,
+        [to, from]
       );
-      // result.affectedRows => how many rows got updated in that table
-      totalUpdated += result.affectedRows;
+      if (result.affectedRows > 0) {
+        totalUpdated += result.affectedRows;
+        parts.push(`${t.label}: ${result.affectedRows}`);
+      }
+      if (t.guarded) {
+        const [[left]] = await pool.query(
+          `SELECT COUNT(*) AS n FROM \`${t.tableName}\` WHERE \`${t.col}\` = ?`, [from]);
+        if (left.n > 0) leftovers.push(`${t.label}: ${left.n} row(s) kept the old SKU because "${to}" already has entries there`);
+      }
     }
+    // The search above caches per-SKU — drop both keys so results are fresh.
+    cache.delete(`sku-${from}`);
+    cache.delete(`sku-${to}`);
 
     // Return JSON success message instead of a redirect
     return res.json({
-      message: `SKU updated from "${oldSku}" to "${newSku}" (total ${totalUpdated} row(s) changed).`
+      message: `SKU updated from "${from}" to "${to}" (total ${totalUpdated} row(s) changed).`
+        + (parts.length ? ` — ${parts.join(', ')}` : '')
+        + (leftovers.length ? ` ⚠ ${leftovers.join('; ')} — review those manually.` : '')
     });
   } catch (err) {
     console.error("Error in POST /operator/sku-management/update:", err);
