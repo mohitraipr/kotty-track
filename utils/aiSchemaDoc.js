@@ -47,14 +47,19 @@ Stage order: cutting → stitching → [jeans_assembly → washing → washing_i
   batch_ref 'KT-DISP-<id>-<lot_no>', lot_no, status ENUM draft/blocked/pushed/
   confirmed/failed/cancelled ('blocked' = a size has no EasyEcom SKU mapping;
   'confirmed' = warehouse GRN'd it in EasyEcom), po_id, total_qty, created_at.
-- pm_lot_audit_log: admin corrections (flow_change/stage_reversal/qty_edit).
+- pm_lot_audit_log: admin corrections. EXACT columns: cutting_lot_id, lot_no,
+  action ('flow_change'/'stage_reversal'/'qty_edit'), detail (JSON),
+  performed_by_name, created_at.
 
 ## Payments (per-piece piecework)
-- stage_payments: the ledger of what workers earned (user_id worker, lot_no,
-  sku, stage, pieces, rate, amount, created_at). One row per approve handover.
-- stage_debits: deductions. stage_rates / stage_extra_rates: rate cards keyed
-  by (sku, stage). If a rate is missing the payment row may be pending.
-  DESCRIBE the table first if you need exact column names.
+- stage_payments (worker earnings, one row per approve handover). EXACT
+  columns: user_id, username, lot_no, sku, stage, qty, base_rate,
+  extra_amount, total_amount, rate_configured, status, paid_on, created_at.
+  Amount earned = total_amount; pieces = qty. rate_configured=0 means the
+  rate card was missing and the row is pending a rate.
+- stage_debits (deductions): user_id, username, lot_no, sku, stage, qty,
+  rate, amount, reason, status, created_at.
+- stage_rates / stage_extra_rates: rate cards keyed by (sku, stage).
 
 ## Sales & inventory (EasyEcom mirror — size-SKU space)
 ⚠ THE #1 MISTAKE: sales tables use SIZE-SKUs. A question about a STYLE
@@ -88,6 +93,28 @@ source='orders_api'); DOH/day-cover = SOH ÷ DRR.
 - users: id, username, is_active, role via roles table (users.role_id →
   roles.id, roles.name: 'operator','production_manager','finishing',
   'stitching_master', 'cutting_manager', …). DESCRIBE to confirm.
+
+## LOT DOSSIER PLAYBOOK — "tell me everything about lot X"
+When asked for details of a lot (any depth), follow this:
+1. RESOLVE: the number may be lot_no OR manual_lot_number —
+   SELECT ... FROM cutting_lots WHERE lot_no = 'X' OR manual_lot_number = 'X'.
+   ⚠ manual_lot_number is NOT unique (up to 7 lots share one). If several
+   match and the user named the cutter, filter by users.username; otherwise
+   list the matches (lot_no, style, cutter, date, pieces) and ask which one.
+2. After resolving the lot id, issue ALL of the remaining queries BATCHED in
+   ONE round (multiple run_sql calls together — do not go one at a time):
+   - cutting_lots row (style, fabric, flow, pieces, cutter, dates, remark)
+   - cutting_lot_sizes GROUP BY size_label
+   - cutting_lot_rolls (roll numbers + weights)
+   - each stage's events: approved/completed/rejected totals + first/last
+     dates + operators (stitching→finishing per the lot's flow)
+   - {stage}_data batches (who produced what, when)
+   - finishing_dispatches (destination, size, qty, dates)
+   - ee_dispatch_po + lines where lot_no matches (challan/PO/GRN status)
+   - stage_payments for the lot (stage, worker, pieces, amount)
+   - pm_lot_audit_log entries (admin corrections)
+3. Present as short titled sections in pipeline order, dates inline.
+   Skip empty sections with one line ("No dispatches yet").
 
 ## Conventions & gotchas
 - The session time zone is IST (+05:30): NOW() and all TIMESTAMP columns read
