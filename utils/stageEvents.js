@@ -296,7 +296,8 @@ async function recordEvent(conn, {
       .filter(l => l && !allowed.has(l));
     if (bad.length) {
       throw new Error(
-        `Invalid size label(s) [${bad.join(', ')}] not in cutting breakdown for lot ${cuttingLotId}`
+        `Invalid size label(s) [${bad.join(', ')}] not in cutting breakdown for lot ${cuttingLotId}. `
+        + `If this screen has been open a long time, refresh the page (Ctrl+Shift+R) and try again.`
       );
     }
   }

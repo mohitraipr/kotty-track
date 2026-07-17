@@ -148,6 +148,19 @@ app.use(flash());
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// HTML pages must never be cached: floor tabs stay open for days, and a
+// browser serving a stale page after a deploy posts outdated payloads to new
+// endpoints (seen live: washing-in completes failing with index size labels).
+// Static assets below keep their default caching — this only touches renders.
+app.use((req, res, next) => {
+  const render = res.render;
+  res.render = function (...args) {
+    res.set('Cache-Control', 'no-store, must-revalidate');
+    return render.apply(res, args);
+  };
+  next();
+});
+
 // Serve Static Files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
