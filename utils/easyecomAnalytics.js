@@ -54,7 +54,34 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
   const snapshotStart = new Date(window.start);
   snapshotStart.setHours(0, 0, 0, 0);
 
-  const params = [snapshotStart, window.start];
+  // selling_days = distinct in-stock snapshot days for the SKU. HOW it's computed
+  // depends on whether one SKU or all SKUs are queried — this is a real hot path
+  // (~1,900 single-SKU calls/day; it was 95% of all DB time before this branch):
+  //   • Single SKU  → a CORRELATED scalar subquery keyed on es.sku hits the
+  //     snapshot PRIMARY KEY (sku,…) directly: ~77ms vs ~5,700ms for the derived
+  //     table, which scanned ~433k rows + temp table + filesort on EVERY call to
+  //     compute all 27k SKUs and keep one.
+  //   • All SKUs    → the grouped derived table is correct (you genuinely need
+  //     every SKU's selling_days once), so keep it.
+  const params = [];
+  const sellingDaysExpr = sku
+    ? `COALESCE((
+         SELECT COUNT(DISTINCT s.snapshot_date)
+           FROM ee_inventory_daily_snapshot s
+          WHERE s.sku = es.sku AND s.snapshot_date >= ? AND s.qty > 0
+       ), 0)`
+    : 'COALESCE(MAX(sd.selling_days), 0)';
+  params.push(snapshotStart);
+
+  const sellingDaysJoin = sku ? '' : `
+    LEFT JOIN (
+      SELECT sku, COUNT(DISTINCT snapshot_date) AS selling_days
+      FROM ee_inventory_daily_snapshot
+      WHERE snapshot_date >= ? AND qty > 0
+      GROUP BY sku
+    ) sd ON sd.sku = es.sku`;
+  if (!sku) params.push(snapshotStart);
+
   let sql = `
     SELECT
       es.sku,
@@ -62,15 +89,9 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
       eo.marketplace_id,
       COALESCE(SUM(es.quantity), 0) AS order_count,
       MAX(eo.order_date) AS last_order_date,
-      COALESCE(MAX(sd.selling_days), 0) AS selling_days
+      ${sellingDaysExpr} AS selling_days
     FROM ee_suborders es
-    INNER JOIN ee_orders eo ON es.order_id = eo.order_id
-    LEFT JOIN (
-      SELECT sku, COUNT(DISTINCT snapshot_date) AS selling_days
-      FROM ee_inventory_daily_snapshot
-      WHERE snapshot_date >= ? AND qty > 0
-      GROUP BY sku
-    ) sd ON sd.sku = es.sku
+    INNER JOIN ee_orders eo ON es.order_id = eo.order_id${sellingDaysJoin}
     WHERE eo.order_date >= ?
       AND EXISTS (
         SELECT 1 FROM ee_replenishment_rules r
@@ -79,6 +100,7 @@ async function getOrderAggregates(pool, { periodKey = '1d', marketplaceId, wareh
           AND r.making_time_days IS NOT NULL
       )
   `;
+  params.push(window.start);
 
   if (sku) {
     sql += ' AND es.sku = ?';
