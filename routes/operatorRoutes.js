@@ -2420,50 +2420,343 @@ router.get("/system-health/api/check", isAuthenticated, isOperator, async (req, 
  * DOCUMENTATION PAGE
  **************************************************/
 
+// Comprehensive, practical feature guide rendered at /operator/documentation.
+// Each feature: { name, path, role, what (purpose + who), how ([steps]), gotchas }.
+// Keep this current when features change — it is the in-app "everything explained".
 const DOCUMENTATION = {
+  // ── The production pipeline (the heart of the system) ──────────────────
   production: [
-    { name: 'Cutting', desc: 'Create cutting lots, assign to stitching', path: '/cutting-manager/dashboard', role: 'cutting_manager' },
-    { name: 'Stitching', desc: 'Track stitching, assign to assembly/washing', path: '/stitchingdashboard', role: 'stitching_master' },
-    { name: 'Jeans Assembly', desc: 'Assemble jeans components', path: '/jeansassemblydashboard', role: 'jeans_assembly' },
-    { name: 'Washing', desc: 'Manage washing process', path: '/washingdashboard', role: 'washing' },
-    { name: 'Washing In', desc: 'Handle washed items, assign to finishing', path: '/washingin', role: 'washing_in' },
-    { name: 'Finishing', desc: 'Final finishing, QC, dispatch', path: '/finishingdashboard', role: 'finishing' },
+    {
+      name: 'Cutting', path: '/cutting-manager/dashboard', role: 'cutting_manager',
+      what: 'The start of every lot. The cutting manager records a cut: the style (SKU), fabric, roll weights, per-size piece counts, and a manual lot number, then hands the lot to stitching.',
+      how: [
+        'Open Create Lot, enter the style/SKU and the fabric rolls (weight used per roll).',
+        'Fill the per-size piece breakdown; a denim cutter\'s lots default to the denim flow, a hosiery cutter\'s to hosiery (set per cutter in Cutting Users).',
+        'Submit — the lot gets a lot number and appears downstream for stitching to take in.',
+      ],
+      gotchas: 'A lot can have several rows for the same size (multiple cutting patterns) — totals always sum them. "Remaining weight cannot exceed full weight" means a roll entry is off; the form now keeps your data on that error.',
+    },
+    {
+      name: 'Stitching', path: '/stitchingdashboard', role: 'stitching_master',
+      what: 'Stitching masters take approved pieces from cutting into their stitching pool, complete them, and (for denim) hand off to jeans assembly / washing.',
+      how: [
+        'Search a lot, tap Take to pull pieces in per size (this is the payment event — it pays the cutter).',
+        'Mark pieces done as they finish; reject defective ones with a reason.',
+        'Denim lots flow onward to assembly; hosiery lots go straight to finishing.',
+      ],
+      gotchas: 'Take-in is what pays the upstream worker — never edit the event tables by hand. Payload code is payment-critical.',
+    },
+    {
+      name: 'Jeans Assembly', path: '/jeansassemblydashboard', role: 'jeans_assembly',
+      what: 'Denim-only stage. Assembles the jeans components after stitching, before washing.',
+      how: ['Take stitched denim pieces in per size.', 'Complete or reject.', 'Completed pieces flow to washing.'],
+      gotchas: 'Only appears for denim-flow lots. Hosiery skips this entirely.',
+    },
+    {
+      name: 'Washing', path: '/washingdashboard', role: 'washing',
+      what: 'Denim-only. Sends assembled jeans out to the wash and tracks what went and came back.',
+      how: ['Take assembled pieces in.', 'Manage the wash; mark done when returned.', 'Rewash requests can be raised for pieces that come back wrong.'],
+      gotchas: 'Denim flow only. Rewash is a separate loop from reject.',
+    },
+    {
+      name: 'Washing In', path: '/washingin', role: 'washing_in',
+      what: 'Denim-only. Receives washed jeans back, completes them, and assigns to finishing.',
+      how: ['Take washed pieces in per size.', 'Mark done / reject, then assign to finishing.'],
+      gotchas: 'If "Invalid size label" appears when marking done, the page is stale — hard-refresh (Ctrl+Shift+R). HTML is now no-store to prevent this.',
+    },
+    {
+      name: 'Finishing', path: '/finishingdashboard', role: 'finishing',
+      what: 'The last production stage. Finishes pieces, then dispatches them — to the warehouse (which feeds EasyEcom and the marketplaces) or another destination.',
+      how: [
+        'Take completed pieces in, finish them.',
+        'On the Dispatch card, one tap sends all finished pieces of a lot; destination defaults to Warehouse.',
+        'A Warehouse dispatch creates that lot\'s challan + EasyEcom PO automatically and opens a printable challan.',
+      ],
+      gotchas: 'Dispatch is one lot = one challan = one PO. If a size has no EasyEcom SKU mapped, fix it inline in the dispatch card before dispatching.',
+    },
   ],
+
+  // ── Everything else, grouped ───────────────────────────────────────────
   features: [
-    { name: 'System Health', desc: 'Monitor database, features, and system status', path: '/operator/system-health', role: 'operator' },
-    { name: 'Usage Analytics', desc: 'Track page views by feature, daily trends, top routes. Auto-cleans data older than 7 days.', path: '/operator/usage-analytics', role: 'operator' },
-    { name: 'Fabric Manager', desc: 'Manage fabric invoices and rolls', path: '/fabric-manager/dashboard', role: 'fabric_manager' },
-    { name: 'Inventory', desc: 'Track inventory, out-of-stock alerts', path: '/easyecom/stock-market', role: 'operator' },
-    { name: 'Returns', desc: 'Process customer returns, refunds', path: '/returns/dashboard', role: 'operator' },
-    { name: 'PO Creator', desc: 'Create purchase orders', path: '/po-creator/dashboard', role: 'po_creator' },
-    { name: 'Challan', desc: 'Generate and manage challans', path: '/challandashboard', role: 'any' },
-    { name: 'Employees', desc: 'Manage employees, attendance, salaries', path: '/operator/supervisors', role: 'operator' },
-    { name: 'Product Links', desc: 'E-commerce platform links', path: '/product-links', role: 'operator/productviewer' },
-    { name: 'Mail Manager', desc: 'Zoho mail, bulk replies', path: '/mail-manager', role: 'mohitoperator' },
-    { name: 'Vendor Files', desc: 'Share files with vendors', path: '/vendor-files', role: 'vendorfiles' },
-    { name: 'Video Finder', desc: 'Search order videos', path: '/video-finder', role: 'any' },
-    { name: 'Catalog Upload', desc: 'Upload product catalogs', path: '/catalogupload', role: 'catalogUpload' },
+    // Dispatch & EasyEcom
+    {
+      name: 'Warehouse Transfers (EasyEcom PO)', path: '/finishingdashboard/ee-po', role: 'finishing',
+      what: 'The status board for finishing dispatches to the warehouse. Every Warehouse dispatch becomes a lot challan and an EasyEcom Purchase Order; this screen tracks each one and lets you reprint challans or fix blocked SKUs.',
+      how: [
+        'Dispatch a lot to Warehouse on the finishing screen — its challan + PO appear here automatically.',
+        'Watch each row\'s status: PO pending → At EasyEcom → Received (GRN).',
+        'Reprint any challan; resolve a blocked SKU from the dropdown of that style\'s real EasyEcom SKUs.',
+      ],
+      gotchas: 'We only ever CREATE a PO — we never write EasyEcom inventory. The warehouse team GRNs each challan in EasyEcom on physical receipt; that\'s what marks it Received. A 30-min background job sweeps strays and checks GRNs.',
+    },
+    // Lot tools
+    {
+      name: 'Lot Journey', path: '/operator/lot-journey', role: 'operator',
+      what: 'One lot\'s complete story on a single screen: every stage it passed through, the dates, who did each step, and an Activity log of every individual update — plus an Excel export.',
+      how: ['Type a lot number, manual lot number, or SKU.', 'See the stage rail (entered/exited per stage) and the full activity feed.', 'Download the activity as Excel if needed.'],
+      gotchas: 'Read-only. The best first stop for "where is this lot / what happened to it".',
+    },
+    {
+      name: 'Lot Admin', path: '/operator/lot-admin', role: 'operator',
+      what: 'Corrective tools for lots: change a lot\'s denim/hosiery flow, reverse a stage, or edit quantities. Every action is audited.',
+      how: ['Find the lot.', 'Apply a flow change / stage reversal / qty edit.', 'The change is written to the audit log (pm_lot_audit_log).'],
+      gotchas: 'These are the ONLY safe way to correct the append-only ledger — never edit *_events by hand. Everything here is logged.',
+    },
+    {
+      name: 'Edit Lots', path: '/operator/editcuttinglots', role: 'operator',
+      what: 'Edit a cutting lot\'s header details — SKU, fabric, remark, manual lot number, manual cutting date.',
+      how: ['Search the lot, change the fields, save.'],
+      gotchas: 'Changes the lot\'s identity fields, not its stage progress.',
+    },
+    {
+      name: 'Lot TAT', path: '/operator/lot-tat', role: 'operator',
+      what: 'Turnaround-time report: how many days each lot spent at each stage, with overdue flags. Exports to Excel.',
+      how: ['Open the report, optionally filter (overdue only, limit).', 'Read per-stage days; download Excel for the full matrix.'],
+      gotchas: 'Timing comes from the event ledger (first event in = entered; next stage\'s first event = exited).',
+    },
+    {
+      name: 'Lot Completion', path: '/operator/lot-completion', role: 'operator',
+      what: 'Shows how complete each lot is across the pipeline.',
+      how: ['Open and review completion by lot.'],
+      gotchas: '',
+    },
+    {
+      name: 'Rejected Lots', path: '/dashboard/rejected-lots', role: 'operator',
+      what: 'Lists lots/pieces rejected across stages so they can be reviewed.',
+      how: ['Open to see rejections by lot/stage.'],
+      gotchas: 'Reject (defective) is different from rewash (denim re-processing).',
+    },
+    {
+      name: 'Fix Approval', path: '/operator/correct-approval', role: 'operator',
+      what: 'Corrects mistaken stage approvals/take-ins that would otherwise be stuck in the ledger.',
+      how: ['Locate the bad approval, apply the correction.'],
+      gotchas: 'Use sparingly and deliberately — it touches payment-relevant events.',
+    },
+    {
+      name: 'Search', path: '/search-dashboard', role: 'operator',
+      what: 'Generic search across any table by a term — a developer/ops lookup tool.',
+      how: ['Pick a table, enter a term (?q=), read up to 500 rows.'],
+      gotchas: 'Not a lot journey — for lot history use Lot Journey.',
+    },
+    // Planning & analytics
+    {
+      name: 'Production Manager Dashboard', path: '/pm', role: 'production_manager',
+      what: 'The planning cockpit: what to cut next, based on sales rate (DRR), stock-on-hand (SOH), and in-production quantities. Priority table + KPI tiles.',
+      how: ['Review the priority list and suggested cuts.', 'Drill into a style; export recommendations as CSV.', 'Use the "Ask AI" button to query the data in plain language.'],
+      gotchas: 'DRR/SOH come from the nightly EasyEcom pull. The freshness banner shows how current the data is.',
+    },
+    {
+      name: 'Kotty Analyst (AI)', path: '/operator/ai', role: 'operator / production_manager',
+      what: 'Ask questions about production, sales, stock, or payments in plain language. The AI writes read-only SQL against the live database, answers with the numbers, and shows the exact queries behind every answer.',
+      how: [
+        'Type a question ("Where is lot ak5473?", "Top sellers this week?", "What did we pay finishing this month?").',
+        'Read the answer; expand the receipt rows to see the SQL and data it used.',
+        'Ask follow-ups — it keeps context.',
+      ],
+      gotchas: 'Read-only by design (three safety layers block any write). Powered by Claude + Gemini on Vertex AI. Trust the answers that show query receipts.',
+    },
+    {
+      name: 'Cutting Analysis', path: '/cutting-analysis', role: 'operator',
+      what: 'Analytics over cutting activity.',
+      how: ['Open to review cutting metrics.'],
+      gotchas: '',
+    },
+    {
+      name: 'Day Activity', path: '/operator/day-activity', role: 'operator',
+      what: 'What happened on the floor on a given day, across all stages.',
+      how: ['Open, pick a date, review activity by stage.'],
+      gotchas: '',
+    },
+    {
+      name: 'Stitching TAT', path: '/operator/stitching-tat', role: 'operator',
+      what: 'Turnaround analysis focused on stitching, per master, with a detail drill-down and Excel export.',
+      how: ['Open the summary, click a master for detail, export if needed.'],
+      gotchas: '',
+    },
+    {
+      name: 'Reports (Consumption / PIC / Size-PIC / Lot-Dept / Employees)', path: '/operator/dashboard/consumption/download', role: 'operator',
+      what: 'A family of Excel downloads: fabric consumption (with width/GSM, manual lot no, cutting date, type), in-production size PIC reports, lot-department counts, and employee exports.',
+      how: ['Open the relevant download link from the hub (Consumption, PIC Report, Size PIC Report, Lot Dept Counts, Employee Excel).', 'The Excel generates and downloads.'],
+      gotchas: 'These are report exports, not live screens.',
+    },
+    {
+      name: 'System Health', path: '/operator/system-health', role: 'operator',
+      what: 'Live status of the database, key features, and service checks.',
+      how: ['Open to see current health/uptime signals.'],
+      gotchas: '',
+    },
+    {
+      name: 'Usage Analytics', path: '/operator/usage-analytics', role: 'operator',
+      what: 'Page views by feature, daily trends, and top routes — who uses what.',
+      how: ['Open, optionally set a date range.'],
+      gotchas: 'Auto-cleans data older than 7 days.',
+    },
+    {
+      name: 'Security Logs', path: '/operator/security-logs', role: 'operator',
+      what: 'Access and audit trail — a security-oriented log view.',
+      how: ['Open to review access/audit entries.'],
+      gotchas: '',
+    },
+    // Inventory & sales
+    {
+      name: 'Out-of-stock / Inventory', path: '/easyecom/stock-market', role: 'operator',
+      what: 'Stock-on-hand and out-of-stock signals from the EasyEcom inventory mirror.',
+      how: ['Open to see SOH and OOS alerts by SKU.'],
+      gotchas: 'Data is the nightly EasyEcom snapshot, in EasyEcom size-SKU space.',
+    },
+    {
+      name: 'Inventory Hooks / Ops Logs', path: '/inventory-ops/logs', role: 'operator',
+      what: 'Logs of inventory operations / sync events.',
+      how: ['Open to inspect recent inventory-ops activity.'],
+      gotchas: '',
+    },
+    // Returns
+    {
+      name: 'Returns', path: '/returns/dashboard', role: 'operator',
+      what: 'Process customer returns and refunds (Shopify/marketplace lookups).',
+      how: ['Look up an order, process the return/refund.'],
+      gotchas: 'Marketplace returns also generate a credit note in EasyEcom on warehouse receipt (see getAllReturns).',
+    },
+    {
+      name: 'Return GRN', path: '/return-grn/dashboard', role: 'operator',
+      what: 'Goods-receipt for returned items coming back to the warehouse.',
+      how: ['Receive returned stock against the return.'],
+      gotchas: '',
+    },
+    {
+      name: 'Return Challans', path: '/return-challan', role: 'operator',
+      what: 'Generate and manage challans for returns.',
+      how: ['Create/seed a return challan as needed.'],
+      gotchas: '',
+    },
+    // Payments & people
+    {
+      name: 'Payments (Pending / Debits)', path: '/operator/payments/pending', role: 'operator',
+      what: 'The piece-work payment ledger: what each worker earned per stage, plus deductions (debits).',
+      how: ['Review pending payments; record debits where needed.'],
+      gotchas: 'Each stage take-in generates a payment row for the upstream worker. Cutting payments were stopped 2026-05-06 (business decision).',
+    },
+    {
+      name: 'Stage Rates / Stitch Rates', path: '/operator/payments/rates', role: 'operator',
+      what: 'The per-piece rate cards by SKU and stage that drive payments.',
+      how: ['Set/adjust rates per SKU per stage; Stitch Rates is the stitching-specific card.'],
+      gotchas: 'A missing rate leaves a payment pending until the rate exists. Renaming a SKU carries its rates (SKU Management handles this).',
+    },
+    {
+      name: 'Salaries / Attendance / Employees', path: '/operator/supervisors', role: 'operator / supervisor',
+      what: 'Employee management: attendance, salaries by department, and employee exports.',
+      how: ['Manage supervisors/employees; record attendance; download employee Excel.'],
+      gotchas: '',
+    },
+    // SKU & catalog
+    {
+      name: 'SKU Categories', path: '/operator/sku-categories', role: 'operator',
+      what: 'Manage SKU category groupings.',
+      how: ['Open to view/edit categories.'],
+      gotchas: '',
+    },
+    {
+      name: 'SKU Management (rename)', path: '/operator/sku-management', role: 'operator',
+      what: 'Rename a SKU everywhere at once. Search a SKU to see every table it appears in, then rename it across all of them — including the payment tables so rates never detach.',
+      how: ['Search the old SKU to see where it lives.', 'Enter the new SKU and Update — it rewrites cutting/stitching/…/finishing, reject, and the payment ledger + rates.'],
+      gotchas: 'Guarded tables (rates, mappings) use safe updates; if the new SKU already has entries there, the response tells you which to review. Never touches EasyEcom size-SKUs.',
+    },
+    {
+      name: 'Cutting Users (denim/hosiery)', path: '/operator/cutting-users', role: 'operator',
+      what: 'Set each cutter as denim or hosiery. This is the default flow their new lots follow (denim routes through assembly/washing; hosiery skips them).',
+      how: ['Open the list of cutters.', 'Toggle a cutter to Denim or Hosiery — it saves to their user record.'],
+      gotchas: 'Flipping a cutter first freezes their existing lots\' flow, so history/reports never change. Stored on the user (is_denim_cutter). Per-lot flow can still be overridden at cutting.',
+    },
+    {
+      name: 'Product Links', path: '/product-links', role: 'operator / productviewer',
+      what: 'The marketplace/e-commerce listing links per SKU.',
+      how: ['Open to view/manage platform links.'],
+      gotchas: '',
+    },
+    {
+      name: 'Catalog Upload', path: '/catalogupload', role: 'catalogUpload',
+      what: 'Upload product catalog files.',
+      how: ['Upload the catalog; it stores to Google Cloud Storage.'],
+      gotchas: '',
+    },
+    // Media & comms
+    {
+      name: 'VMS Recorder / AWB Uploads', path: '/vms', role: 'operator / vmsOperator',
+      what: 'Video Management: record packing videos and upload AWB sheets used to tie videos to orders.',
+      how: ['Record via VMS; upload AWBs via the VMS operator screen.'],
+      gotchas: 'Feeds the Video Finder and the mail auto-reply (video link on return queries).',
+    },
+    {
+      name: 'Video Finder', path: '/video-finder', role: 'any',
+      what: 'Search packing/order videos (e.g. to resolve a return dispute).',
+      how: ['Search by order/AWB to find the video.'],
+      gotchas: '',
+    },
+    {
+      name: 'Mail Manager', path: '/mail-manager', role: 'mohitoperator',
+      what: 'Zoho mail management and bulk replies; an auto-reply job answers return queries with the packing-video link.',
+      how: ['Manage inbox; send bulk replies.'],
+      gotchas: 'Auto-reply runs twice daily (9 AM / 9 PM IST).',
+    },
+    {
+      name: 'Vendor Files', path: '/vendor-files', role: 'vendorfiles',
+      what: 'Share files with vendors.',
+      how: ['Upload/share files for a vendor.'],
+      gotchas: '',
+    },
+    // Admin
+    {
+      name: 'Manage User Roles', path: '/admin/user-roles', role: 'admin',
+      what: 'Assign roles to users — controls what each person can access.',
+      how: ['Find a user, set their role(s).'],
+      gotchas: 'Roles gate every screen; give the least role needed. Avoid roles that can delete infrastructure.',
+    },
+    {
+      name: 'Fabric Manager', path: '/fabric-manager/dashboard', role: 'fabric_manager',
+      what: 'Manage fabric invoices and rolls (the raw material feeding cutting).',
+      how: ['Record fabric invoices and roll inventory.'],
+      gotchas: '',
+    },
+    {
+      name: 'PO Creator', path: '/po-creator/dashboard', role: 'po_creator',
+      what: 'Create purchase orders.',
+      how: ['Create a PO with line items.'],
+      gotchas: 'Distinct from the finishing→warehouse EasyEcom PO pipeline.',
+    },
+    {
+      name: 'Challan', path: '/challandashboard', role: 'any',
+      what: 'Generate and manage challans generally.',
+      how: ['Create/manage a challan.'],
+      gotchas: 'Warehouse-transfer challans are generated automatically by finishing dispatch (see Warehouse Transfers).',
+    },
   ],
+
   integrations: [
-    { name: 'EasyEcom', desc: 'Inventory and order sync via webhooks' },
-    { name: 'Shopify', desc: 'Order lookup, returns processing' },
-    { name: 'Zoho Mail', desc: 'Email management, bulk replies' },
-    { name: 'Google Cloud Storage', desc: 'File storage for catalogs' },
+    { name: 'EasyEcom (OMS)', desc: 'Orders, inventory and sales are mirrored nightly by a pull worker (POST /internal/run-pull), NOT webhooks. Finishing dispatches create Purchase Orders in EasyEcom; the warehouse GRNs them. Auth: /access/token + account X-API-Key, scoped by location_key (Faridabad / Delhi / primary).' },
+    { name: 'Shopify', desc: 'Order lookup and returns processing for the own-store channel.' },
+    { name: 'Zoho Mail', desc: 'Inbox management and bulk/auto replies (return queries get the packing-video link).' },
+    { name: 'Google Cloud Storage', desc: 'File storage — catalog uploads, migration artifacts, and lot images.' },
+    { name: 'Firebase Hosting', desc: 'Serves erpkotty.in in front of Cloud Run (the old load balancer was retired to save cost). The session cookie is named __session so Firebase\'s CDN forwards it.' },
+    { name: 'Vertex AI (Claude + Gemini)', desc: 'Powers Kotty Analyst — keyless via the project service account. Claude Sonnet primary, Gemini fallback.' },
   ],
+
   roles: [
-    { name: 'admin', desc: 'Full system access' },
-    { name: 'operator', desc: 'Production oversight, reports' },
-    { name: 'cutting_manager', desc: 'Create cutting lots' },
-    { name: 'stitching_master', desc: 'Stitching operations' },
-    { name: 'jeans_assembly', desc: 'Assembly operations' },
-    { name: 'washing', desc: 'Washing operations' },
-    { name: 'washing_in', desc: 'Washing-in operations' },
-    { name: 'finishing', desc: 'Finishing operations' },
-    { name: 'fabric_manager', desc: 'Fabric inventory' },
-    { name: 'supervisor', desc: 'Employee management' },
-    { name: 'po_creator', desc: 'Purchase orders' },
-    { name: 'productviewer', desc: 'View product links' },
-  ]
+    { name: 'admin', desc: 'Full system access, including user-role management.' },
+    { name: 'operator', desc: 'Production oversight, reports, and most operator tools on the hub.' },
+    { name: 'production_manager', desc: 'Planning cockpit (/pm), cut recommendations, Kotty Analyst.' },
+    { name: 'cutting_manager', desc: 'Create cutting lots.' },
+    { name: 'stitching_master', desc: 'Stitching take-in / complete / reject.' },
+    { name: 'jeans_assembly', desc: 'Jeans assembly stage (denim).' },
+    { name: 'washing', desc: 'Washing stage (denim).' },
+    { name: 'washing_in', desc: 'Washing-in stage (denim).' },
+    { name: 'finishing', desc: 'Finishing, dispatch, and warehouse transfers.' },
+    { name: 'fabric_manager', desc: 'Fabric invoices and rolls.' },
+    { name: 'supervisor', desc: 'Employee management, attendance, salaries.' },
+    { name: 'po_creator', desc: 'Purchase orders.' },
+    { name: 'productviewer', desc: 'View product links.' },
+    { name: 'catalogUpload', desc: 'Upload product catalogs.' },
+    { name: 'vendorfiles', desc: 'Share files with vendors.' },
+  ],
 };
 
 router.get("/documentation", isAuthenticated, isOperator, async (req, res) => {
