@@ -229,6 +229,30 @@
     color: white;
   }
 
+  /* Feature cards (practical guide) */
+  .doc-search {
+    width: 100%; padding: 12px 16px; margin-bottom: 20px;
+    border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+    font-size: var(--text-base); font-family: inherit; background: var(--bg-card); color: var(--text-primary);
+  }
+  .doc-search:focus { outline: none; border-color: var(--terracotta); box-shadow: 0 0 0 3px var(--terracotta-bg); }
+  .feat-grid { display: flex; flex-direction: column; gap: 14px; }
+  .feat-card {
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-xs);
+  }
+  .feat-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .feat-head .feat-name { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); }
+  .feat-what { color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
+  .feat-how { margin: 0 0 10px; padding-left: 20px; color: var(--text-secondary); line-height: 1.6; }
+  .feat-how li { margin: 3px 0; }
+  .feat-how-label, .feat-gotcha-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .feat-gotcha {
+    background: var(--terracotta-bg); border-left: 3px solid var(--terracotta);
+    border-radius: var(--radius-sm); padding: 8px 12px; font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.55;
+  }
+  .doc-empty { color: var(--text-muted); text-align: center; padding: 30px; display: none; }
+
   /* Tech Doc Blocks */
   .tech-block {
     background: var(--cream);
@@ -448,54 +472,40 @@
         </p>
       </div>
 
-      <!-- Production Departments -->
+      <%
+        // Shared card renderer: what it's for, the workflow, and gotchas.
+        function featCard(f) {
+          let h = '<div class="feat-card" data-feat="' + (f.name + ' ' + (f.what||'') + ' ' + (f.path||'') + ' ' + (f.role||'') + ' ' + ((f.how||[]).join(' ')) + ' ' + (f.gotchas||'')).replace(/"/g,'&quot;').toLowerCase() + '">';
+          h += '<div class="feat-head"><span class="feat-name">' + f.name + '</span>';
+          if (f.path) h += '<a href="' + f.path + '" class="path-link">' + f.path + '</a>';
+          if (f.role) h += '<span class="role-badge">' + f.role + '</span>';
+          h += '</div>';
+          if (f.what) h += '<p class="feat-what">' + f.what + '</p>';
+          if (f.how && f.how.length) { h += '<span class="feat-how-label">How to use it</span><ol class="feat-how">'; f.how.forEach(function(s){ h += '<li>' + s + '</li>'; }); h += '</ol>'; }
+          if (f.gotchas) h += '<div class="feat-gotcha"><span class="feat-gotcha-label">Good to know</span>' + f.gotchas + '</div>';
+          h += '</div>';
+          return h;
+        }
+      %>
+
+      <input type="text" id="docSearch" class="doc-search" placeholder="Search features — e.g. dispatch, payments, analyst, denim…" />
+
+      <!-- Production pipeline -->
       <div class="doc-section" id="production">
-        <h4><i class="bi bi-building"></i>Production Departments</h4>
-        <table class="doc-table">
-          <thead>
-            <tr>
-              <th>Department</th>
-              <th>Description</th>
-              <th>Path</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% docs.production.forEach(function(d) { %>
-            <tr>
-              <td><strong><%= d.name %></strong></td>
-              <td><%= d.desc %></td>
-              <td><a href="<%= d.path %>" class="path-link"><%= d.path %></a></td>
-              <td><span class="role-badge"><%= d.role %></span></td>
-            </tr>
-            <% }); %>
-          </tbody>
-        </table>
+        <h4><i class="bi bi-building"></i>Production Pipeline</h4>
+        <p style="color: var(--text-secondary); margin-top: -4px;">The six stages. Truth lives in an append-only event ledger; each stage's take-in pays the upstream worker. Denim runs the full chain, hosiery skips assembly/washing.</p>
+        <div class="feat-grid">
+          <% docs.production.forEach(function(d) { %><%- featCard(d) %><% }); %>
+        </div>
       </div>
 
       <!-- Features -->
       <div class="doc-section" id="features">
-        <h4><i class="bi bi-grid"></i>Features</h4>
-        <table class="doc-table">
-          <thead>
-            <tr>
-              <th>Feature</th>
-              <th>Description</th>
-              <th>Path</th>
-              <th>Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% docs.features.forEach(function(f) { %>
-            <tr>
-              <td><strong><%= f.name %></strong></td>
-              <td><%= f.desc %></td>
-              <td><a href="<%= f.path %>" class="path-link"><%= f.path %></a></td>
-              <td><span class="role-badge"><%= f.role %></span></td>
-            </tr>
-            <% }); %>
-          </tbody>
-        </table>
+        <h4><i class="bi bi-grid"></i>Features &amp; Tools</h4>
+        <div class="feat-grid">
+          <% docs.features.forEach(function(f) { %><%- featCard(f) %><% }); %>
+        </div>
+        <div class="doc-empty" id="docEmpty">No features match your search.</div>
       </div>
 
       <!-- Integrations -->
@@ -695,6 +705,24 @@
       }
     });
   });
+
+  // Client-side feature search — filters cards by name/what/how/gotchas/path/role.
+  (function(){
+    var box = document.getElementById('docSearch');
+    if (!box) return;
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.feat-card'));
+    var empty = document.getElementById('docEmpty');
+    box.addEventListener('input', function(){
+      var q = box.value.trim().toLowerCase();
+      var anyVisible = false;
+      cards.forEach(function(c){
+        var hit = !q || (c.getAttribute('data-feat') || '').indexOf(q) !== -1;
+        c.style.display = hit ? '' : 'none';
+        if (hit) anyVisible = true;
+      });
+      if (empty) empty.style.display = anyVisible ? 'none' : 'block';
+    });
+  })();
 </script>
 
 <%- include('partials/footer') %>
