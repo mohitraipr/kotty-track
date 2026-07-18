@@ -2651,9 +2651,15 @@ const DOCUMENTATION = {
     // SKU & catalog
     {
       name: 'SKU Categories', path: '/operator/sku-categories', role: 'operator',
-      what: 'Manage SKU category groupings.',
-      how: ['Open to view/edit categories.'],
-      gotchas: '',
+      what: 'The list of categories used when creating SKUs. Add a category here and it becomes selectable on the PO Creator\'s SKU-entry sheet.',
+      how: ['Open the page.', 'Add a category name (+ optional description); remove ones no longer used.'],
+      gotchas: 'Feeds the same sku_categories list the SKU-creation sheet validates against. Pairs with SKU Brands.',
+    },
+    {
+      name: 'SKU Brands', path: '/po-creator/operator/manage-brands', role: 'operator',
+      what: 'The list of brand codes used when creating SKUs — the exact counterpart of SKU Categories. SKUs on the PO Creator sheet are built from Brand Code + Category + Panel.',
+      how: ['Open the page.', 'Add a brand code (+ optional description). It\'s uppercased and stored.'],
+      gotchas: 'Feeds the sku_brand_codes list; the SKU-creation sheet\'s Brand Code dropdown validates against it, and uploads reject any code not in the list.',
     },
     {
       name: 'SKU Management (rename)', path: '/operator/sku-management', role: 'operator',
