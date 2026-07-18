@@ -435,14 +435,14 @@
                 <div class="col-md-8">
                   <label class="kotty-form-label"><i class="bi bi-barcode"></i><span>SKU Builder</span></label>
                   <div class="sku-builder" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
-                    <div style="flex: 1; min-width: 80px;">
+                    <div style="flex: 1.5; min-width: 120px;">
                       <label style="font-size: 0.7rem; color: #666;">Brand</label>
-                      <select id="skuBrand" class="kotty-input" style="padding: 8px;">
-                        <option value="KTT" selected>KTT</option>
-                        <option value="KOTTY">KOTTY</option>
-                        <option value="NW">NW</option>
-                        <option value="CC">CC</option>
-                      </select>
+                      <div style="display: flex; gap: 4px;">
+                        <select id="skuBrand" class="kotty-input" style="padding: 8px; flex: 1;">
+                          <option value="">Loading…</option>
+                        </select>
+                        <button type="button" id="btnAddBrand" class="kotty-btn" style="padding: 8px 12px; white-space: nowrap;" title="Add new brand">+</button>
+                      </div>
                     </div>
                     <div style="flex: 1; min-width: 100px;">
                       <label style="font-size: 0.7rem; color: #666;">Gender (optional)</label>
@@ -1391,6 +1391,32 @@ async function loadSkuCategories() {
   } catch (e) { console.error('Failed to load categories:', e); }
 }
 
+async function loadSkuBrands() {
+  try {
+    const res = await fetch('/cutting-manager/api/sku-brands');
+    const data = await res.json();
+    const select = document.getElementById('skuBrand');
+    var current = select.value;
+    select.textContent = '';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select...';
+    select.appendChild(placeholder);
+    (data.brands || []).forEach(function(b) {
+      var opt = document.createElement('option');
+      opt.value = b.code;
+      opt.textContent = b.code;
+      select.appendChild(opt);
+    });
+    // Preserve current pick if still present, else default to KTT when available.
+    if (current && [...select.options].some(function(o){ return o.value === current; })) {
+      select.value = current;
+    } else if ([...select.options].some(function(o){ return o.value === 'KTT'; })) {
+      select.value = 'KTT';
+    }
+  } catch (e) { console.error('Failed to load brands:', e); }
+}
+
 function updateSkuPreview() {
   var brand = document.getElementById('skuBrand').value;
   var gender = document.getElementById('skuGender').value;
@@ -1431,6 +1457,28 @@ document.getElementById('btnAddCategory').addEventListener('click', async functi
       updateSkuPreview();
     } else {
       alert(data.error || 'Failed to add category');
+    }
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+document.getElementById('btnAddBrand').addEventListener('click', async function() {
+  var newBrand = prompt('Enter new brand code (e.g., NW):');
+  if (!newBrand || !newBrand.trim()) return;
+  var brandCode = newBrand.trim().toUpperCase();
+  try {
+    var res = await fetch('/cutting-manager/api/sku-brands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: brandCode })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Brand "' + brandCode + '" added!');
+      await loadSkuBrands();
+      document.getElementById('skuBrand').value = brandCode;
+      updateSkuPreview();
+    } else {
+      alert(data.error || 'Failed to add brand');
     }
   } catch (e) { alert('Error: ' + e.message); }
 });
@@ -1496,6 +1544,7 @@ document.getElementById('lotForm').addEventListener('submit', function(e) {
 });
 
 loadSkuCategories();
+loadSkuBrands();
 
 <% if (typeof prefill !== 'undefined' && prefill) { %>
 // ── Pre-fill the create-lot form from a PM cut-plan assignment ("Start this lot").

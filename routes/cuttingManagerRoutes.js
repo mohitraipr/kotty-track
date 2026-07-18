@@ -842,6 +842,38 @@ router.post('/api/sku-categories', isAuthenticated, isCuttingManager, async (req
   }
 });
 
+// GET /cutting-manager/api/sku-brands - List active brand codes (feeds the SKU builder,
+// same sku_brand_codes list the PO Creator uses).
+router.get('/api/sku-brands', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const [brands] = await pool.query(
+      'SELECT id, code FROM sku_brand_codes WHERE is_active = 1 ORDER BY code');
+    return res.json({ success: true, brands });
+  } catch (error) {
+    console.error('Error loading SKU brands:', error);
+    return res.status(500).json({ error: 'Failed to load brands' });
+  }
+});
+
+// POST /cutting-manager/api/sku-brands - Add a new brand code.
+router.post('/api/sku-brands', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code || !code.trim()) {
+      return res.status(400).json({ error: 'Brand code is required' });
+    }
+    const brandCode = code.trim().toUpperCase();
+    await pool.query('INSERT INTO sku_brand_codes (code) VALUES (?)', [brandCode]);
+    return res.json({ success: true, message: 'Brand added' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Brand already exists' });
+    }
+    console.error('Error adding SKU brand:', error);
+    return res.status(500).json({ error: 'Failed to add brand' });
+  }
+});
+
 // GET /cutting-manager/assigned-cuts — cuts the PM has approved and assigned to THIS master.
 // Shows what to cut (per size) + suggested lots + fabric; links to the lot once cut.
 router.get('/assigned-cuts', isAuthenticated, isCuttingManager, async (req, res) => {
