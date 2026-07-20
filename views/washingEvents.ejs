@@ -1918,7 +1918,10 @@ async function doTakeFromForm(card) {
   });
 }
 
+let submitting = false;
 async function doTakeRequest(payload) {
+  if (submitting) return;   // block double-submit (double-click / slow response)
+  submitting = true;
   try {
     await api('POST', BASE + '/event/approve', { cutting_lot_id: currentLot.id, ...payload });
     const tt = (payload.sizes || []).reduce((a,s)=>a+s.pieces,0);
@@ -1926,6 +1929,7 @@ async function doTakeRequest(payload) {
     await refreshState();
     if (infoTab === 'work') loadHistory();
   } catch (err) { toast('Could not save: ' + err.message, 'error'); }
+  finally { submitting = false; }
 }
 
 function buildDoneCard(approve) {
@@ -2098,6 +2102,8 @@ async function doMarkDoneFromForm(card, approve) {
 }
 
 async function doMarkDoneRequest(parentId, completed_sizes, rejected_sizes, complete_remark, reject_reason) {
+  if (submitting) return;   // block double-submit
+  submitting = true;
   try {
     await api('POST', BASE + '/event/complete', {
       parent_event_id: parentId, completed_sizes, rejected_sizes,
@@ -2107,6 +2113,7 @@ async function doMarkDoneRequest(parentId, completed_sizes, rejected_sizes, comp
     await refreshState();
     if (infoTab === 'work') loadHistory();
   } catch (err) { toast('Could not save: ' + err.message, 'error'); }
+  finally { submitting = false; }
 }
 
 // ─── My Work / My Payments ───────────────────

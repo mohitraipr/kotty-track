@@ -259,8 +259,13 @@ async function getOpenApprovals(conn, stage, cuttingLotId, operatorId = null) {
  *   - parentEventId:   required for complete/reject, must be NULL for approve
  *   - remark:          optional per-event note
  *
- * Returns the new event id.
+ * Returns { eventId, deduped }. `deduped` is true when an identical event already
+ * existed in the last few seconds and no new row was inserted — callers MUST skip
+ * side effects (payments/debits) in that case. This is the server-side guard against
+ * a double-submitted take/approve creating duplicate events + duplicate payments.
  */
+const DEDUP_WINDOW_SECONDS = 12;
+
 async function recordEvent(conn, {
   stage, cuttingLotId, eventType, operatorId, sizes, parentEventId = null, remark = null,
 }) {
@@ -302,6 +307,35 @@ async function recordEvent(conn, {
     }
   }
 
+  // Idempotency guard: if the identical event (same lot, operator, type, parent,
+  // total, AND the same per-size breakdown) was just recorded, treat this as a
+  // double-submit — return the existing id and skip the insert. Matching the size
+  // rows too avoids suppressing a genuine second batch that happens to share a total.
+  const parentMatch = parentEventId === null ? 'parent_event_id IS NULL' : 'parent_event_id = ?';
+  const dupParams = [cuttingLotId, eventType, totalPieces, operatorId];
+  if (parentEventId !== null) dupParams.push(parentEventId);
+  const [recent] = await conn.query(
+    `SELECT id FROM ${events}
+      WHERE cutting_lot_id = ? AND event_type = ? AND pieces = ? AND operator_id = ?
+        AND ${parentMatch}
+        AND created_at >= (NOW() - INTERVAL ${DEDUP_WINDOW_SECONDS} SECOND)
+      ORDER BY id DESC`,
+    dupParams
+  );
+  const wantSizes = {};
+  for (const s of sizes) {
+    if (Number(s.pieces) > 0) wantSizes[normalizeSizeLabel(s.size_label)] = Number(s.pieces);
+  }
+  for (const cand of recent) {
+    const [existSizes] = await conn.query(
+      `SELECT size_label, pieces FROM ${eventSizes} WHERE event_id = ?`, [cand.id]);
+    const gotSizes = {};
+    for (const r of existSizes) gotSizes[normalizeSizeLabel(r.size_label)] = Number(r.pieces);
+    const same = Object.keys(wantSizes).length === Object.keys(gotSizes).length
+      && Object.entries(wantSizes).every(([k, v]) => gotSizes[k] === v);
+    if (same) return { eventId: cand.id, deduped: true };
+  }
+
   const [result] = await conn.query(
     `
       INSERT INTO ${events}
@@ -322,7 +356,7 @@ async function recordEvent(conn, {
     );
   }
 
-  return eventId;
+  return { eventId, deduped: false };
 }
 
 module.exports = {

@@ -90,6 +90,9 @@ function recordStub(cutLabels) {
       if (/FROM cutting_lot_sizes WHERE cutting_lot_id/.test(sql)) {
         return [cutLabels.map(l => ({ size_label: l }))];
       }
+      // Idempotency dedup lookup — no recent duplicate in this stub.
+      if (/SELECT id FROM \w+_events\s+WHERE cutting_lot_id/.test(sql)) return [[]];
+      if (/SELECT size_label, pieces FROM \w+_event_sizes WHERE event_id/.test(sql)) return [[]];
       if (/^INSERT INTO \w+_events/.test(sql.trim())) return [{ insertId: 123 }];
       if (/^INSERT INTO \w+_event_sizes/.test(sql.trim())) return [{}];
       throw new Error('unexpected query: ' + sql);
@@ -112,10 +115,32 @@ test('recordEvent: rejects size labels not in the cutting breakdown (blocks junk
 
 test('recordEvent: accepts labels that match the cutting breakdown', async () => {
   const conn = recordStub(['26', '28', '30', '32', '34']);
-  const id = await recordEvent(conn, {
+  const res = await recordEvent(conn, {
     stage: 'stitching', cuttingLotId: 1, eventType: 'approve', operatorId: 9,
     sizes: [{ size_label: '26', pieces: 132 }, { size_label: '28', pieces: 132 }],
   });
-  assert.strictEqual(id, 123);
+  assert.deepStrictEqual(res, { eventId: 123, deduped: false });
   assert.ok(conn.q.some(x => /INSERT INTO \w+_event_sizes/.test(x.sql)));
+});
+
+test('recordEvent: returns deduped when an identical event was just recorded', async () => {
+  const q = [];
+  const conn = {
+    q,
+    async query(sql) {
+      q.push(sql.replace(/\s+/g, ' ').trim());
+      if (/FROM cutting_lot_sizes/.test(sql)) return [[{ size_label: '26' }, { size_label: '28' }]];
+      if (/SELECT id FROM \w+_events\s+WHERE cutting_lot_id/.test(sql)) return [[{ id: 555 }]];
+      if (/SELECT size_label, pieces FROM \w+_event_sizes WHERE event_id/.test(sql)) {
+        return [[{ size_label: '26', pieces: 132 }, { size_label: '28', pieces: 132 }]];
+      }
+      throw new Error('should not INSERT when deduped: ' + sql);
+    },
+  };
+  const res = await recordEvent(conn, {
+    stage: 'stitching', cuttingLotId: 1, eventType: 'approve', operatorId: 9,
+    sizes: [{ size_label: '26', pieces: 132 }, { size_label: '28', pieces: 132 }],
+  });
+  assert.deepStrictEqual(res, { eventId: 555, deduped: true });
+  assert.ok(!q.some(x => /INSERT INTO/.test(x)), 'must not insert a duplicate');
 });
