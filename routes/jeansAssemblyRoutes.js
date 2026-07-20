@@ -1311,7 +1311,7 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
     let rejectEventId  = null;
 
     if (cleanSizes.length) {
-      approveEventId = await stageEvents.recordEvent(conn, {
+      const approveRes = await stageEvents.recordEvent(conn, {
         stage: STAGE_JA,
         cuttingLotId: lotId,
         eventType: 'approve',
@@ -1320,9 +1320,16 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
         parentEventId: null,
         remark: remark ? String(remark).trim() : null,
       });
+      // Idempotency: identical take-in seconds ago = double-submit; don't pay
+      // the stitcher again.
+      if (approveRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, event_id: approveRes.eventId, total_pieces: 0 });
+      }
+      approveEventId = approveRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE_JA,
         cuttingLotId: lotId,
         eventType: 'reject',
@@ -1330,7 +1337,7 @@ router.post('/event/approve', isAuthenticated, isJeansAssemblyMaster, async (req
         sizes: cleanRejected,
         parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     await conn.commit();
@@ -1465,7 +1472,7 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
     let rejectEventId = null;
 
     if (cleanCompleted.length) {
-      completeEventId = await stageEvents.recordEvent(conn, {
+      const completeRes = await stageEvents.recordEvent(conn, {
         stage: STAGE_JA,
         cuttingLotId: parent.cutting_lot_id,
         eventType: 'complete',
@@ -1474,9 +1481,14 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
         parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
       });
+      if (completeRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, complete_event_id: completeRes.eventId, completed_total: 0 });
+      }
+      completeEventId = completeRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE_JA,
         cuttingLotId: parent.cutting_lot_id,
         eventType: 'reject',
@@ -1484,7 +1496,7 @@ router.post('/event/complete', isAuthenticated, isJeansAssemblyMaster, async (re
         sizes: cleanRejected,
         parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     // Dual-write to jeans_assembly_data for downstream compatibility

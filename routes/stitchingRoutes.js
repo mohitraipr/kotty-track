@@ -293,7 +293,7 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
     let rejectEventId  = null;
 
     if (cleanSizes.length) {
-      approveEventId = await stageEvents.recordEvent(conn, {
+      const approveRes = await stageEvents.recordEvent(conn, {
         stage: STAGE,
         cuttingLotId: lotId,
         eventType: 'approve',
@@ -302,9 +302,15 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
         parentEventId: null,
         remark: remark ? String(remark).trim() : null,
       });
+      // Idempotency: identical take-in seconds ago = a double-submitted click.
+      if (approveRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, event_id: approveRes.eventId, total_pieces: 0 });
+      }
+      approveEventId = approveRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE,
         cuttingLotId: lotId,
         eventType: 'reject',
@@ -312,7 +318,7 @@ router.post('/event/approve', isAuthenticated, isStitchingMaster, async (req, re
         sizes: cleanRejected,
         parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     await conn.commit();
@@ -438,7 +444,7 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
     let rejectEventId = null;
 
     if (cleanCompleted.length) {
-      completeEventId = await stageEvents.recordEvent(conn, {
+      const completeRes = await stageEvents.recordEvent(conn, {
         stage: STAGE,
         cuttingLotId: parent.cutting_lot_id,
         eventType: 'complete',
@@ -447,9 +453,16 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
         parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
       });
+      // Idempotency: identical mark-done seconds ago = double-submit; don't
+      // re-record or create a duplicate stitching_data batch.
+      if (completeRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, complete_event_id: completeRes.eventId, completed_total: 0 });
+      }
+      completeEventId = completeRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE,
         cuttingLotId: parent.cutting_lot_id,
         eventType: 'reject',
@@ -457,7 +470,7 @@ router.post('/event/complete', isAuthenticated, isStitchingMaster, async (req, r
         sizes: cleanRejected,
         parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     // Dual-write: also append a stitching_data row for the COMPLETED pieces

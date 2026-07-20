@@ -1161,7 +1161,7 @@ router.post('/event/approve', isAuthenticated, isWashingMaster, async (req, res)
     let rejectEventId  = null;
 
     if (cleanSizes.length) {
-      approveEventId = await stageEvents.recordEvent(conn, {
+      const approveRes = await stageEvents.recordEvent(conn, {
         stage: STAGE_W,
         cuttingLotId: lotId,
         eventType: 'approve',
@@ -1170,9 +1170,16 @@ router.post('/event/approve', isAuthenticated, isWashingMaster, async (req, res)
         parentEventId: null,
         remark: remark ? String(remark).trim() : null,
       });
+      // Idempotency: identical take-in seconds ago = double-submit; don't pay
+      // the assembler again.
+      if (approveRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, event_id: approveRes.eventId, total_pieces: 0 });
+      }
+      approveEventId = approveRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE_W,
         cuttingLotId: lotId,
         eventType: 'reject',
@@ -1180,7 +1187,7 @@ router.post('/event/approve', isAuthenticated, isWashingMaster, async (req, res)
         sizes: cleanRejected,
         parentEventId: null,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     await conn.commit();
@@ -1295,18 +1302,23 @@ router.post('/event/complete', isAuthenticated, isWashingMaster, async (req, res
 
     let completeEventId = null, rejectEventId = null;
     if (cleanCompleted.length) {
-      completeEventId = await stageEvents.recordEvent(conn, {
+      const completeRes = await stageEvents.recordEvent(conn, {
         stage: STAGE_W, cuttingLotId: parent.cutting_lot_id, eventType: 'complete',
         operatorId: userId, sizes: cleanCompleted, parentEventId: parentId,
         remark: complete_remark ? String(complete_remark).trim() : null,
       });
+      if (completeRes.deduped) {
+        await conn.commit();
+        return res.json({ success: true, deduped: true, complete_event_id: completeRes.eventId, completed_total: 0 });
+      }
+      completeEventId = completeRes.eventId;
     }
     if (cleanRejected.length) {
-      rejectEventId = await stageEvents.recordEvent(conn, {
+      rejectEventId = (await stageEvents.recordEvent(conn, {
         stage: STAGE_W, cuttingLotId: parent.cutting_lot_id, eventType: 'reject',
         operatorId: userId, sizes: cleanRejected, parentEventId: parentId,
         remark: reject_reason ? String(reject_reason).trim() : null,
-      });
+      })).eventId;
     }
 
     // Dual-write to washing_data for downstream washing_in compatibility
