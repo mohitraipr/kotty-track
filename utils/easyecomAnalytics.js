@@ -21,16 +21,25 @@ function sanitizeWarehouseIds(warehouseIds) {
     .filter((id) => Number.isFinite(id));
 }
 
+// Single-flight, TTL cache. Caching the in-flight PROMISE (not just the resolved
+// value) means N concurrent callers with a cold/expired key share ONE computation
+// instead of each launching the expensive query — this is what prevents the
+// thundering-herd DB saturation when several dashboard loads land at once.
 async function memoize(key, ttlMs, fetcher) {
   const entry = cache.get(key);
   const now = Date.now();
   if (entry && now - entry.time < ttlMs) {
-    return entry.value;
+    return entry.promise;
   }
-
-  const value = await fetcher();
-  cache.set(key, { value, time: now });
-  return value;
+  const promise = Promise.resolve().then(fetcher);
+  cache.set(key, { promise, time: now });
+  // On failure, drop the cached rejection so the next call retries instead of
+  // serving the error for the whole TTL.
+  promise.catch(() => {
+    const cur = cache.get(key);
+    if (cur && cur.promise === promise) cache.delete(key);
+  });
+  return promise;
 }
 
 function resolvePeriod(periodKey = '1d') {
@@ -715,7 +724,18 @@ async function computeCleanDayMetrics(pool, windowStart) {
   return metrics;
 }
 
-async function getCuttingRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
+// Public entry — single-flight, 5-min cached. The full company-wide computation
+// (a ~24s query on a good day, 300s+ under load) previously ran on EVERY dashboard
+// load and stacked under concurrency, saturating the DB. Now the first caller
+// computes and everyone else (concurrent + within the TTL) shares the result.
+// Keyed on shadow so the shadow-diff path is never served a plain-mode cache.
+async function getCuttingRecommendations(pool, opts = {}) {
+  const { periodKey = '30d', shadow = false } = opts;
+  return memoize(`cutrecs:${periodKey}:${shadow ? 'shadow' : 'plain'}`, CACHE_TTL_MS,
+    () => computeCuttingRecommendations(pool, { periodKey, shadow }));
+}
+
+async function computeCuttingRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
   // Resolve window for snapshot-based selling days
   const presetHours = PERIOD_PRESETS[periodKey]?.hours
     || (Number(String(periodKey).replace(/[^0-9]/g, '')) * 24)

@@ -70,11 +70,23 @@ async function loadResolutionMap(pool) {
   return new Map(resolution.map((r) => [U(r.cl_sku) + '||' + U(r.size_label), U(r.size_sku)]));
 }
 
+// The distinct-SKU scan over ee_suborders (~560k rows) is expensive and its result
+// only changes with the nightly pull. Single-flight + short TTL cache so concurrent
+// dashboard loads share one scan instead of each triggering a full-table read.
+let _canonCache = null; // { promise, time }
+const CANON_TTL_MS = 5 * 60 * 1000;
 async function loadCanonSet(pool) {
-  const [canonRows] = await pool.query(
+  const scan = () => pool.query(
     `SELECT DISTINCT UPPER(sku) AS sku FROM ee_suborders WHERE sku IS NOT NULL AND sku <> ''`
-  );
-  return new Set(canonRows.map((r) => r.sku));
+  ).then(([canonRows]) => new Set(canonRows.map((r) => r.sku)));
+  // No cross-call cache under test — unit tests call this with different mock pools.
+  if (process.env.NODE_ENV === 'test') return scan();
+  const now = Date.now();
+  if (_canonCache && now - _canonCache.time < CANON_TTL_MS) return _canonCache.promise;
+  const promise = scan();
+  _canonCache = { promise, time: now };
+  promise.catch(() => { if (_canonCache && _canonCache.promise === promise) _canonCache = null; });
+  return promise;
 }
 
 // Returns { onOrder: Map<size_sku, qty>, unresolved: { lots, pieces } }.
