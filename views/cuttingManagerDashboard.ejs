@@ -471,6 +471,9 @@
                   </div>
                   <input type="hidden" id="sku" name="sku" required />
                   <div id="skuPreview" style="margin-top: 8px; font-size: 0.9rem; color: #16a34a; font-weight: 600;">Preview: <span id="skuPreviewText">--</span></div>
+                  <div id="skuBlockWarn" style="display:none; margin-top:8px; padding:8px 12px; border-radius:8px; background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; font-size:0.85rem; font-weight:600;">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <span id="skuBlockWarnText"></span>
+                  </div>
                 </div>
                 <div class="col-md-4">
                   <label for="fabric_type_search" class="kotty-form-label"><i class="bi bi-hexagon-fill"></i><span data-i18n="fabricTypeLabel">Fabric Type</span></label>
@@ -1427,10 +1430,35 @@ function updateSkuPreview() {
     var sku = (brand + gender + category + code).toUpperCase();
     document.getElementById('skuPreviewText').textContent = sku;
     document.getElementById('sku').value = sku;
+    checkStyleBlocked(sku);
   } else {
     document.getElementById('skuPreviewText').textContent = '--';
     document.getElementById('sku').value = '';
+    setBlockWarn('');
   }
+}
+
+// High-ageing block: warn (and hard-stop on submit) if this style is blocked from
+// cutting. The server enforces it too; this is the earlier, friendlier signal.
+var skuBlocked = false;
+var _blockTimer = null;
+function setBlockWarn(msg) {
+  skuBlocked = !!msg;
+  var box = document.getElementById('skuBlockWarn');
+  document.getElementById('skuBlockWarnText').textContent = msg || '';
+  box.style.display = msg ? 'block' : 'none';
+}
+function checkStyleBlocked(sku) {
+  clearTimeout(_blockTimer);
+  _blockTimer = setTimeout(async function() {
+    try {
+      var r = await fetch('/cutting-manager/api/blocked?style=' + encodeURIComponent(sku));
+      var j = await r.json();
+      // Only act if this is still the current sku (user may have typed on).
+      if (document.getElementById('sku').value !== sku) return;
+      setBlockWarn(j.blocked ? (j.reason || 'This style is blocked from cutting.') : '');
+    } catch (e) { /* fail-open: never block the UI on a check error */ setBlockWarn(''); }
+  }, 250);
 }
 
 document.getElementById('skuBrand').addEventListener('change', updateSkuPreview);
@@ -1488,6 +1516,13 @@ document.getElementById('lotForm').addEventListener('submit', function(e) {
   if (!sku) {
     e.preventDefault();
     alert('Please complete the SKU builder (Brand + Category + Code required)');
+    return false;
+  }
+  // High-ageing hard stop (server enforces this too; this avoids a wasted round-trip).
+  if (skuBlocked) {
+    e.preventDefault();
+    var warn = document.getElementById('skuBlockWarn');
+    if (warn) warn.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return false;
   }
 });

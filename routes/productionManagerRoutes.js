@@ -1266,4 +1266,49 @@ router.get('/resolver/status', async (req, res) => {
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ── High Ageing (block cutting of slow-moving styles) ───────────────────────
+const highAgeing = require('../utils/highAgeing');
+
+// GET /pm/high-ageing — the tab data: enforcement state + flagged/blocked styles.
+router.get('/high-ageing', async (req, res) => {
+  try { res.json({ ok: true, ...(await highAgeing.getHighAgeingView(pool)) }); }
+  catch (err) { console.error('[pm] high-ageing view error', err); res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /pm/high-ageing/toggle { enabled } — global enforcement on/off.
+router.post('/high-ageing/toggle', async (req, res) => {
+  try {
+    await highAgeing.setBlockEnforced(pool, req.body.enabled === true || req.body.enabled === 'true');
+    res.json({ ok: true, enforced: await highAgeing.isBlockEnforced(pool) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /pm/high-ageing/add { style, reason? } — manually block a style.
+router.post('/high-ageing/add', async (req, res) => {
+  try {
+    const style = await highAgeing.upsertDecision(pool, req.body.style, 'manual_block', req.body.reason, req.session.user);
+    res.json({ ok: true, style });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// POST /pm/high-ageing/allow { style, reason? } — exempt a style from the block.
+router.post('/high-ageing/allow', async (req, res) => {
+  try {
+    const style = await highAgeing.upsertDecision(pool, req.body.style, 'allow', req.body.reason, req.session.user);
+    res.json({ ok: true, style });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// POST /pm/high-ageing/reblock { style } — remove the allow exception (auto/manual re-applies).
+router.post('/high-ageing/reblock', async (req, res) => {
+  try { res.json({ ok: true, style: await highAgeing.removeDecision(pool, req.body.style, 'allow') }); }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /pm/high-ageing/manual/:style — remove a manual block.
+router.delete('/high-ageing/manual/:style', async (req, res) => {
+  try { res.json({ ok: true, style: await highAgeing.removeDecision(pool, req.params.style, 'manual_block') }); }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;
