@@ -159,6 +159,51 @@
     </div>
   </section>
 
+  <!-- HIGH AGEING -->
+  <section class="pm-panel" data-panel="ageing">
+    <div class="pm-card">
+      <div class="pm-card-head">
+        <h2>High Ageing — blocked from cutting</h2>
+        <div class="pm-toolbar">
+          <label style="font-size:0.8rem; color: var(--text-2); display:flex; align-items:center; gap:6px; cursor:pointer;">
+            Enforce block
+            <input type="checkbox" id="ageingEnforce" style="width:18px; height:18px; cursor:pointer;">
+          </label>
+          <button class="pm-btn" id="ageingRefresh">Refresh</button>
+        </div>
+      </div>
+      <div class="pm-card-body">
+        <p style="font-size:0.8rem; color: var(--text-2); margin:0 0 0.75rem;">
+          A style is high-ageing when its stock will take more than <strong>90 days</strong> to sell at the
+          current rate, or it has stock with no recent sales. When <em>Enforce block</em> is on, cutting
+          masters cannot create a lot for a <strong>Blocked</strong> style. Use <em>Allow</em> to let one
+          through, or add a style manually below.
+        </p>
+        <div class="pm-toolbar" style="margin-bottom:0.75rem; gap:6px;">
+          <input type="text" id="ageingAddStyle" placeholder="Style code e.g. KTTWOMENSPANT981" style="flex:1; max-width:340px; padding:7px 10px;">
+          <input type="text" id="ageingAddReason" placeholder="Reason (optional)" style="flex:1; max-width:240px; padding:7px 10px;">
+          <button class="pm-btn" id="ageingAddBtn">Block this style</button>
+        </div>
+        <div class="pm-table-wrap">
+          <table class="pm-table" id="ageingTable">
+            <thead>
+              <tr>
+                <th>Style</th>
+                <th>SOH</th>
+                <th>DRR</th>
+                <th>Days of cover</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CONFIG -->
   <section class="pm-panel" data-panel="config">
     <div class="pm-card">
@@ -352,7 +397,7 @@ async function loadSummary() {
 loadSummary();
 
 // Panels are now driven from the sidebar Tools group via the URL hash (#dead, #lots, …).
-const TOOL_VIEWS = ['dead', 'lots', 'pos', 'config'];
+const TOOL_VIEWS = ['dead', 'lots', 'pos', 'ageing', 'config'];
 function viewFromHash() { const h = (location.hash || '').replace('#', '').toLowerCase(); return TOOL_VIEWS.includes(h) ? h : 'cutting'; }
 function showPanel(key) {
   $$('.pm-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === key));
@@ -364,9 +409,68 @@ function showPanel(key) {
   else if (key === 'dead') loadDead();
   else if (key === 'lots') loadLots();
   else if (key === 'pos') loadPos();
+  else if (key === 'ageing') loadAgeing();
   else if (key === 'config') loadConfig();
 }
 window.addEventListener('hashchange', () => showPanel(viewFromHash()));
+
+// ── HIGH AGEING ─────────────────────────────────────────────────
+async function loadAgeing() {
+  const tbody = $('ageingTable').querySelector('tbody');
+  tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-3);">Loading…</td></tr>';
+  try {
+    const r = await fetch('/pm/high-ageing');
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'failed');
+    $('ageingEnforce').checked = !!j.enforced;
+    const rows = j.styles || [];
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-3);">No high-ageing styles. Nothing blocked.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(s => {
+      const doc = s.days_of_cover == null ? '∞ (no sales)' : (s.days_of_cover + 'd');
+      const allowed = s.status === 'Allowed';
+      const statusPill = allowed
+        ? '<span style="color:#b45309;font-weight:600;">Allowed</span>'
+        : '<span style="color:#b91c1c;font-weight:600;">Blocked</span>';
+      let action;
+      if (allowed) action = '<button class="pm-btn" data-act="reblock" data-style="' + esc(s.style) + '">Re-block</button>';
+      else if (s.source === 'Manual') action = '<button class="pm-btn" data-act="remove" data-style="' + esc(s.style) + '">Remove</button>';
+      else action = '<button class="pm-btn" data-act="allow" data-style="' + esc(s.style) + '">Allow</button>';
+      return '<tr><td><strong>' + esc(s.style) + '</strong></td><td>' + (s.soh == null ? '—' : s.soh) +
+        '</td><td>' + (s.drr == null ? '—' : s.drr) + '</td><td>' + doc + '</td><td>' + esc(s.source) +
+        '</td><td>' + statusPill + '</td><td>' + action + '</td></tr>';
+    }).join('');
+  } catch (e) { tbody.innerHTML = '<tr><td colspan="7" style="color:#b91c1c;">Could not load: ' + esc(e.message) + '</td></tr>'; }
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function ageingPost(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const j = await r.json(); if (!j.ok) throw new Error(j.error || 'failed'); return j;
+}
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('#ageingTable button[data-act]');
+  if (!btn) return;
+  const style = btn.dataset.style, act = btn.dataset.act;
+  try {
+    if (act === 'allow') await ageingPost('/pm/high-ageing/allow', { style });
+    else if (act === 'reblock') await ageingPost('/pm/high-ageing/reblock', { style });
+    else if (act === 'remove') { await fetch('/pm/high-ageing/manual/' + encodeURIComponent(style), { method: 'DELETE' }); }
+    await loadAgeing();
+  } catch (err) { alert('Failed: ' + err.message); }
+});
+document.getElementById('ageingEnforce').addEventListener('change', async (e) => {
+  try { await ageingPost('/pm/high-ageing/toggle', { enabled: e.target.checked }); }
+  catch (err) { alert('Failed: ' + err.message); e.target.checked = !e.target.checked; }
+});
+document.getElementById('ageingRefresh').addEventListener('click', loadAgeing);
+document.getElementById('ageingAddBtn').addEventListener('click', async () => {
+  const style = $('ageingAddStyle').value.trim();
+  if (!style) { alert('Enter a style code'); return; }
+  try {
+    await ageingPost('/pm/high-ageing/add', { style, reason: $('ageingAddReason').value.trim() || null });
+    $('ageingAddStyle').value = ''; $('ageingAddReason').value = '';
+    await loadAgeing();
+  } catch (err) { alert('Failed: ' + err.message); }
+});
 
 // ── CUTTING TODAY ───────────────────────────────────────────────
 async function loadCutting() {

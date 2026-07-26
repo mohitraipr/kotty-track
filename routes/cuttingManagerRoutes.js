@@ -10,6 +10,7 @@ const PDFDocument = require('pdfkit');
 const generateLotNumber = require('../utils/generateLotNumber'); // Import the utility function
 const { cache } = require('../utils/cache');
 const { allowAdhocCuttingEntry, isKnownFabricType } = require('../utils/storeSettings');
+const highAgeing = require('../utils/highAgeing');
 
 // Multer setup for image uploads
 const storage = multer.diskStorage({
@@ -300,6 +301,14 @@ router.post(
     if (!lot_no || !sku || !fabric_type || !manual_lot_number || !manual_lot_number.trim()) {
       return fail('Lot No., SKU, Fabric Type and Manual Lot Number are required.');
     }
+
+    // High-ageing gate: if production-planning enforcement is on and this style is
+    // high-ageing (or manually blocked), don't cut more of it. Fail-open on any
+    // error so a check glitch never halts the floor.
+    try {
+      const block = await highAgeing.isStyleBlocked(pool, sku);
+      if (block.blocked) return fail(block.reason);
+    } catch (e) { console.error('[cutting] high-ageing check failed (allowing):', e.message); }
 
     try {
       const userId = req.session.user.id;
@@ -871,6 +880,18 @@ router.post('/api/sku-brands', isAuthenticated, isCuttingManager, async (req, re
     }
     console.error('Error adding SKU brand:', error);
     return res.status(500).json({ error: 'Failed to add brand' });
+  }
+});
+
+// GET /cutting-manager/api/blocked?style=... — is this style blocked from cutting
+// (high-ageing + enforcement on)? Lets the SKU builder warn before submit.
+router.get('/api/blocked', isAuthenticated, isCuttingManager, async (req, res) => {
+  try {
+    const out = await highAgeing.isStyleBlocked(pool, req.query.style || '');
+    return res.json({ success: true, ...out });
+  } catch (error) {
+    // Fail-open: never let this check stop the UI.
+    return res.json({ success: true, blocked: false });
   }
 });
 

@@ -18,6 +18,16 @@ async function getStoreSetting(key, defaultValue = null) {
   }
 }
 
+// Upserts a store_settings value.
+async function setStoreSetting(key, value) {
+  const { pool } = require('../config/db');
+  await pool.query(
+    `INSERT INTO store_settings (setting_key, setting_value) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+    [key, String(value)]
+  );
+}
+
 // Coerce a stored string to a boolean. Fail-safe: only the literal 'true'
 // (case-insensitive, trimmed) is true; everything else (incl. missing) is false.
 function resolveAllowAdhoc(value) {
@@ -44,6 +54,7 @@ function isKnownFabricType(type, knownTypes) {
 module.exports = {
   ADHOC_KEY,
   getStoreSetting,
+  setStoreSetting,
   resolveAllowAdhoc,
   allowAdhocCuttingEntry,
   isKnownFabricType,
