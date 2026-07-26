@@ -8,6 +8,7 @@ const { syncAjioShipments } = require('./ajioShipmentSync');
 const { runMailAutoReply } = require('./mailAutoReplyJob');
 const { runPullWorker } = require('./easyecomPullWorker');
 const { sweepLotBatches, autoPushDrafts, confirmGrns, pushEnabled } = require('./eeDispatchPo');
+const { refreshCutRecommendations } = require('./easyecomAnalytics');
 const { pool } = require('../config/db');
 
 const TZ = process.env.CRON_TIMEZONE || 'Asia/Kolkata';
@@ -98,6 +99,14 @@ function startCronJobs() {
           await runPullWorker(pool);
         } catch (err) {
           console.error('[cron] easyecom pull worker failed:', err);
+        }
+        // Rebuild the materialized cutting recommendations off the freshly pulled
+        // data so the PM dashboard reads the precomputed snapshot (never the 300s+
+        // live query). Separate try/catch: a refresh failure must not mask the pull.
+        try {
+          await refreshCutRecommendations(pool);
+        } catch (err) {
+          console.error('[cron] cut-recs refresh failed:', err);
         }
       },
       { timezone: TZ }

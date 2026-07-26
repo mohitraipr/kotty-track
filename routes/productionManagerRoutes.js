@@ -1311,4 +1311,24 @@ router.delete('/high-ageing/manual/:style', async (req, res) => {
   catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// GET /pm/api/cut-recs/status — when the materialized recommendations were last
+// computed (for the dashboard freshness note + "warming up" state).
+router.get('/api/cut-recs/status', async (req, res) => {
+  try {
+    const info = await analytics.getCutRecsComputedAt(pool);
+    res.json({ ok: true, computed_at: info?.computed_at || null, row_count: info?.row_count || 0 });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /pm/api/cut-recs/refresh — rebuild the materialized recommendations now.
+// The heavy compute runs in the background (fire-and-forget, single-flight); the
+// request returns immediately so it can never hit the edge timeout. Poll /status.
+router.post('/api/cut-recs/refresh', async (req, res) => {
+  try {
+    analytics.refreshCutRecommendations(pool)
+      .catch((err) => console.error('[pm] manual cut-recs refresh failed:', err.message));
+    res.json({ ok: true, started: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;

@@ -36,6 +36,16 @@ test('flagHighAgeingStyles: sorts worst-first (dead/highest cover first)', () =>
   assert.strictEqual(flagged[1].style, 'SLOW');
 });
 
+test('flagHighAgeingStyles: MIN_SOH floor drops tiny dead remnants', () => {
+  // A 4-unit dead remnant is high-ageing by cover but below the 50-unit floor →
+  // not worth blocking a re-cut over, so it must NOT be flagged.
+  const f = flagHighAgeingStyles([{ style: 'REMNANT', soh: 4, drr: 0 }]);
+  assert.deepStrictEqual(f, []);
+  // With an explicit low floor it comes back (floor is configurable).
+  const f2 = flagHighAgeingStyles([{ style: 'REMNANT', soh: 4, drr: 0 }], 90, 0);
+  assert.deepStrictEqual(f2.map((x) => x.style), ['REMNANT']);
+});
+
 test('flagHighAgeingStyles: threshold is configurable', () => {
   // At threshold 500, SLOW (300d) drops out; DEAD (∞) stays
   const flagged = flagHighAgeingStyles(rows, 500);

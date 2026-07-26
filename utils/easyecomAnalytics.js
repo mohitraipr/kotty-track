@@ -724,15 +724,93 @@ async function computeCleanDayMetrics(pool, windowStart) {
   return metrics;
 }
 
-// Public entry — single-flight, 5-min cached. The full company-wide computation
-// (a ~24s query on a good day, 300s+ under load) previously ran on EVERY dashboard
-// load and stacked under concurrency, saturating the DB. Now the first caller
-// computes and everyone else (concurrent + within the TTL) shares the result.
-// Keyed on shadow so the shadow-diff path is never served a plain-mode cache.
+// ── Materialized cutting recommendations ────────────────────────────────────
+// computeCuttingRecommendations is a 300-2700s all-SKU aggregation. Running it per
+// dashboard load blew past the 60s edge timeout (the "<?xml" error) and saturated
+// the DB. The underlying data only changes with the nightly pull, so we PRECOMPUTE
+// once (nightly + on demand) into pm_cut_recommendations_cache and READ that here.
+// A request NEVER blocks on the heavy compute — if the cache is missing/stale it
+// serves what it has (or empty) and refreshes in the background.
+const CUTRECS_KEY = '30d:plain';
+const CUTRECS_MEM_TTL = 60 * 1000;             // re-read the DB row at most once/min
+const CUTRECS_STALE_MS = 26 * 60 * 60 * 1000;  // > this old → refresh in background
+let _cutRecsMem = null;                         // { rows, at } parsed in-memory copy
+let _cutRecsRefreshing = null;                  // single-flight background refresh
+
+// Public entry. Fast: in-mem → materialized table. Non-default combos (other period
+// / shadow) still compute live (rare, e.g. a shadow diff), memoized.
 async function getCuttingRecommendations(pool, opts = {}) {
   const { periodKey = '30d', shadow = false } = opts;
-  return memoize(`cutrecs:${periodKey}:${shadow ? 'shadow' : 'plain'}`, CACHE_TTL_MS,
-    () => computeCuttingRecommendations(pool, { periodKey, shadow }));
+  if (periodKey !== '30d' || shadow) {
+    return memoize(`cutrecs:${periodKey}:${shadow ? 'shadow' : 'plain'}`, CACHE_TTL_MS,
+      () => computeCuttingRecommendations(pool, { periodKey, shadow }));
+  }
+  if (_cutRecsMem && Date.now() - _cutRecsMem.at < CUTRECS_MEM_TTL) return _cutRecsMem.rows;
+
+  let row = null;
+  try {
+    const [[r]] = await pool.query(
+      'SELECT payload, computed_at FROM pm_cut_recommendations_cache WHERE cache_key = ?', [CUTRECS_KEY]);
+    row = r;
+  } catch (err) { console.error('[pm] cut-recs cache read failed:', err.message); }
+
+  if (row && row.payload) {
+    let rows = [];
+    try { rows = JSON.parse(row.payload); } catch (_) { rows = []; }
+    _cutRecsMem = { rows, at: Date.now() };
+    if (Date.now() - new Date(row.computed_at).getTime() > CUTRECS_STALE_MS) {
+      triggerCutRecsRefresh(pool); // serve current, refresh in background
+    }
+    return rows;
+  }
+  // Never materialized yet → kick a background refresh and serve empty (warming up).
+  triggerCutRecsRefresh(pool);
+  return [];
+}
+
+// Fire-and-forget wrapper used by request/read paths. Never awaited by a request.
+function triggerCutRecsRefresh(pool) {
+  return refreshCutRecommendations(pool)
+    .catch((e) => console.error('[pm] cut-recs background refresh failed:', e.message));
+}
+
+// Compute the heavy recommendations ONCE and store the JSON snapshot. Single-flight
+// across every caller (nightly scheduler, manual "Refresh" endpoint, stale-read
+// trigger) so the 300s+ compute never runs more than once at a time. Only the
+// default 30d/plain combo is materialized; anything else computes without caching.
+function refreshCutRecommendations(pool, opts = {}) {
+  const { periodKey = '30d', shadow = false } = opts;
+  if (periodKey !== '30d' || shadow) return doRefreshCutRecommendations(pool, opts);
+  if (_cutRecsRefreshing) return _cutRecsRefreshing;
+  _cutRecsRefreshing = doRefreshCutRecommendations(pool, opts)
+    .finally(() => { _cutRecsRefreshing = null; });
+  return _cutRecsRefreshing;
+}
+
+async function doRefreshCutRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
+  const started = Date.now();
+  const rows = await computeCuttingRecommendations(pool, { periodKey, shadow });
+  const key = `${periodKey}:${shadow ? 'shadow' : 'plain'}`;
+  try {
+    await pool.query(
+      `INSERT INTO pm_cut_recommendations_cache (cache_key, payload, row_count, duration_ms)
+       VALUES (?,?,?,?)
+       ON DUPLICATE KEY UPDATE payload=VALUES(payload), row_count=VALUES(row_count),
+         duration_ms=VALUES(duration_ms), computed_at=CURRENT_TIMESTAMP`,
+      [key, JSON.stringify(rows), rows.length, Date.now() - started]);
+  } catch (err) { console.error('[pm] cut-recs cache write failed:', err.message); }
+  if (key === CUTRECS_KEY) _cutRecsMem = { rows, at: Date.now() };
+  console.log(`[pm] cut-recs refreshed: ${rows.length} rows in ${Date.now() - started}ms`);
+  return rows;
+}
+
+// When was the materialized snapshot last computed? (for the dashboard freshness note)
+async function getCutRecsComputedAt(pool) {
+  try {
+    const [[r]] = await pool.query(
+      'SELECT computed_at, row_count FROM pm_cut_recommendations_cache WHERE cache_key = ?', [CUTRECS_KEY]);
+    return r ? { computed_at: r.computed_at, row_count: r.row_count } : null;
+  } catch (_) { return null; }
 }
 
 async function computeCuttingRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
@@ -1043,6 +1121,8 @@ module.exports = {
   getSlowMovers,
   getDohForSku,
   getCuttingRecommendations,
+  refreshCutRecommendations,
+  getCutRecsComputedAt,
   getDeadStock,
   recomputeAllHealth,
   deriveStyle,

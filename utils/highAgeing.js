@@ -11,12 +11,17 @@
 const { getStoreSetting, setStoreSetting } = require('./storeSettings');
 
 const THRESHOLD_DOC = 90;                       // days of cover
+// Minimum style-level stock to be worth blocking a re-cut over. Without this floor
+// the auto-flagger surfaced ~5,200 styles — almost all 1-4 unit dead remnants that
+// nobody would re-cut anyway. A style needs at least this many aged units on hand
+// before we stop a cutting master. (Tune here; manual-add covers anything below it.)
+const MIN_SOH = 50;
 const SETTING_KEY = 'high_ageing_block_enabled';
 
 // ── Pure helpers (unit-tested) ──────────────────────────────────────────────
 // Aggregate per-size cut-rec rows (each { style, soh, drr, doh }) to per-style and
 // flag the high-ageing ones. Returns [{ style, soh, drr, days_of_cover, dead }].
-function flagHighAgeingStyles(rows, threshold = THRESHOLD_DOC) {
+function flagHighAgeingStyles(rows, threshold = THRESHOLD_DOC, minSoh = MIN_SOH) {
   const byStyle = new Map();
   for (const r of rows || []) {
     const style = String(r.style || '').trim().toUpperCase();
@@ -28,7 +33,7 @@ function flagHighAgeingStyles(rows, threshold = THRESHOLD_DOC) {
   }
   const out = [];
   for (const a of byStyle.values()) {
-    if (a.soh <= 0) continue;                    // nothing in stock → nothing to age
+    if (a.soh < minSoh) continue;                // too little stock to be worth blocking
     const dead = a.drr <= 1e-9;                  // stock but ~zero sales
     const days_of_cover = dead ? Infinity : a.soh / a.drr;
     if (dead || days_of_cover > threshold) {
@@ -165,6 +170,7 @@ async function removeDecision(pool, style, mode) {
 
 module.exports = {
   THRESHOLD_DOC,
+  MIN_SOH,
   // pure
   flagHighAgeingStyles, partitionBlocklist, computeEffective, autoReason,
   // db
