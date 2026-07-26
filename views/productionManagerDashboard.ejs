@@ -175,10 +175,14 @@
       <div class="pm-card-body">
         <p style="font-size:0.8rem; color: var(--text-2); margin:0 0 0.75rem;">
           A style is high-ageing when its stock will take more than <strong>90 days</strong> to sell at the
-          current rate, or it has stock with no recent sales. When <em>Enforce block</em> is on, cutting
-          masters cannot create a lot for a <strong>Blocked</strong> style. Use <em>Allow</em> to let one
-          through, or add a style manually below.
+          current rate, or it has stock with no recent sales (with at least <strong>50 units</strong> on hand).
+          When <em>Enforce block</em> is on, cutting masters cannot create a lot for a <strong>Blocked</strong>
+          style. Use <em>Allow</em> to let one through, or add a style manually below.
         </p>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 0.75rem; font-size:0.78rem; color:var(--text-3);">
+          <span id="cutRecsFreshness">Recommendations: loading…</span>
+          <button class="pm-btn" id="cutRecsRecompute" style="padding:4px 10px; font-size:0.75rem;">Recompute now</button>
+        </div>
         <div class="pm-toolbar" style="margin-bottom:0.75rem; gap:6px;">
           <input type="text" id="ageingAddStyle" placeholder="Style code e.g. KTTWOMENSPANT981" style="flex:1; max-width:340px; padding:7px 10px;">
           <input type="text" id="ageingAddReason" placeholder="Reason (optional)" style="flex:1; max-width:240px; padding:7px 10px;">
@@ -416,6 +420,7 @@ window.addEventListener('hashchange', () => showPanel(viewFromHash()));
 
 // ── HIGH AGEING ─────────────────────────────────────────────────
 async function loadAgeing() {
+  loadCutRecsFreshness();
   const tbody = $('ageingTable').querySelector('tbody');
   tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-3);">Loading…</td></tr>';
   try {
@@ -462,6 +467,23 @@ document.getElementById('ageingEnforce').addEventListener('change', async (e) =>
   catch (err) { alert('Failed: ' + err.message); e.target.checked = !e.target.checked; }
 });
 document.getElementById('ageingRefresh').addEventListener('click', loadAgeing);
+async function loadCutRecsFreshness() {
+  const el = $('cutRecsFreshness'); if (!el) return;
+  try {
+    const j = await (await fetch('/pm/api/cut-recs/status')).json();
+    if (!j.ok || !j.computed_at) { el.textContent = 'Recommendations: warming up — click Recompute now.'; return; }
+    el.textContent = 'Recommendations computed ' + new Date(j.computed_at).toLocaleString() +
+      ' (' + (j.row_count || 0).toLocaleString() + ' SKUs)';
+  } catch (_) { el.textContent = 'Recommendations: status unavailable.'; }
+}
+document.getElementById('cutRecsRecompute').addEventListener('click', async (e) => {
+  const btn = e.target; const el = $('cutRecsFreshness');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Recomputing…';
+  if (el) el.textContent = 'Recomputing in the background — this can take a few minutes. Reopen this tab to see the update.';
+  try { await ageingPost('/pm/api/cut-recs/refresh', {}); }
+  catch (err) { alert('Failed: ' + err.message); }
+  finally { setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 4000); }
+});
 document.getElementById('ageingAddBtn').addEventListener('click', async () => {
   const style = $('ageingAddStyle').value.trim();
   if (!style) { alert('Enter a style code'); return; }
