@@ -404,37 +404,56 @@ router.get('/api/summary', async (req, res) => {
   res.json({ ok: true, ...out });
 });
 
-// Marketplace links per style, from the existing product_links table. A product_links
-// sku may be the style code itself or a full size-SKU, so match either; degrade quietly
-// (returns {} if the table is absent or the query fails).
-function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// Marketplace links per style, from the existing product_links table.
+//
+// This used to build ONE `sku LIKE ?` clause per requested style and OR them all
+// together in a single query. /api/styles calls it with the ENTIRE (unpaginated)
+// style list — thousands of styles — so the query ballooned to thousands of OR'd
+// LIKE clauses that took 140-206s and, under concurrent dashboard loads, stacked
+// and exhausted the DB connection pool (site down).
+//
+// Instead we memoize the WHOLE product_links table once every 5 minutes into a
+// Map<style, myntra_link> (single-flight, shared across all concurrent callers),
+// then `myntraByStyles` is a pure in-memory lookup. This reads the ~79k-row table
+// at most once per TTL regardless of how many styles/callers ask. A product_links
+// sku may be the style code itself or a full size-SKU, so we key the map by
+// analytics.deriveStyle(sku); the FIRST link seen for a style wins (ORDER BY sku
+// makes that deterministic). Degrades quietly: a missing/failed table yields an
+// empty map, same as before.
+let _linkMap = null;         // { map: Map<style, link>, at: <ms> }
+let _linkMapPromise = null;  // in-flight load, for single-flight
+const LINK_MAP_TTL = 5 * 60 * 1000;
+async function loadMyntraLinkMap() {
+  if (_linkMap && Date.now() - _linkMap.at < LINK_MAP_TTL) return _linkMap.map;
+  if (_linkMapPromise) return _linkMapPromise;
+  _linkMapPromise = (async () => {
+    const map = new Map();
+    try {
+      const [links] = await pool.query(
+        `SELECT sku, myntra_link FROM product_links
+          WHERE myntra_link IS NOT NULL AND myntra_link <> ''
+          ORDER BY sku`
+      );
+      for (const row of links) {
+        const st = analytics.deriveStyle(row.sku);
+        if (st && !map.has(st)) map.set(st, row.myntra_link);
+      }
+    } catch (_) { /* table missing or query failed — no links */ }
+    _linkMap = { map, at: Date.now() };
+    return map;
+  })().finally(() => { _linkMapPromise = null; });
+  return _linkMapPromise;
+}
 async function myntraByStyles(styleList) {
-  const map = {};
+  const out = {};
   const styles = [...new Set((styleList || []).filter(Boolean))];
-  if (!styles.length) return map;
-  try {
-    // Indexed prefix match. A product_links row is keyed by the size-SKU (style +
-    // size), so we need every row whose sku STARTS WITH a style. `sku LIKE 'STYLE%'`
-    // is optimized into an idx_sku range scan (collation-correct), so this reads only
-    // the matching rows — the old `sku REGEXP '^(...)'` could not use the index and
-    // full-scanned all 79k rows on every call (≈1s → ≈70ms; identical link map).
-    // Style codes are [A-Z0-9] with no LIKE metacharacters, so no escaping is needed.
-    // ORDER BY sku makes the per-style pick deterministic when sizes carry differing
-    // links.
-    const likeClause = styles.map(() => 'sku LIKE ?').join(' OR ');
-    const params = styles.map((s) => s + '%');
-    const [links] = await pool.query(
-      `SELECT sku, myntra_link FROM product_links
-        WHERE myntra_link IS NOT NULL AND myntra_link <> '' AND (${likeClause})
-        ORDER BY sku`,
-      params
-    );
-    for (const row of links) {
-      const st = styles.find((s) => row.sku === s || String(row.sku).startsWith(s));
-      if (st && !map[st]) map[st] = row.myntra_link;
-    }
-  } catch (_) { /* table missing or query failed — no links */ }
-  return map;
+  if (!styles.length) return out;
+  const map = await loadMyntraLinkMap();
+  for (const s of styles) {
+    const link = map.get(s) || map.get(analytics.deriveStyle(s));
+    if (link) out[s] = link;
+  }
+  return out;
 }
 
 router.get('/api/styles', async (req, res) => {

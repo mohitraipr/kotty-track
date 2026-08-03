@@ -725,20 +725,30 @@ async function computeCleanDayMetrics(pool, windowStart) {
 }
 
 // ── Materialized cutting recommendations ────────────────────────────────────
-// computeCuttingRecommendations is a 300-2700s all-SKU aggregation. Running it per
-// dashboard load blew past the 60s edge timeout (the "<?xml" error) and saturated
-// the DB. The underlying data only changes with the nightly pull, so we PRECOMPUTE
-// once (nightly + on demand) into pm_cut_recommendations_cache and READ that here.
-// A request NEVER blocks on the heavy compute — if the cache is missing/stale it
-// serves what it has (or empty) and refreshes in the background.
+// computeCuttingRecommendations is an all-SKU aggregation that's cheap on an idle DB
+// (~15s) but stacks catastrophically under concurrency: running it per dashboard load
+// pushed db-g1-small into a saturation death-spiral (every query slows → more pile on),
+// blowing past the 60s edge timeout (the "<?xml" error) and taking the whole site down.
+// The underlying data only changes with the nightly pull, so we PRECOMPUTE once into
+// pm_cut_recommendations_cache and READ that here.
+//
+// Two hard rules keep this from ever re-saturating the DB:
+//   1. A READ NEVER COMPUTES. getCuttingRecommendations only ever reads the snapshot.
+//      An empty/stale cache serves what it has (or empty "warming up") — it does NOT
+//      kick a rebuild. Rebuilds happen only via the nightly cron and the manual button.
+//   2. A REBUILD IS SINGLE-FLIGHT CLUSTER-WIDE. refreshCutRecommendations takes a MySQL
+//      advisory lock, so even with N Cloud Run instances (cron fires on each) only ONE
+//      compute can run at a time; the rest no-op. (Per-instance guards alone failed —
+//      10 instances = 10 concurrent computes = the outage we just had.)
 const CUTRECS_KEY = '30d:plain';
+const CUTRECS_LOCK = 'pm_cut_recs_refresh';
 const CUTRECS_MEM_TTL = 60 * 1000;             // re-read the DB row at most once/min
-const CUTRECS_STALE_MS = 26 * 60 * 60 * 1000;  // > this old → refresh in background
 let _cutRecsMem = null;                         // { rows, at } parsed in-memory copy
-let _cutRecsRefreshing = null;                  // single-flight background refresh
+let _cutRecsRefreshing = null;                  // per-instance single-flight (cheap short-circuit)
 
-// Public entry. Fast: in-mem → materialized table. Non-default combos (other period
-// / shadow) still compute live (rare, e.g. a shadow diff), memoized.
+// Public entry — READ ONLY. Fast: in-mem → materialized table. Never triggers a compute.
+// Non-default combos (other period / shadow) still compute live (rare, e.g. a shadow
+// diff), memoized; those are bounded and not part of the hot dashboard path.
 async function getCuttingRecommendations(pool, opts = {}) {
   const { periodKey = '30d', shadow = false } = opts;
   if (periodKey !== '30d' || shadow) {
@@ -750,7 +760,7 @@ async function getCuttingRecommendations(pool, opts = {}) {
   let row = null;
   try {
     const [[r]] = await pool.query(
-      'SELECT payload, computed_at FROM pm_cut_recommendations_cache WHERE cache_key = ?', [CUTRECS_KEY]);
+      'SELECT payload FROM pm_cut_recommendations_cache WHERE cache_key = ?', [CUTRECS_KEY]);
     row = r;
   } catch (err) { console.error('[pm] cut-recs cache read failed:', err.message); }
 
@@ -758,50 +768,55 @@ async function getCuttingRecommendations(pool, opts = {}) {
     let rows = [];
     try { rows = JSON.parse(row.payload); } catch (_) { rows = []; }
     _cutRecsMem = { rows, at: Date.now() };
-    if (Date.now() - new Date(row.computed_at).getTime() > CUTRECS_STALE_MS) {
-      triggerCutRecsRefresh(pool); // serve current, refresh in background
-    }
     return rows;
   }
-  // Never materialized yet → kick a background refresh and serve empty (warming up).
-  triggerCutRecsRefresh(pool);
-  return [];
+  return []; // not materialized yet → "warming up"; a read must NEVER kick a rebuild
 }
 
-// Fire-and-forget wrapper used by request/read paths. Never awaited by a request.
-function triggerCutRecsRefresh(pool) {
-  return refreshCutRecommendations(pool)
-    .catch((e) => console.error('[pm] cut-recs background refresh failed:', e.message));
-}
-
-// Compute the heavy recommendations ONCE and store the JSON snapshot. Single-flight
-// across every caller (nightly scheduler, manual "Refresh" endpoint, stale-read
-// trigger) so the 300s+ compute never runs more than once at a time. Only the
-// default 30d/plain combo is materialized; anything else computes without caching.
+// Compute the heavy recommendations ONCE and store the JSON snapshot. Called ONLY by
+// the nightly scheduler and the manual "Recompute now" endpoint — never by a read.
+// Cluster-wide single-flight via a MySQL advisory lock so concurrent callers (multiple
+// instances' crons, a button click during a cron) can never stack the heavy query.
 function refreshCutRecommendations(pool, opts = {}) {
   const { periodKey = '30d', shadow = false } = opts;
   if (periodKey !== '30d' || shadow) return doRefreshCutRecommendations(pool, opts);
-  if (_cutRecsRefreshing) return _cutRecsRefreshing;
+  if (_cutRecsRefreshing) return _cutRecsRefreshing;   // this instance already computing
   _cutRecsRefreshing = doRefreshCutRecommendations(pool, opts)
     .finally(() => { _cutRecsRefreshing = null; });
   return _cutRecsRefreshing;
 }
 
 async function doRefreshCutRecommendations(pool, { periodKey = '30d', shadow = false } = {}) {
-  const started = Date.now();
-  const rows = await computeCuttingRecommendations(pool, { periodKey, shadow });
   const key = `${periodKey}:${shadow ? 'shadow' : 'plain'}`;
+  // Cluster-wide lock: only one refresh runs across all instances/processes. timeout 0
+  // = try once and give up immediately if someone else holds it. Held on a dedicated
+  // connection for the whole compute, released in finally.
+  let conn;
+  try { conn = await pool.getConnection(); }
+  catch (err) { console.error('[pm] cut-recs: no connection for lock:', err.message); return _cutRecsMem?.rows || []; }
   try {
-    await pool.query(
-      `INSERT INTO pm_cut_recommendations_cache (cache_key, payload, row_count, duration_ms)
-       VALUES (?,?,?,?)
-       ON DUPLICATE KEY UPDATE payload=VALUES(payload), row_count=VALUES(row_count),
-         duration_ms=VALUES(duration_ms), computed_at=CURRENT_TIMESTAMP`,
-      [key, JSON.stringify(rows), rows.length, Date.now() - started]);
-  } catch (err) { console.error('[pm] cut-recs cache write failed:', err.message); }
-  if (key === CUTRECS_KEY) _cutRecsMem = { rows, at: Date.now() };
-  console.log(`[pm] cut-recs refreshed: ${rows.length} rows in ${Date.now() - started}ms`);
-  return rows;
+    const [[lk]] = await conn.query('SELECT GET_LOCK(?, 0) AS got', [CUTRECS_LOCK]);
+    if (!lk || Number(lk.got) !== 1) {
+      console.log('[pm] cut-recs refresh already running elsewhere — skipping');
+      return _cutRecsMem?.rows || [];
+    }
+    const started = Date.now();
+    const rows = await computeCuttingRecommendations(pool, { periodKey, shadow });
+    try {
+      await pool.query(
+        `INSERT INTO pm_cut_recommendations_cache (cache_key, payload, row_count, duration_ms)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE payload=VALUES(payload), row_count=VALUES(row_count),
+           duration_ms=VALUES(duration_ms), computed_at=CURRENT_TIMESTAMP`,
+        [key, JSON.stringify(rows), rows.length, Date.now() - started]);
+    } catch (err) { console.error('[pm] cut-recs cache write failed:', err.message); }
+    if (key === CUTRECS_KEY) _cutRecsMem = { rows, at: Date.now() };
+    console.log(`[pm] cut-recs refreshed: ${rows.length} rows in ${Date.now() - started}ms`);
+    return rows;
+  } finally {
+    try { await conn.query('SELECT RELEASE_LOCK(?)', [CUTRECS_LOCK]); } catch (_) { /* connection may be gone */ }
+    conn.release();
+  }
 }
 
 // When was the materialized snapshot last computed? (for the dashboard freshness note)
