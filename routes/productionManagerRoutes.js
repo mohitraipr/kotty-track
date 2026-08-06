@@ -21,7 +21,7 @@ const stageEvents = require('../utils/stageEvents');
 const { orderedStages, deriveStageStatus, dispatchSummary, currentStage } = require('../utils/lotJourney');
 const { cutPrioritySummary, fabricNeededByType, wipByStage } = require('../utils/pmAnalytics');
 const { computeStyleTrend } = require('../utils/styleTrend');
-const { buildPicSizeRows, buildPicSizeWorkbook } = require('../utils/picSizeReport');
+const { buildPicSizeRows, buildPicSizeWorkbook, deriveLotStyle } = require('../utils/picSizeReport');
 let pullWorker = null;
 try { pullWorker = require('../utils/easyecomPullWorker'); } catch (_) { pullWorker = null; }
 
@@ -189,14 +189,17 @@ router.get('/style/:style', async (req, res) => {
 });
 
 // Download the size-wise PIC report of ALL in-production lots (every style):
-// a lot cut within the last 120 days that still has undispatched pieces. Identical
-// format to the operator dashboard's /dashboard/pic-size-report (shared builder in
-// utils/picSizeReport.js). Scoped to ?style= when provided (the PM style page passes
-// its style); omit it for an all-styles report.
+// any lot that still has undispatched pieces, however old. Identical format to
+// the operator dashboard's /dashboard/pic-size-report (shared builder in
+// utils/picSizeReport.js). Scoped to ?style= when provided (the PM style page
+// passes its style); omit it for an all-styles report. Optional ?startDate= and
+// ?endDate= (YYYY-MM-DD) window by cut date when a time selection is wanted.
 router.get('/reports/pic-size', async (req, res) => {
   try {
     const style = String(req.query.style || '').trim();
-    const rows = await buildPicSizeRows({ inProductionOnly: true, style });
+    const startDate = String(req.query.startDate || '').trim();
+    const endDate = String(req.query.endDate || '').trim();
+    const rows = await buildPicSizeRows({ inProductionOnly: true, style, startDate, endDate });
     const workbook = buildPicSizeWorkbook(rows);
     const safeStyle = (style || 'AllStyles').replace(/[^A-Za-z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -833,17 +836,20 @@ router.get('/api/style-lots', async (req, res) => {
   try {
     const style = String(req.query.style || '').trim();
     if (!style) return res.status(400).json({ ok: false, error: 'style is required' });
-    const [lots] = await pool.query(
-      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.total_pieces, cl.flow_type, cl.created_at,
+    // LIKE prefilter + deriveLotStyle exact match — same matcher as the pic-size
+    // report, so decorated lot skus ("CCLADIESJEANS20/CC37") show up here too.
+    const styleUpper = style.toUpperCase();
+    const [candidates] = await pool.query(
+      `SELECT cl.id, cl.lot_no, cl.manual_lot_number, cl.sku, cl.total_pieces, cl.flow_type, cl.created_at,
               u.username AS cutter_name
          FROM cutting_lots cl LEFT JOIN users u ON u.id = cl.user_id
-        WHERE cl.sku = ? ORDER BY cl.created_at DESC LIMIT 50`,
-      [style]
+        WHERE cl.sku LIKE ? ORDER BY cl.created_at DESC`,
+      [`${styleUpper}%`]
     );
-    const [[cnt]] = await pool.query('SELECT COUNT(*) AS n FROM cutting_lots WHERE sku = ?', [style]);
+    const matched = candidates.filter((l) => deriveLotStyle(l.sku) === styleUpper);
     const journeys = [];
-    for (const lot of lots) journeys.push(await lotJourneyCompact(lot));
-    res.json({ ok: true, style, total_lots: Number(cnt.n) || journeys.length, lots: journeys });
+    for (const lot of matched.slice(0, 50)) journeys.push(await lotJourneyCompact(lot));
+    res.json({ ok: true, style, total_lots: matched.length, lots: journeys });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

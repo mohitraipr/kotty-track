@@ -9,6 +9,32 @@ const { cache } = require('../utils/cache');
 const ExcelJS = require('exceljs');
 const { deriveStyle } = require('./easyecomAnalytics');
 
+// Cutting-lot SKUs may carry cutter decorations the ecom catalog never has:
+// "CCLADIESJEANS20/CC37" (fabric/shortage code), trailing spaces. Strip the
+// decoration before deriving the style so decorated lots still match their
+// style. Ecom SKUs never contain '/' (verified against ee_suborders).
+function deriveLotStyle(sku) {
+  return deriveStyle(String(sku || '').split('/')[0].trim());
+}
+
+// FNV-1a — cheap stable fingerprint for cache keys. `len-first-last` collides
+// for different lot sets sharing length and endpoints; hashing the full list
+// doesn't.
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+// YYYY-MM-DD in IST — toISOString() is UTC and flips to "yesterday" between
+// 00:00 and 05:30 IST, hiding same-day lots from default date windows.
+function istDateString(d = new Date()) {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 function isDenimLot(lotOrLotNo, isDenimCutter = null, flowType = null) {
   // If called with lot object that has flow_type or is_denim_cutter
   if (typeof lotOrLotNo === 'object' && lotOrLotNo !== null) {
@@ -367,7 +393,7 @@ async function fetchLotEventAggregates(lotNos = []) {
     };
   }
   const sorted = lotNos.slice().sort();
-  const cacheKey = `lotAggEv-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
+  const cacheKey = `lotAggEv-${sorted.length}-${fnv1a(sorted.join(','))}`;
   return cache.fetchCached(cacheKey, async () => {
     const aggSql = (table, key) => `
       SELECT '${key}' AS stage, cl.lot_no,
@@ -475,7 +501,7 @@ async function fetchLotEventAggregates(lotNos = []) {
 async function fetchLotSizeEventSums(lotNos = []) {
   if (!lotNos.length) return {};
   const sorted = lotNos.slice().sort();
-  const cacheKey = `lotSizeEv-${sorted.length}-${sorted[0]}-${sorted[sorted.length - 1]}`;
+  const cacheKey = `lotSizeEv-${sorted.length}-${fnv1a(sorted.join(','))}`;
   return cache.fetchCached(cacheKey, async () => {
     const sizeSql = (eventsTbl, sizesTbl, key) => `
       SELECT '${key}' AS stage, cl.lot_no, s.size_label,
@@ -979,8 +1005,8 @@ function filterByDept({
 
 // Build the per-(lot,size) enriched rows. Options mirror the operator route
 // filters; inProductionOnly restricts to lots still in production across ALL
-// styles (net cut - dispatched > 0), bounded to a recent window so ancient
-// never-dispatched lots don't linger (matches utils/onOrder.js in-flight window).
+// styles (net cut - dispatched > 0) with NO age cutoff — old stuck lots must
+// stay visible. Pass startDate/endDate to window it explicitly.
 async function buildPicSizeRows({
   lotType = 'all',
   department = 'all',
@@ -989,12 +1015,11 @@ async function buildPicSizeRows({
   startDate = '',
   endDate = '',
   inProductionOnly = false,
-  inProductionWindowDays = 120,
   style = '',
 } = {}) {
   // Row cap: the operator (date-windowed) path keeps its historical 5000 cap; the
-  // "all in-production" path needs headroom so it doesn't silently drop older
-  // in-production lots (the 120d window is ~6.5k lot×size rows and growing).
+  // unwindowed "all in-production" path needs headroom for the full lot history
+  // (~45k lot×size rows all-time and growing — watch the cap-hit warning below).
   const rowLimit = inProductionOnly ? 50000 : 5000;
   // Optional style scope (e.g. the PM style page). Matches via deriveStyle() so both
   // style-level and size-suffixed cutting_lots.sku values resolve correctly — the SQL
@@ -1004,17 +1029,16 @@ async function buildPicSizeRows({
   const dateParams = [];
 
   if (inProductionOnly && !startDate && !endDate) {
-    dateWhere = ' AND cl.created_at >= (NOW() - INTERVAL ? DAY) ';
-    dateParams.push(inProductionWindowDays);
+    // No date clause: every lot still holding undispatched pieces is included,
+    // however old. The in-production row filter below does the real bounding.
   } else {
     let sd = startDate;
     let ed = endDate;
     if (!sd || !ed) {
-      const today = new Date();
-      const weekAgo = new Date(today);
+      const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      ed = today.toISOString().split('T')[0];
-      sd = weekAgo.toISOString().split('T')[0];
+      ed = istDateString();
+      sd = istDateString(weekAgo);
     }
     if (dateFilter === 'createdAt') {
       dateWhere = ' AND DATE(cl.created_at) BETWEEN ? AND ? ';
@@ -1079,6 +1103,9 @@ async function buildPicSizeRows({
      ORDER BY cl.created_at DESC
      LIMIT ${rowLimit}`;
   const [rows] = await pool.query(baseQuery, dateParams);
+  if (rows.length >= rowLimit) {
+    console.warn(`[picSizeReport] row cap hit (${rowLimit}) — oldest lots are being silently dropped; raise the cap`);
+  }
 
   const lotNos = [...new Set(rows.map((r) => r.lot_no))];
   if (!lotNos.length) return [];
@@ -1147,8 +1174,9 @@ async function buildPicSizeRows({
   for (const row of rows) {
     // Exact style scope: the SQL LIKE prefilter can over-match (e.g. KTT677 vs KTT6770),
     // so confirm the derived style equals the requested one — same semantics as the
-    // dashboard's r.style === style filtering.
-    if (styleUpper && deriveStyle(row.sku) !== styleUpper) continue;
+    // dashboard's r.style === style filtering. deriveLotStyle (not deriveStyle) so
+    // decorated lot skus like "CCLADIESJEANS20/CC37" still match their style.
+    if (styleUpper && deriveLotStyle(row.sku) !== styleUpper) continue;
     const lotNo = row.lot_no;
     const sizeLabel = row.size_label;
     const totalCut = parseFloat(row.total_pieces) || 0;
@@ -1286,6 +1314,9 @@ function buildPicSizeWorkbook(finalData) {
 
 module.exports = {
   isDenimLot,
+  deriveLotStyle,
+  istDateString,
+  fnv1a,
   parseLotRemark,
   fmtIST,
   daysSince,
