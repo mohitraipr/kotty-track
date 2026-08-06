@@ -1017,10 +1017,11 @@ async function buildPicSizeRows({
   inProductionOnly = false,
   style = '',
 } = {}) {
-  // Row cap: the operator (date-windowed) path keeps its historical 5000 cap; the
-  // unwindowed "all in-production" path needs headroom for the full lot history
-  // (~45k lot×size rows all-time and growing — watch the cap-hit warning below).
-  const rowLimit = inProductionOnly ? 50000 : 5000;
+  // Row cap: pure runaway backstop, NOT a paging mechanism. The old operator cap
+  // of 5000 silently chopped a Jan→Aug window (11k+ rows) to the newest 5000,
+  // hiding older lots (how lot A639 vanished). Full history is ~45k lot×size
+  // rows — keep the cap above it and watch the cap-hit warning below.
+  const rowLimit = 50000;
   // Optional style scope (e.g. the PM style page). Matches via deriveStyle() so both
   // style-level and size-suffixed cutting_lots.sku values resolve correctly — the SQL
   // LIKE is a prefilter; the exact match happens per-row in the assembly loop below.
